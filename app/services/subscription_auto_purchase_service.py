@@ -1361,7 +1361,7 @@ async def _auto_add_devices(
         await db.rollback()
         return False
 
-    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
     await reactivate_subscription(db, subscription)
@@ -1370,6 +1370,9 @@ async def _auto_add_devices(
     try:
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя',
@@ -1573,7 +1576,7 @@ async def _auto_add_traffic(
         await db.rollback()
         return False
 
-    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
     await reactivate_subscription(db, subscription)
@@ -1582,6 +1585,9 @@ async def _auto_add_traffic(
     try:
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя',

@@ -4002,11 +4002,19 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
         else:
             await add_subscription_traffic(db, subscription, gb)
 
-        # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+        # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
         await reactivate_subscription(db, subscription)
 
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
+
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if subscription.status == 'active':
+            from app.database.crud.user import get_user_by_id
+
+            user = await get_user_by_id(db, user_id)
+            if user and user.remnawave_uuid:
+                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
 
         traffic_text = 'безлимитный' if gb == 0 else f'{gb} ГБ'
         logger.info('Админ добавил трафик пользователю', admin_id=admin_id, traffic_text=traffic_text, user_id=user_id)

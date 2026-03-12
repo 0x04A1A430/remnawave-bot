@@ -772,25 +772,34 @@ async def deactivate_subscription(db: AsyncSession, subscription: Subscription) 
 
 
 async def reactivate_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:
-    """Реактивация подписки (например, после повторной подписки на канал).
+    """Реактивация подписки (например, после повторной подписки на канал или докупки трафика).
 
-    Активирует только если подписка была DISABLED и ещё не истекла.
+    Активирует если подписка была DISABLED или EXPIRED и ещё не истекла по времени.
     Не логирует если реактивация не требуется.
     """
     now = datetime.now(UTC)
 
-    # Тихо выходим если реактивация не нужна
-    if subscription.status != SubscriptionStatus.DISABLED.value:
+    # Тихо выходим если реактивация не нужна (уже активна или другой статус)
+    reactivatable_statuses = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value}
+    if subscription.status not in reactivatable_statuses:
         return subscription
 
-    if subscription.end_date and subscription.end_date <= now:
+    if not subscription.end_date or subscription.end_date <= now:
         return subscription
 
+    old_status = subscription.status
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.updated_at = now
 
     await db.commit()
     await db.refresh(subscription)
+
+    logger.info(
+        '✅ Подписка реактивирована',
+        subscription_id=subscription.id,
+        user_id=subscription.user_id,
+        old_status=old_status,
+    )
 
     return subscription
 

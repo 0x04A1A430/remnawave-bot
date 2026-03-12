@@ -934,7 +934,7 @@ async def purchase_traffic(
     # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит)
     await add_subscription_traffic(db, subscription, request.gb)
 
-    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
     await reactivate_subscription(db, subscription)
@@ -944,6 +944,9 @@ async def purchase_traffic(
         subscription_service = SubscriptionService()
         if getattr(user, 'remnawave_uuid', None):
             await subscription_service.update_remnawave_user(db, subscription)
+            # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+            if subscription.status == 'active':
+                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
         else:
             await subscription_service.create_remnawave_user(db, subscription)
     except Exception as e:

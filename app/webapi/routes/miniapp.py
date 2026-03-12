@@ -7314,7 +7314,7 @@ async def purchase_traffic_topup_endpoint(
     # Добавляем трафик (add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля)
     await add_subscription_traffic(db, subscription, payload.gb)
 
-    # Реактивируем подписку если она была DISABLED (например, после LIMITED в RemnaWave)
+    # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
     await reactivate_subscription(db, subscription)
@@ -7323,6 +7323,9 @@ async def purchase_traffic_topup_endpoint(
     try:
         service = SubscriptionService()
         await service.update_remnawave_user(db, subscription)
+        # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
+        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
+            await service.enable_remnawave_user(user.remnawave_uuid)
     except Exception as e:
         logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=e)
 
