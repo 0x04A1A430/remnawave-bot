@@ -2515,7 +2515,9 @@ async def sync_user_from_panel(
                 if panel_user.expire_at:
                     panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
 
-                    sub_end_utc = sub.end_date if sub.end_date and sub.end_date.tzinfo else sub.end_date
+                    sub_end_utc = sub.end_date
+                    if sub_end_utc is not None and sub_end_utc.tzinfo is None:
+                        sub_end_utc = sub_end_utc.replace(tzinfo=UTC)
                     if sub_end_utc != panel_expire_utc:
                         # Предупреждаем если локальная дата новее панельной
                         # (например, автопокупка уже продлила подписку)

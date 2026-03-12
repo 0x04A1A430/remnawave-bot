@@ -501,6 +501,7 @@ async def subtract_user_balance(
     transaction_type: TransactionType = TransactionType.WITHDRAWAL,
     consume_promo_offer: bool = False,
     mark_as_paid_subscription: bool = False,
+    commit: bool = True,
 ) -> bool:
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
     logger.info('💸 ОТЛАДКА subtract_user_balance:')
@@ -572,8 +573,6 @@ async def subtract_user_balance(
                 create_transaction as create_trans,
             )
 
-            # create_trans commits the session, atomically persisting
-            # both the balance change and the transaction record
             await create_trans(
                 db=db,
                 user_id=user.id,
@@ -581,11 +580,15 @@ async def subtract_user_balance(
                 amount_kopeks=amount_kopeks,
                 description=description,
                 payment_method=payment_method,
+                commit=commit,
             )
-        else:
+        elif commit:
             await db.commit()
+        else:
+            await db.flush()
 
-        await db.refresh(user)
+        if commit:
+            await db.refresh(user)
 
         if consume_promo_offer and log_context:
             try:
@@ -598,18 +601,20 @@ async def subtract_user_balance(
                     percent=log_context.get('percent'),
                     effect_type=log_context.get('effect_type'),
                     details=log_context.get('details'),
+                    commit=commit,
                 )
             except Exception as log_error:  # pragma: no cover - defensive logging
                 logger.warning(
                     'Failed to record promo offer consumption log for user', user_id=user.id, log_error=log_error
                 )
-                try:
-                    await db.rollback()
-                except Exception as rollback_error:  # pragma: no cover - defensive logging
-                    logger.warning(
-                        'Failed to rollback session after promo offer consumption log failure',
-                        rollback_error=rollback_error,
-                    )
+                if commit:
+                    try:
+                        await db.rollback()
+                    except Exception as rollback_error:  # pragma: no cover - defensive logging
+                        logger.warning(
+                            'Failed to rollback session after promo offer consumption log failure',
+                            rollback_error=rollback_error,
+                        )
 
         logger.info('✅ Средства списаны: →', old_balance=old_balance, balance_kopeks=user.balance_kopeks)
         return True

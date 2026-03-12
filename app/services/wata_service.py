@@ -15,6 +15,10 @@ from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
+# WATA API rejects expirationDateTime <= now + 10 minutes (exclusive lower bound).
+# 15 minutes provides a 5-minute buffer against clock skew and request latency.
+_MIN_EXPIRATION_MINUTES = 15
+
 
 class WataAPIError(RuntimeError):
     """Raised when the WATA API returns an error response."""
@@ -196,7 +200,7 @@ class WataService:
         if expiration_minutes:
             # WATA API требует expirationDateTime строго > now + 10 минут.
             # Принудительный минимум 15 минут, чтобы не попасть на границу.
-            safe_minutes = max(expiration_minutes, 15)
+            safe_minutes = max(expiration_minutes, _MIN_EXPIRATION_MINUTES)
             expiration_time = datetime.now(UTC) + timedelta(minutes=safe_minutes)
             payload['expirationDateTime'] = self._format_datetime(expiration_time)
 
