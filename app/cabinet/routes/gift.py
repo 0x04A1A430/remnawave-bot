@@ -82,9 +82,11 @@ async def get_gift_config(
             balance_kopeks=user.balance_kopeks,
         )
 
-    # Load active tariffs
+    # Load active tariffs visible in gift section
     result = await db.execute(
-        select(Tariff).where(Tariff.is_active.is_(True)).order_by(Tariff.display_order, Tariff.id)
+        select(Tariff)
+        .where(Tariff.is_active.is_(True), Tariff.show_in_gift.is_(True))
+        .order_by(Tariff.display_order, Tariff.id)
     )
     tariffs_db = result.scalars().all()
 
@@ -241,7 +243,7 @@ async def create_gift_purchase(
 
     # Find tariff and validate period
     tariff = await get_tariff_by_id(db, body.tariff_id)
-    if tariff is None or not tariff.is_active:
+    if tariff is None or not tariff.is_active or not tariff.show_in_gift:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Tariff not found or inactive',

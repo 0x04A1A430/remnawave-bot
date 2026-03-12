@@ -974,6 +974,9 @@ class Tariff(Base):
     min_traffic_gb = Column(Integer, default=1, nullable=False)  # Минимальный трафик в ГБ
     max_traffic_gb = Column(Integer, default=1000, nullable=False)  # Максимальный трафик в ГБ
 
+    # Видимость в разделе подарков
+    show_in_gift = Column(Boolean, default=True, server_default='true', nullable=False)
+
     # Режим сброса трафика: DAY, WEEK, MONTH, NO_RESET (по умолчанию берётся из конфига)
     traffic_reset_mode = Column(String(20), nullable=True, default=None)  # None = использовать глобальную настройку
 

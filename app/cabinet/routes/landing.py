@@ -607,6 +607,13 @@ async def create_landing_purchase(
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
+    # Gift purchases require the tariff to be visible in the gift section
+    if body.is_gift and not tariff.show_in_gift:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This tariff is not available for gift purchases',
+        )
+
     # Validate amount against per-method min/max limits (before creating purchase record)
     min_amount = method_config.get('min_amount_kopeks')
     max_amount = method_config.get('max_amount_kopeks')

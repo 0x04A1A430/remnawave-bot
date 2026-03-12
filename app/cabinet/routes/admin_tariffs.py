@@ -127,6 +127,7 @@ async def list_tariffs(
                 is_daily=tariff.is_daily,
                 daily_price_kopeks=tariff.daily_price_kopeks,
                 allow_traffic_topup=tariff.allow_traffic_topup,
+                show_in_gift=tariff.show_in_gift,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
                 tier_level=tariff.tier_level,
@@ -265,6 +266,8 @@ async def get_tariff(
         traffic_reset_mode=tariff.traffic_reset_mode,
         # Внешний сквад
         external_squad_uuid=tariff.external_squad_uuid,
+        # Показывать в подарках
+        show_in_gift=tariff.show_in_gift,
         created_at=tariff.created_at,
         updated_at=tariff.updated_at,
     )
@@ -321,6 +324,8 @@ async def create_new_tariff(
         traffic_reset_mode=request.traffic_reset_mode,
         # Внешний сквад
         external_squad_uuid=request.external_squad_uuid,
+        # Показывать в подарках
+        show_in_gift=request.show_in_gift,
     )
 
     logger.info('Admin created tariff', admin_id=admin.id, tariff_id=tariff.id, tariff_name=tariff.name)
@@ -413,6 +418,9 @@ async def update_existing_tariff(
     # Внешний сквад (None допускается для сброса)
     if 'external_squad_uuid' in request.model_fields_set:
         updates['external_squad_uuid'] = request.external_squad_uuid
+    # Показывать в подарках
+    if request.show_in_gift is not None:
+        updates['show_in_gift'] = request.show_in_gift
 
     if updates:
         await update_tariff(db, tariff, **updates)
