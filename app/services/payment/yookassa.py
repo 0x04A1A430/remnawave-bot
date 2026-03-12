@@ -22,6 +22,8 @@ from app.utils.user_utils import format_referrer_info
 if TYPE_CHECKING:
     from app.database.models import Transaction, User, YooKassaPayment
 
+_INT32_MAX = 2_147_483_647
+
 
 class YooKassaPaymentMixin:
     """Mixin с операциями по созданию и подтверждению платежей YooKassa."""
@@ -1334,7 +1336,9 @@ class YooKassaPaymentMixin:
             return None
 
         metadata = self._normalise_yookassa_metadata(event_object.get('metadata'))
-        user_id_raw = metadata.get('user_id') or metadata.get('userId')
+        user_id_raw = metadata.get('user_id')
+        if user_id_raw is None:
+            user_id_raw = metadata.get('userId')
 
         if user_id_raw is None:
             logger.error(
@@ -1353,10 +1357,17 @@ class YooKassaPaymentMixin:
             )
             return None
 
+        if user_id <= 0:
+            logger.error(
+                'Webhook YooKassa содержит неположительный user_id',
+                yookassa_payment_id=yookassa_payment_id,
+                user_id=user_id,
+            )
+            return None
+
         # Verify user exists before creating FK-linked record.
         # Legacy payments may have telegram_id stored in metadata['user_id']
         # instead of the internal User.id. Detect by checking int32 range.
-        _INT32_MAX = 2_147_483_647
         user: User | None = None
 
         try:
@@ -1375,13 +1386,16 @@ class YooKassaPaymentMixin:
 
             # Fallback: try user_telegram_id from metadata if primary lookup failed
             if not user:
-                tg_id_raw = metadata.get('user_telegram_id') or metadata.get('userTelegramId')
-                if tg_id_raw:
+                tg_id_raw = metadata.get('user_telegram_id')
+                if tg_id_raw is None:
+                    tg_id_raw = metadata.get('userTelegramId')
+                if tg_id_raw is not None:
                     try:
                         tg_id = int(tg_id_raw)
-                        user = await get_user_by_telegram_id(db, tg_id)
                     except (TypeError, ValueError):
-                        pass
+                        tg_id = None
+                    if tg_id and tg_id > 0:
+                        user = await get_user_by_telegram_id(db, tg_id)
 
             if not user:
                 logger.warning(
