@@ -5188,18 +5188,15 @@ async def submit_subscription_renewal_endpoint(
             detail={'code': 'invalid_period', 'message': 'Invalid renewal period'},
         )
 
-    # Проверяем, есть ли у подписки тариф (режим тарифов)
+    # Валидация периода и расчёт цены через PricingEngine
+    from app.services.pricing_engine import PricingEngine
+
     tariff_id = getattr(subscription, 'tariff_id', None)
     tariff = None
-    tariff_pricing = None
-
     if tariff_id:
-        from app.database.crud.tariff import get_tariff_by_id
-
         tariff = await get_tariff_by_id(db, tariff_id)
 
     if tariff and tariff.period_prices:
-        # Режим тарифов: проверяем периоды из тарифа
         available_periods = [int(p) for p in tariff.period_prices.keys()]
         if period_days not in available_periods:
             raise HTTPException(
@@ -5209,109 +5206,50 @@ async def submit_subscription_renewal_endpoint(
                     'message': 'Selected renewal period is not available for this tariff',
                 },
             )
-
-        # Рассчитываем цену из тарифа
-        original_price_kopeks = tariff.period_prices.get(str(period_days), tariff.period_prices.get(period_days, 0))
-
-        # Добавляем стоимость докупленных устройств сверх тарифа (ДО скидки, как в cabinet)
-        tariff_device_limit = tariff.device_limit if tariff.device_limit is not None else 0
-        sub_device_limit = subscription.device_limit if subscription.device_limit is not None else tariff_device_limit
-        extra_devices = max(0, sub_device_limit - tariff_device_limit)
-        if extra_devices > 0:
-            from app.utils.pricing_utils import calculate_months_from_days
-
-            device_price = (
-                tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
-            )
-            months = calculate_months_from_days(period_days)
-            original_price_kopeks += extra_devices * device_price * months
-
-        # Применяем скидку промогруппы (к полной сумме: тариф + доп. устройства)
-        discount_percent = 0
-        if hasattr(user, 'get_promo_discount'):
-            discount_percent = user.get_promo_discount('period', period_days)
-
-        final_total = original_price_kopeks
-        if discount_percent > 0:
-            final_total = int(original_price_kopeks * (100 - discount_percent) / 100)
-
-        # Применяем promo_offer скидку (временная скидка, как в cabinet)
-        promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
-        if promo_offer_discount_percent > 0:
-            promo_offer_discount_value = final_total * promo_offer_discount_percent // 100
-            final_total = final_total - promo_offer_discount_value
-
-        # Комбинированный процент скидки для отображения
-        combined_discount_percent = discount_percent
-        if promo_offer_discount_percent > 0 and original_price_kopeks > 0:
-            total_discount = original_price_kopeks - final_total
-            combined_discount_percent = int(total_discount * 100 / original_price_kopeks)
-
-        tariff_pricing = {
-            'period_days': period_days,
-            'original_price_kopeks': original_price_kopeks,
-            'discount_percent': combined_discount_percent,
-            'final_total': final_total,
-            'tariff_id': tariff.id,
-        }
     else:
-        # Классический режим
-        available_periods = [period for period in settings.get_available_renewal_periods() if period > 0]
+        available_periods = [p for p in settings.get_available_renewal_periods() if p > 0]
         if period_days not in available_periods:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 detail={'code': 'period_unavailable', 'message': 'Selected renewal period is not available'},
             )
 
+    pricing_engine = PricingEngine()
+    try:
+        pricing_result = await pricing_engine.calculate_renewal_price(db, subscription, period_days, user=user)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(
+            'Failed to calculate renewal pricing for subscription (period)',
+            subscription_id=subscription.id,
+            period_days=period_days,
+            error=error,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={'code': 'pricing_failed', 'message': 'Failed to calculate renewal pricing'},
+        ) from error
+
+    final_total = pricing_result.final_total
+    promo_offer_discount_value = pricing_result.promo_offer_discount
+
     method = (payload.method or '').strip().lower()
 
-    # Для тарифного режима используем упрощённый расчёт
-    if tariff_pricing:
-        final_total = tariff_pricing['final_total']
-        pricing = tariff_pricing
-    else:
-        try:
-            pricing_model = await _calculate_subscription_renewal_pricing(
-                db,
-                user,
-                subscription,
-                period_days,
-            )
-        except HTTPException:
-            raise
-        except Exception as error:
-            logger.error(
-                'Failed to calculate renewal pricing for subscription (period)',
-                subscription_id=subscription.id,
-                period_days=period_days,
-                error=error,
-            )
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail={'code': 'pricing_failed', 'message': 'Failed to calculate renewal pricing'},
-            ) from error
-
-        pricing = pricing_model.to_payload()
-        final_total = int(pricing_model.final_total)
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
     description = f'Продление подписки на {period_days} дней'
 
     if missing_amount <= 0:
-        if tariff_pricing:
+        if pricing_result.is_tariff_mode:
             # Тарифный режим: простое продление
-            from app.database.crud.subscription import extend_subscription
-            from app.database.crud.transaction import create_transaction
-            from app.database.crud.user import subtract_user_balance
-
             try:
-                # Списываем баланс (subtract_user_balance делает commit и обновляет user.balance_kopeks)
                 success = await subtract_user_balance(
                     db,
                     user,
                     final_total,
                     description,
-                    consume_promo_offer=promo_offer_discount_percent > 0,
+                    consume_promo_offer=promo_offer_discount_value > 0,
                     mark_as_paid_subscription=True,
                 )
                 if not success:
@@ -5320,12 +5258,8 @@ async def submit_subscription_renewal_endpoint(
                         detail={'code': 'balance_error', 'message': 'Failed to subtract balance'},
                     )
 
-                # Продлеваем подписку
                 subscription = await extend_subscription(db, subscription, period_days)
                 new_end_date = subscription.end_date
-
-                # Записываем транзакцию
-                from app.database.models import TransactionType
 
                 await create_transaction(
                     db,
@@ -5337,8 +5271,6 @@ async def submit_subscription_renewal_endpoint(
 
                 # Синхронизируем с RemnaWave (сброс трафика по настройке)
                 try:
-                    from app.services.subscription_service import SubscriptionService
-
                     service = SubscriptionService()
                     await service.update_remnawave_user(
                         db,
@@ -5370,7 +5302,26 @@ async def submit_subscription_renewal_endpoint(
                     detail={'code': 'renewal_failed', 'message': 'Failed to renew subscription'},
                 ) from error
         else:
-            # Классический режим
+            # Классический режим: finalize() ожидает старую модель pricing (будет обновлено в Task 17)
+            try:
+                pricing_model = await _calculate_subscription_renewal_pricing(
+                    db,
+                    user,
+                    subscription,
+                    period_days,
+                )
+            except Exception as error:
+                logger.error(
+                    'Failed to calculate legacy pricing for finalize',
+                    subscription_id=subscription.id,
+                    period_days=period_days,
+                    error=error,
+                )
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    detail={'code': 'pricing_failed', 'message': 'Failed to calculate renewal pricing'},
+                ) from error
+
             try:
                 result = await renewal_service.finalize(
                     db,
