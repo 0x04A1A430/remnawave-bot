@@ -230,55 +230,29 @@ async def _prepare_auto_extend_context(
         )
         return None
 
-    # Если в корзине есть tariff_id - пересчитываем цену по актуальному тарифу
+    # Fresh pricing via unified PricingEngine (no stale cart prices)
     tariff_id = cart_data.get('tariff_id')
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
-        tariff_result = await _get_tariff_price_for_period(db, user, tariff_id, period_days)
-        if tariff_result is None:
-            # Тариф недоступен или период отсутствует - используем сохранённую цену как fallback
-            price_kopeks = _safe_int(
-                cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
-            )
-            logger.warning(
-                '🔁 Автопокупка: не удалось пересчитать цену тарифа , используем сохранённую',
-                tariff_id=tariff_id,
-                price_kopeks=price_kopeks,
-            )
-        else:
-            base_price, discount_percent = tariff_result
-            price_kopeks = base_price
 
-            # Добавляем стоимость докупленных устройств ДО применения скидки (как в cabinet)
-            if subscription.tariff_id == tariff_id:
-                from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+    from app.services.pricing_engine import PricingEngine
 
-                _tariff = await _get_tariff(db, tariff_id)
-                if _tariff:
-                    extra_devices = max(0, (subscription.device_limit or 0) - (_tariff.device_limit or 0))
-                    if extra_devices > 0:
-                        from app.utils.pricing_utils import calculate_months_from_days
-
-                        device_price_per_month = (
-                            _tariff.device_price_kopeks
-                            if _tariff.device_price_kopeks is not None
-                            else settings.PRICE_PER_DEVICE
-                        )
-                        months = calculate_months_from_days(period_days)
-                        price_kopeks += extra_devices * device_price_per_month * months
-
-            # Применяем promo_group скидку к полной сумме (база + доп. устройства)
-            price_kopeks = _apply_promo_discount_for_tariff(price_kopeks, discount_percent)
-
-            # Применяем promo_offer скидку отдельно (последовательно, как в cabinet)
-            from app.utils.promo_offer import get_user_active_promo_discount_percent
-
-            promo_offer_percent = get_user_active_promo_discount_percent(user)
-            if promo_offer_percent > 0:
-                price_kopeks = _apply_promo_discount_for_tariff(price_kopeks, promo_offer_percent)
-    else:
+    pricing_engine = PricingEngine()
+    try:
+        pricing = await pricing_engine.calculate_renewal_price(
+            db, subscription, period_days, user=user,
+        )
+        price_kopeks = pricing.final_total
+    except Exception as e:
+        # Fallback to saved cart price if PricingEngine fails
         price_kopeks = _safe_int(
             cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
+        )
+        logger.warning(
+            'Автопокупка: ошибка PricingEngine, используем сохранённую цену',
+            format_user_id=_format_user_id(user),
+            error=str(e),
+            fallback_price=price_kopeks,
         )
 
     if price_kopeks <= 0:
