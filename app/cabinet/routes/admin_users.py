@@ -1644,11 +1644,13 @@ async def update_user_promo_group(
     await db.execute(sa_delete(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
 
     if new_promo_group_id is not None:
-        db.add(UserPromoGroup(
-            user_id=user_id,
-            promo_group_id=new_promo_group_id,
-            assigned_by='admin',
-        ))
+        db.add(
+            UserPromoGroup(
+                user_id=user_id,
+                promo_group_id=new_promo_group_id,
+                assigned_by='admin',
+            )
+        )
 
     await db.flush()
     await sync_user_primary_promo_group(db, user_id)

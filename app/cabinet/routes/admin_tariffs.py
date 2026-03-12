@@ -708,9 +708,7 @@ async def sync_tariff_squads(
                     )
                     if consecutive_failures >= _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES:
                         aborted = True
-                        errors.append(
-                            f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures'
-                        )
+                        errors.append(f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures')
                     return 'error'
 
         await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])

@@ -1980,25 +1980,17 @@ def _get_payment_method_display_name(card, language: str = DEFAULT_LANGUAGE) -> 
     return method_name
 
 
-def get_saved_cards_keyboard(
-    cards: list, language: str = DEFAULT_LANGUAGE
-) -> InlineKeyboardMarkup:
+def get_saved_cards_keyboard(cards: list, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     for card in cards:
         card_label = f'🗑 {_get_payment_method_display_name(card, language)}'
-        keyboard.append(
-            [InlineKeyboardButton(text=card_label, callback_data=f'unlink_card_{card.id}')]
-        )
-    keyboard.append(
-        [InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')]
-    )
+        keyboard.append([InlineKeyboardButton(text=card_label, callback_data=f'unlink_card_{card.id}')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_confirm_unlink_keyboard(
-    card_id: int, language: str = DEFAULT_LANGUAGE
-) -> InlineKeyboardMarkup:
+def get_confirm_unlink_keyboard(card_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
