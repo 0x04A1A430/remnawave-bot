@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, and_, func, or_, select
+from sqlalchemy import Integer, and_, delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,6 +25,7 @@ from app.database.crud.user import (
     get_users_statistics,
     subtract_user_balance,
 )
+from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
     GuestPurchase,
     PromoGroup,
@@ -36,6 +37,7 @@ from app.database.models import (
     Transaction,
     TransactionType,
     User,
+    UserPromoGroup,
     UserStatus,
 )
 from app.utils.timezone import panel_datetime_to_utc
@@ -1636,8 +1638,20 @@ async def update_user_promo_group(
             )
         promo_group_name = promo_group.name
 
-    user.promo_group_id = new_promo_group_id
-    user.updated_at = datetime.now(UTC)
+    # Update M2M table (authoritative source) — not just the legacy FK column.
+    # Without this, sync_user_primary_promo_group overwrites the admin change
+    # on the next transaction.
+    await db.execute(sa_delete(UserPromoGroup).where(UserPromoGroup.user_id == user_id))
+
+    if new_promo_group_id is not None:
+        db.add(UserPromoGroup(
+            user_id=user_id,
+            promo_group_id=new_promo_group_id,
+            assigned_by='admin',
+        ))
+
+    await db.flush()
+    await sync_user_primary_promo_group(db, user_id)
     await db.commit()
     await db.refresh(user)
 
