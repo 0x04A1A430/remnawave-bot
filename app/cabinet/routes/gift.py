@@ -380,7 +380,14 @@ async def create_gift_purchase(
 
         from app.services.payment_service import PaymentService
 
-        payment_service = PaymentService()
+        # Stars payments need a Bot instance to create invoice links
+        bot = None
+        if body.payment_method == 'telegram_stars':
+            from aiogram import Bot
+
+            bot = Bot(token=settings.BOT_TOKEN)
+
+        payment_service = PaymentService(bot=bot)
         payment_result = await payment_service.create_guest_payment(
             db=db,
             amount_kopeks=price_kopeks,
