@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.transaction import get_user_transactions
 from app.database.models import TransactionType, User
+from app.handlers.subscription.autopay import handle_confirm_unlink, handle_saved_cards_list, handle_unlink_card
 from app.keyboards.inline import (
     get_back_keyboard,
     get_balance_keyboard,
@@ -879,8 +880,6 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_quick_amount_selection, F.data.startswith('quick_amount_'))
 
     dp.callback_query.register(handle_topup_amount_callback, F.data.startswith('topup_amount|'))
-
-    from app.handlers.subscription.autopay import handle_confirm_unlink, handle_saved_cards_list, handle_unlink_card
 
     dp.callback_query.register(handle_saved_cards_list, F.data == 'saved_cards_list')
     dp.callback_query.register(handle_unlink_card, F.data.startswith('unlink_card_'))

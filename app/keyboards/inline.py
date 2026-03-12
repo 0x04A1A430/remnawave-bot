@@ -1493,8 +1493,6 @@ def get_subscription_confirm_keyboard(language: str = DEFAULT_LANGUAGE) -> Inlin
 
 
 def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    from app.config import settings
-
     texts = get_texts(language)
 
     keyboard = [
