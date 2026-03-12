@@ -17,7 +17,17 @@ from app.config import settings
 from app.database.crud.landing import create_guest_purchase
 from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id, replace_subscription
 from app.database.crud.tariff import get_tariff_by_id
-from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff, User
+from app.database.crud.transaction import create_transaction
+from app.database.crud.user import _get_or_create_default_promo_group
+from app.database.models import (
+    GuestPurchase,
+    GuestPurchaseStatus,
+    LandingPage,
+    PaymentMethod,
+    Tariff,
+    TransactionType,
+    User,
+)
 from app.services.subscription_service import SubscriptionService
 
 
@@ -242,7 +252,7 @@ async def fulfill_purchase(
             # Active subscription or gift with any existing subscription — hold for manual activation
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
             purchase.user_id = user.id
-            if recipient_type == 'email' and not purchase.is_gift:
+            if recipient_type == 'email' and not purchase.is_gift and is_new_account:
                 purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
             await db.refresh(purchase, attribute_names=['landing', 'user'])
@@ -310,11 +320,27 @@ async def fulfill_purchase(
         purchase.status = GuestPurchaseStatus.DELIVERED.value
         purchase.user_id = user.id
         purchase.delivered_at = datetime.now(UTC)
-        if recipient_type == 'email' and not purchase.is_gift:
+        if recipient_type == 'email' and not purchase.is_gift and is_new_account:
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
         await db.refresh(purchase, attribute_names=['landing', 'user'])
+
+        # Create transaction so promo group auto-assignment and contest tracking work
+        try:
+            payment_method_enum = _resolve_payment_method(purchase.payment_method)
+            await create_transaction(
+                db=db,
+                user_id=user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=purchase.amount_kopeks,
+                description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
+                payment_method=payment_method_enum,
+                external_id=purchase.payment_id,
+                is_completed=True,
+            )
+        except Exception:
+            logger.exception('Failed to create transaction for guest purchase', purchase_id=purchase.id)
 
         try:
             await send_guest_notification(
@@ -355,6 +381,26 @@ async def fulfill_purchase(
         raise GuestPurchaseError('Purchase fulfillment failed', status_code=500)
 
     return purchase
+
+
+def _resolve_payment_method(method_str: str | None) -> PaymentMethod | None:
+    """Convert payment method string from GuestPurchase to PaymentMethod enum."""
+    if not method_str:
+        return None
+    # Try exact match first (handles 'telegram_stars', 'kassa_ai', 'yookassa', etc.)
+    try:
+        return PaymentMethod(method_str)
+    except ValueError:
+        pass
+    # Strip sub-option suffix ('yookassa_sbp' → 'yookassa', 'platega_2' → 'platega')
+    if '_' in method_str:
+        base_method = method_str.split('_')[0]
+        try:
+            return PaymentMethod(base_method)
+        except ValueError:
+            pass
+    logger.debug('Unknown payment method for transaction', method=method_str)
+    return None
 
 
 def _mask_email(email: str) -> str:
@@ -399,8 +445,8 @@ async def _find_or_create_user(
         user = result.scalars().first()
         if user:
             is_new_account = False
-            # Existing user WITHOUT password — generate one and set up cabinet access
             if not user.password_hash:
+                # User without cabinet access — generate credentials
                 plain_password = secrets.token_urlsafe(12)
                 user.password_hash = hash_password(plain_password)
                 if purchase:
@@ -410,16 +456,22 @@ async def _find_or_create_user(
             if not user.email_verified:
                 user.email_verified = True
                 user.email_verified_at = datetime.now(UTC)
+            # Ensure default promo group
+            if not user.promo_group_id:
+                default_group = await _get_or_create_default_promo_group(db)
+                user.promo_group_id = default_group.id
             return user, is_new_account
 
         # Create new email user with verified cabinet account
         plain_password = secrets.token_urlsafe(12)
+        default_group = await _get_or_create_default_promo_group(db)
         user = User(
             auth_type='email',
             email=contact_value,
             email_verified=True,
             email_verified_at=datetime.now(UTC),
             password_hash=hash_password(plain_password),
+            promo_group_id=default_group.id,
         )
         if purchase:
             purchase.cabinet_password = plain_password
@@ -431,7 +483,7 @@ async def _find_or_create_user(
             result = await db.execute(select(User).where(User.email == contact_value))
             user = result.scalars().first()
             if user:
-                # Clear stale password from failed insert, then check if re-fetched user needs one
+                # Race condition — user was created concurrently
                 if purchase:
                     purchase.cabinet_password = None
                 is_new_account = False
@@ -444,6 +496,9 @@ async def _find_or_create_user(
                 if not user.email_verified:
                     user.email_verified = True
                     user.email_verified_at = datetime.now(UTC)
+                if not user.promo_group_id:
+                    default_group = await _get_or_create_default_promo_group(db)
+                    user.promo_group_id = default_group.id
                 return user, is_new_account
             raise
         logger.info(
@@ -508,13 +563,19 @@ async def _find_or_create_user(
                     resolved_telegram_id=resolved_telegram_id,
                 )
                 await db.refresh(user)
+        # Ensure default promo group
+        if not user.promo_group_id:
+            default_group = await _get_or_create_default_promo_group(db)
+            user.promo_group_id = default_group.id
         return user, False
 
     # Create new telegram user
+    default_group = await _get_or_create_default_promo_group(db)
     user = User(
         auth_type='telegram',
         username=username,
         telegram_id=resolved_telegram_id,
+        promo_group_id=default_group.id,
     )
     try:
         async with db.begin_nested():
@@ -525,10 +586,16 @@ async def _find_or_create_user(
             result = await db.execute(select(User).where(User.telegram_id == resolved_telegram_id))
             user = result.scalars().first()
             if user:
+                if not user.promo_group_id:
+                    default_group = await _get_or_create_default_promo_group(db)
+                    user.promo_group_id = default_group.id
                 return user, False
         result = await db.execute(select(User).where(func.lower(User.username) == normalized))
         user = result.scalars().first()
         if user:
+            if not user.promo_group_id:
+                default_group = await _get_or_create_default_promo_group(db)
+                user.promo_group_id = default_group.id
             return user, False
         raise
     logger.info(
@@ -854,12 +921,28 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
         purchase.subscription_crypto_link = subscription.subscription_crypto_link
         purchase.status = GuestPurchaseStatus.DELIVERED.value
         purchase.delivered_at = datetime.now(UTC)
-        if user.auth_type == 'email' and not purchase.is_gift:
+        if user.auth_type == 'email' and not purchase.is_gift and is_new_account:
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         # Single atomic commit: subscription + purchase status + user changes
         await db.commit()
         await db.refresh(purchase, attribute_names=['landing', 'user'])
+
+        # Create transaction so promo group auto-assignment and contest tracking work
+        try:
+            payment_method_enum = _resolve_payment_method(purchase.payment_method)
+            await create_transaction(
+                db=db,
+                user_id=user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=purchase.amount_kopeks,
+                description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
+                payment_method=payment_method_enum,
+                external_id=purchase.payment_id,
+                is_completed=True,
+            )
+        except Exception:
+            logger.exception('Failed to create transaction for activated purchase', purchase_id=purchase.id)
 
         if not skip_notification:
             try:
