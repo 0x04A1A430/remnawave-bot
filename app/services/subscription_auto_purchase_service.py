@@ -18,6 +18,7 @@ from app.database.crud.user import get_user_by_id, subtract_user_balance
 from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.pricing_engine import PricingEngine
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -1750,15 +1751,14 @@ async def try_auto_extend_expired_after_topup(
     else:
         period_days = 30
 
-    # Calculate renewal price
+    # Calculate renewal price via PricingEngine
     subscription_service = SubscriptionService()
+    pricing_engine = PricingEngine()
     try:
-        renewal_cost = await subscription_service.calculate_renewal_price(
-            subscription,
-            period_days,
-            db,
-            user=user,
+        pricing = await pricing_engine.calculate_renewal_price(
+            db, subscription, period_days, user=user,
         )
+        renewal_cost = pricing.final_total
     except Exception as error:
         logger.error(
             '❌ Автопродление expired: ошибка расчёта стоимости',
@@ -1767,6 +1767,15 @@ async def try_auto_extend_expired_after_topup(
             exc_info=True,
         )
         return False
+
+    logger.info(
+        'Расчёт цены автопродления (PricingEngine)',
+        user_id=getattr(user, 'id', None),
+        period_days=period_days,
+        final_total=pricing.final_total,
+        is_tariff_mode=pricing.is_tariff_mode,
+        breakdown=pricing.breakdown,
+    )
 
     if renewal_cost <= 0:
         logger.warning(
