@@ -2389,7 +2389,8 @@ class RemnaWaveService:
 
     async def force_cleanup_user_data(self, db: AsyncSession, user: User) -> bool:
         """
-        ОПАСНАЯ ФУНКЦИЯ: Полностью сбрасывает все данные пользователя включая баланс!
+        ОПАСНАЯ ФУНКЦИЯ: Полностью сбрасывает данные подписки пользователя.
+        Баланс и has_had_paid_subscription СОХРАНЯЮТСЯ (оплаченные средства).
         Используйте только для полной очистки пользователя.
         """
         try:
@@ -2453,9 +2454,13 @@ class RemnaWaveService:
                 logger.error('❌ Ошибка удаления связанных записей', records_error=records_error)
 
             try:
-                user.balance_kopeks = 0
+                if user.balance_kopeks > 0:
+                    logger.warning(
+                        '⚠️ force_cleanup: СОХРАНЯЕМ баланс пользователя (оплаченные средства)',
+                        user_id_display=user_id_display,
+                        balance_kopeks=user.balance_kopeks,
+                    )
                 user.remnawave_uuid = None
-                user.has_had_paid_subscription = False
                 user.used_promocodes = 0
                 user.updated_at = self._now_utc()
 

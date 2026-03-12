@@ -194,7 +194,10 @@ class WataService:
             expiration_minutes = int(ttl) if ttl is not None else None
 
         if expiration_minutes:
-            expiration_time = datetime.now(UTC) + timedelta(minutes=expiration_minutes)
+            # WATA API требует expirationDateTime строго > now + 10 минут.
+            # Принудительный минимум 15 минут, чтобы не попасть на границу.
+            safe_minutes = max(expiration_minutes, 15)
+            expiration_time = datetime.now(UTC) + timedelta(minutes=safe_minutes)
             payload['expirationDateTime'] = self._format_datetime(expiration_time)
 
         if allow_arbitrary_amount:

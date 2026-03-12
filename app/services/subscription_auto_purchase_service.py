@@ -2298,6 +2298,24 @@ async def auto_purchase_saved_cart_after_topup(
 
     logger.info('🔁 Автопокупка: обнаружена сохранённая корзина у пользователя', format_user_id=_format_user_id(user))
 
+    # Защита от автопокупки на DISABLED подписке — пользователь отключён в панели,
+    # сохранённая корзина устарела. Списание баланса необратимо, а Remnawave-обновление
+    # провалится → баланс потерян навсегда.
+    # Суточные тарифы тоже блокируем: try_resume_disabled_daily_after_topup уже отработал
+    # выше по цепочке (common.py), и если он не возобновил — причина сохраняется.
+    from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
+
+    _existing_sub = await _get_sub(db, user.id)
+    if _existing_sub and _existing_sub.status == SubscriptionStatus.DISABLED.value:
+        logger.warning(
+            '🔁 Автопокупка: пропускаем — подписка DISABLED, корзина устарела',
+            format_user_id=_format_user_id(user),
+            subscription_status=_existing_sub.status,
+        )
+        await user_cart_service.delete_user_cart(user.id)
+        await clear_subscription_checkout_draft(user.id)
+        return False
+
     cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
 
     # Защита от race condition: если подписка была куплена/продлена в последние 60 секунд,

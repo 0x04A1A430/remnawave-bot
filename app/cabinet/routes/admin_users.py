@@ -2517,6 +2517,21 @@ async def sync_user_from_panel(
 
                     sub_end_utc = sub.end_date if sub.end_date and sub.end_date.tzinfo else sub.end_date
                     if sub_end_utc != panel_expire_utc:
+                        # Предупреждаем если локальная дата новее панельной
+                        # (например, автопокупка уже продлила подписку)
+                        if sub_end_utc and panel_expire_utc and sub_end_utc > panel_expire_utc:
+                            logger.warning(
+                                'Sync: локальная end_date новее панельной, перезаписываем. '
+                                'Возможно автопокупка уже продлила подписку.',
+                                user_id=user_id,
+                                local_end_date=sub_end_utc.isoformat(),
+                                panel_expire_at=panel_expire_utc.isoformat(),
+                            )
+                            errors.append(
+                                f'Warning: local end_date ({sub_end_utc.isoformat()}) is newer than '
+                                f'panel expire_at ({panel_expire_utc.isoformat()}). '
+                                f'Panel value applied — check if auto-purchase extended subscription.'
+                            )
                         changes['end_date'] = {
                             'old': sub.end_date.isoformat() if sub.end_date else None,
                             'new': panel_expire_utc.isoformat(),
