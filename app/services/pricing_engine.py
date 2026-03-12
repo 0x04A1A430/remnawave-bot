@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass, field
 
-from app.config import settings
+import structlog
+
+from app.config import CLASSIC_PERIOD_PRICES, PERIOD_PRICES, settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
+from app.utils.promo_offer import get_user_active_promo_discount_percent
+
 
 logger = structlog.get_logger()
 
@@ -70,45 +73,45 @@ class PricingEngine:
             try:
                 server = await get_server_squad_by_uuid(db, uuid)
             except Exception as e:
-                logger.error("Ошибка загрузки сервера", squad_uuid=uuid, error=str(e))
-                details.append({"uuid": uuid, "price": 0, "status": "error"})
+                logger.error('Ошибка загрузки сервера', squad_uuid=uuid, error=str(e))
+                details.append({'uuid': uuid, 'price': 0, 'status': 'error'})
                 continue
 
             if server is None:
-                logger.error("Сервер не найден в БД", squad_uuid=uuid)
-                details.append({"uuid": uuid, "price": 0, "status": "not_found"})
+                logger.error('Сервер не найден в БД', squad_uuid=uuid)
+                details.append({'uuid': uuid, 'price': 0, 'status': 'not_found'})
                 continue
 
             price = server.price_kopeks or 0
-            status = "available"
+            status = 'available'
 
             if not server.is_available:
-                status = "unavailable"
+                status = 'unavailable'
                 logger.warning(
-                    "Сервер недоступен, используем реальную цену",
+                    'Сервер недоступен, используем реальную цену',
                     squad_uuid=uuid,
                     price_kopeks=price,
                 )
             elif server.is_full:
-                status = "full"
+                status = 'full'
                 logger.warning(
-                    "Сервер переполнен, используем реальную цену",
+                    'Сервер переполнен, используем реальную цену',
                     squad_uuid=uuid,
                     price_kopeks=price,
                 )
             elif promo_group_id is not None:
                 allowed_ids = [pg.id for pg in (server.allowed_promo_groups or [])]
                 if allowed_ids and promo_group_id not in allowed_ids:
-                    status = "not_allowed"
+                    status = 'not_allowed'
                     logger.warning(
-                        "Сервер недоступен для промогруппы, используем реальную цену",
+                        'Сервер недоступен для промогруппы, используем реальную цену',
                         squad_uuid=uuid,
                         promo_group_id=promo_group_id,
                         price_kopeks=price,
                     )
 
             total_price += price
-            details.append({"uuid": uuid, "price": price, "status": status})
+            details.append({'uuid': uuid, 'price': price, 'status': status})
 
         return total_price, details
 
@@ -127,3 +130,163 @@ class PricingEngine:
         purchased_price = settings.get_traffic_price(purchased_gb) if purchased_gb > 0 else 0
 
         return base_price + purchased_price
+
+    # ------------------------------------------------------------------
+    # Main public method
+    # ------------------------------------------------------------------
+
+    async def calculate_renewal_price(
+        self,
+        db,  # AsyncSession
+        subscription,
+        period_days: int,
+        *,
+        user=None,
+    ) -> RenewalPricing:
+        """Calculate renewal price for a subscription.
+
+        Routes to tariff mode (subscription has a tariff) or classic mode
+        (legacy env-based pricing).  Stacked discounts (promo-group then
+        promo-offer) are applied in both modes.
+        """
+        if subscription.tariff_id is not None and subscription.tariff is not None:
+            return await self._calculate_tariff_mode(db, subscription, period_days, user=user)
+        return await self._calculate_classic_mode(db, subscription, period_days, user=user)
+
+    # ------------------------------------------------------------------
+    # Tariff mode
+    # ------------------------------------------------------------------
+
+    async def _calculate_tariff_mode(
+        self,
+        db,
+        subscription,
+        period_days: int,
+        *,
+        user=None,
+    ) -> RenewalPricing:
+        """Price calculation when subscription is linked to a Tariff."""
+        tariff = subscription.tariff
+        period_prices: dict = tariff.period_prices or {}
+        base_price = period_prices.get(str(period_days), 0)
+
+        # Extra devices above the tariff's included limit
+        device_price_per_unit = settings.PRICE_PER_DEVICE
+        extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
+        devices_price = extra_devices * device_price_per_unit
+
+        subtotal = base_price + devices_price
+
+        # Resolve discounts
+        group_pct = 0
+        if user and getattr(user, 'promo_group', None) is not None:
+            group_pct = user.promo_group.get_discount_percent('period', period_days)
+
+        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+
+        final_total, group_discount, offer_discount = self.apply_stacked_discounts(
+            subtotal,
+            group_pct,
+            offer_pct,
+        )
+
+        breakdown = {
+            'tariff_id': tariff.id,
+            'extra_devices': extra_devices,
+            'group_discount_pct': group_pct,
+            'offer_discount_pct': offer_pct,
+        }
+
+        return RenewalPricing(
+            base_price=base_price,
+            servers_price=0,
+            traffic_price=0,
+            devices_price=devices_price,
+            promo_group_discount=group_discount,
+            promo_offer_discount=offer_discount,
+            final_total=final_total,
+            period_days=period_days,
+            is_tariff_mode=True,
+            breakdown=breakdown,
+        )
+
+    # ------------------------------------------------------------------
+    # Classic mode
+    # ------------------------------------------------------------------
+
+    async def _calculate_classic_mode(
+        self,
+        db,
+        subscription,
+        period_days: int,
+        *,
+        user=None,
+    ) -> RenewalPricing:
+        """Price calculation for legacy (non-tariff) subscriptions.
+
+        Uses CLASSIC_PERIOD_PRICES from settings, falling back to the
+        global PERIOD_PRICES dict during migration.
+        """
+        # Try CLASSIC_PERIOD_PRICES first, fall back to PERIOD_PRICES
+        base_price = CLASSIC_PERIOD_PRICES.get(period_days)
+        if base_price is None:
+            base_price = PERIOD_PRICES.get(period_days, 0)
+
+        # Servers
+        connected_squads: list[str] = subscription.connected_squads or []
+        promo_group_id = getattr(user, 'promo_group_id', None) if user else None
+        servers_price, server_details = await self._calculate_servers_price(
+            connected_squads,
+            db,
+            promo_group_id=promo_group_id,
+        )
+
+        # Traffic
+        traffic_limit_gb = subscription.traffic_limit_gb or 0
+        purchased_traffic_gb = subscription.purchased_traffic_gb or 0
+        traffic_price = self._calculate_traffic_price(traffic_limit_gb, purchased_traffic_gb)
+
+        # Devices
+        default_device_limit = settings.DEFAULT_DEVICE_LIMIT
+        device_price_per_unit = settings.PRICE_PER_DEVICE
+        extra_devices = max(0, (subscription.device_limit or 0) - default_device_limit)
+        devices_price = extra_devices * device_price_per_unit
+
+        subtotal = base_price + servers_price + traffic_price + devices_price
+
+        # Resolve discounts
+        group_pct = 0
+        if user and getattr(user, 'promo_group', None) is not None:
+            group_pct = user.promo_group.get_discount_percent('period', period_days)
+
+        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+
+        final_total, group_discount, offer_discount = self.apply_stacked_discounts(
+            subtotal,
+            group_pct,
+            offer_pct,
+        )
+
+        breakdown = {
+            'servers': server_details,
+            'servers_individual_prices': [d['price'] for d in server_details],
+            'server_ids': connected_squads,
+            'base_traffic_gb': max(0, traffic_limit_gb - purchased_traffic_gb),
+            'purchased_traffic_gb': purchased_traffic_gb,
+            'extra_devices': extra_devices,
+            'group_discount_pct': group_pct,
+            'offer_discount_pct': offer_pct,
+        }
+
+        return RenewalPricing(
+            base_price=base_price,
+            servers_price=servers_price,
+            traffic_price=traffic_price,
+            devices_price=devices_price,
+            promo_group_discount=group_discount,
+            promo_offer_discount=offer_discount,
+            final_total=final_total,
+            period_days=period_days,
+            is_tariff_mode=False,
+            breakdown=breakdown,
+        )
