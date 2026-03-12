@@ -667,9 +667,12 @@ async def sync_tariff_squads(
         semaphore = asyncio.Semaphore(_SYNC_SQUADS_CONCURRENCY)
 
         async def _sync_one(sub: Subscription) -> str:
+            # Counter mutations are safe: no `await` between read-modify-write
+            # and the check within each branch (single-threaded asyncio event loop).
             nonlocal updated_count, failed_count, skipped_count, consecutive_failures, aborted
 
             if aborted:
+                skipped_count += 1
                 return 'skipped'
 
             remnawave_uuid = sub.user.remnawave_uuid if sub.user else None
@@ -685,7 +688,7 @@ async def sync_tariff_squads(
                 try:
                     await api.update_user(
                         uuid=remnawave_uuid,
-                        active_internal_squads=new_squads if new_squads else [],
+                        active_internal_squads=new_squads,
                         external_squad_uuid=ext_squad_uuid,
                     )
                     # Update local DB only on successful API call
