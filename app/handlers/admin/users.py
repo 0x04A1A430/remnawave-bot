@@ -4184,7 +4184,10 @@ async def _calculate_subscription_period_price(
 
     pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
-        db, subscription, period_days, user=target_user,
+        db,
+        subscription,
+        period_days,
+        user=target_user,
     )
     return pricing.final_total
 

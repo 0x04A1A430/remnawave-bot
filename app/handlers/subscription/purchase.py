@@ -1612,9 +1612,7 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
             )
 
             # original = price before ALL discounts, final = price with all discounts
-            total_original_price = (
-                pricing.base_price + pricing.servers_price + pricing.traffic_price + pricing.devices_price
-            )
+            total_original_price = pricing.original_total
 
             renewal_prices[days] = {
                 'final': pricing.final_total,
@@ -1719,6 +1717,9 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
 
 
 async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    if not callback.data:
+        await callback.answer('⚠ Ошибка данных', show_alert=True)
+        return
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
 
@@ -1737,9 +1738,9 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         return
 
     from app.services.pricing_engine import PricingEngine
+    from app.services.subscription_renewal_service import SubscriptionRenewalChargeError, SubscriptionRenewalService
 
     months_in_period = calculate_months_from_days(days)
-    old_end_date = subscription.end_date
 
     try:
         pricing_engine = PricingEngine()
@@ -1750,13 +1751,6 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
             user=db_user,
         )
         price = pricing.final_total
-
-        # Build server_uuid_prices from breakdown for add_subscription_servers
-        server_uuid_prices: dict[str, int] = {}
-        total_servers_price = pricing.servers_price
-        if not pricing.is_tariff_mode:
-            for detail in pricing.breakdown.get('servers', []):
-                server_uuid_prices[detail['uuid']] = detail['price']
 
         # Derive device_limit from subscription (same logic as engine)
         device_limit = subscription.device_limit
@@ -1838,181 +1832,57 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         await callback.answer()
         return
 
+    old_traffic_gb = subscription.traffic_limit_gb
+    renewal_description = f'Продление подписки на {days} дней ({months_in_period} мес)'
+
     try:
-        success = await subtract_user_balance(
+        renewal_service = SubscriptionRenewalService()
+        result = await renewal_service.finalize(
             db,
             db_user,
-            price,
-            f'Продление подписки на {days} дней',
-            consume_promo_offer=promo_offer_discount > 0,
-            mark_as_paid_subscription=True,
+            subscription,
+            pricing,
+            description=renewal_description,
+            payment_method=PaymentMethod.BALANCE,
         )
-
-        if not success:
-            await callback.answer('⚠ Ошибка списания средств', show_alert=True)
-            return
-
-        current_time = datetime.now(UTC)
-
-        was_expired = subscription.status in (
-            SubscriptionStatus.EXPIRED.value,
-            SubscriptionStatus.DISABLED.value,
-        ) or (subscription.end_date is not None and subscription.end_date <= current_time)
-
-        if subscription.end_date > current_time:
-            new_end_date = subscription.end_date + timedelta(days=days)
-        else:
-            new_end_date = current_time + timedelta(days=days)
-
-        subscription.end_date = new_end_date
-
-        subscription.status = SubscriptionStatus.ACTIVE.value
-        subscription.updated_at = current_time
-
-        # При продлении истёкшей подписки — сбрасываем докупки трафика
-        if was_expired:
-            from sqlalchemy import delete as sql_delete_tp
-
-            from app.database.models import TrafficPurchase as TrafficPurchaseModel
-
-            await db.execute(
-                sql_delete_tp(TrafficPurchaseModel).where(TrafficPurchaseModel.subscription_id == subscription.id)
-            )
-            purchased = subscription.purchased_traffic_gb or 0
-            if purchased > 0:
-                old_traffic = subscription.traffic_limit_gb
-                subscription.traffic_limit_gb = max(0, (subscription.traffic_limit_gb or 0) - purchased)
-                logger.info(
-                    'Сброс докупок при продлении истёкшей подписки',
-                    old_traffic=old_traffic,
-                    new_traffic=subscription.traffic_limit_gb,
-                )
-            subscription.purchased_traffic_gb = 0
-            subscription.traffic_reset_at = None
-            if settings.RESET_TRAFFIC_ON_PAYMENT:
-                subscription.traffic_used_gb = 0.0
-
-        # В режиме fixed_with_topup при продлении сбрасываем трафик до фиксированного лимита
-        traffic_was_reset = False
-        old_traffic_limit = subscription.traffic_limit_gb
-        if settings.is_traffic_fixed():
-            fixed_limit = settings.get_fixed_traffic_limit()
-            if subscription.traffic_limit_gb != fixed_limit or (subscription.purchased_traffic_gb or 0) > 0:
-                traffic_was_reset = True
-                subscription.traffic_limit_gb = fixed_limit
-                from sqlalchemy import delete as sql_delete_fixed
-
-                from app.database.models import TrafficPurchase as TPFixed
-
-                await db.execute(sql_delete_fixed(TPFixed).where(TPFixed.subscription_id == subscription.id))
-                subscription.purchased_traffic_gb = 0
-                subscription.traffic_reset_at = None
-                logger.info(
-                    '🔄 Сброс трафика при продлении: ГБ → ГБ',
-                    old_traffic_limit=old_traffic_limit,
-                    fixed_limit=fixed_limit,
-                )
-
-        await db.commit()
-        await db.refresh(subscription)
-        await db.refresh(db_user)
-
-        # ensure freshly loaded values are available even if SQLAlchemy expires
-        # attributes on subsequent access
-        refreshed_end_date = subscription.end_date
-        refreshed_balance = db_user.balance_kopeks
-
-        from app.database.crud.server_squad import get_server_ids_by_uuids
-        from app.database.crud.subscription import add_subscription_servers
-
-        server_ids = await get_server_ids_by_uuids(db, subscription.connected_squads)
-        if server_ids:
-            from sqlalchemy import select
-
-            from app.database.models import ServerSquad
-
-            result = await db.execute(
-                select(ServerSquad.id, ServerSquad.squad_uuid).where(ServerSquad.id.in_(server_ids))
-            )
-            id_to_uuid = {row.id: row.squad_uuid for row in result}
-            default_price = total_servers_price // len(server_ids) if server_ids else 0
-            server_prices_for_period = [
-                server_uuid_prices.get(id_to_uuid.get(server_id, ''), default_price) for server_id in server_ids
-            ]
-            await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
-
-        try:
-            subscription_service = SubscriptionService()
-            remnawave_result = await subscription_service.update_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-                reset_reason='продление подписки',
-            )
-            if remnawave_result:
-                logger.info('✅ RemnaWave обновлен успешно')
-            else:
-                logger.error('⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
-        except Exception as e:
-            logger.error('⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
-
-        transaction = await create_transaction(
-            db=db,
-            user_id=db_user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
-            description=f'Продление подписки на {days} дней ({months_in_period} мес)',
-        )
-
-        try:
-            notification_service = AdminNotificationService(callback.bot)
-            await notification_service.send_subscription_extension_notification(
-                db,
-                db_user,
-                subscription,
-                transaction,
-                days,
-                old_end_date,
-                new_end_date=refreshed_end_date,
-                balance_after=refreshed_balance,
-            )
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления о продлении', error=e)
-
-        success_message = (
-            '✅ Подписка успешно продлена!\n\n'
-            f'⏰ Добавлено: {days} дней\n'
-            f'Действует до: {format_local_datetime(refreshed_end_date, "%d.%m.%Y %H:%M")}\n\n'
-            f'💰 Списано: {texts.format_price(price)}'
-        )
-
-        # Добавляем уведомление о сбросе трафика
-        if traffic_was_reset:
-            fixed_limit = settings.get_fixed_traffic_limit()
-            success_message += f'\n\n📊 Трафик сброшен до {fixed_limit} ГБ'
-
-        if promo_offer_discount > 0:
-            success_message += f' (включая доп. скидку {offer_pct}%: -{texts.format_price(promo_offer_discount)})'
-
-        await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
-
-        logger.info(
-            '✅ Пользователь продлил подписку на дней за ₽',
-            telegram_id=db_user.telegram_id,
-            days=days,
-            price=price / 100,
-        )
-
+    except SubscriptionRenewalChargeError:
+        await callback.answer('⚠ Ошибка списания средств', show_alert=True)
+        return
     except Exception as e:
         logger.error('⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ', error=e)
-        import traceback
-
-        logger.error('TRACEBACK', format_exc=traceback.format_exc())
-
         await callback.message.edit_text(
             '⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
             reply_markup=get_back_keyboard(db_user.language),
         )
+        await callback.answer()
+        return
+
+    refreshed_end_date = result.subscription.end_date
+    await db.refresh(db_user)
+
+    success_message = (
+        '✅ Подписка успешно продлена!\n\n'
+        f'⏰ Добавлено: {days} дней\n'
+        f'Действует до: {format_local_datetime(refreshed_end_date, "%d.%m.%Y %H:%M")}\n\n'
+        f'💰 Списано: {texts.format_price(price)}'
+    )
+
+    # Добавляем уведомление о сбросе трафика
+    if settings.is_traffic_fixed() and result.subscription.traffic_limit_gb != old_traffic_gb:
+        fixed_limit = settings.get_fixed_traffic_limit()
+        success_message += f'\n\n📊 Трафик сброшен до {fixed_limit} ГБ'
+
+    if promo_offer_discount > 0:
+        success_message += f' (включая доп. скидку {offer_pct}%: -{texts.format_price(promo_offer_discount)})'
+
+    await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
+
+    logger.info(
+        '✅ Пользователь продлил подписку на дней за ₽',
+        telegram_id=db_user.telegram_id,
+        days=days,
+        price=price / 100,
+    )
 
     await callback.answer()
 
@@ -4413,7 +4283,32 @@ async def _extend_existing_subscription(
     current_subscription.updated_at = current_time
 
     # Сохраняем изменения
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as commit_error:
+        logger.error('Ошибка сохранения продления подписки', error=commit_error, exc_info=True)
+        await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                db_user,
+                price_kopeks,
+                'Возврат: ошибка продления подписки',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: не удалось вернуть средства после ошибки продления',
+                user_id=db_user.id,
+                price_kopeks=price_kopeks,
+                refund_error=refund_error,
+            )
+        await callback.answer('⚠ Ошибка продления подписки', show_alert=True)
+        return
     await db.refresh(current_subscription)
     await db.refresh(db_user)
 

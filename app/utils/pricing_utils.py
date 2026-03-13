@@ -18,20 +18,6 @@ def calculate_months_from_days(days: int) -> int:
     return max(1, round(days / 30))
 
 
-def calculate_period_multiplier(period_days: int) -> tuple[int, float]:
-    exact_months = period_days / 30
-    months_count = max(1, round(exact_months))
-
-    logger.debug(
-        'Период дней точных месяцев ≈ месяцев для расчета',
-        period_days=period_days,
-        exact_months=round(exact_months, 2),
-        months_count=months_count,
-    )
-
-    return months_count, exact_months
-
-
 def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_days: int = 30) -> tuple[int, int]:
     """Calculate prorated price based on remaining days.
 
@@ -340,17 +326,3 @@ def validate_pricing_calculation(base_price: int, monthly_additions: int, months
         )
 
     return is_valid
-
-
-STANDARD_PERIODS = {
-    14: {'months': 0.5, 'display_ru': '2 недели', 'display_en': '2 weeks'},
-    30: {'months': 1, 'display_ru': '1 месяц', 'display_en': '1 month'},
-    60: {'months': 2, 'display_ru': '2 месяца', 'display_en': '2 months'},
-    90: {'months': 3, 'display_ru': '3 месяца', 'display_en': '3 months'},
-    180: {'months': 6, 'display_ru': '6 месяцев', 'display_en': '6 months'},
-    360: {'months': 12, 'display_ru': '1 год', 'display_en': '1 year'},
-}
-
-
-def get_period_info(days: int) -> dict:
-    return STANDARD_PERIODS.get(days)

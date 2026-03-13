@@ -1297,6 +1297,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     # Найти максимальный период <= баланса
     best_period = None
     best_price = 0
+    best_pricing = None  # Cache pricing result for reuse in finalize()
 
     # Для продления используем PricingEngine (единый расчёт для всех поверхностей).
     from app.services.pricing_engine import PricingEngine
@@ -1316,6 +1317,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             if price <= balance:
                 best_period = period
                 best_price = price
+                best_pricing = pricing_result if subscription else None
                 break
 
         if not best_period:
@@ -1341,8 +1343,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 
     try:
         if subscription:
-            # Продление существующей подписки
-            pricing = await pricing_engine.calculate_renewal_price(db, subscription, best_period, user=db_user)
+            # Продление существующей подписки (reuse cached pricing from loop above)
+            if best_pricing is None:
+                raise ValueError('best_pricing is None despite best_period being set')
+            pricing = best_pricing
 
             await renewal_service.finalize(
                 db,
