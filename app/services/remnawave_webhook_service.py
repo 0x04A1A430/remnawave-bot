@@ -530,7 +530,7 @@ class RemnaWaveWebhookService:
     ) -> None:
         if subscription:
             self._stamp_webhook_update(subscription)
-            if subscription.status == SubscriptionStatus.DISABLED.value:
+            if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
                 await reactivate_subscription(db, subscription)
                 logger.info(
                     'Webhook: subscription re-enabled for user', subscription_id=subscription.id, user_id=user.id
@@ -545,8 +545,11 @@ class RemnaWaveWebhookService:
     ) -> None:
         if subscription:
             self._stamp_webhook_update(subscription)
-            if subscription.status == SubscriptionStatus.ACTIVE.value:
-                await deactivate_subscription(db, subscription)
+            if subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value):
+                subscription.status = SubscriptionStatus.LIMITED.value
+                subscription.updated_at = datetime.now(UTC)
+                await db.commit()
+                await db.refresh(subscription)
                 logger.info(
                     'Webhook: subscription limited (traffic) for user', subscription_id=subscription.id, user_id=user.id
                 )
@@ -561,8 +564,8 @@ class RemnaWaveWebhookService:
         if subscription:
             self._stamp_webhook_update(subscription)
             await update_subscription_usage(db, subscription, 0.0)
-            # Re-enable if was disabled due to traffic limit
-            if subscription.status == SubscriptionStatus.DISABLED.value:
+            # Re-enable if was disabled/limited due to traffic limit
+            if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
                 await reactivate_subscription(db, subscription)
             logger.info(
                 'Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id
@@ -721,7 +724,7 @@ class RemnaWaveWebhookService:
             subscription.subscription_url = None
             subscription.subscription_crypto_link = None
             subscription.remnawave_short_uuid = None
-            subscription.connected_squads = None
+            subscription.connected_squads = []
             subscription.updated_at = datetime.now(UTC)
 
             # Remove SubscriptionServer link rows

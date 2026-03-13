@@ -1210,7 +1210,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
                 end_date=format_datetime(subscription.end_date),
                 traffic=traffic_usage,
                 devices=subscription.device_limit,
-                countries=len(subscription.connected_squads),
+                countries=len(subscription.connected_squads or []),
             )
         )
     else:
@@ -2712,7 +2712,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         text += f'• Статус: {sub_status}{sub_type}\n'
         text += f'• Трафик: {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ\n'
         text += f'• Устройства: {subscription.device_limit}\n'
-        text += f'• Стран: {len(subscription.connected_squads)}\n'
+        text += f'• Стран: {len(subscription.connected_squads or [])}\n'
     else:
         text += '• Отсутствует\n'
 
@@ -4173,8 +4173,7 @@ async def _calculate_subscription_period_price(
     subscription_service: SubscriptionService | None = None,
 ) -> int:
     """Рассчитывает стоимость подписки для администратора с учётом всех параметров."""
-
-    service = subscription_service or SubscriptionService()
+    from app.services.pricing_engine import pricing_engine
 
     # Загружаем тариф для корректного расчёта в тарифном режиме
     if subscription.tariff_id:
@@ -4183,13 +4182,13 @@ async def _calculate_subscription_period_price(
         except Exception as e:
             logger.warning('Не удалось загрузить тариф для расчёта цены', error=e)
 
-    return await service.calculate_renewal_price(
-        subscription=subscription,
-        period_days=period_days,
-        db=db,
+    pricing = await pricing_engine.calculate_renewal_price(
+        db,
+        subscription,
+        period_days,
         user=target_user,
-        promo_group=getattr(target_user, 'promo_group', None),
     )
+    return pricing.final_total
 
 
 @admin_required

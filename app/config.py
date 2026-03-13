@@ -2700,6 +2700,25 @@ PERIOD_PRICES: dict[int, int] = {}
 refresh_period_prices()
 
 
+def _build_classic_period_prices() -> dict[int, int]:
+    """Build classic-mode period prices directly from PRICE_*_DAYS settings.
+
+    Unlike PERIOD_PRICES (which may use DB tariff prices in tariffs mode),
+    this always reflects the env/settings values — the canonical prices for
+    classic (non-tariff) subscriptions.
+    """
+    return {days: getattr(settings, field_name, 0) for days, field_name in _PERIOD_PRICE_FIELDS.items()}
+
+
+CLASSIC_PERIOD_PRICES: dict[int, int] = _build_classic_period_prices()
+
+
+def refresh_classic_period_prices() -> None:
+    """Rebuild CLASSIC_PERIOD_PRICES from current settings."""
+    CLASSIC_PERIOD_PRICES.clear()
+    CLASSIC_PERIOD_PRICES.update(_build_classic_period_prices())
+
+
 def get_traffic_prices() -> dict[int, int]:
     packages = settings.get_traffic_packages()
     return {package['gb']: package['price'] for package in packages}

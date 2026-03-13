@@ -446,6 +446,15 @@ async def execute_merge(
     # 4. Суммируем баланс (включая отрицательный — долг не должен исчезать)
     transferred_kopeks = secondary.balance_kopeks
     if transferred_kopeks != 0:
+        from app.database.models import User as UserModel
+
+        if isinstance(primary, UserModel):
+            from app.database.crud.user import lock_user_for_update
+
+            primary = await lock_user_for_update(db, primary)
+            secondary = await lock_user_for_update(db, secondary)
+            # Re-read after lock in case concurrent payment changed it
+            transferred_kopeks = secondary.balance_kopeks
         primary.balance_kopeks += transferred_kopeks
         secondary.balance_kopeks = 0
         logger.info(

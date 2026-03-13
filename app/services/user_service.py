@@ -1246,10 +1246,14 @@ class UserService:
                     AccessPolicy,
                     AdminAuditLog,
                     AdminRole,
+                    RioPayPayment,
+                    SavedPaymentMethod,
                     UserRole,
                     WithdrawalRequest,
                 )
 
+                await db.execute(delete(SavedPaymentMethod).where(SavedPaymentMethod.user_id == user_id))
+                await db.execute(delete(RioPayPayment).where(RioPayPayment.user_id == user_id))
                 await db.execute(delete(AdminAuditLog).where(AdminAuditLog.user_id == user_id))
                 await db.execute(delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user_id))
                 await db.execute(

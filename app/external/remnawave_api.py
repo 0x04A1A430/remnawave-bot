@@ -400,7 +400,12 @@ class RemnaWaveAPI:
 
                     if response.status >= 400:
                         error_message = response_data.get('message', f'HTTP {response.status}')
-                        log = logger.warning if response.status in (502, 503, 504) else logger.error
+                        # Downgrade known-harmless 400s to warning (caller handles them as success)
+                        error_lower = str(error_message).lower()
+                        is_harmless = response.status == 400 and (
+                            'already enabled' in error_lower or 'already disabled' in error_lower
+                        )
+                        log = logger.warning if response.status in (502, 503, 504) or is_harmless else logger.error
                         log('API Error %s: %s', response.status, error_message)
                         log('Response: %s', response_text[:500])
                         raise RemnaWaveAPIError(error_message, response.status, response_data)

@@ -8,6 +8,7 @@ from sqlalchemy import Integer, and_, delete as sa_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
     extend_subscription,
@@ -1122,26 +1123,18 @@ async def update_user_subscription(
             )
 
         # Preserve extra purchased devices above the old tariff's base limit
-        extra_devices = 0
-        if subscription.tariff_id:
-            old_tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            if old_tariff and old_tariff.device_limit:
-                extra_devices = max(0, (subscription.device_limit or old_tariff.device_limit) - old_tariff.device_limit)
+        from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
-        from app.config import settings
+        old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
 
         subscription.tariff_id = request.tariff_id
         subscription.traffic_limit_gb = tariff.traffic_limit_gb
-
-        new_base = tariff.device_limit or 1
-        new_total = new_base + extra_devices
-        # Cap at new tariff's max_device_limit, falling back to global MAX_DEVICES_LIMIT
-        effective_max = tariff.max_device_limit or (
-            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
+        subscription.device_limit = calc_device_limit_on_tariff_switch(
+            current_device_limit=subscription.device_limit,
+            old_tariff_device_limit=old_tariff.device_limit if old_tariff else None,
+            new_tariff_device_limit=tariff.device_limit,
+            max_device_limit=tariff.max_device_limit,
         )
-        if effective_max and new_total > effective_max:
-            new_total = effective_max
-        subscription.device_limit = new_total
         # Set squads from tariff
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads
@@ -2523,8 +2516,25 @@ async def sync_user_from_panel(
                 if panel_user.expire_at:
                     panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
 
-                    sub_end_utc = sub.end_date if sub.end_date and sub.end_date.tzinfo else sub.end_date
+                    sub_end_utc = sub.end_date
+                    if sub_end_utc is not None and sub_end_utc.tzinfo is None:
+                        sub_end_utc = sub_end_utc.replace(tzinfo=UTC)
                     if sub_end_utc != panel_expire_utc:
+                        # Предупреждаем если локальная дата новее панельной
+                        # (например, автопокупка уже продлила подписку)
+                        if sub_end_utc and panel_expire_utc and sub_end_utc > panel_expire_utc:
+                            logger.warning(
+                                'Sync: локальная end_date новее панельной, перезаписываем. '
+                                'Возможно автопокупка уже продлила подписку.',
+                                user_id=user_id,
+                                local_end_date=sub_end_utc.isoformat(),
+                                panel_expire_at=panel_expire_utc.isoformat(),
+                            )
+                            errors.append(
+                                f'Warning: local end_date ({sub_end_utc.isoformat()}) is newer than '
+                                f'panel expire_at ({panel_expire_utc.isoformat()}). '
+                                f'Panel value applied — check if auto-purchase extended subscription.'
+                            )
                         changes['end_date'] = {
                             'old': sub.end_date.isoformat() if sub.end_date else None,
                             'new': panel_expire_utc.isoformat(),

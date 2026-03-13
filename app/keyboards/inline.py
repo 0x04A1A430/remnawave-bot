@@ -1146,7 +1146,11 @@ def get_subscription_keyboard(
 
                 sub_status = getattr(subscription, 'status', None)
                 is_paused = getattr(subscription, 'is_daily_paused', False)
-                is_inactive = sub_status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.EXPIRED.value)
+                is_inactive = sub_status in (
+                    SubscriptionStatus.DISABLED.value,
+                    SubscriptionStatus.EXPIRED.value,
+                    SubscriptionStatus.LIMITED.value,
+                )
 
                 if is_inactive or is_paused:
                     # Подписка остановлена (системой или пользователем) — показываем «Возобновить»
@@ -1500,8 +1504,17 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
             InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data='balance_history'),
             InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data='balance_topup'),
         ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
     ]
+    if settings.YOOKASSA_RECURRENT_ENABLED:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SAVED_CARDS_BUTTON', '💳 Привязанные карты'),
+                    callback_data='saved_cards_list',
+                )
+            ]
+        )
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1933,6 +1946,68 @@ def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
                 )
             ],
             [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
+        ]
+    )
+
+
+_PAYMENT_METHOD_LOCALE_KEYS: dict[str, tuple[str, str]] = {
+    'bank_card': ('PAYMENT_METHOD_BANK_CARD', '💳 Банковская карта'),
+    'yoo_money': ('PAYMENT_METHOD_YOO_MONEY', '🟣 ЮMoney'),
+    'sberbank': ('PAYMENT_METHOD_SBERBANK', '🟢 СберPay'),
+    'tinkoff_bank': ('PAYMENT_METHOD_TINKOFF_BANK', '🟡 Т-Банк'),
+    'sbp': ('PAYMENT_METHOD_SBP', '🏦 СБП'),
+    'mir_pay': ('PAYMENT_METHOD_MIR_PAY', '🟦 Mir Pay'),
+}
+
+
+def _get_payment_method_display_name(card, language: str = DEFAULT_LANGUAGE) -> str:
+    """Локализованное название метода оплаты + реквизиты."""
+    texts = get_texts(language)
+
+    # Для банковских карт title уже содержит тип + маску (например "Visa *4444")
+    if card.method_type == 'bank_card' or (not card.method_type and card.card_last4):
+        if card.title:
+            return card.title
+        if card.card_last4:
+            return f'{card.card_type or "Card"} *{card.card_last4}'
+
+    # Для остальных методов: локализованное название + реквизиты из title
+    locale_entry = _PAYMENT_METHOD_LOCALE_KEYS.get(card.method_type)
+    if locale_entry:
+        key, default = locale_entry
+        method_name = texts.t(key, default)
+    else:
+        method_name = card.method_type or 'Card'
+
+    if card.title:
+        return f'{method_name} {card.title}'
+    return method_name
+
+
+def get_saved_cards_keyboard(cards: list, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard = []
+    for card in cards:
+        card_label = f'🗑 {_get_payment_method_display_name(card, language)}'
+        keyboard.append([InlineKeyboardButton(text=card_label, callback_data=f'unlink_card_{card.id}')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_confirm_unlink_keyboard(card_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SAVED_CARDS_CONFIRM_YES', '✅ Да, отвязать'),
+                    callback_data=f'confirm_unlink_{card_id}',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('CANCEL', '❌ Отмена'),
+                    callback_data='saved_cards_list',
+                ),
+            ]
         ]
     )
 

@@ -1053,12 +1053,15 @@ class MonitoringService:
                     autopay_period = 30
 
                 try:
-                    renewal_cost = await self.subscription_service.calculate_renewal_price(
+                    from app.services.pricing_engine import pricing_engine
+
+                    pricing = await pricing_engine.calculate_renewal_price(
+                        db,
                         subscription,
                         autopay_period,
-                        db,
                         user=user,
                     )
+                    renewal_cost = pricing.final_total
                 except Exception as e:
                     logger.error(
                         'Ошибка расчёта стоимости автопродления, пропускаем',

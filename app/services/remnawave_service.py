@@ -1796,6 +1796,8 @@ class RemnaWaveService:
 
             if panel_status == 'ACTIVE' and end_date_utc > current_time:
                 new_status = SubscriptionStatus.ACTIVE.value
+            elif panel_status == 'LIMITED':
+                new_status = SubscriptionStatus.LIMITED.value
             elif panel_status == 'DISABLED':
                 new_status = SubscriptionStatus.DISABLED.value
             elif end_date_utc <= current_time:
@@ -2387,7 +2389,8 @@ class RemnaWaveService:
 
     async def force_cleanup_user_data(self, db: AsyncSession, user: User) -> bool:
         """
-        ОПАСНАЯ ФУНКЦИЯ: Полностью сбрасывает все данные пользователя включая баланс!
+        ОПАСНАЯ ФУНКЦИЯ: Полностью сбрасывает данные подписки пользователя.
+        Баланс и has_had_paid_subscription СОХРАНЯЮТСЯ (оплаченные средства).
         Используйте только для полной очистки пользователя.
         """
         try:
@@ -2422,7 +2425,6 @@ class RemnaWaveService:
                 from sqlalchemy import delete
 
                 from app.database.models import (
-                    PromoCodeUse,
                     ReferralEarning,
                     SubscriptionServer,
                     SubscriptionStatus,
@@ -2444,17 +2446,20 @@ class RemnaWaveService:
                 await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user.id))
                 logger.info('🗑️ Удалены реферальные доходы для', user_id_display=user_id_display)
 
-                await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
-                logger.info('🗑️ Удалены использования промокодов для', user_id_display=user_id_display)
+                # PromoCodeUse НЕ удаляем — история промокодов постоянна,
+                # иначе пользователь может повторно активировать промокоды
 
             except Exception as records_error:
                 logger.error('❌ Ошибка удаления связанных записей', records_error=records_error)
 
             try:
-                user.balance_kopeks = 0
+                if user.balance_kopeks > 0:
+                    logger.warning(
+                        '⚠️ force_cleanup: СОХРАНЯЕМ баланс пользователя (оплаченные средства)',
+                        user_id_display=user_id_display,
+                        balance_kopeks=user.balance_kopeks,
+                    )
                 user.remnawave_uuid = None
-                user.has_had_paid_subscription = False
-                user.used_promocodes = 0
                 user.updated_at = self._now_utc()
 
                 if user.subscription:
@@ -2524,7 +2529,10 @@ class RemnaWaveService:
                         stats['checked'] += 1
                         user = subscription.user
 
-                        if subscription.status == SubscriptionStatus.DISABLED.value:
+                        if subscription.status in (
+                            SubscriptionStatus.DISABLED.value,
+                            SubscriptionStatus.LIMITED.value,
+                        ):
                             continue
 
                         if user.telegram_id not in panel_telegram_ids:
