@@ -4537,14 +4537,7 @@ async def _prepare_subscription_renewal_options(
             continue
 
         # Вычисляем оригинальную цену (до скидок) для отображения зачёркнутой цены
-        original_price = (
-            pricing_result.base_price
-            + pricing_result.servers_price
-            + pricing_result.traffic_price
-            + pricing_result.devices_price
-            + pricing_result.promo_group_discount
-            + pricing_result.promo_offer_discount
-        )
+        original_price = pricing_result.original_total
         has_discount = original_price > pricing_result.final_total and original_price > 0
         discount_percent = (
             int((original_price - pricing_result.final_total) * 100 / original_price) if has_discount else 0
@@ -5228,100 +5221,41 @@ async def submit_subscription_renewal_endpoint(
     description = f'Продление подписки на {period_days} дней'
 
     if missing_amount <= 0:
-        if pricing_result.is_tariff_mode:
-            # Тарифный режим: простое продление
-            try:
-                success = await subtract_user_balance(
-                    db,
-                    user,
-                    final_total,
-                    description,
-                    consume_promo_offer=promo_offer_discount_value > 0,
-                    mark_as_paid_subscription=True,
-                )
-                if not success:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail={'code': 'balance_error', 'message': 'Failed to subtract balance'},
-                    )
-
-                subscription = await extend_subscription(db, subscription, period_days)
-                new_end_date = subscription.end_date
-
-                await create_transaction(
-                    db,
-                    user_id=user.id,
-                    type=TransactionType.SUBSCRIPTION_PAYMENT,
-                    amount_kopeks=final_total,
-                    description=description,
-                )
-
-                # Синхронизируем с RemnaWave (сброс трафика по настройке)
-                try:
-                    service = SubscriptionService()
-                    await service.update_remnawave_user(
-                        db,
-                        subscription,
-                        reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-                        reset_reason='subscription renewal (miniapp)',
-                    )
-                except Exception as e:
-                    logger.error('Ошибка синхронизации с RemnaWave при продлении (miniapp)', error=e)
-
-                lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
-                if lang == 'ru':
-                    message = f'Подписка продлена до {new_end_date.strftime("%d.%m.%Y")}'
-                else:
-                    message = f'Subscription extended until {new_end_date.strftime("%Y-%m-%d")}'
-
-                return MiniAppSubscriptionRenewalResponse(
-                    message=message,
-                    balance_kopeks=user.balance_kopeks,
-                    balance_label=settings.format_price(user.balance_kopeks),
-                    subscription_id=subscription.id,
-                    renewed_until=new_end_date,
-                )
-            except Exception as error:
-                await db.rollback()
-                logger.error('Failed to renew tariff subscription', subscription_id=subscription.id, error=error)
-                raise HTTPException(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={'code': 'renewal_failed', 'message': 'Failed to renew subscription'},
-                ) from error
-        else:
-            # Классический режим: finalize() принимает RenewalPricing (duck-typed)
-            try:
-                result = await renewal_service.finalize(
-                    db,
-                    user,
-                    subscription,
-                    pricing_result,
-                    description=description,
-                )
-            except SubscriptionRenewalChargeError as error:
-                logger.error(
-                    'Failed to charge balance for subscription renewal', subscription_id=subscription.id, error=error
-                )
-                raise HTTPException(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={'code': 'charge_failed', 'message': 'Failed to charge balance'},
-                ) from error
-
-            updated_subscription = result.subscription
-            message = _build_renewal_success_message(
+        # Both tariff and classic modes use finalize() for consistent renewal handling
+        # (balance charge, extend, server recording, RemnaWave sync, transaction, admin notification)
+        try:
+            result = await renewal_service.finalize(
+                db,
                 user,
-                updated_subscription,
-                result.total_amount_kopeks,
-                promo_offer_discount_value,
+                subscription,
+                pricing_result,
+                description=description,
+                payment_method=PaymentMethod.BALANCE,
             )
+        except SubscriptionRenewalChargeError as error:
+            logger.error(
+                'Failed to charge balance for subscription renewal', subscription_id=subscription.id, error=error
+            )
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={'code': 'charge_failed', 'message': 'Failed to charge balance'},
+            ) from error
 
-            return MiniAppSubscriptionRenewalResponse(
-                message=message,
-                balance_kopeks=user.balance_kopeks,
-                balance_label=settings.format_price(user.balance_kopeks),
-                subscription_id=updated_subscription.id,
-                renewed_until=updated_subscription.end_date,
-            )
+        updated_subscription = result.subscription
+        message = _build_renewal_success_message(
+            user,
+            updated_subscription,
+            result.total_amount_kopeks,
+            promo_offer_discount_value,
+        )
+
+        return MiniAppSubscriptionRenewalResponse(
+            message=message,
+            balance_kopeks=user.balance_kopeks,
+            balance_label=settings.format_price(user.balance_kopeks),
+            subscription_id=updated_subscription.id,
+            renewed_until=updated_subscription.end_date,
+        )
 
     if not method:
         if final_total > 0 and balance_kopeks < final_total:
@@ -6509,6 +6443,15 @@ async def purchase_tariff_endpoint(
                 },
             )
 
+    # Add extra device cost if user renews same tariff with purchased extra devices
+    subscription = getattr(user, 'subscription', None)
+    if not is_daily_tariff and subscription and subscription.tariff_id == tariff.id:
+        device_price_per_unit = (
+            tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+        )
+        extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
+        base_price_kopeks += extra_devices * device_price_per_unit
+
     # Применяем скидку промогруппы (только для обычных тарифов, не для суточных)
     price_kopeks = base_price_kopeks
     discount_percent = 0
@@ -6524,6 +6467,15 @@ async def purchase_tariff_endpoint(
         if discount_percent > 0:
             price_kopeks = int(base_price_kopeks * (100 - discount_percent) / 100)
 
+    # Apply personal promo_offer discount on top of group discount
+    consume_promo_offer = False
+    if not is_daily_tariff:
+        promo_offer_pct = get_user_active_promo_discount_percent(user)
+        if promo_offer_pct > 0:
+            offer_discount_value = price_kopeks * promo_offer_pct // 100
+            price_kopeks = price_kopeks - offer_discount_value
+            consume_promo_offer = True
+
     # Проверяем баланс
     if user.balance_kopeks < price_kopeks:
         missing = price_kopeks - user.balance_kopeks
@@ -6535,8 +6487,6 @@ async def purchase_tariff_endpoint(
                 'missing_amount': missing,
             },
         )
-
-    subscription = getattr(user, 'subscription', None)
 
     # Списываем баланс
     if is_daily_tariff:
@@ -6550,6 +6500,7 @@ async def purchase_tariff_endpoint(
         user,
         price_kopeks,
         description,
+        consume_promo_offer=consume_promo_offer,
         mark_as_paid_subscription=True,
     )
     if not success:
@@ -6581,6 +6532,11 @@ async def purchase_tariff_endpoint(
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
     if subscription:
+        # Preserve extra purchased devices when renewing the same tariff
+        if subscription.tariff_id == tariff.id:
+            effective_device_limit = max(tariff.device_limit or 0, subscription.device_limit or 0)
+        else:
+            effective_device_limit = tariff.device_limit
         # Смена/продление тарифа
         subscription = await extend_subscription(
             db=db,
@@ -6588,7 +6544,7 @@ async def purchase_tariff_endpoint(
             days=payload.period_days,
             tariff_id=tariff.id,
             traffic_limit_gb=tariff.traffic_limit_gb,
-            device_limit=tariff.device_limit,
+            device_limit=effective_device_limit,
             connected_squads=squads,
         )
     else:
@@ -6849,6 +6805,16 @@ async def switch_tariff_endpoint(
             detail={'code': 'no_subscription', 'message': 'No active subscription with tariff'},
         )
 
+    # Lock subscription row to prevent concurrent switch race condition
+    locked_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    subscription = locked_result.scalar_one()
+    user.subscription = subscription
+
     if subscription.status not in ('active', 'trial'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -6935,6 +6901,7 @@ async def switch_tariff_endpoint(
             upgrade_cost,
             description,
             mark_as_paid_subscription=True,
+            commit=False,
         )
         if not success:
             raise HTTPException(
@@ -6943,22 +6910,26 @@ async def switch_tariff_endpoint(
             )
 
         # Записываем транзакцию
-        await create_transaction(
+        switch_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=upgrade_cost,
             description=description,
+            payment_method=PaymentMethod.BALANCE,
+            commit=False,
         )
     else:
         # Бесплатный переход (downgrade) — записываем в историю
         description = f"Переход на тариф '{new_tariff.name}'"
+        switch_transaction = None
         await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=0,
             description=description,
+            commit=False,
         )
 
     # Получаем список серверов из тарифа
@@ -7022,6 +6993,20 @@ async def switch_tariff_endpoint(
             logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')
 
     await db.commit()
+
+    # Emit deferred side-effects after atomic commit
+    if upgrade_cost > 0 and switch_transaction:
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            switch_transaction,
+            amount_kopeks=upgrade_cost,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.BALANCE,
+        )
+
     await db.refresh(subscription)
     await db.refresh(user)
 

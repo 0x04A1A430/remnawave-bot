@@ -629,6 +629,9 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
     db.add(earning)
 
     # Добавляем на баланс пользователя
+    from app.database.crud.user import lock_user_for_update
+
+    target_user = await lock_user_for_update(db, target_user)
     target_user.balance_kopeks += amount_kopeks
 
     await db.commit()
