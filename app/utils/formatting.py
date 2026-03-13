@@ -21,12 +21,14 @@ def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
 
 def format_period(days: int) -> str:
     """Форматирует период."""
-    if days == 1:
-        return '1 день'
-    if days < 5:
-        return f'{days} дня'
-    if days < 21 or days % 10 >= 5 or days % 10 == 0:
-        return f'{days} дней'
-    if days % 10 == 1:
-        return f'{days} день'
-    return f'{days} дня'
+    mod100 = days % 100
+    mod10 = days % 10
+    if 11 <= mod100 <= 19:
+        word = 'дней'
+    elif mod10 == 1:
+        word = 'день'
+    elif 2 <= mod10 <= 4:
+        word = 'дня'
+    else:
+        word = 'дней'
+    return f'{days} {word}'

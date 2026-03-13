@@ -28,7 +28,7 @@ def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_
     days_remaining = max(1, (end_date - now).days)
     days_to_charge = max(min_charge_days, days_remaining)
 
-    total_price = int(monthly_price * days_to_charge / 30)
+    total_price = monthly_price * days_to_charge // 30
     if monthly_price > 0:
         total_price = max(100, total_price)  # Минимум 1 рубль
 
@@ -163,14 +163,20 @@ async def compute_simple_subscription_price(
         elif raw_squad:
             resolved_uuids.append(str(raw_squad))
 
-    from app.database.crud.server_squad import get_server_squad_by_uuid
+    from app.database.crud.server_squad import get_server_squads_by_uuids
 
     server_breakdown: list[dict[str, Any]] = []
     servers_price_original = 0
     servers_discount_total = 0
 
+    if resolved_uuids:
+        servers = await get_server_squads_by_uuids(db, resolved_uuids)
+        server_map = {s.squad_uuid: s for s in servers}
+    else:
+        server_map = {}
+
     for squad_uuid in resolved_uuids:
-        server = await get_server_squad_by_uuid(db, squad_uuid)
+        server = server_map.get(squad_uuid)
         if not server:
             logger.warning('SIMPLE_SUBSCRIPTION_PRICE_SERVER_NOT_FOUND | squad', squad_uuid=squad_uuid)
             server_breakdown.append(

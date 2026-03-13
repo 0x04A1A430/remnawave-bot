@@ -42,6 +42,7 @@ class ClassicBreakdown:
     base_traffic_gb: int
     purchased_traffic_gb: int
     extra_devices: int
+    # NB: dict[str, int] per-category (period/servers/traffic/devices), unlike TariffBreakdown's single int
     group_discount_pct: dict[str, int]
     offer_discount_pct: int
 
@@ -110,8 +111,8 @@ class PricingEngine:
 
         try:
             servers = await get_server_squads_by_uuids(db, country_uuids)
-        except Exception as e:
-            logger.error('Ошибка пакетной загрузки серверов', error=str(e))
+        except Exception as e:  # intentional broad catch: pricing must not crash on DB errors, servers_price=0 is safe (user pays less)
+            logger.error('Ошибка пакетной загрузки серверов', error=str(e), squad_uuids=country_uuids)
             return 0, [{'uuid': uuid, 'id': None, 'price': 0, 'status': 'error'} for uuid in country_uuids]
 
         server_map = {s.squad_uuid: s for s in servers}
@@ -196,8 +197,15 @@ class PricingEngine:
         if not isinstance(period_days, int) or period_days <= 0:
             raise ValueError(f'Invalid period_days: {period_days}')
 
-        if subscription.tariff_id is not None and subscription.tariff is not None:
-            return await self._calculate_tariff_mode(db, subscription, period_days, user=user)
+        if subscription.tariff_id is not None:
+            if subscription.tariff is None:
+                logger.error(
+                    'tariff_id set but tariff relationship not loaded, falling back to classic mode',
+                    subscription_id=getattr(subscription, 'id', None),
+                    tariff_id=subscription.tariff_id,
+                )
+            else:
+                return await self._calculate_tariff_mode(db, subscription, period_days, user=user)
         return await self._calculate_classic_mode(db, subscription, period_days, user=user)
 
     # ------------------------------------------------------------------
@@ -297,6 +305,12 @@ class PricingEngine:
         base_price_original = CLASSIC_PERIOD_PRICES.get(period_days)
         if base_price_original is None:
             base_price_original = PERIOD_PRICES.get(period_days, 0)
+            if base_price_original > 0:
+                logger.warning(
+                    'CLASSIC_PERIOD_PRICES miss, falling back to PERIOD_PRICES — verify price is not from tariff regime',
+                    period_days=period_days,
+                    fallback_price_kopeks=base_price_original,
+                )
 
         # --- Per-category discount percents ---
         period_pct = 0

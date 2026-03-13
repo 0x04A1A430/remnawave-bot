@@ -14,6 +14,7 @@ from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Us
 from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, RemnaWaveUser, TrafficLimitStrategy, UserStatus
 from app.utils.pricing_utils import (
     calculate_months_from_days,
+    resolve_discount_percent,
 )
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
@@ -22,24 +23,6 @@ from app.utils.subscription_utils import (
 
 logger = structlog.get_logger(__name__)
 
-
-def _resolve_discount_percent(
-    user: User | None,
-    promo_group: PromoGroup | None,
-    category: str,
-    *,
-    period_days: int | None = None,
-) -> int:
-    if user is not None:
-        try:
-            return user.get_promo_discount(category, period_days)
-        except AttributeError:
-            pass
-
-    if promo_group is not None:
-        return promo_group.get_discount_percent(category, period_days)
-
-    return 0
 
 
 def get_traffic_reset_strategy(tariff=None):
@@ -813,7 +796,7 @@ class SubscriptionService:
         months_in_period = calculate_months_from_days(period_days)
 
         base_price_original = PERIOD_PRICES.get(period_days, 0)
-        period_discount_percent = _resolve_discount_percent(
+        period_discount_percent = resolve_discount_percent(
             user,
             promo_group,
             'period',
@@ -825,7 +808,7 @@ class SubscriptionService:
         promo_group = promo_group or (user.get_primary_promo_group() if user else None)
 
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
-        traffic_discount_percent = _resolve_discount_percent(
+        traffic_discount_percent = resolve_discount_percent(
             user,
             promo_group,
             'traffic',
@@ -837,7 +820,7 @@ class SubscriptionService:
 
         server_prices = []
         total_servers_price = 0
-        servers_discount_percent = _resolve_discount_percent(
+        servers_discount_percent = resolve_discount_percent(
             user,
             promo_group,
             'servers',
@@ -865,7 +848,7 @@ class SubscriptionService:
 
         additional_devices = max(0, devices - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _resolve_discount_percent(
+        devices_discount_percent = resolve_discount_percent(
             user,
             promo_group,
             'devices',

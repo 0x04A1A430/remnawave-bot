@@ -6463,7 +6463,9 @@ async def purchase_tariff_endpoint(
             except (TypeError, ValueError):
                 pass
         if discount_percent > 0:
-            price_kopeks = int(base_price_kopeks * (100 - discount_percent) / 100)
+            from app.services.pricing_engine import PricingEngine
+
+            price_kopeks = PricingEngine.apply_discount(base_price_kopeks, discount_percent)
 
     # Apply personal promo_offer discount on top of group discount
     consume_promo_offer = False
