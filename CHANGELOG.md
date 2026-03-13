@@ -1,5 +1,57 @@
 # Changelog
 
+## [3.32.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.31.0...v3.32.0) (2026-03-13)
+
+
+### New Features
+
+* add _calculate_servers_price (fixed fallback) and _calculate_traffic_price ([88369ee](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/88369eec5047e733d26d2450a74abd0d600b2e1b))
+* add CLASSIC_PERIOD_PRICES to config ([c3bb63f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c3bb63ffed6e0b684c322aa51d70ab7e71c8eb6b))
+* add LIMITED subscription status and preserve extra devices on tariff switch ([8f43452](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8f434525eb14618e3c3e26261d443b1632c111bb))
+* add RenewalPricing dataclass and PricingEngine discount methods ([83ca51c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/83ca51cd5b040e747c6db904dde0f3a5c59f480f))
+* implement calculate_renewal_price with tariff and classic modes ([02e5401](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/02e5401327786c9dfe5ae7d4c89624c9455aa53e))
+
+
+### Bug Fixes
+
+* add missing settings import in admin_users tariff switch ([b2ee6c7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b2ee6c766a1fb0c9a701684a6349b970d12f5e2e))
+* add per-category discounts and months multiplier to classic mode ([1660b24](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1660b24f9844374bbd156f9202a8e1550a6beb49))
+* add period_days whitelist validation and type annotations ([18e2e78](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/18e2e7841a6d614263e7c87db5964916ec869a9d))
+* address 6-agent review findings for PricingEngine ([c9f2dff](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c9f2dffabf6369df360c5f9ad7a12c0415026310))
+* address review findings from 5-agent audit ([08bea70](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/08bea704ded78102dce29deac8da95c4e4b9d815))
+* atomicity refactor, review fixes, and DELETED recovery logging ([ba54819](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ba54819f9cd7f60914dd472b68885683f435db4e))
+* change None assignment to [] + add "or []" guards at all 5 call sites. ([a5fbd74](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a5fbd7400f828824c5baa520bdaf06023b4caf70))
+* downgrade known-harmless RemnaWave 400s to warning level ([0419781](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/04197817fede058dc4688dce2f9877f0fc2a7f7f))
+* guard rollback on commit flag, add flush to promo_offer_log ([b7775b7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b7775b72dc7a1b3d18f179c2f247fe9f47023347))
+* handle legacy telegram_id in YooKassa webhook recovery metadata ([815a1d9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/815a1d9136f39b932d4b369aec9d67034d6785d9))
+* harden remnawave API error handling and YooKassa user cross-validation ([585baaf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/585baaf63c9f535e5311a32085d0187d8c854001))
+* harden YooKassa webhook recovery user lookup ([d35ee58](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d35ee58aa6f3edc6a9e8ab43025569262acf64a2))
+* payment providers — lock_user_for_update + commit=False atomicity ([b4ef52c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b4ef52caa4b324eded8e6c6cb715a09ad59140c1))
+* prevent balance loss on auto-purchase for DISABLED subscriptions and fix WATA expiration ([266340a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/266340aad195995f208ed82fc11e0909d34898f4))
+* pricing audit — display/charge parity, race conditions, balance locks ([ae99358](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ae99358ae9f35a25370ab127d98a0b630a08e3f2))
+* resolve merge conflict with dev (accept calc_device_limit_on_tariff_switch) ([ba049ca](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ba049ca017e004c25f8738f01b2d5f329a35bb5e))
+* user deletion FK error + connected_squads None TypeError ([a5fbd74](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a5fbd7400f828824c5baa520bdaf06023b4caf70))
+
+
+### Refactoring
+
+* add typed breakdowns + module-level singleton to PricingEngine ([b551def](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b551def3402e2bf762406fb0b374360958231bb3))
+* extract shared formatting helpers into app/utils/formatting.py ([5e9a462](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5e9a462261e46ee649de481266a821fd6793bf2e))
+* make finalize() accept both old and new pricing types ([3efa24b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3efa24bab3a2bd1d31103b134e502c10af8e41e1))
+* migrate admin user price calculation to PricingEngine ([49c0f3f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/49c0f3fc10d27092961601cf7f6a780fb56885fa))
+* migrate all callers to pricing_engine singleton + fix miniapp discount ([e24b911](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e24b911283bf4cbee7b18d3e49c935217e4a2863))
+* migrate bot renewal display to PricingEngine ([ce82c2c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ce82c2c00988542ac73dc9d2e811711ea9cefebe))
+* migrate bot renewal execute to PricingEngine ([acf27a1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/acf27a102308d38676b2ccaef78016b56a80935d))
+* migrate cabinet renewal display + execute to PricingEngine ([28fc36d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/28fc36dca41b626430baf823274561269023ac59))
+* migrate cart auto-purchase to PricingEngine (fresh calc) ([bd2e93a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bd2e93a6a5076341b104f7dba2b7fc5fdb587e66))
+* migrate menu.py renewal pricing to PricingEngine ([652b6da](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/652b6dabde014d19075f13198dd06e5fb8bef380))
+* migrate miniapp renewal display + execute to PricingEngine ([cb43aca](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cb43acab3194bbf9b6e2c04ca0254ba5b2571b2d))
+* migrate recurrent and monitoring services to PricingEngine ([978f68e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/978f68e7be42b0faf92d9ac5bc0bbaa2022ac95b))
+* migrate remaining callers to PricingEngine + cleanup dead CRUD ([75dbd2b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/75dbd2b4fcc8ab14ac44d915bf55b10406544bb1))
+* migrate try_auto_extend_expired to PricingEngine ([e6ebc67](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e6ebc6722d826d291156e6bff3bf86000b32b783))
+* remove dead pricing code and fix miniapp classic mode ([c9a9816](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c9a9816daa15a4534a3990822543eeefe1a1631b))
+* unify first-purchase discount algorithm with PricingEngine ([fe4e6ac](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fe4e6acb5391d0797ea01281eeb2e2ea59a0070f))
+
 ## [3.31.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.30.0...v3.31.0) (2026-03-12)
 
 
