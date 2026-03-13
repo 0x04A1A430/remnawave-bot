@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.32.2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.32.1...v3.32.2) (2026-03-13)
+
+
+### Bug Fixes
+
+* add nested selectinload and referrer eager loading to prevent MissingGreenlet ([3306e02](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3306e029021c396e13774a205225beece4fbbcfb))
+* add selectinload to user lock queries to prevent MissingGreenlet ([5442f28](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5442f288d4c6c3973dd92ac141172a9f0e53a28f))
+* silence PARTICIPANT_ID_INVALID error in channel subscription check ([14dceaa](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/14dceaa39ff9faa1c9205483653014a1c5ac73fb))
+
 ## [3.32.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.32.0...v3.32.1) (2026-03-13)
 
 
