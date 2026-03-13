@@ -19,71 +19,40 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
+from app.utils.formatting import format_period, format_price_kopeks, format_traffic
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
 logger = structlog.get_logger(__name__)
 
 
-def _format_traffic(gb: int) -> str:
-    """Форматирует трафик."""
-    if gb == 0:
-        return 'Безлимит'
-    return f'{gb} ГБ'
+def _apply_promo_discount(price: int, group_pct: int, offer_pct: int = 0) -> int:
+    """Применяет стекинг скидок к цене (sequential floor division, как PricingEngine)."""
+    from app.services.pricing_engine import PricingEngine
+
+    final, _, _ = PricingEngine.apply_stacked_discounts(price, group_pct, offer_pct)
+    return final
 
 
-def _format_price_kopeks(kopeks: int, compact: bool = False) -> str:
-    """Форматирует цену из копеек в рубли."""
-    rubles = kopeks / 100
-    if compact:
-        # Компактный формат - округляем до рублей
-        return f'{int(round(rubles))}₽'
-    if rubles == int(rubles):
-        return f'{int(rubles)} ₽'
-    return f'{rubles:.2f} ₽'
+def _get_user_period_discount(db_user: User, period_days: int) -> tuple[int, int, int]:
+    """Получает скидку пользователя на период из промогруппы + промо-оффер.
 
-
-def _format_period(days: int) -> str:
-    """Форматирует период."""
-    if days == 1:
-        return '1 день'
-    if days < 5:
-        return f'{days} дня'
-    if days < 21 or days % 10 >= 5 or days % 10 == 0:
-        return f'{days} дней'
-    if days % 10 == 1:
-        return f'{days} день'
-    return f'{days} дня'
-
-
-def _apply_promo_discount(price: int, discount_percent: int) -> int:
-    """Применяет скидку промогруппы к цене."""
-    if discount_percent <= 0:
-        return price
-    discount = int(price * discount_percent / 100)
-    return max(0, price - discount)
-
-
-def _get_user_period_discount(db_user: User, period_days: int) -> int:
-    """Получает скидку пользователя на период из промогруппы + промо-оффер (стекинг).
-
-    Возвращает итоговый процент скидки после последовательного применения
-    скидки промогруппы и персональной скидки промо-оффера.
+    Returns:
+        (group_pct, offer_pct, display_combined_pct) — отдельные проценты для
+        корректного расчёта цены и комбинированный процент для отображения в UI.
     """
     promo_group = db_user.get_primary_promo_group()
     group_discount = promo_group.get_discount_percent('period', period_days) if promo_group else 0
     personal_discount = get_user_active_promo_discount_percent(db_user)
 
     if group_discount <= 0 and personal_discount <= 0:
-        return 0
+        return 0, 0, 0
 
-    # Стекинг: применяем последовательно (как в кабинете)
-    # price * (1 - group/100) * (1 - personal/100)
-    # Вычисляем эффективный общий процент
+    # Комбинированный процент для отображения
     remaining = (100 - group_discount) * (100 - personal_discount)
-    effective_discount = 100 - remaining // 100
+    display_combined = 100 - remaining // 100
 
-    return effective_discount
+    return group_discount, personal_discount, display_combined
 
 
 def format_tariffs_list_text(
@@ -112,20 +81,20 @@ def format_tariffs_list_text(
         if is_daily:
             # Для суточных тарифов показываем цену за день
             daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-            price_text = f'🔄 {_format_price_kopeks(daily_price, compact=True)}/день'
+            price_text = f'🔄 {format_price_kopeks(daily_price, compact=True)}/день'
         else:
             # Для периодных тарифов показываем минимальную цену
             prices = tariff.period_prices or {}
             if prices:
                 min_period = min(prices.keys(), key=int)
                 min_price = prices[min_period]
-                discount_percent = 0
+                group_pct, offer_pct, discount_percent = 0, 0, 0
                 if db_user:
-                    discount_percent = _get_user_period_discount(db_user, int(min_period))
+                    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, int(min_period))
                 if discount_percent > 0:
-                    min_price = _apply_promo_discount(min_price, discount_percent)
+                    min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
                     discount_icon = '🔥'
-                price_text = f'от {_format_price_kopeks(min_price, compact=True)}{discount_icon}'
+                price_text = f'от {format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
         # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
         lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
@@ -170,17 +139,17 @@ def get_tariff_periods_keyboard(
         price = prices[period_str]
 
         # Получаем скидку для конкретного периода
-        discount_percent = 0
+        group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
         if discount_percent > 0:
-            price = _apply_promo_discount(price, discount_percent)
-            price_text = f'{_format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price = _apply_promo_discount(price, group_pct, offer_pct)
+            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
         else:
-            price_text = _format_price_kopeks(price)
+            price_text = format_price_kopeks(price)
 
-        button_text = f'{_format_period(period)} — {price_text}'
+        button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
@@ -203,17 +172,17 @@ def get_tariff_periods_keyboard_with_traffic(
         price = prices[period_str]
 
         # Получаем скидку для конкретного периода
-        discount_percent = 0
+        group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
         if discount_percent > 0:
-            price = _apply_promo_discount(price, discount_percent)
-            price_text = f'{_format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price = _apply_promo_discount(price, group_pct, offer_pct)
+            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
         else:
-            price_text = _format_price_kopeks(price)
+            price_text = format_price_kopeks(price)
 
-        button_text = f'{_format_period(period)} — {price_text}'
+        button_text = f'{format_period(period)} — {price_text}'
         # Используем другой callback для перехода к настройке трафика
         buttons.append(
             [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
@@ -262,7 +231,7 @@ def format_tariff_info_for_user(
     """Форматирует информацию о тарифе для пользователя."""
     get_texts(language)
 
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     text = f"""📦 <b>{tariff.name}</b>
 
@@ -431,15 +400,17 @@ def format_custom_tariff_preview(
     traffic_gb: int,
     user_balance: int,
     discount_percent: int = 0,
+    group_pct: int = 0,
+    offer_pct: int = 0,
 ) -> str:
     """Форматирует предпросмотр покупки с кастомными параметрами."""
     period_price, traffic_price, total_price = _calculate_custom_tariff_price(tariff, days, traffic_gb)
 
     # Применяем скидку
     if discount_percent > 0:
-        total_price = _apply_promo_discount(total_price, discount_percent)
+        total_price = _apply_promo_discount(total_price, group_pct, offer_pct)
 
-    traffic_display = f'{traffic_gb} ГБ' if traffic_gb > 0 else _format_traffic(tariff.traffic_limit_gb)
+    traffic_display = f'{traffic_gb} ГБ' if traffic_gb > 0 else format_traffic(tariff.traffic_limit_gb)
 
     text = f"""📦 <b>{tariff.name}</b>
 
@@ -448,15 +419,15 @@ def format_custom_tariff_preview(
 
     if tariff.can_purchase_custom_days():
         text += f'📅 Дней: <b>{days}</b> (от {tariff.min_days} до {tariff.max_days})\n'
-        text += f'   💰 {_format_price_kopeks(period_price)}\n'
+        text += f'   💰 {format_price_kopeks(period_price)}\n'
     else:
         # Фиксированный период - показываем без возможности изменения
-        text += f'📅 Период: <b>{_format_period(days)}</b>\n'
-        text += f'   💰 {_format_price_kopeks(period_price)}\n'
+        text += f'📅 Период: <b>{format_period(days)}</b>\n'
+        text += f'   💰 {format_price_kopeks(period_price)}\n'
 
     if tariff.can_purchase_custom_traffic():
         text += f'📊 Трафик: <b>{traffic_gb} ГБ</b> (от {tariff.min_traffic_gb} до {tariff.max_traffic_gb})\n'
-        text += f'   💰 +{_format_price_kopeks(traffic_price)}\n'
+        text += f'   💰 +{format_price_kopeks(traffic_price)}\n'
     else:
         text += f'📊 Трафик: {traffic_display}\n'
 
@@ -466,15 +437,15 @@ def format_custom_tariff_preview(
         text += f'\n🎁 <b>Скидка: {discount_percent}%</b>\n'
 
     text += f"""
-<b>💰 Итого: {_format_price_kopeks(total_price)}</b>
+<b>💰 Итого: {format_price_kopeks(total_price)}</b>
 
-💳 Ваш баланс: {_format_price_kopeks(user_balance)}"""
+💳 Ваш баланс: {format_price_kopeks(user_balance)}"""
 
     if user_balance < total_price:
         missing = total_price - user_balance
-        text += f'\n⚠️ <b>Не хватает: {_format_price_kopeks(missing)}</b>'
+        text += f'\n⚠️ <b>Не хватает: {format_price_kopeks(missing)}</b>'
     else:
-        text += f'\nПосле оплаты: {_format_price_kopeks(user_balance - total_price)}'
+        text += f'\nПосле оплаты: {format_price_kopeks(user_balance - total_price)}'
 
     return text
 
@@ -545,7 +516,7 @@ async def select_tariff(
         # Для суточного тарифа показываем подтверждение без выбора периода
         daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         user_balance = db_user.balance_kopeks or 0
-        traffic = _format_traffic(tariff.traffic_limit_gb)
+        traffic = format_traffic(tariff.traffic_limit_gb)
 
         if user_balance >= daily_price:
             await callback.message.edit_text(
@@ -554,8 +525,8 @@ async def select_tariff(
                 f'📊 Трафик: {traffic}\n'
                 f'📱 Устройств: {tariff.device_limit}\n'
                 f'🔄 Тип: <b>Суточный</b>\n\n'
-                f'💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n\n'
+                f'💰 <b>Цена: {format_price_kopeks(daily_price)}/день</b>\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n\n'
                 f'ℹ️ Средства будут списываться автоматически раз в сутки.\n'
                 f'Вы можете приостановить подписку в любой момент.',
                 reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
@@ -586,9 +557,9 @@ async def select_tariff(
                 f'❌ <b>Недостаточно средств</b>\n\n'
                 f'📦 Тариф: <b>{tariff.name}</b>\n'
                 f'🔄 Тип: Суточный\n'
-                f'💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>\n\n'
+                f'💰 Цена: {format_price_kopeks(daily_price)}/день\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>\n\n'
                 f'🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
@@ -606,13 +577,15 @@ async def select_tariff(
             initial_traffic = tariff.min_traffic_gb if can_custom_traffic else tariff.traffic_limit_gb
 
             # Вычисляем скидку для начального периода
-            discount_percent = _get_user_period_discount(db_user, initial_days)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, initial_days)
 
             await state.update_data(
                 selected_tariff_id=tariff_id,
                 custom_days=initial_days,
                 custom_traffic_gb=initial_traffic,
                 period_discount_percent=discount_percent,
+                period_group_pct=group_pct,
+                period_offer_pct=offer_pct,
             )
 
             preview_text = format_custom_tariff_preview(
@@ -621,6 +594,8 @@ async def select_tariff(
                 traffic_gb=initial_traffic,
                 user_balance=user_balance,
                 discount_percent=discount_percent,
+                group_pct=group_pct,
+                offer_pct=offer_pct,
             )
 
             await callback.message.edit_text(
@@ -686,9 +661,14 @@ async def handle_custom_days_change(
     new_days = max(tariff.min_days, min(tariff.max_days, new_days))
 
     # При изменении дней пересчитываем скидку для нового периода
-    discount_percent = _get_user_period_discount(db_user, new_days)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, new_days)
 
-    await state.update_data(custom_days=new_days, period_discount_percent=discount_percent)
+    await state.update_data(
+        custom_days=new_days,
+        period_discount_percent=discount_percent,
+        period_group_pct=group_pct,
+        period_offer_pct=offer_pct,
+    )
 
     user_balance = db_user.balance_kopeks or 0
 
@@ -698,6 +678,8 @@ async def handle_custom_days_change(
         traffic_gb=current_traffic,
         user_balance=user_balance,
         discount_percent=discount_percent,
+        group_pct=group_pct,
+        offer_pct=offer_pct,
     )
 
     await callback.message.edit_text(
@@ -740,6 +722,8 @@ async def handle_custom_traffic_change(
     current_days = state_data.get('custom_days', tariff.min_days)
     current_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
     discount_percent = state_data.get('period_discount_percent', 0)
+    group_pct = state_data.get('period_group_pct', 0)
+    offer_pct = state_data.get('period_offer_pct', 0)
 
     # Применяем изменение
     new_traffic = current_traffic + delta
@@ -755,6 +739,8 @@ async def handle_custom_traffic_change(
         traffic_gb=new_traffic,
         user_balance=user_balance,
         discount_percent=discount_percent,
+        group_pct=group_pct,
+        offer_pct=offer_pct,
     )
 
     await callback.message.edit_text(
@@ -795,6 +781,8 @@ async def handle_custom_confirm(
     custom_days = state_data.get('custom_days', tariff.min_days)
     custom_traffic = state_data.get('custom_traffic_gb', tariff.min_traffic_gb)
     discount_percent = state_data.get('period_discount_percent', 0)
+    group_pct = state_data.get('period_group_pct', 0)
+    offer_pct = state_data.get('period_offer_pct', 0)
 
     # Рассчитываем цену (используем общую функцию)
     period_price, traffic_price, total_price = _calculate_custom_tariff_price(tariff, custom_days, custom_traffic)
@@ -807,7 +795,7 @@ async def handle_custom_confirm(
 
     # Применяем скидку к цене периода (не к трафику)
     if discount_percent > 0:
-        period_price = _apply_promo_discount(period_price, discount_percent)
+        period_price = _apply_promo_discount(period_price, group_pct, offer_pct)
         total_price = period_price + traffic_price
 
     # Проверяем баланс
@@ -818,6 +806,12 @@ async def handle_custom_confirm(
 
     texts = get_texts(db_user.language)
 
+    # Save promo offer state before deduction (for restore on failure)
+    consume_promo = get_user_active_promo_discount_percent(db_user) > 0
+    saved_promo_percent = int(getattr(db_user, 'promo_offer_discount_percent', 0) or 0) if consume_promo else 0
+    saved_promo_source = getattr(db_user, 'promo_offer_discount_source', None) if consume_promo else None
+    saved_promo_expires = getattr(db_user, 'promo_offer_discount_expires_at', None) if consume_promo else None
+
     try:
         # Списываем баланс
         success = await subtract_user_balance(
@@ -825,29 +819,34 @@ async def handle_custom_confirm(
             db_user,
             total_price,
             f'Покупка тарифа {tariff.name} на {custom_days} дней',
-            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+            consume_promo_offer=consume_promo,
             mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
             return
+    except Exception as e:
+        logger.error('Ошибка списания баланса при покупке кастомного тарифа', error=e, exc_info=True)
+        await callback.answer('Ошибка списания баланса', show_alert=True)
+        return
 
-        # Получаем список серверов из тарифа
-        squads = tariff.allowed_squads or []
+    # Получаем список серверов из тарифа
+    squads = tariff.allowed_squads or []
 
-        # Если allowed_squads пустой - значит "все серверы", получаем их
-        if not squads:
-            from app.database.crud.server_squad import get_all_server_squads
+    # Если allowed_squads пустой - значит "все серверы", получаем их
+    if not squads:
+        from app.database.crud.server_squad import get_all_server_squads
 
-            all_servers, _ = await get_all_server_squads(db, available_only=True)
-            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-        # Определяем трафик
-        traffic_limit = custom_traffic if tariff.can_purchase_custom_traffic() else tariff.traffic_limit_gb
+    # Определяем трафик
+    traffic_limit = custom_traffic if tariff.can_purchase_custom_traffic() else tariff.traffic_limit_gb
 
-        # Проверяем есть ли уже подписка
-        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+    # Проверяем есть ли уже подписка
+    existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
+    try:
         if existing_subscription:
             # Продлеваем существующую подписку и обновляем параметры тарифа
             # Сохраняем докупленные устройства при продлении того же тарифа
@@ -875,7 +874,38 @@ async def handle_custom_confirm(
                 connected_squads=squads,
                 tariff_id=tariff.id,
             )
+    except Exception as e:
+        logger.error('Ошибка создания/продления подписки при покупке кастомного тарифа', error=e, exc_info=True)
+        await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
 
+            await add_user_balance(
+                db,
+                db_user,
+                total_price,
+                'Возврат: ошибка покупки кастомного тарифа',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            # Restore promo offer if consumed
+            if consume_promo and saved_promo_percent > 0:
+                db_user.promo_offer_discount_percent = saved_promo_percent
+                db_user.promo_offer_discount_source = saved_promo_source
+                db_user.promo_offer_discount_expires_at = saved_promo_expires
+                await db.commit()
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: не удалось вернуть средства после ошибки покупки кастомного тарифа',
+                user_id=db_user.id,
+                price_kopeks=total_price,
+                refund_error=refund_error,
+            )
+        await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
+        return
+
+    try:
         # Обновляем пользователя в Remnawave
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         try:
@@ -922,15 +952,15 @@ async def handle_custom_confirm(
 
         await state.clear()
 
-        traffic_display = _format_traffic(traffic_limit)
+        traffic_display = format_traffic(traffic_limit)
 
         await callback.message.edit_text(
             f'🎉 <b>Подписка успешно оформлена!</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic_display}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {_format_period(custom_days)}\n'
-            f'💰 Списано: {_format_price_kopeks(total_price)}\n\n'
+            f'📅 Период: {format_period(custom_days)}\n'
+            f'💰 Списано: {format_price_kopeks(total_price)}\n\n'
             f'Перейдите в раздел «Подписка» для подключения.',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -972,14 +1002,16 @@ async def select_tariff_period_with_traffic(
     initial_traffic = tariff.min_traffic_gb
 
     # Получаем скидку для выбранного периода
-    discount_percent = _get_user_period_discount(db_user, period)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
     # Сохраняем выбранный период и скидку в состояние
     await state.update_data(
         selected_tariff_id=tariff_id,
         custom_days=period,  # Фиксированный период из period_prices
         custom_traffic_gb=initial_traffic,
-        period_discount_percent=discount_percent,  # Сохраняем скидку
+        period_discount_percent=discount_percent,
+        period_group_pct=group_pct,
+        period_offer_pct=offer_pct,
     )
 
     preview_text = format_custom_tariff_preview(
@@ -987,7 +1019,9 @@ async def select_tariff_period_with_traffic(
         days=period,
         traffic_gb=initial_traffic,
         user_balance=user_balance,
-        discount_percent=discount_percent,  # Применяем скидку при отображении
+        discount_percent=discount_percent,
+        group_pct=group_pct,
+        offer_pct=offer_pct,
     )
 
     await callback.message.edit_text(
@@ -1027,34 +1061,34 @@ async def select_tariff_period(
         return
 
     # Получаем скидку для выбранного периода
-    discount_percent = _get_user_period_discount(db_user, period)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
     base_price = prices.get(str(period), 0)
-    final_price = _apply_promo_discount(base_price, discount_percent)
+    final_price = _apply_promo_discount(base_price, group_pct, offer_pct)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         # Показываем подтверждение
         discount_text = ''
         if discount_percent > 0:
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(base_price - final_price)})'
+            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(base_price - final_price)})'
 
         await callback.message.edit_text(
             f'✅ <b>Подтверждение покупки</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {_format_period(period)}\n'
+            f'📅 Период: {format_period(period)}\n'
             f'{discount_text}\n'
-            f'💰 <b>Итого: {_format_price_kopeks(final_price)}</b>\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {_format_price_kopeks(user_balance - final_price)}',
+            f'💰 <b>Итого: {format_price_kopeks(final_price)}</b>\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'После оплаты: {format_price_kopeks(user_balance - final_price)}',
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -1083,10 +1117,10 @@ async def select_tariff_period(
         await callback.message.edit_text(
             f'❌ <b>Недостаточно средств</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
-            f'📅 Период: {_format_period(period)}\n'
-            f'💰 Стоимость: {_format_price_kopeks(final_price)}\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>\n\n'
+            f'📅 Период: {format_period(period)}\n'
+            f'💰 Стоимость: {format_price_kopeks(final_price)}\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>\n\n'
             f'🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
             reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
@@ -1118,13 +1152,32 @@ async def confirm_tariff_purchase(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
-    # Получаем скидку для выбранного периода
-    discount_percent = _get_user_period_discount(db_user, period)
-
     # Получаем цену
     prices = tariff.period_prices or {}
     base_price = prices.get(str(period), 0)
-    final_price = _apply_promo_discount(base_price, discount_percent)
+
+    # Add extra device cost if user has more devices than tariff's included limit
+    existing_sub = await get_subscription_by_user_id(db, db_user.id)
+    device_price_per_unit = (
+        tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+    )
+    extra_devices = 0
+    if existing_sub and existing_sub.tariff_id == tariff.id:
+        extra_devices = max(0, (existing_sub.device_limit or 0) - (tariff.device_limit or 0))
+    devices_price = extra_devices * device_price_per_unit
+
+    # Apply discounts sequentially (matching PricingEngine): group first, then offer
+    subtotal = base_price + devices_price
+    promo_group = db_user.get_primary_promo_group()
+    group_discount_pct = promo_group.get_discount_percent('period', period) if promo_group else 0
+    if group_discount_pct > 0:
+        subtotal = subtotal - subtotal * group_discount_pct // 100
+
+    offer_discount_pct = get_user_active_promo_discount_percent(db_user)
+    if offer_discount_pct > 0:
+        subtotal = subtotal - subtotal * offer_discount_pct // 100
+
+    final_price = max(0, subtotal)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -1134,33 +1187,43 @@ async def confirm_tariff_purchase(
 
     texts = get_texts(db_user.language)
 
+    # Списываем баланс
+    consume_promo = get_user_active_promo_discount_percent(db_user) > 0
+    # Save promo offer state before deduction (for restore on failure)
+    saved_promo_percent = int(getattr(db_user, 'promo_offer_discount_percent', 0) or 0) if consume_promo else 0
+    saved_promo_source = getattr(db_user, 'promo_offer_discount_source', None) if consume_promo else None
+    saved_promo_expires = getattr(db_user, 'promo_offer_discount_expires_at', None) if consume_promo else None
     try:
-        # Списываем баланс
         success = await subtract_user_balance(
             db,
             db_user,
             final_price,
             f'Покупка тарифа {tariff.name} на {period} дней',
-            consume_promo_offer=get_user_active_promo_discount_percent(db_user) > 0,
+            consume_promo_offer=consume_promo,
             mark_as_paid_subscription=True,
         )
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
             return
+    except Exception as e:
+        logger.error('Ошибка списания баланса при покупке тарифа', error=e, exc_info=True)
+        await callback.answer('Ошибка списания баланса', show_alert=True)
+        return
 
-        # Получаем список серверов из тарифа
-        squads = tariff.allowed_squads or []
+    # Получаем список серверов из тарифа
+    squads = tariff.allowed_squads or []
 
-        # Если allowed_squads пустой - значит "все серверы", получаем их
-        if not squads:
-            from app.database.crud.server_squad import get_all_server_squads
+    # Если allowed_squads пустой - значит "все серверы", получаем их
+    if not squads:
+        from app.database.crud.server_squad import get_all_server_squads
 
-            all_servers, _ = await get_all_server_squads(db, available_only=True)
-            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-        # Проверяем есть ли уже подписка
-        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+    # Reuse existing_sub fetched above for device pricing
+    existing_subscription = existing_sub
 
+    try:
         if existing_subscription:
             # Продлеваем существующую подписку и обновляем параметры тарифа
             # Сохраняем докупленные устройства при продлении того же тарифа
@@ -1188,21 +1251,52 @@ async def confirm_tariff_purchase(
                 connected_squads=squads,
                 tariff_id=tariff.id,
             )
-
-        # Обновляем пользователя в Remnawave
-        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    except Exception as e:
+        logger.error('Ошибка создания/продления подписки при покупке тарифа', error=e, exc_info=True)
+        await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
         try:
-            subscription_service = SubscriptionService()
-            await subscription_service.create_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=True,
-                reset_reason='покупка тарифа',
-            )
-        except Exception as e:
-            logger.error('Ошибка обновления Remnawave', error=e)
+            from app.database.crud.user import add_user_balance
 
-        # Создаем транзакцию
+            await add_user_balance(
+                db,
+                db_user,
+                final_price,
+                'Возврат: ошибка покупки тарифа',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            # Restore promo offer if consumed
+            if consume_promo and saved_promo_percent > 0:
+                db_user.promo_offer_discount_percent = saved_promo_percent
+                db_user.promo_offer_discount_source = saved_promo_source
+                db_user.promo_offer_discount_expires_at = saved_promo_expires
+                await db.commit()
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: не удалось вернуть средства после ошибки покупки тарифа',
+                user_id=db_user.id,
+                price_kopeks=final_price,
+                refund_error=refund_error,
+            )
+        await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
+        return
+
+    # Обновляем пользователя в Remnawave
+    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=True,
+            reset_reason='покупка тарифа',
+        )
+    except Exception as e:
+        logger.error('Ошибка обновления Remnawave', error=e)
+
+    # Создаем транзакцию
+    try:
         await create_transaction(
             db,
             user_id=db_user.id,
@@ -1210,55 +1304,53 @@ async def confirm_tariff_purchase(
             amount_kopeks=final_price,
             description=f'Покупка тарифа {tariff.name} на {period} дней',
         )
-
-        # Отправляем уведомление админу
-        try:
-            admin_notification_service = AdminNotificationService(callback.bot)
-            await admin_notification_service.send_subscription_purchase_notification(
-                db,
-                db_user,
-                subscription,
-                None,  # Транзакция отсутствует, оплата с баланса
-                period,
-                was_trial_conversion=False,
-                amount_kopeks=final_price,
-                purchase_type='renewal' if existing_subscription else 'first_purchase',
-            )
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления админу', error=e)
-
-        # Очищаем корзину после успешной покупки
-        try:
-            await user_cart_service.delete_user_cart(db_user.id)
-            logger.info('Корзина очищена после покупки тарифа для пользователя', telegram_id=db_user.telegram_id)
-        except Exception as e:
-            logger.error('Ошибка очистки корзины', error=e)
-
-        await state.clear()
-
-        traffic = _format_traffic(tariff.traffic_limit_gb)
-
-        await callback.message.edit_text(
-            f'🎉 <b>Подписка успешно оформлена!</b>\n\n'
-            f'📦 Тариф: <b>{tariff.name}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {_format_period(period)}\n'
-            f'💰 Списано: {_format_price_kopeks(final_price)}\n\n'
-            f'Перейдите в раздел «Подписка» для подключения.',
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-                ]
-            ),
-            parse_mode='HTML',
-        )
-        await callback.answer('Подписка оформлена!', show_alert=True)
-
     except Exception as e:
-        logger.error('Ошибка при покупке тарифа', error=e, exc_info=True)
-        await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
+        logger.error('Ошибка создания транзакции', error=e)
+
+    # Отправляем уведомление админу
+    try:
+        admin_notification_service = AdminNotificationService(callback.bot)
+        await admin_notification_service.send_subscription_purchase_notification(
+            db,
+            db_user,
+            subscription,
+            None,  # Транзакция отсутствует, оплата с баланса
+            period,
+            was_trial_conversion=False,
+            amount_kopeks=final_price,
+            purchase_type='renewal' if existing_subscription else 'first_purchase',
+        )
+    except Exception as e:
+        logger.error('Ошибка отправки уведомления админу', error=e)
+
+    # Очищаем корзину после успешной покупки
+    try:
+        await user_cart_service.delete_user_cart(db_user.id)
+        logger.info('Корзина очищена после покупки тарифа для пользователя', telegram_id=db_user.telegram_id)
+    except Exception as e:
+        logger.error('Ошибка очистки корзины', error=e)
+
+    await state.clear()
+
+    traffic = format_traffic(tariff.traffic_limit_gb)
+
+    await callback.message.edit_text(
+        f'🎉 <b>Подписка успешно оформлена!</b>\n\n'
+        f'📦 Тариф: <b>{tariff.name}</b>\n'
+        f'📊 Трафик: {traffic}\n'
+        f'📱 Устройств: {tariff.device_limit}\n'
+        f'📅 Период: {format_period(period)}\n'
+        f'💰 Списано: {format_price_kopeks(final_price)}\n\n'
+        f'Перейдите в раздел «Подписка» для подключения.',
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ]
+        ),
+        parse_mode='HTML',
+    )
+    await callback.answer('Подписка оформлена!', show_alert=True)
 
 
 # ==================== Покупка суточного тарифа ====================
@@ -1310,20 +1402,25 @@ async def confirm_daily_tariff_purchase(
         if not success:
             await callback.answer('Ошибка списания баланса', show_alert=True)
             return
+    except Exception as e:
+        logger.error('Ошибка списания баланса при покупке суточного тарифа', error=e, exc_info=True)
+        await callback.answer('Ошибка списания баланса', show_alert=True)
+        return
 
-        # Получаем список серверов из тарифа
-        squads = tariff.allowed_squads or []
+    # Получаем список серверов из тарифа
+    squads = tariff.allowed_squads or []
 
-        # Если allowed_squads пустой - значит "все серверы", получаем их
-        if not squads:
-            from app.database.crud.server_squad import get_all_server_squads
+    # Если allowed_squads пустой - значит "все серверы", получаем их
+    if not squads:
+        from app.database.crud.server_squad import get_all_server_squads
 
-            all_servers, _ = await get_all_server_squads(db, available_only=True)
-            squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+        all_servers, _ = await get_all_server_squads(db, available_only=True)
+        squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-        # Проверяем есть ли уже подписка
-        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+    # Проверяем есть ли уже подписка
+    existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
+    try:
         if existing_subscription:
             # Обновляем существующую подписку на суточный тариф
             # Сохраняем докупленные устройства при смене тарифа
@@ -1378,80 +1475,98 @@ async def confirm_daily_tariff_purchase(
             subscription.is_daily_paused = False
             await db.commit()
             await db.refresh(subscription)
-
-        # Обновляем пользователя в Remnawave
-        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    except Exception as e:
+        logger.error('Ошибка создания/продления подписки при покупке суточного тарифа', error=e, exc_info=True)
+        await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
         try:
-            subscription_service = SubscriptionService()
-            await subscription_service.create_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=True,
-                reset_reason='покупка суточного тарифа',
-            )
-        except Exception as e:
-            logger.error('Ошибка обновления Remnawave', error=e)
+            from app.database.crud.user import add_user_balance
 
-        # Создаем транзакцию
-        await create_transaction(
-            db,
-            user_id=db_user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=daily_price,
-            description=f'Покупка суточного тарифа {tariff.name} (первый день)',
-        )
-
-        # Отправляем уведомление админу
-        try:
-            admin_notification_service = AdminNotificationService(callback.bot)
-            await admin_notification_service.send_subscription_purchase_notification(
+            await add_user_balance(
                 db,
                 db_user,
-                subscription,
-                None,
-                1,  # 1 день
-                was_trial_conversion=False,
-                amount_kopeks=daily_price,
-                purchase_type='renewal' if existing_subscription else 'first_purchase',
+                daily_price,
+                'Возврат: ошибка покупки суточного тарифа',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
             )
-        except Exception as e:
-            logger.error('Ошибка отправки уведомления админу', error=e)
-
-        # Очищаем корзину после успешной покупки
-        try:
-            await user_cart_service.delete_user_cart(db_user.id)
-            logger.info(
-                'Корзина очищена после покупки суточного тарифа для пользователя', telegram_id=db_user.telegram_id
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: не удалось вернуть средства после ошибки покупки суточного тарифа',
+                user_id=db_user.id,
+                price_kopeks=daily_price,
+                refund_error=refund_error,
             )
-        except Exception as e:
-            logger.error('Ошибка очистки корзины', error=e)
-
-        await state.clear()
-
-        traffic = _format_traffic(tariff.traffic_limit_gb)
-
-        await callback.message.edit_text(
-            f'🎉 <b>Суточная подписка оформлена!</b>\n\n'
-            f'📦 Тариф: <b>{tariff.name}</b>\n'
-            f'📊 Трафик: {traffic}\n'
-            f'📱 Устройств: {tariff.device_limit}\n'
-            f'🔄 Тип: Суточный\n'
-            f'💰 Списано: {_format_price_kopeks(daily_price)}\n\n'
-            f'ℹ️ Следующее списание через 24 часа.\n'
-            f'Перейдите в раздел «Подписка» для подключения.',
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
-                ]
-            ),
-            parse_mode='HTML',
-        )
-        await callback.answer('Подписка оформлена!', show_alert=True)
-
-    except Exception as e:
-        logger.error('Ошибка при покупке суточного тарифа', error=e, exc_info=True)
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
+        return
+
+    # Обновляем пользователя в Remnawave
+    # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    try:
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=True,
+            reset_reason='покупка суточного тарифа',
+        )
+    except Exception as e:
+        logger.error('Ошибка обновления Remnawave', error=e)
+
+    # Создаем транзакцию
+    await create_transaction(
+        db,
+        user_id=db_user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=daily_price,
+        description=f'Покупка суточного тарифа {tariff.name} (первый день)',
+    )
+
+    # Отправляем уведомление админу
+    try:
+        admin_notification_service = AdminNotificationService(callback.bot)
+        await admin_notification_service.send_subscription_purchase_notification(
+            db,
+            db_user,
+            subscription,
+            None,
+            1,  # 1 день
+            was_trial_conversion=False,
+            amount_kopeks=daily_price,
+            purchase_type='renewal' if existing_subscription else 'first_purchase',
+        )
+    except Exception as e:
+        logger.error('Ошибка отправки уведомления админу', error=e)
+
+    # Очищаем корзину после успешной покупки
+    try:
+        await user_cart_service.delete_user_cart(db_user.id)
+        logger.info('Корзина очищена после покупки суточного тарифа для пользователя', telegram_id=db_user.telegram_id)
+    except Exception as e:
+        logger.error('Ошибка очистки корзины', error=e)
+
+    await state.clear()
+
+    traffic = format_traffic(tariff.traffic_limit_gb)
+
+    await callback.message.edit_text(
+        f'🎉 <b>Суточная подписка оформлена!</b>\n\n'
+        f'📦 Тариф: <b>{tariff.name}</b>\n'
+        f'📊 Трафик: {traffic}\n'
+        f'📱 Устройств: {tariff.device_limit}\n'
+        f'🔄 Тип: Суточный\n'
+        f'💰 Списано: {format_price_kopeks(daily_price)}\n\n'
+        f'ℹ️ Следующее списание через 24 часа.\n'
+        f'Перейдите в раздел «Подписка» для подключения.',
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
+                [InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')],
+            ]
+        ),
+        parse_mode='HTML',
+    )
+    await callback.answer('Подписка оформлена!', show_alert=True)
 
 
 # ==================== Продление по тарифу ====================
@@ -1489,17 +1604,17 @@ def get_tariff_extend_keyboard(
             price += _calc_extra_devices_cost(tariff, subscription_device_limit, period)
 
         # Получаем скидку для конкретного периода
-        discount_percent = 0
+        group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
         if discount_percent > 0:
-            price = _apply_promo_discount(price, discount_percent)
-            price_text = f'{_format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price = _apply_promo_discount(price, group_pct, offer_pct)
+            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
         else:
-            price_text = _format_price_kopeks(price)
+            price_text = format_price_kopeks(price)
 
-        button_text = f'{_format_period(period)} — {price_text}'
+        button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_extend:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
@@ -1544,7 +1659,7 @@ async def show_tariff_extend(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = getattr(db_user, 'promo_group', None)
@@ -1602,34 +1717,34 @@ async def select_tariff_extend_period(
     actual_device_limit = (subscription.device_limit if subscription else None) or tariff.device_limit
 
     # Получаем скидку для выбранного периода
-    discount_percent = _get_user_period_discount(db_user, period)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену (тариф + дополнительные устройства)
     prices = tariff.period_prices or {}
     base_price = prices.get(str(period), 0)
     base_price += _calc_extra_devices_cost(tariff, actual_device_limit, period)
-    final_price = _apply_promo_discount(base_price, discount_percent)
+    final_price = _apply_promo_discount(base_price, group_pct, offer_pct)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     if user_balance >= final_price:
         discount_text = ''
         if discount_percent > 0:
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(base_price - final_price)})'
+            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(base_price - final_price)})'
 
         await callback.message.edit_text(
             f'✅ <b>Подтверждение продления</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {actual_device_limit}\n'
-            f'📅 Период: {_format_period(period)}\n'
+            f'📅 Период: {format_period(period)}\n'
             f'{discount_text}\n'
-            f'💰 <b>К оплате: {_format_price_kopeks(final_price)}</b>\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {_format_price_kopeks(user_balance - final_price)}',
+            f'💰 <b>К оплате: {format_price_kopeks(final_price)}</b>\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'После оплаты: {format_price_kopeks(user_balance - final_price)}',
             reply_markup=get_tariff_extend_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -1658,10 +1773,10 @@ async def select_tariff_extend_period(
         await callback.message.edit_text(
             f'❌ <b>Недостаточно средств</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
-            f'📅 Период: {_format_period(period)}\n'
-            f'💰 К оплате: {_format_price_kopeks(final_price)}\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>\n\n'
+            f'📅 Период: {format_period(period)}\n'
+            f'💰 К оплате: {format_price_kopeks(final_price)}\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>\n\n'
             f'🛒 <i>Корзина сохранена! После пополнения баланса подписка будет продлена автоматически.</i>',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1676,6 +1791,8 @@ async def select_tariff_extend_period(
         extend_tariff_id=tariff_id,
         extend_period=period,
         extend_discount_percent=discount_percent,
+        extend_group_pct=group_pct,
+        extend_offer_pct=offer_pct,
     )
     await callback.answer()
 
@@ -1705,13 +1822,14 @@ async def confirm_tariff_extend(
     actual_device_limit = subscription.device_limit or tariff.device_limit
 
     data = await state.get_data()
-    discount_percent = data.get('extend_discount_percent', 0)
+    group_pct = data.get('extend_group_pct', 0)
+    offer_pct = data.get('extend_offer_pct', 0)
 
     # Получаем цену (тариф + дополнительные устройства)
     prices = tariff.period_prices or {}
     base_price = prices.get(str(period), 0)
     base_price += _calc_extra_devices_cost(tariff, actual_device_limit, period)
-    final_price = _apply_promo_discount(base_price, discount_percent)
+    final_price = _apply_promo_discount(base_price, group_pct, offer_pct)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -1788,15 +1906,15 @@ async def confirm_tariff_extend(
 
         await state.clear()
 
-        traffic = _format_traffic(tariff.traffic_limit_gb)
+        traffic = format_traffic(tariff.traffic_limit_gb)
 
         await callback.message.edit_text(
             f'🎉 <b>Подписка успешно продлена!</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {actual_device_limit}\n'
-            f'📅 Добавлено: {_format_period(period)}\n'
-            f'💰 Списано: {_format_price_kopeks(final_price)}',
+            f'📅 Добавлено: {format_period(period)}\n'
+            f'💰 Списано: {format_price_kopeks(final_price)}',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text='📱 Моя подписка', callback_data='menu_subscription')],
@@ -1850,19 +1968,19 @@ def format_tariff_switch_list_text(
         if is_daily:
             # Для суточных тарифов показываем цену за день
             daily_price = getattr(tariff, 'daily_price_kopeks', 0)
-            price_text = f'🔄 {_format_price_kopeks(daily_price, compact=True)}/день'
+            price_text = f'🔄 {format_price_kopeks(daily_price, compact=True)}/день'
         else:
             prices = tariff.period_prices or {}
             if prices:
                 min_period = min(prices.keys(), key=int)
                 min_price = prices[min_period]
-                discount_percent = 0
+                group_pct, offer_pct, discount_percent = 0, 0, 0
                 if db_user:
-                    discount_percent = _get_user_period_discount(db_user, int(min_period))
+                    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, int(min_period))
                 if discount_percent > 0:
-                    min_price = _apply_promo_discount(min_price, discount_percent)
+                    min_price = _apply_promo_discount(min_price, group_pct, offer_pct)
                     discount_icon = '🔥'
-                price_text = f'от {_format_price_kopeks(min_price, compact=True)}{discount_icon}'
+                price_text = f'от {format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
         lines.append(f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
 
@@ -1909,17 +2027,17 @@ def get_tariff_switch_periods_keyboard(
         price = prices[period_str]
 
         # Получаем скидку для конкретного периода
-        discount_percent = 0
+        group_pct, offer_pct, discount_percent = 0, 0, 0
         if db_user:
-            discount_percent = _get_user_period_discount(db_user, period)
+            group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
         if discount_percent > 0:
-            price = _apply_promo_discount(price, discount_percent)
-            price_text = f'{_format_price_kopeks(price)} 🔥−{discount_percent}%'
+            price = _apply_promo_discount(price, group_pct, offer_pct)
+            price_text = f'{format_price_kopeks(price)} 🔥−{discount_percent}%'
         else:
-            price_text = _format_price_kopeks(price)
+            price_text = format_price_kopeks(price)
 
-        button_text = f'{_format_period(period)} — {price_text}'
+        button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_sw_period:{tariff.id}:{period}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_switch')])
@@ -2045,7 +2163,7 @@ async def select_tariff_switch(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     # Проверяем, суточный ли это тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -2071,8 +2189,8 @@ async def select_tariff_switch(
                 f'📊 Трафик: {traffic}\n'
                 f'📱 Устройств: {tariff.device_limit}\n'
                 f'🔄 Тип: <b>Суточный</b>\n\n'
-                f'💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}'
+                f'💰 <b>Цена: {format_price_kopeks(daily_price)}/день</b>\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}'
                 f'{days_warning}\n\n'
                 f'ℹ️ Средства будут списываться автоматически раз в сутки.\n'
                 f'Вы можете приостановить подписку в любой момент.',
@@ -2094,9 +2212,9 @@ async def select_tariff_switch(
                 f'❌ <b>Недостаточно средств</b>\n\n'
                 f'📦 Тариф: <b>{tariff.name}</b>\n'
                 f'🔄 Тип: Суточный\n'
-                f'💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>'
+                f'💰 Цена: {format_price_kopeks(daily_price)}/день\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>'
                 f'{days_warning}',
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -2152,17 +2270,17 @@ async def select_tariff_switch_period(
     current_tariff_id = data.get('current_tariff_id')
 
     # Получаем скидку для выбранного периода
-    discount_percent = _get_user_period_discount(db_user, period)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
     base_price = prices.get(str(period), 0)
-    final_price = _apply_promo_discount(base_price, discount_percent)
+    final_price = _apply_promo_discount(base_price, group_pct, offer_pct)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     # Получаем текущий тариф для отображения
     current_tariff_name = 'Неизвестно'
@@ -2182,7 +2300,7 @@ async def select_tariff_switch_period(
     if user_balance >= final_price:
         discount_text = ''
         if discount_percent > 0:
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(base_price - final_price)})'
+            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(base_price - final_price)})'
 
         await callback.message.edit_text(
             f'✅ <b>Подтверждение переключения тарифа</b>\n\n'
@@ -2192,9 +2310,9 @@ async def select_tariff_switch_period(
             f'📱 Устройств: {tariff.device_limit}\n'
             f'{time_info}\n'
             f'{discount_text}\n'
-            f'💰 <b>К оплате: {_format_price_kopeks(final_price)}</b>\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {_format_price_kopeks(user_balance - final_price)}',
+            f'💰 <b>К оплате: {format_price_kopeks(final_price)}</b>\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'После оплаты: {format_price_kopeks(user_balance - final_price)}',
             reply_markup=get_tariff_switch_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -2203,10 +2321,10 @@ async def select_tariff_switch_period(
         await callback.message.edit_text(
             f'❌ <b>Недостаточно средств</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
-            f'📅 Период: {_format_period(period)}\n'
-            f'💰 К оплате: {_format_price_kopeks(final_price)}\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>',
+            f'📅 Период: {format_period(period)}\n'
+            f'💰 К оплате: {format_price_kopeks(final_price)}\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
             reply_markup=get_tariff_switch_insufficient_balance_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )
@@ -2237,12 +2355,12 @@ async def confirm_tariff_switch(
         return
 
     # Получаем скидку для выбранного периода
-    discount_percent = _get_user_period_discount(db_user, period)
+    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
 
     # Получаем цену
     prices = tariff.period_prices or {}
     base_price = prices.get(str(period), 0)
-    final_price = _apply_promo_discount(base_price, discount_percent)
+    final_price = _apply_promo_discount(base_price, group_pct, offer_pct)
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -2361,7 +2479,7 @@ async def confirm_tariff_switch(
 
         await state.clear()
 
-        traffic = _format_traffic(tariff.traffic_limit_gb)
+        traffic = format_traffic(tariff.traffic_limit_gb)
 
         # При смене тарифа устанавливается оплаченный период
         time_info = f'📅 Период: {days_for_new_tariff} дней'
@@ -2371,7 +2489,7 @@ async def confirm_tariff_switch(
             f'📦 Новый тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
-            f'💰 Списано: {_format_price_kopeks(final_price)}\n'
+            f'💰 Списано: {format_price_kopeks(final_price)}\n'
             f'{time_info}\n\n'
             f'Перейдите в раздел «Подписка» для просмотра деталей.',
             reply_markup=InlineKeyboardMarkup(
@@ -2543,7 +2661,7 @@ async def confirm_daily_tariff_switch(
 
         await state.clear()
 
-        traffic = _format_traffic(tariff.traffic_limit_gb)
+        traffic = format_traffic(tariff.traffic_limit_gb)
 
         await callback.message.edit_text(
             f'🎉 <b>Тариф успешно изменён!</b>\n\n'
@@ -2551,7 +2669,7 @@ async def confirm_daily_tariff_switch(
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
             f'🔄 Тип: Суточный\n'
-            f'💰 Списано: {_format_price_kopeks(daily_price)}\n\n'
+            f'💰 Списано: {format_price_kopeks(daily_price)}\n\n'
             f'ℹ️ Следующее списание через 24 часа.',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -2609,13 +2727,13 @@ def _calculate_instant_switch_cost(
     current_monthly = _get_tariff_monthly_price(current_tariff)
     new_monthly = _get_tariff_monthly_price(new_tariff)
 
-    discount_percent = 0
+    group_pct, offer_pct, discount_percent = 0, 0, 0
     if db_user:
-        discount_percent = _get_user_period_discount(db_user, 30)
+        group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, 30)
 
     if discount_percent > 0:
-        current_monthly = _apply_promo_discount(current_monthly, discount_percent)
-        new_monthly = _apply_promo_discount(new_monthly, discount_percent)
+        current_monthly = _apply_promo_discount(current_monthly, group_pct, offer_pct)
+        new_monthly = _apply_promo_discount(new_monthly, group_pct, offer_pct)
 
     price_diff = new_monthly - current_monthly
 
@@ -2655,7 +2773,7 @@ def format_instant_switch_list_text(
         cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, tariff, remaining_days, db_user)
 
         if is_upgrade:
-            cost_text = f'⬆️ +{_format_price_kopeks(cost, compact=True)}'
+            cost_text = f'⬆️ +{format_price_kopeks(cost, compact=True)}'
         else:
             cost_text = '⬇️ Бесплатно'
 
@@ -2688,7 +2806,7 @@ def get_instant_switch_keyboard(
         cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, tariff, remaining_days, db_user)
 
         if is_upgrade:
-            btn_text = f'{tariff.name} (+{_format_price_kopeks(cost, compact=True)})'
+            btn_text = f'{tariff.name} (+{format_price_kopeks(cost, compact=True)})'
         else:
             btn_text = f'{tariff.name} (бесплатно)'
 
@@ -2850,8 +2968,8 @@ async def preview_instant_switch(
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
 
-    traffic = _format_traffic(new_tariff.traffic_limit_gb)
-    current_traffic = _format_traffic(current_tariff.traffic_limit_gb)
+    traffic = format_traffic(new_tariff.traffic_limit_gb)
+    current_traffic = format_traffic(current_tariff.traffic_limit_gb)
 
     texts = get_texts(db_user.language)
 
@@ -2879,8 +2997,8 @@ async def preview_instant_switch(
                 f'   • Трафик: {traffic}\n'
                 f'   • Устройств: {new_tariff.device_limit}\n'
                 f'   • Тип: 🔄 Суточный\n\n'
-                f'💰 <b>Цена: {_format_price_kopeks(daily_price)}/день</b>\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}'
+                f'💰 <b>Цена: {format_price_kopeks(daily_price)}/день</b>\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}'
                 f'{daily_warning}\n\n'
                 f'ℹ️ Средства будут списываться автоматически раз в сутки.',
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
@@ -2892,9 +3010,9 @@ async def preview_instant_switch(
                 f'❌ <b>Недостаточно средств</b>\n\n'
                 f'📦 Тариф: <b>{new_tariff.name}</b>\n'
                 f'🔄 Тип: Суточный\n'
-                f'💰 Цена: {_format_price_kopeks(daily_price)}/день\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>'
+                f'💰 Цена: {format_price_kopeks(daily_price)}/день\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>'
                 f'{daily_warning}',
                 reply_markup=get_instant_switch_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
@@ -2922,9 +3040,9 @@ async def preview_instant_switch(
                 f'   • Трафик: {traffic}\n'
                 f'   • Устройств: {new_tariff.device_limit}\n\n'
                 f'⏰ Осталось дней: <b>{remaining_days}</b>\n'
-                f'💰 <b>Доплата: {_format_price_kopeks(upgrade_cost)}</b>\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'После оплаты: {_format_price_kopeks(user_balance - upgrade_cost)}',
+                f'💰 <b>Доплата: {format_price_kopeks(upgrade_cost)}</b>\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'После оплаты: {format_price_kopeks(user_balance - upgrade_cost)}',
                 reply_markup=get_instant_switch_confirm_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -2933,9 +3051,9 @@ async def preview_instant_switch(
             await callback.message.edit_text(
                 f'❌ <b>Недостаточно средств</b>\n\n'
                 f'📦 Новый тариф: <b>{new_tariff.name}</b>\n'
-                f'💰 Требуется доплата: {_format_price_kopeks(upgrade_cost)}\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>',
+                f'💰 Требуется доплата: {format_price_kopeks(upgrade_cost)}\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
                 reply_markup=get_instant_switch_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -3144,7 +3262,7 @@ async def confirm_instant_switch(
 
         await state.clear()
 
-        traffic = _format_traffic(new_tariff.traffic_limit_gb)
+        traffic = format_traffic(new_tariff.traffic_limit_gb)
 
         # Для суточного тарифа другое сообщение об успехе
         if is_new_daily:
@@ -3155,7 +3273,7 @@ async def confirm_instant_switch(
                 f'📊 Трафик: {traffic}\n'
                 f'📱 Устройств: {new_tariff.device_limit}\n'
                 f'🔄 Тип: Суточный\n'
-                f'💰 Списано: {_format_price_kopeks(daily_price)}\n\n'
+                f'💰 Списано: {format_price_kopeks(daily_price)}\n\n'
                 f'ℹ️ Следующее списание через 24 часа.',
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -3167,7 +3285,7 @@ async def confirm_instant_switch(
             )
         else:
             if is_upgrade:
-                cost_text = f'💰 Списано: {_format_price_kopeks(upgrade_cost)}'
+                cost_text = f'💰 Списано: {format_price_kopeks(upgrade_cost)}'
             else:
                 cost_text = '💰 Бесплатно'
 
@@ -3218,7 +3336,7 @@ async def return_to_saved_tariff_cart(
 
     total_price = cart_data.get('total_price', 0)
     user_balance = db_user.balance_kopeks or 0
-    traffic = _format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb)
 
     # Проверяем баланс
     if user_balance < total_price:
@@ -3229,9 +3347,9 @@ async def return_to_saved_tariff_cart(
                 f'❌ <b>Все еще недостаточно средств</b>\n\n'
                 f'📦 Тариф: <b>{tariff.name}</b>\n'
                 f'🔄 Тип: Суточный\n'
-                f'💰 Стоимость: {_format_price_kopeks(total_price)}\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>',
+                f'💰 Стоимость: {format_price_kopeks(total_price)}\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
                 reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
                 parse_mode='HTML',
             )
@@ -3240,10 +3358,10 @@ async def return_to_saved_tariff_cart(
             await callback.message.edit_text(
                 f'❌ <b>Все еще недостаточно средств</b>\n\n'
                 f'📦 Тариф: <b>{tariff.name}</b>\n'
-                f'📅 Период: {_format_period(period)}\n'
-                f'💰 Стоимость: {_format_price_kopeks(total_price)}\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>',
+                f'📅 Период: {format_period(period)}\n'
+                f'💰 Стоимость: {format_price_kopeks(total_price)}\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
                 reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
                 parse_mode='HTML',
             )
@@ -3252,10 +3370,10 @@ async def return_to_saved_tariff_cart(
             await callback.message.edit_text(
                 f'❌ <b>Все еще недостаточно средств</b>\n\n'
                 f'📦 Тариф: <b>{tariff.name}</b>\n'
-                f'📅 Период: {_format_period(period)}\n'
-                f'💰 Стоимость: {_format_price_kopeks(total_price)}\n\n'
-                f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-                f'⚠️ Не хватает: <b>{_format_price_kopeks(missing)}</b>',
+                f'📅 Период: {format_period(period)}\n'
+                f'💰 Стоимость: {format_price_kopeks(total_price)}\n\n'
+                f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+                f'⚠️ Не хватает: <b>{format_price_kopeks(missing)}</b>',
                 reply_markup=get_tariff_insufficient_balance_keyboard(tariff_id, period, db_user.language),
                 parse_mode='HTML',
             )
@@ -3274,9 +3392,9 @@ async def return_to_saved_tariff_cart(
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
             f'🔄 Тип: Суточный\n'
-            f'💰 <b>Стоимость в день: {_format_price_kopeks(daily_price)}</b>\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {_format_price_kopeks(user_balance - daily_price)}',
+            f'💰 <b>Стоимость в день: {format_price_kopeks(daily_price)}</b>\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'После оплаты: {format_price_kopeks(user_balance - daily_price)}',
             reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
             parse_mode='HTML',
         )
@@ -3286,18 +3404,18 @@ async def return_to_saved_tariff_cart(
         discount_text = ''
         if discount_percent > 0:
             original_price = int(total_price / (1 - discount_percent / 100))
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(original_price - total_price)})'
+            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(original_price - total_price)})'
 
         await callback.message.edit_text(
             f'✅ <b>Подтверждение продления</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {_format_period(period)}\n'
+            f'📅 Период: {format_period(period)}\n'
             f'{discount_text}\n'
-            f'💰 <b>Итого: {_format_price_kopeks(total_price)}</b>\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {_format_price_kopeks(user_balance - total_price)}',
+            f'💰 <b>Итого: {format_price_kopeks(total_price)}</b>\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'После оплаты: {format_price_kopeks(user_balance - total_price)}',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -3316,18 +3434,18 @@ async def return_to_saved_tariff_cart(
         discount_text = ''
         if discount_percent > 0:
             original_price = int(total_price / (1 - discount_percent / 100))
-            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{_format_price_kopeks(original_price - total_price)})'
+            discount_text = f'\n🎁 Скидка: {discount_percent}% (-{format_price_kopeks(original_price - total_price)})'
 
         await callback.message.edit_text(
             f'✅ <b>Подтверждение покупки</b>\n\n'
             f'📦 Тариф: <b>{tariff.name}</b>\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
-            f'📅 Период: {_format_period(period)}\n'
+            f'📅 Период: {format_period(period)}\n'
             f'{discount_text}\n'
-            f'💰 <b>Итого: {_format_price_kopeks(total_price)}</b>\n\n'
-            f'💳 Ваш баланс: {_format_price_kopeks(user_balance)}\n'
-            f'После оплаты: {_format_price_kopeks(user_balance - total_price)}',
+            f'💰 <b>Итого: {format_price_kopeks(total_price)}</b>\n\n'
+            f'💳 Ваш баланс: {format_price_kopeks(user_balance)}\n'
+            f'После оплаты: {format_price_kopeks(user_balance - total_price)}',
             reply_markup=get_tariff_confirm_keyboard(tariff_id, period, db_user.language),
             parse_mode='HTML',
         )

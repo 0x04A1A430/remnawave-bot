@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import PERIOD_PRICES, settings
+from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
     create_paid_subscription,
@@ -26,11 +26,16 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
+from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
     PurchaseBalanceError,
     PurchaseValidationError,
+)
+from app.services.subscription_renewal_service import (
+    SubscriptionRenewalChargeError,
+    SubscriptionRenewalService,
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.system_settings_service import bot_configuration_service
@@ -326,77 +331,34 @@ async def get_renewal_options(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get available subscription renewal options with prices."""
-    options = []
+    subscription = await get_subscription_by_user_id(db, user.id)
+    if not subscription:
+        return []
 
-    # В режиме тарифов берём цены из тарифа пользователя
-    tariff_prices = None
-    tariff_periods = None
-    extra_devices = 0
-    tariff_device_price = 0
-    if settings.is_tariffs_mode():
-        subscription = await get_subscription_by_user_id(db, user.id)
-        if subscription and subscription.tariff_id:
-            tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            if tariff and tariff.period_prices:
-                tariff_prices = {int(k): v for k, v in tariff.period_prices.items()}
-                tariff_periods = sorted(tariff_prices.keys())
-                # Учитываем докупленные устройства сверх тарифа
-                extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
-                if extra_devices > 0:
-                    tariff_device_price = (
-                        tariff.device_price_kopeks
-                        if tariff.device_price_kopeks is not None
-                        else settings.PRICE_PER_DEVICE
-                    )
-
-    # Используем периоды тарифа или стандартные
-    if tariff_periods:
-        periods = tariff_periods
+    # Determine available periods
+    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+        periods = sorted(int(k) for k in subscription.tariff.period_prices.keys())
     else:
         periods = settings.get_available_renewal_periods()
 
-    for period in periods:
-        # Получаем цену из тарифа или из PERIOD_PRICES
-        if tariff_prices and period in tariff_prices:
-            price_kopeks = tariff_prices[period]
-        else:
-            price_kopeks = PERIOD_PRICES.get(period, 0)
+    options = []
 
-        if price_kopeks <= 0:
+    for period in periods:
+        pricing = await pricing_engine.calculate_renewal_price(db, subscription, period, user=user)
+
+        if pricing.final_total <= 0 and pricing.base_price <= 0:
             continue
 
-        # Добавляем стоимость докупленных устройств за период продления
-        if extra_devices > 0 and tariff_device_price > 0:
-            from app.utils.pricing_utils import calculate_months_from_days
-
-            months = calculate_months_from_days(period)
-            price_kopeks += extra_devices * tariff_device_price * months
-
-        # Apply user's discount if any
-        original_price = price_kopeks
-        discount_percent = 0
-        if hasattr(user, 'get_promo_discount'):
-            discount_percent = user.get_promo_discount('period', period)
-
-        if discount_percent > 0:
-            price_kopeks = int(price_kopeks * (100 - discount_percent) / 100)
-
-        # Apply promo_offer discount (временная скидка, как в /renew)
-        promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
-        if promo_offer_discount_percent > 0:
-            price_kopeks = price_kopeks - price_kopeks * promo_offer_discount_percent // 100
-
-        # Комбинированный процент скидки для отображения
-        combined_discount = discount_percent
-        if original_price > 0 and original_price != price_kopeks:
-            total_discount = original_price - price_kopeks
-            combined_discount = int(total_discount * 100 / original_price)
+        original_price = pricing.original_total
+        combined_discount = 0
+        if original_price > 0 and original_price != pricing.final_total:
+            combined_discount = int((original_price - pricing.final_total) * 100 / original_price)
 
         options.append(
             RenewalOptionResponse(
                 period_days=period,
-                price_kopeks=price_kopeks,
-                price_rubles=price_kopeks / 100,
+                price_kopeks=pricing.final_total,
+                price_rubles=pricing.final_total / 100,
                 discount_percent=combined_discount,
                 original_price_kopeks=original_price if combined_discount > 0 else None,
             )
@@ -426,57 +388,42 @@ async def renew_subscription(
             detail='No subscription found',
         )
 
-    # В режиме тарифов берём цену из тарифа пользователя
-    price_kopeks = 0
-    tariff = None
-    if settings.is_tariffs_mode() and user.subscription.tariff_id:
-        tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
-        if tariff and tariff.period_prices:
-            price_kopeks = tariff.period_prices.get(str(request.period_days), 0)
+    # Validate period_days against available periods (prevent arbitrary periods)
+    subscription = user.subscription
+    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+        available_periods = [int(p) for p in subscription.tariff.period_prices.keys()]
+    else:
+        available_periods = settings.get_available_renewal_periods()
 
-    # Fallback на PERIOD_PRICES
-    if price_kopeks <= 0:
-        price_kopeks = PERIOD_PRICES.get(request.period_days, 0)
+    if request.period_days not in available_periods:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Selected renewal period is not available',
+        )
 
-    if price_kopeks <= 0:
+    # Unified pricing via PricingEngine
+    pricing = await pricing_engine.calculate_renewal_price(
+        db,
+        subscription,
+        request.period_days,
+        user=user,
+    )
+    price_kopeks = pricing.final_total
+    promo_offer_discount_value = pricing.promo_offer_discount
+    promo_offer_discount_percent = pricing.breakdown.get('offer_discount_pct', 0)
+
+    if price_kopeks <= 0 and pricing.base_price <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid renewal period',
         )
 
-    # Добавляем стоимость докупленных устройств сверх тарифа
-    if tariff:
-        extra_devices = max(0, (user.subscription.device_limit or 0) - (tariff.device_limit or 0))
-        if extra_devices > 0:
-            from app.utils.pricing_utils import calculate_months_from_days
+    original_price_kopeks = pricing.original_total
+    discount_percent = 0
+    if original_price_kopeks > 0 and original_price_kopeks != price_kopeks:
+        discount_percent = int((original_price_kopeks - price_kopeks) * 100 / original_price_kopeks)
 
-            device_price = (
-                tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
-            )
-            months = calculate_months_from_days(request.period_days)
-            price_kopeks += extra_devices * device_price * months
-
-    # Apply promo group discount
-    original_price_kopeks = price_kopeks
-    promo_group_discount_percent = 0
-    if hasattr(user, 'get_promo_discount'):
-        promo_group_discount_percent = user.get_promo_discount('period', request.period_days)
-
-    if promo_group_discount_percent > 0:
-        price_kopeks = int(price_kopeks * (100 - promo_group_discount_percent) / 100)
-
-    # Apply promo offer discount (temporary discount from promo offers)
-    promo_offer_discount_percent = get_user_active_promo_discount_percent(user)
-    promo_offer_discount_value = 0
-    if promo_offer_discount_percent > 0:
-        promo_offer_discount_value = price_kopeks * promo_offer_discount_percent // 100
-        price_kopeks = price_kopeks - promo_offer_discount_value
-
-    # Combined discount percent for display
-    discount_percent = promo_group_discount_percent
-    if promo_offer_discount_percent > 0 and original_price_kopeks > 0:
-        total_discount = original_price_kopeks - price_kopeks
-        discount_percent = int(total_discount * 100 / original_price_kopeks)
+    tariff = user.subscription.tariff if user.subscription.tariff_id else None
 
     # Check balance
     if user.balance_kopeks < price_kopeks:
@@ -541,19 +488,21 @@ async def renew_subscription(
             },
         )
 
-    # Deduct balance (centralized: row-level lock, promo consumption, paid subscription flag)
-    from app.database.crud.user import subtract_user_balance
-
+    # Centralized renewal: balance deduction, extension, RemnaWave sync, admin notification,
+    # server price recording, and compensating refund on failure.
     renewal_description = f'Продление подписки на {request.period_days} дней' + (f' ({tariff.name})' if tariff else '')
-    success = await subtract_user_balance(
-        db,
-        user,
-        price_kopeks,
-        renewal_description,
-        consume_promo_offer=promo_offer_discount_value > 0,
-        mark_as_paid_subscription=True,
-    )
-    if not success:
+    renewal_service = SubscriptionRenewalService()
+
+    try:
+        result = await renewal_service.finalize(
+            db,
+            user,
+            subscription,
+            pricing,
+            description=renewal_description,
+            payment_method=PaymentMethod.BALANCE,
+        )
+    except SubscriptionRenewalChargeError:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
@@ -562,104 +511,9 @@ async def renew_subscription(
             },
         )
 
-    # Создаём транзакцию для учёта списания
-    transaction = await create_transaction(
-        db,
-        user_id=user.id,
-        type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=price_kopeks,
-        description=renewal_description,
-        payment_method=PaymentMethod.BALANCE,
-    )
-
-    await db.refresh(user, ['subscription'])
-
-    # Extend from end_date or now if expired
-    now = datetime.now(UTC)
-    was_expired = user.subscription.status in ('expired', 'disabled', 'limited') or (
-        user.subscription.end_date is not None and user.subscription.end_date <= now
-    )
-
-    if user.subscription.end_date and user.subscription.end_date > now:
-        user.subscription.end_date = user.subscription.end_date + timedelta(days=request.period_days)
-    else:
-        user.subscription.end_date = now + timedelta(days=request.period_days)
-        user.subscription.start_date = now
-
-    user.subscription.status = 'active'
-    user.subscription.is_trial = False
-
-    # При продлении истёкшей подписки — сбрасываем докупки трафика (новый период)
-    if was_expired:
-        from sqlalchemy import delete as sql_delete
-
-        from app.database.models import TrafficPurchase
-
-        await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
-        purchased = user.subscription.purchased_traffic_gb or 0
-        if purchased > 0:
-            old_traffic = user.subscription.traffic_limit_gb
-            user.subscription.traffic_limit_gb = max(0, (user.subscription.traffic_limit_gb or 0) - purchased)
-            logger.info(
-                'Сброс докупок трафика при продлении истёкшей подписки',
-                old_traffic=old_traffic,
-                new_traffic=user.subscription.traffic_limit_gb,
-            )
-        user.subscription.purchased_traffic_gb = 0
-        user.subscription.traffic_reset_at = None
-        if settings.RESET_TRAFFIC_ON_PAYMENT:
-            user.subscription.traffic_used_gb = 0.0
-
-    await db.commit()
-
-    # Синхронизируем с RemnaWave
-    try:
-        subscription_service = SubscriptionService()
-        if getattr(user, 'remnawave_uuid', None):
-            await subscription_service.update_remnawave_user(
-                db,
-                user.subscription,
-                reset_traffic=was_expired and settings.RESET_TRAFFIC_ON_PAYMENT,
-                reset_reason='subscription renewal (cabinet)',
-            )
-        else:
-            await subscription_service.create_remnawave_user(
-                db,
-                user.subscription,
-                reset_traffic=was_expired and settings.RESET_TRAFFIC_ON_PAYMENT,
-                reset_reason='subscription renewal (cabinet)',
-            )
-    except Exception as e:
-        logger.error('Failed to sync subscription renewal with RemnaWave', error=e)
-
-    # Отправляем уведомление админам о продлении подписки
-    try:
-        from aiogram import Bot
-
-        from app.services.admin_notification_service import AdminNotificationService
-
-        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
-            bot = Bot(token=settings.BOT_TOKEN)
-            try:
-                notification_service = AdminNotificationService(bot)
-                await notification_service.send_subscription_purchase_notification(
-                    db=db,
-                    user=user,
-                    subscription=user.subscription,
-                    transaction=transaction,
-                    period_days=request.period_days,
-                    was_trial_conversion=False,
-                    amount_kopeks=price_kopeks,
-                    purchase_type='renewal',
-                )
-            finally:
-                await bot.session.close()
-    except Exception as e:
-        logger.error('Failed to send admin notification for subscription renewal', error=e)
-
     response = {
         'message': 'Subscription renewed successfully',
-        'new_end_date': user.subscription.end_date.isoformat(),
+        'new_end_date': result.subscription.end_date.isoformat(),
         'amount_paid_kopeks': price_kopeks,
     }
 
@@ -4177,6 +4031,15 @@ async def switch_tariff(
             detail='No active subscription with tariff',
         )
 
+    # Lock subscription row to prevent concurrent tariff switches
+    locked_result = await db.execute(
+        select(Subscription)
+        .where(Subscription.id == user.subscription.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    user.subscription = locked_result.scalar_one()
+
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = user.subscription.actual_status
     if actual_status == 'expired':
@@ -4339,6 +4202,7 @@ async def switch_tariff(
             upgrade_cost,
             description,
             mark_as_paid_subscription=True,
+            commit=False,
         )
         if not success:
             raise HTTPException(
@@ -4346,7 +4210,7 @@ async def switch_tariff(
                 detail='Failed to charge balance',
             )
 
-        # Create transaction
+        # Create transaction (commit=False to keep FOR UPDATE lock held)
         switch_transaction = await create_transaction(
             db=db,
             user_id=user.id,
@@ -4354,6 +4218,7 @@ async def switch_tariff(
             amount_kopeks=upgrade_cost,
             description=description,
             payment_method=PaymentMethod.BALANCE,
+            commit=False,
         )
     else:
         # Free switch (downgrade) — record in history
@@ -4364,6 +4229,7 @@ async def switch_tariff(
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=0,
             description=description,
+            commit=False,
         )
 
     # Update subscription
@@ -4405,6 +4271,19 @@ async def switch_tariff(
 
     user.subscription.updated_at = datetime.now(UTC)
     await db.commit()
+
+    # Emit deferred side-effects after atomic commit
+    if upgrade_cost > 0 and switch_transaction:
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            switch_transaction,
+            amount_kopeks=upgrade_cost,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.BALANCE,
+        )
 
     # Sync with RemnaWave (optionally reset traffic based on admin setting)
     should_reset_traffic = settings.RESET_TRAFFIC_ON_TARIFF_SWITCH

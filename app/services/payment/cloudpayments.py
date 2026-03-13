@@ -271,6 +271,11 @@ class CloudPaymentsPaymentMixin:
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
 
+        # Lock user row to prevent concurrent balance race conditions
+        from app.database.crud.user import lock_user_for_update
+
+        user = await lock_user_for_update(db, user)
+
         old_balance = user.balance_kopeks
         was_first_topup = not user.has_made_first_topup
 

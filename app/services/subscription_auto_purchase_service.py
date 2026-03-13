@@ -18,6 +18,7 @@ from app.database.crud.user import get_user_by_id, subtract_user_balance
 from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -142,55 +143,7 @@ def _safe_int(value: object | None, default: int = 0) -> int:
 
 def _apply_promo_discount_for_tariff(price: int, discount_percent: int) -> int:
     """Применяет скидку промогруппы к цене тарифа."""
-    if discount_percent <= 0:
-        return price
-    discount = int(price * discount_percent / 100)
-    return max(0, price - discount)
-
-
-async def _get_tariff_price_for_period(
-    db: AsyncSession,
-    user: User,
-    tariff_id: int,
-    period_days: int,
-) -> tuple[int, int] | None:
-    """Получает базовую цену тарифа и процент скидки (без применения).
-
-    Returns:
-        (base_price, discount_percent) или None если тариф/период недоступен.
-        Скидка НЕ применяется — вызывающий код должен сначала добавить доп. устройства,
-        затем применить скидку к полной сумме (как в cabinet).
-    """
-    from app.database.crud.tariff import get_tariff_by_id
-
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff or not tariff.is_active:
-        logger.warning(
-            '🔁 Автопокупка: тариф недоступен для пользователя',
-            tariff_id=tariff_id,
-            format_user_id=_format_user_id(user),
-        )
-        return None
-
-    prices = tariff.period_prices or {}
-    base_price = prices.get(str(period_days))
-    if base_price is None:
-        logger.warning(
-            '🔁 Автопокупка: период дней недоступен для тарифа', period_days=period_days, tariff_id=tariff_id
-        )
-        return None
-
-    # Возвращаем только promo_group скидку.
-    # Promo_offer скидку вызывающий код должен применить отдельно (последовательно, как в cabinet).
-    discount_percent = 0
-    if hasattr(user, 'get_promo_discount'):
-        discount_percent = user.get_promo_discount('period', period_days)
-    else:
-        promo_group = getattr(user, 'promo_group', None)
-        if promo_group and hasattr(promo_group, 'get_discount_percent'):
-            discount_percent = promo_group.get_discount_percent('period', period_days)
-
-    return (int(base_price), discount_percent)
+    return PricingEngine.apply_discount(price, discount_percent)
 
 
 async def _prepare_auto_extend_context(
@@ -229,56 +182,28 @@ async def _prepare_auto_extend_context(
         )
         return None
 
-    # Если в корзине есть tariff_id - пересчитываем цену по актуальному тарифу
+    # Fresh pricing via unified PricingEngine (no stale cart prices)
     tariff_id = cart_data.get('tariff_id')
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
-        tariff_result = await _get_tariff_price_for_period(db, user, tariff_id, period_days)
-        if tariff_result is None:
-            # Тариф недоступен или период отсутствует - используем сохранённую цену как fallback
-            price_kopeks = _safe_int(
-                cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
-            )
-            logger.warning(
-                '🔁 Автопокупка: не удалось пересчитать цену тарифа , используем сохранённую',
-                tariff_id=tariff_id,
-                price_kopeks=price_kopeks,
-            )
-        else:
-            base_price, discount_percent = tariff_result
-            price_kopeks = base_price
 
-            # Добавляем стоимость докупленных устройств ДО применения скидки (как в cabinet)
-            if subscription.tariff_id == tariff_id:
-                from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+    from app.services.pricing_engine import pricing_engine as _pricing_engine
 
-                _tariff = await _get_tariff(db, tariff_id)
-                if _tariff:
-                    extra_devices = max(0, (subscription.device_limit or 0) - (_tariff.device_limit or 0))
-                    if extra_devices > 0:
-                        from app.utils.pricing_utils import calculate_months_from_days
-
-                        device_price_per_month = (
-                            _tariff.device_price_kopeks
-                            if _tariff.device_price_kopeks is not None
-                            else settings.PRICE_PER_DEVICE
-                        )
-                        months = calculate_months_from_days(period_days)
-                        price_kopeks += extra_devices * device_price_per_month * months
-
-            # Применяем promo_group скидку к полной сумме (база + доп. устройства)
-            price_kopeks = _apply_promo_discount_for_tariff(price_kopeks, discount_percent)
-
-            # Применяем promo_offer скидку отдельно (последовательно, как в cabinet)
-            from app.utils.promo_offer import get_user_active_promo_discount_percent
-
-            promo_offer_percent = get_user_active_promo_discount_percent(user)
-            if promo_offer_percent > 0:
-                price_kopeks = _apply_promo_discount_for_tariff(price_kopeks, promo_offer_percent)
-    else:
-        price_kopeks = _safe_int(
-            cart_data.get('total_price') or cart_data.get('price') or cart_data.get('final_price'),
+    try:
+        pricing = await _pricing_engine.calculate_renewal_price(
+            db,
+            subscription,
+            period_days,
+            user=user,
         )
+        price_kopeks = pricing.final_total
+    except Exception as e:
+        logger.error(
+            'Автопокупка: ошибка PricingEngine, пропускаем автопродление',
+            format_user_id=_format_user_id(user),
+            error=str(e),
+        )
+        return None
 
     if price_kopeks <= 0:
         logger.warning(
@@ -398,6 +323,15 @@ async def _auto_extend_subscription(
         )
         return False
 
+    # Save promo offer state before charge so we can restore on failure
+    saved_promo_percent = (
+        int(getattr(user, 'promo_offer_discount_percent', 0) or 0) if prepared.consume_promo_offer else 0
+    )
+    saved_promo_source = getattr(user, 'promo_offer_discount_source', None) if prepared.consume_promo_offer else None
+    saved_promo_expires = (
+        getattr(user, 'promo_offer_discount_expires_at', None) if prepared.consume_promo_offer else None
+    )
+
     try:
         deducted = await subtract_user_balance(
             db,
@@ -462,8 +396,44 @@ async def _auto_extend_subscription(
             error=error,
             exc_info=True,
         )
-        # НОВОЕ: Откатываем изменения при ошибке
         await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                prepared.price_kopeks,
+                'Возврат: ошибка автопродления подписки',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+
+            # Restore consumed promo offer fields
+            if prepared.consume_promo_offer and saved_promo_percent > 0:
+                user.promo_offer_discount_percent = saved_promo_percent
+                user.promo_offer_discount_source = saved_promo_source
+                user.promo_offer_discount_expires_at = saved_promo_expires
+                await db.commit()
+                logger.info(
+                    '💰 Автопокупка: восстановлен промо-оффер после ошибки продления',
+                    format_user_id=_format_user_id(user),
+                    restored_percent=saved_promo_percent,
+                )
+
+            logger.info(
+                '💰 Автопокупка: возврат средств после ошибки продления',
+                format_user_id=_format_user_id(user),
+                refund_kopeks=prepared.price_kopeks,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Автопокупка: не удалось вернуть средства после ошибки продления',
+                format_user_id=_format_user_id(user),
+                price_kopeks=prepared.price_kopeks,
+                refund_error=refund_error,
+            )
         return False
 
     transaction = None
@@ -673,13 +643,10 @@ async def _auto_purchase_tariff(
     if existing_subscription and existing_subscription.tariff_id == tariff_id:
         extra_devices = max(0, (existing_subscription.device_limit or 0) - (tariff.device_limit or 0))
         if extra_devices > 0:
-            from app.utils.pricing_utils import calculate_months_from_days
-
-            device_price_per_month = (
+            device_price_per_unit = (
                 tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
             )
-            months = calculate_months_from_days(period_days)
-            extra_devices_cost = extra_devices * device_price_per_month * months
+            extra_devices_cost = extra_devices * device_price_per_unit
             final_price += extra_devices_cost
 
     # Пересчитываем скидку из актуальных данных пользователя (не из stale корзины)
@@ -706,6 +673,12 @@ async def _auto_purchase_tariff(
         )
         return False
 
+    # Save promo offer state before deduction (for restore on failure)
+    consume_promo = promo_offer_percent > 0
+    saved_promo_percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0) if consume_promo else 0
+    saved_promo_source = getattr(user, 'promo_offer_discount_source', None) if consume_promo else None
+    saved_promo_expires = getattr(user, 'promo_offer_discount_expires_at', None) if consume_promo else None
+
     # Списываем баланс
     try:
         description = f'Покупка тарифа {tariff.name} на {period_days} дней'
@@ -714,7 +687,7 @@ async def _auto_purchase_tariff(
             user,
             final_price,
             description,
-            consume_promo_offer=promo_offer_percent > 0,
+            consume_promo_offer=consume_promo,
             mark_as_paid_subscription=True,
         )
         if not success:
@@ -779,6 +752,36 @@ async def _auto_purchase_tariff(
             exc_info=True,
         )
         await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                final_price,
+                'Возврат: ошибка автопокупки тарифа',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            # Restore promo offer if consumed
+            if consume_promo and saved_promo_percent > 0:
+                user.promo_offer_discount_percent = saved_promo_percent
+                user.promo_offer_discount_source = saved_promo_source
+                user.promo_offer_discount_expires_at = saved_promo_expires
+                await db.commit()
+            logger.info(
+                '💰 Автопокупка тарифа: возврат средств после ошибки создания подписки',
+                format_user_id=_format_user_id(user),
+                refund_kopeks=final_price,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Автопокупка тарифа: не удалось вернуть средства после ошибки создания подписки',
+                format_user_id=_format_user_id(user),
+                price_kopeks=final_price,
+                refund_error=refund_error,
+            )
         return False
 
     # Создаём транзакцию
@@ -1071,6 +1074,30 @@ async def _auto_purchase_daily_tariff(
             exc_info=True,
         )
         await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                daily_price,
+                'Возврат: ошибка автопокупки суточного тарифа',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            logger.info(
+                '💰 Автопокупка суточного тарифа: возврат средств после ошибки создания подписки',
+                format_user_id=_format_user_id(user),
+                refund_kopeks=daily_price,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Автопокупка суточного тарифа: не удалось вернуть средства',
+                format_user_id=_format_user_id(user),
+                price_kopeks=daily_price,
+                refund_error=refund_error,
+            )
         return False
 
     # Создаём транзакцию
@@ -1585,6 +1612,30 @@ async def _auto_add_traffic(
             exc_info=True,
         )
         await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                price_kopeks,
+                'Возврат: ошибка автопокупки трафика',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            logger.info(
+                '💰 Автопокупка трафика: возврат средств после ошибки добавления трафика',
+                format_user_id=_format_user_id(user),
+                refund_kopeks=price_kopeks,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Автопокупка трафика: не удалось вернуть средства',
+                format_user_id=_format_user_id(user),
+                price_kopeks=price_kopeks,
+                refund_error=refund_error,
+            )
         return False
 
     # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
@@ -1750,15 +1801,16 @@ async def try_auto_extend_expired_after_topup(
     else:
         period_days = 30
 
-    # Calculate renewal price
+    # Calculate renewal price via PricingEngine
     subscription_service = SubscriptionService()
     try:
-        renewal_cost = await subscription_service.calculate_renewal_price(
+        pricing = await pricing_engine.calculate_renewal_price(
+            db,
             subscription,
             period_days,
-            db,
             user=user,
         )
+        renewal_cost = pricing.final_total
     except Exception as error:
         logger.error(
             '❌ Автопродление expired: ошибка расчёта стоимости',
@@ -1767,6 +1819,15 @@ async def try_auto_extend_expired_after_topup(
             exc_info=True,
         )
         return False
+
+    logger.info(
+        'Расчёт цены автопродления (PricingEngine)',
+        user_id=getattr(user, 'id', None),
+        period_days=period_days,
+        final_total=pricing.final_total,
+        is_tariff_mode=pricing.is_tariff_mode,
+        breakdown=pricing.breakdown,
+    )
 
     if renewal_cost <= 0:
         logger.warning(
@@ -1813,6 +1874,11 @@ async def try_auto_extend_expired_after_topup(
     from app.utils.promo_offer import get_user_active_promo_discount_percent
 
     consume_promo_offer = get_user_active_promo_discount_percent(user) > 0
+
+    # Save promo offer state before deduction (for restore on failure)
+    saved_promo_percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0) if consume_promo_offer else 0
+    saved_promo_source = getattr(user, 'promo_offer_discount_source', None) if consume_promo_offer else None
+    saved_promo_expires = getattr(user, 'promo_offer_discount_expires_at', None) if consume_promo_offer else None
 
     # Deduct balance
     description = f'Автопродление истёкшей подписки на {period_days} дней'
@@ -1866,6 +1932,36 @@ async def try_auto_extend_expired_after_topup(
             exc_info=True,
         )
         await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                renewal_cost,
+                'Возврат: ошибка автопродления истёкшей подписки',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            # Restore promo offer if consumed
+            if consume_promo_offer and saved_promo_percent > 0:
+                user.promo_offer_discount_percent = saved_promo_percent
+                user.promo_offer_discount_source = saved_promo_source
+                user.promo_offer_discount_expires_at = saved_promo_expires
+                await db.commit()
+            logger.info(
+                '💰 Автопродление expired: возврат средств после ошибки продления',
+                format_user_id=_format_user_id(user),
+                refund_kopeks=renewal_cost,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Автопродление expired: не удалось вернуть средства',
+                format_user_id=_format_user_id(user),
+                price_kopeks=renewal_cost,
+                refund_error=refund_error,
+            )
         return False
 
     # Create transaction record
@@ -2124,6 +2220,30 @@ async def try_resume_disabled_daily_after_topup(
             exc_info=True,
         )
         await db.rollback()
+        # Compensating refund: balance was already committed by subtract_user_balance
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                user,
+                daily_price,
+                'Возврат: ошибка авто-возобновления суточной подписки',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+            logger.info(
+                '💰 Авто-возобновление daily: возврат средств после ошибки активации',
+                format_user_id=_format_user_id(user),
+                refund_kopeks=daily_price,
+            )
+        except Exception as refund_error:
+            logger.critical(
+                'CRITICAL: Авто-возобновление daily: не удалось вернуть средства',
+                format_user_id=_format_user_id(user),
+                price_kopeks=daily_price,
+                refund_error=refund_error,
+            )
         return False
 
     logger.info(
