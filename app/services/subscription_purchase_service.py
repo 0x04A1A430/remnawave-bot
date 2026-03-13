@@ -267,16 +267,10 @@ class PurchaseBalanceError(Exception):
 
 
 def _apply_percentage_discount(amount: int, percent: int) -> tuple[int, int]:
-    if amount <= 0 or percent <= 0:
-        return amount, 0
-    clamped = max(0, min(100, percent))
-    discount_value = amount * clamped // 100
-    discounted = amount - discount_value
-    if discount_value >= 100 and discounted % 100:
-        discounted += 100 - (discounted % 100)
-        discounted = min(discounted, amount)
-        discount_value = amount - discounted
-    return discounted, discount_value
+    """Delegate to shared apply_percentage_discount (uses PricingEngine internally)."""
+    from app.utils.pricing_utils import apply_percentage_discount
+
+    return apply_percentage_discount(amount, percent)
 
 
 def _apply_discount_to_monthly_component(amount_per_month: int, percent: int, months: int) -> dict[str, int]:

@@ -43,29 +43,17 @@ def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_
 
 
 def apply_percentage_discount(amount: int, percent: int) -> tuple[int, int]:
+    """Apply percentage discount using PricingEngine's floor division.
+
+    Returns (discounted_amount, discount_value).
+    """
+    from app.services.pricing_engine import PricingEngine
+
     if amount <= 0 or percent <= 0:
         return amount, 0
 
-    clamped_percent = max(0, min(100, percent))
-    discount_value = amount * clamped_percent // 100
-    discounted_amount = amount - discount_value
-
-    # Round the discounted price up to the nearest full ruble (100 kopeks)
-    # to avoid undercharging users because of fractional kopeks.
-    if discount_value >= 100 and discounted_amount % 100:
-        discounted_amount += 100 - (discounted_amount % 100)
-        discounted_amount = min(discounted_amount, amount)
-        discount_value = amount - discounted_amount
-
-    logger.debug(
-        'Применена скидка %: → (скидка)',
-        clamped_percent=clamped_percent,
-        amount=amount,
-        discounted_amount=discounted_amount,
-        discount_value=discount_value,
-    )
-
-    return discounted_amount, discount_value
+    discounted = PricingEngine.apply_discount(amount, percent)
+    return discounted, amount - discounted
 
 
 def resolve_discount_percent(
