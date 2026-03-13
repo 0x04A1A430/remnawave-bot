@@ -473,7 +473,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         days_left=max(0, subscription.days_left),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
         traffic_limit=traffic_text,
-        countries_count=len(subscription.connected_squads),
+        countries_count=len(subscription.connected_squads or []),
         devices_used=devices_used,
         devices_limit=subscription.device_limit,
         autopay_status='✅ Включен' if subscription.autopay_enabled else '⌛ Выключен',

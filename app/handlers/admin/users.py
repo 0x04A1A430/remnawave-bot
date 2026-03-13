@@ -1210,7 +1210,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
                 end_date=format_datetime(subscription.end_date),
                 traffic=traffic_usage,
                 devices=subscription.device_limit,
-                countries=len(subscription.connected_squads),
+                countries=len(subscription.connected_squads or []),
             )
         )
     else:
@@ -2712,7 +2712,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         text += f'• Статус: {sub_status}{sub_type}\n'
         text += f'• Трафик: {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ\n'
         text += f'• Устройства: {subscription.device_limit}\n'
-        text += f'• Стран: {len(subscription.connected_squads)}\n'
+        text += f'• Стран: {len(subscription.connected_squads or [])}\n'
     else:
         text += '• Отсутствует\n'
 

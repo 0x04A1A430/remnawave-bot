@@ -1673,7 +1673,7 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
         f'Осталось дней: {subscription.days_left}',
         '',
         '<b>Ваша текущая конфигурация:</b>',
-        f'🌍 Серверов: {len(subscription.connected_squads)}',
+        f'🌍 Серверов: {len(subscription.connected_squads or [])}',
         f'📊 Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}',
     ]
 
@@ -2880,7 +2880,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
     devices_limit_display = str(subscription.device_limit)
 
     settings_text = settings_template.format(
-        countries_count=len(subscription.connected_squads),
+        countries_count=len(subscription.connected_squads or []),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
         traffic_limit=texts.format_traffic(subscription.traffic_limit_gb, is_limit=True),
         devices_used=devices_used,

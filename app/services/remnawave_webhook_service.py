@@ -724,7 +724,7 @@ class RemnaWaveWebhookService:
             subscription.subscription_url = None
             subscription.subscription_crypto_link = None
             subscription.remnawave_short_uuid = None
-            subscription.connected_squads = None
+            subscription.connected_squads = []
             subscription.updated_at = datetime.now(UTC)
 
             # Remove SubscriptionServer link rows
