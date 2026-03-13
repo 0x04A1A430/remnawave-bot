@@ -141,6 +141,11 @@ class TributeService:
                     description=f'Пополнение через Tribute: {amount_kopeks / 100}₽ (ID: {payment_id})',
                 )
 
+                # Lock user row to prevent concurrent balance race conditions
+                from app.database.crud.user import lock_user_for_update
+
+                user = await lock_user_for_update(session, user)
+
                 old_balance = user.balance_kopeks
                 was_first_topup = not user.has_made_first_topup
 
@@ -247,12 +252,19 @@ class TributeService:
                     payment_method=PaymentMethod.TRIBUTE,
                     external_id=f'refund_{payment_id}',
                     is_completed=True,
+                    commit=False,
                 )
 
                 user = await get_user_by_telegram_id(session, user_id)
-                if user and user.balance_kopeks >= amount_kopeks:
-                    user.balance_kopeks -= amount_kopeks
-                    await session.commit()
+                if user:
+                    # Lock user row to prevent concurrent balance race conditions
+                    from app.database.crud.user import lock_user_for_update
+
+                    user = await lock_user_for_update(session, user)
+                    if user.balance_kopeks >= amount_kopeks:
+                        user.balance_kopeks -= amount_kopeks
+
+                await session.commit()
 
                 await self._send_refund_notification(user_id, amount_kopeks)
 
@@ -393,6 +405,11 @@ class TributeService:
                     external_id=external_id,
                     is_completed=True,
                 )
+
+                # Lock user row to prevent concurrent balance race conditions
+                from app.database.crud.user import lock_user_for_update
+
+                user = await lock_user_for_update(session, user)
 
                 old_balance = user.balance_kopeks
                 user.balance_kopeks += amount_kopeks

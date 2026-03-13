@@ -410,6 +410,18 @@ async def update_user(db: AsyncSession, user: User, **kwargs) -> User:
     return user
 
 
+async def lock_user_for_update(db: AsyncSession, user: User) -> User:
+    """Lock user row with SELECT FOR UPDATE to prevent concurrent balance modifications.
+
+    Returns the refreshed user object with current DB values.
+    Must be called within an active transaction before modifying balance_kopeks.
+    """
+    result = await db.execute(
+        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+    )
+    return result.scalar_one()
+
+
 async def add_user_balance(
     db: AsyncSession,
     user: User,
@@ -421,6 +433,12 @@ async def add_user_balance(
     payment_method: PaymentMethod | None = None,
 ) -> bool:
     try:
+        # Lock the user row to prevent concurrent balance race conditions
+        locked_result = await db.execute(
+            select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        )
+        user = locked_result.scalar_one()
+
         old_balance = user.balance_kopeks
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.now(UTC)
@@ -503,12 +521,17 @@ async def subtract_user_balance(
     mark_as_paid_subscription: bool = False,
     commit: bool = True,
 ) -> bool:
-    user_id_display = user.telegram_id or user.email or f'#{user.id}'
-    logger.info('💸 ОТЛАДКА subtract_user_balance:')
-    logger.info('👤 User ID: (ID: )', user_id=user.id, user_id_display=user_id_display)
-    logger.info('💰 Баланс до списания: копеек', balance_kopeks=user.balance_kopeks)
-    logger.info('💸 Сумма к списанию: копеек', amount_kopeks=amount_kopeks)
-    logger.info('📝 Описание', description=description)
+    if amount_kopeks < 0:
+        logger.error('subtract_user_balance called with negative amount', amount_kopeks=amount_kopeks, user_id=user.id)
+        return False
+
+    logger.debug(
+        'subtract_user_balance called',
+        user_id=user.id,
+        balance_kopeks=user.balance_kopeks,
+        amount_kopeks=amount_kopeks,
+        description=description,
+    )
 
     # Lock the user row to prevent concurrent balance race conditions
     locked_result = await db.execute(

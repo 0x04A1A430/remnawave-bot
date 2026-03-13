@@ -619,6 +619,7 @@ class YooKassaPaymentMixin:
                     external_id=payment.yookassa_payment_id,
                     is_completed=True,
                     created_at=getattr(payment, 'created_at', None),
+                    commit=False,
                 )
 
             if not getattr(payment, 'transaction_id', None):
@@ -742,8 +743,13 @@ class YooKassaPaymentMixin:
                             'Ошибка реферального начисления при покупке подписки YooKassa', ref_error=ref_error
                         )
                 else:
-                    old_balance = getattr(user, 'balance_kopeks', 0)
-                    was_first_topup = not getattr(user, 'has_made_first_topup', False)
+                    # Lock user row to prevent concurrent balance race conditions
+                    from app.database.crud.user import lock_user_for_update
+
+                    user = await lock_user_for_update(db, user)
+
+                    old_balance = user.balance_kopeks
+                    was_first_topup = not user.has_made_first_topup
 
                     user.balance_kopeks += payment.amount_kopeks
                     user.updated_at = datetime.now(UTC)
@@ -784,6 +790,22 @@ class YooKassaPaymentMixin:
                     processing_marked = True
 
                     await db.commit()
+
+                    # Emit deferred side-effects after atomic commit
+                    try:
+                        from app.database.crud.transaction import emit_transaction_side_effects
+
+                        await emit_transaction_side_effects(
+                            db,
+                            transaction,
+                            amount_kopeks=payment.amount_kopeks,
+                            user_id=payment.user_id,
+                            type=transaction_type,
+                            payment_method=PaymentMethod.YOOKASSA,
+                            external_id=payment.yookassa_payment_id,
+                        )
+                    except Exception as error:
+                        logger.warning('Failed to emit YooKassa transaction side effects', error=error)
 
                     try:
                         from app.services.referral_service import process_referral_topup
