@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
-from app.services.pricing_engine import PricingEngine, RenewalPricing
+from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
     SubscriptionRenewalChargeError,
@@ -461,8 +461,7 @@ class CryptoBotPaymentMixin:
 
         if pricing_model is None:
             try:
-                engine = PricingEngine()
-                pricing_model = await engine.calculate_renewal_price(
+                pricing_model = await pricing_engine.calculate_renewal_price(
                     db,
                     subscription,
                     descriptor.period_days,

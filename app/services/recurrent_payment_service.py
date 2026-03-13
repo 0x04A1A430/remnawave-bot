@@ -224,9 +224,8 @@ async def _process_single_subscription(
         autopay_period = 30
 
     try:
-        from app.services.pricing_engine import PricingEngine
+        from app.services.pricing_engine import pricing_engine
 
-        pricing_engine = PricingEngine()
         pricing = await pricing_engine.calculate_renewal_price(
             db,
             subscription,

@@ -18,7 +18,7 @@ from app.database.crud.user import get_user_by_id, subtract_user_balance
 from app.database.models import Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.pricing_engine import PricingEngine
+from app.services.pricing_engine import PricingEngine, pricing_engine
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -187,11 +187,10 @@ async def _prepare_auto_extend_context(
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
 
-    from app.services.pricing_engine import PricingEngine
+    from app.services.pricing_engine import pricing_engine as _pricing_engine
 
-    pricing_engine = PricingEngine()
     try:
-        pricing = await pricing_engine.calculate_renewal_price(
+        pricing = await _pricing_engine.calculate_renewal_price(
             db,
             subscription,
             period_days,
@@ -1804,7 +1803,6 @@ async def try_auto_extend_expired_after_topup(
 
     # Calculate renewal price via PricingEngine
     subscription_service = SubscriptionService()
-    pricing_engine = PricingEngine()
     try:
         pricing = await pricing_engine.calculate_renewal_price(
             db,

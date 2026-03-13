@@ -26,7 +26,7 @@ from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
 )
-from app.services.pricing_engine import PricingEngine
+from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_purchase_service import (
     MiniAppSubscriptionPurchaseService,
@@ -341,7 +341,6 @@ async def get_renewal_options(
     else:
         periods = settings.get_available_renewal_periods()
 
-    pricing_engine = PricingEngine()
     options = []
 
     for period in periods:
@@ -403,7 +402,6 @@ async def renew_subscription(
         )
 
     # Unified pricing via PricingEngine
-    pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
         db,
         subscription,

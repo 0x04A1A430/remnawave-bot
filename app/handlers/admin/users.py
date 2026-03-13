@@ -4173,7 +4173,7 @@ async def _calculate_subscription_period_price(
     subscription_service: SubscriptionService | None = None,
 ) -> int:
     """Рассчитывает стоимость подписки для администратора с учётом всех параметров."""
-    from app.services.pricing_engine import PricingEngine
+    from app.services.pricing_engine import pricing_engine
 
     # Загружаем тариф для корректного расчёта в тарифном режиме
     if subscription.tariff_id:
@@ -4182,7 +4182,6 @@ async def _calculate_subscription_period_price(
         except Exception as e:
             logger.warning('Не удалось загрузить тариф для расчёта цены', error=e)
 
-    pricing_engine = PricingEngine()
     pricing = await pricing_engine.calculate_renewal_price(
         db,
         subscription,

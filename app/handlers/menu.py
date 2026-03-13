@@ -1300,9 +1300,8 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     best_pricing = None  # Cache pricing result for reuse in finalize()
 
     # Для продления используем PricingEngine (единый расчёт для всех поверхностей).
-    from app.services.pricing_engine import PricingEngine
+    from app.services.pricing_engine import pricing_engine
 
-    pricing_engine = PricingEngine()
     renewal_service = SubscriptionRenewalService() if subscription else None
 
     try:

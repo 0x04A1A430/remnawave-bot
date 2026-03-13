@@ -4503,7 +4503,7 @@ async def _prepare_subscription_renewal_options(
     user: User,
     subscription: Subscription,
 ) -> tuple[list[MiniAppSubscriptionRenewalPeriod], dict[str | int, dict[str, Any]], str | None]:
-    from app.services.pricing_engine import PricingEngine
+    from app.services.pricing_engine import pricing_engine
 
     option_payloads: list[tuple[MiniAppSubscriptionRenewalPeriod, dict[str, Any]]] = []
 
@@ -4518,7 +4518,6 @@ async def _prepare_subscription_renewal_options(
     else:
         available_periods = [p for p in settings.get_available_renewal_periods() if p > 0]
 
-    pricing_engine = PricingEngine()
     for period_days in available_periods:
         try:
             pricing_result = await pricing_engine.calculate_renewal_price(
@@ -5169,7 +5168,7 @@ async def submit_subscription_renewal_endpoint(
         )
 
     # Валидация периода и расчёт цены через PricingEngine
-    from app.services.pricing_engine import PricingEngine
+    from app.services.pricing_engine import pricing_engine
 
     tariff_id = getattr(subscription, 'tariff_id', None)
     tariff = None
@@ -5194,7 +5193,6 @@ async def submit_subscription_renewal_endpoint(
                 detail={'code': 'period_unavailable', 'message': 'Selected renewal period is not available'},
             )
 
-    pricing_engine = PricingEngine()
     try:
         pricing_result = await pricing_engine.calculate_renewal_price(db, subscription, period_days, user=user)
     except HTTPException:
@@ -6629,11 +6627,10 @@ def _get_user_period_discount(user, period_days: int) -> int:
 
 
 def _apply_promo_discount(price: int, discount_percent: int) -> int:
-    """Применяет скидку к цене."""
-    if discount_percent <= 0:
-        return price
-    discount = int(price * discount_percent / 100)
-    return max(0, price - discount)
+    """Применяет скидку к цене (через PricingEngine для единообразия)."""
+    from app.services.pricing_engine import PricingEngine
+
+    return PricingEngine.apply_discount(price, discount_percent)
 
 
 def _calculate_tariff_switch_cost(

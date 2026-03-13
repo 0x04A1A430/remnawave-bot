@@ -1594,9 +1594,7 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
         await callback.answer()
         return
 
-    from app.services.pricing_engine import PricingEngine
-
-    pricing_engine = PricingEngine()
+    from app.services.pricing_engine import pricing_engine
 
     available_periods = settings.get_available_renewal_periods()
     renewal_prices = {}
@@ -1737,13 +1735,12 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         await callback.answer('⚠ У вас нет активной подписки', show_alert=True)
         return
 
-    from app.services.pricing_engine import PricingEngine
+    from app.services.pricing_engine import pricing_engine
     from app.services.subscription_renewal_service import SubscriptionRenewalChargeError, SubscriptionRenewalService
 
     months_in_period = calculate_months_from_days(days)
 
     try:
-        pricing_engine = PricingEngine()
         pricing = await pricing_engine.calculate_renewal_price(
             db,
             subscription,
