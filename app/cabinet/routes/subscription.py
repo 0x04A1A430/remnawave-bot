@@ -4038,7 +4038,8 @@ async def switch_tariff(
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    user.subscription = locked_result.scalar_one()
+    subscription = locked_result.scalar_one()
+    user.subscription = subscription
 
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = user.subscription.actual_status
@@ -4238,38 +4239,43 @@ async def switch_tariff(
     # Preserve extra purchased devices above the old tariff's base limit
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
-    user.subscription.tariff_id = new_tariff.id
-    user.subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
-    user.subscription.device_limit = calc_device_limit_on_tariff_switch(
-        current_device_limit=user.subscription.device_limit,
+    # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
+    # (subtract_user_balance re-selects User with populate_existing=True which expires relationships)
+    await db.refresh(user, ['subscription'])
+    subscription = user.subscription
+
+    subscription.tariff_id = new_tariff.id
+    subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
+    subscription.device_limit = calc_device_limit_on_tariff_switch(
+        current_device_limit=subscription.device_limit,
         old_tariff_device_limit=current_tariff.device_limit if current_tariff else None,
         new_tariff_device_limit=new_tariff.device_limit,
         max_device_limit=new_tariff.max_device_limit,
     )
-    user.subscription.connected_squads = new_tariff.allowed_squads or []
+    subscription.connected_squads = new_tariff.allowed_squads or []
 
     # Reset purchased traffic and delete TrafficPurchase records on tariff switch
     from sqlalchemy import delete as sql_delete
 
     from app.database.models import TrafficPurchase
 
-    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
-    user.subscription.purchased_traffic_gb = 0
-    user.subscription.traffic_reset_at = None
+    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
+    subscription.purchased_traffic_gb = 0
+    subscription.traffic_reset_at = None
 
     if settings.RESET_TRAFFIC_ON_TARIFF_SWITCH:
-        user.subscription.traffic_used_gb = 0.0
+        subscription.traffic_used_gb = 0.0
 
     if switching_to_daily:
         # Switching TO daily - reset end_date to 1 day, set last_daily_charge_at
-        user.subscription.end_date = datetime.now(UTC) + timedelta(days=1)
-        user.subscription.last_daily_charge_at = datetime.now(UTC)
-        user.subscription.is_daily_paused = False
+        subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        subscription.last_daily_charge_at = datetime.now(UTC)
+        subscription.is_daily_paused = False
     elif switching_from_daily:
-        user.subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
-        user.subscription.is_daily_paused = False
+        subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
+        subscription.is_daily_paused = False
 
-    user.subscription.updated_at = datetime.now(UTC)
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Emit deferred side-effects after atomic commit
@@ -4287,19 +4293,22 @@ async def switch_tariff(
 
     # Sync with RemnaWave (optionally reset traffic based on admin setting)
     should_reset_traffic = settings.RESET_TRAFFIC_ON_TARIFF_SWITCH
+    # Refresh subscription after commit (all objects are expired)
+    await db.refresh(subscription)
+
     try:
         subscription_service = SubscriptionService()
         if getattr(user, 'remnawave_uuid', None):
             await subscription_service.update_remnawave_user(
                 db,
-                user.subscription,
+                subscription,
                 reset_traffic=should_reset_traffic,
                 reset_reason='смена тарифа',
             )
         else:
             await subscription_service.create_remnawave_user(
                 db,
-                user.subscription,
+                subscription,
                 reset_traffic=should_reset_traffic,
                 reset_reason='смена тарифа',
             )
@@ -4319,7 +4328,7 @@ async def switch_tariff(
             logger.error('Failed to reset devices on tariff switch', error=e)
 
     await db.refresh(user)
-    await db.refresh(user.subscription)
+    await db.refresh(subscription)
 
     # Отправляем уведомление админам о смене тарифа
     try:
@@ -4334,7 +4343,7 @@ async def switch_tariff(
                 await notification_service.send_subscription_purchase_notification(
                     db=db,
                     user=user,
-                    subscription=user.subscription,
+                    subscription=subscription,
                     transaction=switch_transaction if upgrade_cost > 0 else None,
                     period_days=remaining_days if remaining_days > 0 else new_period_days,
                     was_trial_conversion=False,
@@ -4350,7 +4359,7 @@ async def switch_tariff(
         'success': True,
         'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'"
         + (' (devices reset)' if devices_reset else ''),
-        'subscription': _subscription_to_response(user.subscription),
+        'subscription': _subscription_to_response(subscription),
         'old_tariff_name': old_tariff_name,
         'new_tariff_id': new_tariff.id,
         'new_tariff_name': new_tariff.name,
