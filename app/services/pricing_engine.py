@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -18,6 +19,31 @@ if TYPE_CHECKING:
 
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class TariffBreakdown:
+    """Typed breakdown for tariff mode pricing."""
+
+    tariff_id: int
+    extra_devices: int
+    group_discount_pct: int
+    offer_discount_pct: int
+
+
+@dataclass(frozen=True)
+class ClassicBreakdown:
+    """Typed breakdown for classic mode pricing."""
+
+    months_in_period: int
+    servers: list[dict[str, Any]]
+    servers_individual_prices: list[int]
+    server_ids: list[int]
+    base_traffic_gb: int
+    purchased_traffic_gb: int
+    extra_devices: int
+    group_discount_pct: dict[str, int]
+    offer_discount_pct: int
 
 
 @dataclass(frozen=True)
@@ -213,12 +239,14 @@ class PricingEngine:
             offer_pct,
         )
 
-        breakdown = {
-            'tariff_id': tariff.id,
-            'extra_devices': extra_devices,
-            'group_discount_pct': group_pct,
-            'offer_discount_pct': offer_pct,
-        }
+        breakdown = dataclasses.asdict(
+            TariffBreakdown(
+                tariff_id=tariff.id,
+                extra_devices=extra_devices,
+                group_discount_pct=group_pct,
+                offer_discount_pct=offer_pct,
+            )
+        )
 
         if final_total < 0:
             logger.warning(
@@ -340,22 +368,24 @@ class PricingEngine:
         )
 
         valid_servers = [d for d in server_details if d.get('id') is not None]
-        breakdown = {
-            'months_in_period': months,
-            'servers': server_details,
-            'servers_individual_prices': [d['price'] * months for d in valid_servers],
-            'server_ids': [d['id'] for d in valid_servers],
-            'base_traffic_gb': max(0, traffic_limit_gb - purchased_traffic_gb),
-            'purchased_traffic_gb': purchased_traffic_gb,
-            'extra_devices': extra_devices,
-            'group_discount_pct': {
-                'period': period_pct,
-                'servers': servers_pct,
-                'traffic': traffic_pct,
-                'devices': devices_pct,
-            },
-            'offer_discount_pct': offer_pct,
-        }
+        breakdown = dataclasses.asdict(
+            ClassicBreakdown(
+                months_in_period=months,
+                servers=server_details,
+                servers_individual_prices=[d['price'] * months for d in valid_servers],
+                server_ids=[d['id'] for d in valid_servers],
+                base_traffic_gb=max(0, traffic_limit_gb - purchased_traffic_gb),
+                purchased_traffic_gb=purchased_traffic_gb,
+                extra_devices=extra_devices,
+                group_discount_pct={
+                    'period': period_pct,
+                    'servers': servers_pct,
+                    'traffic': traffic_pct,
+                    'devices': devices_pct,
+                },
+                offer_discount_pct=offer_pct,
+            )
+        )
 
         if final_total < 0:
             logger.warning(
@@ -377,3 +407,7 @@ class PricingEngine:
             is_tariff_mode=False,
             breakdown=breakdown,
         )
+
+
+# Module-level singleton — use this instead of PricingEngine()
+pricing_engine = PricingEngine()
