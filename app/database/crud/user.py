@@ -422,8 +422,9 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
         .where(User.id == user.id)
         .options(
             selectinload(User.subscription),
-            selectinload(User.user_promo_groups),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.promo_group),
+            selectinload(User.referrer),
         )
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -449,8 +450,9 @@ async def add_user_balance(
             .where(User.id == user.id)
             .options(
                 selectinload(User.subscription),
-                selectinload(User.user_promo_groups),
+                selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
                 selectinload(User.promo_group),
+                selectinload(User.referrer),
             )
             .with_for_update()
             .execution_options(populate_existing=True)
@@ -558,8 +560,9 @@ async def subtract_user_balance(
         .where(User.id == user.id)
         .options(
             selectinload(User.subscription),
-            selectinload(User.user_promo_groups),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.promo_group),
+            selectinload(User.referrer),
         )
         .with_for_update()
         .execution_options(populate_existing=True)
