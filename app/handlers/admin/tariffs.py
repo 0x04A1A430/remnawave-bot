@@ -1993,9 +1993,7 @@ async def process_edit_traffic_topup_packages(
 
     # Показываем обновленное меню
     texts = get_texts(db_user.language)
-    packages_display = '\n'.join(
-        f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items())
-    )
+    packages_display = '\n'.join(f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items()))
     max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
     max_limit_display = f'{max_topup_traffic} ГБ' if max_topup_traffic > 0 else 'Без ограничений'
 

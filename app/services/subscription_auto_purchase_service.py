@@ -1876,9 +1876,7 @@ async def try_auto_extend_expired_after_topup(
     consume_promo_offer = get_user_active_promo_discount_percent(user) > 0
 
     # Save promo offer state before deduction (for restore on failure)
-    saved_promo_percent = (
-        int(getattr(user, 'promo_offer_discount_percent', 0) or 0) if consume_promo_offer else 0
-    )
+    saved_promo_percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0) if consume_promo_offer else 0
     saved_promo_source = getattr(user, 'promo_offer_discount_source', None) if consume_promo_offer else None
     saved_promo_expires = getattr(user, 'promo_offer_discount_expires_at', None) if consume_promo_offer else None
 

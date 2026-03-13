@@ -165,7 +165,11 @@ class CryptoBotPaymentMixin:
                 paid_at = datetime.now(UTC)
 
             updated_payment = await cryptobot_crud.update_cryptobot_payment_status(
-                db, invoice_id, status, paid_at, commit=False,
+                db,
+                invoice_id,
+                status,
+                paid_at,
+                commit=False,
             )
 
             descriptor = decode_payment_payload(

@@ -24,7 +24,6 @@ from app.utils.subscription_utils import (
 logger = structlog.get_logger(__name__)
 
 
-
 def get_traffic_reset_strategy(tariff=None):
     """Получает стратегию сброса трафика.
 

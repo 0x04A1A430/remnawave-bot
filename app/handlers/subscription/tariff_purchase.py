@@ -1541,9 +1541,7 @@ async def confirm_daily_tariff_purchase(
     # Очищаем корзину после успешной покупки
     try:
         await user_cart_service.delete_user_cart(db_user.id)
-        logger.info(
-            'Корзина очищена после покупки суточного тарифа для пользователя', telegram_id=db_user.telegram_id
-        )
+        logger.info('Корзина очищена после покупки суточного тарифа для пользователя', telegram_id=db_user.telegram_id)
     except Exception as e:
         logger.error('Ошибка очистки корзины', error=e)
 

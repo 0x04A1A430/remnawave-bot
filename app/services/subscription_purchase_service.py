@@ -267,7 +267,6 @@ class PurchaseBalanceError(Exception):
         super().__init__(message)
 
 
-
 def _apply_discount_to_monthly_component(amount_per_month: int, percent: int, months: int) -> dict[str, int]:
     discounted_per_month, discount_per_month = apply_percentage_discount(amount_per_month, percent)
     return {

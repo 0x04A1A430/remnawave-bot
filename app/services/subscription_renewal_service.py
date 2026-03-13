@@ -556,7 +556,6 @@ class SubscriptionRenewalService:
         )
 
 
-
 def calculate_missing_amount(balance_kopeks: int, total_kopeks: int) -> int:
     if total_kopeks <= 0:
         return 0
