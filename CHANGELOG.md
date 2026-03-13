@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.32.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.32.0...v3.32.1) (2026-03-13)
+
+
+### Bug Fixes
+
+* invalid ISO date format in node usage stats API call ([69a38da](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/69a38dad259bd05f4658e1014ce0bd73fc2e2ac5))
+* platega webhook ID fallback for SBP and card payments ([aa3459b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/aa3459b8463ce0a54b7709aa3547b2337064fa26))
+* resolve MissingGreenlet in switch_tariff endpoint ([4d695be](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4d695be7d51adda40fa72c00c349fb0e1ec4acd2))
+
 ## [3.32.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.31.0...v3.32.0) (2026-03-13)
 
 
