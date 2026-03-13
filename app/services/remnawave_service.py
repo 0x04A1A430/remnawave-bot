@@ -2323,8 +2323,8 @@ class RemnaWaveService:
     async def get_node_user_usage_by_range(self, node_uuid: str, start_date, end_date) -> list[dict[str, Any]]:
         try:
             async with self.get_api_client() as api:
-                start_str = start_date.isoformat() + 'Z'
-                end_str = end_date.isoformat() + 'Z'
+                start_str = start_date.isoformat().replace('+00:00', 'Z')
+                end_str = end_date.isoformat().replace('+00:00', 'Z')
 
                 params = {'start': start_str, 'end': end_str}
 
