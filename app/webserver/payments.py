@@ -705,8 +705,10 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 if success:
                     return JSONResponse({'status': 'ok'})
 
-                transaction_id = payload.get('transactionId', 'unknown')
-                logger.error('Platega webhook processing failed: transactionId', transaction_id=transaction_id)
+                transaction_id = (
+                    payload.get('id') or payload.get('transactionId') or payload.get('transaction_id') or 'unknown'
+                )
+                logger.error('Platega webhook processing failed', transaction_id=transaction_id)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
