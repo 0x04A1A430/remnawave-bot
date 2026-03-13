@@ -415,9 +415,19 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
 
     Returns the refreshed user object with current DB values.
     Must be called within an active transaction before modifying balance_kopeks.
+    Eagerly loads key relationships to avoid MissingGreenlet in async context.
     """
     result = await db.execute(
-        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     return result.scalar_one()
 
@@ -434,8 +444,18 @@ async def add_user_balance(
 ) -> bool:
     try:
         # Lock the user row to prevent concurrent balance race conditions
+        # Eagerly load key relationships to avoid MissingGreenlet in async context
         locked_result = await db.execute(
-            select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+            select(User)
+            .where(User.id == user.id)
+            .options(
+                selectinload(User.subscription),
+                selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                selectinload(User.promo_group),
+                selectinload(User.referrer),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         user = locked_result.scalar_one()
 
@@ -534,8 +554,18 @@ async def subtract_user_balance(
     )
 
     # Lock the user row to prevent concurrent balance race conditions
+    # Eagerly load key relationships to avoid MissingGreenlet in async context
     locked_result = await db.execute(
-        select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True)
+        select(User)
+        .where(User.id == user.id)
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     user = locked_result.scalar_one()
 
