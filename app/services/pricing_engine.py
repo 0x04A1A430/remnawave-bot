@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from app.config import CLASSIC_PERIOD_PRICES, PERIOD_PRICES, settings
-from app.database.crud.server_squad import get_server_squad_by_uuid
+from app.database.crud.server_squad import get_server_squads_by_uuids
 from app.utils.pricing_utils import calculate_months_from_days
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.database.models import Subscription, User
 
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,11 @@ class RenewalPricing:
     period_days: int
     is_tariff_mode: bool
     breakdown: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def original_total(self) -> int:
+        """Price before all discounts (group + offer)."""
+        return self.final_total + self.promo_group_discount + self.promo_offer_discount
 
 
 class PricingEngine:
@@ -70,24 +75,29 @@ class PricingEngine:
     ) -> tuple[int, list[dict]]:
         """Calculate total server price from connected squad UUIDs.
 
-        Unlike the old implementation, ALWAYS uses real price_kopeks
-        even when server is unavailable or full. Only orphaned UUIDs
-        (not found in DB) get price=0.
+        Uses a single batch query instead of N+1 individual queries.
+        ALWAYS uses real price_kopeks even when server is unavailable
+        or full. Only orphaned UUIDs (not found in DB) get price=0.
         """
+        if not country_uuids:
+            return 0, []
+
+        try:
+            servers = await get_server_squads_by_uuids(db, country_uuids)
+        except Exception as e:
+            logger.error('Ошибка пакетной загрузки серверов', error=str(e))
+            return 0, [{'uuid': uuid, 'id': None, 'price': 0, 'status': 'error'} for uuid in country_uuids]
+
+        server_map = {s.squad_uuid: s for s in servers}
+
         total_price = 0
         details: list[dict] = []
 
         for uuid in country_uuids:
-            try:
-                server = await get_server_squad_by_uuid(db, uuid)
-            except Exception as e:
-                logger.error('Ошибка загрузки сервера', squad_uuid=uuid, error=str(e))
-                details.append({'uuid': uuid, 'price': 0, 'status': 'error'})
-                continue
-
+            server = server_map.get(uuid)
             if server is None:
                 logger.error('Сервер не найден в БД', squad_uuid=uuid)
-                details.append({'uuid': uuid, 'price': 0, 'status': 'not_found'})
+                details.append({'uuid': uuid, 'id': None, 'price': 0, 'status': 'not_found'})
                 continue
 
             price = server.price_kopeks or 0
@@ -119,7 +129,7 @@ class PricingEngine:
                     )
 
             total_price += price
-            details.append({'uuid': uuid, 'price': price, 'status': status})
+            details.append({'uuid': uuid, 'id': server.id, 'price': price, 'status': status})
 
         return total_price, details
 
@@ -157,6 +167,9 @@ class PricingEngine:
         (legacy env-based pricing).  Stacked discounts (promo-group then
         promo-offer) are applied in both modes.
         """
+        if not isinstance(period_days, int) or period_days <= 0:
+            raise ValueError(f'Invalid period_days: {period_days}')
+
         if subscription.tariff_id is not None and subscription.tariff is not None:
             return await self._calculate_tariff_mode(db, subscription, period_days, user=user)
         return await self._calculate_classic_mode(db, subscription, period_days, user=user)
@@ -176,10 +189,12 @@ class PricingEngine:
         """Price calculation when subscription is linked to a Tariff."""
         tariff = subscription.tariff
         period_prices: dict = tariff.period_prices or {}
-        base_price = period_prices.get(str(period_days), 0)
+        base_price = int(period_prices.get(str(period_days), 0) or 0)
 
         # Extra devices above the tariff's included limit
-        device_price_per_unit = settings.PRICE_PER_DEVICE
+        device_price_per_unit = (
+            tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
+        )
         extra_devices = max(0, (subscription.device_limit or 0) - (tariff.device_limit or 0))
         devices_price = extra_devices * device_price_per_unit
 
@@ -204,6 +219,15 @@ class PricingEngine:
             'group_discount_pct': group_pct,
             'offer_discount_pct': offer_pct,
         }
+
+        if final_total < 0:
+            logger.warning(
+                'Negative final_total in tariff mode, clamping to 0',
+                final_total=final_total,
+                subtotal=subtotal,
+                group_pct=group_pct,
+                offer_pct=offer_pct,
+            )
 
         return RenewalPricing(
             base_price=base_price,
@@ -276,8 +300,16 @@ class PricingEngine:
         servers_price = discounted_servers_per_month * months
 
         # --- Traffic (monthly × months, with traffic discount) ---
-        traffic_limit_gb = subscription.traffic_limit_gb or 0
-        purchased_traffic_gb = subscription.purchased_traffic_gb or 0
+        if settings.is_traffic_fixed():
+            traffic_limit_gb = settings.get_fixed_traffic_limit()
+            purchased_traffic_gb = 0
+        else:
+            traffic_limit_gb = (
+                subscription.traffic_limit_gb
+                if subscription.traffic_limit_gb is not None
+                else settings.DEFAULT_TRAFFIC_LIMIT_GB
+            )
+            purchased_traffic_gb = subscription.purchased_traffic_gb or 0
         traffic_price_per_month = self._calculate_traffic_price(traffic_limit_gb, purchased_traffic_gb)
         discounted_traffic_per_month = self.apply_discount(traffic_price_per_month, traffic_pct)
         traffic_price = discounted_traffic_per_month * months
@@ -294,8 +326,9 @@ class PricingEngine:
         subtotal = base_price + servers_price + traffic_price + devices_price
 
         # --- Promo offer discount on entire subtotal ---
-        promo_offer_discount = subtotal * offer_pct // 100 if offer_pct > 0 else 0
-        final_total = subtotal - promo_offer_discount
+        after_offer = self.apply_discount(subtotal, offer_pct)
+        promo_offer_discount = subtotal - after_offer
+        final_total = after_offer
 
         # Total group discount = sum of per-category discounts
         base_group_discount = base_price_original - base_price
@@ -306,11 +339,12 @@ class PricingEngine:
             base_group_discount + servers_group_discount + traffic_group_discount + devices_group_discount
         )
 
+        valid_servers = [d for d in server_details if d.get('id') is not None]
         breakdown = {
             'months_in_period': months,
             'servers': server_details,
-            'servers_individual_prices': [d['price'] * months for d in server_details],
-            'server_ids': connected_squads,
+            'servers_individual_prices': [d['price'] * months for d in valid_servers],
+            'server_ids': [d['id'] for d in valid_servers],
             'base_traffic_gb': max(0, traffic_limit_gb - purchased_traffic_gb),
             'purchased_traffic_gb': purchased_traffic_gb,
             'extra_devices': extra_devices,
@@ -322,6 +356,14 @@ class PricingEngine:
             },
             'offer_discount_pct': offer_pct,
         }
+
+        if final_total < 0:
+            logger.warning(
+                'Negative final_total in classic mode, clamping to 0',
+                final_total=final_total,
+                subtotal=subtotal,
+                offer_pct=offer_pct,
+            )
 
         return RenewalPricing(
             base_price=base_price,

@@ -42,26 +42,6 @@ def _resolve_discount_percent(
     return 0
 
 
-def _resolve_addon_discount_percent(
-    user: User | None,
-    promo_group: PromoGroup | None,
-    category: str,
-    *,
-    period_days: int | None = None,
-) -> int:
-    group = promo_group or (user.get_primary_promo_group() if user else None)
-
-    if group is not None and not getattr(group, 'apply_discounts_to_addons', True):
-        return 0
-
-    return _resolve_discount_percent(
-        user,
-        promo_group,
-        category,
-        period_days=period_days,
-    )
-
-
 def get_traffic_reset_strategy(tariff=None):
     """Получает стратегию сброса трафика.
 
@@ -711,106 +691,6 @@ class SubscriptionService:
             logger.error('Ошибка синхронизации подписки', subscription_id=subscription.id, error=e)
             return False, 'unknown_error'
 
-    async def calculate_subscription_price(
-        self,
-        period_days: int,
-        traffic_gb: int,
-        server_squad_ids: list[int],
-        devices: int,
-        db: AsyncSession,
-        *,
-        user: User | None = None,
-        promo_group: PromoGroup | None = None,
-    ) -> tuple[int, list[int]]:
-        from app.config import PERIOD_PRICES
-        from app.database.crud.server_squad import get_server_squad_by_id
-
-        if settings.MAX_DEVICES_LIMIT > 0 and devices > settings.MAX_DEVICES_LIMIT:
-            raise ValueError(f'Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}')
-
-        base_price_original = PERIOD_PRICES.get(period_days, 0)
-        period_discount_percent = _resolve_discount_percent(
-            user,
-            promo_group,
-            'period',
-            period_days=period_days,
-        )
-        base_discount_total = base_price_original * period_discount_percent // 100
-        base_price = base_price_original - base_discount_total
-
-        promo_group = promo_group or (user.get_primary_promo_group() if user else None)
-
-        traffic_price = settings.get_traffic_price(traffic_gb)
-        traffic_discount_percent = _resolve_discount_percent(
-            user,
-            promo_group,
-            'traffic',
-            period_days=period_days,
-        )
-        traffic_discount = traffic_price * traffic_discount_percent // 100
-        discounted_traffic_price = traffic_price - traffic_discount
-
-        server_prices = []
-        total_servers_price = 0
-        servers_discount_percent = _resolve_discount_percent(
-            user,
-            promo_group,
-            'servers',
-            period_days=period_days,
-        )
-
-        for server_id in server_squad_ids:
-            server = await get_server_squad_by_id(db, server_id)
-            if server and server.is_available and not server.is_full:
-                server_price = server.price_kopeks
-                server_discount = server_price * servers_discount_percent // 100
-                discounted_server_price = server_price - server_discount
-                server_prices.append(discounted_server_price)
-                total_servers_price += discounted_server_price
-                log_message = f'Сервер {server.display_name}: {server_price / 100}₽'
-                if server_discount > 0:
-                    log_message += f' (скидка {servers_discount_percent}%: -{server_discount / 100}₽ → {discounted_server_price / 100}₽)'
-                logger.debug(log_message)
-            else:
-                server_prices.append(0)
-                logger.warning('Сервер ID недоступен', server_id=server_id)
-
-        devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _resolve_discount_percent(
-            user,
-            promo_group,
-            'devices',
-            period_days=period_days,
-        )
-        devices_discount = devices_price * devices_discount_percent // 100
-        discounted_devices_price = devices_price - devices_discount
-
-        total_price = base_price + discounted_traffic_price + total_servers_price + discounted_devices_price
-
-        logger.debug('Расчет стоимости новой подписки:')
-        base_log = f'   Период {period_days} дней: {base_price_original / 100}₽'
-        if base_discount_total > 0:
-            base_log += f' → {base_price / 100}₽ (скидка {period_discount_percent}%: -{base_discount_total / 100}₽)'
-        logger.debug(base_log)
-        if discounted_traffic_price > 0:
-            message = f'   Трафик {traffic_gb} ГБ: {traffic_price / 100}₽'
-            if traffic_discount > 0:
-                message += f' (скидка {traffic_discount_percent}%: -{traffic_discount / 100}₽ → {discounted_traffic_price / 100}₽)'
-            logger.debug(message)
-        if total_servers_price > 0:
-            message = f'   Серверы ({len(server_squad_ids)}): {total_servers_price / 100}₽'
-            if servers_discount_percent > 0:
-                message += f' (скидка {servers_discount_percent}% применяется ко всем серверам)'
-            logger.debug(message)
-        if discounted_devices_price > 0:
-            message = f'   Устройства ({devices}): {devices_price / 100}₽'
-            if devices_discount > 0:
-                message += f' (скидка {devices_discount_percent}%: -{devices_discount / 100}₽ → {discounted_devices_price / 100}₽)'
-            logger.debug(message)
-        logger.debug('ИТОГО: ₽', total_price=total_price / 100)
-
-        return total_price, server_prices
-
     async def validate_and_clean_subscription(self, db: AsyncSession, subscription: Subscription, user: User) -> bool:
         try:
             needs_cleanup = False
@@ -912,14 +792,6 @@ class SubscriptionService:
             logger.error('Ошибка получения цен стран', error=e)
             default_prices = [0] * len(country_uuids)
             return sum(default_prices), default_prices
-
-    async def _get_countries_price(self, country_uuids: list[str], db: AsyncSession) -> int:
-        try:
-            total_price, _ = await self.get_countries_price_by_uuids(country_uuids, db)
-            return total_price
-        except Exception as e:
-            logger.error('Ошибка получения цен стран', error=e)
-            return len(country_uuids) * 1000
 
     async def calculate_subscription_price_with_months(
         self,
@@ -1034,97 +906,6 @@ class SubscriptionService:
         logger.debug('ИТОГО: ₽', total_price=total_price / 100)
 
         return total_price, server_prices
-
-    async def calculate_addon_price_with_remaining_period(
-        self,
-        subscription: Subscription,
-        additional_traffic_gb: int = 0,
-        additional_devices: int = 0,
-        additional_server_ids: list[int] = None,
-        db: AsyncSession = None,
-    ) -> int:
-        if additional_server_ids is None:
-            additional_server_ids = []
-
-        now = datetime.now(UTC)
-        days_to_pay = max(1, (subscription.end_date - now).days)
-        period_hint_days = days_to_pay
-
-        user = getattr(subscription, 'user', None)
-        promo_group = user.promo_group if user else None
-
-        total_price = 0
-
-        if additional_traffic_gb > 0:
-            traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-            traffic_discount_percent = _resolve_addon_discount_percent(
-                user,
-                promo_group,
-                'traffic',
-                period_days=period_hint_days,
-            )
-            traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
-            discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
-            traffic_total_price = int(discounted_traffic_per_month * days_to_pay / 30)
-            total_price += traffic_total_price
-            message = (
-                f'Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month / 100}₽/мес x {days_to_pay} дн.'
-                f' = {traffic_total_price / 100}₽'
-            )
-            if traffic_discount_per_month > 0:
-                message += f' (скидка {traffic_discount_percent}%: -{int(traffic_discount_per_month * days_to_pay / 30) / 100}₽)'
-            logger.info(message)
-
-        if additional_devices > 0:
-            devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = _resolve_addon_discount_percent(
-                user,
-                promo_group,
-                'devices',
-                period_days=period_hint_days,
-            )
-            devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
-            discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
-            devices_total_price = int(discounted_devices_per_month * days_to_pay / 30)
-            total_price += devices_total_price
-            message = (
-                f'Устройства +{additional_devices}: {devices_price_per_month / 100}₽/мес x {days_to_pay} дн.'
-                f' = {devices_total_price / 100}₽'
-            )
-            if devices_discount_per_month > 0:
-                message += f' (скидка {devices_discount_percent}%: -{int(devices_discount_per_month * days_to_pay / 30) / 100}₽)'
-            logger.info(message)
-
-        if additional_server_ids and db:
-            for server_id in additional_server_ids:
-                from app.database.crud.server_squad import get_server_squad_by_id
-
-                server = await get_server_squad_by_id(db, server_id)
-                if server and server.is_available:
-                    server_price_per_month = server.price_kopeks
-                    servers_discount_percent = _resolve_addon_discount_percent(
-                        user,
-                        promo_group,
-                        'servers',
-                        period_days=period_hint_days,
-                    )
-                    server_discount_per_month = server_price_per_month * servers_discount_percent // 100
-                    discounted_server_per_month = server_price_per_month - server_discount_per_month
-                    server_total_price = int(discounted_server_per_month * days_to_pay / 30)
-                    total_price += server_total_price
-                    message = (
-                        f'Сервер {server.display_name}: {server_price_per_month / 100}₽/мес x {days_to_pay} дн.'
-                        f' = {server_total_price / 100}₽'
-                    )
-                    if server_discount_per_month > 0:
-                        message += (
-                            f' (скидка {servers_discount_percent}%:'
-                            f' -{int(server_discount_per_month * days_to_pay / 30) / 100}₽)'
-                        )
-                    logger.info(message)
-
-        logger.info('Итого доплата за дн.: ₽', days_to_pay=days_to_pay, total_price=total_price / 100)
-        return total_price
 
     def _gb_to_bytes(self, gb: int | None) -> int:
         if not gb:  # None or 0

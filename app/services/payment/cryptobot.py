@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
+from app.services.pricing_engine import PricingEngine, RenewalPricing
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
     SubscriptionRenewalChargeError,
@@ -163,7 +164,9 @@ class CryptoBotPaymentMixin:
             else:
                 paid_at = datetime.now(UTC)
 
-            updated_payment = await cryptobot_crud.update_cryptobot_payment_status(db, invoice_id, status, paid_at)
+            updated_payment = await cryptobot_crud.update_cryptobot_payment_status(
+                db, invoice_id, status, paid_at, commit=False,
+            )
 
             descriptor = decode_payment_payload(
                 getattr(updated_payment, 'payload', '') or '',
@@ -290,6 +293,11 @@ class CryptoBotPaymentMixin:
                     logger.error('Пользователь с ID не найден при пополнении баланса', user_id=updated_payment.user_id)
                     return False
 
+                # Lock user row to prevent concurrent balance race conditions
+                from app.database.crud.user import lock_user_for_update
+
+                user = await lock_user_for_update(db, user)
+
                 old_balance = user.balance_kopeks
                 was_first_topup = not user.has_made_first_topup
 
@@ -404,7 +412,7 @@ class CryptoBotPaymentMixin:
         except Exception as error:
             logger.error(
                 'Не удалось загрузить пользователя для продления через CryptoBot',
-                getattr=getattr(payment, 'user_id', None),
+                payment_user_id=getattr(payment, 'user_id', None),
                 error=error,
             )
             return False
@@ -412,7 +420,7 @@ class CryptoBotPaymentMixin:
         if not user:
             logger.error(
                 'Пользователь не найден при обработке продления через CryptoBot',
-                getattr=getattr(payment, 'user_id', None),
+                payment_user_id=getattr(payment, 'user_id', None),
             )
             return False
 
@@ -420,12 +428,27 @@ class CryptoBotPaymentMixin:
         if not subscription or subscription.id != descriptor.subscription_id:
             logger.warning(
                 'Продление через CryptoBot отклонено: подписка не совпадает с ожидаемой',
-                getattr=getattr(subscription, 'id', None),
-                subscription_id=descriptor.subscription_id,
+                current_subscription_id=getattr(subscription, 'id', None),
+                expected_subscription_id=descriptor.subscription_id,
             )
             return False
 
-        pricing_model: SubscriptionRenewalPricing | None = None
+        # Validate period_days against allowed periods
+        tariff = getattr(subscription, 'tariff', None)
+        if tariff and tariff.period_prices:
+            allowed_periods = [int(p) for p in tariff.period_prices.keys()]
+        else:
+            allowed_periods = settings.get_available_renewal_periods()
+        if descriptor.period_days not in allowed_periods:
+            logger.error(
+                'CryptoBot renewal rejected: period_days not in allowed periods',
+                invoice_id=payment.invoice_id,
+                period_days=descriptor.period_days,
+                allowed_periods=allowed_periods,
+            )
+            return False
+
+        pricing_model: SubscriptionRenewalPricing | RenewalPricing | None = None
         if descriptor.pricing_snapshot:
             try:
                 pricing_model = SubscriptionRenewalPricing.from_payload(descriptor.pricing_snapshot)
@@ -438,11 +461,12 @@ class CryptoBotPaymentMixin:
 
         if pricing_model is None:
             try:
-                pricing_model = await renewal_service.calculate_pricing(
+                engine = PricingEngine()
+                pricing_model = await engine.calculate_renewal_price(
                     db,
-                    user,
                     subscription,
                     descriptor.period_days,
+                    user=user,
                 )
             except Exception as error:
                 logger.error(
@@ -454,27 +478,40 @@ class CryptoBotPaymentMixin:
 
             if pricing_model.final_total != descriptor.total_amount_kopeks:
                 logger.warning(
-                    'Сумма продления через CryptoBot изменилась (ожидалось , получено)',
+                    'Сумма продления через CryptoBot изменилась',
                     invoice_id=payment.invoice_id,
-                    total_amount_kopeks=descriptor.total_amount_kopeks,
-                    final_total=pricing_model.final_total,
+                    expected_kopeks=descriptor.total_amount_kopeks,
+                    actual_kopeks=pricing_model.final_total,
                 )
-                pricing_model.final_total = descriptor.total_amount_kopeks
-                pricing_model.per_month = (
-                    descriptor.total_amount_kopeks // pricing_model.months
-                    if pricing_model.months
-                    else descriptor.total_amount_kopeks
+                if pricing_model.final_total > descriptor.total_amount_kopeks:
+                    # Price increased since invoice creation — user would be undercharged.
+                    # Reject and let the user create a new invoice at the current price.
+                    logger.error(
+                        'CryptoBot renewal rejected: recalculated price exceeds agreed amount',
+                        invoice_id=payment.invoice_id,
+                        agreed_kopeks=descriptor.total_amount_kopeks,
+                        recalculated_kopeks=pricing_model.final_total,
+                    )
+                    return False
+                # Price decreased — charge recalculated (lower) amount, user benefits
+                logger.info(
+                    'CryptoBot renewal: price decreased, user benefits',
+                    invoice_id=payment.invoice_id,
+                    agreed_kopeks=descriptor.total_amount_kopeks,
+                    recalculated_kopeks=pricing_model.final_total,
+                    delta_kopeks=descriptor.total_amount_kopeks - pricing_model.final_total,
                 )
 
-        pricing_model.period_days = descriptor.period_days
-        pricing_model.period_id = build_renewal_period_id(descriptor.period_days)
+        # Override period_days/period_id only on mutable SubscriptionRenewalPricing
+        if isinstance(pricing_model, SubscriptionRenewalPricing):
+            pricing_model.period_days = descriptor.period_days
+            pricing_model.period_id = build_renewal_period_id(descriptor.period_days)
 
+        # When price drops, recalculate balance portion: total minus the fixed external payment
+        # This ensures the user isn't overcharged from balance when crypto already covers more
         required_balance = max(
             0,
-            min(
-                pricing_model.final_total,
-                descriptor.balance_component_kopeks,
-            ),
+            pricing_model.final_total - descriptor.missing_amount_kopeks,
         )
 
         current_balance = getattr(user, 'balance_kopeks', 0)
@@ -606,10 +643,10 @@ class CryptoBotPaymentMixin:
                 reply_markup=payload.reply_markup,
             )
             logger.info(
-                '✅ Отправлено уведомление пользователю %s о пополнении на %s₽ (%s)',
-                payload.telegram_id,
-                f'{payload.amount_rubles:.2f}',
-                payload.asset,
+                'Отправлено уведомление пользователю о пополнении',
+                telegram_id=payload.telegram_id,
+                amount_rubles=f'{payload.amount_rubles:.2f}',
+                asset=payload.asset,
             )
         except Exception as error:
             logger.error('Ошибка отправки уведомления о пополнении CryptoBot', error=error)
