@@ -2455,8 +2455,8 @@ async def auto_purchase_saved_cart_after_topup(
                         format_user_id=_format_user_id(user),
                         total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
                     )
-                    # Очищаем корзину чтобы не срабатывало повторно
-                    await user_cart_service.delete_user_cart(user.id)
+                    # Корзину не очищаем: транзакция могла быть из другого потока
+                    # (например, фоновое автопродление), чтобы не потерять явный выбор пользователя.
                     return False
         except Exception as check_error:
             logger.warning(

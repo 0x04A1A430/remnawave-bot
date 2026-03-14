@@ -325,7 +325,111 @@ async def send_cart_notification_after_topup(
             exc_info=True,
         )
 
-    # Try to auto-extend expired subscription (works without cart)
+    cart_data = await user_cart_service.get_user_cart(user.id)
+    # В приоритете всегда сохраненная корзина: она отражает явный выбор пользователя
+    # (период/тариф/сумма). Автопродление expired — только когда корзины нет.
+    if cart_data:
+        cart_total = cart_data.get('total_price', 0)
+        if not cart_total:
+            logger.warning(
+                'Сохраненная корзина найдена, но total_price отсутствует или некорректен',
+                user_id=user.id,
+                cart_total=cart_total,
+            )
+            return False
+
+        # Try auto-purchase first
+        auto_purchase_success = False
+        try:
+            auto_purchase_success = await auto_purchase_saved_cart_after_topup(db, user, bot=bot)
+        except Exception as auto_error:
+            logger.error(
+                'Ошибка автоматической покупки подписки для пользователя',
+                user_id=user.id,
+                auto_error=auto_error,
+                exc_info=True,
+            )
+
+        if auto_purchase_success:
+            return False
+
+        if not bot or not getattr(user, 'telegram_id', None):
+            return False
+
+        # Refresh balance from DB to account for any changes during auto-purchase attempt
+        refreshed_user = await get_user_by_id(db, user.id)
+        balance = getattr(refreshed_user or user, 'balance_kopeks', 0)
+
+        texts = get_texts(getattr(user, 'language', 'ru'))
+
+        # Build message based on whether balance is sufficient
+        fmt = settings.format_price
+        cart_total_formatted = fmt(cart_total)
+        if balance >= cart_total:
+            template = texts.get('BALANCE_TOPPED_UP_CART_SUFFICIENT', '')
+            message_text = template.format(
+                amount=fmt(amount_kopeks),
+                balance=fmt(balance),
+                cart_total=cart_total_formatted,
+                total_amount=cart_total_formatted,
+            )
+        else:
+            missing = cart_total - balance
+            template = texts.get('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
+            message_text = template.format(
+                amount=fmt(amount_kopeks),
+                balance=fmt(balance),
+                cart_total=cart_total_formatted,
+                total_amount=cart_total_formatted,
+                missing=fmt(missing),
+            )
+
+        if not message_text:
+            logger.warning('Missing cart notification template', language=getattr(user, 'language', 'ru'))
+            return False
+
+        sent = False
+        try:
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '⬅️ Checkout'),
+                            callback_data='return_to_saved_cart',
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.get('MY_BALANCE_BUTTON', '💰 Balance'),
+                            callback_data='menu_balance',
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.get('MAIN_MENU_BUTTON', '🏠 Menu'),
+                            callback_data='back_to_menu',
+                        )
+                    ],
+                ]
+            )
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message_text,
+                reply_markup=keyboard,
+                parse_mode='HTML',
+            )
+            sent = True
+            logger.info('Sent cart notification to user', user_id=user.id)
+        except Exception as send_error:
+            logger.error(
+                'Failed to send cart notification to user',
+                user_id=user.id,
+                error=send_error,
+            )
+
+        return sent
+
+    # Try to auto-extend expired subscription only when there is no saved cart.
     try:
         auto_extended = await try_auto_extend_expired_after_topup(db, user, bot=bot)
         if auto_extended:
@@ -338,104 +442,7 @@ async def send_cart_notification_after_topup(
             exc_info=True,
         )
 
-    cart_data = await user_cart_service.get_user_cart(user.id)
-    if not cart_data:
-        return False
-
-    cart_total = cart_data.get('total_price', 0)
-    if not cart_total:
-        return False
-
-    # Try auto-purchase first
-    auto_purchase_success = False
-    try:
-        auto_purchase_success = await auto_purchase_saved_cart_after_topup(db, user, bot=bot)
-    except Exception as auto_error:
-        logger.error(
-            'Ошибка автоматической покупки подписки для пользователя',
-            user_id=user.id,
-            auto_error=auto_error,
-            exc_info=True,
-        )
-
-    if auto_purchase_success:
-        return False
-
-    if not bot or not getattr(user, 'telegram_id', None):
-        return False
-
-    # Refresh balance from DB to account for any changes during auto-purchase attempt
-    refreshed_user = await get_user_by_id(db, user.id)
-    balance = getattr(refreshed_user or user, 'balance_kopeks', 0)
-
-    texts = get_texts(getattr(user, 'language', 'ru'))
-
-    # Build message based on whether balance is sufficient
-    fmt = settings.format_price
-    cart_total_formatted = fmt(cart_total)
-    if balance >= cart_total:
-        template = texts.get('BALANCE_TOPPED_UP_CART_SUFFICIENT', '')
-        message_text = template.format(
-            amount=fmt(amount_kopeks),
-            balance=fmt(balance),
-            cart_total=cart_total_formatted,
-            total_amount=cart_total_formatted,
-        )
-    else:
-        missing = cart_total - balance
-        template = texts.get('BALANCE_TOPPED_UP_CART_INSUFFICIENT', '')
-        message_text = template.format(
-            amount=fmt(amount_kopeks),
-            balance=fmt(balance),
-            cart_total=cart_total_formatted,
-            total_amount=cart_total_formatted,
-            missing=fmt(missing),
-        )
-
-    if not message_text:
-        logger.warning('Missing cart notification template', language=getattr(user, 'language', 'ru'))
-        return False
-
-    sent = False
-    try:
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '⬅️ Checkout'),
-                        callback_data='return_to_saved_cart',
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.get('MY_BALANCE_BUTTON', '💰 Balance'),
-                        callback_data='menu_balance',
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.get('MAIN_MENU_BUTTON', '🏠 Menu'),
-                        callback_data='back_to_menu',
-                    )
-                ],
-            ]
-        )
-        await bot.send_message(
-            chat_id=user.telegram_id,
-            text=message_text,
-            reply_markup=keyboard,
-            parse_mode='HTML',
-        )
-        sent = True
-        logger.info('Sent cart notification to user', user_id=user.id)
-    except Exception as send_error:
-        logger.error(
-            'Failed to send cart notification to user',
-            user_id=user.id,
-            error=send_error,
-        )
-
-    return sent
+    return False
 
 
 # ---------------------------------------------------------------------------
