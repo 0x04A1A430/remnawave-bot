@@ -149,6 +149,16 @@ async def process_kassa_ai_payment_amount(
     """
     texts = get_texts(db_user.language)
 
+    # Проверка что sub-method включён
+    if payment_method == 'kassa_ai_sbp' and not settings.is_kassa_ai_sbp_enabled():
+        await message.answer('Метод оплаты СБП через KassaAI временно недоступен.', parse_mode='HTML')
+        await state.clear()
+        return
+    if payment_method == 'kassa_ai_card' and not settings.is_kassa_ai_card_enabled():
+        await message.answer('Метод оплаты картой через KassaAI временно недоступен.', parse_mode='HTML')
+        await state.clear()
+        return
+
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
         reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
@@ -278,6 +288,8 @@ async def process_kassa_ai_custom_amount(
     data = await state.get_data()
     pm = data.get('payment_method', 'kassa_ai')
     if pm not in ('kassa_ai', 'kassa_ai_sbp', 'kassa_ai_card'):
+        await state.clear()
+        await message.answer('Неизвестный метод оплаты. Попробуйте снова.', parse_mode='HTML')
         return
 
     texts = get_texts(db_user.language)
