@@ -912,6 +912,18 @@ class YooKassaPaymentMixin:
                         if subscription:
                             logger.info('Подписка успешно активирована для пользователя', user_id=user.id)
 
+                            # Consume promo-offer discount (invoice was created with discounted price)
+                            try:
+                                from app.utils.promo_offer import consume_user_promo_offer
+
+                                await consume_user_promo_offer(db, user.id)
+                            except Exception as promo_error:
+                                logger.warning(
+                                    'Ошибка потребления промо-оффера при YooKassa оплате',
+                                    user_id=user.id,
+                                    error=promo_error,
+                                )
+
                             # Обновляем данные подписки в RemnaWave, чтобы получить актуальные ссылки
                             try:
                                 remnawave_user = await subscription_service.create_remnawave_user(db, subscription)

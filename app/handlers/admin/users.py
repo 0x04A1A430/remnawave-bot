@@ -4457,6 +4457,11 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
     subscription_service = SubscriptionService()
 
+    # TOCTOU protection: lock user row before pricing to prevent concurrent balance modifications
+    from app.database.crud.user import lock_user_for_pricing
+
+    target_user = await lock_user_for_pricing(db, target_user.id)
+
     try:
         price_kopeks = await _calculate_subscription_period_price(
             db,
@@ -4914,7 +4919,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
     user_id = int(parts[4])
     tariff_id = int(parts[5])
     period = int(parts[6])
-    price_kopeks = int(parts[7])
+    price_kopeks_from_callback = int(parts[7])
 
     user_service = UserService()
     profile = await user_service.get_user_profile(db, user_id)
@@ -4933,7 +4938,48 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
         await callback.answer('❌ Тариф недоступен', show_alert=True)
         return
 
-    # Проверяем баланс ещё раз
+    # TOCTOU protection: lock user row before pricing to prevent concurrent balance modifications
+    from app.database.crud.user import lock_user_for_pricing
+
+    target_user = await lock_user_for_pricing(db, target_user.id)
+
+    from app.database.crud.subscription import get_subscription_by_user_id
+
+    existing_subscription = await get_subscription_by_user_id(db, target_user.id)
+
+    # Recalculate price from locked state (callback data may be stale)
+    from app.services.pricing_engine import PricingEngine
+
+    pricing_engine = PricingEngine()
+    device_limit = None
+    if existing_subscription and existing_subscription.tariff_id == tariff_id:
+        device_limit = existing_subscription.device_limit
+
+    try:
+        result = await pricing_engine.calculate_tariff_purchase_price(
+            tariff,
+            period,
+            device_limit=device_limit,
+            user=target_user,
+        )
+        price_kopeks = result.final_total
+    except Exception as e:
+        logger.error(
+            'Ошибка расчёта стоимости тарифа при списании средств админом для пользователя',
+            telegram_id=target_user.telegram_id,
+            e=e,
+        )
+        await callback.answer('❌ Не удалось рассчитать стоимость тарифа', show_alert=True)
+        return
+
+    if price_kopeks_from_callback != price_kopeks:
+        logger.info(
+            'Стоимость тарифа для пользователя изменилась перед списанием',
+            telegram_id=target_user.telegram_id,
+            price_kopeks_from_callback=price_kopeks_from_callback,
+            price_kopeks=price_kopeks,
+        )
+
     if target_user.balance_kopeks < price_kopeks:
         await callback.answer('❌ Недостаточно средств на балансе', show_alert=True)
         return
@@ -4942,7 +4988,6 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
         from app.database.crud.subscription import (
             create_paid_subscription,
             extend_subscription,
-            get_subscription_by_user_id,
         )
         from app.database.crud.transaction import create_transaction
         from app.database.crud.user import subtract_user_balance

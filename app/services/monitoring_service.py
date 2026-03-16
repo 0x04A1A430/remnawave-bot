@@ -1053,7 +1053,10 @@ class MonitoringService:
                     autopay_period = 30
 
                 try:
+                    from app.database.crud.user import lock_user_for_pricing
                     from app.services.pricing_engine import pricing_engine
+
+                    user = await lock_user_for_pricing(db, user.id)
 
                     pricing = await pricing_engine.calculate_renewal_price(
                         db,
