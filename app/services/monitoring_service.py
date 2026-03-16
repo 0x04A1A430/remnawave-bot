@@ -392,10 +392,8 @@ class MonitoringService:
                 if hwid_limit is not None:
                     update_kwargs['hwid_device_limit'] = hwid_limit
 
-                # Внешний сквад: синхронизируем из тарифа (если задан)
-                # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
-                if subscription.tariff and subscription.tariff.external_squad_uuid:
-                    update_kwargs['external_squad_uuid'] = subscription.tariff.external_squad_uuid
+                # Внешний сквад НЕ пересылаем в рутинном sync — стейловый UUID
+                # вызывает FK violation → A039. Назначается при создании подписки.
 
                 updated_user = await api.update_user(**update_kwargs)
 
