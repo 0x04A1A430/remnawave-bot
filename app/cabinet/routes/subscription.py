@@ -1771,6 +1771,9 @@ async def submit_purchase(
         except Exception as e:
             logger.error('Failed to send admin notification for subscription purchase', error=e)
 
+        # Refresh expired objects after db.commit() in _record_subscription_event
+        await db.refresh(subscription)
+
         return {
             'success': True,
             'message': result['message'],
@@ -2137,6 +2140,7 @@ async def purchase_tariff(
                 logger.error('Error saving tariff cart (cabinet)', error=e)
 
         await db.refresh(user)
+        await db.refresh(subscription)
 
         response = {
             'success': True,
@@ -4354,6 +4358,10 @@ async def switch_tariff(
                 await bot.session.close()
     except Exception as e:
         logger.error('Failed to send admin notification for tariff switch', error=e)
+
+    # Refresh expired objects after db.commit() in _record_subscription_event
+    await db.refresh(subscription)
+    await db.refresh(user)
 
     response = {
         'success': True,
