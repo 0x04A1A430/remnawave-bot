@@ -4590,11 +4590,10 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                         if hwid_limit is not None:
                             update_kwargs['hwid_device_limit'] = hwid_limit
 
-                        # Внешний сквад: синхронизируем из тарифа или сбрасываем
+                        # Внешний сквад: синхронизируем из тарифа (если задан)
+                        # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
                         if ext_squad_uuid is not None:
                             update_kwargs['external_squad_uuid'] = ext_squad_uuid
-                        else:
-                            update_kwargs['external_squad_uuid'] = None
 
                         remnawave_user = await api.update_user(**update_kwargs)
                 else:

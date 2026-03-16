@@ -3762,17 +3762,27 @@ async def reduce_devices(
 
     old_device_limit = current_device_limit
 
-    # Update subscription
+    # Update subscription in memory (will be committed by update_remnawave_user on success)
     subscription.device_limit = new_device_limit
     subscription.updated_at = datetime.now(UTC)
-    await db.commit()
 
-    # Update RemnaWave
-    try:
-        subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
-    except Exception as e:
-        logger.error('Error updating RemnaWave user', error=e)
+    # Update RemnaWave — commits on success, returns None on failure
+    subscription_service = SubscriptionService()
+    result = await subscription_service.update_remnawave_user(db, subscription)
+
+    if result is None:
+        # RemnaWave update failed — rollback local changes
+        await db.rollback()
+        logger.error(
+            'Failed to update RemnaWave after device limit reduction',
+            user_id=user.id,
+            old_device_limit=old_device_limit,
+            new_device_limit=new_device_limit,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Не удалось обновить VPN-панель. Попробуйте позже.',
+        )
 
     logger.info(
         f'User {user.id} reduced device limit from {old_device_limit} to {new_device_limit}'

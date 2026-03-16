@@ -238,11 +238,10 @@ class SubscriptionService:
                     if hwid_limit is not None:
                         update_kwargs['hwid_device_limit'] = hwid_limit
 
-                    # Внешний сквад: назначаем из тарифа или сбрасываем
+                    # Внешний сквад: назначаем из тарифа (если задан)
+                    # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
                     if ext_squad_uuid is not None:
                         update_kwargs['external_squad_uuid'] = ext_squad_uuid
-                    else:
-                        update_kwargs['external_squad_uuid'] = None
 
                     updated_user = await api.update_user(**update_kwargs)
 
@@ -872,10 +871,9 @@ class SubscriptionService:
                         if hwid_limit is not None:
                             update_kwargs['hwid_device_limit'] = hwid_limit
 
+                        # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
                         if ext_squad_uuid is not None:
                             update_kwargs['external_squad_uuid'] = ext_squad_uuid
-                        else:
-                            update_kwargs['external_squad_uuid'] = None
 
                         updated_user = await api.update_user(**update_kwargs)
 
