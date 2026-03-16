@@ -3761,6 +3761,7 @@ async def reduce_devices(
             logger.error('Error checking/removing devices', error=e)
 
     old_device_limit = current_device_limit
+    user_id = user.id  # save before potential rollback (expires ORM objects)
 
     # Update subscription in memory (will be committed by update_remnawave_user on success)
     subscription.device_limit = new_device_limit
@@ -3775,7 +3776,7 @@ async def reduce_devices(
         await db.rollback()
         logger.error(
             'Failed to update RemnaWave after device limit reduction',
-            user_id=user.id,
+            user_id=user_id,
             old_device_limit=old_device_limit,
             new_device_limit=new_device_limit,
         )
@@ -3785,7 +3786,7 @@ async def reduce_devices(
         )
 
     logger.info(
-        f'User {user.id} reduced device limit from {old_device_limit} to {new_device_limit}'
+        f'User {user_id} reduced device limit from {old_device_limit} to {new_device_limit}'
         + (f' (removed {devices_removed_count} devices)' if devices_removed_count > 0 else '')
     )
 
