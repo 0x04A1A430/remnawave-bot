@@ -579,6 +579,9 @@ class RemnaWaveAPI:
             uuid=uuid,
             hwidDeviceLimit=data.get('hwidDeviceLimit'),
             status=data.get('status'),
+            activeInternalSquads=data.get('activeInternalSquads'),
+            externalSquadUuid=data.get('externalSquadUuid'),
+            tag=data.get('tag'),
         )
         response = await self._make_request('PATCH', '/api/users', data)
         user = self._parse_user(response['response'])
