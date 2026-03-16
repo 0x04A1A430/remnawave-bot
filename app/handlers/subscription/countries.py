@@ -398,7 +398,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         await db.commit()
 
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)
 
         await db.refresh(subscription)
 
@@ -906,7 +906,7 @@ async def confirm_add_countries_to_subscription(
         await db.commit()
 
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)
 
         await db.refresh(db_user)
         await db.refresh(subscription)

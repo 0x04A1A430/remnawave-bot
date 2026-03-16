@@ -384,8 +384,10 @@ class MonitoringService:
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads,
                 )
+
+                # Не пересылаем activeInternalSquads в рутинном sync — сквады уже назначены
+                # при создании подписки, пересылка стейловых UUID вызывает FK violation → A039
 
                 if hwid_limit is not None:
                     update_kwargs['hwid_device_limit'] = hwid_limit

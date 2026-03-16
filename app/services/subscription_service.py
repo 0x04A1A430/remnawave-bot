@@ -330,6 +330,7 @@ class SubscriptionService:
         *,
         reset_traffic: bool = False,
         reset_reason: str | None = None,
+        sync_squads: bool = False,
     ) -> RemnaWaveUser | None:
         try:
             user = await get_user_by_id(db, subscription.user_id)
@@ -384,7 +385,10 @@ class SubscriptionService:
                     ),
                 )
 
-                if subscription.connected_squads:
+                # Сквады отправляем только при явном sync_squads=True (propagate_squads и пр.)
+                # В рутинных обновлениях пропускаем — сквады уже назначены при создании подписки,
+                # а пересылка стейловых UUID вызывает FK violation → A039 в RemnaWave
+                if sync_squads and subscription.connected_squads:
                     update_kwargs['active_internal_squads'] = subscription.connected_squads
 
                 if user_tag is not None:
