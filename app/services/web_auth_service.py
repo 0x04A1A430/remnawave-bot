@@ -48,10 +48,12 @@ async def create_web_auth_token() -> str:
 async def link_web_auth_token(token: str, telegram_id: int, user_id: int) -> bool:
     """Link a web auth token to a Telegram user (called by bot on /start).
 
+    Atomically takes the token (GETDEL) so only one caller can win the race.
     Returns True if token was found and linked, False if expired/invalid.
     """
     key = cache_key(WEB_AUTH_PREFIX, token)
-    data: Any = await cache.get(key)
+    # Atomically take the token — only one concurrent caller can succeed
+    data: Any = await cache.getdel(key)
 
     if not data or not isinstance(data, dict):
         logger.warning('Web auth token not found or expired', token_prefix=token[:8])
@@ -67,15 +69,15 @@ async def link_web_auth_token(token: str, telegram_id: int, user_id: int) -> boo
     data['user_id'] = user_id
     data['linked_at'] = datetime.now(UTC).isoformat()
 
-    # Re-store with remaining TTL (use same TTL, it's short enough)
-    await cache.set(key, data, expire=WEB_AUTH_TOKEN_TTL)
+    # Re-store with reduced TTL (only needs to survive the poll window)
+    await cache.set(key, data, expire=120)
 
     logger.info('Web auth token linked', token_prefix=token[:8], telegram_id=telegram_id)
     return True
 
 
 async def poll_web_auth_token(token: str) -> dict[str, Any] | None:
-    """Poll for web auth token status.
+    """Poll for web auth token status (non-destructive).
 
     Returns:
         - None if token doesn't exist or is expired

@@ -28,10 +28,16 @@ from app.database.crud.user import (
     set_email_change_pending,
     verify_and_apply_email_change,
 )
-from app.database.models import CabinetRefreshToken, User
+from app.database.models import CabinetRefreshToken, User, UserStatus
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
 from app.services.referral_service import process_referral_registration
+from app.services.web_auth_service import (
+    WEB_AUTH_TOKEN_TTL,
+    consume_web_auth_token,
+    create_web_auth_token,
+    poll_web_auth_token,
+)
 from app.utils.cache import RateLimitCache, TokenReplayCache
 from app.utils.timezone import panel_datetime_to_utc
 
@@ -463,7 +469,7 @@ async def auth_telegram(
         if updated:
             logger.info('User profile updated from initData', user_id=user.id)
 
-    if user.status != 'active':
+    if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='User account is not active',
@@ -546,7 +552,7 @@ async def auth_telegram_widget(
         )
         logger.info('User created successfully: id=, telegram_id', user_id=user.id, telegram_id=user.telegram_id)
 
-    if user.status != 'active':
+    if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='User account is not active',
@@ -675,7 +681,7 @@ async def auth_telegram_oidc(
         )
         logger.info('User created successfully', user_id=user.id, telegram_id=user.telegram_id)
 
-    if user.status != 'active':
+    if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='User account is not active',
@@ -1145,7 +1151,7 @@ async def login_email(
             detail='Please verify your email first',
         )
 
-    if user.status != 'active':
+    if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='User account is not active',
@@ -1294,7 +1300,7 @@ async def auto_login(
             detail='User not found',
         )
 
-    if user.status != 'active':
+    if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Account is deactivated',
@@ -1698,8 +1704,6 @@ async def request_deep_link_token(
             headers={'Retry-After': '60'},
         )
 
-    from app.services.web_auth_service import WEB_AUTH_TOKEN_TTL, create_web_auth_token
-
     try:
         token = await create_web_auth_token()
     except RuntimeError:
@@ -1708,7 +1712,12 @@ async def request_deep_link_token(
             detail='Service temporarily unavailable',
         )
 
-    bot_username = settings.get_bot_username() or ''
+    bot_username = settings.get_bot_username()
+    if not bot_username:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Bot not configured',
+        )
 
     return DeepLinkTokenResponse(
         token=token,
@@ -1717,7 +1726,7 @@ async def request_deep_link_token(
     )
 
 
-@router.post('/deeplink/poll')
+@router.post('/deeplink/poll', response_model=AuthResponse)
 async def poll_deep_link_token(
     request: DeepLinkPollRequest,
     raw_request: Request,
@@ -1728,14 +1737,12 @@ async def poll_deep_link_token(
     Returns 202 if still pending, AuthResponse if completed, 410 if expired.
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'deeplink_poll', limit=30, window=60, fail_closed=True):
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'deeplink_poll', limit=60, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail='Too many requests',
             headers={'Retry-After': '60'},
         )
-
-    from app.services.web_auth_service import consume_web_auth_token, poll_web_auth_token
 
     data = await poll_web_auth_token(request.token)
 
@@ -1779,16 +1786,15 @@ async def poll_deep_link_token(
             detail='User not found',
         )
 
-    if user.status != 'active':
+    if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Account is deactivated',
         )
 
     response = await _create_auth_response(user, db)
-    await _store_refresh_token(db, user.id, response.refresh_token, device_info='deep_link')
     user.cabinet_last_login = datetime.now(UTC)
-    await db.commit()
+    await _store_refresh_token(db, user.id, response.refresh_token, device_info='deep_link')
 
     logger.info('Deep link auth successful', user_id=user.id, telegram_id=user.telegram_id)
 

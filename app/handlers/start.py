@@ -537,23 +537,32 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     if start_parameter and start_parameter.startswith('webauth_'):
         web_auth_token = start_parameter[8:]  # Strip "webauth_" prefix
         if len(web_auth_token) >= 16:
-            from app.services.web_auth_service import link_web_auth_token
-
             user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
             if user and user.status != UserStatus.DELETED.value:
-                linked = await link_web_auth_token(web_auth_token, message.from_user.id, user.id)
-                if linked:
-                    texts = get_texts(user.language)
-                    await message.answer(
-                        texts.t('WEB_AUTH_SUCCESS', '✅ Авторизация в кабинете подтверждена! Вернитесь в браузер.'),
-                    )
-                else:
-                    await message.answer('❌ Ссылка для входа истекла. Попробуйте снова.')
+                texts = get_texts(user.language)
+                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('WEB_AUTH_CONFIRM_YES', '✅ Да, войти'),
+                            callback_data=f'webauth_confirm:{web_auth_token}',
+                        ),
+                        types.InlineKeyboardButton(
+                            text=texts.t('WEB_AUTH_CONFIRM_NO', '❌ Нет'),
+                            callback_data='webauth_deny',
+                        ),
+                    ],
+                ])
+                await message.answer(
+                    texts.t(
+                        'WEB_AUTH_CONFIRM_PROMPT',
+                        '🔐 Подтвердите вход в личный кабинет. Если вы не запрашивали вход — нажмите «Нет».',
+                    ),
+                    reply_markup=keyboard,
+                )
             else:
-                # User not registered in bot - just show standard start
                 logger.warning('Web auth attempt from unregistered user', telegram_id=message.from_user.id)
                 await message.answer('❌ Сначала зарегистрируйтесь в боте, затем попробуйте войти в кабинет.')
-            return  # Don't continue with normal start flow
+            return
         start_parameter = None  # Invalid token, ignore
 
     if start_parameter:
@@ -2496,6 +2505,42 @@ async def required_sub_channel_check(
             pass
 
 
+async def process_webauth_confirm(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    """Handle web auth confirmation or denial."""
+    await callback.answer()
+
+    if callback.data == 'webauth_deny':
+        await callback.message.edit_text('❌ Вход отменён.')
+        return
+
+    # Extract token from callback_data: "webauth_confirm:{token}"
+    token = callback.data.split(':', 1)[1] if ':' in callback.data else ''
+    if len(token) < 16:
+        await callback.message.edit_text('❌ Ошибка: неверный токен.')
+        return
+
+    from app.services.web_auth_service import link_web_auth_token
+
+    user = await get_user_by_telegram_id(db, callback.from_user.id)
+    if not user or user.status == UserStatus.DELETED.value:
+        await callback.message.edit_text('❌ Пользователь не найден.')
+        return
+
+    linked = await link_web_auth_token(token, callback.from_user.id, user.id)
+    texts = get_texts(user.language)
+    if linked:
+        await callback.message.edit_text(
+            texts.t('WEB_AUTH_SUCCESS', '✅ Авторизация в кабинете подтверждена! Вернитесь в браузер.'),
+        )
+    else:
+        await callback.message.edit_text(
+            texts.t('WEB_AUTH_EXPIRED', '❌ Ссылка для входа истекла. Попробуйте снова.'),
+        )
+
+
 def register_handlers(dp: Dispatcher):
     logger.debug('=== НАЧАЛО регистрации обработчиков start.py ===')
 
@@ -2539,5 +2584,11 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(required_sub_channel_check, F.data.in_(['sub_channel_check']))
     logger.debug('Зарегистрирован required_sub_channel_check')
+
+    dp.callback_query.register(
+        process_webauth_confirm,
+        F.data.startswith('webauth_confirm:') | F.data.in_(['webauth_deny']),
+    )
+    logger.debug('Зарегистрирован process_webauth_confirm')
 
     logger.debug('=== КОНЕЦ регистрации обработчиков start.py ===')
