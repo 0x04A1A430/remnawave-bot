@@ -692,6 +692,29 @@ class PaymentService(
                 }
             return None
 
+        # --- RioPay -----------------------------------------------------------
+        if payment_method == 'riopay':
+            if not settings.is_riopay_enabled():
+                logger.warning('RioPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_riopay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                success_url=return_url,
+                fail_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'riopay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('riopay_order_id') or result.get('order_id'),
+                    'provider': 'riopay',
+                }
+            return None
+
         # --- Telegram Stars ---------------------------------------------------
         if payment_method == 'telegram_stars':
             if not settings.TELEGRAM_STARS_ENABLED:
