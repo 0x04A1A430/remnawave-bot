@@ -198,7 +198,6 @@ async def _claim_phantom_user(
     return True, phantom
 
 
-
 async def _merge_phantom_into_active_user(
     db: AsyncSession,
     phantom: 'User',
@@ -220,17 +219,11 @@ async def _merge_phantom_into_active_user(
     )
 
     # Transfer GuestPurchase.user_id references
-    await db.execute(
-        update(GuestPurchase)
-        .where(GuestPurchase.user_id == phantom.id)
-        .values(user_id=active_user.id)
-    )
+    await db.execute(update(GuestPurchase).where(GuestPurchase.user_id == phantom.id).values(user_id=active_user.id))
 
     # Transfer GuestPurchase.buyer_user_id references
     await db.execute(
-        update(GuestPurchase)
-        .where(GuestPurchase.buyer_user_id == phantom.id)
-        .values(buyer_user_id=active_user.id)
+        update(GuestPurchase).where(GuestPurchase.buyer_user_id == phantom.id).values(buyer_user_id=active_user.id)
     )
 
     # Transfer balance

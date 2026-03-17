@@ -137,7 +137,9 @@ async def process_cryptobot_payment_amount(
         return
 
     if amount_rubles > 100000:
-        await message.answer('Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            'Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language)
+        )
         return
 
     try:
@@ -154,11 +156,15 @@ async def process_cryptobot_payment_amount(
         amount_usd = round(amount_usd, 2)
 
         if amount_usd < 1:
-            await message.answer('❌ Минимальная сумма для оплаты в USD: 1.00 USD', reply_markup=get_back_keyboard(db_user.language))
+            await message.answer(
+                '❌ Минимальная сумма для оплаты в USD: 1.00 USD', reply_markup=get_back_keyboard(db_user.language)
+            )
             return
 
         if amount_usd > 1000:
-            await message.answer('❌ Максимальная сумма для оплаты в USD: 1,000 USD', reply_markup=get_back_keyboard(db_user.language))
+            await message.answer(
+                '❌ Максимальная сумма для оплаты в USD: 1,000 USD', reply_markup=get_back_keyboard(db_user.language)
+            )
             return
 
         payment_service = PaymentService(message.bot)

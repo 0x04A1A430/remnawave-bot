@@ -548,7 +548,9 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             return
 
         if amount_rubles > 50000:
-            await message.answer('Максимальная сумма пополнения: 50,000 ₽', reply_markup=get_back_keyboard(db_user.language))
+            await message.answer(
+                'Максимальная сумма пополнения: 50,000 ₽', reply_markup=get_back_keyboard(db_user.language)
+            )
             return
 
         amount_kopeks = int(amount_rubles * 100)
@@ -558,7 +560,10 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
         if payment_method in ['yookassa', 'yookassa_sbp']:
             if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
                 min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
-                await message.answer(f'❌ Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽', reply_markup=get_back_keyboard(db_user.language))
+                await message.answer(
+                    f'❌ Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽',
+                    reply_markup=get_back_keyboard(db_user.language),
+                )
                 return
 
             if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:

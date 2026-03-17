@@ -133,7 +133,9 @@ async def process_heleket_payment_amount(
         return
 
     if amount_rubles > 100000:
-        await message.answer('Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            'Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language)
+        )
         return
 
     payment_service = PaymentService(message.bot)

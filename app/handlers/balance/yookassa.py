@@ -178,12 +178,18 @@ async def process_yookassa_payment_amount(
 
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
         min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
-        await message.answer(f'❌ Минимальная сумма для оплаты картой: {min_rubles:.0f} ₽', reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            f'❌ Минимальная сумма для оплаты картой: {min_rubles:.0f} ₽',
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         return
 
     if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
         max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
-        await message.answer(f'❌ Максимальная сумма для оплаты картой: {max_rubles:,.0f} ₽'.replace(',', ' '), reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            f'❌ Максимальная сумма для оплаты картой: {max_rubles:,.0f} ₽'.replace(',', ' '),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         return
 
     try:
@@ -327,12 +333,18 @@ async def process_yookassa_sbp_payment_amount(
 
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
         min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
-        await message.answer(f'❌ Минимальная сумма для оплаты через СБП: {min_rubles:.0f} ₽', reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            f'❌ Минимальная сумма для оплаты через СБП: {min_rubles:.0f} ₽',
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         return
 
     if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
         max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
-        await message.answer(f'❌ Максимальная сумма для оплаты через СБП: {max_rubles:,.0f} ₽'.replace(',', ' '), reply_markup=get_back_keyboard(db_user.language))
+        await message.answer(
+            f'❌ Максимальная сумма для оплаты через СБП: {max_rubles:,.0f} ₽'.replace(',', ' '),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         return
 
     try:

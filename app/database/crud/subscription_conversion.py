@@ -61,7 +61,9 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
     total_conversions = total_conversions_result.scalar() or 0
 
     # Подсчитываем пользователей с платными подписками
-    users_with_paid_result = await db.execute(select(func.count(User.id)).where(User.has_had_paid_subscription.is_(True)))
+    users_with_paid_result = await db.execute(
+        select(func.count(User.id)).where(User.has_had_paid_subscription.is_(True))
+    )
     users_with_paid = users_with_paid_result.scalar() or 0
 
     # Подсчитываем всех пользователей с подписками (использовавших триал)
