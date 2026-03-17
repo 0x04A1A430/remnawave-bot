@@ -1859,8 +1859,6 @@ async def select_tariff_extend_period(
         extend_tariff_id=tariff_id,
         extend_period=period,
         extend_discount_percent=discount_percent,
-        extend_group_pct=group_pct,
-        extend_offer_pct=offer_pct,
     )
     await callback.answer()
 
