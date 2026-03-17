@@ -198,6 +198,87 @@ async def _claim_phantom_user(
     return True, phantom
 
 
+
+async def _merge_phantom_into_active_user(
+    db: AsyncSession,
+    phantom: 'User',
+    active_user: 'User',
+) -> None:
+    """Merge a phantom user (created by guest landing purchase) into an existing active user.
+
+    Transfers GuestPurchase records and handles subscription conflict.
+    The phantom is soft-deleted (status=DELETED, username cleared) to preserve
+    audit trail and avoid CASCADE deletion of payment/transaction records.
+    """
+    from sqlalchemy import update
+
+    logger.info(
+        'Merging phantom user into active user',
+        phantom_id=phantom.id,
+        active_user_id=active_user.id,
+        phantom_username=phantom.username,
+    )
+
+    # Transfer GuestPurchase.user_id references
+    await db.execute(
+        update(GuestPurchase)
+        .where(GuestPurchase.user_id == phantom.id)
+        .values(user_id=active_user.id)
+    )
+
+    # Transfer GuestPurchase.buyer_user_id references
+    await db.execute(
+        update(GuestPurchase)
+        .where(GuestPurchase.buyer_user_id == phantom.id)
+        .values(buyer_user_id=active_user.id)
+    )
+
+    # Transfer balance
+    if phantom.balance_kopeks and phantom.balance_kopeks > 0:
+        active_user.balance_kopeks = (active_user.balance_kopeks or 0) + phantom.balance_kopeks
+        logger.info('Transferred balance from phantom', amount_kopeks=phantom.balance_kopeks)
+
+    # Handle subscription
+    await db.refresh(phantom, ['subscription'])
+    await db.refresh(active_user, ['subscription'])
+
+    if phantom.subscription and not active_user.subscription:
+        # Transfer subscription from phantom to active user
+        phantom.subscription.user_id = active_user.id
+        # Transfer remnawave_uuid
+        if phantom.remnawave_uuid and not active_user.remnawave_uuid:
+            active_user.remnawave_uuid = phantom.remnawave_uuid
+            phantom.remnawave_uuid = None
+        await db.flush()
+        logger.info(
+            'Transferred subscription from phantom to active user',
+            subscription_id=phantom.subscription.id,
+        )
+    elif phantom.subscription:
+        # Both have subscriptions — disable phantom's Remnawave user and free server slots
+        logger.warning(
+            'Both phantom and active user have subscriptions, disabling phantom',
+            phantom_subscription_id=phantom.subscription.id,
+            active_subscription_id=active_user.subscription.id,
+        )
+        if phantom.remnawave_uuid:
+            try:
+                subscription_service = SubscriptionService()
+                await subscription_service.disable_remnawave_user(phantom.remnawave_uuid)
+            except Exception as exc:
+                logger.warning('Failed to disable phantom Remnawave user', error=str(exc))
+        await decrement_subscription_server_counts(db, phantom.subscription)
+
+    # Soft-delete phantom: clear identifiers to prevent future matches,
+    # preserve record for audit trail and avoid CASCADE deletion of payments/transactions
+    phantom.status = UserStatus.DELETED.value
+    phantom.username = None
+    phantom.remnawave_uuid = None
+    await db.flush()
+
+    logger.info('Phantom user merged and soft-deleted', phantom_id=phantom.id, active_user_id=active_user.id)
+
+
 def _calculate_subscription_flags(subscription):
     if not subscription:
         return False, False
@@ -623,6 +704,21 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     if user and user.status != UserStatus.DELETED.value:
         logger.info('✅ Активный пользователь найден', telegram_id=user.telegram_id)
+
+        # Check for phantom user created by guest landing purchase and merge
+        if message.from_user.username:
+            phantom = await find_phantom_user_by_username(db, message.from_user.username)
+            if phantom and phantom.id != user.id:
+                try:
+                    await _merge_phantom_into_active_user(db, phantom, user)
+                    await db.refresh(user, ['subscription'])
+                except Exception:
+                    await db.rollback()
+                    logger.exception(
+                        'Failed to merge phantom user',
+                        phantom_id=phantom.id,
+                        active_user_id=user.id,
+                    )
 
         profile_updated = False
 
