@@ -1059,6 +1059,7 @@ async def get_latest_payment_by_method(
         MulenPayPayment,
         Pal24Payment,
         PlategaPayment,
+        RioPayPayment,
         WataPayment,
         YooKassaPayment,
     )
@@ -1074,6 +1075,7 @@ async def get_latest_payment_by_method(
         PaymentMethod.CLOUDPAYMENTS: CloudPaymentsPayment,
         PaymentMethod.FREEKASSA: FreekassaPayment,
         PaymentMethod.KASSA_AI: KassaAiPayment,
+        PaymentMethod.RIOPAY: RioPayPayment,
     }
 
     model = model_map.get(payment_method)

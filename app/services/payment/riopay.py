@@ -78,8 +78,11 @@ class RioPayPaymentMixin:
             return None
 
         # Получаем telegram_id пользователя для order_id
-        user = await get_user_by_id(db, user_id)
-        tg_id = user.telegram_id if user else user_id
+        if user_id is not None:
+            user = await get_user_by_id(db, user_id)
+            tg_id = user.telegram_id if user else user_id
+        else:
+            tg_id = 'guest'
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
         order_id = f'rp{tg_id}_{uuid.uuid4().hex[:6]}'

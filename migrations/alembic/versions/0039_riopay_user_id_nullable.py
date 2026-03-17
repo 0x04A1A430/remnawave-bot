@@ -18,10 +18,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('riopay_payments') as batch_op:
-        batch_op.alter_column('user_id', existing_type=sa.Integer(), nullable=True)
+    op.alter_column('riopay_payments', 'user_id', existing_type=sa.Integer(), nullable=True)
+    op.drop_constraint('riopay_payments_user_id_fkey', 'riopay_payments', type_='foreignkey')
+    op.create_foreign_key(None, 'riopay_payments', 'users', ['user_id'], ['id'], ondelete='SET NULL')
 
 
 def downgrade() -> None:
-    with op.batch_alter_table('riopay_payments') as batch_op:
-        batch_op.alter_column('user_id', existing_type=sa.Integer(), nullable=False)
+    op.drop_constraint(None, 'riopay_payments', type_='foreignkey')
+    op.create_foreign_key('riopay_payments_user_id_fkey', 'riopay_payments', 'users', ['user_id'], ['id'])
+    op.alter_column('riopay_payments', 'user_id', existing_type=sa.Integer(), nullable=False)
