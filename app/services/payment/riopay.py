@@ -47,6 +47,8 @@ class RioPayPaymentMixin:
         description: str = 'Пополнение баланса',
         email: str | None = None,
         language: str = 'ru',
+        success_url: str | None = None,
+        fail_url: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Создает платеж RioPay.
@@ -103,8 +105,8 @@ class RioPayPaymentMixin:
                 currency=currency,
                 external_id=order_id,
                 purpose=description,
-                success_url=settings.RIOPAY_SUCCESS_URL,
-                fail_url=settings.RIOPAY_FAIL_URL,
+                success_url=success_url or settings.RIOPAY_SUCCESS_URL,
+                fail_url=fail_url or settings.RIOPAY_FAIL_URL,
             )
 
             payment_url = result.get('paymentLink')
