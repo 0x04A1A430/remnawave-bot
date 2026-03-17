@@ -120,7 +120,8 @@ async def process_wata_payment_amount(
             texts.t(
                 'WATA_AMOUNT_TOO_LOW',
                 'Минимальная сумма пополнения: {amount}',
-            ).format(amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS))
+            ).format(amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS)),
+            reply_markup=get_back_keyboard(db_user.language),
         )
         return
 
@@ -129,7 +130,8 @@ async def process_wata_payment_amount(
             texts.t(
                 'WATA_AMOUNT_TOO_HIGH',
                 'Максимальная сумма пополнения: {amount}',
-            ).format(amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS))
+            ).format(amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS)),
+            reply_markup=get_back_keyboard(db_user.language),
         )
         return
 

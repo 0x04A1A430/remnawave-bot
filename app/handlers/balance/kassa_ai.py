@@ -198,6 +198,7 @@ async def process_kassa_ai_payment_amount(
                 'PAYMENT_AMOUNT_TOO_LOW',
                 'Минимальная сумма пополнения: {min_amount}₽',
             ).format(min_amount=min_amount // 100),
+            reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
         )
         return
@@ -208,6 +209,7 @@ async def process_kassa_ai_payment_amount(
                 'PAYMENT_AMOUNT_TOO_HIGH',
                 'Максимальная сумма пополнения: {max_amount}₽',
             ).format(max_amount=max_amount // 100),
+            reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
         )
         return

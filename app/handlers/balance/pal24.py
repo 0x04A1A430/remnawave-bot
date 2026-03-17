@@ -359,12 +359,12 @@ async def process_pal24_payment_amount(
 
     if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
         min_rubles = settings.PAL24_MIN_AMOUNT_KOPEKS / 100
-        await message.answer(f'❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽')
+        await message.answer(f'❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽', reply_markup=get_back_keyboard(db_user.language))
         return
 
     if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
         max_rubles = settings.PAL24_MAX_AMOUNT_KOPEKS / 100
-        await message.answer(f'❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽'.replace(',', ' '))
+        await message.answer(f'❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽'.replace(',', ' '), reply_markup=get_back_keyboard(db_user.language))
         return
 
     available_methods = _get_available_pal24_methods()
