@@ -533,6 +533,29 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await state.update_data(pending_gift_token=gift_token)
             start_parameter = None  # Don't treat as campaign or referral
 
+    # Handle web auth deep links: /start webauth_{token}
+    if start_parameter and start_parameter.startswith('webauth_'):
+        web_auth_token = start_parameter[8:]  # Strip "webauth_" prefix
+        if len(web_auth_token) >= 16:
+            from app.services.web_auth_service import link_web_auth_token
+
+            user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
+            if user and user.status != UserStatus.DELETED.value:
+                linked = await link_web_auth_token(web_auth_token, message.from_user.id, user.id)
+                if linked:
+                    texts = get_texts(user.language)
+                    await message.answer(
+                        texts.t('WEB_AUTH_SUCCESS', '✅ Авторизация в кабинете подтверждена! Вернитесь в браузер.'),
+                    )
+                else:
+                    await message.answer('❌ Ссылка для входа истекла. Попробуйте снова.')
+            else:
+                # User not registered in bot - just show standard start
+                logger.warning('Web auth attempt from unregistered user', telegram_id=message.from_user.id)
+                await message.answer('❌ Сначала зарегистрируйтесь в боте, затем попробуйте войти в кабинет.')
+            return  # Don't continue with normal start flow
+        start_parameter = None  # Invalid token, ignore
+
     if start_parameter:
         campaign = await get_campaign_by_start_parameter(
             db,

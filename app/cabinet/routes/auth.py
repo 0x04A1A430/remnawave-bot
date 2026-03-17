@@ -61,6 +61,8 @@ from ..schemas.auth import (
     AuthResponse,
     AutoLoginRequest,
     CampaignBonusInfo,
+    DeepLinkPollRequest,
+    DeepLinkTokenResponse,
     EmailChangeRequest,
     EmailChangeResponse,
     EmailChangeVerifyRequest,
@@ -1674,3 +1676,120 @@ async def get_email_change_status(
         'new_email': user.email_change_new,
         'expires_at': user.email_change_expires.isoformat() if user.email_change_expires else None,
     }
+
+
+# --- Deep link auth (fallback when oauth.telegram.org is blocked) ---
+
+
+@router.post('/deeplink/request', response_model=DeepLinkTokenResponse)
+async def request_deep_link_token(
+    raw_request: Request,
+):
+    """Generate a one-time deep link auth token.
+
+    Frontend shows t.me/{bot}?start=webauth_{token} to the user.
+    No auth required (user is not logged in yet).
+    """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'deeplink_request', limit=10, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
+    from app.services.web_auth_service import WEB_AUTH_TOKEN_TTL, create_web_auth_token
+
+    try:
+        token = await create_web_auth_token()
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Service temporarily unavailable',
+        )
+
+    bot_username = settings.get_bot_username() or ''
+
+    return DeepLinkTokenResponse(
+        token=token,
+        bot_username=bot_username,
+        expires_in=WEB_AUTH_TOKEN_TTL,
+    )
+
+
+@router.post('/deeplink/poll')
+async def poll_deep_link_token(
+    request: DeepLinkPollRequest,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Poll for deep link auth completion.
+
+    Returns 202 if still pending, AuthResponse if completed, 410 if expired.
+    """
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'deeplink_poll', limit=30, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
+    from app.services.web_auth_service import consume_web_auth_token, poll_web_auth_token
+
+    data = await poll_web_auth_token(request.token)
+
+    if data is None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail='Token expired or not found',
+        )
+
+    if data.get('status') == 'pending':
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail='Waiting for confirmation',
+        )
+
+    if data.get('status') != 'linked':
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail='Invalid token state',
+        )
+
+    # Token is linked - consume it atomically
+    consumed = await consume_web_auth_token(request.token)
+    if not consumed:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail='Token already consumed',
+        )
+
+    user_id = consumed.get('user_id')
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Invalid token data',
+        )
+
+    user = await get_user_by_id(db, int(user_id))
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='User not found',
+        )
+
+    if user.status != 'active':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Account is deactivated',
+        )
+
+    response = await _create_auth_response(user, db)
+    await _store_refresh_token(db, user.id, response.refresh_token, device_info='deep_link')
+    user.cabinet_last_login = datetime.now(UTC)
+    await db.commit()
+
+    logger.info('Deep link auth successful', user_id=user.id, telegram_id=user.telegram_id)
+
+    return response
