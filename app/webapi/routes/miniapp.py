@@ -5691,7 +5691,7 @@ async def update_subscription_servers_endpoint(
         pass
 
     service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
+    await service.update_remnawave_user(db, subscription, sync_squads=True)
 
     await with_admin_notification_service(
         lambda service: service.send_subscription_update_notification(
@@ -6500,6 +6500,7 @@ async def purchase_tariff_endpoint(
         subscription,
         reset_traffic=True,
         reset_reason='покупка тарифа (miniapp)',
+        sync_squads=True,
     )
 
     # Сохраняем корзину для автопродления
@@ -6873,6 +6874,7 @@ async def switch_tariff_endpoint(
             subscription,
             reset_traffic=should_reset_traffic,
             reset_reason='смена тарифа',
+            sync_squads=True,
         )
     except Exception as e:
         logger.error('Ошибка синхронизации с RemnaWave при смене тарифа', error=e)

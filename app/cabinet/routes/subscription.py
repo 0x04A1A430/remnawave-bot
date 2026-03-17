@@ -2071,6 +2071,7 @@ async def purchase_tariff(
                     subscription,
                     reset_traffic=True,
                     reset_reason='покупка тарифа (cabinet)',
+                    sync_squads=True,
                 )
             else:
                 await service.create_remnawave_user(
@@ -3144,7 +3145,7 @@ async def update_countries(
     try:
         subscription_service = SubscriptionService()
         if getattr(user, 'remnawave_uuid', None):
-            await subscription_service.update_remnawave_user(db, user.subscription)
+            await subscription_service.update_remnawave_user(db, user.subscription, sync_squads=True)
         else:
             await subscription_service.create_remnawave_user(db, user.subscription)
     except Exception as e:
@@ -4174,6 +4175,7 @@ async def switch_tariff(
                 subscription,
                 reset_traffic=should_reset_traffic,
                 reset_reason='смена тарифа',
+                sync_squads=True,
             )
         else:
             await subscription_service.create_remnawave_user(
