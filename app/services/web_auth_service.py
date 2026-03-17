@@ -22,6 +22,8 @@ from app.utils.cache import cache, cache_key
 logger = structlog.get_logger(__name__)
 
 WEB_AUTH_TOKEN_TTL = 300  # 5 minutes
+WEB_AUTH_LINKED_TTL = 120  # seconds — poll window after token is linked
+WEB_AUTH_TOKEN_MIN_LENGTH = 16
 WEB_AUTH_PREFIX = 'web_auth'
 
 
@@ -70,7 +72,7 @@ async def link_web_auth_token(token: str, telegram_id: int, user_id: int) -> boo
     data['linked_at'] = datetime.now(UTC).isoformat()
 
     # Re-store with reduced TTL (only needs to survive the poll window)
-    await cache.set(key, data, expire=120)
+    await cache.set(key, data, expire=WEB_AUTH_LINKED_TTL)
 
     logger.info('Web auth token linked', token_prefix=token[:8], telegram_id=telegram_id)
     return True
@@ -100,4 +102,7 @@ async def consume_web_auth_token(token: str) -> dict[str, Any] | None:
     Returns the token data or None.
     """
     key = cache_key(WEB_AUTH_PREFIX, token)
-    return await cache.getdel(key)
+    data = await cache.getdel(key)
+    if not data or not isinstance(data, dict):
+        return None
+    return data

@@ -51,6 +51,7 @@ from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.referral_service import process_referral_registration
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
+from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
 from app.utils.promo_offer import (
     build_promo_offer_hint,
@@ -535,23 +536,25 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     # Handle web auth deep links: /start webauth_{token}
     if start_parameter and start_parameter.startswith('webauth_'):
-        web_auth_token = start_parameter[8:]  # Strip "webauth_" prefix
-        if len(web_auth_token) >= 16:
+        web_auth_token = start_parameter.removeprefix('webauth_')
+        if len(web_auth_token) >= WEB_AUTH_TOKEN_MIN_LENGTH:
             user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
             if user and user.status != UserStatus.DELETED.value:
                 texts = get_texts(user.language)
-                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text=texts.t('WEB_AUTH_CONFIRM_YES', '✅ Да, войти'),
-                            callback_data=f'webauth_confirm:{web_auth_token}',
-                        ),
-                        types.InlineKeyboardButton(
-                            text=texts.t('WEB_AUTH_CONFIRM_NO', '❌ Нет'),
-                            callback_data='webauth_deny',
-                        ),
-                    ],
-                ])
+                keyboard = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text=texts.t('WEB_AUTH_CONFIRM_YES', '✅ Да, войти'),
+                                callback_data=f'webauth_confirm:{web_auth_token}',
+                            ),
+                            types.InlineKeyboardButton(
+                                text=texts.t('WEB_AUTH_CONFIRM_NO', '❌ Нет'),
+                                callback_data='webauth_deny',
+                            ),
+                        ],
+                    ]
+                )
                 await message.answer(
                     texts.t(
                         'WEB_AUTH_CONFIRM_PROMPT',
@@ -2512,21 +2515,22 @@ async def process_webauth_confirm(
     """Handle web auth confirmation or denial."""
     await callback.answer()
 
+    if not isinstance(callback.message, types.Message):
+        return
+
     if callback.data == 'webauth_deny':
         await callback.message.edit_text('❌ Вход отменён.')
         return
 
     # Extract token from callback_data: "webauth_confirm:{token}"
     token = callback.data.split(':', 1)[1] if ':' in callback.data else ''
-    if len(token) < 16:
+    if len(token) < WEB_AUTH_TOKEN_MIN_LENGTH:
         await callback.message.edit_text('❌ Ошибка: неверный токен.')
         return
 
-    from app.services.web_auth_service import link_web_auth_token
-
     user = await get_user_by_telegram_id(db, callback.from_user.id)
-    if not user or user.status == UserStatus.DELETED.value:
-        await callback.message.edit_text('❌ Пользователь не найден.')
+    if not user or user.status != UserStatus.ACTIVE.value:
+        await callback.message.edit_text('❌ Учётная запись неактивна.')
         return
 
     linked = await link_web_auth_token(token, callback.from_user.id, user.id)

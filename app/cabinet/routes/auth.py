@@ -1792,8 +1792,10 @@ async def poll_deep_link_token(
             detail='Account is deactivated',
         )
 
-    response = await _create_auth_response(user, db)
     user.cabinet_last_login = datetime.now(UTC)
+    await db.commit()
+
+    response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token, device_info='deep_link')
 
     logger.info('Deep link auth successful', user_id=user.id, telegram_id=user.telegram_id)
