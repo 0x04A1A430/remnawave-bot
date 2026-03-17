@@ -666,23 +666,52 @@ class PaymentService(
             return None
 
         # --- KassaAI ----------------------------------------------------------
-        if payment_method == 'kassa_ai':
+        if payment_method in ('kassa_ai', 'kassa_ai_sbp', 'kassa_ai_card'):
             if not settings.is_kassa_ai_enabled():
                 logger.warning('KassaAI is not enabled, cannot create guest payment')
                 return None
+
+            from app.services.kassa_ai_service import KASSA_AI_SUB_METHODS
+
+            sub = KASSA_AI_SUB_METHODS.get(payment_method)
+            ps_id = sub['payment_system_id'] if sub else None
 
             result = await self.create_kassa_ai_payment(
                 db=db,
                 user_id=None,
                 amount_kopeks=amount_kopeks,
                 description=description,
+                payment_system_id=ps_id,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'kassa_ai')
+                await _patch_guest_metadata(result['local_payment_id'], payment_method)
                 return {
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('order_id'),
-                    'provider': 'kassa_ai',
+                    'provider': payment_method,
+                }
+            return None
+
+        # --- RioPay -----------------------------------------------------------
+        if payment_method == 'riopay':
+            if not settings.is_riopay_enabled():
+                logger.warning('RioPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_riopay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                success_url=return_url,
+                fail_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'riopay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('riopay_order_id') or result.get('order_id'),
+                    'provider': 'riopay',
                 }
             return None
 

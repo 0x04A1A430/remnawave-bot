@@ -129,11 +129,13 @@ async def process_heleket_payment_amount(
     amount_rubles = amount_kopeks / 100
 
     if amount_rubles < 100:
-        await message.answer('Минимальная сумма пополнения: 100 ₽')
+        await message.answer('Минимальная сумма пополнения: 100 ₽', reply_markup=get_back_keyboard(db_user.language))
         return
 
     if amount_rubles > 100000:
-        await message.answer('Максимальная сумма пополнения: 100,000 ₽')
+        await message.answer(
+            'Максимальная сумма пополнения: 100,000 ₽', reply_markup=get_back_keyboard(db_user.language)
+        )
         return
 
     payment_service = PaymentService(message.bot)

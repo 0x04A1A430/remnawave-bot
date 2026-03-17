@@ -42,11 +42,13 @@ class RioPayPaymentMixin:
         self,
         db: AsyncSession,
         *,
-        user_id: int,
+        user_id: int | None,
         amount_kopeks: int,
         description: str = 'Пополнение баланса',
         email: str | None = None,
         language: str = 'ru',
+        success_url: str | None = None,
+        fail_url: str | None = None,
     ) -> dict[str, Any] | None:
         """
         Создает платеж RioPay.
@@ -76,8 +78,11 @@ class RioPayPaymentMixin:
             return None
 
         # Получаем telegram_id пользователя для order_id
-        user = await get_user_by_id(db, user_id)
-        tg_id = user.telegram_id if user else user_id
+        if user_id is not None:
+            user = await get_user_by_id(db, user_id)
+            tg_id = user.telegram_id if user else user_id
+        else:
+            tg_id = 'guest'
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
         order_id = f'rp{tg_id}_{uuid.uuid4().hex[:6]}'
@@ -103,8 +108,8 @@ class RioPayPaymentMixin:
                 currency=currency,
                 external_id=order_id,
                 purpose=description,
-                success_url=settings.RIOPAY_SUCCESS_URL,
-                fail_url=settings.RIOPAY_FAIL_URL,
+                success_url=success_url or settings.RIOPAY_SUCCESS_URL,
+                fail_url=fail_url or settings.RIOPAY_FAIL_URL,
             )
 
             payment_url = result.get('paymentLink')
@@ -273,6 +278,20 @@ class RioPayPaymentMixin:
         """Создаёт транзакцию, начисляет баланс и отправляет уведомления."""
         if payment.transaction_id:
             logger.info('RioPay платеж уже привязан к транзакции', order_id=payment.order_id, trigger=trigger)
+            return True
+
+        # --- Guest purchase flow (landing page / gift) ---
+        riopay_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        from app.services.payment.common import try_fulfill_guest_purchase
+
+        guest_result = await try_fulfill_guest_purchase(
+            db,
+            metadata=riopay_metadata,
+            payment_amount_kopeks=payment.amount_kopeks,
+            provider_payment_id=str(riopay_order_id) if riopay_order_id else payment.order_id,
+            provider_name='riopay',
+        )
+        if guest_result is not None:
             return True
 
         # Получаем пользователя
