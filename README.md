@@ -25,6 +25,12 @@ Bedolaga — полнофункциональная платформа для п
 
 > 🖥 **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** — веб-кабинет на React + TypeScript, который существенно расширяет возможности бота: личный кабинет, OAuth-авторизация (Google, Yandex, Discord, VK, Telegram OIDC), лендинги, аналитика продаж, RBAC и подарочные подписки.
 
+<div align="center">
+
+<img src=".github/assets/bot-preview.png" alt="Bedolaga Bot — Telegram" width="700" />
+
+</div>
+
 ---
 
 ## ✨ Возможности
