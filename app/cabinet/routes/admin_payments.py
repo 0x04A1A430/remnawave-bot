@@ -351,7 +351,9 @@ async def get_payments_stats(
 
 @router.get('/search', response_model=PendingPaymentListResponse)
 async def search_payments_endpoint(
-    search: str | None = Query(None, max_length=256, description='Search query (invoice, @username, telegram_id, email)'),
+    search: str | None = Query(
+        None, max_length=256, description='Search query (invoice, @username, telegram_id, email)'
+    ),
     status_filter: str = Query('all', description='Status filter: all, pending, paid, cancelled'),
     method_filter: str | None = Query(None, description='Filter by payment method'),
     period: str = Query('24h', description='Period preset: 24h, 7d, 30d, all'),
@@ -419,7 +421,9 @@ async def search_payments_endpoint(
 
 @router.get('/search/stats', response_model=SearchStatsResponse)
 async def search_payments_stats_endpoint(
-    search: str | None = Query(None, max_length=256, description='Search query (invoice, @username, telegram_id, email)'),
+    search: str | None = Query(
+        None, max_length=256, description='Search query (invoice, @username, telegram_id, email)'
+    ),
     status_filter: str = Query('all', description='Status filter: all, pending, paid, cancelled'),
     method_filter: str | None = Query(None, description='Filter by payment method'),
     period: str = Query('24h', description='Period preset: 24h, 7d, 30d, all'),

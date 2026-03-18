@@ -1221,7 +1221,6 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
-
     if routes_registered:
 
         @router.get('/health/payment-webhooks')

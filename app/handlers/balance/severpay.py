@@ -245,7 +245,6 @@ async def start_severpay_topup(
     )
 
 
-
 @error_handler
 async def process_severpay_quick_amount(
     callback: types.CallbackQuery,
