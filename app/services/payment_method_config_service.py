@@ -138,6 +138,13 @@ def _get_method_defaults() -> dict:
             'default_max': settings.RIOPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
         },
+        'severpay': {
+            'default_display_name': settings.get_severpay_display_name(),
+            'is_configured': settings.is_severpay_enabled(),
+            'default_min': settings.SEVERPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.SEVERPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
     }
 
 
@@ -179,6 +186,7 @@ DEFAULT_METHOD_ORDER = [
     'cloudpayments',
     'kassa_ai',
     'riopay',
+    'severpay',
 ]
 
 
