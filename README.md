@@ -165,6 +165,7 @@ docker compose up -d
 | 🐍 | Язык | Python 3.13, полностью async |
 | 🤖 | Telegram | aiogram 3.x |
 | 🗄 | База данных | PostgreSQL + SQLAlchemy 2.x + Alembic |
+| 🔴 | Кэш/очереди | Redis |
 | ⚡ | Web-сервер | FastAPI (webhook, платежи, Cabinet API) |
 | 📝 | Логирование | structlog |
 | 🐳 | Контейнеризация | Docker + Docker Compose |
