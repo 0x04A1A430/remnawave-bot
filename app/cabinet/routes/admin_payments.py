@@ -62,6 +62,7 @@ class PendingPaymentResponse(BaseModel):
     user_id: int | None = None
     user_telegram_id: int | None = None
     user_username: str | None = None
+    user_email: str | None = None
 
     class Config:
         from_attributes = True
@@ -285,6 +286,7 @@ def _record_to_response(record: PendingPayment) -> PendingPaymentResponse:
         user_id=record.user.id if record.user else None,
         user_telegram_id=record.user.telegram_id if record.user else None,
         user_username=record.user.username if record.user else None,
+        user_email=record.user.email if record.user else None,
     )
 
 
