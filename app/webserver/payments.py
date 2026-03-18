@@ -312,7 +312,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
 
             signature = request.headers.get('Crypto-Pay-API-Signature')
-            secret = settings.CRYPTOBOT_WEBHOOK_SECRET or settings.CRYPTOBOT_API_TOKEN
+            secret = settings.CRYPTOBOT_API_TOKEN
             if secret:
                 if not signature:
                     return JSONResponse(
@@ -682,6 +682,10 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
         async def platega_webhook(request: Request) -> JSONResponse:
             merchant_id = request.headers.get('X-MerchantId', '')
             secret = request.headers.get('X-Secret', '')
+            raw_body = await request.body()
+            if not merchant_id and not secret and not raw_body.strip():
+                logger.info('Platega webhook verification ping (no auth headers, empty body)')
+                return JSONResponse({'status': 'ok'})
             if merchant_id != (settings.PLATEGA_MERCHANT_ID or '') or secret != (settings.PLATEGA_SECRET or ''):
                 return JSONResponse(
                     {'status': 'error', 'reason': 'unauthorized'},

@@ -571,7 +571,7 @@ class BotConfigurationService:
             'format': 'Булево значение.',
             'example': 'Включите после указания токена API и секрета вебхука.',
             'warning': 'Пустой токен или неверный вебхук приведут к отказам платежей.',
-            'dependencies': 'CRYPTOBOT_API_TOKEN, CRYPTOBOT_WEBHOOK_SECRET',
+            'dependencies': 'CRYPTOBOT_API_TOKEN',
         },
         'PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED': {
             'description': (
