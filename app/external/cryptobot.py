@@ -16,7 +16,6 @@ class CryptoBotService:
     def __init__(self):
         self.api_token = settings.CRYPTOBOT_API_TOKEN
         self.base_url = settings.get_cryptobot_base_url()
-        self.webhook_secret = settings.CRYPTOBOT_WEBHOOK_SECRET
 
     async def _make_request(
         self,
@@ -123,37 +122,45 @@ class CryptoBotService:
         return await self._make_request('GET', 'getExchangeRates')
 
     def verify_webhook_signature(self, body: str, signature: str) -> bool:
-        # По документации CryptoBot, ключ — SHA256 от API токена
-        token = self.webhook_secret or self.api_token
+        # По документации CryptoBot, ключ ВСЕГДА SHA256 от API токена
+        token = self.api_token
         if not token:
-            logger.warning('CryptoBot webhook secret и API token не настроены')
+            logger.warning('CryptoBot API token не настроен, пропуск проверки подписи')
             return True
 
         try:
             secret_hash = hashlib.sha256(token.encode()).digest()
 
-            # 1. Raw body — CryptoBot скорее всего шлёт compact JSON
+            # 1. Raw body — CryptoBot шлёт compact JSON
             expected = hmac.new(secret_hash, body.encode('utf-8'), hashlib.sha256).hexdigest()
             if hmac.compare_digest(signature, expected):
-                logger.info('CryptoBot webhook подпись валидна')
+                logger.info('CryptoBot webhook подпись валидна (raw body)')
                 return True
 
-            # 2. Fallback: JSON.stringify(body) как в доке — re-serialize compact
+            # 2. Fallback: re-serialize compact JSON
             parsed = json.loads(body)
             check_string = json.dumps(parsed, separators=(',', ':'), ensure_ascii=False)
-            expected = hmac.new(secret_hash, check_string.encode('utf-8'), hashlib.sha256).hexdigest()
-            if hmac.compare_digest(signature, expected):
+            expected_reserialized = hmac.new(secret_hash, check_string.encode('utf-8'), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(signature, expected_reserialized):
                 logger.info('CryptoBot webhook подпись валидна (re-serialized)')
                 return True
 
-            # 3. Fallback: ensure_ascii=True (если CryptoBot эскейпит unicode)
+            # 3. Fallback: ensure_ascii=True
             check_string_ascii = json.dumps(parsed, separators=(',', ':'), ensure_ascii=True)
-            expected = hmac.new(secret_hash, check_string_ascii.encode('utf-8'), hashlib.sha256).hexdigest()
-            if hmac.compare_digest(signature, expected):
+            expected_ascii = hmac.new(secret_hash, check_string_ascii.encode('utf-8'), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(signature, expected_ascii):
                 logger.info('CryptoBot webhook подпись валидна (ascii-escaped)')
                 return True
 
-            logger.error('Неверная подпись CryptoBot webhook')
+            logger.error(
+                'Неверная подпись CryptoBot webhook',
+                received_signature=signature,
+                expected_raw=expected,
+                expected_reserialized=expected_reserialized,
+                body_length=len(body),
+                token_length=len(token),
+                token_prefix=token[:4] + '...',
+            )
             return False
 
         except Exception as e:

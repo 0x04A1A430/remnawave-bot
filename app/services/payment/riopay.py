@@ -126,7 +126,7 @@ class RioPayPaymentMixin:
                 user_id=user_id,
                 order_id=order_id,
                 amount_kopeks=amount_kopeks,
-                currency=currency,
+                currency=settings.RIOPAY_CURRENCY,
                 description=description,
                 payment_url=payment_url,
                 riopay_order_id=riopay_order_id,
@@ -140,7 +140,7 @@ class RioPayPaymentMixin:
                 order_id=order_id,
                 user_id=user_id,
                 amount_rubles=amount_rubles,
-                currency=currency,
+                currency=settings.RIOPAY_CURRENCY,
             )
 
             return {
@@ -148,7 +148,7 @@ class RioPayPaymentMixin:
                 'riopay_order_id': riopay_order_id,
                 'amount_kopeks': amount_kopeks,
                 'amount_rubles': amount_rubles,
-                'currency': currency,
+                'currency': settings.RIOPAY_CURRENCY,
                 'payment_url': payment_url,
                 'expires_at': expires_at.isoformat(),
                 'local_payment_id': local_payment.id,
