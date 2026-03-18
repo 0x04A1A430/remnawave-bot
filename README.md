@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".github/assets/logo.png" alt="Bedolaga Bot" width="400" />
+<img src=".github/assets/logo.png" alt="Bedolaga Bot" width="800" />
 
 # Bedolaga Bot
 
