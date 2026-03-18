@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import PaymentMethod, User
 from app.services.payment_search_service import (
+    MAX_ALL_TIME_DAYS,
     PeriodPreset,
     SearchParams,
     StatusFilter,
