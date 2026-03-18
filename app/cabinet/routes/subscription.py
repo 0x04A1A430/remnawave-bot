@@ -4107,7 +4107,7 @@ async def switch_tariff(
     # Update subscription
     old_tariff_name = current_tariff.name if current_tariff else 'Unknown'
 
-    # Preserve extra purchased devices above the old tariff's base limit
+    # Reset device limit to new tariff base (extra purchased devices are not carried over)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
     # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
