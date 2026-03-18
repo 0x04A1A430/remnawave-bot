@@ -1175,6 +1175,53 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # SeverPay webhook
+    if settings.is_severpay_enabled():
+
+        @router.get(settings.SEVERPAY_WEBHOOK_PATH)
+        async def severpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'severpay_webhook',
+                    'enabled': settings.is_severpay_enabled(),
+                }
+            )
+
+        @router.post(settings.SEVERPAY_WEBHOOK_PATH)
+        async def severpay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('SeverPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.severpay_service import severpay_service
+
+            if not severpay_service.verify_webhook_signature(raw_body):
+                logger.warning('SeverPay webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_403_FORBIDDEN)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_severpay_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'SeverPay webhook processing failed',
+                        data=payload.get('data'),
+                    )
+            except Exception as e:
+                logger.exception('SeverPay webhook processing error', error=e)
+            # Always return 200 {"status": true} — SeverPay retries on any non-200
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+
     if routes_registered:
 
         @router.get('/health/payment-webhooks')
@@ -1194,6 +1241,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'freekassa_enabled': settings.is_freekassa_enabled(),
                     'kassa_ai_enabled': settings.is_kassa_ai_enabled(),
                     'riopay_enabled': settings.is_riopay_enabled(),
+                    'severpay_enabled': settings.is_severpay_enabled(),
                 }
             )
 
