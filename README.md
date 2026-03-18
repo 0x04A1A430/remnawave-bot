@@ -114,7 +114,7 @@ Bedolaga — полнофункциональная платформа для п
 | 💳 | **Kassa AI** | СБП, карты, SberPay | RUB |
 | 💳 | **PayPalych (Pal24)** | Карты, СБП | RUB |
 | 💳 | **Platega** | Карты, СБП, крипто | RUB |
-| 💳 | **WATA** | Карты | RUB |
+| 💳 | **WATA** | СБП, Карты | RUB |
 | 💳 | **MulenPay** | Карты | RUB |
 | 💳 | **RioPay** | Карты | RUB |
 | 💳 | **SeverPay** | СБП, карты | RUB |
