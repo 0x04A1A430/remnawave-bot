@@ -11,7 +11,7 @@ from typing import Any
 import structlog
 from sqlalchemy import cast, desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import contains_eager, selectinload
+from sqlalchemy.orm import selectinload
 from sqlalchemy.types import String as SAString
 
 from app.database.models import (
@@ -225,7 +225,6 @@ def _apply_user_join_filter(
 ) -> Any:
     """Apply user-based search filters by joining the User table."""
     stmt = stmt.join(User, model.user_id == User.id)
-    stmt = stmt.options(contains_eager(model.user))
     if search_kind == _UserSearchKind.USERNAME:
         username = search_value.lstrip('@')
         stmt = stmt.where(User.username.ilike(f'%{_escape_like(username)}%'))
