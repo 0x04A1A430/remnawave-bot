@@ -30,16 +30,16 @@ from app.utils.timezone import format_local_datetime
 class NotificationCategory(StrEnum):
     """Категории уведомлений для маршрутизации по топикам."""
 
-    PURCHASES = 'purchases'           # Покупки подписок, покупки с лендинга
-    RENEWALS = 'renewals'             # Продления
-    TRIALS = 'trials'                 # Триалы
-    BALANCE = 'balance'               # Пополнение баланса
-    ADDONS = 'addons'                 # Докупка трафика/устройств/серверов
-    INFRASTRUCTURE = 'infrastructure' # Ноды, техработы, статус панели, вебхуки
-    ERRORS = 'errors'                 # Ошибки бота, краши
-    PROMO = 'promo'                   # Промокоды, кампании, промогруппы
-    PARTNERS = 'partners'             # Партнёрки, выводы, админ-действия
-    TICKETS = 'tickets'               # Тикеты (уже существует)
+    PURCHASES = 'purchases'  # Покупки подписок, покупки с лендинга
+    RENEWALS = 'renewals'  # Продления
+    TRIALS = 'trials'  # Триалы
+    BALANCE = 'balance'  # Пополнение баланса
+    ADDONS = 'addons'  # Докупка трафика/устройств/серверов
+    INFRASTRUCTURE = 'infrastructure'  # Ноды, техработы, статус панели, вебхуки
+    ERRORS = 'errors'  # Ошибки бота, краши
+    PROMO = 'promo'  # Промокоды, кампании, промогруппы
+    PARTNERS = 'partners'  # Партнёрки, выводы, админ-действия
+    TICKETS = 'tickets'  # Тикеты (уже существует)
 
 
 logger = structlog.get_logger(__name__)

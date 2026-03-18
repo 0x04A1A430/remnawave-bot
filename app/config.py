@@ -57,15 +57,15 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: int | None = None
 
     # Раздельные топики для уведомлений (если не задано — fallback на ADMIN_NOTIFICATIONS_TOPIC_ID)
-    ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID: int | None = None      # Покупки подписок
-    ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID: int | None = None       # Продления
-    ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID: int | None = None         # Триалы
-    ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID: int | None = None        # Пополнение баланса
-    ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID: int | None = None         # Докупка трафика/устройств/серверов
-    ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID: int | None = None # Ноды, техработы, статус панели
-    ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID: int | None = None         # Ошибки бота
-    ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID: int | None = None          # Промокоды, кампании, промогруппы
-    ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID: int | None = None       # Партнёрки, выводы, админ-действия
+    ADMIN_NOTIFICATIONS_PURCHASES_TOPIC_ID: int | None = None  # Покупки подписок
+    ADMIN_NOTIFICATIONS_RENEWALS_TOPIC_ID: int | None = None  # Продления
+    ADMIN_NOTIFICATIONS_TRIALS_TOPIC_ID: int | None = None  # Триалы
+    ADMIN_NOTIFICATIONS_BALANCE_TOPIC_ID: int | None = None  # Пополнение баланса
+    ADMIN_NOTIFICATIONS_ADDONS_TOPIC_ID: int | None = None  # Докупка трафика/устройств/серверов
+    ADMIN_NOTIFICATIONS_INFRASTRUCTURE_TOPIC_ID: int | None = None  # Ноды, техработы, статус панели
+    ADMIN_NOTIFICATIONS_ERRORS_TOPIC_ID: int | None = None  # Ошибки бота
+    ADMIN_NOTIFICATIONS_PROMO_TOPIC_ID: int | None = None  # Промокоды, кампании, промогруппы
+    ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID: int | None = None  # Партнёрки, выводы, админ-действия
 
     # Настройки очереди чеков NaloGO
     NALOGO_QUEUE_CHECK_INTERVAL: int = 300  # Интервал проверки очереди (секунды)

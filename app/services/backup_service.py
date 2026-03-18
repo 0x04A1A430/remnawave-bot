@@ -1813,7 +1813,9 @@ class BackupService:
                 from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 
                 admin_service = AdminNotificationService(self.bot)
-                await admin_service.send_admin_notification(notification_text, category=NotificationCategory.INFRASTRUCTURE)
+                await admin_service.send_admin_notification(
+                    notification_text, category=NotificationCategory.INFRASTRUCTURE
+                )
             except Exception as e:
                 logger.error('Ошибка отправки уведомления через AdminNotificationService', error=e)
 
