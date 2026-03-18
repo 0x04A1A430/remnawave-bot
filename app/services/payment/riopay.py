@@ -87,7 +87,6 @@ class RioPayPaymentMixin:
         # Генерируем уникальный order_id с telegram_id для удобного поиска
         order_id = f'rp{tg_id}_{uuid.uuid4().hex[:6]}'
         amount_rubles = amount_kopeks / 100
-        currency = settings.RIOPAY_CURRENCY
 
         # Срок действия платежа (1 час по умолчанию)
         expires_at = datetime.now(UTC) + timedelta(hours=1)
@@ -105,11 +104,9 @@ class RioPayPaymentMixin:
             # Используем API для создания заказа
             result = await riopay_service.create_order(
                 amount=amount_rubles,
-                currency=currency,
                 external_id=order_id,
                 purpose=description,
                 success_url=success_url or settings.RIOPAY_SUCCESS_URL,
-                fail_url=fail_url or settings.RIOPAY_FAIL_URL,
             )
 
             payment_url = result.get('paymentLink')
