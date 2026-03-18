@@ -124,6 +124,25 @@ Bedolaga — полнофункциональная платформа для п
 
 > Все провайдеры работают параллельно через единый веб-сервер на порту 8080. Подробная настройка — в [документации](https://docs.bedolagam.ru/bot/payments).
 
+<div align="center">
+<table>
+<tr>
+<td align="center">
+
+<img src=".github/assets/wata-logo.jpg" alt="WATA" width="60" />
+
+**🤝 Официальный партнёр WATA**
+
+Bedolaga — официальный партнёр платёжной системы **WATA**.<br>
+Пользователи бота получают **бесплатное подключение** по кодовому слову **`bedolaga`**
+
+📩 По вопросам: [@wyrz_wata](https://t.me/wyrz_wata)
+
+</td>
+</tr>
+</table>
+</div>
+
 ---
 
 ## 🚀 Быстрый старт
