@@ -153,6 +153,10 @@ docker compose up -d
 
 [![Cabinet](https://img.shields.io/badge/Репозиторий-Bedolaga_Cabinet-6366f1?style=for-the-badge&logo=react&logoColor=white)](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)
 
+<br>
+
+<img src=".github/assets/cabinet-preview.png" alt="Bedolaga Cabinet" width="700" />
+
 </div>
 
 Веб-кабинет на **React + TypeScript**, существенно расширяющий возможности бота:
