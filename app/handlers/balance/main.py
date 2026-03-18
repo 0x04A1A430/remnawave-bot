@@ -157,102 +157,6 @@ async def route_payment_by_method(
     return False
 
 
-async def get_quick_amount_buttons(language: str, user: User) -> list:
-    """
-    Generate quick amount buttons with user-specific pricing and discounts.
-
-    Uses PricingEngine as the single source of truth for all price calculations,
-    including base period price, devices, servers, traffic, and per-category discounts.
-
-    Args:
-        language: User's language for formatting
-        user: User object to calculate personalized discounts
-
-    Returns:
-        List of button rows for inline keyboard
-    """
-    if not settings.is_quick_amount_buttons_enabled():
-        return []
-
-    from app.database.crud.subscription import get_subscription_by_user_id
-    from app.database.database import AsyncSessionLocal
-    from app.services.pricing_engine import pricing_engine
-
-    texts = get_texts(language)
-
-    buttons = []
-
-    async with AsyncSessionLocal() as db:
-        subscription = await get_subscription_by_user_id(db, user.id)
-
-        tariff = None
-        tariff_periods = None
-        if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
-            tariff = subscription.tariff
-            if tariff and tariff.period_prices:
-                tariff_periods = sorted(int(k) for k in tariff.period_prices.keys())
-
-        if tariff_periods:
-            periods = tariff_periods[:6]
-        else:
-            periods = settings.get_available_subscription_periods()[:6]
-
-        for period in periods:
-            try:
-                if tariff and tariff_periods and period in tariff_periods:
-                    result = await pricing_engine.calculate_tariff_purchase_price(
-                        tariff,
-                        period,
-                        device_limit=subscription.device_limit if subscription else None,
-                        user=user,
-                    )
-                elif subscription:
-                    result = await pricing_engine.calculate_renewal_price(db, subscription, period, user=user)
-                else:
-                    result = await pricing_engine.calculate_classic_new_subscription_price(
-                        db,
-                        period,
-                        [],
-                        0,
-                        settings.DEFAULT_DEVICE_LIMIT,
-                        user=user,
-                    )
-
-                total_price = result.final_total
-                original_total = result.original_total
-
-                if total_price <= 0:
-                    continue
-
-                callback_data = f'quick_amount_{total_price}'
-                period_label = f'{period} дней'
-
-                has_discount = original_total > total_price and original_total > 0
-                if has_discount:
-                    discount_pct = round((original_total - total_price) * 100 / original_total)
-                    if discount_pct > 0:
-                        button_text = (
-                            f'{texts.format_price(original_total)} ➜ '
-                            f'{texts.format_price(total_price)} '
-                            f'(-{discount_pct}%) • {period_label}'
-                        )
-                    else:
-                        button_text = f'{texts.format_price(total_price)} • {period_label}'
-                else:
-                    button_text = f'{texts.format_price(total_price)} • {period_label}'
-
-                buttons.append(types.InlineKeyboardButton(text=button_text, callback_data=callback_data))
-            except Exception:
-                logger.warning('Failed to calculate price for period', period=period)
-                continue
-
-    keyboard_rows = []
-    for i in range(0, len(buttons), 2):
-        keyboard_rows.append(buttons[i : i + 2])
-
-    return keyboard_rows
-
-
 @error_handler
 async def show_balance_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Проверяем, доступно ли сообщение
@@ -379,9 +283,22 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     payment_text = get_payment_methods_text(db_user.language)
 
+    # Проверяем сохранённую корзину для автоподстановки суммы пополнения
+    amount_kopeks = 0
+    try:
+        from app.services.user_cart_service import user_cart_service
+
+        cart_data = await user_cart_service.get_user_cart(db_user.id)
+        if cart_data and cart_data.get('saved_cart'):
+            missing = cart_data.get('missing_amount', 0)
+            if missing > 0:
+                amount_kopeks = missing
+    except Exception:
+        pass
+
     full_text = payment_text
 
-    keyboard = get_payment_methods_keyboard(0, db_user.language)
+    keyboard = get_payment_methods_keyboard(amount_kopeks, db_user.language)
 
     # Если сообщение недоступно, отправляем новое
     if isinstance(callback.message, InaccessibleMessage):
@@ -628,37 +545,6 @@ async def handle_sbp_payment(callback: types.CallbackQuery, db: AsyncSession):
 
 
 @error_handler
-async def handle_quick_amount_selection(callback: types.CallbackQuery, db_user: User, state: FSMContext):
-    """
-    Обработчик выбора суммы через кнопки быстрого выбора
-    """
-    # Проверяем, что пользователь в правильном состоянии FSM
-    current_state = await state.get_state()
-    if current_state != BalanceStates.waiting_for_amount:
-        await callback.answer('❌ Сначала выберите способ оплаты', show_alert=True)
-        return
-
-    # Извлекаем сумму из callback_data
-    try:
-        amount_kopeks = int(callback.data.split('_')[-1])
-
-        # Получаем метод оплаты из состояния
-        data = await state.get_data()
-        payment_method = data.get('payment_method', 'yookassa')
-
-        # Роутим платеж на соответствующий обработчик
-        if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, payment_method):
-            await callback.answer('❌ Неизвестный способ оплаты', show_alert=True)
-            return
-
-    except ValueError:
-        await callback.answer('❌ Ошибка обработки суммы', show_alert=True)
-    except Exception as e:
-        logger.error('Ошибка обработки быстрого выбора суммы', error=e)
-        await callback.answer('❌ Ошибка обработки запроса', show_alert=True)
-
-
-@error_handler
 async def handle_topup_amount_callback(
     callback: types.CallbackQuery,
     db_user: User,
@@ -784,52 +670,37 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_heleket_payment, F.data == 'topup_heleket')
     dp.callback_query.register(check_heleket_payment_status, F.data.startswith('check_heleket_'))
 
-    from .cloudpayments import handle_cloudpayments_quick_amount, start_cloudpayments_payment
+    from .cloudpayments import start_cloudpayments_payment
 
     dp.callback_query.register(start_cloudpayments_payment, F.data == 'topup_cloudpayments')
-    dp.callback_query.register(handle_cloudpayments_quick_amount, F.data.startswith('topup_amount|cloudpayments|'))
 
     from .freekassa import (
-        process_freekassa_card_quick_amount,
-        process_freekassa_quick_amount,
-        process_freekassa_sbp_quick_amount,
         start_freekassa_card_topup,
         start_freekassa_sbp_topup,
         start_freekassa_topup,
     )
 
     dp.callback_query.register(start_freekassa_topup, F.data == 'topup_freekassa')
-    dp.callback_query.register(process_freekassa_quick_amount, F.data.startswith('topup_amount|freekassa|'))
     dp.callback_query.register(start_freekassa_sbp_topup, F.data == 'topup_freekassa_sbp')
-    dp.callback_query.register(process_freekassa_sbp_quick_amount, F.data.startswith('topup_amount|freekassa_sbp|'))
     dp.callback_query.register(start_freekassa_card_topup, F.data == 'topup_freekassa_card')
-    dp.callback_query.register(process_freekassa_card_quick_amount, F.data.startswith('topup_amount|freekassa_card|'))
 
     from .kassa_ai import (
-        process_kassa_ai_card_quick_amount,
-        process_kassa_ai_quick_amount,
-        process_kassa_ai_sbp_quick_amount,
         start_kassa_ai_card_topup,
         start_kassa_ai_sbp_topup,
         start_kassa_ai_topup,
     )
 
     dp.callback_query.register(start_kassa_ai_topup, F.data == 'topup_kassa_ai')
-    dp.callback_query.register(process_kassa_ai_quick_amount, F.data.startswith('topup_amount|kassa_ai|'))
     dp.callback_query.register(start_kassa_ai_sbp_topup, F.data == 'topup_kassa_ai_sbp')
-    dp.callback_query.register(process_kassa_ai_sbp_quick_amount, F.data.startswith('topup_amount|kassa_ai_sbp|'))
     dp.callback_query.register(start_kassa_ai_card_topup, F.data == 'topup_kassa_ai_card')
-    dp.callback_query.register(process_kassa_ai_card_quick_amount, F.data.startswith('topup_amount|kassa_ai_card|'))
 
-    from .riopay import process_riopay_quick_amount, start_riopay_topup
+    from .riopay import start_riopay_topup
 
     dp.callback_query.register(start_riopay_topup, F.data == 'topup_riopay')
-    dp.callback_query.register(process_riopay_quick_amount, F.data.startswith('topup_amount|riopay|'))
 
-    from .severpay import process_severpay_quick_amount, start_severpay_topup
+    from .severpay import start_severpay_topup
 
     dp.callback_query.register(start_severpay_topup, F.data == 'topup_severpay')
-    dp.callback_query.register(process_severpay_quick_amount, F.data.startswith('topup_amount|severpay|'))
 
     from .mulenpay import check_mulenpay_payment_status
 
@@ -848,9 +719,6 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(check_platega_payment_status, F.data.startswith('check_platega_'))
 
     dp.callback_query.register(handle_payment_methods_unavailable, F.data == 'payment_methods_unavailable')
-
-    # Регистрируем обработчик для кнопок быстрого выбора суммы
-    dp.callback_query.register(handle_quick_amount_selection, F.data.startswith('quick_amount_'))
 
     dp.callback_query.register(handle_topup_amount_callback, F.data.startswith('topup_amount|'))
 

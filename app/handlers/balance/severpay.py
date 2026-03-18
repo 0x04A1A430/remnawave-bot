@@ -136,7 +136,7 @@ async def process_severpay_payment_amount(
     state: FSMContext,
 ):
     """
-    Process payment amount directly (called from quick_amount handlers).
+    Process payment amount directly.
     """
     texts = get_texts(db_user.language)
 
@@ -242,76 +242,4 @@ async def start_severpay_topup(
         ),
         parse_mode='HTML',
         reply_markup=keyboard,
-    )
-
-
-@error_handler
-async def process_severpay_quick_amount(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    """
-    Process quick amount selection for SeverPay payment.
-    Called when user clicks a predefined amount button.
-    """
-    texts = get_texts(db_user.language)
-
-    if not settings.is_severpay_enabled():
-        await callback.answer(
-            texts.t('SEVERPAY_NOT_AVAILABLE', 'SeverPay временно недоступен'),
-            show_alert=True,
-        )
-        return
-
-    # Extract amount from callback data: topup_amount|severpay|{amount_kopeks}
-    try:
-        parts = callback.data.split('|')
-        if len(parts) >= 3:
-            amount_kopeks = int(parts[2])
-        else:
-            await callback.answer('Invalid callback data', show_alert=True)
-            return
-    except (ValueError, IndexError):
-        await callback.answer('Invalid amount', show_alert=True)
-        return
-
-    restriction_kb = _check_topup_restriction(db_user, texts)
-    if restriction_kb:
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
-        await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
-            parse_mode='HTML',
-            reply_markup=restriction_kb,
-        )
-        return
-
-    # Validate amount
-    min_amount = settings.SEVERPAY_MIN_AMOUNT_KOPEKS
-    max_amount = settings.SEVERPAY_MAX_AMOUNT_KOPEKS
-
-    if amount_kopeks < min_amount:
-        await callback.answer(
-            texts.t('AMOUNT_TOO_LOW_SHORT', 'Сумма слишком мала'),
-            show_alert=True,
-        )
-        return
-
-    if amount_kopeks > max_amount:
-        await callback.answer(
-            texts.t('AMOUNT_TOO_HIGH_SHORT', 'Сумма слишком велика'),
-            show_alert=True,
-        )
-        return
-
-    await callback.answer()
-    await state.clear()
-
-    await _create_severpay_payment_and_respond(
-        message_or_callback=callback.message,
-        db_user=db_user,
-        db=db,
-        amount_kopeks=amount_kopeks,
-        edit_message=True,
     )

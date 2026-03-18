@@ -312,7 +312,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
 
             signature = request.headers.get('Crypto-Pay-API-Signature')
-            secret = settings.CRYPTOBOT_WEBHOOK_SECRET
+            secret = settings.CRYPTOBOT_WEBHOOK_SECRET or settings.CRYPTOBOT_API_TOKEN
             if secret:
                 if not signature:
                     return JSONResponse(
