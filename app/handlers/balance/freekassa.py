@@ -370,5 +370,3 @@ async def process_freekassa_custom_amount(
         state=state,
         payment_method=data.get('payment_method'),
     )
-
-

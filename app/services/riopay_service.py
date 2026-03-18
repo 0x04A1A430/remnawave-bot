@@ -70,7 +70,6 @@ class RioPayService:
         external_id: str,
         purpose: str = 'Пополнение баланса',
         success_url: str | None = None,
-
     ) -> dict[str, Any]:
         """
         Создает заказ через API RioPay.

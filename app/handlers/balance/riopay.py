@@ -282,5 +282,3 @@ async def process_riopay_custom_amount(
         amount_kopeks=amount_kopeks,
         state=state,
     )
-
-

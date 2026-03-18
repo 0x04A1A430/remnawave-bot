@@ -243,5 +243,3 @@ async def start_severpay_topup(
         parse_mode='HTML',
         reply_markup=keyboard,
     )
-
-

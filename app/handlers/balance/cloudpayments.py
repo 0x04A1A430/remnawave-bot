@@ -375,5 +375,3 @@ async def process_cloudpayments_amount(
     )
 
     logger.info('CloudPayments payment created: user amount=₽', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
-
-

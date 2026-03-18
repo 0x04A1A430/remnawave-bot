@@ -654,9 +654,7 @@ class RemnaWaveWebhookService:
             changed = True
 
         # Sync subscription crypto link (for HAPP_CRYPT4_LINK)
-        subscription_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get(
-            'cryptoLink', ''
-        )
+        subscription_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get('cryptoLink', '')
         if subscription_crypto_link and self._is_valid_link(subscription_crypto_link):
             if subscription.subscription_crypto_link != subscription_crypto_link:
                 subscription.subscription_crypto_link = subscription_crypto_link
@@ -746,9 +744,7 @@ class RemnaWaveWebhookService:
     ) -> None:
         if subscription:
             new_url = data.get('subscriptionUrl')
-            new_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get(
-                'cryptoLink', ''
-            )
+            new_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get('cryptoLink', '')
             changed = False
 
             if new_url and self._is_valid_url(new_url) and subscription.subscription_url != new_url:
