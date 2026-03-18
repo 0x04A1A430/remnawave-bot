@@ -353,10 +353,8 @@ class Settings(BaseSettings):
     YOOKASSA_TRUSTED_PROXY_NETWORKS: str = ''
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
-    YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
     YOOKASSA_RECURRENT_ENABLED: bool = False
     YOOKASSA_RECURRENT_REQUIRED: bool = False
-    DISABLE_TOPUP_BUTTONS: bool = False
     SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
@@ -1253,10 +1251,6 @@ class Settings(BaseSettings):
             return normalized in {'1', 'true', 'yes', 'on'}
 
         return bool(value)
-
-    def is_quick_amount_buttons_enabled(self) -> bool:
-        """Кнопки быстрого выбора суммы пополнения отключены."""
-        return False
 
     def get_available_languages(self) -> list[str]:
         defaults = ['ru', 'en', 'ua', 'zh', 'fa']

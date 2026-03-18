@@ -65,13 +65,6 @@ async def start_mulenpay_payment(
 
     keyboard = get_back_keyboard(db_user.language)
 
-    if settings.is_quick_amount_buttons_enabled():
-        from .main import get_quick_amount_buttons
-
-        quick_amount_buttons = await get_quick_amount_buttons(db_user.language, db_user)
-        if quick_amount_buttons:
-            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
-
     await callback.message.edit_text(
         message_text,
         reply_markup=keyboard,

@@ -168,7 +168,7 @@ async def process_kassa_ai_payment_amount(
     state: FSMContext,
     payment_method: str = 'kassa_ai',
 ):
-    """Process payment amount directly (called from custom_amount and quick_amount handlers)."""
+    """Process payment amount directly (called from custom_amount handlers)."""
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на пополнение
@@ -275,54 +275,6 @@ async def _start_kassa_ai_sub_topup(
     )
 
 
-async def _process_kassa_ai_sub_quick_amount(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-    payment_method: str,
-):
-    """Generic quick amount handler for any KassaAI sub-method."""
-    cfg = _KASSA_AI_METHOD_CONFIG[payment_method]
-    texts = get_texts(db_user.language)
-
-    if not cfg['is_enabled']():
-        await callback.answer(texts.t('KASSA_AI_NOT_AVAILABLE', cfg['unavailable_text']), show_alert=True)
-        return
-
-    try:
-        parts = callback.data.split('|')
-        amount_kopeks = int(parts[2]) if len(parts) >= 3 else None
-        if amount_kopeks is None:
-            raise ValueError
-    except (ValueError, IndexError):
-        await callback.answer('Invalid amount', show_alert=True)
-        return
-
-    if await _check_topup_restriction(callback, db_user):
-        return
-
-    min_amount = settings.KASSA_AI_MIN_AMOUNT_KOPEKS
-    max_amount = settings.KASSA_AI_MAX_AMOUNT_KOPEKS
-    if amount_kopeks < min_amount:
-        await callback.answer(texts.t('AMOUNT_TOO_LOW_SHORT', 'Сумма слишком мала'), show_alert=True)
-        return
-    if amount_kopeks > max_amount:
-        await callback.answer(texts.t('AMOUNT_TOO_HIGH_SHORT', 'Сумма слишком велика'), show_alert=True)
-        return
-
-    await callback.answer()
-    await state.clear()
-    await _create_kassa_ai_payment_and_respond(
-        message_or_callback=callback.message,
-        db_user=db_user,
-        db=db,
-        amount_kopeks=amount_kopeks,
-        edit_message=True,
-        payment_method=payment_method,
-    )
-
-
 # --- Public handler functions (registered in main.py) ---
 
 
@@ -377,17 +329,6 @@ async def process_kassa_ai_custom_amount(
 
 
 @error_handler
-async def process_kassa_ai_quick_amount(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    """Process quick amount selection for KassaAI payment."""
-    await _process_kassa_ai_sub_quick_amount(callback, db_user, db, state, 'kassa_ai')
-
-
-@error_handler
 async def start_kassa_ai_sbp_topup(
     callback: types.CallbackQuery,
     db_user: User,
@@ -396,17 +337,6 @@ async def start_kassa_ai_sbp_topup(
 ):
     """Start KassaAI SBP top-up process."""
     await _start_kassa_ai_sub_topup(callback, db_user, db, state, 'kassa_ai_sbp')
-
-
-@error_handler
-async def process_kassa_ai_sbp_quick_amount(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    """Process quick amount for KassaAI SBP."""
-    await _process_kassa_ai_sub_quick_amount(callback, db_user, db, state, 'kassa_ai_sbp')
 
 
 @error_handler
@@ -420,12 +350,3 @@ async def start_kassa_ai_card_topup(
     await _start_kassa_ai_sub_topup(callback, db_user, db, state, 'kassa_ai_card')
 
 
-@error_handler
-async def process_kassa_ai_card_quick_amount(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    state: FSMContext,
-):
-    """Process quick amount for KassaAI Card."""
-    await _process_kassa_ai_sub_quick_amount(callback, db_user, db, state, 'kassa_ai_card')
