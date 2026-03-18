@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.34.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.33.0...v3.34.0) (2026-03-18)
+
+
+### New Features
+
+* добавлен SeverPay в админ-панель и настройки кабинета ([06a00e3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/06a00e367c303b5426008f38a20393ec4f2e07cd))
+* добавлена интеграция SeverPay для пополнения баланса ([abaf279](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/abaf279533d31994a8a70346627c962b43000c64))
+* поиск платежей в админ-панели с фильтрами и статистикой ([1804c28](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1804c28f0551fbe52883fc36fc4cfcd60d2d6bd6))
+
+
+### Bug Fixes
+
+* remove contains_eager conflicting with selectinload on user relationship ([fddf8ef](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fddf8ef5ebc8e5176a75a10e92d59165bdabf2e1))
+* добавлен импорт MAX_ALL_TIME_DAYS в admin_payments routes ([ad26832](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ad268329be45bdd665ce4a6f142e9762a78e55b5))
+* добавлены RioPay и SeverPay в REAL_PAYMENT_METHODS ([f967c29](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f967c29bd7cfe8a66e7e0f492573bb7521fcda22))
+
 ## [3.33.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.32.4...v3.33.0) (2026-03-17)
 
 
