@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.transaction import REAL_PAYMENT_METHODS
 from app.database.models import (
+    PaymentMethod,
     Subscription,
     SubscriptionConversion,
     SubscriptionStatus,
@@ -87,6 +88,7 @@ class SalesSummary(BaseModel):
     """Summary stats for the top cards."""
 
     total_revenue_kopeks: int
+    manual_topup_kopeks: int
     active_subscriptions: int
     active_trials: int
     new_trials: int
@@ -123,6 +125,20 @@ async def get_sales_summary(
             )
         )
         total_revenue = revenue_result.scalar() or 0
+
+        # Manual top-ups by admins
+        manual_topup_result = await db.execute(
+            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+                and_(
+                    Transaction.type == TransactionType.DEPOSIT.value,
+                    Transaction.is_completed == True,
+                    Transaction.payment_method == PaymentMethod.MANUAL.value,
+                    Transaction.created_at >= period_start,
+                    Transaction.created_at <= period_end,
+                )
+            )
+        )
+        manual_topup = manual_topup_result.scalar() or 0
 
         # Consolidated subscription counts: active paid, active trial, new trials in period
         sub_counts_result = await db.execute(
@@ -243,7 +259,8 @@ async def get_sales_summary(
         addon_revenue = abs(addon_revenue_result.scalar() or 0)
 
         return SalesSummary(
-            total_revenue_kopeks=total_revenue,
+            total_revenue_kopeks=total_revenue + manual_topup,
+            manual_topup_kopeks=manual_topup,
             active_subscriptions=active_subs,
             active_trials=active_trials,
             new_trials=new_trials,
@@ -1060,10 +1077,11 @@ async def get_deposits_stats(
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
+        methods_with_manual = [*REAL_PAYMENT_METHODS, PaymentMethod.MANUAL.value]
         base_filter = and_(
             Transaction.type == TransactionType.DEPOSIT.value,
             Transaction.is_completed == True,
-            Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
+            Transaction.payment_method.in_(methods_with_manual),
             Transaction.created_at >= period_start,
             Transaction.created_at <= period_end,
         )
@@ -1114,7 +1132,7 @@ async def get_deposits_stats(
         ]
 
         # Daily deposits grouped by payment method
-        # base_filter already excludes NULLs via .in_(REAL_PAYMENT_METHODS), no coalesce needed
+        # base_filter already excludes NULLs via .in_(methods_with_manual), no coalesce needed
         daily_by_method_query = await db.execute(
             select(
                 func.date(Transaction.created_at).label('date'),
