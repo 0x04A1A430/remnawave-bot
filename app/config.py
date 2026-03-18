@@ -553,6 +553,18 @@ class Settings(BaseSettings):
     RIOPAY_SUCCESS_URL: str | None = None
     RIOPAY_FAIL_URL: str | None = None
 
+    # SeverPay (severpay.io)
+    SEVERPAY_ENABLED: bool = False
+    SEVERPAY_MID: int | None = None  # Merchant ID
+    SEVERPAY_TOKEN: str | None = None  # Secret token for HMAC-SHA256
+    SEVERPAY_DISPLAY_NAME: str = 'SeverPay'
+    SEVERPAY_CURRENCY: str = 'RUB'
+    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    SEVERPAY_WEBHOOK_PATH: str = '/severpay-webhook'
+    SEVERPAY_RETURN_URL: str | None = None
+    SEVERPAY_LIFETIME: int = 1440  # minutes, 30-4320
+
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
@@ -1854,6 +1866,16 @@ class Settings(BaseSettings):
 
     def get_riopay_display_name_html(self) -> str:
         return html.escape(self.get_riopay_display_name())
+
+    def is_severpay_enabled(self) -> bool:
+        return self.SEVERPAY_ENABLED and self.SEVERPAY_MID is not None and self.SEVERPAY_TOKEN is not None
+
+    def get_severpay_display_name(self) -> str:
+        name = (self.SEVERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'SeverPay'
+
+    def get_severpay_display_name_html(self) -> str:
+        return html.escape(self.get_severpay_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()

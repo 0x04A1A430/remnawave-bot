@@ -34,6 +34,7 @@ from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
 from app.services.payment.freekassa import FreekassaPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
+from app.services.payment.severpay import SeverPayPaymentMixin
 from app.services.platega_service import PlategaService
 from app.services.wata_service import WataService
 from app.services.yookassa_service import YooKassaService
@@ -296,6 +297,41 @@ async def update_cloudpayments_payment(*args, **kwargs):
     return await cloudpayments_crud.update_cloudpayments_payment(*args, **kwargs)
 
 
+async def create_severpay_payment(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.create_severpay_payment(*args, **kwargs)
+
+
+async def get_severpay_payment_by_order_id(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.get_severpay_payment_by_order_id(*args, **kwargs)
+
+
+async def get_severpay_payment_by_severpay_id(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.get_severpay_payment_by_severpay_id(*args, **kwargs)
+
+
+async def get_severpay_payment_by_id(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.get_severpay_payment_by_id(*args, **kwargs)
+
+
+async def get_severpay_payment_by_id_for_update(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.get_severpay_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_severpay_payment_status(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.update_severpay_payment_status(*args, **kwargs)
+
+
+async def link_severpay_payment_to_transaction(*args, **kwargs):
+    severpay_crud = import_module('app.database.crud.severpay')
+    return await severpay_crud.link_severpay_payment_to_transaction(*args, **kwargs)
+
+
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
@@ -318,6 +354,7 @@ class PaymentService(
     FreekassaPaymentMixin,
     KassaAiPaymentMixin,
     RioPayPaymentMixin,
+    SeverPayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -712,6 +749,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('riopay_order_id') or result.get('order_id'),
                     'provider': 'riopay',
+                }
+            return None
+
+        # --- SeverPay ---------------------------------------------------------
+        if payment_method == 'severpay':
+            if not settings.is_severpay_enabled():
+                logger.warning('SeverPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_severpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'severpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('severpay_id') or result.get('order_id'),
+                    'provider': 'severpay',
                 }
             return None
 
