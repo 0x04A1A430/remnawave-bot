@@ -168,11 +168,9 @@ async def show_main_menu(
     db_user.last_activity = datetime.now(UTC)
     await db.commit()
 
-    has_active_subscription = bool(db_user.subscription and db_user.subscription.is_active)
-    subscription_is_active = False
-
-    if db_user.subscription:
-        subscription_is_active = db_user.subscription.is_active
+    # Multi-tariff aware: check if user has ANY active subscription
+    has_active_subscription = any(sub.is_active for sub in (getattr(db_user, 'subscriptions', None) or []))
+    subscription_is_active = has_active_subscription
 
     menu_text = await get_main_menu_text(db_user, texts, db)
 
@@ -1014,11 +1012,9 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
 
     texts = get_texts(db_user.language)
 
-    has_active_subscription = bool(db_user.subscription and db_user.subscription.is_active)
-    subscription_is_active = False
-
-    if db_user.subscription:
-        subscription_is_active = db_user.subscription.is_active
+    # Multi-tariff aware: check if user has ANY active subscription
+    has_active_subscription = any(sub.is_active for sub in (getattr(db_user, 'subscriptions', None) or []))
+    subscription_is_active = has_active_subscription
 
     menu_text = await get_main_menu_text(db_user, texts, db)
 
@@ -1258,7 +1254,13 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
     from app.services.subscription_renewal_service import SubscriptionRenewalService
     from app.services.subscription_service import SubscriptionService
 
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
 
     # Если подписка активна — ничего не делаем
     if subscription and subscription.status == 'ACTIVE' and subscription.end_date > datetime.now(UTC):

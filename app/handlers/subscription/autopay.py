@@ -8,7 +8,7 @@ from app.database.crud.saved_payment_method import (
     deactivate_payment_method,
     get_active_payment_methods_by_user,
 )
-from app.database.crud.subscription import update_subscription_autopay
+from app.database.crud.subscription import get_subscription_by_id_for_user, update_subscription_autopay
 from app.database.models import User
 from app.keyboards.inline import (
     _get_payment_method_display_name,
@@ -37,9 +37,33 @@ from .countries import (
 from .pricing import _build_subscription_period_prompt
 
 
+async def _resolve_subscription(callback, db_user, db):
+    """Resolve subscription from callback_data (multi-tariff) or db_user (legacy)."""
+    if settings.is_multi_tariff_enabled():
+        parts = (callback.data or '').split(':')
+        if len(parts) >= 2:
+            try:
+                sub_id = int(parts[-1])
+                sub = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+                if not sub:
+                    await callback.answer('Подписка не найдена', show_alert=True)
+                    return None, None
+                return sub, sub_id
+            except (ValueError, TypeError):
+                pass
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        if len(subs) == 1:
+            return subs[0], subs[0].id
+        await callback.answer('Выберите подписку', show_alert=True)
+        return None, None
+    return db_user.subscription, getattr(db_user.subscription, 'id', None)
+
+
 async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
     if not subscription:
         await callback.answer(
             texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
@@ -88,8 +112,10 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
 
 
 async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    subscription = db_user.subscription
-    enable = callback.data == 'autopay_enable'
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
+    enable = callback.data.startswith('autopay_enable')
 
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
     # глобальный autopay для них запрещён
@@ -137,8 +163,11 @@ async def show_autopay_days(callback: types.CallbackQuery, db_user: User):
 
 
 async def set_autopay_days(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    days = int(callback.data.split('_')[2])
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
+    base_data = callback.data.split(':')[0]
+    days = int(base_data.split('_')[2])
 
     await update_subscription_autopay(db, subscription, subscription.autopay_enabled, days)
 

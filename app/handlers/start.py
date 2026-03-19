@@ -132,6 +132,164 @@ async def _activate_pending_gift_after_registration(
         )
 
 
+async def _claim_phantom_user(
+    db: AsyncSession,
+    phantom: 'User',
+    *,
+    telegram_id: int,
+    username: str | None,
+    first_name: str | None,
+    last_name: str | None,
+    language: str,
+    referrer_id: int | None,
+) -> tuple[bool, 'User | None']:
+    """Claim a phantom user by backfilling Telegram profile data.
+
+    Returns (success, user). On IntegrityError falls back to existing user lookup.
+
+    Note: Phantom users created when Bot.get_chat() fails at purchase time are matched
+    by username only. Since Telegram usernames are changeable and reassignable, this is
+    inherently vulnerable to username change attacks. When Bot.get_chat() succeeds at
+    purchase time, telegram_id is stored on the user and the phantom path is not used.
+    """
+    from app.utils.validators import sanitize_telegram_name
+
+    phantom.telegram_id = telegram_id
+    phantom.username = username
+    phantom.first_name = sanitize_telegram_name(first_name)
+    phantom.last_name = sanitize_telegram_name(last_name)
+    phantom.language = language
+    phantom.status = UserStatus.ACTIVE.value
+    if referrer_id and referrer_id != phantom.id:
+        phantom.referred_by_id = referrer_id
+    if not phantom.referral_code:
+        phantom.referral_code = await generate_unique_referral_code(db, telegram_id)
+    phantom.updated_at = datetime.now(UTC)
+    phantom.last_activity = datetime.now(UTC)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.warning(
+            'IntegrityError claiming phantom user, falling back to existing user lookup',
+            phantom_user_id=phantom.id,
+            telegram_id=telegram_id,
+        )
+        existing = await get_user_by_telegram_id(db, telegram_id)
+        return False, existing
+    await db.refresh(phantom, ['subscription'])
+    # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
+    # Telegram usernames are changeable/reassignable, so the claimer may not be the intended
+    # recipient. This is logged at WARNING for admin audit. A confirmation flow would be needed
+    # to fully prevent username spoofing attacks on phantom claims.
+    logger.warning(
+        'Phantom user claimed by username match (verify intended recipient)',
+        phantom_user_id=phantom.id,
+        telegram_id=telegram_id,
+        username=username,
+        has_subscription=phantom.subscription is not None,
+    )
+
+    # Sync Remnawave panel with updated user data (telegram_id, username, etc.)
+    phantom_subs = getattr(phantom, 'subscriptions', None) or []
+    for phantom_sub in phantom_subs:
+        try:
+            subscription_service = SubscriptionService()
+            await subscription_service.update_remnawave_user(db, phantom_sub)
+        except Exception as exc:
+            logger.warning(
+                'Failed to update Remnawave panel after phantom claim',
+                phantom_user_id=phantom.id,
+                subscription_id=phantom_sub.id,
+                error=str(exc),
+            )
+
+    return True, phantom
+
+
+async def _merge_phantom_into_active_user(
+    db: AsyncSession,
+    phantom: 'User',
+    active_user: 'User',
+) -> None:
+    """Merge a phantom user (created by guest landing purchase) into an existing active user.
+
+    Transfers GuestPurchase records and handles subscription conflict.
+    The phantom is soft-deleted (status=DELETED, username cleared) to preserve
+    audit trail and avoid CASCADE deletion of payment/transaction records.
+    """
+    from sqlalchemy import update
+
+    logger.warning(
+        'Merging phantom user into active user (audit: username-only match)',
+        phantom_id=phantom.id,
+        active_user_id=active_user.id,
+        active_user_telegram_id=active_user.telegram_id,
+        phantom_username=phantom.username,
+    )
+
+    # Transfer GuestPurchase.user_id references
+    await db.execute(update(GuestPurchase).where(GuestPurchase.user_id == phantom.id).values(user_id=active_user.id))
+
+    # Transfer GuestPurchase.buyer_user_id references
+    await db.execute(
+        update(GuestPurchase).where(GuestPurchase.buyer_user_id == phantom.id).values(buyer_user_id=active_user.id)
+    )
+
+    # Transfer balance
+    if phantom.balance_kopeks and phantom.balance_kopeks > 0:
+        active_user.balance_kopeks = (active_user.balance_kopeks or 0) + phantom.balance_kopeks
+        logger.info('Transferred balance from phantom', amount_kopeks=phantom.balance_kopeks)
+
+    # Handle subscriptions
+    await db.refresh(phantom, ['subscriptions'])
+    await db.refresh(active_user, ['subscriptions'])
+
+    phantom_subs = getattr(phantom, 'subscriptions', None) or []
+    active_user_subs = getattr(active_user, 'subscriptions', None) or []
+
+    if phantom_subs and not active_user_subs:
+        # Transfer ALL subscriptions from phantom to active user
+        for sub in phantom_subs:
+            sub.user_id = active_user.id
+        # Transfer remnawave_uuid (clear first to avoid unique constraint violation on flush)
+        if phantom.remnawave_uuid and not active_user.remnawave_uuid:
+            uuid_to_transfer = phantom.remnawave_uuid
+            phantom.remnawave_uuid = None
+            await db.flush()
+            active_user.remnawave_uuid = uuid_to_transfer
+        await db.flush()
+        logger.info(
+            'Transferred subscriptions from phantom to active user',
+            subscription_ids=[sub.id for sub in phantom_subs],
+        )
+    elif phantom_subs:
+        # Both have subscriptions — disable phantom's Remnawave user and free server slots
+        logger.warning(
+            'Both phantom and active user have subscriptions, disabling phantom',
+            phantom_subscription_ids=[sub.id for sub in phantom_subs],
+            active_subscription_ids=[sub.id for sub in active_user_subs],
+        )
+        if phantom.remnawave_uuid:
+            try:
+                subscription_service = SubscriptionService()
+                await subscription_service.disable_remnawave_user(phantom.remnawave_uuid)
+            except Exception as exc:
+                logger.warning('Failed to disable phantom Remnawave user', error=str(exc))
+        for sub in phantom_subs:
+            await decrement_subscription_server_counts(db, sub)
+
+    # Soft-delete phantom: clear unique identifiers to prevent future matches
+    # and constraint violations. Preserve record for audit trail.
+    phantom.status = UserStatus.DELETED.value
+    phantom.username = None
+    phantom.remnawave_uuid = None
+    phantom.referral_code = None
+    await db.flush()
+
+    logger.info('Phantom user merged and soft-deleted', phantom_id=phantom.id, active_user_id=active_user.id)
+
+
 def _calculate_subscription_flags(subscription):
     if not subscription:
         return False, False
@@ -632,10 +790,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         if user:
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
             await state.update_data(pending_gift_token=None)
-            # Refresh user to pick up newly created subscription
-            await db.refresh(user, attribute_names=['subscription'])
+            # Refresh user to pick up newly created subscriptions
+            await db.refresh(user, attribute_names=['subscriptions'])
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
+        user_subs_for_flags = getattr(user, 'subscriptions', None) or []
+        first_sub_for_flags = next(
+            (s for s in user_subs_for_flags if s.is_active), user_subs_for_flags[0] if user_subs_for_flags else None
+        )
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_for_flags)
 
         pinned_message = await get_active_pinned_message(db)
 
@@ -656,6 +818,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 subscription_is_active=subscription_is_active,
             )
 
+        user_subs = getattr(user, 'subscriptions', None) or []
+        first_sub = next((s for s in user_subs if s.is_active), user_subs[0] if user_subs else None)
         keyboard = await get_main_menu_keyboard_async(
             db=db,
             user=user,
@@ -665,7 +829,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
             balance_kopeks=user.balance_kopeks,
-            subscription=user.subscription,
+            subscription=first_sub,
             is_moderator=is_moderator,
             custom_buttons=custom_buttons,
         )
@@ -699,16 +863,15 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 YooKassaPayment,
             )
 
-            if user.subscription:
-                await decrement_subscription_server_counts(db, user.subscription)
-                await db.execute(
-                    delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
-                )
-                logger.info('🗑️ Удалены записи SubscriptionServer')
+            user_subs = getattr(user, 'subscriptions', None) or []
+            for sub in user_subs:
+                await decrement_subscription_server_counts(db, sub)
+                await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
+                logger.info('Deleted SubscriptionServer records', subscription_id=sub.id)
 
-            if user.subscription:
-                await db.delete(user.subscription)
-                logger.info('🗑️ Удалена подписка пользователя')
+            for sub in user_subs:
+                await db.delete(sub)
+                logger.info('Deleted user subscription', subscription_id=sub.id)
 
             await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
 
@@ -1281,9 +1444,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 )
             )
 
-        await db.refresh(existing_user, ['subscription'])
+        await db.refresh(existing_user, ['subscriptions'])
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(existing_user.subscription)
+        existing_user_subs = getattr(existing_user, 'subscriptions', None) or []
+        first_existing_sub = next(
+            (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
+        )
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_existing_sub)
 
         menu_text = await get_main_menu_text(existing_user, texts, db)
 
@@ -1310,7 +1477,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=existing_user.balance_kopeks,
-                subscription=existing_user.subscription,
+                subscription=first_existing_sub,
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
@@ -1530,9 +1697,9 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             telegram_id=user.telegram_id,
         )
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
-            getattr(user, 'subscription', None)
-        )
+        user_subs_menu = getattr(user, 'subscriptions', None) or []
+        first_sub_menu = next((s for s in user_subs_menu if s.is_active), user_subs_menu[0] if user_subs_menu else None)
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_menu)
 
         menu_text = await get_main_menu_text(user, texts, db)
 
@@ -1558,7 +1725,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,
+                subscription=first_sub_menu,
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
@@ -1598,9 +1765,13 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 )
             )
 
-        await db.refresh(existing_user, ['subscription'])
+        await db.refresh(existing_user, ['subscriptions'])
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(existing_user.subscription)
+        existing_user_subs = getattr(existing_user, 'subscriptions', None) or []
+        first_existing_sub = next(
+            (s for s in existing_user_subs if s.is_active), existing_user_subs[0] if existing_user_subs else None
+        )
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_existing_sub)
 
         menu_text = await get_main_menu_text(existing_user, texts, db)
 
@@ -1627,7 +1798,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=existing_user.balance_kopeks,
-                subscription=existing_user.subscription,
+                subscription=first_existing_sub,
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
@@ -1843,7 +2014,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     if offer_text:
         try:
             # Если у пользователя уже есть подписка (например, от промокода), не предлагаем триал
-            user_has_subscription = user.subscription and getattr(user.subscription, 'is_active', False)
+            _subs = getattr(user, 'subscriptions', None) or []
+            user_has_subscription = any(s.is_active for s in _subs)
             if user_has_subscription:
                 keyboard = get_back_keyboard(user.language, callback_data='back_to_menu')
             else:
@@ -1881,9 +2053,9 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             telegram_id=user.telegram_id,
         )
 
-        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
-            getattr(user, 'subscription', None)
-        )
+        user_subs_menu = getattr(user, 'subscriptions', None) or []
+        first_sub_menu = next((s for s in user_subs_menu if s.is_active), user_subs_menu[0] if user_subs_menu else None)
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_menu)
 
         menu_text = await get_main_menu_text(user, texts, db)
 
@@ -1909,7 +2081,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,
+                subscription=first_sub_menu,
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
@@ -1932,10 +2104,12 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
 
 def _get_subscription_status(user, texts):
-    if not user or not hasattr(user, 'subscription') or not user.subscription:
+    _subs = getattr(user, 'subscriptions', None) or [] if user else []
+    _first_sub = next((s for s in _subs if s.is_active), _subs[0] if _subs else None)
+    if not user or not _first_sub:
         return texts.t('SUBSCRIPTION_NONE', 'Нет активной подписки')
 
-    subscription = user.subscription
+    subscription = _first_sub
     actual_status = getattr(subscription, 'actual_status', None)
 
     end_date = getattr(subscription, 'end_date', None)
@@ -2197,30 +2371,34 @@ async def required_sub_channel_check(
 
             await state.set_data(state_data)
 
-        if user and user.subscription:
-            subscription = user.subscription
+        _subs = getattr(user, 'subscriptions', None) or [] if user else []
+        _restored = False
+        for subscription in _subs:
             if subscription.is_trial and subscription.status == SubscriptionStatus.DISABLED.value:
                 subscription.status = SubscriptionStatus.ACTIVE.value
                 subscription.updated_at = datetime.now(UTC)
-                await db.commit()
-                await db.refresh(subscription)
-                logger.info(
-                    '✅ Триальная подписка пользователя восстановлена после подтверждения подписки на канал',
-                    telegram_id=user.telegram_id,
+                _restored = True
+        if _restored:
+            await db.commit()
+            logger.info(
+                '✅ Триальная подписка пользователя восстановлена после подтверждения подписки на канал',
+                telegram_id=user.telegram_id,
+            )
+            try:
+                subscription_service = SubscriptionService()
+                for sub in _subs:
+                    if sub.is_trial and sub.status == SubscriptionStatus.ACTIVE.value:
+                        remnawave_uuid = getattr(sub, 'remnawave_uuid', None) or user.remnawave_uuid
+                        if remnawave_uuid:
+                            await subscription_service.update_remnawave_user(db, sub)
+                        else:
+                            await subscription_service.create_remnawave_user(db, sub)
+            except Exception as api_error:
+                logger.error(
+                    '❌ Ошибка обновления RemnaWave при восстановлении подписки пользователя',
+                    telegram_id=user.telegram_id if user else query.from_user.id,
+                    api_error=api_error,
                 )
-
-                try:
-                    subscription_service = SubscriptionService()
-                    if user.remnawave_uuid:
-                        await subscription_service.update_remnawave_user(db, subscription)
-                    else:
-                        await subscription_service.create_remnawave_user(db, subscription)
-                except Exception as api_error:
-                    logger.error(
-                        '❌ Ошибка обновления RemnaWave при восстановлении подписки пользователя',
-                        telegram_id=user.telegram_id if user else query.from_user.id,
-                        api_error=api_error,
-                    )
 
         await query.answer(
             texts.t('CHANNEL_SUBSCRIBE_THANKS', '✅ Спасибо за подписку'),

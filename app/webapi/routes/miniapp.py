@@ -4745,8 +4745,13 @@ def _ensure_paid_subscription(
     user: User,
     *,
     allowed_statuses: Collection[str] | None = None,
+    subscription_id: int | None = None,
 ) -> Subscription:
-    subscription = getattr(user, 'subscription', None)
+    subs = getattr(user, 'subscriptions', None) or []
+    if subscription_id:
+        subscription = next((s for s in subs if s.id == subscription_id), None)
+    else:
+        subscription = next((s for s in subs if getattr(s, 'is_active', False)), None)
     if not subscription:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
@@ -6763,7 +6768,11 @@ async def switch_tariff_endpoint(
             detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
-    subscription = getattr(user, 'subscription', None)
+    subs = getattr(user, 'subscriptions', None) or []
+    if payload.subscription_id:
+        subscription = next((s for s in subs if s.id == payload.subscription_id), None)
+    else:
+        subscription = next((s for s in subs if s.is_active and s.tariff_id), None)
     if not subscription or not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -6778,7 +6787,6 @@ async def switch_tariff_endpoint(
         .execution_options(populate_existing=True)
     )
     subscription = locked_result.scalar_one()
-    user.subscription = subscription
 
     if subscription.status not in ('active', 'trial'):
         raise HTTPException(
@@ -7195,7 +7203,11 @@ async def toggle_daily_subscription_pause_endpoint(
     from app.webapi.schemas.miniapp import MiniAppDailySubscriptionToggleResponse
 
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = user.subscription
+    subs = getattr(user, 'subscriptions', None) or []
+    if payload.subscription_id:
+        subscription = next((s for s in subs if s.id == payload.subscription_id), None)
+    else:
+        subscription = next((s for s in subs if s.tariff_id), None)
 
     if not subscription:
         raise HTTPException(

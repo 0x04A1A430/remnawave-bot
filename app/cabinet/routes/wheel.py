@@ -48,10 +48,17 @@ async def get_wheel_config(
     # Проверяем доступность
     availability = await wheel_service.check_availability(db, user)
 
-    # Проверяем наличие подписки
-    from app.database.crud.subscription import get_subscription_by_user_id
+    # Проверяем наличие подписки (multi-tariff aware)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        # Check if user has any active subscription for wheel access
+        subscription = active_subs[0] if active_subs else None
+    else:
+        from app.database.crud.subscription import get_subscription_by_user_id
+
+        subscription = await get_subscription_by_user_id(db, user.id)
     has_subscription = subscription is not None and subscription.is_active
 
     prizes_display = [
@@ -218,10 +225,17 @@ async def create_stars_invoice(
             detail='Оплата Stars не включена',
         )
 
-    # Проверяем наличие активной подписки
-    from app.database.crud.subscription import get_subscription_by_user_id
+    # Проверяем наличие активной подписки (multi-tariff aware)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        # Check if user has any active subscription for Stars invoice
+        subscription = active_subs[0] if active_subs else None
+    else:
+        from app.database.crud.subscription import get_subscription_by_user_id
+
+        subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription or not subscription.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

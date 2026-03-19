@@ -113,7 +113,14 @@ class FortuneWheelService:
                 can_pay_stars = True
 
         if config.spin_cost_days_enabled:
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Wheel doesn't have subscription picker; use first active sub as reasonable default
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user.id)
             if subscription and subscription.is_active:
                 user_subscription_days = subscription.days_left
                 # Нужно оставить минимум min_subscription_days_for_day_payment дней после оплаты
@@ -299,7 +306,14 @@ class FortuneWheelService:
         Обработать оплату днями подписки.
         Возвращает эквивалент в копейках.
         """
-        subscription = await get_subscription_by_user_id(db, user.id)
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            # Wheel days payment: use first active sub (wheel has no subscription picker)
+            subscription = active_subs[0] if active_subs else None
+        else:
+            subscription = await get_subscription_by_user_id(db, user.id)
 
         if not subscription or not subscription.is_active:
             raise ValueError('Нет активной подписки')
@@ -361,7 +375,14 @@ class FortuneWheelService:
 
         if prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value:
             # Дни подписки
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Prize applies to first active sub (wheel has no subscription picker)
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user.id)
             if subscription:
                 # Проверяем суточный тариф - для него конвертируем дни в баланс
                 is_daily = getattr(subscription, 'is_daily', False) or (
@@ -426,7 +447,14 @@ class FortuneWheelService:
 
         if prize_type == WheelPrizeType.TRAFFIC_GB.value:
             # Бонусный трафик
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Traffic prize applies to first active sub (wheel has no subscription picker)
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user.id)
             if subscription and subscription.traffic_limit_gb > 0:
                 subscription.traffic_limit_gb += prize.prize_value
                 subscription.updated_at = datetime.now(UTC)

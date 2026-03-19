@@ -97,3 +97,7 @@ class UserSubscriptionCreateRequest(BaseModel):
     squad_uuid: str | None = None
     connected_squads: list[str] | None = None
     replace_existing: bool = False
+    subscription_id: int | None = Field(
+        default=None,
+        description='ID of existing subscription to replace (required in multi-tariff mode when replace_existing=true)',
+    )

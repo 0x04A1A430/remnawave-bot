@@ -7,10 +7,16 @@ import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import create_paid_subscription, extend_subscription, get_subscription_by_user_id
+from app.database.crud.subscription import (
+    create_paid_subscription,
+    extend_subscription,
+    get_active_subscriptions_by_user_id,
+    get_subscription_by_user_id,
+)
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
@@ -880,7 +886,13 @@ async def handle_custom_confirm(
     traffic_limit = custom_traffic if tariff.can_purchase_custom_traffic() else tariff.traffic_limit_gb
 
     # Проверяем есть ли уже подписка
-    existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        existing_subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff.id), active_subs[0] if active_subs else None
+        )
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
     try:
         if existing_subscription:
@@ -1187,6 +1199,11 @@ async def confirm_tariff_purchase(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
+    # Validate period is available for this tariff
+    if str(period) not in (tariff.period_prices or {}):
+        await callback.answer('Период недоступен', show_alert=True)
+        return
+
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
 
@@ -1195,7 +1212,14 @@ async def confirm_tariff_purchase(
     # Calculate price via PricingEngine (single source of truth)
     from app.services.pricing_engine import pricing_engine
 
-    existing_sub = await get_subscription_by_user_id(db, db_user.id)
+    # In multi-tariff mode, look for existing subscription for this specific tariff
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+    else:
+        existing_sub = await get_subscription_by_user_id(db, db_user.id)
+
     device_limit = None
     if existing_sub and existing_sub.tariff_id == tariff.id:
         device_limit = existing_sub.device_limit
@@ -1253,8 +1277,32 @@ async def confirm_tariff_purchase(
     existing_subscription = existing_sub
 
     try:
-        if existing_subscription:
-            # Продлеваем существующую подписку и обновляем параметры тарифа
+        if settings.is_multi_tariff_enabled():
+            if existing_subscription and existing_subscription.tariff_id == tariff.id:
+                # Extend existing subscription for this tariff
+                effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
+                subscription = await extend_subscription(
+                    db,
+                    existing_subscription,
+                    days=period,
+                    tariff_id=tariff.id,
+                    traffic_limit_gb=tariff.traffic_limit_gb,
+                    device_limit=effective_device_limit,
+                    connected_squads=squads,
+                )
+            else:
+                # Create NEW subscription for this tariff (multi-tariff: new Remnawave user)
+                subscription = await create_paid_subscription(
+                    db=db,
+                    user_id=db_user.id,
+                    duration_days=period,
+                    traffic_limit_gb=tariff.traffic_limit_gb,
+                    device_limit=tariff.device_limit,
+                    connected_squads=squads,
+                    tariff_id=tariff.id,
+                )
+        elif existing_subscription:
+            # Legacy single-subscription: extend or switch
             # Сохраняем докупленные устройства при продлении того же тарифа
             if existing_subscription.tariff_id == tariff.id:
                 effective_device_limit = max(tariff.device_limit or 0, existing_subscription.device_limit or 0)
@@ -1280,6 +1328,25 @@ async def confirm_tariff_purchase(
                 connected_squads=squads,
                 tariff_id=tariff.id,
             )
+    except IntegrityError as e:
+        # Partial unique index violation: user already has active subscription for this tariff
+        logger.warning('Тариф уже активен у пользователя', tariff_id=tariff_id, user_id=db_user.id, error=e)
+        await db.rollback()
+        try:
+            from app.database.crud.user import add_user_balance
+
+            await add_user_balance(
+                db,
+                db_user,
+                final_price,
+                'Возврат: тариф уже активен',
+                create_transaction=True,
+                transaction_type=TransactionType.REFUND,
+            )
+        except Exception as refund_error:
+            logger.critical('CRITICAL: не удалось вернуть средства', user_id=db_user.id, refund_error=refund_error)
+        await callback.answer('У вас уже есть активная подписка на этот тариф', show_alert=True)
+        return
     except Exception as e:
         logger.error('Ошибка создания/продления подписки при покупке тарифа', error=e, exc_info=True)
         await db.rollback()
@@ -1465,7 +1532,13 @@ async def confirm_daily_tariff_purchase(
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
     # Проверяем есть ли уже подписка
-    existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        existing_subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff.id), active_subs[0] if active_subs else None
+        )
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
     try:
         if existing_subscription:
@@ -1709,7 +1782,11 @@ async def show_tariff_extend(
     """Показывает экран продления по текущему тарифу."""
     get_texts(db_user.language)
 
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription or not subscription.tariff_id:
         await callback.answer('Тариф не найден', show_alert=True)
         return
@@ -1775,7 +1852,13 @@ async def select_tariff_extend_period(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     actual_device_limit = (subscription.device_limit if subscription else None) or tariff.device_limit
 
     # Calculate price via PricingEngine (per-category discounts: period + devices)
@@ -1881,7 +1964,18 @@ async def confirm_tariff_extend(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    # Validate period is available for this tariff
+    if str(period) not in (tariff.period_prices or {}):
+        await callback.answer('Период недоступен', show_alert=True)
+        return
+
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer('Подписка не найдена', show_alert=True)
         return
@@ -2169,7 +2263,11 @@ async def show_tariff_switch_list(
     await state.clear()
 
     # Проверяем наличие активной подписки
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
@@ -2259,7 +2357,13 @@ async def select_tariff_switch(
         user_balance = db_user.balance_kopeks or 0
 
         # Проверяем текущую подписку на оставшиеся дни
-        current_subscription = await get_subscription_by_user_id(db, db_user.id)
+        if settings.is_multi_tariff_enabled():
+            active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+            current_subscription = next(
+                (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+            )
+        else:
+            current_subscription = await get_subscription_by_user_id(db, db_user.id)
         days_warning = ''
         if current_subscription and current_subscription.end_date:
             remaining = current_subscription.end_date - datetime.now(UTC)
@@ -2385,7 +2489,13 @@ async def select_tariff_switch_period(
             current_tariff_name = html.escape(current_tariff.name)
 
     # Получаем текущую подписку для расчёта оставшегося времени
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff.id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if subscription and subscription.end_date:
         max(0, (subscription.end_date - datetime.now(UTC)).days)
 
@@ -2449,12 +2559,23 @@ async def confirm_tariff_switch(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
+    # Validate period is available for this tariff
+    if str(period) not in (tariff.period_prices or {}):
+        await callback.answer('Период недоступен', show_alert=True)
+        return
+
     from app.database.crud.user import lock_user_for_pricing
 
     db_user = await lock_user_for_pricing(db, db_user.id)
 
     # Проверяем наличие подписки (need device_limit for pricing)
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
@@ -2666,7 +2787,13 @@ async def confirm_daily_tariff_switch(
         return
 
     # Проверяем наличие подписки
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
@@ -2970,7 +3097,11 @@ async def show_instant_switch_list(
     await state.clear()
 
     # Проверяем наличие активной подписки
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
@@ -3060,7 +3191,13 @@ async def preview_instant_switch(
     remaining_days = data.get('remaining_days', 0)
 
     # Если данных нет в state, получаем заново
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription or not subscription.tariff_id:
         await callback.answer('Подписка не найдена', show_alert=True)
         return
@@ -3222,7 +3359,13 @@ async def confirm_instant_switch(
         return
 
     # Проверяем подписку
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
+        )
+    else:
+        subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
         await callback.answer('Подписка не найдена', show_alert=True)
         return

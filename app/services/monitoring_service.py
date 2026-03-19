@@ -1814,7 +1814,9 @@ class MonitoringService:
             deleted_count = 0
 
             for user in inactive_users:
-                if not user.subscription or not user.subscription.is_active:
+                # Check if user has ANY active subscription (multi-tariff aware)
+                has_active = any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or []))
+                if not has_active:
                     success = await delete_user(db, user)
                     if success:
                         deleted_count += 1

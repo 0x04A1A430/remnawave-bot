@@ -300,8 +300,19 @@ class RemnaWaveWebhookService:
 
         Handles both user-scope events (top-level telegramId/uuid) and
         device-scope events (userUuid, or nested user.telegramId/user.uuid).
+
+        In multi-tariff mode, resolves subscription by remnawave_uuid from payload
+        (each subscription has its own Remnawave user).
         """
         user: User | None = None
+        remnawave_uuid: str | None = None
+
+        # Extract Remnawave UUID from payload (used for subscription lookup in multi-tariff)
+        remnawave_uuid = data.get('uuid') or data.get('userUuid')
+        if not remnawave_uuid:
+            nested_user = data.get('user')
+            if isinstance(nested_user, dict):
+                remnawave_uuid = nested_user.get('uuid')
 
         # Try top-level telegramId first
         telegram_id = data.get('telegramId')
@@ -312,10 +323,8 @@ class RemnaWaveWebhookService:
                 pass
 
         # Try top-level uuid
-        if not user:
-            uuid = data.get('uuid') or data.get('userUuid')
-            if uuid:
-                user = await get_user_by_remnawave_uuid(db, uuid)
+        if not user and remnawave_uuid:
+            user = await get_user_by_remnawave_uuid(db, remnawave_uuid)
 
         # Try nested user object (e.g. user_hwid_devices events)
         if not user:
@@ -334,6 +343,29 @@ class RemnaWaveWebhookService:
 
         if not user:
             return None, None
+
+        # In multi-tariff mode, find subscription by remnawave_uuid (per-subscription)
+        if settings.is_multi_tariff_enabled() and remnawave_uuid:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            result = await db.execute(
+                select(Subscription)
+                .options(selectinload(Subscription.tariff))
+                .where(
+                    Subscription.remnawave_uuid == remnawave_uuid,
+                    Subscription.user_id == user.id,
+                )
+            )
+            subscription = result.scalar_one_or_none()
+            if subscription:
+                return user, subscription
+            # Fallback to legacy lookup if no subscription found by UUID
+            logger.warning(
+                'Webhook: подписка не найдена по remnawave_uuid, fallback на user_id',
+                remnawave_uuid=remnawave_uuid,
+                user_id=user.id,
+            )
 
         subscription = await get_subscription_by_user_id(db, user.id)
         return user, subscription

@@ -138,9 +138,26 @@ async def create_subscription(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
-    existing = await get_subscription_by_user_id(db, payload.user_id)
-    if existing and not payload.replace_existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User already has a subscription')
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, payload.user_id)
+        if payload.replace_existing and payload.subscription_id:
+            from app.database.crud.subscription import get_subscription_by_id
+
+            existing = await get_subscription_by_id(db, payload.subscription_id)
+            if existing and existing.user_id != payload.user_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
+        elif payload.replace_existing and active_subs:
+            existing = active_subs[0]
+        else:
+            existing = None
+        if active_subs and not payload.replace_existing:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User already has a subscription')
+    else:
+        existing = await get_subscription_by_user_id(db, payload.user_id)
+        if existing and not payload.replace_existing:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User already has a subscription')
 
     forced_devices = None
     if not settings.is_devices_selection_enabled():

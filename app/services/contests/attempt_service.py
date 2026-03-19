@@ -293,7 +293,14 @@ class ContestAttemptService:
         prize_value = template.prize_value or '1'
 
         if prize_type == PrizeType.DAYS.value:
-            subscription = await get_subscription_by_user_id(db, user_id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                # Contest prize applies to first active sub (contest has no subscription picker)
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user_id)
             if not subscription:
                 return ''
             days = int(prize_value) if prize_value.isdigit() else 1

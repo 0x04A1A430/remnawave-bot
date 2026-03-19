@@ -43,7 +43,11 @@ class PaymentCommonMixin:
         subscription = None
         if user:
             try:
-                subscription = user.subscription
+                subs = getattr(user, 'subscriptions', None) or []
+                subscription = next(
+                    (s for s in subs if getattr(s, 'is_active', False)),
+                    None,
+                )
                 has_active_subscription = bool(
                     subscription
                     and not getattr(subscription, 'is_trial', False)
@@ -222,14 +226,18 @@ class PaymentCommonMixin:
             if source is None:
                 return None
 
-            subscription = getattr(source, 'subscription', None)
+            subs = getattr(source, 'subscriptions', None) or []
+            active_sub = next(
+                (s for s in subs if getattr(s, 'is_active', False)),
+                None,
+            )
             subscription_snapshot = None
 
-            if subscription is not None:
+            if active_sub is not None:
                 subscription_snapshot = SimpleNamespace(
-                    is_trial=getattr(subscription, 'is_trial', False),
-                    is_active=getattr(subscription, 'is_active', False),
-                    actual_status=getattr(subscription, 'actual_status', None),
+                    is_trial=getattr(active_sub, 'is_trial', False),
+                    is_active=getattr(active_sub, 'is_active', False),
+                    actual_status=getattr(active_sub, 'actual_status', None),
                 )
 
             return SimpleNamespace(

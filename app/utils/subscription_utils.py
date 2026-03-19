@@ -13,6 +13,7 @@ logger = structlog.get_logger(__name__)
 
 
 async def ensure_single_subscription(db: AsyncSession, user_id: int) -> Subscription | None:
+    """В multi-tariff режиме возвращает последнюю подписку без удаления остальных."""
     result = await db.execute(
         select(Subscription).where(Subscription.user_id == user_id).order_by(Subscription.created_at.desc())
     )
@@ -22,6 +23,11 @@ async def ensure_single_subscription(db: AsyncSession, user_id: int) -> Subscrip
         return subscriptions[0] if subscriptions else None
 
     latest_subscription = subscriptions[0]
+
+    # В multi-tariff режиме несколько подписок — это нормально, не удаляем
+    if settings.is_multi_tariff_enabled():
+        return latest_subscription
+
     old_subscriptions = subscriptions[1:]
 
     logger.warning(
@@ -83,6 +89,11 @@ async def update_or_create_subscription(db: AsyncSession, user_id: int, **subscr
 
 
 async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
+    # В multi-tariff режиме несколько подписок у пользователя — это нормально
+    if settings.is_multi_tariff_enabled():
+        logger.info('♻️ cleanup_duplicate_subscriptions пропущена: multi-tariff режим')
+        return 0
+
     result = await db.execute(
         select(Subscription.user_id).group_by(Subscription.user_id).having(func.count(Subscription.id) > 1)
     )

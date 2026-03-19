@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.promocode import (
     check_user_promocode_usage,
@@ -258,39 +259,54 @@ class PromoCodeService:
             effects.append(f'💰 Баланс пополнен на {balance_bonus_rubles}₽')
 
         if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
-            if not subscription:
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            else:
+                single_sub = await get_subscription_by_user_id(db, user.id)
+                active_subs = [single_sub] if single_sub else []
+
+            if not active_subs:
                 raise ValueError('no_subscription_for_days')
 
-            # Конвертация триала в платную подписку при активации промокода на дни
-            if subscription.is_trial:
-                subscription.is_trial = False
-                if subscription.status == SubscriptionStatus.TRIAL.value:
-                    subscription.status = SubscriptionStatus.ACTIVE.value
-                subscription.updated_at = datetime.now(UTC)
-                logger.info(
-                    '🎓 Промокод: конвертация триала в платную подписку',
-                    subscription_id=subscription.id,
-                    code=promocode.code,
-                )
+            # Extend ALL active subscriptions
+            for subscription in active_subs:
+                # Конвертация триала в платную подписку при активации промокода на дни
+                if subscription.is_trial:
+                    subscription.is_trial = False
+                    if subscription.status == SubscriptionStatus.TRIAL.value:
+                        subscription.status = SubscriptionStatus.ACTIVE.value
+                    subscription.updated_at = datetime.now(UTC)
+                    logger.info(
+                        '🎓 Промокод: конвертация триала в платную подписку',
+                        subscription_id=subscription.id,
+                        code=promocode.code,
+                    )
 
-            await extend_subscription(db, subscription, promocode.subscription_days)
-
-            await self.subscription_service.update_remnawave_user(db, subscription)
+                await extend_subscription(db, subscription, promocode.subscription_days)
+                await self.subscription_service.update_remnawave_user(db, subscription)
 
             effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
             logger.info(
-                '✅ Подписка пользователя продлена на дней в RemnaWave с текущими сквадами',
+                '✅ Подписки пользователя продлены на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
                 subscription_days=promocode.subscription_days,
+                subscriptions_count=len(active_subs),
             )
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.config import settings
             from app.database.crud.subscription import create_trial_subscription
 
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Check if user has ANY active subscription (trial not created if any exists)
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user.id)
 
             if not subscription:
                 trial_days = (

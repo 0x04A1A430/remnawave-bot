@@ -174,6 +174,13 @@ from .traffic import (
 
 
 async def show_subscription_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    # Multi-tariff: redirect to "My subscriptions" list
+    if settings.is_multi_tariff_enabled():
+        from app.handlers.subscription.my_subscriptions import show_my_subscriptions
+
+        await show_my_subscriptions(callback, db_user, db)
+        return
+
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
@@ -3916,6 +3923,25 @@ def register_handlers(dp: Dispatcher):
     update_traffic_prices()
 
     dp.callback_query.register(show_subscription_info, F.data == 'menu_subscription')
+
+    # Multi-tariff: "My subscriptions" list and detail views
+    from app.handlers.subscription.my_subscriptions import show_my_subscriptions, show_subscription_detail
+
+    dp.callback_query.register(show_my_subscriptions, F.data == 'my_subscriptions')
+    dp.callback_query.register(show_subscription_detail, F.data.startswith('sm:'))
+
+    # Multi-tariff delegation handlers from subscription detail view
+    from app.handlers.subscription.my_subscriptions import (
+        handle_subscription_devices,
+        handle_subscription_extend,
+        handle_subscription_link,
+        handle_subscription_traffic,
+    )
+
+    dp.callback_query.register(handle_subscription_link, F.data.startswith('sl:'))
+    dp.callback_query.register(handle_subscription_extend, F.data.startswith('se:'))
+    dp.callback_query.register(handle_subscription_traffic, F.data.startswith('st:'))
+    dp.callback_query.register(handle_subscription_devices, F.data.startswith('sd:'))
 
     dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 

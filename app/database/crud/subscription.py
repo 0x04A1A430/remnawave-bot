@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
@@ -22,6 +23,18 @@ from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
+
+
+async def generate_unique_short_id(db: AsyncSession, max_attempts: int = 10) -> str:
+    """Generate a unique remnawave_short_id (6 hex chars) with collision check."""
+    for _ in range(max_attempts):
+        short_id = secrets.token_hex(3)
+        existing = await db.execute(select(Subscription.id).where(Subscription.remnawave_short_id == short_id).limit(1))
+        if existing.scalar_one_or_none() is None:
+            return short_id
+    # Fallback: 8 chars for extra entropy
+    return secrets.token_hex(4)
+
 
 _WEBHOOK_GUARD_SECONDS = 60
 
@@ -67,6 +80,7 @@ def is_active_paid_subscription(subscription: Subscription | None) -> bool:
 
 
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscription | None:
+    """Deprecated: returns single subscription. Use get_active_subscriptions_by_user_id for multi-tariff."""
     result = await db.execute(
         select(Subscription)
         .options(
@@ -144,12 +158,16 @@ async def create_trial_subscription(
         existing.device_limit = device_limit
         existing.connected_squads = final_squads
         existing.tariff_id = tariff_id
+        if not existing.remnawave_short_id:
+            existing.remnawave_short_id = await generate_unique_short_id(db)
         await db.commit()
         await db.refresh(existing)
         logger.info(
             '🎁 Обновлена PENDING триальная подписка для пользователя', existing_id=existing.id, user_id=user_id
         )
         return existing
+
+    short_id = await generate_unique_short_id(db)
 
     subscription = Subscription(
         user_id=user_id,
@@ -163,6 +181,7 @@ async def create_trial_subscription(
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
         tariff_id=tariff_id,
+        remnawave_short_id=short_id,
     )
 
     db.add(subscription)
@@ -230,6 +249,8 @@ async def create_paid_subscription(
         except Exception as error:
             logger.error('❌ Не удалось получить fallback сквад', user_id=user_id, error=error)
 
+    short_id = await generate_unique_short_id(db)
+
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,
@@ -242,6 +263,7 @@ async def create_paid_subscription(
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
         tariff_id=tariff_id,
+        remnawave_short_id=short_id,
     )
 
     db.add(subscription)
@@ -1937,3 +1959,85 @@ async def toggle_daily_subscription_pause(
     if subscription.is_daily_paused:
         return await resume_daily_subscription(db, subscription)
     return await pause_daily_subscription(db, subscription)
+
+
+# ── Multi-tariff CRUD functions ──────────────────────────────────────────────
+
+
+async def get_active_subscriptions_by_user_id(db: AsyncSession, user_id: int) -> list[Subscription]:
+    """Get all active/trial subscriptions for a user."""
+    result = await db.execute(
+        select(Subscription)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+        )
+        .order_by(Subscription.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_subscription_by_id_for_user(db: AsyncSession, subscription_id: int, user_id: int) -> Subscription | None:
+    """Get subscription by ID with ownership check (IDOR protection)."""
+    result = await db.execute(
+        select(Subscription)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            Subscription.id == subscription_id,
+            Subscription.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_subscription_by_id(db: AsyncSession, subscription_id: int) -> Subscription | None:
+    """Get subscription by ID (admin use only, no ownership check)."""
+    result = await db.execute(
+        select(Subscription)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(Subscription.id == subscription_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_subscription_by_user_and_tariff(db: AsyncSession, user_id: int, tariff_id: int) -> Subscription | None:
+    """Get active/trial subscription for a specific user+tariff combination."""
+    result = await db.execute(
+        select(Subscription)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(
+            Subscription.user_id == user_id,
+            Subscription.tariff_id == tariff_id,
+            Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+        )
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_all_subscriptions_by_user_id(db: AsyncSession, user_id: int) -> list[Subscription]:
+    """Get all subscriptions for a user (any status)."""
+    result = await db.execute(
+        select(Subscription)
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
+        .where(Subscription.user_id == user_id)
+        .order_by(Subscription.created_at.desc())
+    )
+    return list(result.scalars().all())

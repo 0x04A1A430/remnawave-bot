@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.contest import get_active_rounds, get_attempt
-from app.database.crud.subscription import get_subscription_by_user_id
+from app.database.crud.subscription import get_active_subscriptions_by_user_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import SubscriptionStatus
 from app.keyboards.inline import get_back_keyboard
@@ -93,7 +93,8 @@ async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSe
     """Show menu with available contest games."""
     texts = get_texts(db_user.language)
 
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+    subscription = active_subs[0] if active_subs else None
     if not _user_allowed(subscription):
         await _reply_not_eligible(callback, db_user.language)
         return
@@ -146,7 +147,8 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
     """Start playing a specific contest."""
     texts = get_texts(db_user.language)
 
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+    subscription = active_subs[0] if active_subs else None
     if not _user_allowed(subscription):
         await _reply_not_eligible(callback, db_user.language)
         return
@@ -260,7 +262,8 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
         return
 
     # Re-check subscription
-    subscription = await get_subscription_by_user_id(db, db_user.id)
+    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+    subscription = active_subs[0] if active_subs else None
     if not _user_allowed(subscription):
         await callback.answer(
             texts.t('CONTEST_NOT_ELIGIBLE', 'Игра недоступна без активной подписки.'),

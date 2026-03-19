@@ -160,7 +160,7 @@ async def _load_user_map(db: AsyncSession) -> dict[str, User]:
     stmt = (
         select(User)
         .where(User.remnawave_uuid.isnot(None))
-        .options(selectinload(User.subscription).selectinload(Subscription.tariff))
+        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
     )
     result = await db.execute(stmt)
     users = result.scalars().all()
@@ -202,7 +202,8 @@ def _build_traffic_items(
             ):
                 continue
 
-        sub = user.subscription
+        subs = getattr(user, 'subscriptions', None) or []
+        sub = next((s for s in subs if s.is_active), subs[0] if subs else None)
         tariff_name = None
         subscription_status = None
         traffic_limit_gb = 0.0
@@ -305,15 +306,21 @@ async def get_traffic_usage(
     # Collect all available tariff names (before filtering)
     available_tariffs = sorted(
         {
-            u.subscription.tariff.name
+            sub.tariff.name
             for u in user_map.values()
-            if u.subscription and u.subscription.tariff and u.subscription.tariff.name
+            for sub in (getattr(u, 'subscriptions', None) or [])
+            if sub.tariff and sub.tariff.name
         }
     )
 
     # Collect all available statuses (before filtering)
     available_statuses = sorted(
-        {_get_status(sub) for u in user_map.values() if (sub := u.subscription) and _get_status(sub)}
+        {
+            _get_status(sub)
+            for u in user_map.values()
+            for sub in (getattr(u, 'subscriptions', None) or [])
+            if _get_status(sub)
+        }
     )
 
     # Parse tariff filter
@@ -466,7 +473,8 @@ async def _build_enrichment(db: AsyncSession, user_map: dict[str, User]) -> dict
     enrichment: dict[int, UserTrafficEnrichment] = {}
     for uuid, user in user_map.items():
         uid = user.id
-        sub = user.subscription
+        subs_list = getattr(user, 'subscriptions', None) or []
+        sub = next((s for s in subs_list if s.is_active), subs_list[0] if subs_list else None)
 
         start_date = None
         end_date = None

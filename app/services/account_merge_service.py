@@ -133,6 +133,7 @@ def _build_subscription_preview(sub: Subscription | None) -> dict[str, Any] | No
 
 def _build_user_preview(user: User) -> dict[str, Any]:
     """Формирует превью данных пользователя для предварительного просмотра мержа."""
+    subs = getattr(user, 'subscriptions', None) or []
     return {
         'id': user.id,
         'username': user.username,
@@ -140,7 +141,8 @@ def _build_user_preview(user: User) -> dict[str, Any]:
         'email': user.email,
         'auth_methods': compute_auth_methods(user),
         'balance_kopeks': user.balance_kopeks,
-        'subscription': _build_subscription_preview(user.subscription),
+        'subscription': _build_subscription_preview(subs[0] if subs else None),
+        'subscriptions_count': len(subs),
         'created_at': user.created_at,
     }
 
@@ -258,8 +260,29 @@ async def _handle_subscription_merge(
         secondary: Вторичный пользователь.
         keep_subscription_from: 'primary' или 'secondary' — чью подписку оставить.
     """
-    primary_sub = primary.subscription
-    secondary_sub = secondary.subscription
+    # Multi-tariff mode: transfer ALL subscriptions from secondary to primary
+    if settings.is_multi_tariff_enabled():
+        secondary_subs = list(getattr(secondary, 'subscriptions', None) or [])
+        if secondary_subs:
+            for sub in secondary_subs:
+                sub.user_id = primary.id
+            await db.flush()
+            logger.info(
+                'Мерж подписок (multi-tariff): перенесено подписок secondary на primary',
+                count=len(secondary_subs),
+                primary_id=primary.id,
+                secondary_id=secondary.id,
+            )
+        # Clean up legacy remnawave_uuid on secondary
+        if secondary.remnawave_uuid:
+            secondary.remnawave_uuid = None
+        return
+
+    # Legacy single-subscription mode
+    primary_subs = getattr(primary, 'subscriptions', None) or []
+    secondary_subs = getattr(secondary, 'subscriptions', None) or []
+    primary_sub = primary_subs[0] if primary_subs else None
+    secondary_sub = secondary_subs[0] if secondary_subs else None
     has_primary_sub = primary_sub is not None
     has_secondary_sub = secondary_sub is not None
 

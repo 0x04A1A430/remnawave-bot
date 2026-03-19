@@ -147,24 +147,38 @@ async def _prepare_auto_extend_context(
 ) -> AutoExtendContext | None:
     from app.database.crud.subscription import get_subscription_by_user_id
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    saved_subscription_id = cart_data.get('subscription_id')
+
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import (
+            get_active_subscriptions_by_user_id,
+            get_subscription_by_id_for_user,
+        )
+
+        if saved_subscription_id is not None:
+            parsed_sub_id = _safe_int(saved_subscription_id)
+            subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
+        else:
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription is not None and saved_subscription_id is not None:
+            parsed_sub_id = _safe_int(saved_subscription_id, subscription.id)
+            if parsed_sub_id != subscription.id:
+                logger.warning(
+                    '🔁 Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
+                    saved_subscription_id=parsed_sub_id,
+                    subscription_id=subscription.id,
+                    format_user_id=_format_user_id(user),
+                )
+                return None
+
     if subscription is None:
         logger.info(
             '🔁 Автопокупка: у пользователя нет активной подписки для продления', format_user_id=_format_user_id(user)
         )
         return None
-
-    saved_subscription_id = cart_data.get('subscription_id')
-    if saved_subscription_id is not None:
-        saved_subscription_id = _safe_int(saved_subscription_id, subscription.id)
-        if saved_subscription_id != subscription.id:
-            logger.warning(
-                '🔁 Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
-                saved_subscription_id=saved_subscription_id,
-                subscription_id=subscription.id,
-                format_user_id=_format_user_id(user),
-            )
-            return None
 
     period_days = _safe_int(cart_data.get('period_days'))
 
@@ -677,7 +691,16 @@ async def _auto_purchase_tariff(
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
 
-    existing_subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        existing_subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id),
+            None,
+        )
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
 
     user = await lock_user_for_pricing(db, user.id)
 
@@ -1063,7 +1086,16 @@ async def _auto_purchase_daily_tariff(
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
     # Проверяем есть ли уже подписка
-    existing_subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        existing_subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id),
+            None,
+        )
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
 
     try:
         if existing_subscription:
@@ -1609,7 +1641,21 @@ async def _auto_add_traffic(
         return False
 
     # Verify subscription
-    subscription = await get_subscription_by_user_id(db, user.id)
+    saved_subscription_id = cart_data.get('subscription_id')
+
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        if saved_subscription_id is not None:
+            from app.database.crud.subscription import get_subscription_by_id_for_user
+
+            parsed_sub_id = _safe_int(saved_subscription_id)
+            subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
+        else:
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
         logger.warning('🔁 Автопокупка трафика: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await user_cart_service.delete_user_cart(user.id)
@@ -1898,7 +1944,13 @@ async def try_auto_extend_expired_after_topup(
     if not user or not getattr(user, 'id', None):
         return False
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         logger.debug(
             '🔄 Автопродление expired: у пользователя нет подписки',
@@ -2252,7 +2304,13 @@ async def try_resume_disabled_daily_after_topup(
     if not user or not getattr(user, 'id', None):
         return False
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         return False
 
@@ -2617,7 +2675,13 @@ async def auto_purchase_saved_cart_after_topup(
     # выше по цепочке (common.py), и если он не возобновил — причина сохраняется.
     from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
 
-    _existing_sub = await _get_sub(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        _active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        _existing_sub = _active_subs[0] if _active_subs else None
+    else:
+        _existing_sub = await _get_sub(db, user.id)
     if _existing_sub and _existing_sub.status == SubscriptionStatus.DISABLED.value:
         logger.warning(
             '🔁 Автопокупка: пропускаем — подписка DISABLED, корзина устарела',

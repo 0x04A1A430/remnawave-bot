@@ -338,7 +338,17 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             from app.database.crud.subscription import get_subscription_by_user_id
             from app.database.models import Subscription, SubscriptionStatus
 
-            existing_sub = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Match subscription by panel UUID instead of blindly taking first
+                existing_sub = next(
+                    (s for s in active_subs if s.remnawave_uuid == panel_user.uuid),
+                    None,
+                )
+            else:
+                existing_sub = await get_subscription_by_user_id(db, user.id)
 
             # Parse panel data — panel returns local time with misleading +00:00 offset
             expire_at = panel_datetime_to_utc(panel_user.expire_at)

@@ -359,30 +359,32 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
-                if not user or not user.subscription:
+                subs = getattr(user, 'subscriptions', None) or []
+                if not user or not subs:
                     return
 
-                subscription = user.subscription
-
-                if subscription.status != SubscriptionStatus.ACTIVE.value:
+                active_subs = [s for s in subs if s.status == SubscriptionStatus.ACTIVE.value]
+                if not active_subs:
                     return
 
                 # Per-channel settings: check if any unsubscribed channel requires deactivation
                 unsubscribed = [ch for ch in channels if not ch.get('is_subscribed', False)]
-                should_disable = any(
-                    channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
-                    for ch in unsubscribed
-                )
-                if not should_disable:
-                    return
 
-                await deactivate_subscription(db, subscription)
-                sub_type = 'trial' if subscription.is_trial else 'paid'
-                logger.info(
-                    'Subscription deactivated after channel unsubscribe',
-                    sub_type=sub_type,
-                    telegram_id=telegram_id,
-                )
+                for subscription in active_subs:
+                    should_disable = any(
+                        channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
+                        for ch in unsubscribed
+                    )
+                    if not should_disable:
+                        continue
+
+                    await deactivate_subscription(db, subscription)
+                    sub_type = 'trial' if subscription.is_trial else 'paid'
+                    logger.info(
+                        'Subscription deactivated after channel unsubscribe',
+                        sub_type=sub_type,
+                        telegram_id=telegram_id,
+                    )
 
                 if user.remnawave_uuid:
                     service = SubscriptionService()
@@ -428,7 +430,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
-                if not user or not user.subscription:
+                subs = getattr(user, 'subscriptions', None) or []
+                if not user or not subs:
                     return
 
                 # Do NOT reactivate for blocked users
@@ -436,23 +439,23 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     logger.info('Skipping reactivation for blocked user', telegram_id=telegram_id)
                     return
 
-                subscription = user.subscription
-
-                # Only reactivate DISABLED subscriptions
-                if subscription.status != SubscriptionStatus.DISABLED.value:
+                disabled_subs = [
+                    s
+                    for s in subs
+                    if s.status == SubscriptionStatus.DISABLED.value
+                    and (not s.end_date or s.end_date > datetime.now(UTC))
+                ]
+                if not disabled_subs:
                     return
 
-                # Check subscription has not expired
-                if subscription.end_date and subscription.end_date <= datetime.now(UTC):
-                    return
-
-                await reactivate_subscription(db, subscription)
-                sub_type = 'trial' if subscription.is_trial else 'paid'
-                logger.info(
-                    'Subscription reactivated after channel subscribe',
-                    sub_type=sub_type,
-                    telegram_id=telegram_id,
-                )
+                for subscription in disabled_subs:
+                    await reactivate_subscription(db, subscription)
+                    sub_type = 'trial' if subscription.is_trial else 'paid'
+                    logger.info(
+                        'Subscription reactivated after channel subscribe',
+                        sub_type=sub_type,
+                        telegram_id=telegram_id,
+                    )
 
                 # Enable in RemnaWave
                 if user.remnawave_uuid:

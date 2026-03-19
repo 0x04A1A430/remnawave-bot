@@ -132,7 +132,7 @@ async def list_users(
     search: str | None = Query(default=None),
 ) -> UserListResponse:
     base_query = select(User).options(
-        selectinload(User.subscription),
+        selectinload(User.subscriptions).selectinload(Subscription.tariff),
         selectinload(User.promo_group),
     )
 
@@ -368,11 +368,32 @@ async def create_user_subscription(
     """
     user = await _get_user_by_id_or_telegram_id(db, user_id)
 
-    existing = await get_subscription_by_user_id(db, user.id)
-    if existing and not payload.replace_existing:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, 'User already has a subscription. Use replace_existing=true to replace it'
-        )
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        if payload.replace_existing and payload.subscription_id:
+            from app.database.crud.subscription import get_subscription_by_id
+
+            existing = await get_subscription_by_id(db, payload.subscription_id)
+            if existing and existing.user_id != user.id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
+        elif payload.replace_existing and active_subs:
+            existing = active_subs[0]
+        else:
+            existing = None
+        if active_subs and not payload.replace_existing:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                'User already has a subscription. Use replace_existing=true to replace it',
+            )
+    else:
+        existing = await get_subscription_by_user_id(db, user.id)
+        if existing and not payload.replace_existing:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                'User already has a subscription. Use replace_existing=true to replace it',
+            )
 
     forced_devices = None
     if not settings.is_devices_selection_enabled():
@@ -456,25 +477,41 @@ async def create_user_subscription(
 @router.delete('/{user_id}/subscription', response_model=UserResponse)
 async def delete_user_subscription(
     user_id: int,
+    subscription_id: int | None = None,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     """
     Деактивировать подписку пользователя.
     Подписка не удаляется физически, а помечается как DISABLED.
+    In multi-tariff mode, subscription_id query param specifies which subscription to deactivate.
     """
     user = await _get_user_by_id_or_telegram_id(db, user_id)
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        if subscription_id:
+            from app.database.crud.subscription import get_subscription_by_id
+
+            subscription = await get_subscription_by_id(db, subscription_id)
+            if subscription and subscription.user_id != user.id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
+        else:
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            subscription = active_subs[0] if active_subs else None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'User has no subscription')
 
     await deactivate_subscription(db, subscription)
 
     # Деактивируем пользователя в RemnaWave, если есть UUID
-    if user.remnawave_uuid:
+    remnawave_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
+    if remnawave_uuid:
         subscription_service = SubscriptionService()
-        await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+        await subscription_service.disable_remnawave_user(remnawave_uuid)
 
     # Перезагружаем пользователя
     user = await get_user_by_id(db, user.id)

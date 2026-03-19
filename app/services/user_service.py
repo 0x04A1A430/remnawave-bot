@@ -4,7 +4,7 @@ from typing import Any
 
 import structlog
 from aiogram import Bot, types
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, exists, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -166,11 +166,9 @@ class UserService:
             )
 
         keyboard_rows = []
-        if getattr(user, 'subscription', None) and user.subscription.status in {
-            'active',
-            'expired',
-            'trial',
-        }:
+        subs = getattr(user, 'subscriptions', None) or []
+        has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
+        if has_extendable:
             keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
@@ -208,7 +206,13 @@ class UserService:
             if not user:
                 return None
 
-            subscription = await get_subscription_by_user_id(db, user_id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user_id)
             transactions_count = await get_user_transactions_count(db, user_id)
 
             return {
@@ -322,7 +326,7 @@ class UserService:
 
             query = (
                 select(User)
-                .options(selectinload(User.subscription))
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
                 .join(Subscription, Subscription.user_id == User.id)
                 .where(*base_filters)
                 .order_by(User.balance_kopeks.desc(), Subscription.end_date.asc())
@@ -370,17 +374,19 @@ class UserService:
                 User.balance_kopeks >= min_balance_kopeks,
             ]
 
-            # Основной запрос с LEFT JOIN для поддержки пользователей без подписки
+            # Subquery: user has at least one active/trial subscription
+            active_sub_exists = exists().where(
+                Subscription.user_id == User.id,
+                Subscription.status.in_(['active', 'trial']),
+            )
+
+            # Основной запрос: пользователи БЕЗ активных подписок
             query = (
                 select(User)
-                .options(selectinload(User.subscription))
-                .outerjoin(Subscription, Subscription.user_id == User.id)
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
                 .where(
                     *base_filters,
-                    or_(
-                        User.subscription == None,
-                        ~Subscription.status.in_(['active', 'trial']),
-                    ),
+                    ~active_sub_exists,
                 )
                 .order_by(User.balance_kopeks.desc(), User.created_at.desc())
                 .offset(offset)
@@ -390,16 +396,9 @@ class UserService:
             users = result.scalars().unique().all()
 
             # Запрос для подсчета общего количества
-            count_query = (
-                select(func.count(User.id))
-                .outerjoin(Subscription, Subscription.user_id == User.id)
-                .where(
-                    *base_filters,
-                    or_(
-                        User.subscription == None,
-                        ~Subscription.status.in_(['active', 'trial']),
-                    ),
-                )
+            count_query = select(func.count(User.id)).where(
+                *base_filters,
+                ~active_sub_exists,
             )
             total_count = (await db.execute(count_query)).scalar() or 0
             total_pages = (total_count + limit - 1) // limit if total_count else 0
@@ -464,7 +463,7 @@ class UserService:
                     AdvertisingCampaign,
                     AdvertisingCampaign.id == latest_campaign.c.campaign_id,
                 )
-                .options(selectinload(User.subscription))
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
                 .order_by(
                     AdvertisingCampaign.name.asc(),
                     latest_campaign.c.created_at.desc(),
@@ -674,7 +673,10 @@ class UserService:
 
             from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription
 
-            if is_active_paid_subscription(user.subscription):
+            subs = getattr(user, 'subscriptions', None) or []
+            has_active_paid = any(is_active_paid_subscription(sub) for sub in subs)
+
+            if has_active_paid:
                 logger.info(
                     '⏭️ Пропуск отключения RemnaWave и подписки: у пользователя активная оплаченная подписка',
                     user_id=user_id,
@@ -694,8 +696,9 @@ class UserService:
                     except Exception as e:
                         logger.error('❌ Ошибка деактивации RemnaWave пользователя при блокировке', error=e)
 
-                if user.subscription:
-                    await deactivate_subscription(db, user.subscription)
+                for sub in subs:
+                    if sub.status in ['active', 'trial']:
+                        await deactivate_subscription(db, sub)
 
             await update_user(db, user, status=UserStatus.BLOCKED.value)
 
@@ -714,29 +717,29 @@ class UserService:
 
             await update_user(db, user, status=UserStatus.ACTIVE.value)
 
-            if user.subscription:
-                from app.database.models import SubscriptionStatus
+            from app.database.models import SubscriptionStatus
 
-                if user.subscription.end_date > datetime.now(UTC):
-                    user.subscription.status = SubscriptionStatus.ACTIVE.value
-                    await db.commit()
-                    await db.refresh(user.subscription)
-                    logger.info('🔄 Подписка пользователя восстановлена', user_id=user_id)
+            now = datetime.now(UTC)
+            for sub in getattr(user, 'subscriptions', None) or []:
+                if sub.end_date and sub.end_date > now and sub.status != SubscriptionStatus.ACTIVE.value:
+                    sub.status = SubscriptionStatus.ACTIVE.value
+                    try:
+                        from app.services.subscription_service import SubscriptionService
 
-                    if user.remnawave_uuid:
-                        try:
-                            from app.services.subscription_service import SubscriptionService
-
-                            subscription_service = SubscriptionService()
-                            await subscription_service.update_remnawave_user(db, user.subscription)
-                            logger.info(
-                                '✅ RemnaWave пользователь восстановлен при разблокировке',
-                                remnawave_uuid=user.remnawave_uuid,
-                            )
-                        except Exception as e:
-                            logger.error('❌ Ошибка восстановления RemnaWave пользователя при разблокировке', error=e)
-                else:
-                    logger.info('⏰ Подписка пользователя истекла, восстановление невозможно', user_id=user_id)
+                        subscription_service = SubscriptionService()
+                        await subscription_service.update_remnawave_user(db, sub)
+                        logger.info(
+                            '✅ RemnaWave подписка восстановлена при разблокировке',
+                            subscription_id=sub.id,
+                            remnawave_uuid=user.remnawave_uuid,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            '❌ Ошибка восстановления RemnaWave подписки при разблокировке',
+                            subscription_id=sub.id,
+                            error=e,
+                        )
+            await db.commit()
 
             logger.info('Админ разблокировал пользователя', admin_id=admin_id, user_id=user_id)
             return True
@@ -770,7 +773,9 @@ class UserService:
                 from app.config import settings
                 from app.database.crud.subscription import is_active_paid_subscription
 
-                if not force_panel_delete and is_active_paid_subscription(user.subscription):
+                if not force_panel_delete and any(
+                    is_active_paid_subscription(sub) for sub in (getattr(user, 'subscriptions', None) or [])
+                ):
                     logger.info(
                         '⏭️ Пропуск отключения RemnaWave при удалении: у пользователя активная оплаченная подписка',
                         user_id=user_id,
@@ -1210,36 +1215,38 @@ class UserService:
 
             try:
                 async with db.begin_nested():
-                    if user.subscription:
-                        logger.info('🔄 Удаляем подписку', subscription_id=user.subscription.id)
+                    subs = getattr(user, 'subscriptions', None) or []
+                    if subs:
+                        all_squad_ids: set[str] = set()
+                        for sub in subs:
+                            logger.info('🔄 Удаляем подписку', subscription_id=sub.id)
+                            if sub.connected_squads:
+                                all_squad_ids.update(sub.connected_squads)
+                            await db.execute(
+                                delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id)
+                            )
 
-                        # Save squad info before deleting subscription
-                        squad_ids = user.subscription.connected_squads
-
-                        # Delete subscription_servers and subscription FIRST
-                        # Lock order: subscriptions → server_squads (matches webhook order)
-                        await db.execute(
-                            delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
-                        )
+                        # Delete all subscriptions for this user
+                        # Lock order: subscriptions -> server_squads (matches webhook order)
                         await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
                         await db.flush()
 
                         # Decrement server_squads.current_users AFTER subscription delete
                         # to match lock ordering with webhook and avoid deadlocks
-                        if squad_ids:
+                        if all_squad_ids:
                             try:
                                 from app.database.crud.server_squad import (
                                     get_server_ids_by_uuids,
                                     remove_user_from_servers,
                                 )
 
-                                int_squad_ids = await get_server_ids_by_uuids(db, list(squad_ids))
+                                int_squad_ids = await get_server_ids_by_uuids(db, list(all_squad_ids))
                                 if int_squad_ids:
                                     await remove_user_from_servers(db, int_squad_ids)
                             except Exception as sq_err:
                                 logger.warning('⚠️ Не удалось уменьшить счётчик серверов', error=sq_err)
             except Exception as e:
-                logger.error('❌ Ошибка удаления подписки', error=e)
+                logger.error('❌ Ошибка удаления подписок', error=e)
 
             try:
                 from app.database.models import (
@@ -1316,7 +1323,7 @@ class UserService:
 
             for user in inactive_users:
                 # Skip users with active paid subscriptions
-                if user.subscription and user.subscription.is_active:
+                if any(sub.is_active for sub in (getattr(user, 'subscriptions', None) or [])):
                     skipped_active_sub += 1
                     continue
 
@@ -1341,7 +1348,13 @@ class UserService:
             if not user:
                 return {}
 
-            subscription = await get_subscription_by_user_id(db, user_id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                subscription = active_subs[0] if active_subs else None
+            else:
+                subscription = await get_subscription_by_user_id(db, user_id)
             transactions_count = await get_user_transactions_count(db, user_id)
 
             days_since_registration = (datetime.now(UTC) - user.created_at).days

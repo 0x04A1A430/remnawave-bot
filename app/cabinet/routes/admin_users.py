@@ -118,11 +118,13 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     subscription_end_date = None
     has_subscription = False
 
-    if user.subscription:
+    subs = getattr(user, 'subscriptions', None) or []
+    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    if subscription:
         has_subscription = True
-        subscription_status = user.subscription.status
-        subscription_is_trial = user.subscription.is_trial
-        subscription_end_date = user.subscription.end_date
+        subscription_status = subscription.status
+        subscription_is_trial = subscription.is_trial
+        subscription_end_date = subscription.end_date
 
     return UserListItem(
         id=user.id,
@@ -573,8 +575,10 @@ async def get_user_detail(
 
     # Build subscription info
     subscription_info = None
-    if user.subscription:
-        subscription_info = await _build_subscription_info_async(db, user.subscription)
+    subs = getattr(user, 'subscriptions', None) or []
+    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    if subscription:
+        subscription_info = await _build_subscription_info_async(db, subscription)
 
     # Build promo group info
     promo_group_info = None
@@ -976,7 +980,8 @@ async def update_user_subscription(
             detail='User not found',
         )
 
-    subscription = user.subscription
+    subs = getattr(user, 'subscriptions', None) or []
+    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
 
     if request.action == 'create':
         # Create new subscription
@@ -1433,10 +1438,12 @@ async def get_user_available_tariffs(
     # Get current subscription tariff
     current_tariff_id = None
     current_tariff_name = None
-    if user.subscription and user.subscription.tariff_id:
-        current_tariff_id = user.subscription.tariff_id
-        if user.subscription.tariff:
-            current_tariff_name = user.subscription.tariff.name
+    subs = getattr(user, 'subscriptions', None) or []
+    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    if subscription and subscription.tariff_id:
+        current_tariff_id = subscription.tariff_id
+        if subscription.tariff:
+            current_tariff_name = subscription.tariff.name
 
     # Build tariff items
     tariff_items = []
@@ -1881,8 +1888,10 @@ async def get_user_devices(
                 )
 
             device_limit = 0
-            if user.subscription:
-                device_limit = user.subscription.device_limit or 0
+            subs = getattr(user, 'subscriptions', None) or []
+            subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+            if subscription:
+                device_limit = subscription.device_limit or 0
 
             return UserDevicesResponse(
                 devices=devices,
@@ -2089,11 +2098,13 @@ async def reset_user_trial(
 
     subscription_deleted = False
 
-    # Delete subscription if exists
-    if user.subscription:
+    # Delete subscriptions if any exist
+    subs = getattr(user, 'subscriptions', None) or []
+    if subs:
         from app.database.crud.subscription import is_active_paid_subscription
 
-        if is_active_paid_subscription(user.subscription):
+        has_active_paid = any(is_active_paid_subscription(s) for s in subs)
+        if has_active_paid:
             logger.info(
                 '⏭️ Пропуск удаления подписки и RemnaWave: у пользователя активная оплаченная подписка',
                 user_id=user_id,
@@ -2111,11 +2122,11 @@ async def reset_user_trial(
                 except Exception as e:
                     logger.warning('Failed to disable Remnawave user during trial reset', error=e)
 
-            # Delete subscription from database
+            # Delete all subscriptions from database
             from sqlalchemy import delete
 
-            subscription_id = user.subscription.id
-            await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription_id))
+            for sub in subs:
+                await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
             await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
             subscription_deleted = True
 
@@ -2162,7 +2173,8 @@ async def reset_user_subscription(
     panel_deactivated = False
     panel_error: str | None = None
 
-    if not user.subscription:
+    subs = getattr(user, 'subscriptions', None) or []
+    if not subs:
         return ResetSubscriptionResponse(
             success=True,
             message='User has no subscription to reset',
@@ -2183,11 +2195,11 @@ async def reset_user_subscription(
             panel_error = 'Ошибка обработки пользователя в Remnawave'
             logger.warning('Failed to disable Remnawave user during subscription reset', error=e)
 
-    # Delete subscription from database
+    # Delete all subscriptions from database
     from sqlalchemy import delete
 
-    subscription_id = user.subscription.id
-    await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == subscription_id))
+    for sub in subs:
+        await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
     await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
     subscription_deleted = True
 
@@ -2232,10 +2244,13 @@ async def disable_user(
     panel_deactivated = False
     panel_error: str | None = None
 
-    # Deactivate subscription in panel (skip if active paid subscription)
-    from app.database.crud.subscription import is_active_paid_subscription
+    # Deactivate subscriptions in panel (skip if active paid subscription)
+    from app.database.crud.subscription import deactivate_subscription, is_active_paid_subscription
 
-    if is_active_paid_subscription(user.subscription):
+    subs = getattr(user, 'subscriptions', None) or []
+    has_active_paid = any(is_active_paid_subscription(s) for s in subs)
+
+    if has_active_paid:
         logger.info(
             '⏭️ Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
             user_id=user_id,
@@ -2253,13 +2268,14 @@ async def disable_user(
             panel_error = 'Ошибка обработки пользователя в Remnawave'
             logger.warning('Failed to disable Remnawave user', error=e)
 
-    # Deactivate subscription in bot database (skip if active paid subscription)
-    if user.subscription and not is_active_paid_subscription(user.subscription):
-        from app.database.crud.subscription import deactivate_subscription
-
-        await deactivate_subscription(db, user.subscription)
+    # Deactivate all subscriptions in bot database (skip active paid ones)
+    for sub in subs:
+        if is_active_paid_subscription(sub):
+            continue
+        await deactivate_subscription(db, sub)
         subscription_deactivated = True
-        logger.info('Deactivated subscription for user', user_id=user_id)
+    if subscription_deactivated:
+        logger.info('Deactivated subscriptions for user', user_id=user_id)
 
     # Block user account
     user.status = UserStatus.BLOCKED.value
@@ -2411,13 +2427,15 @@ async def get_user_sync_status(
     bot_device_limit = 0
     bot_squads: list[str] = []
 
-    if user.subscription:
-        bot_sub_status = user.subscription.status
-        bot_sub_end_date = user.subscription.end_date
-        bot_traffic_limit = user.subscription.traffic_limit_gb
-        bot_traffic_used = user.subscription.traffic_used_gb or 0.0
-        bot_device_limit = user.subscription.device_limit or 0
-        bot_squads = user.subscription.connected_squads or []
+    subs = getattr(user, 'subscriptions', None) or []
+    active_sub = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    if active_sub:
+        bot_sub_status = active_sub.status
+        bot_sub_end_date = active_sub.end_date
+        bot_traffic_limit = active_sub.traffic_limit_gb
+        bot_traffic_used = active_sub.traffic_used_gb or 0.0
+        bot_device_limit = active_sub.device_limit or 0
+        bot_squads = active_sub.connected_squads or []
 
     # Panel data
     panel_found = False
@@ -2626,8 +2644,10 @@ async def sync_user_from_panel(
                 user.remnawave_uuid = panel_user.uuid
 
             # Update subscription if requested
-            if request.update_subscription and user.subscription:
-                sub = user.subscription
+            sync_subs = getattr(user, 'subscriptions', None) or []
+            sync_sub = next((s for s in sync_subs if s.is_active), sync_subs[0] if sync_subs else None)
+            if request.update_subscription and sync_sub:
+                sub = sync_sub
 
                 # Update end date (normalize timezone)
                 if panel_user.expire_at:
@@ -2704,14 +2724,14 @@ async def sync_user_from_panel(
                     sub.remnawave_short_uuid = panel_user.short_uuid
 
             # Update traffic usage if requested
-            if request.update_traffic and user.subscription:
+            if request.update_traffic and sync_sub:
                 panel_traffic_used = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0
-                if abs((user.subscription.traffic_used_gb or 0) - panel_traffic_used) > 0.01:
-                    changes['traffic_used_gb'] = {'old': user.subscription.traffic_used_gb, 'new': panel_traffic_used}
-                    user.subscription.traffic_used_gb = panel_traffic_used
+                if abs((sync_sub.traffic_used_gb or 0) - panel_traffic_used) > 0.01:
+                    changes['traffic_used_gb'] = {'old': sync_sub.traffic_used_gb, 'new': panel_traffic_used}
+                    sync_sub.traffic_used_gb = panel_traffic_used
 
             # Create subscription if missing but user exists in panel
-            if request.create_if_missing and not user.subscription and panel_user.expire_at:
+            if request.create_if_missing and not sync_sub and panel_user.expire_at:
                 from app.database.crud.subscription import create_paid_subscription
 
                 panel_traffic_limit = (
@@ -2779,7 +2799,9 @@ async def sync_user_to_panel(
             detail='User not found',
         )
 
-    if not user.subscription:
+    push_subs = getattr(user, 'subscriptions', None) or []
+    push_sub = next((s for s in push_subs if s.is_active), push_subs[0] if push_subs else None)
+    if not push_sub:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='User has no subscription to sync',
@@ -2798,7 +2820,7 @@ async def sync_user_to_panel(
                 detail=service.configuration_error or 'Remnawave API not configured',
             )
 
-        sub = user.subscription
+        sub = push_sub
         changes = {}
         errors = []
         action = 'no_changes'

@@ -299,10 +299,23 @@ def _build_server_option(
 class MiniAppSubscriptionPurchaseService:
     """Builds configuration and pricing for subscription purchases in the mini app."""
 
-    async def build_options(self, db: AsyncSession, user: User) -> PurchaseOptionsContext:
+    async def build_options(
+        self, db: AsyncSession, user: User, subscription_id: int | None = None
+    ) -> PurchaseOptionsContext:
         from app.database.crud.subscription import get_subscription_by_user_id
 
-        subscription = await get_subscription_by_user_id(db, user.id)
+        if settings.is_multi_tariff_enabled():
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
+
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                subscription = active_subs[0] if active_subs else None
+        else:
+            subscription = await get_subscription_by_user_id(db, user.id)
         balance_kopeks = int(getattr(user, 'balance_kopeks', 0) or 0)
         currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
         texts = get_texts(getattr(user, 'language', None))
@@ -1012,7 +1025,12 @@ class MiniAppSubscriptionPurchaseService:
                     refresh_error=refresh_error,
                 )
         else:
-            result = await db.execute(select(Subscription).where(Subscription.user_id == user.id))
+            result = await db.execute(
+                select(Subscription)
+                .where(Subscription.user_id == user.id)
+                .order_by(Subscription.created_at.desc())
+                .limit(1)
+            )
             subscription = result.scalar_one_or_none()
             if subscription is not None:
                 context.subscription = subscription

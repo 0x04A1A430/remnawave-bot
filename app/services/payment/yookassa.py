@@ -770,14 +770,20 @@ class YooKassaPaymentMixin:
                     # Загружаем пользователя с подпиской и промо-группой
                     full_user_result = await db.execute(
                         select(User)
-                        .options(selectinload(User.subscription))
+                        .options(selectinload(User.subscriptions).selectinload(SubscriptionModel.tariff))
                         .options(selectinload(User.user_promo_groups))
                         .where(User.id == user.id)
                     )
                     full_user = full_user_result.scalar_one_or_none()
 
                     # Используем обновленные данные или исходные, если не удалось обновить
-                    subscription = full_user.subscription if full_user else getattr(user, 'subscription', None)
+                    full_subs = getattr(full_user, 'subscriptions', []) if full_user else []
+                    fallback_subs = getattr(user, 'subscriptions', [])
+                    all_subs = full_subs or fallback_subs
+                    subscription = next(
+                        (s for s in all_subs if s.status in ('active', 'trial')),
+                        all_subs[0] if all_subs else None,
+                    )
                     promo_group = (
                         full_user.get_primary_promo_group()
                         if full_user
@@ -1001,15 +1007,22 @@ class YooKassaPaymentMixin:
                                     # Загружаем пользователя с подпиской и промо-группой
                                     full_user_result = await db.execute(
                                         select(User)
-                                        .options(selectinload(User.subscription))
+                                        .options(
+                                            selectinload(User.subscriptions).selectinload(SubscriptionModel.tariff)
+                                        )
                                         .options(selectinload(User.user_promo_groups))
                                         .where(User.id == user.id)
                                     )
                                     full_user = full_user_result.scalar_one_or_none()
 
                                     # Загружаем подписку отдельно, если нужно
+                                    # Используем limit(1) вместо scalar_one_or_none() —
+                                    # у пользователя может быть несколько подписок (multi-tariff)
                                     subscription_result = await db.execute(
-                                        select(SubscriptionModel).where(SubscriptionModel.user_id == user.id)
+                                        select(SubscriptionModel)
+                                        .where(SubscriptionModel.user_id == user.id)
+                                        .order_by(SubscriptionModel.created_at.desc())
+                                        .limit(1)
                                     )
                                     subscription_db = subscription_result.scalar_one_or_none()
 

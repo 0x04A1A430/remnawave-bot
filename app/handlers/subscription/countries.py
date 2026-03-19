@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.subscription import get_subscription_by_id_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
 from app.database.models import TransactionType, User
@@ -33,6 +34,30 @@ from .common import _get_period_hint_from_subscription, logger
 from .summary import present_subscription_summary
 
 
+async def _resolve_subscription(callback, db_user, db):
+    """Resolve subscription from callback_data (multi-tariff) or db_user (legacy)."""
+    if settings.is_multi_tariff_enabled():
+        parts = (callback.data or '').split(':')
+        if len(parts) >= 2:
+            try:
+                sub_id = int(parts[-1])
+                sub = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+                if not sub:
+                    await callback.answer('Подписка не найдена', show_alert=True)
+                    return None, None
+                return sub, sub_id
+            except (ValueError, TypeError):
+                pass
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        if len(subs) == 1:
+            return subs[0], subs[0].id
+        await callback.answer('Выберите подписку', show_alert=True)
+        return None, None
+    return db_user.subscription, getattr(db_user.subscription, 'id', None)
+
+
 async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     if not await _should_show_countries_management(db_user):
         texts = get_texts(db_user.language)
@@ -46,7 +71,9 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
         return
 
     texts = get_texts(db_user.language)
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     if not subscription or subscription.is_trial:
         await callback.answer(
@@ -157,7 +184,9 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
 
     country_uuid = callback.data.split('_')[2]
 
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
     if not subscription or subscription.is_trial:
         texts = get_texts(db_user.language)
         await callback.answer(
@@ -228,7 +257,9 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     await save_subscription_checkout_draft(db_user.id, dict(data))
     resume_callback = 'subscription_resume_checkout' if should_offer_checkout_resume(db_user, True) else None
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     selected_countries = data.get('countries', [])
     current_countries = subscription.connected_squads
@@ -257,7 +288,10 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     # TOCTOU protection: lock user row before reading discount and charging balance
     db_user = await lock_user_for_pricing(db, db_user.id)
-    subscription = db_user.subscription
+    if settings.is_multi_tariff_enabled() and sub_id:
+        subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    else:
+        subscription = db_user.subscription
 
     servers_discount_percent = PricingEngine.get_addon_discount_percent(
         db_user,
@@ -687,7 +721,9 @@ async def handle_add_country_to_subscription(
         logger.info('🔍 Добавлена страна', country_uuid=country_uuid)
 
     total_price = 0
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
     period_hint_days = _get_period_hint_from_subscription(subscription)
     servers_discount_percent = PricingEngine.get_addon_discount_percent(
         db_user,
@@ -776,7 +812,9 @@ async def confirm_add_countries_to_subscription(
 ):
     data = await state.get_data()
     texts = get_texts(db_user.language)
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     selected_countries = data.get('countries', [])
     current_countries = subscription.connected_squads
@@ -795,7 +833,10 @@ async def confirm_add_countries_to_subscription(
 
     # TOCTOU protection: lock user row before reading discount and charging balance
     db_user = await lock_user_for_pricing(db, db_user.id)
-    subscription = db_user.subscription
+    if settings.is_multi_tariff_enabled() and sub_id:
+        subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    else:
+        subscription = db_user.subscription
 
     total_price = 0
     new_countries_names = []
