@@ -38,6 +38,7 @@ SPENT_TRANSACTION_TYPES: tuple[str, ...] = (
 
 EDGE_TYPE_REFERRAL = 'referral'
 EDGE_TYPE_CAMPAIGN = 'campaign'
+EDGE_TYPE_PARTNER_CAMPAIGN = 'partner_campaign'
 
 NODE_PREFIX_USER = 'user_'
 NODE_PREFIX_CAMPAIGN = 'campaign_'
@@ -584,6 +585,21 @@ async def get_referral_network(
                     source=f'{NODE_PREFIX_CAMPAIGN}{campaign_id}',
                     target=f'{NODE_PREFIX_USER}{user_id}',
                     type=EDGE_TYPE_CAMPAIGN,
+                )
+            )
+
+    # Partner ↔ Campaign edges (partner owns campaign)
+    partner_campaigns_stmt = select(
+        AdvertisingCampaign.id, AdvertisingCampaign.partner_user_id,
+    ).where(AdvertisingCampaign.partner_user_id.isnot(None))
+    partner_campaigns_result = await db.execute(partner_campaigns_stmt)
+    for campaign_id, partner_user_id in partner_campaigns_result:
+        if partner_user_id in network_user_ids:
+            edges.append(
+                NetworkEdge(
+                    source=f'{NODE_PREFIX_USER}{partner_user_id}',
+                    target=f'{NODE_PREFIX_CAMPAIGN}{campaign_id}',
+                    type=EDGE_TYPE_PARTNER_CAMPAIGN,
                 )
             )
 
