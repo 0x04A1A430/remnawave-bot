@@ -737,11 +737,13 @@ async def _get_descendant_user_ids(db: AsyncSession, root_ids: set[int]) -> set[
     return {row[0] for row in result}
 
 
-async def _get_ancestor_user_ids(db: AsyncSession, start_user_id: int) -> set[int]:
-    """Walk up the referral chain from start_user_id to root (inclusive)."""
+async def _get_ancestor_user_ids(db: AsyncSession, start_user_ids: set[int]) -> set[int]:
+    """Walk up the referral chain from start_user_ids to root (inclusive)."""
+    if not start_user_ids:
+        return set()
     anchor = (
         select(User.id, User.referred_by_id, literal(0).label('depth'))
-        .where(User.id == start_user_id)
+        .where(User.id.in_(start_user_ids))
         .cte(name='ancestors', recursive=True)
     )
     rpart = (
@@ -867,14 +869,18 @@ async def _build_scoped_graph(
     )
 
 
+MAX_SCOPE_ITEMS = 50
+
+
 @router.get('/scoped', response_model=NetworkGraphResponse)
 async def get_scoped_referral_network(
-    scope: str = Query(..., pattern='^(campaign|partner|user)$'),
-    scope_id: int = Query(..., alias='id'),
+    campaign_ids: list[int] = Query(default=[], max_length=MAX_SCOPE_ITEMS),
+    partner_ids: list[int] = Query(default=[], max_length=MAX_SCOPE_ITEMS),
+    user_ids: list[int] = Query(default=[], max_length=MAX_SCOPE_ITEMS),
     admin: User = Depends(require_permission('stats:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NetworkGraphResponse:
-    """Return scoped referral network graph for a specific campaign, partner, or user."""
+    """Return scoped referral network graph for selected campaigns, partners, and/or users."""
     if await RateLimitCache.is_rate_limited(
         admin.id, 'referral_scoped', GRAPH_RATE_LIMIT, GRAPH_RATE_WINDOW, fail_closed=True,
     ):
@@ -884,55 +890,95 @@ async def get_scoped_referral_network(
             headers={'Retry-After': str(GRAPH_RATE_WINDOW)},
         )
 
-    if scope == 'campaign':
-        campaign = await db.get(AdvertisingCampaign, scope_id)
-        if not campaign:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Campaign not found')
+    unique_campaign_ids = set(campaign_ids)
+    unique_partner_ids = set(partner_ids)
+    unique_user_ids = set(user_ids)
 
-        reg_result = await db.execute(
-            select(AdvertisingCampaignRegistration.user_id)
-            .where(AdvertisingCampaignRegistration.campaign_id == scope_id)
+    total_items = len(unique_campaign_ids) + len(unique_partner_ids) + len(unique_user_ids)
+    if total_items == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='At least one campaign, partner, or user must be selected',
         )
-        registered_ids = {row[0] for row in reg_result}
-        scoped_ids = await _get_descendant_user_ids(db, registered_ids)
-        return await _build_scoped_graph(db, scoped_ids, {scope_id})
-
-    if scope == 'partner':
-        partner = await db.get(User, scope_id)
-        if not partner or partner.partner_status != PartnerStatus.APPROVED.value:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Partner not found')
-
-        campaigns_result = await db.execute(
-            select(AdvertisingCampaign.id)
-            .where(AdvertisingCampaign.partner_user_id == scope_id)
+    if total_items > MAX_SCOPE_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Too many items selected (max {MAX_SCOPE_ITEMS})',
         )
-        partner_campaign_ids = {row[0] for row in campaigns_result}
 
-        registered_ids: set[int] = set()
-        if partner_campaign_ids:
-            reg_result = await db.execute(
+    all_scoped_user_ids: set[int] = set()
+    all_campaign_ids: set[int] = set()
+
+    # --- Campaigns ---
+    if unique_campaign_ids:
+        existing = await db.execute(
+            select(AdvertisingCampaign.id).where(AdvertisingCampaign.id.in_(unique_campaign_ids))
+        )
+        valid_campaign_ids = {row[0] for row in existing}
+        if valid_campaign_ids:
+            all_campaign_ids |= valid_campaign_ids
+
+            campaign_reg_result = await db.execute(
                 select(AdvertisingCampaignRegistration.user_id)
-                .where(AdvertisingCampaignRegistration.campaign_id.in_(partner_campaign_ids))
+                .where(AdvertisingCampaignRegistration.campaign_id.in_(valid_campaign_ids))
             )
-            registered_ids = {row[0] for row in reg_result}
+            campaign_registered_ids = {row[0] for row in campaign_reg_result}
+            campaign_descendant_ids = await _get_descendant_user_ids(db, campaign_registered_ids)
+            all_scoped_user_ids |= campaign_descendant_ids
 
-        scoped_ids = await _get_descendant_user_ids(db, registered_ids | {scope_id})
-        return await _build_scoped_graph(db, scoped_ids, partner_campaign_ids)
+    # --- Partners ---
+    if unique_partner_ids:
+        partner_result = await db.execute(
+            select(User.id).where(
+                User.id.in_(unique_partner_ids),
+                User.partner_status == PartnerStatus.APPROVED.value,
+            )
+        )
+        valid_partner_ids = {row[0] for row in partner_result}
+        if valid_partner_ids:
+            partner_campaigns_result = await db.execute(
+                select(AdvertisingCampaign.id)
+                .where(AdvertisingCampaign.partner_user_id.in_(valid_partner_ids))
+            )
+            partner_campaign_set = {row[0] for row in partner_campaigns_result}
+            all_campaign_ids |= partner_campaign_set
 
-    # scope == 'user'
-    user = await db.get(User, scope_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+            partner_registered_ids: set[int] = set()
+            if partner_campaign_set:
+                partner_reg_result = await db.execute(
+                    select(AdvertisingCampaignRegistration.user_id)
+                    .where(AdvertisingCampaignRegistration.campaign_id.in_(partner_campaign_set))
+                )
+                partner_registered_ids = {row[0] for row in partner_reg_result}
 
-    ancestor_ids = await _get_ancestor_user_ids(db, scope_id)
-    descendant_ids = await _get_descendant_user_ids(db, {scope_id})
-    scoped_ids = ancestor_ids | descendant_ids
+            partner_descendant_ids = await _get_descendant_user_ids(db, partner_registered_ids | valid_partner_ids)
+            all_scoped_user_ids |= partner_descendant_ids
 
-    campaign_regs = await _fetch_campaign_registrations(db, scoped_ids)
-    relevant_campaigns = set(campaign_regs.values())
-    relevant_campaigns.discard(None)
+    # --- Users ---
+    if unique_user_ids:
+        user_result = await db.execute(
+            select(User.id).where(User.id.in_(unique_user_ids))
+        )
+        valid_user_ids = {row[0] for row in user_result}
+        if valid_user_ids:
+            ancestor_ids = await _get_ancestor_user_ids(db, valid_user_ids)
+            descendant_ids = await _get_descendant_user_ids(db, valid_user_ids)
+            all_scoped_user_ids |= ancestor_ids | descendant_ids
 
-    return await _build_scoped_graph(db, scoped_ids, relevant_campaigns)
+    # Fail only if ALL provided IDs were invalid
+    if not all_scoped_user_ids and not all_campaign_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='No valid items found for the provided IDs',
+        )
+
+    # Discover campaigns that scoped users registered through (runs for all scopes)
+    if all_scoped_user_ids:
+        scope_campaign_regs = await _fetch_campaign_registrations(db, all_scoped_user_ids)
+        relevant_campaigns = {cid for cid in scope_campaign_regs.values() if cid is not None}
+        all_campaign_ids |= relevant_campaigns
+
+    return await _build_scoped_graph(db, all_scoped_user_ids, all_campaign_ids)
 
 
 @router.get('/user/{user_id}', response_model=NetworkUserDetail)
