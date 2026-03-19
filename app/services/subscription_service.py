@@ -759,19 +759,21 @@ class SubscriptionService:
             needs_cleanup = False
             user_log = self._format_user_log(user)
 
-            if user.remnawave_uuid:
+            # In multi-tariff mode, validate per-subscription UUID, not user-level UUID
+            check_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
+
+            if check_uuid:
                 try:
                     async with self.get_api_client() as api:
-                        remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                        remnawave_user = await api.get_user_by_uuid(check_uuid)
 
                         if not remnawave_user:
                             logger.warning(
-                                '⚠️ Пользователь имеет UUID но не найден в панели',
+                                '⚠️ UUID не найден в панели',
                                 user_log=user_log,
-                                remnawave_uuid=user.remnawave_uuid,
+                                remnawave_uuid=check_uuid,
                             )
                             needs_cleanup = True
-                        # Проверяем telegram_id только если он задан у обоих
                         elif (
                             user.telegram_id
                             and remnawave_user.telegram_id
@@ -787,21 +789,20 @@ class SubscriptionService:
                     logger.error('❌ Ошибка проверки пользователя в панели', api_error=api_error)
                     needs_cleanup = True
 
-            if subscription.remnawave_short_uuid and not user.remnawave_uuid:
-                logger.warning('⚠️ У подписки есть short_uuid, но у пользователя нет remnawave_uuid')
+            if subscription.remnawave_short_uuid and not check_uuid:
+                logger.warning('⚠️ У подписки есть short_uuid, но нет remnawave_uuid')
                 needs_cleanup = True
 
             if needs_cleanup:
                 logger.info('🧹 Очищаем мусорные данные подписки для', user_log=user_log)
 
                 subscription.remnawave_short_uuid = None
+                subscription.remnawave_uuid = None
                 subscription.subscription_url = ''
                 subscription.subscription_crypto_link = ''
-                # connected_squads intentionally NOT cleared — it holds the desired squad
-                # configuration for this subscription period and must be preserved so that
-                # create_remnawave_user() can send it to the Remnawave API.
 
-                user.remnawave_uuid = None
+                if not settings.is_multi_tariff_enabled():
+                    user.remnawave_uuid = None
 
                 await db.commit()
                 logger.info('✅ Мусорные данные очищены для', user_log=user_log)

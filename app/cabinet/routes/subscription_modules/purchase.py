@@ -776,7 +776,8 @@ async def purchase_tariff(
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         service = SubscriptionService()
         try:
-            if getattr(user, 'remnawave_uuid', None):
+            if subscription.remnawave_uuid:
+                # Existing subscription with Remnawave user — update it
                 await service.update_remnawave_user(
                     db,
                     subscription,
@@ -785,6 +786,7 @@ async def purchase_tariff(
                     sync_squads=True,
                 )
             else:
+                # New subscription — create new Remnawave user
                 await service.create_remnawave_user(
                     db,
                     subscription,
