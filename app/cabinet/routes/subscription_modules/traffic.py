@@ -132,7 +132,7 @@ async def purchase_traffic(
     from app.database.crud.tariff import get_tariff_by_id
     from app.utils.pricing_utils import calculate_prorated_price
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(
@@ -389,7 +389,7 @@ async def save_traffic_cart(
 ) -> dict[str, bool]:
     """Save cart for traffic purchase (for insufficient balance flow)."""
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
     subscription = user.subscription
 
     if not subscription:
@@ -500,7 +500,7 @@ async def switch_traffic_package(
     """Switch to a different traffic package (change limit)."""
     from app.utils.pricing_utils import calculate_prorated_price
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(

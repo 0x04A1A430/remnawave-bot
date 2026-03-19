@@ -36,7 +36,7 @@ async def update_autopay(
         if not subscription:
             raise HTTPException(status_code=404, detail='Subscription not found')
     else:
-        await db.refresh(user, ['subscription'])
+        await db.refresh(user, ['subscriptions'])
         subscription = user.subscription
 
     if not subscription:

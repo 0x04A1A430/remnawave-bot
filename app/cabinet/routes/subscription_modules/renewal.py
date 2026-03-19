@@ -112,7 +112,7 @@ async def renew_subscription(
                 detail='Subscription not found',
             )
     else:
-        await db.refresh(user, ['subscription'])
+        await db.refresh(user, ['subscriptions'])
 
         if not user.subscription:
             raise HTTPException(

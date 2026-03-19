@@ -146,7 +146,7 @@ async def get_connection_link(
         if not subscription:
             raise HTTPException(status_code=404, detail='Subscription not found')
     else:
-        await db.refresh(user, ['subscription'])
+        await db.refresh(user, ['subscriptions'])
         subscription = user.subscription
 
     if not subscription:
@@ -426,7 +426,7 @@ async def get_app_config(
         if not subscription:
             raise HTTPException(status_code=404, detail='Subscription not found')
     else:
-        await db.refresh(user, ['subscription'])
+        await db.refresh(user, ['subscriptions'])
         subscription = user.subscription
 
     subscription_url = None

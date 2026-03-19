@@ -46,7 +46,7 @@ async def preview_tariff_switch(
             detail='Tariffs mode is not enabled',
         )
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription or not user.subscription.tariff_id:
         raise HTTPException(
@@ -165,7 +165,7 @@ async def switch_tariff(
             detail='Tariffs mode is not enabled',
         )
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription or not user.subscription.tariff_id:
         raise HTTPException(
@@ -338,7 +338,7 @@ async def switch_tariff(
 
     # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
     # (subtract_user_balance re-selects User with populate_existing=True which expires relationships)
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
     subscription = user.subscription
 
     subscription.tariff_id = new_tariff.id

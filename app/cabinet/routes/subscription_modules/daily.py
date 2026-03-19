@@ -31,7 +31,7 @@ async def toggle_subscription_pause(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Toggle pause/resume for daily subscription."""
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(

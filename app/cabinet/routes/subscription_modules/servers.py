@@ -33,7 +33,7 @@ async def get_available_countries(
     from app.database.crud.server_squad import get_available_server_squads
     from app.utils.pricing_utils import apply_percentage_discount, calculate_prorated_price
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     promo_group_id = user.promo_group_id
     available_servers = await get_available_server_squads(db, promo_group_id=promo_group_id)
@@ -109,7 +109,7 @@ async def update_countries(
     from app.database.models import TransactionType
     from app.utils.pricing_utils import apply_percentage_discount, calculate_prorated_price
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(

@@ -920,7 +920,7 @@ async def get_trial_info(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get trial subscription info and availability."""
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     # Проверяем, отключён ли триал для этого типа пользователя
     if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
@@ -1011,7 +1011,7 @@ async def activate_trial(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate trial subscription."""
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     # Проверяем, отключён ли триал для этого типа пользователя
     if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):

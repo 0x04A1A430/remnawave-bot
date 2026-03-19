@@ -534,7 +534,7 @@ async def save_devices_cart(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, bool]:
     """Save cart for device purchase (for insufficient balance flow)."""
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
     subscription = user.subscription
 
     if not subscription:
@@ -623,7 +623,7 @@ async def get_device_price(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get price for additional devices."""
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
     subscription = user.subscription
 
     if not subscription or subscription.status not in ['active', 'trial']:
@@ -733,7 +733,7 @@ async def get_devices(
     """Get list of connected devices."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(
@@ -794,7 +794,7 @@ async def delete_device(
     """Delete a specific device by HWID."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(
@@ -836,7 +836,7 @@ async def delete_all_devices(
     """Delete all connected devices."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         raise HTTPException(
@@ -907,7 +907,7 @@ async def get_device_reduction_info(
     """Get info about device limit reduction availability."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscription'])
+    await db.refresh(user, ['subscriptions'])
 
     if not user.subscription:
         return {
