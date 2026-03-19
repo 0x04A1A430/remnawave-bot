@@ -280,10 +280,9 @@ async def _fetch_personal_revenue(db: AsyncSession, user_ids: set[int]) -> dict[
 
 
 async def _fetch_branch_revenue(db: AsyncSession, user_ids: set[int]) -> dict[int, int]:
-    """Return {referrer_id: sum of earnings from their direct referrals}.
+    """Return {referrer_id: total_spent_by_direct_referrals}.
 
-    This is an approximation: earnings where referral_id is a direct referral of the user.
-    We join ReferralEarning.referral_id with User.referred_by_id to find the parent.
+    This sums subscription payments by each user's direct referrals (one level deep).
     """
     if not user_ids:
         return {}
@@ -297,9 +296,15 @@ async def _fetch_branch_revenue(db: AsyncSession, user_ids: set[int]) -> dict[in
     stmt = (
         select(
             referred_user.c.referred_by_id,
-            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
+            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
         )
-        .join(referred_user, ReferralEarning.referral_id == referred_user.c.id)
+        .join(referred_user, Transaction.user_id == referred_user.c.id)
+        .where(
+            and_(
+                Transaction.type.in_(SPENT_TRANSACTION_TYPES),
+                Transaction.is_completed.is_(True),
+            )
+        )
         .group_by(referred_user.c.referred_by_id)
     )
     result = await db.execute(stmt)
@@ -397,19 +402,7 @@ async def _fetch_campaign_stats(
     # Registration counts derived from the same query
     reg_counts: dict[int, int] = {cid: len(uids) for cid, uids in campaign_user_ids.items()}
 
-    # Revenue per campaign from ReferralEarning
-    revenue_stmt = (
-        select(
-            ReferralEarning.campaign_id,
-            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-        )
-        .where(ReferralEarning.campaign_id.in_(campaign_ids))
-        .group_by(ReferralEarning.campaign_id)
-    )
-    rev_result = await db.execute(revenue_stmt)
-    campaign_revenue: dict[int, int] = {row[0]: row[1] for row in rev_result}
-
-    # Total spending by users from each campaign (for conversion/avg check)
+    # Total spending by users from each campaign (for revenue, conversion, avg check)
     all_campaign_users = set()
     for uids in campaign_user_ids.values():
         all_campaign_users.update(uids)
@@ -459,13 +452,11 @@ async def _fetch_campaign_stats(
         for uid in c_user_ids:
             network_users += referral_counts.get(uid, 0)
 
-        revenue = campaign_revenue.get(cid, 0)
-
         # Conversion = users who spent > 0 / total registered
         paying_users = sum(1 for uid in c_user_ids if user_spent.get(uid, 0) > 0)
         conversion_rate = (paying_users / direct_users * 100) if direct_users > 0 else 0.0
 
-        # Avg check among paying users
+        # Total revenue = sum of subscription payments by campaign users
         total_spent_by_campaign_users = sum(user_spent.get(uid, 0) for uid in c_user_ids)
         avg_check = (total_spent_by_campaign_users // paying_users) if paying_users > 0 else 0
 
@@ -486,7 +477,7 @@ async def _fetch_campaign_stats(
                 is_active=campaign.is_active,
                 direct_users=direct_users,
                 total_network_users=network_users,
-                total_revenue_kopeks=revenue,
+                total_revenue_kopeks=total_spent_by_campaign_users,
                 conversion_rate=round(conversion_rate, 2),
                 avg_check_kopeks=avg_check,
                 top_referrers=top_refs,
@@ -656,13 +647,8 @@ async def get_network_user_detail(
     personal_rev_result = await db.execute(personal_rev_stmt)
     personal_revenue = personal_rev_result.scalar() or 0
 
-    # Branch revenue: earnings where referral_id is one of the user's direct referrals
-    direct_referral_ids_stmt = select(User.id).where(User.referred_by_id == user_id)
-    branch_rev_stmt = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-        ReferralEarning.referral_id.in_(direct_referral_ids_stmt)
-    )
-    branch_rev_result = await db.execute(branch_rev_stmt)
-    branch_revenue = branch_rev_result.scalar() or 0
+    # Branch revenue: computed after branch CTE (see below)
+    branch_revenue = 0
 
     # Personal spent
     spent_stmt = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
@@ -707,6 +693,18 @@ async def get_network_user_detail(
     total_branch_stmt = select(func.count(func.distinct(branch_cte.c.id))).select_from(branch_cte)
     total_branch_result = await db.execute(total_branch_stmt)
     total_branch_users = total_branch_result.scalar() or 0
+
+    # Branch revenue: total spent by all users in the branch
+    branch_user_ids_stmt = select(branch_cte.c.id)
+    branch_rev_stmt = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+        and_(
+            Transaction.user_id.in_(branch_user_ids_stmt),
+            Transaction.type.in_(SPENT_TRANSACTION_TYPES),
+            Transaction.is_completed.is_(True),
+        )
+    )
+    branch_rev_result = await db.execute(branch_rev_stmt)
+    branch_revenue = branch_rev_result.scalar() or 0
 
     # Referrer info
     referrer_display_name: str | None = None
@@ -802,14 +800,7 @@ async def get_network_campaign_detail(
         referral_counts = {row[0]: row[1] for row in ref_result}
         total_network_users += sum(referral_counts.values())
 
-    # Revenue from this campaign
-    rev_stmt = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
-        ReferralEarning.campaign_id == campaign_id
-    )
-    rev_result = await db.execute(rev_stmt)
-    total_revenue = rev_result.scalar() or 0
-
-    # Spending by campaign users (for conversion + avg check)
+    # Spending by campaign users (for conversion, avg check, and total revenue)
     paying_users = 0
     total_spent = 0
     if campaign_user_ids:
@@ -861,7 +852,7 @@ async def get_network_campaign_detail(
         is_active=campaign.is_active,
         direct_users=direct_users,
         total_network_users=total_network_users,
-        total_revenue_kopeks=total_revenue,
+        total_revenue_kopeks=total_spent,
         conversion_rate=round(conversion_rate, 2),
         avg_check_kopeks=avg_check,
         top_referrers=top_referrers,
@@ -986,22 +977,27 @@ async def search_referral_network(
         for row in uc_res:
             campaign_user_map[row[0]].append(row[1])
 
-        # Batch: revenue per campaign
-        rev_stmt = (
-            select(
-                ReferralEarning.campaign_id,
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0),
-            )
-            .where(ReferralEarning.campaign_id.in_(matched_campaign_ids))
-            .group_by(ReferralEarning.campaign_id)
-        )
-        rev_res = await db.execute(rev_stmt)
-        campaign_revenue: dict[int, int] = {row[0]: row[1] for row in rev_res}
-
-        # Fetch referral counts scoped to campaign users
+        # Fetch referral counts and spending scoped to campaign users
         all_campaign_user_ids: set[int] = set()
         for uids in campaign_user_map.values():
             all_campaign_user_ids.update(uids)
+
+        # Batch: spending per user (for campaign revenue)
+        campaign_user_spent: dict[int, int] = {}
+        if all_campaign_user_ids:
+            spent_stmt = (
+                select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+                .where(
+                    and_(
+                        Transaction.user_id.in_(all_campaign_user_ids),
+                        Transaction.type.in_(SPENT_TRANSACTION_TYPES),
+                        Transaction.is_completed.is_(True),
+                    )
+                )
+                .group_by(Transaction.user_id)
+            )
+            spent_res = await db.execute(spent_stmt)
+            campaign_user_spent = {row[0]: row[1] for row in spent_res}
         campaign_referral_counts = (
             await _fetch_direct_referral_counts(db, all_campaign_user_ids)
             if all_campaign_user_ids
@@ -1013,6 +1009,7 @@ async def search_referral_network(
             direct_users = reg_counts.get(cid, 0)
             c_user_ids = campaign_user_map.get(cid, [])
             network_users = direct_users + sum(campaign_referral_counts.get(uid, 0) for uid in c_user_ids)
+            total_revenue = sum(campaign_user_spent.get(uid, 0) for uid in c_user_ids)
 
             campaign_nodes.append(
                 NetworkCampaignNode(
@@ -1022,7 +1019,7 @@ async def search_referral_network(
                     is_active=campaign.is_active,
                     direct_users=direct_users,
                     total_network_users=network_users,
-                    total_revenue_kopeks=campaign_revenue.get(cid, 0),
+                    total_revenue_kopeks=total_revenue,
                     conversion_rate=0.0,
                     avg_check_kopeks=0,
                     top_referrers=[],
