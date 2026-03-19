@@ -54,6 +54,8 @@ DETAIL_RATE_WINDOW = 60
 SEARCH_RATE_LIMIT = 30
 SEARCH_RATE_WINDOW = 60
 
+MAX_REFERRAL_DEPTH = 50
+
 # Regex to escape LIKE wildcards
 _LIKE_ESCAPE_RE = re.compile(r'([%_\\])')
 
@@ -172,7 +174,7 @@ def _user_display_name(user: User) -> str:
     return f'User{user.id}'
 
 
-def _format_datetime(dt) -> str | None:
+def _format_datetime(dt: object) -> str | None:
     """Format datetime to ISO string, handle None."""
     if dt is None:
         return None
@@ -382,19 +384,7 @@ async def _fetch_campaign_stats(
 
     campaign_ids = [c.id for c in campaigns]
 
-    # Registration counts per campaign
-    reg_count_stmt = (
-        select(
-            AdvertisingCampaignRegistration.campaign_id,
-            func.count(AdvertisingCampaignRegistration.id),
-        )
-        .where(AdvertisingCampaignRegistration.campaign_id.in_(campaign_ids))
-        .group_by(AdvertisingCampaignRegistration.campaign_id)
-    )
-    reg_result = await db.execute(reg_count_stmt)
-    reg_counts: dict[int, int] = {row[0]: row[1] for row in reg_result}
-
-    # Users per campaign (for computing network users and top referrers)
+    # Users per campaign (for computing registration counts, network users, and top referrers)
     user_campaign_stmt = select(
         AdvertisingCampaignRegistration.campaign_id,
         AdvertisingCampaignRegistration.user_id,
@@ -403,6 +393,9 @@ async def _fetch_campaign_stats(
     campaign_user_ids: dict[int, list[int]] = defaultdict(list)
     for row in uc_result:
         campaign_user_ids[row[0]].append(row[1])
+
+    # Registration counts derived from the same query
+    reg_counts: dict[int, int] = {cid: len(uids) for cid, uids in campaign_user_ids.items()}
 
     # Revenue per campaign from ReferralEarning
     revenue_stmt = (
@@ -606,9 +599,7 @@ async def get_referral_network(
     # Summary stats
     total_referrers = len([u for u in user_nodes if u.direct_referrals > 0])
 
-    total_earnings_stmt = select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
-    total_earnings_result = await db.execute(total_earnings_stmt)
-    total_earnings = total_earnings_result.scalar() or 0
+    total_earnings = sum(personal_revenue.values())
 
     return NetworkGraphResponse(
         users=user_nodes,
@@ -628,7 +619,9 @@ async def get_network_user_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NetworkUserDetail:
     """Return detailed info about a specific user in the referral network."""
-    if await RateLimitCache.is_rate_limited(admin.id, 'referral_user_detail', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW):
+    if await RateLimitCache.is_rate_limited(
+        admin.id, 'referral_user_detail', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW, fail_closed=True,
+    ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail='Too many requests',
@@ -708,10 +701,10 @@ async def get_network_user_detail(
     recursive_part = (
         select(User.id, (base.c.depth + 1).label('depth'))
         .join(base, User.referred_by_id == base.c.id)
-        .where(base.c.depth < 50)
+        .where(base.c.depth < MAX_REFERRAL_DEPTH)
     )
-    branch_cte = base.union_all(recursive_part)
-    total_branch_stmt = select(func.count()).select_from(branch_cte)
+    branch_cte = base.union_all(recursive_part)  # UNION ALL + count(distinct) is faster than UNION
+    total_branch_stmt = select(func.count(func.distinct(branch_cte.c.id))).select_from(branch_cte)
     total_branch_result = await db.execute(total_branch_stmt)
     total_branch_users = total_branch_result.scalar() or 0
 
@@ -761,7 +754,9 @@ async def get_network_campaign_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NetworkCampaignDetail:
     """Return detailed info about a specific advertising campaign."""
-    if await RateLimitCache.is_rate_limited(admin.id, 'referral_campaign_detail', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW):
+    if await RateLimitCache.is_rate_limited(
+        admin.id, 'referral_campaign_detail', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW, fail_closed=True,
+    ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail='Too many requests',
@@ -880,13 +875,15 @@ async def search_referral_network(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NetworkSearchResult:
     """Search users and campaigns in the referral network by telegram_id, username, email, or campaign name."""
-    if await RateLimitCache.is_rate_limited(admin.id, 'referral_search', SEARCH_RATE_LIMIT, SEARCH_RATE_WINDOW):
+    if await RateLimitCache.is_rate_limited(
+        admin.id, 'referral_search', SEARCH_RATE_LIMIT, SEARCH_RATE_WINDOW, fail_closed=True,
+    ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail='Too many requests',
             headers={'Retry-After': str(SEARCH_RATE_WINDOW)},
         )
-    logger.info('Searching referral network', admin_id=admin.id, query=q)
+    logger.info('Searching referral network', admin_id=admin.id, query_len=len(q))
 
     query_stripped = q.strip()
     escaped_query = _escape_like(query_stripped)
