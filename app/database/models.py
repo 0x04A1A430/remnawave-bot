@@ -1574,6 +1574,7 @@ class Transaction(Base):
         Index('ix_transactions_type_created_completed', 'type', 'created_at', 'is_completed'),
         Index('ix_transactions_user_created', 'user_id', 'created_at'),
         Index('ix_transactions_type_method_created', 'type', 'payment_method', 'created_at'),
+        Index('ix_transactions_user_type_completed_amount', 'user_id', 'type', 'is_completed', 'amount_kopeks'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -2490,7 +2491,10 @@ class AdvertisingCampaign(Base):
 
 class AdvertisingCampaignRegistration(Base):
     __tablename__ = 'advertising_campaign_registrations'
-    __table_args__ = (UniqueConstraint('campaign_id', 'user_id', name='uq_campaign_user'),)
+    __table_args__ = (
+        UniqueConstraint('campaign_id', 'user_id', name='uq_campaign_user'),
+        Index('ix_campaign_reg_user_created', 'user_id', 'created_at'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     campaign_id = Column(Integer, ForeignKey('advertising_campaigns.id', ondelete='CASCADE'), nullable=False)
