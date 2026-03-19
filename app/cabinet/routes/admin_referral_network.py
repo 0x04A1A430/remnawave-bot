@@ -157,6 +157,26 @@ class NetworkSearchResult(BaseModel):
     campaigns: list[NetworkCampaignNode]
 
 
+class CampaignOption(BaseModel):
+    id: int
+    name: str
+    start_parameter: str
+    is_active: bool
+    direct_users: int
+
+
+class PartnerOption(BaseModel):
+    id: int
+    display_name: str
+    username: str | None
+    campaign_count: int
+
+
+class ScopeOptionsResponse(BaseModel):
+    campaigns: list[CampaignOption]
+    partners: list[PartnerOption]
+
+
 # ============ Helpers ============
 
 
@@ -378,23 +398,25 @@ async def _fetch_subscription_info(db: AsyncSession, user_ids: set[int]) -> dict
 async def _fetch_campaign_stats(
     db: AsyncSession,
     referral_counts: dict[int, int],
+    campaign_ids: set[int] | None = None,
 ) -> list[NetworkCampaignNode]:
-    """Build campaign nodes with aggregated stats."""
-    # Fetch all campaigns
+    """Build campaign nodes with aggregated stats. Optionally scoped to campaign_ids."""
     stmt = select(AdvertisingCampaign)
+    if campaign_ids is not None:
+        stmt = stmt.where(AdvertisingCampaign.id.in_(campaign_ids))
     result = await db.execute(stmt)
     campaigns = list(result.scalars().all())
 
     if not campaigns:
         return []
 
-    campaign_ids = [c.id for c in campaigns]
+    fetched_campaign_ids = [c.id for c in campaigns]
 
     # Users per campaign (for computing registration counts, network users, and top referrers)
     user_campaign_stmt = select(
         AdvertisingCampaignRegistration.campaign_id,
         AdvertisingCampaignRegistration.user_id,
-    ).where(AdvertisingCampaignRegistration.campaign_id.in_(campaign_ids))
+    ).where(AdvertisingCampaignRegistration.campaign_id.in_(fetched_campaign_ids))
     uc_result = await db.execute(user_campaign_stmt)
     campaign_user_ids: dict[int, list[int]] = defaultdict(list)
     for row in uc_result:
@@ -617,6 +639,300 @@ async def get_referral_network(
         total_campaigns=len(campaign_nodes),
         total_earnings_kopeks=total_earnings,
     )
+
+
+@router.get('/scope-options', response_model=ScopeOptionsResponse)
+async def get_scope_options(
+    admin: User = Depends(require_permission('stats:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> ScopeOptionsResponse:
+    """Return lightweight lists of campaigns and partners for the scope selector."""
+    if await RateLimitCache.is_rate_limited(
+        admin.id, 'referral_scope_opts', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW, fail_closed=True,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': str(DETAIL_RATE_WINDOW)},
+        )
+
+    # Campaigns with registration counts
+    campaign_stmt = (
+        select(
+            AdvertisingCampaign.id,
+            AdvertisingCampaign.name,
+            AdvertisingCampaign.start_parameter,
+            AdvertisingCampaign.is_active,
+            func.count(AdvertisingCampaignRegistration.id).label('direct_users'),
+        )
+        .outerjoin(
+            AdvertisingCampaignRegistration,
+            AdvertisingCampaignRegistration.campaign_id == AdvertisingCampaign.id,
+        )
+        .group_by(AdvertisingCampaign.id)
+        .order_by(AdvertisingCampaign.name)
+    )
+    campaign_result = await db.execute(campaign_stmt)
+    campaign_options = [
+        CampaignOption(
+            id=row[0], name=row[1], start_parameter=row[2],
+            is_active=row[3], direct_users=row[4],
+        )
+        for row in campaign_result
+    ]
+
+    # Partners with campaign counts
+    partner_stmt = (
+        select(
+            User.id,
+            User.username,
+            User.first_name,
+            User.last_name,
+            User.telegram_id,
+            User.email,
+            func.count(AdvertisingCampaign.id).label('campaign_count'),
+        )
+        .outerjoin(AdvertisingCampaign, AdvertisingCampaign.partner_user_id == User.id)
+        .where(User.partner_status == PartnerStatus.APPROVED.value)
+        .group_by(User.id)
+        .order_by(User.id)
+    )
+    partner_result = await db.execute(partner_stmt)
+    partner_options = []
+    for row in partner_result:
+        user_obj = User(
+            id=row[0], username=row[1], first_name=row[2],
+            last_name=row[3], telegram_id=row[4], email=row[5],
+        )
+        partner_options.append(
+            PartnerOption(
+                id=row[0],
+                display_name=_user_display_name(user_obj),
+                username=row[1],
+                campaign_count=row[6],
+            )
+        )
+
+    return ScopeOptionsResponse(campaigns=campaign_options, partners=partner_options)
+
+
+async def _get_descendant_user_ids(db: AsyncSession, root_ids: set[int]) -> set[int]:
+    """Get all user IDs in the referral trees rooted at root_ids (inclusive)."""
+    if not root_ids:
+        return set()
+
+    anchor = (
+        select(User.id, literal(0).label('depth'))
+        .where(User.id.in_(root_ids))
+        .cte(name='descendants', recursive=True)
+    )
+    rpart = (
+        select(User.id, (anchor.c.depth + 1).label('depth'))
+        .join(anchor, User.referred_by_id == anchor.c.id)
+        .where(anchor.c.depth < MAX_REFERRAL_DEPTH)
+    )
+    descendants_cte = anchor.union_all(rpart)
+
+    result = await db.execute(select(func.distinct(descendants_cte.c.id)))
+    return {row[0] for row in result}
+
+
+async def _get_ancestor_user_ids(db: AsyncSession, start_user_id: int) -> set[int]:
+    """Walk up the referral chain from start_user_id to root (inclusive)."""
+    anchor = (
+        select(User.id, User.referred_by_id, literal(0).label('depth'))
+        .where(User.id == start_user_id)
+        .cte(name='ancestors', recursive=True)
+    )
+    rpart = (
+        select(User.id, User.referred_by_id, (anchor.c.depth + 1).label('depth'))
+        .join(anchor, User.id == anchor.c.referred_by_id)
+        .where(anchor.c.depth < MAX_REFERRAL_DEPTH)
+    )
+    ancestors_cte = anchor.union_all(rpart)
+
+    result = await db.execute(select(func.distinct(ancestors_cte.c.id)))
+    return {row[0] for row in result}
+
+
+async def _build_scoped_graph(
+    db: AsyncSession,
+    scoped_user_ids: set[int],
+    campaign_ids: set[int],
+) -> NetworkGraphResponse:
+    """Build graph response for a scoped set of users and campaigns."""
+    if not scoped_user_ids:
+        # Still show campaign nodes even with no users
+        if campaign_ids:
+            campaign_nodes = await _fetch_campaign_stats(db, {}, campaign_ids=campaign_ids)
+            return NetworkGraphResponse(
+                users=[], campaigns=campaign_nodes, edges=[],
+                total_users=0, total_referrers=0, total_campaigns=len(campaign_nodes),
+                total_earnings_kopeks=0,
+            )
+        return NetworkGraphResponse(
+            users=[], campaigns=[], edges=[],
+            total_users=0, total_referrers=0, total_campaigns=0, total_earnings_kopeks=0,
+        )
+
+    # Cap to prevent excessive response sizes
+    if len(scoped_user_ids) > GRAPH_MAX_NODES:
+        logger.warning(
+            'Scoped referral network exceeds node limit, truncating',
+            total=len(scoped_user_ids),
+            limit=GRAPH_MAX_NODES,
+        )
+        scoped_user_ids = set(sorted(scoped_user_ids)[:GRAPH_MAX_NODES])
+
+    referral_counts = await _fetch_direct_referral_counts(db, scoped_user_ids)
+    personal_revenue = await _fetch_personal_revenue(db, scoped_user_ids)
+    branch_revenue = await _fetch_branch_revenue(db, scoped_user_ids)
+    personal_spent = await _fetch_personal_spent(db, scoped_user_ids)
+    campaign_regs = await _fetch_campaign_registrations(db, scoped_user_ids)
+    sub_info = await _fetch_subscription_info(db, scoped_user_ids)
+
+    users_result = await db.execute(select(User).where(User.id.in_(scoped_user_ids)))
+    users = list(users_result.scalars().all())
+
+    user_nodes: list[NetworkUserNode] = []
+    for user in users:
+        sub = sub_info.get(user.id, (None, None))
+        user_nodes.append(
+            _build_user_node(
+                user,
+                direct_referral_count=referral_counts.get(user.id, 0),
+                personal_revenue=personal_revenue.get(user.id, 0),
+                branch_revenue=branch_revenue.get(user.id, 0),
+                personal_spent=personal_spent.get(user.id, 0),
+                campaign_id=campaign_regs.get(user.id),
+                subscription_name=sub[0],
+                subscription_end_str=sub[1],
+            )
+        )
+
+    # Include campaigns from the scope + any campaigns users registered through
+    all_campaign_ids = campaign_ids | set(campaign_regs.values())
+    all_campaign_ids.discard(None)
+    campaign_nodes = await _fetch_campaign_stats(db, referral_counts, campaign_ids=all_campaign_ids) if all_campaign_ids else []
+
+    edges: list[NetworkEdge] = []
+
+    for user in users:
+        if user.referred_by_id is not None and user.referred_by_id in scoped_user_ids:
+            edges.append(
+                NetworkEdge(
+                    source=f'{NODE_PREFIX_USER}{user.referred_by_id}',
+                    target=f'{NODE_PREFIX_USER}{user.id}',
+                    type=EDGE_TYPE_REFERRAL,
+                )
+            )
+
+    for user_id, cid in campaign_regs.items():
+        if user_id in scoped_user_ids and cid in all_campaign_ids:
+            edges.append(
+                NetworkEdge(
+                    source=f'{NODE_PREFIX_CAMPAIGN}{cid}',
+                    target=f'{NODE_PREFIX_USER}{user_id}',
+                    type=EDGE_TYPE_CAMPAIGN,
+                )
+            )
+
+    partner_stmt = select(
+        AdvertisingCampaign.id, AdvertisingCampaign.partner_user_id,
+    ).where(
+        AdvertisingCampaign.partner_user_id.isnot(None),
+        AdvertisingCampaign.id.in_(all_campaign_ids),
+    )
+    for cid, pid in await db.execute(partner_stmt):
+        if pid in scoped_user_ids:
+            edges.append(
+                NetworkEdge(
+                    source=f'{NODE_PREFIX_USER}{pid}',
+                    target=f'{NODE_PREFIX_CAMPAIGN}{cid}',
+                    type=EDGE_TYPE_PARTNER_CAMPAIGN,
+                )
+            )
+
+    total_referrers = len([u for u in user_nodes if u.direct_referrals > 0])
+    total_earnings = sum(personal_revenue.values())
+
+    return NetworkGraphResponse(
+        users=user_nodes,
+        campaigns=campaign_nodes,
+        edges=edges,
+        total_users=len(user_nodes),
+        total_referrers=total_referrers,
+        total_campaigns=len(campaign_nodes),
+        total_earnings_kopeks=total_earnings,
+    )
+
+
+@router.get('/scoped', response_model=NetworkGraphResponse)
+async def get_scoped_referral_network(
+    scope: str = Query(..., pattern='^(campaign|partner|user)$'),
+    scope_id: int = Query(..., alias='id'),
+    admin: User = Depends(require_permission('stats:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> NetworkGraphResponse:
+    """Return scoped referral network graph for a specific campaign, partner, or user."""
+    if await RateLimitCache.is_rate_limited(
+        admin.id, 'referral_scoped', GRAPH_RATE_LIMIT, GRAPH_RATE_WINDOW, fail_closed=True,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': str(GRAPH_RATE_WINDOW)},
+        )
+
+    if scope == 'campaign':
+        campaign = await db.get(AdvertisingCampaign, scope_id)
+        if not campaign:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Campaign not found')
+
+        reg_result = await db.execute(
+            select(AdvertisingCampaignRegistration.user_id)
+            .where(AdvertisingCampaignRegistration.campaign_id == scope_id)
+        )
+        registered_ids = {row[0] for row in reg_result}
+        scoped_ids = await _get_descendant_user_ids(db, registered_ids)
+        return await _build_scoped_graph(db, scoped_ids, {scope_id})
+
+    if scope == 'partner':
+        partner = await db.get(User, scope_id)
+        if not partner or partner.partner_status != PartnerStatus.APPROVED.value:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Partner not found')
+
+        campaigns_result = await db.execute(
+            select(AdvertisingCampaign.id)
+            .where(AdvertisingCampaign.partner_user_id == scope_id)
+        )
+        partner_campaign_ids = {row[0] for row in campaigns_result}
+
+        registered_ids: set[int] = set()
+        if partner_campaign_ids:
+            reg_result = await db.execute(
+                select(AdvertisingCampaignRegistration.user_id)
+                .where(AdvertisingCampaignRegistration.campaign_id.in_(partner_campaign_ids))
+            )
+            registered_ids = {row[0] for row in reg_result}
+
+        scoped_ids = await _get_descendant_user_ids(db, registered_ids | {scope_id})
+        return await _build_scoped_graph(db, scoped_ids, partner_campaign_ids)
+
+    # scope == 'user'
+    user = await db.get(User, scope_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    ancestor_ids = await _get_ancestor_user_ids(db, scope_id)
+    descendant_ids = await _get_descendant_user_ids(db, {scope_id})
+    scoped_ids = ancestor_ids | descendant_ids
+
+    campaign_regs = await _fetch_campaign_registrations(db, scoped_ids)
+    relevant_campaigns = set(campaign_regs.values())
+    relevant_campaigns.discard(None)
+
+    return await _build_scoped_graph(db, scoped_ids, relevant_campaigns)
 
 
 @router.get('/user/{user_id}', response_model=NetworkUserDetail)
