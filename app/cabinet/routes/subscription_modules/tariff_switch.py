@@ -181,10 +181,9 @@ async def switch_tariff(
         .execution_options(populate_existing=True)
     )
     subscription = locked_result.scalar_one()
-    user.subscription = subscription
 
     # Use actual_status for correct status check (handles time-based expiration)
-    actual_status = user.subscription.actual_status
+    actual_status = subscription.actual_status
     if actual_status == 'expired':
         # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
