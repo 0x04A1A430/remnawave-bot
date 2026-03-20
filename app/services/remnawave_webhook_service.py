@@ -218,14 +218,8 @@ class RemnaWaveWebhookService:
 
     async def _process_admin_event(self, event_name: str, data: dict) -> bool:
         """Format and send admin notification for infrastructure events."""
-        if (
-            event_name in _ADMIN_NODE_CONNECTION_EVENTS
-            and not settings.REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS
-        ):
-            logger.debug(
-                'RemnaWave node connection notifications disabled, skipping event',
-                event_name=event_name,
-            )
+        if event_name in _ADMIN_NODE_CONNECTION_EVENTS and not settings.REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS:
+            logger.debug('RemnaWave node connection notifications disabled, skipping event', event_name=event_name)
             return True
 
         if not self._admin_service.is_enabled:
