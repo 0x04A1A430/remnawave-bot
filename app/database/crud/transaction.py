@@ -51,6 +51,11 @@ async def create_transaction(
         else amount_kopeks
     )
 
+    # Default payment_method to BALANCE for subscription/gift payments from bot (not landing)
+    # to avoid double-counting with DEPOSIT in revenue calculations
+    if payment_method is None and type in (TransactionType.SUBSCRIPTION_PAYMENT, TransactionType.GIFT_PAYMENT):
+        payment_method = PaymentMethod.BALANCE
+
     transaction = Transaction(
         user_id=user_id,
         type=type.value,
