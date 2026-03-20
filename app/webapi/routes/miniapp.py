@@ -2869,8 +2869,10 @@ async def _build_referral_info(
     referral_settings = settings.get_referral_settings() or {}
 
     referral_link = None
+    bot_referral_link = None
     if referral_code:
-        referral_link = settings.get_referral_link(referral_code)
+        referral_link = settings.get_cabinet_referral_link(referral_code)
+        bot_referral_link = settings.get_bot_referral_link(referral_code)
 
     minimum_topup_kopeks = int(referral_settings.get('minimum_topup_kopeks') or 0)
     first_topup_bonus_kopeks = int(referral_settings.get('first_topup_bonus_kopeks') or 0)
@@ -2967,6 +2969,7 @@ async def _build_referral_info(
     return MiniAppReferralInfo(
         referral_code=referral_code,
         referral_link=referral_link,
+        bot_referral_link=bot_referral_link,
         terms=terms,
         stats=stats,
         recent_earnings=recent_earnings,

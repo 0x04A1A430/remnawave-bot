@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import time
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlparse
+from urllib.parse import quote as _url_quote, urlparse
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -1439,23 +1439,43 @@ class Settings(BaseSettings):
 
     _CABINET_URL_DEFAULT = 'https://example.com/cabinet'
 
+    def _encode_referral_code(self, referral_code: str) -> str:
+        """Validate and URL-encode a referral code."""
+        if not referral_code:
+            raise ValueError('referral_code must not be empty or None')
+        return _url_quote(referral_code, safe='')
+
+    def _normalized_cabinet_url(self) -> str | None:
+        """Return normalized cabinet URL, or None if not configured."""
+        cabinet_url = (self.CABINET_URL or '').strip().rstrip('/')
+        if not cabinet_url or cabinet_url == self._CABINET_URL_DEFAULT:
+            return None
+        return cabinet_url
+
     def get_referral_link(self, referral_code: str, bot_username: str | None = None) -> str:
         """Build a referral link pointing to the web cabinet.
 
         Falls back to a Telegram bot deep link when CABINET_URL is not configured.
         """
-        from urllib.parse import quote
+        cabinet_link = self.get_cabinet_referral_link(referral_code)
+        if cabinet_link:
+            return cabinet_link
+        return self.get_bot_referral_link(referral_code, bot_username)
 
-        if not referral_code:
-            raise ValueError('referral_code must not be empty or None')
-
-        safe_code = quote(referral_code, safe='')
-        cabinet_url = (self.CABINET_URL or '').strip().rstrip('/')
-        if cabinet_url and cabinet_url != self._CABINET_URL_DEFAULT:
-            sep = '&' if '?' in cabinet_url else '?'
-            return f'{cabinet_url}{sep}ref={safe_code}'
+    def get_bot_referral_link(self, referral_code: str, bot_username: str | None = None) -> str:
+        """Always return the Telegram bot deep link for a referral code."""
+        safe_code = self._encode_referral_code(referral_code)
         username = bot_username or self.get_bot_username() or 'bot'
         return f'https://t.me/{username}?start={safe_code}'
+
+    def get_cabinet_referral_link(self, referral_code: str) -> str | None:
+        """Return the cabinet referral link, or None if cabinet is not configured."""
+        cabinet_url = self._normalized_cabinet_url()
+        if not cabinet_url:
+            return None
+        safe_code = self._encode_referral_code(referral_code)
+        sep = '&' if '?' in cabinet_url else '?'
+        return f'{cabinet_url}{sep}ref={safe_code}'
 
     def is_deep_links_enabled(self) -> bool:
         return self.ENABLE_DEEP_LINKS
