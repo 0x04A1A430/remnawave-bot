@@ -401,7 +401,12 @@ return c
 
     @staticmethod
     async def is_rate_limited(
-        user_id: int, action: str, limit: int, window: int, *, fail_closed: bool = False,
+        user_id: int,
+        action: str,
+        limit: int,
+        window: int,
+        *,
+        fail_closed: bool = False,
     ) -> bool:
         key = cache_key('rate_limit', user_id, action)
         return await RateLimitCache._atomic_rate_check(key, limit, window, fail_closed=fail_closed)

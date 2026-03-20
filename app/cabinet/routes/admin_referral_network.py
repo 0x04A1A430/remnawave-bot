@@ -32,9 +32,7 @@ router = APIRouter(prefix='/admin/referral-network', tags=['Cabinet Admin Referr
 
 # ============ Constants ============
 
-SPENT_TRANSACTION_TYPES: tuple[str, ...] = (
-    TransactionType.SUBSCRIPTION_PAYMENT.value,
-)
+SPENT_TRANSACTION_TYPES: tuple[str, ...] = (TransactionType.SUBSCRIPTION_PAYMENT.value,)
 
 EDGE_TYPE_REFERRAL = 'referral'
 EDGE_TYPE_CAMPAIGN = 'campaign'
@@ -275,10 +273,7 @@ async def _fetch_direct_referral_counts(db: AsyncSession, user_ids: set[int] | N
 
     When user_ids is provided, only counts referrals for those users.
     """
-    stmt = (
-        select(User.referred_by_id, func.count(User.id))
-        .where(User.referred_by_id.isnot(None))
-    )
+    stmt = select(User.referred_by_id, func.count(User.id)).where(User.referred_by_id.isnot(None))
     if user_ids is not None:
         stmt = stmt.where(User.referred_by_id.in_(user_ids))
     stmt = stmt.group_by(User.referred_by_id)
@@ -520,7 +515,11 @@ async def get_referral_network(
 ) -> NetworkGraphResponse:
     """Return full referral network graph data for visualization."""
     if await RateLimitCache.is_rate_limited(
-        admin.id, 'referral_graph', GRAPH_RATE_LIMIT, GRAPH_RATE_WINDOW, fail_closed=True,
+        admin.id,
+        'referral_graph',
+        GRAPH_RATE_LIMIT,
+        GRAPH_RATE_WINDOW,
+        fail_closed=True,
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -612,7 +611,8 @@ async def get_referral_network(
 
     # Partner ↔ Campaign edges (partner owns campaign)
     partner_campaigns_stmt = select(
-        AdvertisingCampaign.id, AdvertisingCampaign.partner_user_id,
+        AdvertisingCampaign.id,
+        AdvertisingCampaign.partner_user_id,
     ).where(AdvertisingCampaign.partner_user_id.isnot(None))
     partner_campaigns_result = await db.execute(partner_campaigns_stmt)
     for campaign_id, partner_user_id in partner_campaigns_result:
@@ -648,7 +648,11 @@ async def get_scope_options(
 ) -> ScopeOptionsResponse:
     """Return lightweight lists of campaigns and partners for the scope selector."""
     if await RateLimitCache.is_rate_limited(
-        admin.id, 'referral_scope_opts', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW, fail_closed=True,
+        admin.id,
+        'referral_scope_opts',
+        DETAIL_RATE_LIMIT,
+        DETAIL_RATE_WINDOW,
+        fail_closed=True,
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -675,8 +679,11 @@ async def get_scope_options(
     campaign_result = await db.execute(campaign_stmt)
     campaign_options = [
         CampaignOption(
-            id=row[0], name=row[1], start_parameter=row[2],
-            is_active=row[3], direct_users=row[4],
+            id=row[0],
+            name=row[1],
+            start_parameter=row[2],
+            is_active=row[3],
+            direct_users=row[4],
         )
         for row in campaign_result
     ]
@@ -701,8 +708,12 @@ async def get_scope_options(
     partner_options = []
     for row in partner_result:
         user_obj = User(
-            id=row[0], username=row[1], first_name=row[2],
-            last_name=row[3], telegram_id=row[4], email=row[5],
+            id=row[0],
+            username=row[1],
+            first_name=row[2],
+            last_name=row[3],
+            telegram_id=row[4],
+            email=row[5],
         )
         partner_options.append(
             PartnerOption(
@@ -722,9 +733,7 @@ async def _get_descendant_user_ids(db: AsyncSession, root_ids: set[int]) -> set[
         return set()
 
     anchor = (
-        select(User.id, literal(0).label('depth'))
-        .where(User.id.in_(root_ids))
-        .cte(name='descendants', recursive=True)
+        select(User.id, literal(0).label('depth')).where(User.id.in_(root_ids)).cte(name='descendants', recursive=True)
     )
     rpart = (
         select(User.id, (anchor.c.depth + 1).label('depth'))
@@ -768,13 +777,22 @@ async def _build_scoped_graph(
         if campaign_ids:
             campaign_nodes = await _fetch_campaign_stats(db, {}, campaign_ids=campaign_ids)
             return NetworkGraphResponse(
-                users=[], campaigns=campaign_nodes, edges=[],
-                total_users=0, total_referrers=0, total_campaigns=len(campaign_nodes),
+                users=[],
+                campaigns=campaign_nodes,
+                edges=[],
+                total_users=0,
+                total_referrers=0,
+                total_campaigns=len(campaign_nodes),
                 total_earnings_kopeks=0,
             )
         return NetworkGraphResponse(
-            users=[], campaigns=[], edges=[],
-            total_users=0, total_referrers=0, total_campaigns=0, total_earnings_kopeks=0,
+            users=[],
+            campaigns=[],
+            edges=[],
+            total_users=0,
+            total_referrers=0,
+            total_campaigns=0,
+            total_earnings_kopeks=0,
         )
 
     # Cap to prevent excessive response sizes
@@ -815,7 +833,9 @@ async def _build_scoped_graph(
     # Include campaigns from the scope + any campaigns users registered through
     all_campaign_ids = campaign_ids | set(campaign_regs.values())
     all_campaign_ids.discard(None)
-    campaign_nodes = await _fetch_campaign_stats(db, referral_counts, campaign_ids=all_campaign_ids) if all_campaign_ids else []
+    campaign_nodes = (
+        await _fetch_campaign_stats(db, referral_counts, campaign_ids=all_campaign_ids) if all_campaign_ids else []
+    )
 
     edges: list[NetworkEdge] = []
 
@@ -840,7 +860,8 @@ async def _build_scoped_graph(
             )
 
     partner_stmt = select(
-        AdvertisingCampaign.id, AdvertisingCampaign.partner_user_id,
+        AdvertisingCampaign.id,
+        AdvertisingCampaign.partner_user_id,
     ).where(
         AdvertisingCampaign.partner_user_id.isnot(None),
         AdvertisingCampaign.id.in_(all_campaign_ids),
@@ -882,7 +903,11 @@ async def get_scoped_referral_network(
 ) -> NetworkGraphResponse:
     """Return scoped referral network graph for selected campaigns, partners, and/or users."""
     if await RateLimitCache.is_rate_limited(
-        admin.id, 'referral_scoped', GRAPH_RATE_LIMIT, GRAPH_RATE_WINDOW, fail_closed=True,
+        admin.id,
+        'referral_scoped',
+        GRAPH_RATE_LIMIT,
+        GRAPH_RATE_WINDOW,
+        fail_closed=True,
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -919,8 +944,9 @@ async def get_scoped_referral_network(
             all_campaign_ids |= valid_campaign_ids
 
             campaign_reg_result = await db.execute(
-                select(AdvertisingCampaignRegistration.user_id)
-                .where(AdvertisingCampaignRegistration.campaign_id.in_(valid_campaign_ids))
+                select(AdvertisingCampaignRegistration.user_id).where(
+                    AdvertisingCampaignRegistration.campaign_id.in_(valid_campaign_ids)
+                )
             )
             campaign_registered_ids = {row[0] for row in campaign_reg_result}
             campaign_descendant_ids = await _get_descendant_user_ids(db, campaign_registered_ids)
@@ -937,8 +963,7 @@ async def get_scoped_referral_network(
         valid_partner_ids = {row[0] for row in partner_result}
         if valid_partner_ids:
             partner_campaigns_result = await db.execute(
-                select(AdvertisingCampaign.id)
-                .where(AdvertisingCampaign.partner_user_id.in_(valid_partner_ids))
+                select(AdvertisingCampaign.id).where(AdvertisingCampaign.partner_user_id.in_(valid_partner_ids))
             )
             partner_campaign_set = {row[0] for row in partner_campaigns_result}
             all_campaign_ids |= partner_campaign_set
@@ -946,8 +971,9 @@ async def get_scoped_referral_network(
             partner_registered_ids: set[int] = set()
             if partner_campaign_set:
                 partner_reg_result = await db.execute(
-                    select(AdvertisingCampaignRegistration.user_id)
-                    .where(AdvertisingCampaignRegistration.campaign_id.in_(partner_campaign_set))
+                    select(AdvertisingCampaignRegistration.user_id).where(
+                        AdvertisingCampaignRegistration.campaign_id.in_(partner_campaign_set)
+                    )
                 )
                 partner_registered_ids = {row[0] for row in partner_reg_result}
 
@@ -956,9 +982,7 @@ async def get_scoped_referral_network(
 
     # --- Users ---
     if unique_user_ids:
-        user_result = await db.execute(
-            select(User.id).where(User.id.in_(unique_user_ids))
-        )
+        user_result = await db.execute(select(User.id).where(User.id.in_(unique_user_ids)))
         valid_user_ids = {row[0] for row in user_result}
         if valid_user_ids:
             ancestor_ids = await _get_ancestor_user_ids(db, valid_user_ids)
@@ -989,7 +1013,11 @@ async def get_network_user_detail(
 ) -> NetworkUserDetail:
     """Return detailed info about a specific user in the referral network."""
     if await RateLimitCache.is_rate_limited(
-        admin.id, 'referral_user_detail', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW, fail_closed=True,
+        admin.id,
+        'referral_user_detail',
+        DETAIL_RATE_LIMIT,
+        DETAIL_RATE_WINDOW,
+        fail_closed=True,
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -1131,7 +1159,11 @@ async def get_network_campaign_detail(
 ) -> NetworkCampaignDetail:
     """Return detailed info about a specific advertising campaign."""
     if await RateLimitCache.is_rate_limited(
-        admin.id, 'referral_campaign_detail', DETAIL_RATE_LIMIT, DETAIL_RATE_WINDOW, fail_closed=True,
+        admin.id,
+        'referral_campaign_detail',
+        DETAIL_RATE_LIMIT,
+        DETAIL_RATE_WINDOW,
+        fail_closed=True,
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -1245,7 +1277,11 @@ async def search_referral_network(
 ) -> NetworkSearchResult:
     """Search users and campaigns in the referral network by telegram_id, username, email, or campaign name."""
     if await RateLimitCache.is_rate_limited(
-        admin.id, 'referral_search', SEARCH_RATE_LIMIT, SEARCH_RATE_WINDOW, fail_closed=True,
+        admin.id,
+        'referral_search',
+        SEARCH_RATE_LIMIT,
+        SEARCH_RATE_WINDOW,
+        fail_closed=True,
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -1377,9 +1413,7 @@ async def search_referral_network(
             spent_res = await db.execute(spent_stmt)
             campaign_user_spent = {row[0]: row[1] for row in spent_res}
         campaign_referral_counts = (
-            await _fetch_direct_referral_counts(db, all_campaign_user_ids)
-            if all_campaign_user_ids
-            else {}
+            await _fetch_direct_referral_counts(db, all_campaign_user_ids) if all_campaign_user_ids else {}
         )
 
         for campaign in matched_campaigns:
