@@ -251,8 +251,7 @@ async def _warn_if_no_superadmins(
         )
     else:
         logger.warning(
-            'No active superadmin RBAC roles in DB. '
-            'Legacy config admins (ADMIN_IDS/ADMIN_EMAILS) still have access.',
+            'No active superadmin RBAC roles in DB. Legacy config admins (ADMIN_IDS/ADMIN_EMAILS) still have access.',
         )
 
 

@@ -540,10 +540,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     # Compact share text for switch_inline_query (256-char limit)
     share_text = invite_text
     if len(share_text) > 256:
-        share_text = (
-            texts.t('REFERRAL_INVITE_TITLE', '🎉 Присоединяйся к VPN сервису!')
-            + f'\n\n👇 {bot_referral_link}'
-        )
+        share_text = texts.t('REFERRAL_INVITE_TITLE', '🎉 Присоединяйся к VPN сервису!') + f'\n\n👇 {bot_referral_link}'
         if cabinet_referral_link and len(share_text) + len(cabinet_referral_link) + 5 <= 256:
             share_text += f'\n🌐 {cabinet_referral_link}'
         share_text = share_text[:256]

@@ -511,9 +511,7 @@ async def revoke_role(
     from app.database.models import UserRole
 
     # Lock the assignment row (FOR UPDATE held until commit)
-    result = await db.execute(
-        sa.select(UserRole).where(UserRole.id == assignment_id).with_for_update()
-    )
+    result = await db.execute(sa.select(UserRole).where(UserRole.id == assignment_id).with_for_update())
     user_role = result.scalar_one_or_none()
     if not user_role:
         raise HTTPException(

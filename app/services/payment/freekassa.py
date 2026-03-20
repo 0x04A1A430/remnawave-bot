@@ -509,14 +509,10 @@ class FreekassaPaymentMixin:
                     # Lock payment row before finalization to prevent concurrent double-processing
                     locked = await freekassa_crud.get_freekassa_payment_by_id_for_update(db, payment.id)
                     if not locked:
-                        logger.error(
-                            'Freekassa status check: не удалось заблокировать платёж', payment_id=payment.id
-                        )
+                        logger.error('Freekassa status check: не удалось заблокировать платёж', payment_id=payment.id)
                     elif locked.is_paid:
                         # Another concurrent handler already processed — skip
-                        logger.info(
-                            'Freekassa платеж уже оплачен после блокировки', order_id=locked.order_id
-                        )
+                        logger.info('Freekassa платеж уже оплачен после блокировки', order_id=locked.order_id)
                         payment = locked
                     else:
                         payment = locked

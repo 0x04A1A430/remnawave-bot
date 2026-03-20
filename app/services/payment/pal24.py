@@ -264,7 +264,7 @@ class Pal24PaymentMixin:
                 payment.callback_payload = callback
                 if payment_id is not None:
                     payment.payment_id = payment_id
-                payment.payment_status = (callback.get('Status') or status)
+                payment.payment_status = callback.get('Status') or status
                 payment.payment_method = (
                     callback.get('payment_method')
                     or callback.get('PaymentMethod')

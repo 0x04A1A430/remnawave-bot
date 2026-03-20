@@ -488,14 +488,10 @@ class KassaAiPaymentMixin:
                     # Lock payment row before finalization to prevent concurrent double-processing
                     locked = await kassa_ai_crud.get_kassa_ai_payment_by_id_for_update(db, payment.id)
                     if not locked:
-                        logger.error(
-                            'KassaAI status check: не удалось заблокировать платёж', payment_id=payment.id
-                        )
+                        logger.error('KassaAI status check: не удалось заблокировать платёж', payment_id=payment.id)
                     elif locked.is_paid:
                         # Another concurrent handler already processed — skip
-                        logger.info(
-                            'KassaAI платеж уже оплачен после блокировки', order_id=locked.order_id
-                        )
+                        logger.info('KassaAI платеж уже оплачен после блокировки', order_id=locked.order_id)
                         payment = locked
                     else:
                         payment = locked
