@@ -35,11 +35,19 @@ _ALL_METADATA_TABLES = [*_TABLES_WITH_IS_PAID, 'heleket_payments']
 
 
 def upgrade() -> None:
-    # 1. Add retry_count column to guest_purchases (safe: has server_default)
-    op.add_column(
-        'guest_purchases',
-        sa.Column('retry_count', sa.Integer(), nullable=False, server_default='0'),
+    # 1. Add retry_count column to guest_purchases (idempotent: skip if exists)
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'guest_purchases' AND column_name = 'retry_count'"
+        )
     )
+    if not result.fetchone():
+        op.add_column(
+            'guest_purchases',
+            sa.Column('retry_count', sa.Integer(), nullable=False, server_default='0'),
+        )
 
     # 2. Create expression indexes for payment recovery queries.
     #    These allow efficient lookup of succeeded payments by purchase_token
