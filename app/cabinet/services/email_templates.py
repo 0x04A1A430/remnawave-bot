@@ -1384,45 +1384,65 @@ class EmailNotificationTemplates:
             'fa': 'اشتراک VPN شما آماده است',
         }
 
-        creds_block_ru = f"""
+        creds_block_ru = (
+            f"""
                 <div class="highlight">
                     <p><strong>Данные для входа в личный кабинет:</strong></p>
                     <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
                     <p><strong>Пароль:</strong> <code>{cabinet_password}</code></p>
                 </div>
-        """ if cabinet_password else ''
+        """
+            if cabinet_password
+            else ''
+        )
 
-        creds_block_en = f"""
+        creds_block_en = (
+            f"""
                 <div class="highlight">
                     <p><strong>Your cabinet login credentials:</strong></p>
                     <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
                     <p><strong>Password:</strong> <code>{cabinet_password}</code></p>
                 </div>
-        """ if cabinet_password else ''
+        """
+            if cabinet_password
+            else ''
+        )
 
-        creds_block_zh = f"""
+        creds_block_zh = (
+            f"""
                 <div class="highlight">
                     <p><strong>个人中心登录信息：</strong></p>
                     <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
                     <p><strong>密码:</strong> <code>{cabinet_password}</code></p>
                 </div>
-        """ if cabinet_password else ''
+        """
+            if cabinet_password
+            else ''
+        )
 
-        creds_block_ua = f"""
+        creds_block_ua = (
+            f"""
                 <div class="highlight">
                     <p><strong>Дані для входу в особистий кабінет:</strong></p>
                     <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
                     <p><strong>Пароль:</strong> <code>{cabinet_password}</code></p>
                 </div>
-        """ if cabinet_password else ''
+        """
+            if cabinet_password
+            else ''
+        )
 
-        creds_block_fa = f"""
+        creds_block_fa = (
+            f"""
                 <div class="highlight">
                     <p><strong>اطلاعات ورود به پنل کاربری:</strong></p>
                     <p><strong>Email:</strong> <code>{cabinet_email}</code></p>
                     <p><strong>رمز عبور:</strong> <code>{cabinet_password}</code></p>
                 </div>
-        """ if cabinet_password else ''
+        """
+            if cabinet_password
+            else ''
+        )
 
         bodies = {
             'ru': f"""
