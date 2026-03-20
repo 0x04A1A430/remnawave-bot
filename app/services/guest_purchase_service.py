@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 import structlog
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1037,10 +1037,12 @@ async def retry_stuck_paid_purchases(
 
     # Collect tokens only — each retry gets its own session.
     # NULL paid_at is included via or_() as a safety net for data anomalies.
+    # Filter retry_count < max_retries in SQL to avoid wasting LIMIT slots.
     result = await db.execute(
-        select(GuestPurchase.token, GuestPurchase.retry_count)
+        select(GuestPurchase.token)
         .where(
             GuestPurchase.status == GuestPurchaseStatus.PAID.value,
+            GuestPurchase.retry_count < max_retries,
             or_(GuestPurchase.paid_at < cutoff, GuestPurchase.paid_at.is_(None)),
             or_(GuestPurchase.paid_at > max_age, GuestPurchase.paid_at.is_(None)),
             # Exclude code-only gifts — they stay PAID intentionally until activated
@@ -1049,24 +1051,24 @@ async def retry_stuck_paid_purchases(
         .order_by(GuestPurchase.paid_at.asc().nulls_first())
         .limit(limit)
     )
-    rows = result.all()
+    tokens = result.scalars().all()
 
-    if not rows:
+    # Separately fail exhausted purchases (retry_count >= max_retries)
+    await _fail_exhausted_purchases_batch(db, GuestPurchaseStatus.PAID, max_retries, max_age)
+
+    if not tokens:
         return 0
 
     retried = 0
-    for token, retry_count in rows:
-        if retry_count >= max_retries:
-            await _fail_exhausted_purchase(db, token, retry_count, 'PAID')
-            continue
+    for token in tokens:
         try:
             async with AsyncSessionLocal() as retry_db:
                 await _increment_retry_count(retry_db, token)
                 await fulfill_purchase(retry_db, token)
                 retried += 1
-                logger.info('Retried stuck purchase successfully', token_prefix=token[:5], retry=retry_count + 1)
+                logger.info('Retried stuck purchase successfully', token_prefix=token[:5])
         except Exception:
-            logger.exception('Failed to retry stuck purchase', token_prefix=token[:5], retry=retry_count + 1)
+            logger.exception('Failed to retry stuck purchase', token_prefix=token[:5])
 
     return retried
 
@@ -1092,9 +1094,10 @@ async def retry_stuck_pending_activation(
     max_age = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
     result = await db.execute(
-        select(GuestPurchase.token, GuestPurchase.retry_count)
+        select(GuestPurchase.token)
         .where(
             GuestPurchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value,
+            GuestPurchase.retry_count < max_retries,
             or_(GuestPurchase.paid_at < cutoff, GuestPurchase.paid_at.is_(None)),
             or_(GuestPurchase.paid_at > max_age, GuestPurchase.paid_at.is_(None)),
             GuestPurchase.user_id.isnot(None),
@@ -1102,89 +1105,123 @@ async def retry_stuck_pending_activation(
         .order_by(GuestPurchase.paid_at.asc().nulls_first())
         .limit(limit)
     )
-    rows = result.all()
+    tokens = result.scalars().all()
 
-    if not rows:
+    # Separately fail exhausted purchases (retry_count >= max_retries)
+    await _fail_exhausted_purchases_batch(db, GuestPurchaseStatus.PENDING_ACTIVATION, max_retries, max_age)
+
+    if not tokens:
         return 0
 
     retried = 0
-    for token, retry_count in rows:
-        if retry_count >= max_retries:
-            await _fail_exhausted_purchase(db, token, retry_count, 'PENDING_ACTIVATION')
-            continue
+    for token in tokens:
         try:
             async with AsyncSessionLocal() as retry_db:
                 await _increment_retry_count(retry_db, token)
                 await activate_purchase(retry_db, token)
                 retried += 1
-                logger.info(
-                    'Retried stuck pending_activation successfully', token_prefix=token[:5], retry=retry_count + 1
-                )
+                logger.info('Retried stuck pending_activation successfully', token_prefix=token[:5])
         except Exception:
-            logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5], retry=retry_count + 1)
+            logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5])
 
     return retried
 
 
 async def _increment_retry_count(db: AsyncSession, purchase_token: str) -> None:
-    """Increment retry_count on a GuestPurchase (best-effort, separate commit)."""
-    result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == purchase_token))
-    purchase = result.scalars().first()
-    if purchase:
-        purchase.retry_count = (purchase.retry_count or 0) + 1
-        await db.commit()
+    """Atomically increment retry_count via UPDATE statement (no SELECT, no identity map pollution)."""
+    await db.execute(
+        update(GuestPurchase)
+        .where(GuestPurchase.token == purchase_token)
+        .values(retry_count=GuestPurchase.retry_count + 1)
+    )
+    await db.commit()
 
 
-async def _fail_exhausted_purchase(db: AsyncSession, purchase_token: str, retry_count: int, phase: str) -> None:
-    """Mark a purchase as FAILED after exceeding max retries and send admin alert."""
+async def _fail_exhausted_purchases_batch(
+    db: AsyncSession,
+    status: GuestPurchaseStatus,
+    max_retries: int,
+    max_age: datetime,
+) -> None:
+    """Find and mark exhausted purchases as FAILED, then send admin alerts."""
     from app.database.crud.landing import update_purchase_status
     from app.database.database import AsyncSessionLocal
 
-    logger.error(
-        'Purchase exceeded max retries — marking FAILED',
-        token_prefix=purchase_token[:5],
-        retry_count=retry_count,
-        phase=phase,
+    result = await db.execute(
+        select(GuestPurchase.token, GuestPurchase.retry_count)
+        .where(
+            GuestPurchase.status == status.value,
+            GuestPurchase.retry_count >= max_retries,
+            or_(GuestPurchase.paid_at > max_age, GuestPurchase.paid_at.is_(None)),
+        )
+        .limit(10)
     )
+    exhausted = result.all()
 
-    try:
-        async with AsyncSessionLocal() as fail_db:
-            result = await fail_db.execute(
-                select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update()
-            )
-            purchase = result.scalars().first()
-            if purchase and purchase.status not in (
-                GuestPurchaseStatus.DELIVERED.value,
-                GuestPurchaseStatus.FAILED.value,
-            ):
-                await update_purchase_status(fail_db, purchase_token, GuestPurchaseStatus.FAILED)
+    for token, retry_count in exhausted:
+        # Collect alert data before closing the session
+        alert_data: dict | None = None
+        try:
+            async with AsyncSessionLocal() as fail_db:
+                row = await fail_db.execute(select(GuestPurchase).where(GuestPurchase.token == token).with_for_update())
+                purchase = row.scalars().first()
+                if purchase and purchase.status not in (
+                    GuestPurchaseStatus.DELIVERED.value,
+                    GuestPurchaseStatus.FAILED.value,
+                ):
+                    # Capture alert data before commit expires attributes
+                    alert_data = {
+                        'id': purchase.id,
+                        'token': purchase.token,
+                        'amount_kopeks': purchase.amount_kopeks,
+                        'payment_method': purchase.payment_method,
+                        'payment_id': purchase.payment_id,
+                        'contact_type': purchase.contact_type,
+                        'contact_value': purchase.contact_value,
+                        'created_at': purchase.created_at,
+                    }
+                    await update_purchase_status(fail_db, token, GuestPurchaseStatus.FAILED)
+                    logger.error(
+                        'Purchase exceeded max retries — marked FAILED',
+                        token_prefix=token[:5],
+                        retry_count=retry_count,
+                        phase=status.value,
+                    )
+        except Exception:
+            logger.exception('Failed to mark exhausted purchase as FAILED', token_prefix=token[:5])
 
-                # Send admin alert
-                await _send_stuck_purchase_alert(purchase, retry_count, phase)
-    except Exception:
-        logger.exception('Failed to mark exhausted purchase as FAILED', token_prefix=purchase_token[:5])
+        # Send alert OUTSIDE the session (no row lock held)
+        if alert_data:
+            await _send_stuck_purchase_alert(alert_data, retry_count, status.value)
 
 
-async def _send_stuck_purchase_alert(purchase: GuestPurchase, retry_count: int, phase: str) -> None:
-    """Send admin notification about a purchase that exhausted all retries."""
+async def _send_stuck_purchase_alert(data: dict, retry_count: int, phase: str) -> None:
+    """Send admin notification about a purchase that exhausted all retries.
+
+    Accepts a plain dict (not ORM object) so it can be called after the session is closed.
+    """
     if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
         return
     try:
+        import html as html_mod
+
         from aiogram import Bot
 
         from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
 
-        amount_rub = purchase.amount_kopeks / 100
+        amount_rub = data['amount_kopeks'] / 100
+        contact_value = html_mod.escape(str(data.get('contact_value', '?')))
+        contact_type = html_mod.escape(str(data.get('contact_type', '?')))
         text = (
             f'<b>STUCK PURCHASE — retries exhausted</b>\n\n'
-            f'Token: <code>{purchase.token[:8]}...</code>\n'
+            f'Token: <code>{data["token"][:8]}...</code>\n'
             f'Status: <code>{phase}</code> → <code>FAILED</code>\n'
             f'Retries: <b>{retry_count}</b>\n'
             f'Amount: <b>{amount_rub:.0f} ₽</b>\n'
-            f'Payment: <code>{purchase.payment_method or "?"}</code>\n'
-            f'Payment ID: <code>{purchase.payment_id or "?"}</code>\n'
-            f'Contact: {purchase.contact_type}: <code>{purchase.contact_value}</code>\n'
-            f'Created: {purchase.created_at:%Y-%m-%d %H:%M UTC}\n\n'
+            f'Payment: <code>{html_mod.escape(str(data.get("payment_method") or "?"))}</code>\n'
+            f'Payment ID: <code>{html_mod.escape(str(data.get("payment_id") or "?"))}</code>\n'
+            f'Contact: {contact_type}: <code>{contact_value}</code>\n'
+            f'Created: {data["created_at"]:%Y-%m-%d %H:%M UTC}\n\n'
             f'Requires manual investigation.'
         )
 
@@ -1192,7 +1229,42 @@ async def _send_stuck_purchase_alert(purchase: GuestPurchase, retry_count: int, 
             service = AdminNotificationService(bot)
             await service.send_admin_notification(text, category=NotificationCategory.ERRORS)
     except Exception:
-        logger.warning('Failed to send stuck purchase admin alert', purchase_id=purchase.id, exc_info=True)
+        logger.warning('Failed to send stuck purchase admin alert', purchase_id=data.get('id'), exc_info=True)
+
+
+async def _send_amount_mismatch_alert(
+    purchase: GuestPurchase,
+    provider_amount_kopeks: int,
+    provider_payment_id: str,
+    payment_method: str | None,
+) -> None:
+    """Send admin alert when recovery detects an amount mismatch (possible fraud or bug)."""
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+        return
+    try:
+        import html as html_mod
+
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+
+        text = (
+            f'<b>AMOUNT MISMATCH — purchase marked FAILED</b>\n\n'
+            f'Token: <code>{purchase.token[:8]}...</code>\n'
+            f'Expected: <b>{purchase.amount_kopeks / 100:.0f} ₽</b>\n'
+            f'Provider: <b>{provider_amount_kopeks / 100:.0f} ₽</b>\n'
+            f'Payment: <code>{html_mod.escape(str(payment_method or "?"))}</code>\n'
+            f'Payment ID: <code>{html_mod.escape(str(provider_payment_id))}</code>\n'
+            f'Contact: {html_mod.escape(str(purchase.contact_type))}: '
+            f'<code>{html_mod.escape(str(purchase.contact_value))}</code>\n\n'
+            f'Requires manual investigation.'
+        )
+
+        async with Bot(token=settings.BOT_TOKEN) as bot:
+            service = AdminNotificationService(bot)
+            await service.send_admin_notification(text, category=NotificationCategory.ERRORS)
+    except Exception:
+        logger.warning('Failed to send amount mismatch alert', purchase_id=purchase.id, exc_info=True)
 
 
 async def recover_stuck_pending_purchases(
@@ -1397,6 +1469,11 @@ async def _check_and_recover_pending_purchase(
             purchase_amount=purchase.amount_kopeks,
             payment_method=payment_method,
         )
+        # Mark FAILED to prevent repeated mismatch logs every cycle
+        from app.database.crud.landing import update_purchase_status as _update_status
+
+        await _update_status(db, purchase_token, GuestPurchaseStatus.FAILED)
+        await _send_amount_mismatch_alert(purchase, provider_amount_kopeks, provider_payment_id, payment_method)
         return False
 
     # Transition PENDING → PAID for retry_stuck_paid_purchases to handle
