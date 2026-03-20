@@ -229,6 +229,8 @@ class FreekassaPaymentMixin:
                 'cur_id': cur_id,
             }
             payment.status = 'success'
+            payment.is_paid = True
+            payment.paid_at = datetime.now(UTC)
             payment.callback_payload = callback_payload
             payment.freekassa_order_id = intid
             if cur_id is not None:
@@ -529,6 +531,8 @@ class FreekassaPaymentMixin:
 
                         # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
                         payment.status = 'success'
+                        payment.is_paid = True
+                        payment.paid_at = datetime.now(UTC)
                         payment.callback_payload = callback_payload
                         payment.freekassa_order_id = fk_intid
                         if target_order.get('curID'):

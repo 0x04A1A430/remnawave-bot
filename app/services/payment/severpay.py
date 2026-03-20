@@ -266,9 +266,11 @@ class SeverPayPaymentMixin:
                 # Inline field assignments to keep FOR UPDATE lock intact
                 payment.status = internal_status
                 payment.is_paid = True
+                payment.paid_at = datetime.now(UTC)
                 payment.severpay_id = severpay_id or payment.severpay_id
                 payment.callback_payload = callback_payload
                 payment.updated_at = datetime.now(UTC)
+                await db.flush()
                 return await self._finalize_severpay_payment(db, payment, severpay_id=severpay_id, trigger='webhook')
 
             # Для не-success статусов можно безопасно коммитить
@@ -581,7 +583,7 @@ class SeverPayPaymentMixin:
                             # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
                             payment.status = 'success'
                             payment.is_paid = True
-                            payment.severpay_id = payment.severpay_id
+                            payment.paid_at = datetime.now(UTC)
                             payment.callback_payload = {
                                 'check_source': 'api',
                                 'severpay_order_data': order_data,

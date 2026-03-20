@@ -225,6 +225,8 @@ class MulenPayPaymentMixin:
             if payment_status == 'success':
                 # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
                 payment.status = 'success'
+                payment.is_paid = True
+                payment.paid_at = datetime.now(UTC)
                 payment.callback_payload = callback_data
                 if mulen_payment_id_int is not None and not payment.mulen_payment_id:
                     payment.mulen_payment_id = mulen_payment_id_int
