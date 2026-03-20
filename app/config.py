@@ -802,6 +802,27 @@ class Settings(BaseSettings):
     BAN_SYSTEM_API_TOKEN: str | None = None
     BAN_SYSTEM_REQUEST_TIMEOUT: int = 30
 
+    # SOCKS5 proxy for routing bot traffic to Telegram API
+    # Format: socks5://user:password@host:port or socks5://host:port
+    PROXY_URL: str | None = None
+
+    @field_validator('PROXY_URL', mode='before')
+    @classmethod
+    def validate_proxy_url(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        from urllib.parse import urlparse
+
+        parsed = urlparse(value)
+        if parsed.scheme not in ('socks5', 'socks4'):
+            raise ValueError(
+                f'PROXY_URL must use socks5:// or socks4:// scheme, got: {parsed.scheme!r}. '
+                'HTTP proxies are not supported for security reasons (bot token would be exposed).'
+            )
+        if not parsed.hostname:
+            raise ValueError('PROXY_URL must contain a hostname')
+        return value
+
     @field_validator('MAIN_MENU_MODE', mode='before')
     @classmethod
     def normalize_main_menu_mode(cls, value: str | None) -> str:
@@ -927,6 +948,10 @@ class Settings(BaseSettings):
     def is_sqlite(self) -> bool:
         """Проверяет, используется ли SQLite"""
         return 'sqlite' in self.get_database_url()
+
+    def get_proxy_url(self) -> str | None:
+        """Return SOCKS5 proxy URL or None."""
+        return self.PROXY_URL if self.PROXY_URL else None
 
     def is_admin(self, telegram_id: int | None = None, email: str | None = None) -> bool:
         """
