@@ -1743,8 +1743,18 @@ class MonitoringService:
 
     async def _retry_stuck_guest_purchases(self, db: AsyncSession):
         try:
-            from app.services.guest_purchase_service import retry_stuck_paid_purchases, retry_stuck_pending_activation
+            from app.services.guest_purchase_service import (
+                recover_stuck_pending_purchases,
+                retry_stuck_paid_purchases,
+                retry_stuck_pending_activation,
+            )
 
+            # Phase 1: Recover PENDING purchases where provider payment already succeeded
+            recovered = await recover_stuck_pending_purchases(db, stale_minutes=10, limit=10)
+            if recovered:
+                logger.info('Recovered stuck PENDING purchases', recovered=recovered)
+
+            # Phase 2: Retry fulfillment for purchases in PAID status
             retried = await retry_stuck_paid_purchases(db, stale_minutes=5, limit=10)
             if retried:
                 logger.info('Retried stuck guest purchases', retried=retried)

@@ -476,8 +476,7 @@ async def try_fulfill_guest_purchase(
             introduces imprecision.
 
     Returns:
-        ``True``  -- guest purchase was detected and successfully fulfilled.
-        ``False`` -- guest purchase was detected but fulfillment failed.
+        ``True``  -- guest purchase was detected and consumed (fulfilled or queued for retry).
         ``None``  -- this is NOT a guest purchase (caller should proceed normally).
     """
     purchase_token = _extract_guest_purchase_token(metadata)
@@ -558,13 +557,27 @@ async def try_fulfill_guest_purchase(
             provider=provider_name,
             error=guest_error,
         )
-        # Mark as FAILED so it doesn't get retried forever
+        # Mark as PAID (not FAILED) so retry_stuck_paid_purchases can pick it up.
+        # Use a fresh session to avoid tainted-session issues after rollback.
+        # The monitoring service retries PAID purchases every 5 minutes for up to 24 hours.
         try:
-            await update_purchase_status(
-                db,
-                purchase_token,
-                GuestPurchaseStatus.FAILED,
-            )
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as recovery_db:
+                # Re-check current status to avoid overwriting a terminal state
+                # (e.g., a concurrent webhook already delivered the purchase).
+                current = await get_purchase_by_token(recovery_db, purchase_token)
+                if current and current.status in (
+                    GuestPurchaseStatus.PENDING.value,
+                    GuestPurchaseStatus.PAID.value,
+                ):
+                    await update_purchase_status(
+                        recovery_db,
+                        purchase_token,
+                        GuestPurchaseStatus.PAID,
+                        payment_id=provider_payment_id,
+                        paid_at=datetime.now(UTC),
+                    )
         except Exception:
-            logger.exception('Failed to mark guest purchase as FAILED')
-        return False
+            logger.exception('Failed to mark guest purchase as PAID for retry')
+        return True

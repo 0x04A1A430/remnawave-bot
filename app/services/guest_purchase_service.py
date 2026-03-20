@@ -392,24 +392,41 @@ async def fulfill_purchase(
     return purchase
 
 
+def _resolve_base_payment_method(method_str: str | None) -> str:
+    """Resolve base payment method string by stripping sub-option suffixes.
+
+    'yookassa_sbp' → 'yookassa', 'kassa_ai' → 'kassa_ai' (enum match keeps it),
+    'platega_2' → 'platega'.
+    """
+    if not method_str:
+        return ''
+    # If exact enum match, return as-is (handles 'telegram_stars', 'kassa_ai', etc.)
+    try:
+        PaymentMethod(method_str)
+        return method_str
+    except ValueError:
+        pass
+    # Strip sub-option suffix
+    if '_' in method_str:
+        base = method_str.rsplit('_', 1)[0]
+        try:
+            PaymentMethod(base)
+            return base
+        except ValueError:
+            pass
+    return method_str
+
+
 def _resolve_payment_method(method_str: str | None) -> PaymentMethod | None:
     """Convert payment method string from GuestPurchase to PaymentMethod enum."""
     if not method_str:
         return None
-    # Try exact match first (handles 'telegram_stars', 'kassa_ai', 'yookassa', etc.)
+    base = _resolve_base_payment_method(method_str)
     try:
-        return PaymentMethod(method_str)
+        return PaymentMethod(base)
     except ValueError:
-        pass
-    # Strip sub-option suffix ('yookassa_sbp' → 'yookassa', 'platega_2' → 'platega')
-    if '_' in method_str:
-        base_method = method_str.split('_')[0]
-        try:
-            return PaymentMethod(base_method)
-        except ValueError:
-            pass
-    logger.debug('Unknown payment method for transaction', method=method_str)
-    return None
+        logger.debug('Unknown payment method for transaction', method=method_str)
+        return None
 
 
 def _mask_email(email: str) -> str:
@@ -1092,3 +1109,121 @@ async def retry_stuck_pending_activation(
             logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5])
 
     return retried
+
+
+async def recover_stuck_pending_purchases(
+    db: AsyncSession,
+    stale_minutes: int = 10,
+    limit: int = 10,
+    max_age_hours: int = 24,
+) -> int:
+    """Recover purchases stuck in PENDING by checking provider payment status.
+
+    For YooKassa purchases, queries the YooKassaPayment table. If the payment
+    is succeeded+paid but the GuestPurchase is still PENDING (webhook was lost
+    or processing failed without updating status), marks the purchase as PAID
+    so retry_stuck_paid_purchases can fulfill it.
+
+    Returns the number of recovered purchases.
+    """
+    from app.database.database import AsyncSessionLocal
+
+    cutoff = datetime.now(UTC) - timedelta(minutes=stale_minutes)
+    max_age = datetime.now(UTC) - timedelta(hours=max_age_hours)
+
+    # Find PENDING purchases older than stale_minutes but younger than max_age_hours
+    result = await db.execute(
+        select(GuestPurchase)
+        .where(
+            GuestPurchase.status == GuestPurchaseStatus.PENDING.value,
+            GuestPurchase.created_at < cutoff,
+            GuestPurchase.created_at > max_age,
+        )
+        .order_by(GuestPurchase.created_at.asc())
+        .limit(limit)
+    )
+    pending_purchases = result.scalars().all()
+
+    if not pending_purchases:
+        return 0
+
+    recovered = 0
+    for purchase in pending_purchases:
+        try:
+            async with AsyncSessionLocal() as recover_db:
+                paid = await _check_and_recover_pending_purchase(recover_db, purchase.token, purchase.payment_method)
+                if paid:
+                    recovered += 1
+        except Exception:
+            logger.exception('Failed to recover pending purchase', token_prefix=purchase.token[:5])
+
+    return recovered
+
+
+async def _check_and_recover_pending_purchase(
+    db: AsyncSession,
+    purchase_token: str,
+    payment_method: str | None,
+) -> bool:
+    """Check if a PENDING purchase has a succeeded payment and transition to PAID.
+
+    Uses SELECT ... FOR UPDATE on the GuestPurchase row to prevent concurrent
+    webhook processing from racing with the recovery.
+    """
+    from app.database.crud.landing import update_purchase_status
+    from app.database.models import YooKassaPayment
+
+    # Lock the row to prevent TOCTOU race with concurrent webhook processing
+    result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update())
+    purchase = result.scalars().first()
+    if purchase is None or purchase.status != GuestPurchaseStatus.PENDING.value:
+        return False
+
+    # Resolve base method: 'yookassa_sbp' → 'yookassa', 'kassa_ai' stays 'kassa_ai'
+    base_method = _resolve_base_payment_method(payment_method)
+
+    provider_payment_id: str | None = None
+
+    # --- YooKassa ---
+    if base_method.startswith('yookassa'):
+        yk_result = await db.execute(
+            select(YooKassaPayment).where(
+                YooKassaPayment.status == 'succeeded',
+                YooKassaPayment.is_paid.is_(True),
+                YooKassaPayment.metadata_json['purchase_token'].as_string() == purchase_token,
+            )
+        )
+        yk_payment = yk_result.scalars().first()
+        if yk_payment:
+            provider_payment_id = yk_payment.yookassa_payment_id
+            logger.info(
+                'Found succeeded YooKassa payment for stuck PENDING purchase',
+                token_prefix=purchase_token[:5],
+                yookassa_payment_id=provider_payment_id,
+            )
+
+    # TODO: add recovery for other providers (heleket, mulenpay, etc.)
+    if not provider_payment_id:
+        if base_method and not base_method.startswith('yookassa'):
+            logger.debug(
+                'Recovery not yet implemented for provider',
+                token_prefix=purchase_token[:5],
+                payment_method=payment_method,
+            )
+        return False
+
+    # Transition PENDING → PAID for retry_stuck_paid_purchases to handle
+    await update_purchase_status(
+        db,
+        purchase_token,
+        GuestPurchaseStatus.PAID,
+        payment_id=provider_payment_id,
+        paid_at=datetime.now(UTC),
+    )
+    logger.info(
+        'Recovered stuck PENDING purchase → PAID',
+        token_prefix=purchase_token[:5],
+        payment_method=payment_method,
+        provider_payment_id=provider_payment_id,
+    )
+    return True
