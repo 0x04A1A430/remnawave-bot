@@ -114,28 +114,16 @@ async def maybe_assign_promo_group_by_total_spent(
 
     previous_threshold = user.auto_promo_group_threshold_kopeks or 0
 
-    target_group = await _get_best_group_for_spending(
-        db,
-        total_spent,
-        min_threshold_kopeks=previous_threshold,
-    )
+    # Находим группу, соответствующую текущим тратам (без порогового фильтра,
+    # чтобы промокод-группы всегда очищались при покупке)
+    target_group = await _get_best_group_for_spending(db, total_spent)
     if not target_group:
         return None
 
     try:
         target_threshold = target_group.auto_assign_total_spent_kopeks or 0
 
-        if target_threshold <= previous_threshold:
-            logger.debug(
-                "Порог промогруппы '' не превышает ранее назначенный для пользователя",
-                target_group_name=target_group.name,
-                target_threshold=target_threshold,
-                previous_threshold=previous_threshold,
-                telegram_id=user.telegram_id,
-            )
-            return None
-
-        # Удаляем старые auto/promocode группы перед назначением новой
+        # Фаза 1: Удаляем старые auto/promocode группы, отличные от целевой
         current_groups = await get_user_promo_groups(db, user_id)
         removed_any = False
         for upg in current_groups:
@@ -170,7 +158,8 @@ async def maybe_assign_promo_group_by_total_spent(
             return target_group
 
         user.auto_promo_group_assigned = True
-        user.auto_promo_group_threshold_kopeks = target_threshold
+        if target_threshold > previous_threshold:
+            user.auto_promo_group_threshold_kopeks = target_threshold
         user.updated_at = datetime.now(UTC)
 
         newly_added = False
