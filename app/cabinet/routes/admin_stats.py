@@ -926,9 +926,9 @@ async def get_recent_payments(
         total_count = total_count_result.scalar() or 0
 
         today_total_result = await db.execute(
-            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
                 and_(
-                    Transaction.type == TransactionType.DEPOSIT.value,
+                    Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
                     Transaction.is_completed == True,
                     Transaction.created_at >= today_start,
                     Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
@@ -938,9 +938,9 @@ async def get_recent_payments(
         total_today = today_total_result.scalar() or 0
 
         week_total_result = await db.execute(
-            select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
                 and_(
-                    Transaction.type == TransactionType.DEPOSIT.value,
+                    Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
                     Transaction.is_completed == True,
                     Transaction.created_at >= week_ago,
                     Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
