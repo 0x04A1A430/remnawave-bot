@@ -222,7 +222,10 @@ class RemnaWaveWebhookService:
             event_name in _ADMIN_NODE_CONNECTION_EVENTS
             and not settings.REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS
         ):
-            logger.debug('RemnaWave node connection notifications disabled, skipping event', event_name=event_name)
+            logger.debug(
+                'RemnaWave node connection notifications disabled, skipping event',
+                event_name=event_name,
+            )
             return True
 
         if not self._admin_service.is_enabled:
