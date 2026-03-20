@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.35.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.34.1...v3.35.0) (2026-03-18)
+
+
+### New Features
+
+* add user_email to admin payments API response ([7101555](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7101555da0722d1eacd97f40b6b8c8c3a2327a0c))
+* include manual admin top-ups in sales statistics revenue ([b80eeea](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b80eeea089568c60c20b1ae165b8dbe887bbe378))
+* раздельные топики для админских уведомлений ([e15b18f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e15b18fb41b180e7dd3d65f2f058667be321fe85))
+
+
+### Bug Fixes
+
+* fix Platega and CryptoBot webhook verification ([b40a812](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b40a812f3aa0596bf6c5105008451dd8a17b103f))
+* handle None autopay_days_before in autopayment processing ([f1d4534](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f1d45343e941594d69f71e822ecc9b3a7062f4bf))
+* remove forced white background from custom email template overrides ([cb61014](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cb61014d9c5a89e3aeafb191f1b9826ca1cbf338))
+* undefined currency variable in RioPay payment creation ([5b33534](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5b3353433bc524e3e51f2ae87d26bd162bd9f97b))
+
 ## [3.34.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.34.0...v3.34.1) (2026-03-18)
 
 
