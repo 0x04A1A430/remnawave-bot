@@ -195,18 +195,13 @@ async def get_primary_user_promo_group(db: AsyncSession, user_id: int) -> PromoG
     Returns:
         PromoGroup с максимальным приоритетом или None
     """
-    try:
-        user_promo_groups = await get_user_promo_groups(db, user_id)
+    user_promo_groups = await get_user_promo_groups(db, user_id)
 
-        if not user_promo_groups:
-            return None
-
-        # Первая в списке имеет максимальный приоритет (список уже отсортирован)
-        return user_promo_groups[0].promo_group or None
-
-    except Exception as error:
-        logger.error('Ошибка получения primary промогруппы пользователя', user_id=user_id, error=error)
+    if not user_promo_groups:
         return None
+
+    # Первая в списке имеет максимальный приоритет (список уже отсортирован)
+    return user_promo_groups[0].promo_group or None
 
 
 async def has_user_promo_group(db: AsyncSession, user_id: int, promo_group_id: int) -> bool:
