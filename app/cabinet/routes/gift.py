@@ -375,15 +375,19 @@ async def create_gift_purchase(
 
             bot = create_bot()
 
-        payment_service = PaymentService(bot=bot)
-        payment_result = await payment_service.create_guest_payment(
-            db=db,
-            amount_kopeks=price_kopeks,
-            payment_method=body.payment_method,
-            description=f'Gift: {tariff.name} ({body.period_days}d)',
-            purchase_token=purchase.token,
-            return_url=return_url,
-        )
+        try:
+            payment_service = PaymentService(bot=bot)
+            payment_result = await payment_service.create_guest_payment(
+                db=db,
+                amount_kopeks=price_kopeks,
+                payment_method=body.payment_method,
+                description=f'Gift: {tariff.name} ({body.period_days}d)',
+                purchase_token=purchase.token,
+                return_url=return_url,
+            )
+        finally:
+            if bot:
+                await bot.session.close()
 
         if payment_result is None:
             await db.rollback()

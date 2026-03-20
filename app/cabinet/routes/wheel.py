@@ -249,6 +249,7 @@ async def create_stars_invoice(
 
     # Создаем invoice через Telegram Bot API
     try:
+        from aiogram.exceptions import TelegramAPIError
         from aiogram.types import LabeledPrice
 
         from app.bot_factory import create_bot
@@ -270,7 +271,7 @@ async def create_stars_invoice(
             stars_amount=stars_amount,
         )
 
-    except Exception as e:
+    except TelegramAPIError as e:
         logger.error('Error creating invoice', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
