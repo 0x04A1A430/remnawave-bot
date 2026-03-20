@@ -1019,14 +1019,16 @@ async def retry_stuck_paid_purchases(
     stale_minutes: int = 5,
     limit: int = 10,
     max_age_hours: int = 24,
+    max_retries: int = 20,
 ) -> int:
     """Retry fulfillment for purchases stuck in PAID status.
 
     Finds purchases that have been in PAID status for longer than stale_minutes
-    (but not older than max_age_hours) and attempts to fulfill them in isolated
-    sessions. Returns the number of successfully retried purchases.
+    (but not older than max_age_hours, and with retry_count < max_retries) and
+    attempts to fulfill them in isolated sessions.
 
-    Purchases older than max_age_hours are left for manual investigation.
+    Purchases exceeding max_retries are marked FAILED and an admin alert is sent.
+    Returns the number of successfully retried purchases.
     """
     from app.database.database import AsyncSessionLocal
 
@@ -1036,7 +1038,7 @@ async def retry_stuck_paid_purchases(
     # Collect tokens only — each retry gets its own session.
     # NULL paid_at is included via or_() as a safety net for data anomalies.
     result = await db.execute(
-        select(GuestPurchase.token)
+        select(GuestPurchase.token, GuestPurchase.retry_count)
         .where(
             GuestPurchase.status == GuestPurchaseStatus.PAID.value,
             or_(GuestPurchase.paid_at < cutoff, GuestPurchase.paid_at.is_(None)),
@@ -1047,20 +1049,24 @@ async def retry_stuck_paid_purchases(
         .order_by(GuestPurchase.paid_at.asc().nulls_first())
         .limit(limit)
     )
-    tokens = result.scalars().all()
+    rows = result.all()
 
-    if not tokens:
+    if not rows:
         return 0
 
     retried = 0
-    for token in tokens:
+    for token, retry_count in rows:
+        if retry_count >= max_retries:
+            await _fail_exhausted_purchase(db, token, retry_count, 'PAID')
+            continue
         try:
             async with AsyncSessionLocal() as retry_db:
+                await _increment_retry_count(retry_db, token)
                 await fulfill_purchase(retry_db, token)
                 retried += 1
-                logger.info('Retried stuck purchase successfully', token_prefix=token[:5])
+                logger.info('Retried stuck purchase successfully', token_prefix=token[:5], retry=retry_count + 1)
         except Exception:
-            logger.exception('Failed to retry stuck purchase', token_prefix=token[:5])
+            logger.exception('Failed to retry stuck purchase', token_prefix=token[:5], retry=retry_count + 1)
 
     return retried
 
@@ -1070,12 +1076,15 @@ async def retry_stuck_pending_activation(
     stale_minutes: int = 10,
     limit: int = 10,
     max_age_hours: int = 24,
+    max_retries: int = 20,
 ) -> int:
     """Retry activation for purchases stuck in PENDING_ACTIVATION status.
 
     This handles the case where activate_purchase() failed after the status
     was already transitioned to PENDING_ACTIVATION (e.g., Remnawave panel was
     temporarily down). Each retry runs in an isolated session.
+
+    Purchases exceeding max_retries are marked FAILED and an admin alert is sent.
     """
     from app.database.database import AsyncSessionLocal
 
@@ -1083,7 +1092,7 @@ async def retry_stuck_pending_activation(
     max_age = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
     result = await db.execute(
-        select(GuestPurchase.token)
+        select(GuestPurchase.token, GuestPurchase.retry_count)
         .where(
             GuestPurchase.status == GuestPurchaseStatus.PENDING_ACTIVATION.value,
             or_(GuestPurchase.paid_at < cutoff, GuestPurchase.paid_at.is_(None)),
@@ -1093,22 +1102,97 @@ async def retry_stuck_pending_activation(
         .order_by(GuestPurchase.paid_at.asc().nulls_first())
         .limit(limit)
     )
-    tokens = result.scalars().all()
+    rows = result.all()
 
-    if not tokens:
+    if not rows:
         return 0
 
     retried = 0
-    for token in tokens:
+    for token, retry_count in rows:
+        if retry_count >= max_retries:
+            await _fail_exhausted_purchase(db, token, retry_count, 'PENDING_ACTIVATION')
+            continue
         try:
             async with AsyncSessionLocal() as retry_db:
+                await _increment_retry_count(retry_db, token)
                 await activate_purchase(retry_db, token)
                 retried += 1
-                logger.info('Retried stuck pending_activation successfully', token_prefix=token[:5])
+                logger.info(
+                    'Retried stuck pending_activation successfully', token_prefix=token[:5], retry=retry_count + 1
+                )
         except Exception:
-            logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5])
+            logger.exception('Failed to retry stuck pending_activation', token_prefix=token[:5], retry=retry_count + 1)
 
     return retried
+
+
+async def _increment_retry_count(db: AsyncSession, purchase_token: str) -> None:
+    """Increment retry_count on a GuestPurchase (best-effort, separate commit)."""
+    result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == purchase_token))
+    purchase = result.scalars().first()
+    if purchase:
+        purchase.retry_count = (purchase.retry_count or 0) + 1
+        await db.commit()
+
+
+async def _fail_exhausted_purchase(db: AsyncSession, purchase_token: str, retry_count: int, phase: str) -> None:
+    """Mark a purchase as FAILED after exceeding max retries and send admin alert."""
+    from app.database.crud.landing import update_purchase_status
+    from app.database.database import AsyncSessionLocal
+
+    logger.error(
+        'Purchase exceeded max retries — marking FAILED',
+        token_prefix=purchase_token[:5],
+        retry_count=retry_count,
+        phase=phase,
+    )
+
+    try:
+        async with AsyncSessionLocal() as fail_db:
+            result = await fail_db.execute(
+                select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update()
+            )
+            purchase = result.scalars().first()
+            if purchase and purchase.status not in (
+                GuestPurchaseStatus.DELIVERED.value,
+                GuestPurchaseStatus.FAILED.value,
+            ):
+                await update_purchase_status(fail_db, purchase_token, GuestPurchaseStatus.FAILED)
+
+                # Send admin alert
+                await _send_stuck_purchase_alert(purchase, retry_count, phase)
+    except Exception:
+        logger.exception('Failed to mark exhausted purchase as FAILED', token_prefix=purchase_token[:5])
+
+
+async def _send_stuck_purchase_alert(purchase: GuestPurchase, retry_count: int, phase: str) -> None:
+    """Send admin notification about a purchase that exhausted all retries."""
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not settings.BOT_TOKEN:
+        return
+    try:
+        from aiogram import Bot
+
+        from app.services.admin_notification_service import AdminNotificationService, NotificationCategory
+
+        amount_rub = purchase.amount_kopeks / 100
+        text = (
+            f'<b>STUCK PURCHASE — retries exhausted</b>\n\n'
+            f'Token: <code>{purchase.token[:8]}...</code>\n'
+            f'Status: <code>{phase}</code> → <code>FAILED</code>\n'
+            f'Retries: <b>{retry_count}</b>\n'
+            f'Amount: <b>{amount_rub:.0f} ₽</b>\n'
+            f'Payment: <code>{purchase.payment_method or "?"}</code>\n'
+            f'Payment ID: <code>{purchase.payment_id or "?"}</code>\n'
+            f'Contact: {purchase.contact_type}: <code>{purchase.contact_value}</code>\n'
+            f'Created: {purchase.created_at:%Y-%m-%d %H:%M UTC}\n\n'
+            f'Requires manual investigation.'
+        )
+
+        async with Bot(token=settings.BOT_TOKEN) as bot:
+            service = AdminNotificationService(bot)
+            await service.send_admin_notification(text, category=NotificationCategory.ERRORS)
+    except Exception:
+        logger.warning('Failed to send stuck purchase admin alert', purchase_id=purchase.id, exc_info=True)
 
 
 async def recover_stuck_pending_purchases(
@@ -1119,10 +1203,11 @@ async def recover_stuck_pending_purchases(
 ) -> int:
     """Recover purchases stuck in PENDING by checking provider payment status.
 
-    For YooKassa purchases, queries the YooKassaPayment table. If the payment
-    is succeeded+paid but the GuestPurchase is still PENDING (webhook was lost
-    or processing failed without updating status), marks the purchase as PAID
-    so retry_stuck_paid_purchases can fulfill it.
+    Queries all payment provider tables (YooKassa, Heleket, CryptoBot, etc.)
+    for succeeded payments matching the purchase_token. If a provider payment
+    is confirmed but the GuestPurchase is still PENDING (webhook was lost or
+    processing failed), marks the purchase as PAID so retry_stuck_paid_purchases
+    can fulfill it. Includes amount verification.
 
     Returns the number of recovered purchases.
     """
@@ -1160,6 +1245,115 @@ async def recover_stuck_pending_purchases(
     return recovered
 
 
+async def _find_succeeded_provider_payment(
+    db: AsyncSession,
+    base_method: str,
+    purchase_token: str,
+) -> tuple[str, int | None] | None:
+    """Query provider payment tables for a succeeded payment matching purchase_token.
+
+    Returns ``(provider_payment_id, amount_kopeks)`` or ``None``.
+    ``amount_kopeks`` is ``None`` when the amount check should be skipped
+    (e.g., CryptoBot where USD→RUB conversion introduces imprecision).
+    """
+    from sqlalchemy import cast
+    from sqlalchemy.types import JSON as SA_JSON
+
+    from app.database.models import (
+        CloudPaymentsPayment,
+        CryptoBotPayment,
+        FreekassaPayment,
+        HeleketPayment,
+        KassaAiPayment,
+        MulenPayPayment,
+        Pal24Payment,
+        PlategaPayment,
+        RioPayPayment,
+        SeverPayPayment,
+        WataPayment,
+        YooKassaPayment,
+    )
+
+    # --- CryptoBot: special case — payload field (text JSON), skip amount check ---
+    if base_method == 'cryptobot':
+        result = await db.execute(
+            select(CryptoBotPayment).where(
+                CryptoBotPayment.status == 'paid',
+                cast(CryptoBotPayment.payload, SA_JSON)['purchase_token'].as_string() == purchase_token,
+            )
+        )
+        p = result.scalars().first()
+        return (p.invoice_id, None) if p else None
+
+    # --- All other providers: metadata_json['purchase_token'] + is_paid/status filters ---
+    model = None
+    payment_id_attr: str = ''
+    extra_conditions: list = []
+
+    if base_method.startswith('yookassa'):
+        model = YooKassaPayment
+        payment_id_attr = 'yookassa_payment_id'
+        extra_conditions = [YooKassaPayment.status == 'succeeded', YooKassaPayment.is_paid.is_(True)]
+    elif base_method == 'heleket':
+        model = HeleketPayment
+        payment_id_attr = 'uuid'
+        extra_conditions = [HeleketPayment.status.in_(['paid', 'paid_over'])]
+    elif base_method == 'mulenpay':
+        model = MulenPayPayment
+        payment_id_attr = 'uuid'
+        extra_conditions = [MulenPayPayment.is_paid.is_(True)]
+    elif base_method == 'pal24':
+        model = Pal24Payment
+        payment_id_attr = 'bill_id'
+        extra_conditions = [Pal24Payment.is_paid.is_(True)]
+    elif base_method == 'wata':
+        model = WataPayment
+        payment_id_attr = 'payment_link_id'
+        extra_conditions = [WataPayment.is_paid.is_(True)]
+    elif base_method == 'platega':
+        model = PlategaPayment
+        payment_id_attr = 'platega_transaction_id'
+        extra_conditions = [PlategaPayment.is_paid.is_(True)]
+    elif base_method == 'cloudpayments':
+        model = CloudPaymentsPayment
+        payment_id_attr = 'invoice_id'
+        extra_conditions = [CloudPaymentsPayment.status == 'completed', CloudPaymentsPayment.is_paid.is_(True)]
+    elif base_method == 'freekassa':
+        model = FreekassaPayment
+        payment_id_attr = 'order_id'
+        extra_conditions = [FreekassaPayment.status == 'success', FreekassaPayment.is_paid.is_(True)]
+    elif base_method == 'kassa_ai':
+        model = KassaAiPayment
+        payment_id_attr = 'order_id'
+        extra_conditions = [KassaAiPayment.status == 'success', KassaAiPayment.is_paid.is_(True)]
+    elif base_method == 'riopay':
+        model = RioPayPayment
+        payment_id_attr = 'order_id'
+        extra_conditions = [RioPayPayment.status == 'success', RioPayPayment.is_paid.is_(True)]
+    elif base_method == 'severpay':
+        model = SeverPayPayment
+        payment_id_attr = 'order_id'
+        extra_conditions = [SeverPayPayment.status == 'success', SeverPayPayment.is_paid.is_(True)]
+
+    if model is None:
+        return None
+
+    result = await db.execute(
+        select(model).where(
+            model.metadata_json['purchase_token'].as_string() == purchase_token,
+            *extra_conditions,
+        )
+    )
+    p = result.scalars().first()
+    if p is None:
+        return None
+
+    payment_id = str(getattr(p, payment_id_attr))
+    # amount_kopeks: Integer column for most providers, @property for Heleket
+    amount = getattr(p, 'amount_kopeks', None)
+    return (payment_id, amount)
+
+
 async def _check_and_recover_pending_purchase(
     db: AsyncSession,
     purchase_token: str,
@@ -1169,9 +1363,9 @@ async def _check_and_recover_pending_purchase(
 
     Uses SELECT ... FOR UPDATE on the GuestPurchase row to prevent concurrent
     webhook processing from racing with the recovery.
+    Verifies amount match between provider payment and guest purchase.
     """
     from app.database.crud.landing import update_purchase_status
-    from app.database.models import YooKassaPayment
 
     # Lock the row to prevent TOCTOU race with concurrent webhook processing
     result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update())
@@ -1182,34 +1376,27 @@ async def _check_and_recover_pending_purchase(
     # Resolve base method: 'yookassa_sbp' → 'yookassa', 'kassa_ai' stays 'kassa_ai'
     base_method = _resolve_base_payment_method(payment_method)
 
-    provider_payment_id: str | None = None
-
-    # --- YooKassa ---
-    if base_method.startswith('yookassa'):
-        yk_result = await db.execute(
-            select(YooKassaPayment).where(
-                YooKassaPayment.status == 'succeeded',
-                YooKassaPayment.is_paid.is_(True),
-                YooKassaPayment.metadata_json['purchase_token'].as_string() == purchase_token,
-            )
-        )
-        yk_payment = yk_result.scalars().first()
-        if yk_payment:
-            provider_payment_id = yk_payment.yookassa_payment_id
-            logger.info(
-                'Found succeeded YooKassa payment for stuck PENDING purchase',
-                token_prefix=purchase_token[:5],
-                yookassa_payment_id=provider_payment_id,
-            )
-
-    # TODO: add recovery for other providers (heleket, mulenpay, etc.)
-    if not provider_payment_id:
-        if base_method and not base_method.startswith('yookassa'):
+    match = await _find_succeeded_provider_payment(db, base_method, purchase_token)
+    if match is None:
+        if base_method:
             logger.debug(
-                'Recovery not yet implemented for provider',
+                'No succeeded provider payment found for PENDING purchase',
                 token_prefix=purchase_token[:5],
                 payment_method=payment_method,
             )
+        return False
+
+    provider_payment_id, provider_amount_kopeks = match
+
+    # Amount verification (skip when provider_amount_kopeks is None, e.g., crypto)
+    if provider_amount_kopeks is not None and provider_amount_kopeks != purchase.amount_kopeks:
+        logger.error(
+            'Amount mismatch during PENDING recovery — skipping',
+            token_prefix=purchase_token[:5],
+            provider_amount=provider_amount_kopeks,
+            purchase_amount=purchase.amount_kopeks,
+            payment_method=payment_method,
+        )
         return False
 
     # Transition PENDING → PAID for retry_stuck_paid_purchases to handle
