@@ -1133,7 +1133,7 @@ async def recover_stuck_pending_purchases(
 
     # Find PENDING purchases older than stale_minutes but younger than max_age_hours
     result = await db.execute(
-        select(GuestPurchase)
+        select(GuestPurchase.token, GuestPurchase.payment_method)
         .where(
             GuestPurchase.status == GuestPurchaseStatus.PENDING.value,
             GuestPurchase.created_at < cutoff,
@@ -1142,20 +1142,20 @@ async def recover_stuck_pending_purchases(
         .order_by(GuestPurchase.created_at.asc())
         .limit(limit)
     )
-    pending_purchases = result.scalars().all()
+    pending_purchases = result.all()
 
     if not pending_purchases:
         return 0
 
     recovered = 0
-    for purchase in pending_purchases:
+    for token, payment_method in pending_purchases:
         try:
             async with AsyncSessionLocal() as recover_db:
-                paid = await _check_and_recover_pending_purchase(recover_db, purchase.token, purchase.payment_method)
+                paid = await _check_and_recover_pending_purchase(recover_db, token, payment_method)
                 if paid:
                     recovered += 1
         except Exception:
-            logger.exception('Failed to recover pending purchase', token_prefix=purchase.token[:5])
+            logger.exception('Failed to recover pending purchase', token_prefix=token[:5])
 
     return recovered
 

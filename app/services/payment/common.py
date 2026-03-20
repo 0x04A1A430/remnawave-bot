@@ -484,7 +484,7 @@ async def try_fulfill_guest_purchase(
         return None
 
     from app.database.crud.landing import get_purchase_by_token, update_purchase_status
-    from app.database.models import GuestPurchaseStatus
+    from app.database.models import GuestPurchase, GuestPurchaseStatus
     from app.services.guest_purchase_service import fulfill_purchase
 
     try:
@@ -564,20 +564,19 @@ async def try_fulfill_guest_purchase(
             from app.database.database import AsyncSessionLocal
 
             async with AsyncSessionLocal() as recovery_db:
-                # Re-check current status to avoid overwriting a terminal state
-                # (e.g., a concurrent webhook already delivered the purchase).
-                current = await get_purchase_by_token(recovery_db, purchase_token)
+                # Use FOR UPDATE to prevent TOCTOU race with concurrent webhook.
+                row = await recovery_db.execute(
+                    select(GuestPurchase).where(GuestPurchase.token == purchase_token).with_for_update()
+                )
+                current = row.scalars().first()
                 if current and current.status in (
                     GuestPurchaseStatus.PENDING.value,
                     GuestPurchaseStatus.PAID.value,
                 ):
-                    await update_purchase_status(
-                        recovery_db,
-                        purchase_token,
-                        GuestPurchaseStatus.PAID,
-                        payment_id=provider_payment_id,
-                        paid_at=datetime.now(UTC),
-                    )
+                    current.status = GuestPurchaseStatus.PAID.value
+                    current.payment_id = provider_payment_id
+                    current.paid_at = datetime.now(UTC)
+                    await recovery_db.commit()
         except Exception:
             logger.exception('Failed to mark guest purchase as PAID for retry')
         return True
