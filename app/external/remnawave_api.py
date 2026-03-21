@@ -483,6 +483,7 @@ class RemnaWaveAPI:
                 )
                 response = await self._make_request('POST', '/api/users', data)
             else:
+                logger.error('POST /api/users FAILED — full payload', payload=data)
                 raise
         user = self._parse_user(response['response'])
         logger.info(
