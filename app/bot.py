@@ -102,11 +102,15 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
     proxy_url = settings.get_proxy_url()
     if proxy_url:
-        from urllib.parse import urlparse
+        from app.utils.proxy import mask_proxy_url
 
-        parsed = urlparse(proxy_url)
-        masked = f'{parsed.scheme}://***@{parsed.hostname}:{parsed.port}' if parsed.username else proxy_url
-        logger.info('Proxy configured', proxy_url=masked)
+        logger.info('Proxy configured', proxy_url=mask_proxy_url(proxy_url))
+
+    nalogo_proxy_url = settings.get_nalogo_proxy_url()
+    if nalogo_proxy_url:
+        from app.utils.proxy import mask_proxy_url
+
+        logger.info('Nalogo proxy configured', proxy_url=mask_proxy_url(nalogo_proxy_url))
 
     maintenance_service.set_bot(bot)
     logger.info('Бот установлен в maintenance_service')

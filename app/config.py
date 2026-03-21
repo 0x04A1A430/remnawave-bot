@@ -376,6 +376,7 @@ class Settings(BaseSettings):
     NALOGO_PASSWORD: str | None = None
     NALOGO_DEVICE_ID: str | None = None
     NALOGO_STORAGE_PATH: str = './nalogo_tokens.json'
+    NALOGO_PROXY_URL: str | None = None  # SOCKS proxy for nalog.ru; falls back to PROXY_URL if not set
 
     AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
 
@@ -807,7 +808,7 @@ class Settings(BaseSettings):
     # Format: socks5://user:password@host:port or socks5://host:port
     PROXY_URL: str | None = None
 
-    @field_validator('PROXY_URL', mode='before')
+    @field_validator('PROXY_URL', 'NALOGO_PROXY_URL', mode='before')
     @classmethod
     def validate_proxy_url(cls, value: str | None) -> str | None:
         if not value:
@@ -815,13 +816,13 @@ class Settings(BaseSettings):
         from urllib.parse import urlparse
 
         parsed = urlparse(value)
-        if parsed.scheme not in ('socks5', 'socks4'):
+        if parsed.scheme not in ('socks5', 'socks5h', 'socks4'):
             raise ValueError(
-                f'PROXY_URL must use socks5:// or socks4:// scheme, got: {parsed.scheme!r}. '
-                'HTTP proxies are not supported for security reasons (bot token would be exposed).'
+                f'Proxy URL must use socks5://, socks5h://, or socks4:// scheme, got: {parsed.scheme!r}. '
+                'HTTP proxies are not supported for security reasons.'
             )
         if not parsed.hostname:
-            raise ValueError('PROXY_URL must contain a hostname')
+            raise ValueError('Proxy URL must contain a hostname')
         return value
 
     @field_validator('MAIN_MENU_MODE', mode='before')
@@ -953,6 +954,13 @@ class Settings(BaseSettings):
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
         return self.PROXY_URL if self.PROXY_URL else None
+
+    def get_nalogo_proxy_url(self) -> str | None:
+        """Return SOCKS proxy URL for nalogo or None.
+
+        Uses NALOGO_PROXY_URL if set, otherwise falls back to PROXY_URL.
+        """
+        return self.NALOGO_PROXY_URL or self.PROXY_URL
 
     def is_admin(self, telegram_id: int | None = None, email: str | None = None) -> bool:
         """

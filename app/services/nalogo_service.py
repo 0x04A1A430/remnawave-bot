@@ -41,18 +41,29 @@ class NaloGoService:
             try:
                 # Таймаут 30 секунд — nalog.ru иногда отвечает медленно
                 timeout = getattr(settings, 'NALOGO_TIMEOUT', 30.0)
+                proxy_url = settings.get_nalogo_proxy_url()
                 self.client = Client(
                     base_url='https://lknpd.nalog.ru/api',
                     storage_path=storage_path,
                     device_id=device_id or 'bot-device-123',
                     timeout=timeout,
+                    proxy_url=proxy_url,
                 )
                 self.inn = inn
                 self.password = password
                 self.configured = True
-                logger.info('NaloGO клиент инициализирован для ИНН: ...', inn=inn[:5])
+                if proxy_url:
+                    from app.utils.proxy import mask_proxy_url
+
+                    logger.info(
+                        'NaloGO клиент инициализирован с прокси', inn=inn[:5], proxy_url=mask_proxy_url(proxy_url)
+                    )
+                else:
+                    logger.info('NaloGO клиент инициализирован для ИНН: ...', inn=inn[:5])
             except Exception as error:
-                logger.error('Ошибка инициализации NaloGO клиента', error=error, exc_info=True)
+                from app.utils.proxy import sanitize_proxy_error
+
+                logger.error('Ошибка инициализации NaloGO клиента', error=sanitize_proxy_error(error))
                 self.configured = False
 
     @staticmethod
