@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.38.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.37.0...v3.38.0) (2026-03-21)
+
+
+### New Features
+
+* add SOCKS proxy support for nalogo (tax service) module ([3c5bf4f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3c5bf4fa22d1cdf144269f4e6ab32a4523c8f1f3))
+
+
+### Bug Fixes
+
+* add diagnostic payload logging in create_user error path ([4990ddf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4990ddf9e46495b65fc3638ea8d6bed0cbe6b857))
+* retry Remnawave API calls without externalSquadUuid on A039 FK violation ([de00612](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/de006129657ce3dac2b1f2fc0ab1b91e23e44241))
+* sanitize proxy credentials in all nalogo error paths ([3bf3105](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3bf31055e71ff64e6a6d94486bb7f7775ac7dc91))
+
 ## [3.37.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.36.1...v3.37.0) (2026-03-21)
 
 
