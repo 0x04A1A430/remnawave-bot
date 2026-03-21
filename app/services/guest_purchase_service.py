@@ -1344,6 +1344,7 @@ async def _find_succeeded_provider_payment(
         result = await db.execute(
             select(CryptoBotPayment).where(
                 CryptoBotPayment.status == 'paid',
+                CryptoBotPayment.payload.like('{%'),
                 cast(CryptoBotPayment.payload, SA_JSON)['purchase_token'].as_string() == purchase_token,
             )
         )
