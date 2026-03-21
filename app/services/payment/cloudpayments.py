@@ -493,7 +493,9 @@ class CloudPaymentsPaymentMixin:
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.warning('Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id, error=error)
+                logger.warning(
+                    'Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id, error=error
+                )
 
     async def _send_cloudpayments_fail_notification(
         self,
