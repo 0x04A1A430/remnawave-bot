@@ -353,7 +353,10 @@ class SubscriptionService:
             )
 
             # Логируем если статус и end_date не согласованы (для отладки)
-            if subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value) and subscription.end_date <= current_time:
+            if (
+                subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+                and subscription.end_date <= current_time
+            ):
                 logger.warning(
                     '⚠️ update_remnawave_user: подписка имеет статус ACTIVE, но end_date <= now. Отправляем в RemnaWave как DISABLED, но НЕ меняем статус в БД.',
                     subscription_id=subscription.id,
@@ -373,7 +376,9 @@ class SubscriptionService:
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
-                    expire_at=subscription.end_date if is_actually_active else max(subscription.end_date, current_time + timedelta(minutes=1)),
+                    expire_at=subscription.end_date
+                    if is_actually_active
+                    else max(subscription.end_date, current_time + timedelta(minutes=1)),
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                     telegram_id=user.telegram_id,
@@ -857,7 +862,9 @@ class SubscriptionService:
                         update_kwargs = dict(
                             uuid=user.remnawave_uuid,
                             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
-                            expire_at=sub.end_date if is_actually_active else max(sub.end_date, current_time + timedelta(minutes=1)),
+                            expire_at=sub.end_date
+                            if is_actually_active
+                            else max(sub.end_date, current_time + timedelta(minutes=1)),
                             traffic_limit_bytes=self._gb_to_bytes(sub.traffic_limit_gb),
                             traffic_limit_strategy=traffic_strategy,
                             telegram_id=user.telegram_id,
