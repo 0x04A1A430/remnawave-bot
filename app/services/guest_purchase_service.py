@@ -199,12 +199,20 @@ async def _create_nalogo_receipt_for_purchase(
     if purchase.amount_kopeks <= 0:
         return
 
-    # Защита от дублей: если у транзакции уже есть чек — не создаём новый
+    # Защита от дублей: если у транзакции или покупки уже есть чек — не создаём новый
     if transaction and transaction.receipt_uuid:
         logger.info(
-            'NaloGO receipt already exists for guest purchase',
+            'NaloGO receipt already exists for guest purchase (transaction)',
             purchase_id=purchase.id,
             receipt_uuid=transaction.receipt_uuid,
+        )
+        return
+
+    if purchase.receipt_uuid:
+        logger.info(
+            'NaloGO receipt already exists for guest purchase (purchase)',
+            purchase_id=purchase.id,
+            receipt_uuid=purchase.receipt_uuid,
         )
         return
 
@@ -235,18 +243,21 @@ async def _create_nalogo_receipt_for_purchase(
                 receipt_uuid=receipt_uuid,
                 saved_to_transaction=transaction is not None,
             )
-            if transaction:
-                try:
+            # Всегда сохраняем receipt_uuid на purchase (persistent dedup)
+            try:
+                purchase.receipt_uuid = receipt_uuid
+                purchase.receipt_created_at = datetime.now(UTC)
+                if transaction:
                     transaction.receipt_uuid = receipt_uuid
                     transaction.receipt_created_at = datetime.now(UTC)
-                    await db.commit()
-                except Exception:
-                    await db.rollback()
-                    logger.warning(
-                        'Failed to save receipt_uuid to transaction',
-                        purchase_id=purchase.id,
-                        receipt_uuid=receipt_uuid,
-                    )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                logger.warning(
+                    'Failed to save receipt_uuid to purchase/transaction',
+                    purchase_id=purchase.id,
+                    receipt_uuid=receipt_uuid,
+                )
     except Exception as exc:
         from app.utils.proxy import sanitize_proxy_error
 
@@ -354,6 +365,7 @@ async def fulfill_purchase(
 
             # Создаем чек через NaloGO (деньги получены, чек нужен)
             await _create_nalogo_receipt_for_purchase(db, purchase, user)
+            await db.refresh(purchase)  # guard: inner rollback may expire the object
 
             # Clear plaintext password after email delivery
             if purchase.cabinet_password:
