@@ -25,6 +25,7 @@ dependencies = [
     'structlog>=25.1.0,<26',
     'rich>=14.0',
     'aiohttp-socks>=0.10.1',
+    'httpx[socks]>=0.27.0',
 ]
 
 [dependency-groups]
