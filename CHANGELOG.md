@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.36.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.36.0...v3.36.1) (2026-03-20)
+
+
+### Bug Fixes
+
+* handle duplicate admin roles in RBAC bootstrap ([877b1cd](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/877b1cde11c462c0cf5692119ca09944476a2fb6))
+* make migration 0042 idempotent for retry_count column ([5faf701](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5faf7015ac043f44366fd2a5e00be19eab76b945))
+
 ## [3.36.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.35.0...v3.36.0) (2026-03-20)
 
 
