@@ -377,7 +377,6 @@ class MonitoringService:
 
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
-                    # RemnaWave API accepts only ACTIVE/DISABLED — EXPIRED/LIMITED are managed internally
                     status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.DISABLED,
                     expire_at=subscription.end_date
                     if is_active

@@ -372,7 +372,6 @@ class SubscriptionService:
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
-                # RemnaWave API accepts only ACTIVE/DISABLED — EXPIRED/LIMITED are managed internally
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
@@ -858,7 +857,6 @@ class SubscriptionService:
                         ext_squad_uuid = sub.tariff.external_squad_uuid if sub.tariff else None
                         hwid_limit = resolve_hwid_device_limit_for_payload(sub)
 
-                        # RemnaWave API accepts only ACTIVE/DISABLED — EXPIRED/LIMITED are managed internally
                         update_kwargs = dict(
                             uuid=user.remnawave_uuid,
                             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,

@@ -4571,7 +4571,6 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                     async with remnawave_service.get_api_client() as api:
                         update_kwargs = dict(
                             uuid=target_user.remnawave_uuid,
-                            # RemnaWave API accepts only ACTIVE/DISABLED
                             status=UserStatus.ACTIVE if subscription.is_active else UserStatus.DISABLED,
                             expire_at=subscription.end_date,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3)
@@ -4609,7 +4608,6 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                         create_kwargs = dict(
                             username=username,
                             expire_at=subscription.end_date,
-                            # RemnaWave API accepts only ACTIVE/DISABLED
                             status=UserStatus.ACTIVE if subscription.is_active else UserStatus.DISABLED,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3)
                             if subscription.traffic_limit_gb > 0
