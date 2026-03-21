@@ -51,11 +51,6 @@ async def create_transaction(
         else amount_kopeks
     )
 
-    # Default payment_method to BALANCE for subscription/gift payments from bot (not landing)
-    # to avoid double-counting with DEPOSIT in revenue calculations
-    if payment_method is None and type in (TransactionType.SUBSCRIPTION_PAYMENT, TransactionType.GIFT_PAYMENT):
-        payment_method = PaymentMethod.BALANCE
-
     transaction = Transaction(
         user_id=user_id,
         type=type.value,
@@ -283,11 +278,11 @@ async def get_transactions_statistics(
     if not end_date:
         end_date = datetime.now(UTC)
 
-    # Доход считаем по реальным платежам + прямые покупки подписок (лендинги)
+    # Доход считаем только по реальным платежам (исключаем колесо, промокоды, админские пополнения)
     income_result = await db.execute(
-        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
             and_(
-                Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
+                Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
                 Transaction.created_at >= start_date,
                 Transaction.created_at <= end_date,
@@ -348,7 +343,7 @@ async def get_transactions_statistics(
         )
         .where(
             and_(
-                Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
+                Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
                 Transaction.created_at >= start_date,
                 Transaction.created_at <= end_date,
@@ -368,11 +363,11 @@ async def get_transactions_statistics(
     )
     transactions_today = today_result.scalar()
 
-    # Доход за сегодня — реальные платежи + прямые покупки подписок (лендинги)
+    # Доход за сегодня - только реальные платежи
     today_income_result = await db.execute(
-        select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
             and_(
-                Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
+                Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
                 Transaction.created_at >= today,
                 Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
@@ -396,17 +391,17 @@ async def get_transactions_statistics(
 
 
 async def get_revenue_by_period(db: AsyncSession, days: int = 30) -> list[dict]:
-    """Доход по дням — реальные платежи + прямые покупки подписок (лендинги)."""
+    """Доход по дням - только реальные платежи."""
     start_date = datetime.now(UTC) - timedelta(days=days)
 
     result = await db.execute(
         select(
             func.date(Transaction.created_at).label('date'),
-            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('amount'),
+            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('amount'),
         )
         .where(
             and_(
-                Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
+                Transaction.type == TransactionType.DEPOSIT.value,
                 Transaction.is_completed == True,
                 Transaction.created_at >= start_date,
                 Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
