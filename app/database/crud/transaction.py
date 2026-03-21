@@ -344,7 +344,7 @@ async def get_transactions_statistics(
         select(
             Transaction.payment_method,
             func.count(Transaction.id).label('count'),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('total_amount'),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('total_amount'),
         )
         .where(
             and_(
