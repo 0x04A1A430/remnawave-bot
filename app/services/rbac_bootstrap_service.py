@@ -10,6 +10,7 @@ from typing import Final
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.rbac import SUPERADMIN_LEVEL, UserRoleCRUD
@@ -215,24 +216,87 @@ async def bootstrap_superadmins(db: AsyncSession) -> None:
             if assigned:
                 assigned_count += 1
 
-        # ── 4. Commit all changes ──────────────────────────────────────
+        # ── 4. Revoke superadmin from users NOT in env ───────────────
+        revoked_count = await _revoke_stale_superadmins(
+            db,
+            role_id=role_id,
+            admin_ids=admin_ids,
+            admin_emails=admin_emails,
+        )
+
+        # ── 5. Commit all changes ──────────────────────────────────────
         await db.commit()
 
-        if assigned_count > 0:
+        if assigned_count > 0 or revoked_count > 0:
             logger.info(
                 'Superadmin bootstrap completed',
                 assigned_count=assigned_count,
+                revoked_count=revoked_count,
                 role_id=role_id,
             )
         else:
-            logger.debug('Superadmin bootstrap: no new assignments needed')
+            logger.debug('Superadmin bootstrap: no changes needed')
 
-        # ── 5. Safety: warn if no active superadmins exist ────────────
+        # ── 6. Safety: warn if no active superadmins exist ────────────
         await _warn_if_no_superadmins(db, admin_ids, admin_emails)
 
     except Exception:
         await db.rollback()
         logger.exception('Failed to bootstrap superadmins, continuing startup')
+
+
+async def _revoke_stale_superadmins(
+    db: AsyncSession,
+    *,
+    role_id: int,
+    admin_ids: list[int],
+    admin_emails: list[str],
+) -> int:
+    """Revoke superadmin from users who are no longer in env config.
+
+    Env config (ADMIN_IDS / ADMIN_EMAILS) is the single source of truth.
+    If a user was removed from env, their superadmin DB role is deactivated
+    on the next bot restart.
+
+    Returns the number of revoked assignments.
+    """
+    result = await db.execute(
+        select(UserRole)
+        .options(selectinload(UserRole.user))
+        .where(
+            UserRole.role_id == role_id,
+            UserRole.is_active.is_(True),
+        )
+    )
+    active_assignments = result.scalars().all()
+
+    admin_ids_set = set(admin_ids)
+    admin_emails_set = {e.lower() for e in admin_emails}
+
+    revoked = 0
+    for assignment in active_assignments:
+        user = assignment.user
+        if user is None:
+            continue
+
+        # Check if user is still in env config.
+        # email_verified is required — symmetric with _ensure_role_by_email.
+        in_env_by_id = user.telegram_id is not None and user.telegram_id in admin_ids_set
+        in_env_by_email = user.email is not None and user.email_verified and user.email.lower() in admin_emails_set
+
+        if not in_env_by_id and not in_env_by_email:
+            assignment.is_active = False
+            await db.flush()
+            revoked += 1
+            logger.warning(
+                'Revoked Superadmin role: user removed from env config',
+                user_id=user.id,
+                telegram_id=user.telegram_id,
+                email=user.email,
+                user_role_id=assignment.id,
+            )
+
+    return revoked
 
 
 async def _warn_if_no_superadmins(
@@ -281,13 +345,18 @@ async def _ensure_role_by_email(
     email: str,
     role_id: int,
 ) -> bool:
-    """Assign Superadmin role to user found by email (case-insensitive). Returns True if assigned."""
-    result = await db.execute(select(User).where(func.lower(User.email) == email.lower()))
+    """Assign Superadmin role to user found by verified email (case-insensitive). Returns True if assigned."""
+    result = await db.execute(
+        select(User).where(
+            func.lower(User.email) == email.lower(),
+            User.email_verified.is_(True),
+        )
+    )
     user = result.scalar_one_or_none()
 
     if user is None:
         logger.debug(
-            'Admin user (email) not yet registered, skipping',
+            'Admin user (email) not yet registered or not verified, skipping',
             email=email,
         )
         return False
@@ -302,13 +371,13 @@ async def _assign_if_missing(
     role_id: int,
     identifier: str,
 ) -> bool:
-    """Create a UserRole row if none exists for this user/role pair.
+    """Create or reactivate a UserRole row for this user/role pair.
 
-    If an assignment already exists (active or revoked), it is left as-is.
-    This ensures that an admin-revoked role is NOT silently reactivated
-    on every bot restart.
+    Env config (ADMIN_IDS / ADMIN_EMAILS) is the source of truth for
+    Superadmin assignments.  If a previously revoked assignment exists,
+    it is reactivated — the env config always wins.
 
-    Returns True only if a brand-new assignment was created.
+    Returns True if a new assignment was created or an inactive one was reactivated.
     """
     result = await db.execute(
         select(UserRole).where(
@@ -325,16 +394,18 @@ async def _assign_if_missing(
                 user_id=user_id,
                 identifier=identifier,
             )
-        else:
-            logger.info(
-                'Superadmin role was previously revoked, not reactivating '
-                '(remove user from ADMIN_IDS to stop this warning, '
-                'or re-assign via cabinet)',
-                user_id=user_id,
-                identifier=identifier,
-                user_role_id=existing.id,
-            )
-        return False
+            return False
+
+        # Reactivate: env config is the source of truth
+        existing.is_active = True
+        await db.flush()
+        logger.info(
+            'Reactivated Superadmin role (user is in env config)',
+            user_id=user_id,
+            identifier=identifier,
+            user_role_id=existing.id,
+        )
+        return True
 
     user_role = UserRole(
         user_id=user_id,

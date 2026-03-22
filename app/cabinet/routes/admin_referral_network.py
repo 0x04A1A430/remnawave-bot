@@ -2,6 +2,7 @@
 
 import re
 from collections import defaultdict
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,6 +17,7 @@ from app.database.models import (
     PartnerStatus,
     ReferralEarning,
     Subscription,
+    SubscriptionStatus,
     Tariff,
     Transaction,
     TransactionType,
@@ -78,6 +80,7 @@ class NetworkUserNode(BaseModel):
     personal_spent_kopeks: int
     subscription_name: str | None
     subscription_end: str | None
+    subscription_status: str | None
     registered_at: str | None
 
 
@@ -114,6 +117,7 @@ class NetworkGraphResponse(BaseModel):
     total_referrers: int
     total_campaigns: int
     total_earnings_kopeks: int
+    total_subscription_revenue_kopeks: int
 
 
 class NetworkUserDetail(BaseModel):
@@ -134,6 +138,7 @@ class NetworkUserDetail(BaseModel):
     personal_spent_kopeks: int
     subscription_name: str | None
     subscription_end: str | None
+    subscription_status: str | None
     registered_at: str | None
 
 
@@ -215,6 +220,7 @@ def _build_user_node(
     campaign_id: int | None,
     subscription_name: str | None,
     subscription_end_str: str | None,
+    subscription_status: str | None,
 ) -> NetworkUserNode:
     return NetworkUserNode(
         id=user.id,
@@ -232,6 +238,7 @@ def _build_user_node(
         personal_spent_kopeks=personal_spent,
         subscription_name=subscription_name,
         subscription_end=subscription_end_str,
+        subscription_status=subscription_status,
         registered_at=_format_datetime(user.created_at),
     )
 
@@ -312,7 +319,7 @@ async def _fetch_branch_revenue(db: AsyncSession, user_ids: set[int]) -> dict[in
     stmt = (
         select(
             referred_user.c.referred_by_id,
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
         )
         .join(referred_user, Transaction.user_id == referred_user.c.id)
         .where(
@@ -333,7 +340,7 @@ async def _fetch_personal_spent(db: AsyncSession, user_ids: set[int]) -> dict[in
         return {}
 
     stmt = (
-        select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+        select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
         .where(
             and_(
                 Transaction.user_id.in_(user_ids),
@@ -376,18 +383,81 @@ async def _fetch_campaign_registrations(db: AsyncSession, user_ids: set[int] | N
     return {row[0]: row[1] for row in result}
 
 
-async def _fetch_subscription_info(db: AsyncSession, user_ids: set[int]) -> dict[int, tuple[str | None, str | None]]:
-    """Return {user_id: (tariff_name, end_date_iso)} for given users."""
+def _compute_subscription_status(
+    is_trial: bool | None,
+    db_status: str | None,
+    end_date: datetime | None,
+    now: datetime,
+) -> str | None:
+    """Map subscription fields to a frontend status label.
+
+    Returns one of: 'trial_active', 'trial_expired', 'paid_active', 'paid_expired', or None.
+    Statuses DISABLED, PENDING, EXPIRED, LIMITED are treated as inactive regardless of end_date.
+    ACTIVE and TRIAL fall through to a date-based check.
+    """
+    if is_trial is None:
+        return None
+    if db_status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.PENDING.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    ):
+        return 'trial_expired' if is_trial else 'paid_expired'
+    if is_trial:
+        return 'trial_active' if (end_date and end_date > now) else 'trial_expired'
+    return 'paid_active' if (end_date and end_date > now) else 'paid_expired'
+
+
+async def _fetch_subscription_info(
+    db: AsyncSession,
+    user_ids: set[int],
+) -> dict[int, tuple[str | None, str | None, str | None]]:
+    """Return {user_id: (tariff_name, end_date_iso, subscription_status)} for given users."""
     if not user_ids:
         return {}
 
-    stmt = (
-        select(Subscription.user_id, Tariff.name, Subscription.end_date)
+    row_num = (
+        func.row_number()
+        .over(
+            partition_by=Subscription.user_id,
+            order_by=Subscription.end_date.desc().nullslast(),
+        )
+        .label('rn')
+    )
+
+    inner = (
+        select(
+            Subscription.user_id,
+            Tariff.name,
+            Subscription.end_date,
+            Subscription.is_trial,
+            Subscription.status,
+            row_num,
+        )
         .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
         .where(Subscription.user_id.in_(user_ids))
     )
+    subq = inner.subquery()
+
+    stmt = select(
+        subq.c.user_id,
+        subq.c.name,
+        subq.c.end_date,
+        subq.c.is_trial,
+        subq.c.status,
+    ).where(subq.c.rn == 1)
+
     result = await db.execute(stmt)
-    return {row[0]: (row[1], _format_datetime(row[2]) if row[2] else None) for row in result}
+    now = datetime.now(UTC)
+    out: dict[int, tuple[str | None, str | None, str | None]] = {}
+    for row in result:
+        user_id, tariff_name, end_date, is_trial, db_status = row
+        end_date_iso = _format_datetime(end_date) if end_date else None
+        sub_status = _compute_subscription_status(is_trial, db_status, end_date, now)
+        out[user_id] = (tariff_name, end_date_iso, sub_status)
+
+    return out
 
 
 async def _fetch_campaign_stats(
@@ -428,7 +498,7 @@ async def _fetch_campaign_stats(
     user_spent: dict[int, int] = {}
     if all_campaign_users:
         spent_stmt = (
-            select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+            select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
             .where(
                 and_(
                     Transaction.user_id.in_(all_campaign_users),
@@ -540,6 +610,7 @@ async def get_referral_network(
             total_referrers=0,
             total_campaigns=0,
             total_earnings_kopeks=0,
+            total_subscription_revenue_kopeks=0,
         )
 
     # Cap to prevent excessive response sizes (deterministic: keep lowest IDs for stability)
@@ -567,7 +638,7 @@ async def get_referral_network(
     # Build user nodes
     user_nodes: list[NetworkUserNode] = []
     for user in users:
-        sub = sub_info.get(user.id, (None, None))
+        sub = sub_info.get(user.id, (None, None, None))
         user_nodes.append(
             _build_user_node(
                 user,
@@ -578,6 +649,7 @@ async def get_referral_network(
                 campaign_id=campaign_regs.get(user.id),
                 subscription_name=sub[0],
                 subscription_end_str=sub[1],
+                subscription_status=sub[2],
             )
         )
 
@@ -629,6 +701,7 @@ async def get_referral_network(
     total_referrers = len([u for u in user_nodes if u.direct_referrals > 0])
 
     total_earnings = sum(personal_revenue.values())
+    total_subscription_revenue = sum(personal_spent.values())
 
     return NetworkGraphResponse(
         users=user_nodes,
@@ -638,6 +711,7 @@ async def get_referral_network(
         total_referrers=total_referrers,
         total_campaigns=len(campaign_nodes),
         total_earnings_kopeks=total_earnings,
+        total_subscription_revenue_kopeks=total_subscription_revenue,
     )
 
 
@@ -784,6 +858,7 @@ async def _build_scoped_graph(
                 total_referrers=0,
                 total_campaigns=len(campaign_nodes),
                 total_earnings_kopeks=0,
+                total_subscription_revenue_kopeks=0,
             )
         return NetworkGraphResponse(
             users=[],
@@ -793,6 +868,7 @@ async def _build_scoped_graph(
             total_referrers=0,
             total_campaigns=0,
             total_earnings_kopeks=0,
+            total_subscription_revenue_kopeks=0,
         )
 
     # Cap to prevent excessive response sizes
@@ -816,7 +892,7 @@ async def _build_scoped_graph(
 
     user_nodes: list[NetworkUserNode] = []
     for user in users:
-        sub = sub_info.get(user.id, (None, None))
+        sub = sub_info.get(user.id, (None, None, None))
         user_nodes.append(
             _build_user_node(
                 user,
@@ -827,6 +903,7 @@ async def _build_scoped_graph(
                 campaign_id=campaign_regs.get(user.id),
                 subscription_name=sub[0],
                 subscription_end_str=sub[1],
+                subscription_status=sub[2],
             )
         )
 
@@ -878,6 +955,7 @@ async def _build_scoped_graph(
 
     total_referrers = len([u for u in user_nodes if u.direct_referrals > 0])
     total_earnings = sum(personal_revenue.values())
+    total_subscription_revenue = sum(personal_spent.values())
 
     return NetworkGraphResponse(
         users=user_nodes,
@@ -887,6 +965,7 @@ async def _build_scoped_graph(
         total_referrers=total_referrers,
         total_campaigns=len(campaign_nodes),
         total_earnings_kopeks=total_earnings,
+        total_subscription_revenue_kopeks=total_subscription_revenue,
     )
 
 
@@ -1057,7 +1136,7 @@ async def get_network_user_detail(
     branch_revenue = 0
 
     # Personal spent
-    spent_stmt = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+    spent_stmt = select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
         and_(
             Transaction.user_id == user_id,
             Transaction.type.in_(SPENT_TRANSACTION_TYPES),
@@ -1102,7 +1181,7 @@ async def get_network_user_detail(
 
     # Branch revenue: total spent by all users in the branch
     branch_user_ids_stmt = select(branch_cte.c.id)
-    branch_rev_stmt = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+    branch_rev_stmt = select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
         and_(
             Transaction.user_id.in_(branch_user_ids_stmt),
             Transaction.type.in_(SPENT_TRANSACTION_TYPES),
@@ -1124,10 +1203,17 @@ async def get_network_user_detail(
     # Subscription info
     subscription_name: str | None = None
     subscription_end: str | None = None
+    subscription_status: str | None = None
     if user.subscription is not None:
         if user.subscription.tariff is not None:
             subscription_name = user.subscription.tariff.name
         subscription_end = _format_datetime(user.subscription.end_date)
+        subscription_status = _compute_subscription_status(
+            user.subscription.is_trial,
+            user.subscription.status,
+            user.subscription.end_date,
+            datetime.now(UTC),
+        )
 
     return NetworkUserDetail(
         id=user.id,
@@ -1147,6 +1233,7 @@ async def get_network_user_detail(
         personal_spent_kopeks=personal_spent,
         subscription_name=subscription_name,
         subscription_end=subscription_end,
+        subscription_status=subscription_status,
         registered_at=_format_datetime(user.created_at),
     )
 
@@ -1215,7 +1302,7 @@ async def get_network_campaign_detail(
     total_spent = 0
     if campaign_user_ids:
         spent_stmt = (
-            select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+            select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
             .where(
                 and_(
                     Transaction.user_id.in_(campaign_user_ids),
@@ -1336,7 +1423,7 @@ async def search_referral_network(
         sub_info = await _fetch_subscription_info(db, matched_ids)
 
         for user in matched_users:
-            sub = sub_info.get(user.id, (None, None))
+            sub = sub_info.get(user.id, (None, None, None))
             user_nodes.append(
                 _build_user_node(
                     user,
@@ -1347,6 +1434,7 @@ async def search_referral_network(
                     campaign_id=campaign_regs.get(user.id),
                     subscription_name=sub[0],
                     subscription_end_str=sub[1],
+                    subscription_status=sub[2],
                 )
             )
 
@@ -1400,7 +1488,7 @@ async def search_referral_network(
         campaign_user_spent: dict[int, int] = {}
         if all_campaign_user_ids:
             spent_stmt = (
-                select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+                select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
                 .where(
                     and_(
                         Transaction.user_id.in_(all_campaign_user_ids),

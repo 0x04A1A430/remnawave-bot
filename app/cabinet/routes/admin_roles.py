@@ -441,6 +441,14 @@ async def assign_role(
             detail='Role not found',
         )
 
+    # Superadmin role is managed exclusively via ADMIN_IDS/ADMIN_EMAILS env config
+    if role.level >= SUPERADMIN_LEVEL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
+            'Add the user there and restart the bot.',
+        )
+
     admin_level = await _get_admin_level(db, admin)
 
     # Cannot assign a role with level >= own level
@@ -448,13 +456,6 @@ async def assign_role(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Cannot assign a role with level >= your own role level',
-        )
-
-    # Superadmin assignments must be permanent — expiry would cause silent lockout
-    if role.level == SUPERADMIN_LEVEL and payload.expires_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Superadmin role assignments cannot be time-limited',
         )
 
     # Verify target user exists
@@ -505,9 +506,7 @@ async def revoke_role(
     admin: User = Depends(require_permission('roles:assign')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Revoke a role assignment. Cannot remove the last superadmin."""
-    from app.config import settings
-    from app.database.crud.user import get_user_by_id
+    """Revoke a role assignment. Superadmin roles are managed via env config."""
     from app.database.models import UserRole
 
     # Lock the assignment row (FOR UPDATE held until commit)
@@ -526,6 +525,14 @@ async def revoke_role(
             detail='Associated role not found',
         )
 
+    # Superadmin role is managed exclusively via env config
+    if role.level >= SUPERADMIN_LEVEL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
+            'Remove the user from env and restart the bot.',
+        )
+
     admin_level = await _get_admin_level(db, admin)
 
     # Cannot revoke a role at or above own level
@@ -534,33 +541,6 @@ async def revoke_role(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Cannot revoke a role at or above your own level',
         )
-
-    # Block self-revocation of superadmin role
-    if role.level == SUPERADMIN_LEVEL and user_role.user_id == admin.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='Cannot revoke your own superadmin role',
-        )
-
-    # Protect last superadmin (level 999).
-    # Advisory lock serializes concurrent superadmin revocations so two requests
-    # cannot both read count=2 and then both proceed to revoke.
-    if role.level == SUPERADMIN_LEVEL:
-        if not settings.is_sqlite():
-            await db.execute(sa.text('SELECT pg_advisory_xact_lock(736453)'))
-        superadmin_count = await UserRoleCRUD.get_superadmin_count(db)
-        if superadmin_count <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Cannot remove the last superadmin',
-            )
-
-    # Warn if target user is a legacy admin — RBAC revocation won't actually block access
-    target_user = await get_user_by_id(db, user_role.user_id)
-    is_target_legacy = target_user and settings.is_admin(
-        telegram_id=target_user.telegram_id,
-        email=target_user.email if target_user.email_verified else None,
-    )
 
     # Revoke directly on the locked object (avoid CRUD re-fetch without FOR UPDATE)
     user_role.is_active = False
@@ -575,10 +555,4 @@ async def revoke_role(
         role_name=role.name,
     )
 
-    result_msg = {'message': 'Role revoked', 'assignment_id': assignment_id}
-    if is_target_legacy:
-        result_msg['warning'] = (
-            'This user is still listed in ADMIN_IDS/ADMIN_EMAILS env config. '
-            'They retain full access until removed from those settings and the bot is restarted.'
-        )
-    return result_msg
+    return {'message': 'Role revoked', 'assignment_id': assignment_id}
