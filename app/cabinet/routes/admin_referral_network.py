@@ -410,7 +410,8 @@ def _compute_subscription_status(
 
 
 async def _fetch_subscription_info(
-    db: AsyncSession, user_ids: set[int],
+    db: AsyncSession,
+    user_ids: set[int],
 ) -> dict[int, tuple[str | None, str | None, str | None]]:
     """Return {user_id: (tariff_name, end_date_iso, subscription_status)} for given users."""
     if not user_ids:
