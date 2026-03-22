@@ -2,6 +2,7 @@
 
 import re
 from collections import defaultdict
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -78,6 +79,7 @@ class NetworkUserNode(BaseModel):
     personal_spent_kopeks: int
     subscription_name: str | None
     subscription_end: str | None
+    subscription_status: str | None
     registered_at: str | None
 
 
@@ -134,6 +136,7 @@ class NetworkUserDetail(BaseModel):
     personal_spent_kopeks: int
     subscription_name: str | None
     subscription_end: str | None
+    subscription_status: str | None
     registered_at: str | None
 
 
@@ -215,6 +218,7 @@ def _build_user_node(
     campaign_id: int | None,
     subscription_name: str | None,
     subscription_end_str: str | None,
+    subscription_status: str | None,
 ) -> NetworkUserNode:
     return NetworkUserNode(
         id=user.id,
@@ -232,6 +236,7 @@ def _build_user_node(
         personal_spent_kopeks=personal_spent,
         subscription_name=subscription_name,
         subscription_end=subscription_end_str,
+        subscription_status=subscription_status,
         registered_at=_format_datetime(user.created_at),
     )
 
@@ -376,18 +381,59 @@ async def _fetch_campaign_registrations(db: AsyncSession, user_ids: set[int] | N
     return {row[0]: row[1] for row in result}
 
 
-async def _fetch_subscription_info(db: AsyncSession, user_ids: set[int]) -> dict[int, tuple[str | None, str | None]]:
-    """Return {user_id: (tariff_name, end_date_iso)} for given users."""
+async def _fetch_subscription_info(
+    db: AsyncSession, user_ids: set[int],
+) -> dict[int, tuple[str | None, str | None, str | None]]:
+    """Return {user_id: (tariff_name, end_date_iso, subscription_status)} for given users."""
     if not user_ids:
         return {}
 
-    stmt = (
-        select(Subscription.user_id, Tariff.name, Subscription.end_date)
+    row_num = (
+        func.row_number()
+        .over(
+            partition_by=Subscription.user_id,
+            order_by=Subscription.end_date.desc().nullslast(),
+        )
+        .label('rn')
+    )
+
+    inner = (
+        select(
+            Subscription.user_id,
+            Tariff.name,
+            Subscription.end_date,
+            Subscription.is_trial,
+            row_num,
+        )
         .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
         .where(Subscription.user_id.in_(user_ids))
     )
+    subq = inner.subquery()
+
+    stmt = select(
+        subq.c.user_id,
+        subq.c.name,
+        subq.c.end_date,
+        subq.c.is_trial,
+    ).where(subq.c.rn == 1)
+
     result = await db.execute(stmt)
-    return {row[0]: (row[1], _format_datetime(row[2]) if row[2] else None) for row in result}
+    now = datetime.now(UTC)
+    out: dict[int, tuple[str | None, str | None, str | None]] = {}
+    for row in result:
+        user_id, tariff_name, end_date, is_trial = row
+        end_date_iso = _format_datetime(end_date) if end_date else None
+
+        if is_trial is None:
+            sub_status = None
+        elif is_trial:
+            sub_status = 'trial_active' if (end_date and end_date > now) else 'trial_expired'
+        else:
+            sub_status = 'paid_active' if (end_date and end_date > now) else 'paid_expired'
+
+        out[user_id] = (tariff_name, end_date_iso, sub_status)
+
+    return out
 
 
 async def _fetch_campaign_stats(
@@ -567,7 +613,7 @@ async def get_referral_network(
     # Build user nodes
     user_nodes: list[NetworkUserNode] = []
     for user in users:
-        sub = sub_info.get(user.id, (None, None))
+        sub = sub_info.get(user.id, (None, None, None))
         user_nodes.append(
             _build_user_node(
                 user,
@@ -578,6 +624,7 @@ async def get_referral_network(
                 campaign_id=campaign_regs.get(user.id),
                 subscription_name=sub[0],
                 subscription_end_str=sub[1],
+                subscription_status=sub[2],
             )
         )
 
@@ -816,7 +863,7 @@ async def _build_scoped_graph(
 
     user_nodes: list[NetworkUserNode] = []
     for user in users:
-        sub = sub_info.get(user.id, (None, None))
+        sub = sub_info.get(user.id, (None, None, None))
         user_nodes.append(
             _build_user_node(
                 user,
@@ -827,6 +874,7 @@ async def _build_scoped_graph(
                 campaign_id=campaign_regs.get(user.id),
                 subscription_name=sub[0],
                 subscription_end_str=sub[1],
+                subscription_status=sub[2],
             )
         )
 
@@ -1124,10 +1172,23 @@ async def get_network_user_detail(
     # Subscription info
     subscription_name: str | None = None
     subscription_end: str | None = None
+    subscription_status: str | None = None
     if user.subscription is not None:
         if user.subscription.tariff is not None:
             subscription_name = user.subscription.tariff.name
         subscription_end = _format_datetime(user.subscription.end_date)
+        # Compute subscription status
+        now = datetime.now(UTC)
+        if user.subscription.is_trial is None:
+            subscription_status = None
+        elif user.subscription.is_trial:
+            subscription_status = (
+                'trial_active' if (user.subscription.end_date and user.subscription.end_date > now) else 'trial_expired'
+            )
+        else:
+            subscription_status = (
+                'paid_active' if (user.subscription.end_date and user.subscription.end_date > now) else 'paid_expired'
+            )
 
     return NetworkUserDetail(
         id=user.id,
@@ -1147,6 +1208,7 @@ async def get_network_user_detail(
         personal_spent_kopeks=personal_spent,
         subscription_name=subscription_name,
         subscription_end=subscription_end,
+        subscription_status=subscription_status,
         registered_at=_format_datetime(user.created_at),
     )
 
@@ -1336,7 +1398,7 @@ async def search_referral_network(
         sub_info = await _fetch_subscription_info(db, matched_ids)
 
         for user in matched_users:
-            sub = sub_info.get(user.id, (None, None))
+            sub = sub_info.get(user.id, (None, None, None))
             user_nodes.append(
                 _build_user_node(
                     user,
@@ -1347,6 +1409,7 @@ async def search_referral_network(
                     campaign_id=campaign_regs.get(user.id),
                     subscription_name=sub[0],
                     subscription_end_str=sub[1],
+                    subscription_status=sub[2],
                 )
             )
 
