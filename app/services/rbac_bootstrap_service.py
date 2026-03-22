@@ -218,7 +218,10 @@ async def bootstrap_superadmins(db: AsyncSession) -> None:
 
         # ── 4. Revoke superadmin from users NOT in env ───────────────
         revoked_count = await _revoke_stale_superadmins(
-            db, role_id=role_id, admin_ids=admin_ids, admin_emails=admin_emails,
+            db,
+            role_id=role_id,
+            admin_ids=admin_ids,
+            admin_emails=admin_emails,
         )
 
         # ── 5. Commit all changes ──────────────────────────────────────
@@ -279,11 +282,7 @@ async def _revoke_stale_superadmins(
         # Check if user is still in env config.
         # email_verified is required — symmetric with _ensure_role_by_email.
         in_env_by_id = user.telegram_id is not None and user.telegram_id in admin_ids_set
-        in_env_by_email = (
-            user.email is not None
-            and user.email_verified
-            and user.email.lower() in admin_emails_set
-        )
+        in_env_by_email = user.email is not None and user.email_verified and user.email.lower() in admin_emails_set
 
         if not in_env_by_id and not in_env_by_email:
             assignment.is_active = False
