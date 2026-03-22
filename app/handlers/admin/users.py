@@ -1019,7 +1019,7 @@ async def delete_user_account(callback: types.CallbackQuery, db_user: User, db: 
     user_id = int(callback.data.split('_')[-1])
 
     user_service = UserService()
-    delete_result = await user_service.delete_user_account(db, user_id, db_user.id)
+    delete_result = await user_service.delete_user_account(db, user_id, db_user.id, force_panel_delete=True)
 
     if delete_result.bot_deleted:
         await callback.message.edit_text(
