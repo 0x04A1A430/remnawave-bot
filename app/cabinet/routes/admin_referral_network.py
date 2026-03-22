@@ -319,7 +319,7 @@ async def _fetch_branch_revenue(db: AsyncSession, user_ids: set[int]) -> dict[in
     stmt = (
         select(
             referred_user.c.referred_by_id,
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
+            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0),
         )
         .join(referred_user, Transaction.user_id == referred_user.c.id)
         .where(
@@ -497,7 +497,7 @@ async def _fetch_campaign_stats(
     user_spent: dict[int, int] = {}
     if all_campaign_users:
         spent_stmt = (
-            select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+            select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
             .where(
                 and_(
                     Transaction.user_id.in_(all_campaign_users),
@@ -1179,7 +1179,7 @@ async def get_network_user_detail(
 
     # Branch revenue: total spent by all users in the branch
     branch_user_ids_stmt = select(branch_cte.c.id)
-    branch_rev_stmt = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+    branch_rev_stmt = select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
         and_(
             Transaction.user_id.in_(branch_user_ids_stmt),
             Transaction.type.in_(SPENT_TRANSACTION_TYPES),
@@ -1300,7 +1300,7 @@ async def get_network_campaign_detail(
     total_spent = 0
     if campaign_user_ids:
         spent_stmt = (
-            select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+            select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
             .where(
                 and_(
                     Transaction.user_id.in_(campaign_user_ids),
@@ -1486,7 +1486,7 @@ async def search_referral_network(
         campaign_user_spent: dict[int, int] = {}
         if all_campaign_user_ids:
             spent_stmt = (
-                select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+                select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
                 .where(
                     and_(
                         Transaction.user_id.in_(all_campaign_user_ids),
