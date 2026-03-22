@@ -432,6 +432,8 @@ async def _fetch_subscription_info(
         elif db_status in (
             SubscriptionStatus.DISABLED.value,
             SubscriptionStatus.PENDING.value,
+            SubscriptionStatus.EXPIRED.value,
+            SubscriptionStatus.LIMITED.value,
         ):
             sub_status = 'trial_expired' if is_trial else 'paid_expired'
         elif is_trial:
@@ -1192,6 +1194,8 @@ async def get_network_user_detail(
         elif user.subscription.status in (
             SubscriptionStatus.DISABLED.value,
             SubscriptionStatus.PENDING.value,
+            SubscriptionStatus.EXPIRED.value,
+            SubscriptionStatus.LIMITED.value,
         ):
             subscription_status = 'trial_expired' if user.subscription.is_trial else 'paid_expired'
         elif user.subscription.is_trial:
