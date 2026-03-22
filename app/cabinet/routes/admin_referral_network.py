@@ -382,6 +382,32 @@ async def _fetch_campaign_registrations(db: AsyncSession, user_ids: set[int] | N
     return {row[0]: row[1] for row in result}
 
 
+def _compute_subscription_status(
+    is_trial: bool | None,
+    db_status: str | None,
+    end_date: datetime | None,
+    now: datetime,
+) -> str | None:
+    """Map subscription fields to a frontend status label.
+
+    Returns one of: 'trial_active', 'trial_expired', 'paid_active', 'paid_expired', or None.
+    Statuses DISABLED, PENDING, EXPIRED, LIMITED are treated as inactive regardless of end_date.
+    ACTIVE and TRIAL fall through to a date-based check.
+    """
+    if is_trial is None:
+        return None
+    if db_status in (
+        SubscriptionStatus.DISABLED.value,
+        SubscriptionStatus.PENDING.value,
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.LIMITED.value,
+    ):
+        return 'trial_expired' if is_trial else 'paid_expired'
+    if is_trial:
+        return 'trial_active' if (end_date and end_date > now) else 'trial_expired'
+    return 'paid_active' if (end_date and end_date > now) else 'paid_expired'
+
+
 async def _fetch_subscription_info(
     db: AsyncSession, user_ids: set[int],
 ) -> dict[int, tuple[str | None, str | None, str | None]]:
@@ -426,21 +452,7 @@ async def _fetch_subscription_info(
     for row in result:
         user_id, tariff_name, end_date, is_trial, db_status = row
         end_date_iso = _format_datetime(end_date) if end_date else None
-
-        if is_trial is None:
-            sub_status = None
-        elif db_status in (
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.PENDING.value,
-            SubscriptionStatus.EXPIRED.value,
-            SubscriptionStatus.LIMITED.value,
-        ):
-            sub_status = 'trial_expired' if is_trial else 'paid_expired'
-        elif is_trial:
-            sub_status = 'trial_active' if (end_date and end_date > now) else 'trial_expired'
-        else:
-            sub_status = 'paid_active' if (end_date and end_date > now) else 'paid_expired'
-
+        sub_status = _compute_subscription_status(is_trial, db_status, end_date, now)
         out[user_id] = (tariff_name, end_date_iso, sub_status)
 
     return out
@@ -1187,25 +1199,12 @@ async def get_network_user_detail(
         if user.subscription.tariff is not None:
             subscription_name = user.subscription.tariff.name
         subscription_end = _format_datetime(user.subscription.end_date)
-        # Compute subscription status
-        now = datetime.now(UTC)
-        if user.subscription.is_trial is None:
-            subscription_status = None
-        elif user.subscription.status in (
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.PENDING.value,
-            SubscriptionStatus.EXPIRED.value,
-            SubscriptionStatus.LIMITED.value,
-        ):
-            subscription_status = 'trial_expired' if user.subscription.is_trial else 'paid_expired'
-        elif user.subscription.is_trial:
-            subscription_status = (
-                'trial_active' if (user.subscription.end_date and user.subscription.end_date > now) else 'trial_expired'
-            )
-        else:
-            subscription_status = (
-                'paid_active' if (user.subscription.end_date and user.subscription.end_date > now) else 'paid_expired'
-            )
+        subscription_status = _compute_subscription_status(
+            user.subscription.is_trial,
+            user.subscription.status,
+            user.subscription.end_date,
+            datetime.now(UTC),
+        )
 
     return NetworkUserDetail(
         id=user.id,
