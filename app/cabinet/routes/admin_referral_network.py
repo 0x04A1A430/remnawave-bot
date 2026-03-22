@@ -340,7 +340,7 @@ async def _fetch_personal_spent(db: AsyncSession, user_ids: set[int]) -> dict[in
         return {}
 
     stmt = (
-        select(Transaction.user_id, func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+        select(Transaction.user_id, func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0))
         .where(
             and_(
                 Transaction.user_id.in_(user_ids),
@@ -1134,7 +1134,7 @@ async def get_network_user_detail(
     branch_revenue = 0
 
     # Personal spent
-    spent_stmt = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+    spent_stmt = select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
         and_(
             Transaction.user_id == user_id,
             Transaction.type.in_(SPENT_TRANSACTION_TYPES),
