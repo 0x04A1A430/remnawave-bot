@@ -117,6 +117,7 @@ class NetworkGraphResponse(BaseModel):
     total_referrers: int
     total_campaigns: int
     total_earnings_kopeks: int
+    total_subscription_revenue_kopeks: int
 
 
 class NetworkUserDetail(BaseModel):
@@ -608,6 +609,7 @@ async def get_referral_network(
             total_referrers=0,
             total_campaigns=0,
             total_earnings_kopeks=0,
+            total_subscription_revenue_kopeks=0,
         )
 
     # Cap to prevent excessive response sizes (deterministic: keep lowest IDs for stability)
@@ -698,6 +700,7 @@ async def get_referral_network(
     total_referrers = len([u for u in user_nodes if u.direct_referrals > 0])
 
     total_earnings = sum(personal_revenue.values())
+    total_subscription_revenue = sum(personal_spent.values())
 
     return NetworkGraphResponse(
         users=user_nodes,
@@ -707,6 +710,7 @@ async def get_referral_network(
         total_referrers=total_referrers,
         total_campaigns=len(campaign_nodes),
         total_earnings_kopeks=total_earnings,
+        total_subscription_revenue_kopeks=total_subscription_revenue,
     )
 
 
@@ -862,6 +866,7 @@ async def _build_scoped_graph(
             total_referrers=0,
             total_campaigns=0,
             total_earnings_kopeks=0,
+            total_subscription_revenue_kopeks=0,
         )
 
     # Cap to prevent excessive response sizes
@@ -948,6 +953,7 @@ async def _build_scoped_graph(
 
     total_referrers = len([u for u in user_nodes if u.direct_referrals > 0])
     total_earnings = sum(personal_revenue.values())
+    total_subscription_revenue = sum(personal_spent.values())
 
     return NetworkGraphResponse(
         users=user_nodes,
@@ -957,6 +963,7 @@ async def _build_scoped_graph(
         total_referrers=total_referrers,
         total_campaigns=len(campaign_nodes),
         total_earnings_kopeks=total_earnings,
+        total_subscription_revenue_kopeks=total_subscription_revenue,
     )
 
 
