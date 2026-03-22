@@ -1145,6 +1145,7 @@ async def get_trial_info(
     price_kopeks = settings.TRIAL_ACTIVATION_PRICE if requires_payment else 0
 
     # Get trial parameters from tariff if configured (same logic as activate_trial)
+    # Триальный тариф может быть неактивным — используется для отдельных лимитов
     try:
         from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
 
@@ -1154,8 +1155,6 @@ async def get_trial_info(
             trial_tariff_id = settings.get_trial_tariff_id()
             if trial_tariff_id > 0:
                 trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and not trial_tariff.is_active:
-                    trial_tariff = None
 
         if trial_tariff:
             traffic_limit_gb = trial_tariff.traffic_limit_gb
@@ -1288,6 +1287,7 @@ async def activate_trial(
 
     # First check for tariff with is_trial_available flag in DB (set via admin panel)
     # Then fallback to TRIAL_TARIFF_ID from settings
+    # Триальный тариф может быть неактивным — используется для отдельных лимитов
     trial_tariff = None
     try:
         from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
@@ -1298,8 +1298,6 @@ async def activate_trial(
             trial_tariff_id = settings.get_trial_tariff_id()
             if trial_tariff_id > 0:
                 trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and not trial_tariff.is_active:
-                    trial_tariff = None
 
         if trial_tariff:
             trial_traffic_limit = trial_tariff.traffic_limit_gb

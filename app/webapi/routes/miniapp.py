@@ -3776,14 +3776,13 @@ async def activate_subscription_trial_endpoint(
         try:
             from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
 
+            # Триальный тариф может быть неактивным — используется для отдельных лимитов
             trial_tariff = await get_trial_tariff(db)
 
             if not trial_tariff:
                 trial_tariff_id = settings.get_trial_tariff_id()
                 if trial_tariff_id > 0:
                     trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                    if trial_tariff and not trial_tariff.is_active:
-                        trial_tariff = None
 
             if trial_tariff:
                 trial_traffic_limit = trial_tariff.traffic_limit_gb
