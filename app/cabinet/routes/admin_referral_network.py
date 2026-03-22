@@ -17,6 +17,7 @@ from app.database.models import (
     PartnerStatus,
     ReferralEarning,
     Subscription,
+    SubscriptionStatus,
     Tariff,
     Transaction,
     TransactionType,
@@ -403,6 +404,7 @@ async def _fetch_subscription_info(
             Tariff.name,
             Subscription.end_date,
             Subscription.is_trial,
+            Subscription.status,
             row_num,
         )
         .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
@@ -415,17 +417,23 @@ async def _fetch_subscription_info(
         subq.c.name,
         subq.c.end_date,
         subq.c.is_trial,
+        subq.c.status,
     ).where(subq.c.rn == 1)
 
     result = await db.execute(stmt)
     now = datetime.now(UTC)
     out: dict[int, tuple[str | None, str | None, str | None]] = {}
     for row in result:
-        user_id, tariff_name, end_date, is_trial = row
+        user_id, tariff_name, end_date, is_trial, db_status = row
         end_date_iso = _format_datetime(end_date) if end_date else None
 
         if is_trial is None:
             sub_status = None
+        elif db_status in (
+            SubscriptionStatus.DISABLED.value,
+            SubscriptionStatus.PENDING.value,
+        ):
+            sub_status = 'trial_expired' if is_trial else 'paid_expired'
         elif is_trial:
             sub_status = 'trial_active' if (end_date and end_date > now) else 'trial_expired'
         else:
@@ -1181,6 +1189,11 @@ async def get_network_user_detail(
         now = datetime.now(UTC)
         if user.subscription.is_trial is None:
             subscription_status = None
+        elif user.subscription.status in (
+            SubscriptionStatus.DISABLED.value,
+            SubscriptionStatus.PENDING.value,
+        ):
+            subscription_status = 'trial_expired' if user.subscription.is_trial else 'paid_expired'
         elif user.subscription.is_trial:
             subscription_status = (
                 'trial_active' if (user.subscription.end_date and user.subscription.end_date > now) else 'trial_expired'
