@@ -857,6 +857,7 @@ async def _build_scoped_graph(
                 total_referrers=0,
                 total_campaigns=len(campaign_nodes),
                 total_earnings_kopeks=0,
+                total_subscription_revenue_kopeks=0,
             )
         return NetworkGraphResponse(
             users=[],
