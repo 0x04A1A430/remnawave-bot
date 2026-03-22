@@ -712,8 +712,7 @@ class RemnaWaveWebhookService:
             elapsed = (datetime.now(UTC) - self._recent_recreations[sub_id]).total_seconds()
             if elapsed < self._RECREATION_GUARD_SECONDS:
                 logger.warning(
-                    'Webhook user.deleted: skipping — panel recreation was attempted recently '
-                    '(recreation loop guard)',
+                    'Webhook user.deleted: skipping — panel recreation was attempted recently (recreation loop guard)',
                     sub_id=sub_id,
                     user_id=user_id,
                     elapsed=round(elapsed, 1),

@@ -206,5 +206,9 @@ class DeepLinkPollRequest(BaseModel):
 
     token: str = Field(..., min_length=16, max_length=128, description='Deep link auth token')
     campaign_slug: str | None = Field(
-        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug captured from cabinet URL'
+        None,
+        min_length=1,
+        max_length=64,
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug captured from cabinet URL',
     )

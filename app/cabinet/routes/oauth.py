@@ -234,4 +234,6 @@ async def oauth_callback(
         referred_by_id=referrer_id,
     )
     logger.info('New OAuth user created', provider=provider, user_id=user.id)
-    return await _finalize_oauth_login(db, user, provider, request.campaign_slug, request.referral_code, is_new_user=True)
+    return await _finalize_oauth_login(
+        db, user, provider, request.campaign_slug, request.referral_code, is_new_user=True
+    )
