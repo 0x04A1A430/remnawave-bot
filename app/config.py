@@ -462,6 +462,7 @@ class Settings(BaseSettings):
     PLATEGA_FAILED_URL: str | None = None
     PLATEGA_CURRENCY: str = 'RUB'
     PLATEGA_ACTIVE_METHODS: str = '2,10,11,12,13'
+    PLATEGA_INLINE_METHODS: bool = True
     PLATEGA_MIN_AMOUNT_KOPEKS: int = 10000
     PLATEGA_MAX_AMOUNT_KOPEKS: int = 100000000
     PLATEGA_WEBHOOK_PATH: str = '/platega-webhook'
