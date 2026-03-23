@@ -11,6 +11,7 @@ import io
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import structlog
 from PIL import Image, ImageOps
@@ -52,7 +53,7 @@ class SavedMedia:
     filename: str
     relative_path: str
     thumbnail_path: str | None
-    media_type: str  # 'image' or 'video'
+    media_type: Literal['image', 'video']
     content_type: str
     size_bytes: int
     width: int | None
@@ -120,11 +121,15 @@ def _process_and_save_image(
         # Fix EXIF orientation (rotated photos from phones)
         transposed = ImageOps.exif_transpose(img)
         if transposed is not None:
+            old_img = img
             img = transposed
+            old_img.close()
 
         # Normalize to RGB for consistent JPEG output
         if img.mode != 'RGB':
+            old_img = img
             img = img.convert('RGB')
+            old_img.close()
 
         original_width, original_height = img.size
 
