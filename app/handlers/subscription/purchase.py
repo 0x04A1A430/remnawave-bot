@@ -2921,6 +2921,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             return
 
     if needs_resume:
+        resume_transaction = None
         # Списываем суточную оплату ДО активации (чтобы не было бесплатного дня)
         if daily_price > 0 and is_inactive:
             from app.database.crud.user import subtract_user_balance
@@ -2946,7 +2947,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             from app.database.models import TransactionType
 
             try:
-                await create_transaction(
+                resume_transaction = await create_transaction(
                     db=db,
                     user_id=db_user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -2961,22 +2962,79 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
 
         subscription = await resume_daily_subscription(db, subscription)
         message = texts.t('DAILY_SUBSCRIPTION_RESUMED', '▶️ Подписка возобновлена!')
+        # Восстанавливаем connected_squads из тарифа, если очищены деактивацией
+        try:
+            if not subscription.connected_squads:
+                squads = tariff.allowed_squads or []
+                if not squads:
+                    from app.database.crud.server_squad import get_all_server_squads
+
+                    all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+                    squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+                if squads:
+                    subscription.connected_squads = squads
+                    await db.commit()
+                    await db.refresh(subscription)
+        except Exception as sq_err:
+            logger.warning('Не удалось восстановить connected_squads', error=sq_err)
+
         # Синхронизируем с Remnawave - активируем пользователя
         try:
             from app.services.subscription_service import SubscriptionService
 
             subscription_service = SubscriptionService()
-            await subscription_service.create_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=False,
-                reset_reason=None,
-            )
+            if getattr(db_user, 'remnawave_uuid', None):
+                await subscription_service.update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                    sync_squads=True,
+                )
+            else:
+                await subscription_service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                )
+                # POST может игнорировать activeInternalSquads — отправляем PATCH
+                await db.refresh(db_user)
+                if getattr(db_user, 'remnawave_uuid', None) and subscription.connected_squads:
+                    try:
+                        await subscription_service.update_remnawave_user(
+                            db,
+                            subscription,
+                            reset_traffic=False,
+                            sync_squads=True,
+                        )
+                    except Exception as patch_err:
+                        logger.warning('Не удалось синхронизировать сквады после создания', error=patch_err)
             logger.info(
                 '✅ Синхронизировано с Remnawave после возобновления суточной подписки', subscription_id=subscription.id
             )
         except Exception as e:
             logger.error('Ошибка синхронизации с Remnawave при возобновлении', error=e)
+
+        # Отправляем уведомление администраторам о возобновлении суточной подписки
+        if resume_transaction is not None:
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+
+                if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                    notification_service = AdminNotificationService(callback.bot)
+                    await notification_service.send_subscription_purchase_notification(
+                        db=db,
+                        user=db_user,
+                        subscription=subscription,
+                        transaction=resume_transaction,
+                        period_days=1,
+                        was_trial_conversion=False,
+                        amount_kopeks=daily_price,
+                        purchase_type='renewal',
+                    )
+            except Exception as notif_err:
+                logger.error('Не удалось отправить уведомление администраторам при возобновлении', error=notif_err)
     else:
         # Подписка активна, ставим на паузу
         subscription = await toggle_daily_subscription_pause(db, subscription)

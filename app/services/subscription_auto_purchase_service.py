@@ -2376,15 +2376,60 @@ async def try_resume_disabled_daily_after_topup(
             error=error,
         )
 
+    # Restore connected_squads from tariff if cleared by deactivation sync
+    try:
+        if not subscription.connected_squads:
+            squads = tariff.allowed_squads or []
+            if not squads:
+                from app.database.crud.server_squad import get_all_server_squads
+
+                all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+                squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+            if squads:
+                subscription.connected_squads = squads
+                await db.commit()
+                await db.refresh(subscription)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Авто-возобновление daily: не удалось восстановить connected_squads',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.create_remnawave_user(
-            db,
-            subscription,
-            reset_traffic=False,
-            reset_reason=None,
-        )
+        if getattr(user, 'remnawave_uuid', None):
+            await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+                sync_squads=True,
+            )
+        else:
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
+            # POST may ignore activeInternalSquads — follow up with PATCH
+            await db.refresh(user)
+            if getattr(user, 'remnawave_uuid', None) and subscription.connected_squads:
+                try:
+                    await subscription_service.update_remnawave_user(
+                        db,
+                        subscription,
+                        reset_traffic=False,
+                        sync_squads=True,
+                    )
+                except Exception as patch_err:
+                    logger.warning(
+                        '⚠️ Авто-возобновление daily: не удалось синхронизировать сквады',
+                        format_user_id=_format_user_id(user),
+                        error=patch_err,
+                    )
     except Exception as error:
         logger.error(
             '⚠️ Авто-возобновление daily: не удалось обновить RemnaWave',
