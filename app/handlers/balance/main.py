@@ -570,7 +570,7 @@ async def handle_topup_amount_callback(
 
             from .platega import process_platega_payment_amount
 
-            platega_method_code = int(method[len('platega_m'):])
+            platega_method_code = int(method[len('platega_m') :])
             await state.update_data(payment_method='platega', platega_method=platega_method_code)
             async with AsyncSessionLocal() as db:
                 await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)

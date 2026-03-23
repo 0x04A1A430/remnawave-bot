@@ -299,7 +299,7 @@ def is_payment_method_available(method_id: str) -> bool:
         if not settings.is_platega_enabled():
             return False
         try:
-            code = int(method_id[len('platega_m'):])
+            code = int(method_id[len('platega_m') :])
         except ValueError:
             return False
         return code in settings.get_platega_active_methods()
