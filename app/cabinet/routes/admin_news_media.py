@@ -36,9 +36,10 @@ router = APIRouter(prefix='/admin/news/media', tags=['Cabinet Admin News Media']
 
 
 def _build_media_url(request: Request, relative_path: str) -> str:
-    """Build a full URL for a media file from the request base URL."""
-    base = str(request.base_url).rstrip('/')
-    return f'{base}/uploads/{relative_path}'
+    """Build a full URL for a media file, respecting reverse proxy headers."""
+    proto = request.headers.get('X-Forwarded-Proto', request.url.scheme)
+    host = request.headers.get('X-Forwarded-Host', request.headers.get('Host', request.url.netloc))
+    return f'{proto}://{host}/uploads/{relative_path}'
 
 
 def _build_response(request: Request, saved: SavedMedia) -> NewsMediaUploadResponse:
