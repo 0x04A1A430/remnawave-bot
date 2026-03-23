@@ -43,7 +43,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.main_menu_button_service import MainMenuButtonService
-from app.services.phantom_service import claim_phantom, merge_phantom_into_user, sync_remnawave_after_phantom_merge
+from app.services.phantom_service import claim_phantom, merge_phantom_into_user
 from app.services.pinned_message_service import (
     deliver_pinned_message_to_user,
     get_active_pinned_message,
@@ -721,7 +721,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             phantom = await find_phantom_user_by_username(db, message.from_user.username)
             if phantom and phantom.id != user.id:
                 try:
-                    sub_transferred = await merge_phantom_into_user(db, phantom, user)
+                    await merge_phantom_into_user(db, phantom, user)
                     await db.commit()
                     await db.refresh(user, ['subscriptions'])
                 except Exception:
@@ -1558,7 +1558,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             if not claimed and user:
                 # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
                 # Merge phantom's data into the existing user via full account merge service.
-                sub_transferred = False
                 if phantom.id != user.id:
                     try:
                         await db.refresh(phantom, ['subscriptions'])
@@ -1876,7 +1875,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             if not claimed and user:
                 # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
                 # Merge phantom's data into the existing user via full account merge service.
-                sub_transferred = False
                 if phantom.id != user.id:
                     try:
                         await db.refresh(phantom, ['subscriptions'])
@@ -2504,7 +2502,6 @@ async def required_sub_channel_check(
                         if not claimed and user:
                             # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
                             # Merge phantom's data into the existing user via full account merge service.
-                            sub_transferred = False
                             if phantom.id != user.id:
                                 try:
                                     await db.refresh(phantom, ['subscriptions'])
