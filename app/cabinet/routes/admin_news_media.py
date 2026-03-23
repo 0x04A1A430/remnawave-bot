@@ -4,7 +4,7 @@ import asyncio
 import re
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from PIL import Image as PILImage
 
 from app.config import settings
@@ -64,7 +64,7 @@ def _build_response(request: Request, saved: SavedMedia) -> NewsMediaUploadRespo
 @router.post('/upload', response_model=NewsMediaUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_media(
     request: Request,
-    file: UploadFile,
+    file: UploadFile = File(...),
     admin: User = Depends(require_permission('news:edit')),
 ) -> NewsMediaUploadResponse:
     """Upload an image or video for a news article."""
