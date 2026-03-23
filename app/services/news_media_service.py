@@ -66,7 +66,10 @@ def ensure_upload_dirs(upload_path: Path) -> None:
         (upload_path / subdir).mkdir(parents=True, exist_ok=True)
 
 
-def detect_file_type(data: bytes) -> tuple[str, str]:
+MediaType = Literal['image', 'video']
+
+
+def detect_file_type(data: bytes) -> tuple[MediaType, str]:
     """Detect media type and extension from magic bytes.
 
     Returns:
@@ -88,8 +91,10 @@ def detect_file_type(data: bytes) -> tuple[str, str]:
         if data[: len(signature)] == signature:
             return 'image', ext
 
-    # Check MP4: bytes 4-7 must be 'ftyp'
-    if len(data) >= 8 and data[4:8] == b'ftyp':
+    # Check MP4: bytes 4-7 must be 'ftyp', bytes 8-12 must be a known video brand.
+    # Rejects HEIC/HEIF images (ftypheic, ftypmif1, etc.) which share the ftyp box format.
+    _MP4_VIDEO_BRANDS = {b'isom', b'mp41', b'mp42', b'M4V ', b'avc1', b'iso5', b'iso6', b'mmp4', b'dash', b'mp71'}
+    if data[4:8] == b'ftyp' and data[8:12] in _MP4_VIDEO_BRANDS:
         return 'video', '.mp4'
 
     # Check standard video signatures
@@ -170,7 +175,7 @@ def _process_and_save_image(
         except Exception:
             tmp_thumb.unlink(missing_ok=True)
             # Non-fatal: log and continue without thumbnail
-            logger.warning('Failed to generate thumbnail', filename=filename)
+            logger.warning('Failed to generate thumbnail', filename=filename, exc_info=True)
             thumbnail_filename = None
 
         relative_path = f'{_IMAGES_DIR}/{filename}'

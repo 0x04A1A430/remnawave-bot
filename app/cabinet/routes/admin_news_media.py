@@ -66,6 +66,7 @@ async def upload_media(
     # Read slightly over the max allowed size so we can detect oversized files.
     absolute_max_bytes = settings.MEDIA_MAX_VIDEO_SIZE_MB * _BYTES_PER_MB + 1
     data = await file.read(absolute_max_bytes)
+    await file.close()
     if not data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -85,7 +86,7 @@ async def upload_media(
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail='Unsupported file type. Allowed: JPEG, PNG, WebP, MP4, WebM',
-        )
+        ) from None
 
     # Enforce per-type size limits
     max_size_mb = (
@@ -110,12 +111,12 @@ async def upload_media(
             )
         else:
             saved = await save_video(data, upload_path)
-    except Exception:
-        logger.exception('Failed to save uploaded media', media_type=media_type)
+    except (ValueError, OSError) as exc:
+        logger.warning('Failed to save uploaded media', media_type=media_type, error=str(exc))
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail='Failed to process uploaded file',
-        )
+        ) from None
 
     logger.info(
         'Media uploaded',
