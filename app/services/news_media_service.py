@@ -44,15 +44,31 @@ ALLOWED_VIDEO_SIGNATURES: dict[bytes, str] = {
 _MP4_VIDEO_BRANDS: frozenset[bytes] = frozenset(
     {
         b'isom',
-        b'mp41',
-        b'mp42',
-        b'M4V ',
-        b'avc1',
+        b'iso2',
+        b'iso3',
+        b'iso4',
         b'iso5',
         b'iso6',
+        b'mp41',
+        b'mp42',
+        b'mp71',
+        b'M4V ',
+        b'M4VH',
+        b'M4VP',
+        b'MSNV',
+        b'avc1',
         b'mmp4',
         b'dash',
-        b'mp71',
+        b'3gp4',
+        b'3gp5',
+        b'3gp6',
+        b'NDAS',
+        b'NDSC',
+        b'NDSH',
+        b'NDSS',
+        b'NDSM',
+        b'NDSP',
+        b'qt  ',
     }
 )
 
@@ -108,10 +124,13 @@ def detect_file_type(data: bytes) -> tuple[MediaType, str]:
         if data[: len(signature)] == signature:
             return 'image', ext
 
-    # Check MP4: bytes 4-7 must be 'ftyp', bytes 8-12 must be a known video brand.
+    # Check MP4/MOV: bytes 4-7 must be 'ftyp', bytes 8-12 must be a known video brand.
     # Rejects HEIC/HEIF images (ftypheic, ftypmif1, etc.) which share the ftyp box format.
-    if data[4:8] == b'ftyp' and data[8:12] in _MP4_VIDEO_BRANDS:
-        return 'video', '.mp4'
+    if data[4:8] == b'ftyp':
+        brand = data[8:12]
+        if brand in _MP4_VIDEO_BRANDS:
+            return 'video', '.mp4'
+        logger.warning('Unknown ftyp brand rejected', brand=brand.decode('ascii', errors='replace'))
 
     # Check standard video signatures
     for signature, ext in ALLOWED_VIDEO_SIGNATURES.items():

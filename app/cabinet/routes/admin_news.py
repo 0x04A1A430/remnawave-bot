@@ -124,16 +124,24 @@ async def create_article(
         category_color = request.category_color
         if request.category_id is not None:
             cat = await get_category_by_id(db, request.category_id)
-            if cat:
-                category_name = cat.name
-                category_color = cat.color
+            if not cat:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f'Category with id={request.category_id} not found',
+                )
+            category_name = cat.name
+            category_color = cat.color
 
         # Resolve tag from FK -- sync legacy string field from the managed entity
         tag_name = request.tag
         if request.tag_id is not None:
             tag_obj = await get_tag_by_id(db, request.tag_id)
-            if tag_obj:
-                tag_name = tag_obj.name
+            if not tag_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f'Tag with id={request.tag_id} not found',
+                )
+            tag_name = tag_obj.name
 
         if request.is_featured:
             await unfeature_all_news(db)
@@ -197,15 +205,23 @@ async def update_article(
         # Resolve category from FK -- sync legacy string fields from the managed entity
         if 'category_id' in update_data and update_data['category_id'] is not None:
             cat = await get_category_by_id(db, update_data['category_id'])
-            if cat:
-                update_data['category'] = cat.name
-                update_data['category_color'] = cat.color
+            if not cat:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f'Category with id={update_data["category_id"]} not found',
+                )
+            update_data['category'] = cat.name
+            update_data['category_color'] = cat.color
 
         # Resolve tag from FK -- sync legacy string field from the managed entity
         if 'tag_id' in update_data and update_data['tag_id'] is not None:
             tag_obj = await get_tag_by_id(db, update_data['tag_id'])
-            if tag_obj:
-                update_data['tag'] = tag_obj.name
+            if not tag_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f'Tag with id={update_data["tag_id"]} not found',
+                )
+            update_data['tag'] = tag_obj.name
 
         if update_data.get('is_featured'):
             await unfeature_all_news(db)

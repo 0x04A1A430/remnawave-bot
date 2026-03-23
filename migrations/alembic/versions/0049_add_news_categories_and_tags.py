@@ -73,6 +73,10 @@ def upgrade() -> None:
         ondelete='SET NULL',
     )
 
+    # --- Indexes on FK columns for efficient lookups and ON DELETE SET NULL ---
+    op.create_index('ix_news_articles_category_id', 'news_articles', ['category_id'])
+    op.create_index('ix_news_articles_tag_id', 'news_articles', ['tag_id'])
+
     # --- Backfill: seed categories from existing article data ---
     op.execute(
         sa.text(
@@ -113,6 +117,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index('ix_news_articles_tag_id', 'news_articles')
+    op.drop_index('ix_news_articles_category_id', 'news_articles')
     op.drop_constraint('fk_news_articles_tag_id', 'news_articles', type_='foreignkey')
     op.drop_constraint('fk_news_articles_category_id', 'news_articles', type_='foreignkey')
     op.drop_column('news_articles', 'tag_id')
