@@ -28,6 +28,7 @@ from sqlalchemy import (
     Time,
     TypeDecorator,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
@@ -3332,7 +3333,42 @@ class NewsArticle(Base):
     created_at = Column(AwareDateTime(), server_default=func.now())
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
 
+    category_id = Column(Integer, ForeignKey('news_categories.id', ondelete='SET NULL'), nullable=True)
+    tag_id = Column(Integer, ForeignKey('news_tags.id', ondelete='SET NULL'), nullable=True)
+
     author = relationship('User', backref='created_news_articles', foreign_keys=[created_by])
+    category_obj = relationship('NewsCategory', foreign_keys=[category_id], lazy='noload')
+    tag_obj = relationship('NewsTag', foreign_keys=[tag_id], lazy='noload')
 
     def __repr__(self) -> str:
         return f"<NewsArticle id={self.id} slug='{self.slug}' published={self.is_published}>"
+
+
+class NewsCategory(Base):
+    """Managed news category with a display color."""
+
+    __tablename__ = 'news_categories'
+    __table_args__ = (Index('ix_news_categories_name_lower', text('lower(name)'), unique=True),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    color = Column(String(20), nullable=False, server_default='#00e5a0')
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<NewsCategory id={self.id} name='{self.name}'>"
+
+
+class NewsTag(Base):
+    """Managed news tag with a display color."""
+
+    __tablename__ = 'news_tags'
+    __table_args__ = (Index('ix_news_tags_name_lower', text('lower(name)'), unique=True),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), nullable=False)
+    color = Column(String(20), nullable=False, server_default='#94a3b8')
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<NewsTag id={self.id} name='{self.name}'>"

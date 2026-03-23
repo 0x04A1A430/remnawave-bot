@@ -24,6 +24,8 @@ _ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
         'category',
         'category_color',
         'tag',
+        'category_id',
+        'tag_id',
         'featured_image_url',
         'is_published',
         'is_featured',
@@ -37,6 +39,8 @@ _NULLABLE_UPDATE_FIELDS: frozenset[str] = frozenset(
     {
         'excerpt',
         'tag',
+        'category_id',
+        'tag_id',
         'featured_image_url',
         'published_at',
     }
@@ -53,6 +57,8 @@ async def create_news_article(
     category: str = '',
     category_color: str = '#00e5a0',
     tag: str | None = None,
+    category_id: int | None = None,
+    tag_id: int | None = None,
     featured_image_url: str | None = None,
     is_published: bool = False,
     is_featured: bool = False,
@@ -77,6 +83,8 @@ async def create_news_article(
         category=category,
         category_color=category_color,
         tag=tag,
+        category_id=category_id,
+        tag_id=tag_id,
         featured_image_url=featured_image_url,
         is_published=is_published,
         is_featured=is_featured,
@@ -103,17 +111,29 @@ async def create_news_article(
 
 
 async def get_news_article_by_id(db: AsyncSession, article_id: int) -> NewsArticle | None:
-    """Get a news article by ID with author relationship."""
+    """Get a news article by ID with author, category, and tag relationships."""
     result = await db.execute(
-        select(NewsArticle).options(selectinload(NewsArticle.author)).where(NewsArticle.id == article_id)
+        select(NewsArticle)
+        .options(
+            selectinload(NewsArticle.author),
+            selectinload(NewsArticle.category_obj),
+            selectinload(NewsArticle.tag_obj),
+        )
+        .where(NewsArticle.id == article_id)
     )
     return result.scalar_one_or_none()
 
 
 async def get_news_article_by_slug(db: AsyncSession, slug: str) -> NewsArticle | None:
-    """Get a news article by slug with author relationship."""
+    """Get a news article by slug with author, category, and tag relationships."""
     result = await db.execute(
-        select(NewsArticle).options(selectinload(NewsArticle.author)).where(NewsArticle.slug == slug)
+        select(NewsArticle)
+        .options(
+            selectinload(NewsArticle.author),
+            selectinload(NewsArticle.category_obj),
+            selectinload(NewsArticle.tag_obj),
+        )
+        .where(NewsArticle.slug == slug)
     )
     return result.scalar_one_or_none()
 
@@ -191,9 +211,7 @@ async def unfeature_all_news(db: AsyncSession) -> None:
     This is intentional — the caller should commit both this operation and the
     subsequent feature operation atomically.
     """
-    await db.execute(
-        update(NewsArticle).where(NewsArticle.is_featured.is_(True)).values(is_featured=False)
-    )
+    await db.execute(update(NewsArticle).where(NewsArticle.is_featured.is_(True)).values(is_featured=False))
 
 
 async def update_news_article(

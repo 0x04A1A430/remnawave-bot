@@ -17,6 +17,8 @@ from app.database.crud.news import (
     unfeature_all_news,
     update_news_article,
 )
+from app.database.crud.news_categories import get_category_by_id
+from app.database.crud.news_tags import get_tag_by_id
 from app.database.models import NewsArticle, User
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -53,6 +55,8 @@ def _article_to_detail(article: NewsArticle) -> dict[str, Any]:
         'category': article.category,
         'category_color': article.category_color,
         'tag': article.tag,
+        'category_id': article.category_id,
+        'tag_id': article.tag_id,
         'featured_image_url': article.featured_image_url,
         'is_published': article.is_published,
         'is_featured': article.is_featured,
@@ -115,6 +119,22 @@ async def create_article(
 ) -> NewsArticleResponse:
     """Create a new news article."""
     try:
+        # Resolve category from FK -- sync legacy string fields from the managed entity
+        category_name = request.category
+        category_color = request.category_color
+        if request.category_id is not None:
+            cat = await get_category_by_id(db, request.category_id)
+            if cat:
+                category_name = cat.name
+                category_color = cat.color
+
+        # Resolve tag from FK -- sync legacy string field from the managed entity
+        tag_name = request.tag
+        if request.tag_id is not None:
+            tag_obj = await get_tag_by_id(db, request.tag_id)
+            if tag_obj:
+                tag_name = tag_obj.name
+
         if request.is_featured:
             await unfeature_all_news(db)
         article = await create_news_article(
@@ -123,9 +143,11 @@ async def create_article(
             slug=request.slug,
             content=request.content,
             excerpt=request.excerpt,
-            category=request.category,
-            category_color=request.category_color,
-            tag=request.tag,
+            category=category_name,
+            category_color=category_color,
+            tag=tag_name,
+            category_id=request.category_id,
+            tag_id=request.tag_id,
             featured_image_url=request.featured_image_url,
             is_published=request.is_published,
             is_featured=request.is_featured,
@@ -171,6 +193,20 @@ async def update_article(
 
     try:
         update_data = request.model_dump(exclude_unset=True)
+
+        # Resolve category from FK -- sync legacy string fields from the managed entity
+        if 'category_id' in update_data and update_data['category_id'] is not None:
+            cat = await get_category_by_id(db, update_data['category_id'])
+            if cat:
+                update_data['category'] = cat.name
+                update_data['category_color'] = cat.color
+
+        # Resolve tag from FK -- sync legacy string field from the managed entity
+        if 'tag_id' in update_data and update_data['tag_id'] is not None:
+            tag_obj = await get_tag_by_id(db, update_data['tag_id'])
+            if tag_obj:
+                update_data['tag'] = tag_obj.name
+
         if update_data.get('is_featured'):
             await unfeature_all_news(db)
         article = await update_news_article(db, article, **update_data)

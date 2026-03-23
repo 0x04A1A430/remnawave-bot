@@ -175,6 +175,8 @@ class NewsArticleResponse(BaseModel):
     category: str
     category_color: str
     tag: str | None
+    category_id: int | None = None
+    tag_id: int | None = None
     featured_image_url: str | None
     is_published: bool
     is_featured: bool
@@ -198,6 +200,8 @@ class NewsArticleListItem(BaseModel):
     category: str
     category_color: str
     tag: str | None
+    category_id: int | None = None
+    tag_id: int | None = None
     featured_image_url: str | None
     is_published: bool
     is_featured: bool
@@ -226,6 +230,8 @@ class NewsCreateRequest(BaseModel):
     category: str = Field(..., min_length=1, max_length=100)
     category_color: str = Field(default='#00e5a0', max_length=20)
     tag: str | None = Field(None, max_length=50)
+    category_id: int | None = None
+    tag_id: int | None = None
     featured_image_url: str | None = Field(None, max_length=2000)
     is_published: bool = False
     is_featured: bool = False
@@ -281,6 +287,8 @@ class NewsUpdateRequest(BaseModel):
     category: str | None = Field(None, min_length=1, max_length=100)
     category_color: str | None = Field(None, max_length=20)
     tag: str | None = None
+    category_id: int | None = None
+    tag_id: int | None = None
     featured_image_url: str | None = Field(None, max_length=2000)
     is_published: bool | None = None
     is_featured: bool | None = None
