@@ -288,10 +288,12 @@ async def _handle_subscription_merge(
     if not has_primary_sub and has_secondary_sub:
         assert secondary_sub is not None
         secondary_sub.user_id = primary.id
-        # Переносим remnawave_uuid с secondary на primary
+        # Переносим remnawave_uuid (clear→flush→assign — unique constraint safety)
         if secondary.remnawave_uuid:
-            primary.remnawave_uuid = secondary.remnawave_uuid
+            uuid_to_transfer = secondary.remnawave_uuid
             secondary.remnawave_uuid = None
+            await db.flush()
+            primary.remnawave_uuid = uuid_to_transfer
         await db.flush()
         logger.info(
             'Мерж подписок: перенесена подписка secondary на primary',
@@ -316,10 +318,12 @@ async def _handle_subscription_merge(
         await db.flush()
         # Переносим подписку secondary на primary
         secondary_sub.user_id = primary.id
-        # Переносим remnawave_uuid
+        # Переносим remnawave_uuid (clear→flush→assign — unique constraint safety)
         if secondary.remnawave_uuid:
-            primary.remnawave_uuid = secondary.remnawave_uuid
+            uuid_to_transfer = secondary.remnawave_uuid
             secondary.remnawave_uuid = None
+            await db.flush()
+            primary.remnawave_uuid = uuid_to_transfer
         # Flush сразу — гарантируем, что DELETE предшествует UPDATE (unique constraint на subscription.user_id)
         await db.flush()
         logger.info(

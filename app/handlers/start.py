@@ -9,7 +9,6 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -44,6 +43,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.main_menu_button_service import MainMenuButtonService
+from app.services.phantom_service import claim_phantom, merge_phantom_into_user, sync_remnawave_after_phantom_merge
 from app.services.pinned_message_service import (
     deliver_pinned_message_to_user,
     get_active_pinned_message,
@@ -130,157 +130,6 @@ async def _activate_pending_gift_after_registration(
             'Failed to auto-activate gift after registration',
             token_prefix=(gift_token or '')[:5],
         )
-
-
-async def _claim_phantom_user(
-    db: AsyncSession,
-    phantom: 'User',
-    *,
-    telegram_id: int,
-    username: str | None,
-    first_name: str | None,
-    last_name: str | None,
-    language: str,
-    referrer_id: int | None,
-) -> tuple[bool, 'User | None']:
-    """Claim a phantom user by backfilling Telegram profile data.
-
-    Returns (success, user). On IntegrityError falls back to existing user lookup.
-
-    Note: Phantom users created when Bot.get_chat() fails at purchase time are matched
-    by username only. Since Telegram usernames are changeable and reassignable, this is
-    inherently vulnerable to username change attacks. When Bot.get_chat() succeeds at
-    purchase time, telegram_id is stored on the user and the phantom path is not used.
-    """
-    from app.utils.validators import sanitize_telegram_name
-
-    phantom.telegram_id = telegram_id
-    phantom.username = username
-    phantom.first_name = sanitize_telegram_name(first_name)
-    phantom.last_name = sanitize_telegram_name(last_name)
-    phantom.language = language
-    phantom.status = UserStatus.ACTIVE.value
-    if referrer_id and referrer_id != phantom.id:
-        phantom.referred_by_id = referrer_id
-    if not phantom.referral_code:
-        phantom.referral_code = await generate_unique_referral_code(db, telegram_id)
-    phantom.updated_at = datetime.now(UTC)
-    phantom.last_activity = datetime.now(UTC)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        logger.warning(
-            'IntegrityError claiming phantom user, falling back to existing user lookup',
-            phantom_user_id=phantom.id,
-            telegram_id=telegram_id,
-        )
-        existing = await get_user_by_telegram_id(db, telegram_id)
-        return False, existing
-    await db.refresh(phantom, ['subscription'])
-    # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
-    # Telegram usernames are changeable/reassignable, so the claimer may not be the intended
-    # recipient. This is logged at WARNING for admin audit. A confirmation flow would be needed
-    # to fully prevent username spoofing attacks on phantom claims.
-    logger.warning(
-        'Phantom user claimed by username match (verify intended recipient)',
-        phantom_user_id=phantom.id,
-        telegram_id=telegram_id,
-        username=username,
-        has_subscription=phantom.subscription is not None,
-    )
-
-    # Sync Remnawave panel with updated user data (telegram_id, username, etc.)
-    if phantom.subscription:
-        try:
-            subscription_service = SubscriptionService()
-            await subscription_service.update_remnawave_user(db, phantom.subscription)
-        except Exception as exc:
-            logger.warning(
-                'Failed to update Remnawave panel after phantom claim',
-                phantom_user_id=phantom.id,
-                error=str(exc),
-            )
-
-    return True, phantom
-
-
-async def _merge_phantom_into_active_user(
-    db: AsyncSession,
-    phantom: 'User',
-    active_user: 'User',
-) -> None:
-    """Merge a phantom user (created by guest landing purchase) into an existing active user.
-
-    Transfers GuestPurchase records and handles subscription conflict.
-    The phantom is soft-deleted (status=DELETED, username cleared) to preserve
-    audit trail and avoid CASCADE deletion of payment/transaction records.
-    """
-    from sqlalchemy import update
-
-    logger.warning(
-        'Merging phantom user into active user (audit: username-only match)',
-        phantom_id=phantom.id,
-        active_user_id=active_user.id,
-        active_user_telegram_id=active_user.telegram_id,
-        phantom_username=phantom.username,
-    )
-
-    # Transfer GuestPurchase.user_id references
-    await db.execute(update(GuestPurchase).where(GuestPurchase.user_id == phantom.id).values(user_id=active_user.id))
-
-    # Transfer GuestPurchase.buyer_user_id references
-    await db.execute(
-        update(GuestPurchase).where(GuestPurchase.buyer_user_id == phantom.id).values(buyer_user_id=active_user.id)
-    )
-
-    # Transfer balance
-    if phantom.balance_kopeks and phantom.balance_kopeks > 0:
-        active_user.balance_kopeks = (active_user.balance_kopeks or 0) + phantom.balance_kopeks
-        logger.info('Transferred balance from phantom', amount_kopeks=phantom.balance_kopeks)
-
-    # Handle subscription
-    await db.refresh(phantom, ['subscription'])
-    await db.refresh(active_user, ['subscription'])
-
-    if phantom.subscription and not active_user.subscription:
-        # Transfer subscription from phantom to active user
-        phantom.subscription.user_id = active_user.id
-        # Transfer remnawave_uuid (clear first to avoid unique constraint violation on flush)
-        if phantom.remnawave_uuid and not active_user.remnawave_uuid:
-            uuid_to_transfer = phantom.remnawave_uuid
-            phantom.remnawave_uuid = None
-            await db.flush()
-            active_user.remnawave_uuid = uuid_to_transfer
-        await db.flush()
-        logger.info(
-            'Transferred subscription from phantom to active user',
-            subscription_id=phantom.subscription.id,
-        )
-    elif phantom.subscription:
-        # Both have subscriptions — disable phantom's Remnawave user and free server slots
-        logger.warning(
-            'Both phantom and active user have subscriptions, disabling phantom',
-            phantom_subscription_id=phantom.subscription.id,
-            active_subscription_id=active_user.subscription.id,
-        )
-        if phantom.remnawave_uuid:
-            try:
-                subscription_service = SubscriptionService()
-                await subscription_service.disable_remnawave_user(phantom.remnawave_uuid)
-            except Exception as exc:
-                logger.warning('Failed to disable phantom Remnawave user', error=str(exc))
-        await decrement_subscription_server_counts(db, phantom.subscription)
-
-    # Soft-delete phantom: clear unique identifiers to prevent future matches
-    # and constraint violations. Preserve record for audit trail.
-    phantom.status = UserStatus.DELETED.value
-    phantom.username = None
-    phantom.remnawave_uuid = None
-    phantom.referral_code = None
-    await db.flush()
-
-    logger.info('Phantom user merged and soft-deleted', phantom_id=phantom.id, active_user_id=active_user.id)
 
 
 def _calculate_subscription_flags(subscription):
@@ -714,11 +563,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             phantom = await find_phantom_user_by_username(db, message.from_user.username)
             if phantom and phantom.id != user.id:
                 try:
-                    await _merge_phantom_into_active_user(db, phantom, user)
+                    sub_transferred = await merge_phantom_into_user(db, phantom, user)
                     await db.commit()
                     await db.refresh(user, ['subscription'])
+                    if sub_transferred:
+                        await sync_remnawave_after_phantom_merge(db, user)
                 except Exception:
                     await db.rollback()
+                    await db.refresh(user, ['subscription'])
                     logger.exception(
                         'Failed to merge phantom user',
                         phantom_id=phantom.id,
@@ -1528,7 +1380,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             else None
         )
         if phantom:
-            claimed, user = await _claim_phantom_user(
+            claimed, user = await claim_phantom(
                 db,
                 phantom,
                 telegram_id=callback.from_user.id,
@@ -1540,11 +1392,11 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if not claimed and user:
                 # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
-                # Merge phantom's subscription + GuestPurchase records into the existing user.
+                # Merge phantom's data into the existing user via full account merge service.
+                sub_transferred = False
                 if phantom.id != user.id:
                     try:
-                        await db.refresh(phantom, ['subscription'])
-                        await _merge_phantom_into_active_user(db, phantom, user)
+                        sub_transferred = await merge_phantom_into_user(db, phantom, user)
                         await db.commit()
                     except Exception:
                         await db.rollback()
@@ -1554,6 +1406,8 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                             active_user_id=user.id,
                         )
                 await db.refresh(user, ['subscription'])
+                if sub_transferred:
+                    await sync_remnawave_after_phantom_merge(db, user)
             elif not claimed:
                 logger.critical(
                     'Phantom claim failed with no fallback user, proceeding to normal registration',
@@ -1841,7 +1695,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             await find_phantom_user_by_username(db, message.from_user.username) if message.from_user.username else None
         )
         if phantom:
-            claimed, user = await _claim_phantom_user(
+            claimed, user = await claim_phantom(
                 db,
                 phantom,
                 telegram_id=message.from_user.id,
@@ -1853,11 +1707,11 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if not claimed and user:
                 # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
-                # Merge phantom's subscription + GuestPurchase records into the existing user.
+                # Merge phantom's data into the existing user via full account merge service.
+                sub_transferred = False
                 if phantom.id != user.id:
                     try:
-                        await db.refresh(phantom, ['subscription'])  # Re-sync after rollback in _claim_phantom_user
-                        await _merge_phantom_into_active_user(db, phantom, user)
+                        sub_transferred = await merge_phantom_into_user(db, phantom, user)
                         await db.commit()
                     except Exception:
                         await db.rollback()
@@ -1867,6 +1721,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                             active_user_id=user.id,
                         )
                 await db.refresh(user, ['subscription'])
+                if sub_transferred:
+                    await sync_remnawave_after_phantom_merge(db, user)
             elif not claimed:
                 logger.critical(
                     'Phantom claim failed with no fallback user, proceeding to normal registration',
@@ -2460,7 +2316,7 @@ async def required_sub_channel_check(
                         else None
                     )
                     if phantom:
-                        claimed, user = await _claim_phantom_user(
+                        claimed, user = await claim_phantom(
                             db,
                             phantom,
                             telegram_id=query.from_user.id,
@@ -2472,11 +2328,11 @@ async def required_sub_channel_check(
                         )
                         if not claimed and user:
                             # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
-                            # Merge phantom's subscription + GuestPurchase records into the existing user.
+                            # Merge phantom's data into the existing user via full account merge service.
+                            sub_transferred = False
                             if phantom.id != user.id:
                                 try:
-                                    await db.refresh(phantom, ['subscription'])
-                                    await _merge_phantom_into_active_user(db, phantom, user)
+                                    sub_transferred = await merge_phantom_into_user(db, phantom, user)
                                     await db.commit()
                                 except Exception:
                                     await db.rollback()
@@ -2486,6 +2342,8 @@ async def required_sub_channel_check(
                                         active_user_id=user.id,
                                     )
                             await db.refresh(user, ['subscription'])
+                            if sub_transferred:
+                                await sync_remnawave_after_phantom_merge(db, user)
                         elif not claimed:
                             logger.critical(
                                 'Phantom claim failed with no fallback user, proceeding to normal registration',
