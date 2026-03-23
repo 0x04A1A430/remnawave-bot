@@ -253,6 +253,24 @@ class Pal24PaymentMixin:
                 return True
 
             if status in {'PAID', 'SUCCESS', 'OVERPAID'}:
+                # Verify payment amount matches expected
+                callback_amount_str = callback.get('OutSum') or callback.get('out_sum') or callback.get('Amount')
+                if callback_amount_str is not None:
+                    try:
+                        from decimal import Decimal
+
+                        received_kopeks = int(Decimal(str(callback_amount_str)) * 100)
+                        if abs(received_kopeks - payment.amount_kopeks) > 1:
+                            logger.error(
+                                'Pal24 amount mismatch',
+                                expected_kopeks=payment.amount_kopeks,
+                                received_kopeks=received_kopeks,
+                                bill_id=payment.bill_id,
+                            )
+                            return False
+                    except (ValueError, TypeError) as e:
+                        logger.warning('Pal24: не удалось распарсить сумму из callback', error=str(e))
+
                 metadata = getattr(payment, 'metadata_json', {}) or {}
                 if not isinstance(metadata, dict):
                     metadata = {}

@@ -409,6 +409,14 @@ class YooKassaPaymentMixin:
                 )
                 return True
 
+            # Reject test-mode payments in production
+            if getattr(payment, 'test_mode', False) and not getattr(settings, 'YOOKASSA_TEST_MODE', False):
+                logger.warning(
+                    'YooKassa: rejecting test_mode payment in production',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                )
+                return False
+
             payment_module = import_module('app.services.payment_service')
 
             # Проверяем, не обрабатывается ли уже этот платеж (защита от дублирования)

@@ -82,7 +82,7 @@ class UserUpdateRequest(BaseModel):
 
 
 class BalanceUpdateRequest(BaseModel):
-    amount_kopeks: int
+    amount_kopeks: int = Field(..., ge=-100_000_000, le=100_000_000)
     description: str | None = Field(default='Корректировка через веб-API')
     create_transaction: bool = True
 

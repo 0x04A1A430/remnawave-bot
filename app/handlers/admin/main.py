@@ -137,6 +137,8 @@ async def show_support_submenu(callback: types.CallbackQuery, db_user: User, db:
 
 
 # Moderator panel entry (from main menu quick button)
+@admin_required
+@error_handler
 async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
     kb = InlineKeyboardMarkup(

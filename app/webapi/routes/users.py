@@ -22,6 +22,7 @@ from app.database.crud.user import (
     get_user_by_id,
     get_user_by_referral_code,
     get_user_by_telegram_id,
+    subtract_user_balance,
     update_user,
 )
 from app.database.models import PaymentMethod, PromoGroup, Subscription, User, UserStatus
@@ -311,14 +312,24 @@ async def update_balance(
     if not found_user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
-    success = await add_user_balance(
-        db,
-        found_user,
-        amount_kopeks=payload.amount_kopeks,
-        description=payload.description or 'Корректировка через веб-API',
-        create_transaction=payload.create_transaction,
-        payment_method=PaymentMethod.MANUAL,
-    )
+    if payload.amount_kopeks > 0:
+        success = await add_user_balance(
+            db,
+            found_user,
+            amount_kopeks=payload.amount_kopeks,
+            description=payload.description or 'Корректировка через веб-API',
+            create_transaction=payload.create_transaction,
+            payment_method=PaymentMethod.MANUAL,
+        )
+    else:
+        success = await subtract_user_balance(
+            db,
+            found_user,
+            amount_kopeks=abs(payload.amount_kopeks),
+            description=payload.description or 'Корректировка через веб-API',
+            create_transaction=payload.create_transaction,
+            payment_method=PaymentMethod.MANUAL,
+        )
 
     if not success:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Failed to update balance')

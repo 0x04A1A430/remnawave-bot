@@ -460,6 +460,14 @@ async def add_user_balance(
         )
         user = locked_result.scalar_one()
 
+        if amount_kopeks < 0:
+            logger.error(
+                'add_user_balance вызван с отрицательной суммой — используйте subtract_user_balance',
+                amount_kopeks=amount_kopeks,
+                user_id=user.id,
+            )
+            return False
+
         old_balance = user.balance_kopeks
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.now(UTC)

@@ -603,6 +603,14 @@ async def _resolve_user_from_init_data(
             detail='User not found',
         )
 
+    # Block access for banned/deleted users
+    user_status = getattr(user, 'status', None)
+    if user_status in ('blocked', 'deleted'):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail='Account is blocked or deleted',
+        )
+
     return user, webapp_data
 
 
@@ -897,6 +905,12 @@ async def create_payment_link(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentCreateResponse:
     user, _ = await _resolve_user_from_init_data(db, payload.init_data)
+
+    if getattr(user, 'restriction_topup', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail='Balance top-up is restricted for this account',
+        )
 
     method = (payload.method or '').strip().lower()
     if not method:
@@ -4716,6 +4730,14 @@ async def _authorize_miniapp_user(
             detail={'code': 'user_not_found', 'message': 'User not found'},
         )
 
+    # Block access for banned/deleted users
+    user_status = getattr(user, 'status', None)
+    if user_status in ('blocked', 'deleted'):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={'code': 'account_blocked', 'message': 'Account is blocked or deleted'},
+        )
+
     return user
 
 
@@ -5125,6 +5147,13 @@ async def submit_subscription_renewal_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={'code': 'subscription_restricted', 'message': 'Subscription purchases are restricted for this account'},
+        )
+
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
@@ -5437,6 +5466,12 @@ async def subscription_purchase_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchaseResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={'code': 'subscription_restricted', 'message': 'Subscription purchases are restricted for this account'},
+        )
 
     from app.database.crud.user import lock_user_for_pricing
 
@@ -6386,6 +6421,12 @@ async def purchase_tariff_endpoint(
 ) -> MiniAppTariffPurchaseResponse:
     """Покупка или смена тарифа."""
     user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={'code': 'subscription_restricted', 'message': 'Subscription purchases are restricted for this account'},
+        )
 
     if not settings.is_tariffs_mode():
         raise HTTPException(
