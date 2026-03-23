@@ -39,6 +39,13 @@ ALLOWED_VIDEO_SIGNATURES: dict[bytes, str] = {
     b'\x1a\x45\xdf\xa3': '.webm',
 }
 
+# Known ISO base media file format brands for video.
+# Rejects HEIC/HEIF image brands (heic, heix, mif1, msf1, avif) that share the ftyp box format.
+_MP4_VIDEO_BRANDS: frozenset[bytes] = frozenset({
+    b'isom', b'mp41', b'mp42', b'M4V ', b'avc1',
+    b'iso5', b'iso6', b'mmp4', b'dash', b'mp71',
+})
+
 _IMAGES_DIR = 'images'
 _VIDEOS_DIR = 'videos'
 _THUMBNAILS_DIR = 'thumbnails'
@@ -93,7 +100,6 @@ def detect_file_type(data: bytes) -> tuple[MediaType, str]:
 
     # Check MP4: bytes 4-7 must be 'ftyp', bytes 8-12 must be a known video brand.
     # Rejects HEIC/HEIF images (ftypheic, ftypmif1, etc.) which share the ftyp box format.
-    _MP4_VIDEO_BRANDS = {b'isom', b'mp41', b'mp42', b'M4V ', b'avc1', b'iso5', b'iso6', b'mmp4', b'dash', b'mp71'}
     if data[4:8] == b'ftyp' and data[8:12] in _MP4_VIDEO_BRANDS:
         return 'video', '.mp4'
 

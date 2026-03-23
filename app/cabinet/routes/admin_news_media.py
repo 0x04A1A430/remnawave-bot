@@ -7,6 +7,7 @@ import re
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from PIL import Image as PILImage
 
 from app.config import settings
 from app.database.models import User
@@ -111,7 +112,7 @@ async def upload_media(
             )
         else:
             saved = await save_video(data, upload_path)
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, PILImage.DecompressionBombError) as exc:
         logger.warning('Failed to save uploaded media', media_type=media_type, error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
