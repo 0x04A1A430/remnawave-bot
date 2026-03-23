@@ -1,3 +1,5 @@
+import html
+
 import structlog
 from aiogram import Bot
 from sqlalchemy import delete
@@ -116,7 +118,7 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             commission_percent = get_effective_referral_commission_percent(referrer)
             referral_notification = (
                 f'🎉 <b>Добро пожаловать!</b>\n\n'
-                f'Вы перешли по реферальной ссылке пользователя <b>{referrer.full_name}</b>!'
+                f'Вы перешли по реферальной ссылке пользователя <b>{html.escape(referrer.full_name)}</b>!'
             )
             if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
                 referral_notification += (
@@ -127,7 +129,7 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
 
             inviter_notification = (
                 f'👥 <b>Новый реферал!</b>\n\n'
-                f'По вашей ссылке зарегистрировался пользователь <b>{new_user.full_name}</b>!\n\n'
+                f'По вашей ссылке зарегистрировался пользователь <b>{html.escape(new_user.full_name)}</b>!\n\n'
                 f'💰 Когда он пополнит баланс от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}, '
             )
             if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
@@ -227,7 +229,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         if bot:
                             commission_notification = (
                                 f'💰 <b>Реферальная комиссия!</b>\n\n'
-                                f'Ваш реферал <b>{user.full_name}</b> пополнил баланс на '
+                                f'Ваш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
                                 f'{settings.format_price(topup_amount_kopeks)}\n\n'
                                 f'🎁 Ваша комиссия ({commission_percent}%): '
                                 f'{settings.format_price(commission_amount)}\n\n'
@@ -344,7 +346,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         bonus_breakdown = ' + '.join(bonus_parts)
                         inviter_bonus_notification = (
                             f'💰 <b>Реферальная награда!</b>\n\n'
-                            f'Ваш реферал <b>{user.full_name}</b> сделал первое пополнение '
+                            f'Ваш реферал <b>{html.escape(user.full_name)}</b> сделал первое пополнение '
                             f'на {settings.format_price(topup_amount_kopeks)}!\n\n'
                             f'🎁 Ваша награда: {settings.format_price(inviter_bonus)}'
                             f' ({bonus_breakdown})\n\n'
@@ -398,7 +400,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                 if bot:
                     commission_notification = (
                         f'💰 <b>Реферальная комиссия!</b>\n\n'
-                        f'Ваш реферал <b>{user.full_name}</b> пополнил баланс на '
+                        f'Ваш реферал <b>{html.escape(user.full_name)}</b> пополнил баланс на '
                         f'{settings.format_price(topup_amount_kopeks)}\n\n'
                         f'🎁 Ваша комиссия ({commission_percent}%): '
                         f'{settings.format_price(commission_amount)}\n\n'
@@ -479,7 +481,7 @@ async def process_referral_purchase(
             if bot:
                 purchase_commission_notification = (
                     f'💰 <b>Комиссия с покупки!</b>\n\n'
-                    f'Ваш реферал <b>{user.full_name}</b> совершил покупку на '
+                    f'Ваш реферал <b>{html.escape(user.full_name)}</b> совершил покупку на '
                     f'{settings.format_price(purchase_amount_kopeks)}\n\n'
                     f'🎁 Ваша комиссия ({commission_percent}%): '
                     f'{settings.format_price(commission_amount)}\n\n'

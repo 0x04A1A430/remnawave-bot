@@ -1,5 +1,7 @@
 """Handler for SeverPay balance top-up."""
 
+import html
+
 import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
@@ -142,7 +144,7 @@ async def process_severpay_payment_amount(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         await message.answer(
             f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',
@@ -202,7 +204,7 @@ async def start_severpay_topup(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         await callback.message.edit_text(
             f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
             parse_mode='HTML',

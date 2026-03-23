@@ -1,4 +1,5 @@
 import asyncio
+import html
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -1915,9 +1916,12 @@ class MonitoringService:
                         title = title[:57] + '...'
 
                     # Детали пользователя: имя, Telegram ID и username
-                    full_name = ticket.user.full_name if ticket.user else 'Unknown'
+                    full_name = html.escape(ticket.user.full_name or '') if ticket.user else 'Unknown'
                     telegram_id_display = ticket.user.telegram_id if ticket.user else '—'
-                    username_display = (ticket.user.username or 'отсутствует') if ticket.user else 'отсутствует'
+                    username_display = html.escape(
+                        (ticket.user.username or 'отсутствует') if ticket.user else 'отсутствует'
+                    )
+                    safe_title = html.escape(title) if title else '—'
 
                     text = (
                         f'⏰ <b>Ожидание ответа на тикет превышено</b>\n\n'
@@ -1925,7 +1929,7 @@ class MonitoringService:
                         f'👤 <b>Пользователь:</b> {full_name}\n'
                         f'🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
                         f'📱 <b>Username:</b> @{username_display}\n'
-                        f'📝 <b>Заголовок:</b> {title or "—"}\n'
+                        f'📝 <b>Заголовок:</b> {safe_title}\n'
                         f'⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n'
                     )
 

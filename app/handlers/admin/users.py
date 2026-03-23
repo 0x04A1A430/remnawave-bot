@@ -47,6 +47,7 @@ from app.services.user_service import UserService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
+from app.utils.formatting import user_html_link
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -822,12 +823,8 @@ async def _render_user_subscription_overview(callback: types.CallbackQuery, db: 
     subscription = profile['subscription']
 
     text = '📱 <b>Подписка и настройки пользователя</b>\n\n'
-    if user.telegram_id:
-        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-        user_id_display = user.telegram_id
-    else:
-        user_link = f'<b>{user.full_name}</b>'
-        user_id_display = user.email or f'#{user.id}'
+    user_link = user_html_link(user)
+    user_id_display = user.telegram_id or user.email or f'#{user.id}'
     text += f'👤 {user_link} (ID: <code>{user_id_display}</code>)\n\n'
 
     keyboard = []
@@ -849,7 +846,7 @@ async def _render_user_subscription_overview(callback: types.CallbackQuery, db: 
         if subscription.tariff_id:
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
-                text += f'<b>Тариф:</b> 📦 {tariff.name}\n'
+                text += f'<b>Тариф:</b> 📦 {html.escape(tariff.name)}\n'
             else:
                 text += f'<b>Тариф:</b> ID {subscription.tariff_id} (удалён)\n'
 
@@ -961,12 +958,8 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
     transactions = await get_user_transactions(db, user_id, limit=10)
 
     text = '💳 <b>Транзакции пользователя</b>\n\n'
-    if user.telegram_id:
-        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-        user_id_display = user.telegram_id
-    else:
-        user_link = f'<b>{user.full_name}</b>'
-        user_id_display = user.email or f'#{user.id}'
+    user_link = user_html_link(user)
+    user_id_display = user.telegram_id or user.email or f'#{user.id}'
     text += f'👤 {user_link} (ID: <code>{user_id_display}</code>)\n'
     text += f'💰 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
 
@@ -976,7 +969,7 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
         for transaction in transactions:
             type_emoji = '📈' if transaction.amount_kopeks > 0 else '📉'
             text += f'{type_emoji} {settings.format_price(abs(transaction.amount_kopeks))}\n'
-            text += f'📋 {transaction.description}\n'
+            text += f'📋 {html.escape(transaction.description or "")}\n'
             text += f'📅 {format_datetime(transaction.created_at)}\n\n'
     else:
         text += '📭 <b>Транзакции отсутствуют</b>'
@@ -1057,7 +1050,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
 
     if not search_results['users']:
         await message.answer(
-            f"🔍 По запросу '<b>{query}</b>' ничего не найдено",
+            f"🔍 По запросу '<b>{html.escape(query)}</b>' ничего не найдено",
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_users')]]
             ),
@@ -1065,7 +1058,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
         await state.clear()
         return
 
-    text = f"🔍 <b>Результаты поиска:</b> '{query}'\n\n"
+    text = f"🔍 <b>Результаты поиска:</b> '{html.escape(query)}'\n\n"
     text += 'Выберите пользователя:'
 
     keyboard = []
@@ -1175,7 +1168,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
 
     sections = [
         texts.ADMIN_USER_MANAGEMENT_PROFILE.format(
-            name=user.full_name,
+            name=html.escape(user.full_name),
             telegram_id=user.telegram_id,
             username=username_display,
             status=status_text,
@@ -1223,11 +1216,11 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             texts.t(
                 'ADMIN_USER_PROMO_GROUPS_PRIMARY',
                 '⭐ Основная: {name} (Priority: {priority})',
-            ).format(name=primary_group.name, priority=getattr(primary_group, 'priority', 0))
+            ).format(name=html.escape(primary_group.name), priority=getattr(primary_group, 'priority', 0))
         )
         sections.append(
             texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP.format(
-                name=primary_group.name,
+                name=html.escape(primary_group.name),
                 server_discount=primary_group.server_discount_percent,
                 traffic_discount=primary_group.traffic_discount_percent,
                 device_discount=primary_group.device_discount_percent,
@@ -1249,7 +1242,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
                     )
                 )
                 for group in additional_groups:
-                    sections.append(f'  • {group.name} (Priority: {getattr(group, "priority", 0)})')
+                    sections.append(f'  • {html.escape(group.name)} (Priority: {getattr(group, "priority", 0)})')
     else:
         sections.append(texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP_NONE)
 
@@ -1264,7 +1257,7 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             restriction_lines.append('  • 🚫 Продление/покупка запрещена')
         restriction_reason = getattr(user, 'restriction_reason', None)
         if restriction_reason:
-            restriction_lines.append(f'  📝 Причина: {restriction_reason}')
+            restriction_lines.append(f'  📝 Причина: {html.escape(restriction_reason)}')
         sections.append('\n'.join(restriction_lines))
 
     text = '\n\n'.join(sections)
@@ -1321,7 +1314,7 @@ async def _build_user_referrals_view(
         'ADMIN_USER_REFERRALS_SUMMARY',
         '👤 {name} (ID: <code>{telegram_id}</code>)\n👥 Всего рефералов: {count}',
     ).format(
-        name=user.full_name,
+        name=html.escape(user.full_name),
         telegram_id=user.telegram_id,
         count=len(referrals),
     )
@@ -1356,11 +1349,12 @@ async def _build_user_referrals_view(
         items = []
         for referral in referrals[:limit]:
             username_part = f', @{referral.username}' if referral.username else ''
+            safe_name = html.escape(referral.full_name)
             if referral.telegram_id:
-                referral_link = f'<a href="tg://user?id={referral.telegram_id}">{referral.full_name}</a>'
+                referral_link = f'<a href="tg://user?id={referral.telegram_id}">{safe_name}</a>'
                 referral_id_display = referral.telegram_id
             else:
-                referral_link = f'<b>{referral.full_name}</b>'
+                referral_link = f'<b>{safe_name}</b>'
                 referral_id_display = referral.email or f'#{referral.id}'
             items.append(
                 texts.t(
@@ -1737,7 +1731,7 @@ async def start_edit_user_referrals(
             'Или нажмите кнопку ниже, чтобы отменить.'
         ),
     ).format(
-        name=user.full_name,
+        name=html.escape(user.full_name),
         telegram_id=user.telegram_id,
     )
 
@@ -1972,7 +1966,7 @@ async def _render_user_promo_group(message: types.Message, language: str, user: 
         current_line = texts.t(
             'ADMIN_USER_PROMO_GROUPS_PRIMARY',
             '⭐ Основная: {name} (Priority: {priority})',
-        ).format(name=primary_group.name, priority=getattr(primary_group, 'priority', 0))
+        ).format(name=html.escape(primary_group.name), priority=getattr(primary_group, 'priority', 0))
 
         discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS.format(
             servers=primary_group.server_discount_percent,
@@ -1997,7 +1991,7 @@ async def _render_user_promo_group(message: types.Message, language: str, user: 
                     + '\n'
                 )
                 for group in additional_groups:
-                    additional_line += f'  • {group.name} (Priority: {getattr(group, "priority", 0)})\n'
+                    additional_line += f'  • {html.escape(group.name)} (Priority: {getattr(group, "priority", 0)})\n'
                 discount_line += additional_line
     else:
         current_line = texts.t(
@@ -2388,7 +2382,7 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
 
     text_lines = [
         '⚠️ <b>Ограничения пользователя</b>',
-        f'👤 {user.full_name}',
+        f'👤 {html.escape(user.full_name)}',
         '',
         '✅ — разрешено, 🚫 — запрещено',
         '',
@@ -2398,7 +2392,7 @@ async def show_user_restrictions(callback: types.CallbackQuery, db_user: User, d
 
     if restriction_reason:
         text_lines.append('')
-        text_lines.append(f'📝 <b>Причина:</b> {restriction_reason}')
+        text_lines.append(f'📝 <b>Причина:</b> {html.escape(restriction_reason)}')
 
     keyboard = get_user_restrictions_keyboard(
         user_id=user_id,
@@ -2479,7 +2473,7 @@ async def ask_restriction_reason(callback: types.CallbackQuery, db_user: User, d
         'выполнить запрещённое действие.\n\n'
     )
     if current_reason:
-        text += f'Текущая причина: <i>{current_reason}</i>\n\n'
+        text += f'Текущая причина: <i>{html.escape(current_reason)}</i>\n\n'
     text += 'Отправьте новую причину или /cancel для отмены:'
 
     await callback.message.edit_text(
@@ -2525,12 +2519,12 @@ async def save_restriction_reason(message: types.Message, db_user: User, db: Asy
         '✅ <b>Причина ограничения сохранена</b>',
         '',
         '⚠️ <b>Ограничения пользователя</b>',
-        f'👤 {user.full_name}',
+        f'👤 {html.escape(user.full_name)}',
         '',
         f'{"🚫" if restriction_topup else "✅"} Пополнение баланса',
         f'{"🚫" if restriction_subscription else "✅"} Продление/покупка подписки',
         '',
-        f'📝 <b>Причина:</b> {reason}',
+        f'📝 <b>Причина:</b> {html.escape(reason)}',
     ]
 
     keyboard = get_user_restrictions_keyboard(
@@ -2596,12 +2590,8 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
     text += '\n'
 
     for user in inactive_users[:10]:
-        if user.telegram_id:
-            user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-            user_id_display = user.telegram_id
-        else:
-            user_link = f'<b>{user.full_name}</b>'
-            user_id_display = user.email or f'#{user.id}'
+        user_link = user_html_link(user)
+        user_id_display = user.telegram_id or user.email or f'#{user.id}'
         has_active = user.subscription and user.subscription.is_active
         sub_badge = ' 🛡️' if has_active else ''
         text += f'👤 {user_link}{sub_badge}\n'
@@ -2691,12 +2681,8 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         campaign_stats = await get_campaign_statistics(db, campaign_registration.campaign_id)
 
     text = '📊 <b>Статистика пользователя</b>\n\n'
-    if user.telegram_id:
-        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-        user_id_display = user.telegram_id
-    else:
-        user_link = f'<b>{user.full_name}</b>'
-        user_id_display = user.email or f'#{user.id}'
+    user_link = user_html_link(user)
+    user_id_display = user.telegram_id or user.email or f'#{user.id}'
     text += f'👤 {user_link} (ID: <code>{user_id_display}</code>)\n\n'
 
     text += '<b>Основная информация:</b>\n'
@@ -2721,13 +2707,13 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
     if user.referred_by_id:
         referrer = await get_user_by_id(db, user.referred_by_id)
         if referrer:
-            text += f'• Пришел по реферальной ссылке от <b>{referrer.full_name}</b>\n'
+            text += f'• Пришел по реферальной ссылке от <b>{html.escape(referrer.full_name)}</b>\n'
         else:
             text += '• Пришел по реферальной ссылке (реферер не найден)\n'
         if campaign_registration and campaign_registration.campaign:
-            text += f'• Дополнительно зарегистрирован через кампанию <b>{campaign_registration.campaign.name}</b>\n'
+            text += f'• Дополнительно зарегистрирован через кампанию <b>{html.escape(campaign_registration.campaign.name)}</b>\n'
     elif campaign_registration and campaign_registration.campaign:
-        text += f'• Регистрация через рекламную кампанию <b>{campaign_registration.campaign.name}</b>\n'
+        text += f'• Регистрация через рекламную кампанию <b>{html.escape(campaign_registration.campaign.name)}</b>\n'
         if campaign_registration.created_at:
             text += f'• Дата регистрации по кампании: {campaign_registration.created_at.strftime("%d.%m.%Y %H:%M")}\n'
     else:
@@ -2737,7 +2723,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
 
     if campaign_registration and campaign_registration.campaign and campaign_stats:
         text += '<b>Рекламная кампания:</b>\n'
-        text += f'• Название: <b>{campaign_registration.campaign.name}</b>'
+        text += f'• Название: <b>{html.escape(campaign_registration.campaign.name)}</b>'
         if campaign_registration.campaign.start_parameter:
             text += f' (параметр: <code>{campaign_registration.campaign.start_parameter}</code>)'
         text += '\n'
@@ -2771,7 +2757,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         if referral_stats['referrals_detail']:
             text += '\n<b>Детали по рефералам:</b>\n'
             for detail in referral_stats['referrals_detail'][:5]:
-                referral_name = detail['referral_name']
+                referral_name = html.escape(detail['referral_name'])
                 earned = settings.format_price(detail['total_earned_kopeks'])
                 status = '🟢' if detail['is_active'] else '🔴'
                 text += f'• {status} {referral_name}: {earned}\n'
@@ -4226,7 +4212,7 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
     current_type = '🎁 Триал' if subscription.is_trial else '💎 Платная'
 
     text = '🔄 <b>Смена типа подписки</b>\n\n'
-    text += f'👤 {profile["user"].full_name}\n'
+    text += f'👤 {html.escape(profile["user"].full_name)}\n'
     text += f'📱 Текущий тип: {current_type}\n\n'
     text += 'Выберите новый тип подписки:'
 
@@ -4307,12 +4293,8 @@ async def admin_buy_subscription(callback: types.CallbackQuery, db_user: User, d
     )
 
     text = '💳 <b>Покупка подписки для пользователя</b>\n\n'
-    if target_user.telegram_id:
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-        target_user_id_display = target_user.telegram_id
-    else:
-        target_user_link = f'<b>{target_user.full_name}</b>'
-        target_user_id_display = target_user.email or f'#{target_user.id}'
+    target_user_link = user_html_link(target_user)
+    target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
     text += f'👤 {target_user_link} (ID: {target_user_id_display})\n'
     text += f'💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n'
     traffic_text = 'Безлимит' if (subscription.traffic_limit_gb or 0) <= 0 else f'{subscription.traffic_limit_gb} ГБ'
@@ -4400,12 +4382,8 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
         return
 
     text = '💳 <b>Подтверждение покупки подписки</b>\n\n'
-    if target_user.telegram_id:
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-        target_user_id_display = target_user.telegram_id
-    else:
-        target_user_link = f'<b>{target_user.full_name}</b>'
-        target_user_id_display = target_user.email or f'#{target_user.id}'
+    target_user_link = user_html_link(target_user)
+    target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
     text += f'👤 {target_user_link} (ID: {target_user_id_display})\n'
     text += f'📅 Период подписки: {period_days} дней\n'
     text += f'💰 Стоимость: {settings.format_price(price_kopeks)}\n'
@@ -4646,12 +4624,8 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
         else:
             message = '❌ Ошибка: у пользователя нет существующей подписки'
 
-        if target_user.telegram_id:
-            target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-            target_user_id_display = target_user.telegram_id
-        else:
-            target_user_link = f'<b>{target_user.full_name}</b>'
-            target_user_id_display = target_user.email or f'#{target_user.id}'
+        target_user_link = user_html_link(target_user)
+        target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
         await callback.message.edit_text(
             f'{message}\n\n'
             f'👤 {target_user_link} (ID: {target_user_id_display})\n'
@@ -4727,12 +4701,8 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         await callback.answer()
         return
 
-    if target_user.telegram_id:
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-        target_user_id_display = target_user.telegram_id
-    else:
-        target_user_link = f'<b>{target_user.full_name}</b>'
-        target_user_id_display = target_user.email or f'#{target_user.id}'
+    target_user_link = user_html_link(target_user)
+    target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
     text = '💳 <b>Покупка тарифа для пользователя</b>\n\n'
     text += f'👤 {target_user_link} (ID: {target_user_id_display})\n'
     text += f'💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n'
@@ -4742,7 +4712,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         traffic = '♾️' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
         prices = tariff.period_prices or {}
         min_price = min(prices.values()) if prices else 0
-        text += f'<b>{tariff.name}</b> — {traffic} / {tariff.device_limit} 📱 от {settings.format_price(min_price)}\n'
+        text += f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} 📱 от {settings.format_price(min_price)}\n'
 
     keyboard = []
     for tariff in tariffs:
@@ -4787,18 +4757,14 @@ async def admin_buy_tariff_period(callback: types.CallbackQuery, db_user: User, 
         await callback.answer('❌ Тариф недоступен', show_alert=True)
         return
 
-    if target_user.telegram_id:
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-        target_user_id_display = target_user.telegram_id
-    else:
-        target_user_link = f'<b>{target_user.full_name}</b>'
-        target_user_id_display = target_user.email or f'#{target_user.id}'
+    target_user_link = user_html_link(target_user)
+    target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
     traffic = '♾️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
 
     text = '💳 <b>Покупка тарифа для пользователя</b>\n\n'
     text += f'👤 {target_user_link} (ID: {target_user_id_display})\n'
     text += f'💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n'
-    text += f'📦 <b>Тариф: {tariff.name}</b>\n'
+    text += f'📦 <b>Тариф: {html.escape(tariff.name)}</b>\n'
     text += f'📊 Трафик: {traffic}\n'
     text += f'📱 Устройств: {tariff.device_limit}\n'
     text += f'🌐 Серверов: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}\n\n'
@@ -4876,18 +4842,14 @@ async def admin_buy_tariff_confirm(callback: types.CallbackQuery, db_user: User,
         await callback.answer()
         return
 
-    if target_user.telegram_id:
-        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-        target_user_id_display = target_user.telegram_id
-    else:
-        target_user_link = f'<b>{target_user.full_name}</b>'
-        target_user_id_display = target_user.email or f'#{target_user.id}'
+    target_user_link = user_html_link(target_user)
+    target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
     traffic = '♾️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
 
     text = '💳 <b>Подтверждение покупки тарифа</b>\n\n'
     text += f'👤 {target_user_link} (ID: {target_user_id_display})\n'
     text += f'💰 Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n'
-    text += f'📦 <b>Тариф: {tariff.name}</b>\n'
+    text += f'📦 <b>Тариф: {html.escape(tariff.name)}</b>\n'
     text += f'📊 Трафик: {traffic}\n'
     text += f'📱 Устройств: {tariff.device_limit}\n'
     text += f'📅 Период: {period} дней\n'
@@ -5055,18 +5017,14 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             description=f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
         )
 
-        if target_user.telegram_id:
-            target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
-            target_user_id_display = target_user.telegram_id
-        else:
-            target_user_link = f'<b>{target_user.full_name}</b>'
-            target_user_id_display = target_user.email or f'#{target_user.id}'
+        target_user_link = user_html_link(target_user)
+        target_user_id_display = target_user.telegram_id or target_user.email or f'#{target_user.id}'
         traffic = '♾️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
 
         await callback.message.edit_text(
             f'✅ <b>Тариф успешно куплен!</b>\n\n'
             f'👤 {target_user_link} (ID: {target_user_id_display})\n'
-            f'📦 Тариф: {tariff.name}\n'
+            f'📦 Тариф: {html.escape(tariff.name)}\n'
             f'📊 Трафик: {traffic}\n'
             f'📱 Устройств: {tariff.device_limit}\n'
             f'📅 Период: {period} дней\n'
@@ -5090,7 +5048,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
                     text=f'💳 <b>Администратор оформил вам тариф</b>\n\n'
-                    f'📦 Тариф: {tariff.name}\n'
+                    f'📦 Тариф: {html.escape(tariff.name)}\n'
                     f'📊 Трафик: {traffic}\n'
                     f'📱 Устройств: {tariff.device_limit}\n'
                     f'📅 Период: {period} дней\n'
@@ -5234,14 +5192,11 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
         current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
     text = '📦 <b>Смена тарифа пользователя</b>\n\n'
-    if user.telegram_id:
-        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-    else:
-        user_link = f'<b>{user.full_name}</b> ({user.email or f"#{user.id}"})'
+    user_link = user_html_link(user)
     text += f'👤 {user_link}\n\n'
 
     if current_tariff:
-        text += f'<b>Текущий тариф:</b> {current_tariff.name}\n\n'
+        text += f'<b>Текущий тариф:</b> {html.escape(current_tariff.name)}\n\n'
     else:
         text += '<b>Текущий тариф:</b> не установлен\n\n'
 
@@ -5307,12 +5262,9 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
     servers_count = len(tariff.allowed_squads) if tariff.allowed_squads else 0
 
     text = '📦 <b>Подтверждение смены тарифа</b>\n\n'
-    if user.telegram_id:
-        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
-    else:
-        user_link = f'<b>{user.full_name}</b> ({user.email or f"#{user.id}"})'
+    user_link = user_html_link(user)
     text += f'👤 {user_link}\n\n'
-    text += f'<b>Новый тариф:</b> {tariff.name}\n'
+    text += f'<b>Новый тариф:</b> {html.escape(tariff.name)}\n'
     text += f'• Устройства: {tariff.device_limit}\n'
     text += f'• Трафик: {traffic_str}\n'
     text += f'• Серверы: {servers_count}\n\n'
@@ -5431,7 +5383,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
 
         await callback.message.edit_text(
             f'✅ <b>Тариф успешно изменен</b>\n\n'
-            f'Новый тариф: <b>{tariff.name}</b>\n'
+            f'Новый тариф: <b>{html.escape(tariff.name)}</b>\n'
             f'• Устройства: {subscription.device_limit}\n'
             f'• Трафик: {"♾️" if tariff.traffic_limit_gb == 0 else f"{tariff.traffic_limit_gb} ГБ"}\n'
             f'• Серверы: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}',
@@ -5451,7 +5403,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await db.rollback()
 
         await callback.message.edit_text(
-            f'❌ <b>Ошибка смены тарифа</b>\n\nДетали: {e!s}',
+            f'❌ <b>Ошибка смены тарифа</b>\n\nДетали: {html.escape(str(e))}',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [

@@ -336,7 +336,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 tariff_type_str = '🔄 Суточный' if is_daily else '📅 Периодный'
 
                 tariff_info_lines = [
-                    f'<b>📦 {tariff.name}</b>',
+                    f'<b>📦 {html.escape(tariff.name)}</b>',
                     f'Тип: {tariff_type_str}',
                     f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит',
                     f'Устройства: {tariff.device_limit}',
@@ -453,7 +453,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     device_limit_display = str(subscription.device_limit)
 
     message = message_template.format(
-        full_name=db_user.full_name,
+        full_name=html.escape(db_user.full_name or ''),
         balance=settings.format_price(db_user.balance_kopeks),
         status_emoji=status_emoji,
         status_display=status_display,
@@ -761,7 +761,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
     # Проверка ограничения на покупку/продление подписки
     if getattr(db_user, 'restriction_subscription', False):
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -2068,7 +2068,7 @@ async def devices_continue(callback: types.CallbackQuery, state: FSMContext, db_
 async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     # Проверка ограничения на покупку/продление подписки
     if getattr(db_user, 'restriction_subscription', False):
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         texts = get_texts(db_user.language)
         support_url = settings.get_support_contact_url()
         keyboard = []

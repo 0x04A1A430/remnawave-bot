@@ -1,3 +1,5 @@
+import html
+
 import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
@@ -233,7 +235,7 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         )
 
         text += f'{emoji} {amount_text}\n'
-        text += f'📝 {transaction.description}\n'
+        text += f'📝 {html.escape(transaction.description or "")}\n'
         text += f'📅 {transaction.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []
@@ -266,7 +268,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:

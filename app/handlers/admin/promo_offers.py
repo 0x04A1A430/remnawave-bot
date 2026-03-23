@@ -677,7 +677,7 @@ def _describe_offer(
     label = texts.t(config.get('label_key', ''), config.get('default_label', template.offer_type))
     icon = config.get('icon', '📨')
 
-    lines = [f'{icon} <b>{template.name}</b>', '']
+    lines = [f'{icon} <b>{html.escape(template.name)}</b>', '']
     lines.append(texts.t('ADMIN_PROMO_OFFER_TYPE', 'Тип: {label}').format(label=label))
     lines.append(texts.t('ADMIN_PROMO_OFFER_VALID', 'Срок действия: {hours} ч').format(hours=template.valid_hours))
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -1157,7 +1158,7 @@ async def _auto_purchase_daily_tariff(
             texts = get_texts(getattr(user, 'language', 'ru'))
 
             message = (
-                f'✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n'
+                f'✅ <b>Суточный тариф «{html.escape(tariff.name)}» активирован!</b>\n\n'
                 f'💰 Списано: {final_price / 100:.0f} ₽ за первый день\n'
                 f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
                 f'ℹ️ Вы можете приостановить подписку в любой момент.'
@@ -2426,7 +2427,7 @@ async def try_resume_disabled_daily_after_topup(
                 '💳 Списано: {amount}\n'
                 '💰 Остаток: {balance}',
             ).format(
-                tariff_name=tariff.name,
+                tariff_name=html.escape(tariff.name),
                 amount=settings.format_price(daily_price),
                 balance=settings.format_price(user.balance_kopeks),
             )

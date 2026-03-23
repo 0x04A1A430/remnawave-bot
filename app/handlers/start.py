@@ -1,3 +1,4 @@
+import html
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -117,7 +118,7 @@ async def _activate_pending_gift_after_registration(
                 gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
             await db.flush()
             await svc_activate(db, gift_purchase.token, skip_notification=True)
-            tariff_name = gift_purchase.tariff.name if gift_purchase.tariff else ''
+            tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
             await answer_func(
                 f'🎁 <b>Подарок активирован!</b>\n'
                 f'{tariff_name} — {gift_purchase.period_days} дн.\n\n'
@@ -322,13 +323,13 @@ async def _apply_campaign_bonus_if_needed(
         amount_text = texts.format_price(result.balance_kopeks)
         return texts.CAMPAIGN_BONUS_BALANCE.format(
             amount=amount_text,
-            name=campaign.name,
+            name=html.escape(campaign.name),
         )
 
     if result.bonus_type == 'subscription':
         traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
         return texts.CAMPAIGN_BONUS_SUBSCRIPTION.format(
-            name=campaign.name,
+            name=html.escape(campaign.name),
             days=result.subscription_days,
             traffic=traffic_text,
             devices=result.subscription_device_limit,
@@ -1461,7 +1462,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 texts.t(
                     'WELCOME_FALLBACK',
                     'Добро пожаловать, {user_name}!',
-                ).format(user_name=existing_user.full_name)
+                ).format(user_name=html.escape(existing_user.full_name or ''))
             )
 
         await state.clear()
@@ -1695,7 +1696,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 texts.t(
                     'WELCOME_FALLBACK',
                     'Добро пожаловать, {user_name}!',
-                ).format(user_name=user.full_name)
+                ).format(user_name=html.escape(user.full_name or ''))
             )
 
     logger.info('✅ Регистрация завершена для пользователя', telegram_id=user.telegram_id)
@@ -1763,7 +1764,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 texts.t(
                     'WELCOME_FALLBACK',
                     'Добро пожаловать, {user_name}!',
-                ).format(user_name=existing_user.full_name)
+                ).format(user_name=html.escape(existing_user.full_name or ''))
             )
 
         await state.clear()
@@ -2030,7 +2031,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 texts.t(
                     'WELCOME_FALLBACK',
                     'Добро пожаловать, {user_name}!',
-                ).format(user_name=user.full_name)
+                ).format(user_name=html.escape(user.full_name or ''))
             )
 
     logger.info('✅ Регистрация завершена для пользователя', telegram_id=user.telegram_id)
@@ -2140,8 +2141,6 @@ def get_referral_code_keyboard(language: str):
 
 
 async def get_main_menu_text(user, texts, db: AsyncSession):
-    import html
-
     base_text = texts.MAIN_MENU.format(
         user_name=html.escape(user.full_name or ''), subscription_status=_get_subscription_status(user, texts)
     )
@@ -2189,8 +2188,6 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
 
 async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
-    import html
-
     base_text = texts.MAIN_MENU.format(
         user_name=html.escape(user_name or ''), subscription_status=_get_subscription_status_simple(texts)
     )

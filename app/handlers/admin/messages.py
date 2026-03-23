@@ -643,7 +643,7 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 {status_emoji} <b>{broadcast.created_at.strftime('%d.%m.%Y %H:%M')}</b>
 📊 Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
 🎯 Аудитория: {get_target_name(broadcast.target_type)}
-👤 Админ: {broadcast.admin_name}
+👤 Админ: {html.escape(broadcast.admin_name or '')}
 📝 Сообщение: {message_preview}
 ━━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -1477,7 +1477,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         f'• Не доставлено: {failed_count}\n'
         f'• Всего пользователей: {total_users_count}\n'
         f'• Успешность: {success_rate}%{media_info}\n\n'
-        f'<b>Администратор:</b> {admin_name}'
+        f'<b>Администратор:</b> {html.escape(admin_name)}'
     )
 
     back_keyboard = types.InlineKeyboardMarkup(

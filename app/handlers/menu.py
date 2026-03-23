@@ -1183,12 +1183,13 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
             if tariff:
                 is_daily_tariff = getattr(tariff, 'is_daily', False)
                 # Формируем краткий блок информации о тарифе для главного меню
-                tariff_info_block = f'\n📦 Тариф: {tariff.name}'
+                tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
         except Exception as e:
             logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
     base_text = texts.MAIN_MENU.format(
-        user_name=user.full_name, subscription_status=_get_subscription_status(user, texts, is_daily_tariff)
+        user_name=html.escape(user.full_name or ''),
+        subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
     )
 
     # Добавляем информацию о тарифе перед "Выберите действие"
