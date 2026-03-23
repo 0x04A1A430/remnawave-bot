@@ -1,7 +1,5 @@
 """Admin routes for managing news article media (images/videos)."""
 
-from __future__ import annotations
-
 import asyncio
 import re
 
@@ -35,10 +33,16 @@ _SAFE_FILENAME_RE = re.compile(r'^[0-9a-f]{32}\.(jpg|mp4|webm)$')
 router = APIRouter(prefix='/admin/news/media', tags=['Cabinet Admin News Media'])
 
 
+_ALLOWED_SCHEMES = frozenset({'http', 'https'})
+
+
 def _build_media_url(request: Request, relative_path: str) -> str:
     """Build a full URL for a media file, respecting reverse proxy headers."""
-    proto = request.headers.get('X-Forwarded-Proto', request.url.scheme)
+    proto = request.headers.get('X-Forwarded-Proto', request.url.scheme).split(',')[0].strip()
+    if proto not in _ALLOWED_SCHEMES:
+        proto = 'https'
     host = request.headers.get('X-Forwarded-Host', request.headers.get('Host', request.url.netloc))
+    host = host.split(',')[0].strip()
     return f'{proto}://{host}/uploads/{relative_path}'
 
 
