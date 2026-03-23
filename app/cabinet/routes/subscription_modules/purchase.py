@@ -600,6 +600,26 @@ async def purchase_tariff(
         else:
             period_days = request.period_days
 
+        # Validate period_days against tariff's configured periods (prevent arbitrary periods)
+        if not is_daily_tariff:
+            if tariff.period_prices:
+                available_periods = [int(p) for p in tariff.period_prices.keys()]
+            else:
+                available_periods = []
+
+            custom_days_allowed = (
+                hasattr(tariff, 'can_purchase_custom_days')
+                and tariff.can_purchase_custom_days()
+                and hasattr(tariff, 'get_price_for_custom_days')
+                and tariff.get_price_for_custom_days(period_days) is not None
+            )
+
+            if period_days not in available_periods and not custom_days_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Selected period is not available for this tariff',
+                )
+
         # Determine traffic limit (custom traffic support)
         traffic_limit_gb = tariff.traffic_limit_gb
         custom_traffic_gb = None
@@ -637,6 +657,13 @@ async def purchase_tariff(
         promo_offer_discount_percent = bd.get('offer_discount_pct', 0)
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
+
+        # Safety guard: reject zero-price purchases for non-daily tariffs (defense in depth)
+        if price_kopeks <= 0 and result.base_price <= 0 and not is_daily_tariff:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid tariff period or pricing configuration',
+            )
 
         # Check balance
         if user.balance_kopeks < price_kopeks:
