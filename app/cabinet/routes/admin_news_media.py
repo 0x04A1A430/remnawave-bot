@@ -27,8 +27,9 @@ logger = structlog.get_logger(__name__)
 
 _BYTES_PER_MB = 1024 * 1024
 
-# Only allow UUID-hex filenames with expected extensions (path traversal defense-in-depth)
-_SAFE_FILENAME_RE = re.compile(r'^(thumb_)?[0-9a-f]{32}\.(jpg|mp4|webm)$')
+# Only allow UUID-hex filenames with expected extensions (path traversal defense-in-depth).
+# thumb_ prefix is NOT allowed — thumbnails are cleaned up automatically when the main file is deleted.
+_SAFE_FILENAME_RE = re.compile(r'^[0-9a-f]{32}\.(jpg|mp4|webm)$')
 
 router = APIRouter(prefix='/admin/news/media', tags=['Cabinet Admin News Media'])
 
@@ -97,7 +98,7 @@ async def upload_media(
         )
 
     upload_path = settings.get_media_upload_path()
-    ensure_upload_dirs(upload_path)
+    await asyncio.to_thread(ensure_upload_dirs, upload_path)
 
     try:
         if media_type == 'image':

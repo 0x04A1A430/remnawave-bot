@@ -1,5 +1,7 @@
 """Schemas for news media upload responses."""
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -8,7 +10,7 @@ class NewsMediaUploadResponse(BaseModel):
 
     url: str
     thumbnail_url: str | None = None
-    media_type: str  # 'image' or 'video'
+    media_type: Literal['image', 'video']
     filename: str
     size_bytes: int
     width: int | None = None

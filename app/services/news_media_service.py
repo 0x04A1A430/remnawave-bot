@@ -111,71 +111,78 @@ def _process_and_save_image(
     This is a CPU-bound function intended to be run via asyncio.to_thread.
     """
     img = Image.open(io.BytesIO(data))
-
-    # Double-check pixel count (defense-in-depth alongside Image.MAX_IMAGE_PIXELS)
-    if img.size[0] * img.size[1] > 25_000_000:
-        msg = 'Image dimensions too large'
-        raise ValueError(msg)
-
-    # Fix EXIF orientation (rotated photos from phones)
-    img = ImageOps.exif_transpose(img)
-
-    # Convert to RGB (strip alpha for JPEG, handle palette/grayscale modes)
-    if img.mode not in ('RGB', 'L'):
-        img = img.convert('RGB')
-
-    original_width, original_height = img.size
-
-    # Resize if any dimension exceeds max_dim (preserving aspect ratio)
-    if original_width > max_dim or original_height > max_dim:
-        img.thumbnail((max_dim, max_dim), Image.LANCZOS)
-
-    width, height = img.size
-    filename = f'{uuid.uuid4().hex}.jpg'
-    image_dir = upload_path / _IMAGES_DIR
-    target_path = image_dir / filename
-
-    # Atomic write: save to temp file, then rename
-    tmp_path = target_path.with_suffix('.tmp')
     try:
-        img.save(tmp_path, format='JPEG', quality=quality, optimize=True)
-        tmp_path.rename(target_path)
-    except Exception:
-        tmp_path.unlink(missing_ok=True)
-        raise
+        # Double-check pixel count (defense-in-depth alongside Image.MAX_IMAGE_PIXELS)
+        if img.size[0] * img.size[1] > 25_000_000:
+            msg = 'Image dimensions too large'
+            raise ValueError(msg)
 
-    size_bytes = target_path.stat().st_size
+        # Fix EXIF orientation (rotated photos from phones)
+        transposed = ImageOps.exif_transpose(img)
+        if transposed is not None:
+            img = transposed
 
-    # Generate thumbnail
-    thumbnail_filename = f'thumb_{filename}'
-    thumbnail_dir = upload_path / _THUMBNAILS_DIR
-    thumbnail_target = thumbnail_dir / thumbnail_filename
+        # Normalize to RGB for consistent JPEG output
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
 
-    tmp_thumb = thumbnail_target.with_suffix('.tmp')
-    try:
-        thumb = img.copy()
-        thumb.thumbnail(_THUMBNAIL_SIZE, Image.LANCZOS)
-        thumb.save(tmp_thumb, format='JPEG', quality=quality, optimize=True)
-        tmp_thumb.rename(thumbnail_target)
-    except Exception:
-        tmp_thumb.unlink(missing_ok=True)
-        # Non-fatal: log and continue without thumbnail
-        logger.warning('Failed to generate thumbnail', filename=filename)
-        thumbnail_filename = None
+        original_width, original_height = img.size
 
-    relative_path = f'{_IMAGES_DIR}/{filename}'
-    thumbnail_path = f'{_THUMBNAILS_DIR}/{thumbnail_filename}' if thumbnail_filename else None
+        # Resize if any dimension exceeds max_dim (preserving aspect ratio)
+        if original_width > max_dim or original_height > max_dim:
+            img.thumbnail((max_dim, max_dim), Image.LANCZOS)
 
-    return SavedMedia(
-        filename=filename,
-        relative_path=relative_path,
-        thumbnail_path=thumbnail_path,
-        media_type='image',
-        content_type='image/jpeg',
-        size_bytes=size_bytes,
-        width=width,
-        height=height,
-    )
+        width, height = img.size
+        filename = f'{uuid.uuid4().hex}.jpg'
+        image_dir = upload_path / _IMAGES_DIR
+        target_path = image_dir / filename
+
+        # Atomic write: save to temp file, then rename
+        tmp_path = target_path.with_suffix('.tmp')
+        try:
+            img.save(tmp_path, format='JPEG', quality=quality, optimize=True)
+            tmp_path.rename(target_path)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+        size_bytes = target_path.stat().st_size
+
+        # Generate thumbnail
+        thumbnail_filename = f'thumb_{filename}'
+        thumbnail_dir = upload_path / _THUMBNAILS_DIR
+        thumbnail_target = thumbnail_dir / thumbnail_filename
+
+        tmp_thumb = thumbnail_target.with_suffix('.tmp')
+        try:
+            thumb = img.copy()
+            try:
+                thumb.thumbnail(_THUMBNAIL_SIZE, Image.LANCZOS)
+                thumb.save(tmp_thumb, format='JPEG', quality=quality, optimize=True)
+                tmp_thumb.rename(thumbnail_target)
+            finally:
+                thumb.close()
+        except Exception:
+            tmp_thumb.unlink(missing_ok=True)
+            # Non-fatal: log and continue without thumbnail
+            logger.warning('Failed to generate thumbnail', filename=filename)
+            thumbnail_filename = None
+
+        relative_path = f'{_IMAGES_DIR}/{filename}'
+        thumbnail_path = f'{_THUMBNAILS_DIR}/{thumbnail_filename}' if thumbnail_filename else None
+
+        return SavedMedia(
+            filename=filename,
+            relative_path=relative_path,
+            thumbnail_path=thumbnail_path,
+            media_type='image',
+            content_type='image/jpeg',
+            size_bytes=size_bytes,
+            width=width,
+            height=height,
+        )
+    finally:
+        img.close()
 
 
 async def save_image(
