@@ -126,7 +126,7 @@ class KassaAiService:
             sign_str = f'{shop_id}:{amount_str}:{self.secret2}:{order_id}'
             expected_sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
 
-            return expected_sign.lower() == sign.lower()
+            return hmac.compare_digest(expected_sign.lower(), sign.lower())
         except Exception as e:
             logger.error('KassaAI webhook verify error', error=e)
             return False
