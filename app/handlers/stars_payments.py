@@ -1,3 +1,4 @@
+import html
 from decimal import ROUND_HALF_UP, Decimal
 
 import structlog
@@ -136,7 +137,7 @@ async def _handle_wheel_spin_payment(
         emoji = selected_prize.emoji or '🎁'
         await message.answer(
             f'🎰 <b>Колесо удачи!</b>\n\n'
-            f'{emoji} <b>{selected_prize.display_name}</b>\n\n'
+            f'{emoji} <b>{html.escape(selected_prize.display_name)}</b>\n\n'
             f'{prize_message}\n\n'
             f'⭐ Потрачено: {stars_amount} Stars',
             parse_mode='HTML',

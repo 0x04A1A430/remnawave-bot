@@ -139,6 +139,7 @@ async def find_phantom_user_by_username(db: AsyncSession, username: str) -> User
         .where(
             User.telegram_id.is_(None),
             User.auth_type == 'telegram',
+            User.status != UserStatus.DELETED.value,
             func.lower(User.username) == normalized,
         )
         .with_for_update()
@@ -458,6 +459,14 @@ async def add_user_balance(
             .execution_options(populate_existing=True)
         )
         user = locked_result.scalar_one()
+
+        if amount_kopeks < 0:
+            logger.error(
+                'add_user_balance вызван с отрицательной суммой — используйте subtract_user_balance',
+                amount_kopeks=amount_kopeks,
+                user_id=user.id,
+            )
+            return False
 
         old_balance = user.balance_kopeks
         user.balance_kopeks += amount_kopeks

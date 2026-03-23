@@ -77,11 +77,11 @@ class AdminNotificationService:
                 return f'ID {referred_by_id} (не найден)'
 
             if referrer.username:
-                return f'@{referrer.username} (ID: {referred_by_id})'
+                return f'@{html.escape(referrer.username)} (ID: {referred_by_id})'
             if referrer.telegram_id:
                 return f'ID {referrer.telegram_id}'
             if referrer.email:
-                return f'📧 {referrer.email}'
+                return f'📧 {html.escape(referrer.email)}'
             return f'User#{referred_by_id}'
 
         except Exception as e:
@@ -118,17 +118,17 @@ class AdminNotificationService:
     def _get_user_display(self, user: User) -> str:
         first_name = getattr(user, 'first_name', '') or ''
         if first_name:
-            return first_name
+            return html.escape(first_name)
 
         username = getattr(user, 'username', '') or ''
         if username:
-            return username
+            return html.escape(username)
 
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id is None:
             email = getattr(user, 'email', None)
             if email:
-                return email
+                return html.escape(email)
             return f'User#{getattr(user, "id", "Unknown")}'
         return f'ID{telegram_id}'
 
@@ -140,7 +140,7 @@ class AdminNotificationService:
 
         email = getattr(user, 'email', None)
         if email:
-            return f'📧 {email}'
+            return f'📧 {html.escape(email)}'
 
         return f'User#{getattr(user, "id", "Unknown")}'
 
@@ -249,7 +249,7 @@ class AdminNotificationService:
         if not promo_group:
             return f'{icon} <b>{title}:</b> —'
 
-        lines = [f'{icon} <b>{title}:</b> {promo_group.name}']
+        lines = [f'{icon} <b>{title}:</b> {html.escape(promo_group.name)}']
 
         discount_lines = self._format_promo_group_discounts(promo_group)
         if discount_lines:
@@ -265,6 +265,8 @@ class AdminNotificationService:
             PromoCodeType.BALANCE.value: '💰 Бонус на баланс',
             PromoCodeType.SUBSCRIPTION_DAYS.value: '⏰ Доп. дни подписки',
             PromoCodeType.TRIAL_SUBSCRIPTION.value: '🎁 Триал подписка',
+            PromoCodeType.PROMO_GROUP.value: '👥 Промогруппа',
+            PromoCodeType.DISCOUNT.value: '💸 Скидка',
         }
 
         if not promo_type:
@@ -357,14 +359,14 @@ class AdminNotificationService:
                 '',
                 f'👤 <b>Пользователь:</b> {user_display}',
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> @{getattr(user, "username", None) or "отсутствует"}',
+                f'📱 <b>Username:</b> @{html.escape(getattr(user, "username", None) or "отсутствует")}',
                 f'👥 <b>Статус:</b> {user_status}',
                 '',
             ]
 
             # Промогруппа — только название, без скидок
             if promo_group:
-                message_lines.append(f'🏷️ <b>Промогруппа:</b> {promo_group.name}')
+                message_lines.append(f'🏷️ <b>Промогруппа:</b> {html.escape(promo_group.name)}')
             else:
                 message_lines.append('🏷️ <b>Промогруппа:</b> —')
 
@@ -417,7 +419,7 @@ class AdminNotificationService:
 
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
             if tariff:
-                return tariff.name
+                return html.escape(tariff.name)
         except Exception:
             pass
         return None
@@ -494,7 +496,7 @@ class AdminNotificationService:
             # Добавляем username только если есть
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 @{username}')
+                message_lines.append(f'📱 @{html.escape(username)}')
 
             message_lines.append(f'📋 {user_status}')
 
@@ -657,13 +659,13 @@ class AdminNotificationService:
 
         username = getattr(user, 'username', None)
         if username:
-            message_lines.append(f'📱 @{username}')
+            message_lines.append(f'📱 @{html.escape(username)}')
 
         message_lines.append(f'💳 {topup_status}')
 
         # Промогруппа -- только название
         if promo_group:
-            message_lines.append(f'🏷️ Промогруппа: {promo_group.name}')
+            message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
 
         message_lines.append('')
 
@@ -697,7 +699,7 @@ class AdminNotificationService:
             desc = transaction.description
             if len(desc) > 120:
                 desc = desc[:117] + '...'
-            detail_lines.append(f'Описание: {desc}')
+            detail_lines.append(f'Описание: {html.escape(desc)}')
 
         if transaction.created_at:
             detail_lines.append(f'Создана: {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M:%S")}')
@@ -916,7 +918,7 @@ class AdminNotificationService:
 
 👤 <b>Пользователь:</b> {user_display}
 🆔 <b>{user_id_label}:</b> {user_id_display}
-📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
+📱 <b>Username:</b> @{html.escape(getattr(user, 'username', None) or 'отсутствует')}
 
 {promo_block}
 
@@ -1003,7 +1005,7 @@ class AdminNotificationService:
                 '',
                 f'👤 <b>Пользователь:</b> {user_display}',
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> @{getattr(user, "username", None) or "отсутствует"}',
+                f'📱 <b>Username:</b> @{html.escape(getattr(user, "username", None) or "отсутствует")}',
                 '',
                 promo_block,
                 '',
@@ -1013,13 +1015,21 @@ class AdminNotificationService:
                 f'📊 Использования: {usage_info}',
             ]
 
+            promo_type = promocode_data.get('type')
             balance_bonus = promocode_data.get('balance_bonus_kopeks', 0)
-            if balance_bonus:
-                message_lines.append(f'💰 Бонус на баланс: {settings.format_price(balance_bonus)}')
-
             subscription_days = promocode_data.get('subscription_days', 0)
-            if subscription_days:
-                message_lines.append(f'📅 Доп. дни подписки: {subscription_days}')
+
+            if promo_type == PromoCodeType.DISCOUNT.value:
+                message_lines.append(f'💸 Скидка: {balance_bonus}%')
+                if subscription_days:
+                    message_lines.append(f'⏳ Срок действия скидки: {subscription_days} ч.')
+                else:
+                    message_lines.append('⏳ Срок действия скидки: до первой покупки')
+            else:
+                if balance_bonus:
+                    message_lines.append(f'💰 Бонус на баланс: {settings.format_price(balance_bonus)}')
+                if subscription_days:
+                    message_lines.append(f'📅 Доп. дни подписки: {subscription_days}')
 
             valid_until = promocode_data.get('valid_until')
             if valid_until:
@@ -1094,13 +1104,13 @@ class AdminNotificationService:
             message_lines = [
                 '📣 <b>ПЕРЕХОД ПО РК</b>',
                 '',
-                f'🧾 {campaign.name} (<code>{campaign.start_parameter}</code>)',
+                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
                 '',
-                f'👤 {full_name} (<code>{telegram_user.id}</code>)',
+                f'👤 {html.escape(full_name)} (<code>{telegram_user.id}</code>)',
             ]
 
             if telegram_user.username:
-                message_lines.append(f'📱 @{telegram_user.username}')
+                message_lines.append(f'📱 @{html.escape(telegram_user.username)}')
 
             message_lines.append(f'📋 {user_status}')
 
@@ -1108,7 +1118,7 @@ class AdminNotificationService:
             if user:
                 promo_group = await self._get_user_promo_group(db, user)
                 if promo_group:
-                    message_lines.append(f'🏷️ Промогруппа: {promo_group.name}')
+                    message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
 
             message_lines.append('')
 
@@ -1120,7 +1130,7 @@ class AdminNotificationService:
 
                     tariff = await get_tariff_by_id(db, campaign.tariff_id)
                     if tariff:
-                        tariff_name = tariff.name
+                        tariff_name = html.escape(tariff.name)
                 except Exception:
                     pass
 
@@ -1186,7 +1196,9 @@ class AdminNotificationService:
             title = '🤖 АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ' if automatic else '👥 СМЕНА ПРОМОГРУППЫ'
             initiator_line = None
             if initiator:
-                initiator_line = f'👮 <b>Инициатор:</b> {initiator.full_name} (ID: {initiator.telegram_id})'
+                initiator_line = (
+                    f'👮 <b>Инициатор:</b> {html.escape(initiator.full_name)} (ID: {initiator.telegram_id})'
+                )
             elif automatic:
                 initiator_line = '🤖 Автоматическое назначение'
             user_display = self._get_user_display(user)
@@ -1198,7 +1210,7 @@ class AdminNotificationService:
                 '',
                 f'👤 <b>Пользователь:</b> {user_display}',
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> @{getattr(user, "username", None) or "отсутствует"}',
+                f'📱 <b>Username:</b> @{html.escape(getattr(user, "username", None) or "отсутствует")}',
                 '',
                 self._format_promo_group_block(new_group, title='Новая промогруппа', icon='🏆'),
             ]
@@ -1643,7 +1655,7 @@ class AdminNotificationService:
 
             elif status == 'maintenance':
                 if details.get('maintenance_reason'):
-                    message_parts.append(f'🔧 <b>Причина:</b> {details["maintenance_reason"]}')
+                    message_parts.append(f'🔧 <b>Причина:</b> {html.escape(details["maintenance_reason"])}')
 
                 if details.get('estimated_duration'):
                     message_parts.append(f'⏰ <b>Ожидаемая длительность:</b> {details["estimated_duration"]}')
@@ -1700,7 +1712,7 @@ class AdminNotificationService:
             # Добавляем username только если есть
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 @{username}')
+                message_lines.append(f'📱 @{html.escape(username)}')
 
             # Тариф (если есть)
             if tariff_name:
@@ -1806,7 +1818,7 @@ class AdminNotificationService:
 
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 @{username}')
+                message_lines.append(f'📱 @{html.escape(username)}')
 
             message_lines.append('')
 
@@ -1861,7 +1873,7 @@ class AdminNotificationService:
 
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 @{username}')
+                message_lines.append(f'📱 @{html.escape(username)}')
 
             message_lines.extend(
                 [
@@ -1906,7 +1918,7 @@ class AdminNotificationService:
             message_lines = [
                 '🛑 <b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>',
                 '',
-                f'👮 <b>Администратор:</b> {admin_name}',
+                f'👮 <b>Администратор:</b> {html.escape(admin_name)}',
                 f'🆔 <b>ID администратора:</b> {admin_user_id}',
                 '',
                 '📊 <b>Результаты:</b>',

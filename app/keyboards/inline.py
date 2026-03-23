@@ -1612,14 +1612,26 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
 
     if settings.is_platega_enabled() and settings.get_platega_active_methods():
         platega_name = settings.get_platega_display_name()
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'),
-                    callback_data=_build_callback('platega'),
+        if settings.PLATEGA_INLINE_METHODS:
+            for method_code in settings.get_platega_active_methods():
+                title = settings.get_platega_method_display_title(method_code)
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            text=f'{title} ({platega_name})',
+                            callback_data=_build_callback(f'platega_m{method_code}'),
+                        )
+                    ]
                 )
-            ]
-        )
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('PAYMENT_PLATEGA', f'💳 {platega_name}'),
+                        callback_data=_build_callback('platega'),
+                    )
+                ]
+            )
         has_direct_payment_methods = True
 
     if settings.is_cryptobot_enabled():

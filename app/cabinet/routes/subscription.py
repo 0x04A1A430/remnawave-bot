@@ -1888,6 +1888,26 @@ async def purchase_tariff(
         else:
             period_days = request.period_days
 
+            # Validate period_days against tariff's configured periods (prevent arbitrary periods)
+            if tariff.period_prices:
+                available_periods = [int(p) for p in tariff.period_prices.keys()]
+            else:
+                available_periods = []
+
+            # Allow custom days only if tariff explicitly supports them
+            custom_days_allowed = (
+                hasattr(tariff, 'can_purchase_custom_days')
+                and tariff.can_purchase_custom_days()
+                and hasattr(tariff, 'get_price_for_custom_days')
+                and tariff.get_price_for_custom_days(period_days) is not None
+            )
+
+            if period_days not in available_periods and not custom_days_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Selected period is not available for this tariff',
+                )
+
         # Determine traffic limit (custom traffic support)
         traffic_limit_gb = tariff.traffic_limit_gb
         custom_traffic_gb = None
@@ -1920,6 +1940,13 @@ async def purchase_tariff(
         promo_offer_discount_percent = bd.get('offer_discount_pct', 0)
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
+
+        # Safety guard: reject zero-price purchases for non-daily tariffs (defense in depth)
+        if price_kopeks <= 0 and result.base_price <= 0 and not is_daily_tariff:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid tariff period or pricing configuration',
+            )
 
         # Check balance
         if user.balance_kopeks < price_kopeks:
@@ -4394,16 +4421,80 @@ async def toggle_subscription_pause(
 
     # Sync with RemnaWave only when resuming from DISABLED state
     if not new_paused_state and was_disabled:
+        # Restore connected_squads from tariff if cleared by deactivation sync
+        try:
+            if not user.subscription.connected_squads:
+                squads = tariff.allowed_squads or []
+                if not squads:
+                    from app.database.crud.server_squad import get_all_server_squads
+
+                    all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+                    squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+                if squads:
+                    user.subscription.connected_squads = squads
+                    await db.commit()
+                    await db.refresh(user.subscription)
+        except Exception as sq_err:
+            logger.warning('Failed to restore connected_squads', error=sq_err)
+
+        # Sync with RemnaWave
         try:
             subscription_service = SubscriptionService()
-            await subscription_service.create_remnawave_user(
-                db,
-                user.subscription,
-                reset_traffic=False,
-                reset_reason=None,
-            )
+            if getattr(user, 'remnawave_uuid', None):
+                await subscription_service.update_remnawave_user(
+                    db,
+                    user.subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                    sync_squads=True,
+                )
+            else:
+                await subscription_service.create_remnawave_user(
+                    db,
+                    user.subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                )
+                # POST /api/users may ignore activeInternalSquads —
+                # follow up with PATCH to ensure internal squads are assigned
+                await db.refresh(user)
+                if getattr(user, 'remnawave_uuid', None) and user.subscription.connected_squads:
+                    try:
+                        await subscription_service.update_remnawave_user(
+                            db,
+                            user.subscription,
+                            reset_traffic=False,
+                            sync_squads=True,
+                        )
+                    except Exception as squad_err:
+                        logger.warning('Failed to sync squads after user creation', error=squad_err)
         except Exception as e:
             logger.error('Error syncing RemnaWave user on resume', error=e)
+
+        # Send admin notification about daily subscription resume
+        if resume_transaction is not None:
+            try:
+                from app.bot_factory import create_bot
+                from app.services.admin_notification_service import AdminNotificationService
+
+                if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                    bot = create_bot()
+                    try:
+                        notification_service = AdminNotificationService(bot)
+                        await notification_service.send_subscription_purchase_notification(
+                            db=db,
+                            user=user,
+                            subscription=user.subscription,
+                            transaction=resume_transaction,
+                            period_days=1,
+                            was_trial_conversion=False,
+                            amount_kopeks=daily_price,
+                            purchase_type='renewal',
+                        )
+                    finally:
+                        await bot.session.close()
+            except Exception as notif_err:
+                logger.error('Failed to send admin notification for daily resume', error=notif_err)
 
     if new_paused_state:
         message = 'Daily subscription paused'

@@ -1,5 +1,7 @@
 """Управление тарифами в админ-панели."""
 
+import html
+
 import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
@@ -317,7 +319,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
         price_block = f'<b>Цены:</b>\n{prices_display}'
         tariff_type = '📅 Периодный'
 
-    return f"""📦 <b>Тариф: {tariff.name}</b>
+    return f"""📦 <b>Тариф: {html.escape(tariff.name)}</b>
 
 {status} | {tariff_type}
 🎚️ Уровень: {tariff.tier_level}
@@ -343,7 +345,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
 📊 Подписок на тарифе: {subs_count}
 
-{f'📝 {tariff.description}' if tariff.description else ''}"""
+{f'📝 {html.escape(tariff.description)}' if tariff.description else ''}"""
 
 
 @admin_required
@@ -591,7 +593,7 @@ async def start_edit_daily_price(
 
     await callback.message.edit_text(
         f'💰 <b>Редактирование суточной цены</b>\n\n'
-        f'Тариф: {tariff.name}\n'
+        f'Тариф: {html.escape(tariff.name)}\n'
         f'Текущая цена: {format_price_kopeks(current_price)}/день\n\n'
         'Введите новую цену за день в рублях.\n'
         'Пример: <code>50</code> или <code>99.90</code>',
@@ -1011,7 +1013,7 @@ async def start_edit_tariff_name(
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        f'✏️ <b>Редактирование названия</b>\n\nТекущее название: <b>{tariff.name}</b>\n\nВведите новое название:',
+        f'✏️ <b>Редактирование названия</b>\n\nТекущее название: <b>{html.escape(tariff.name)}</b>\n\nВведите новое название:',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1801,7 +1803,7 @@ async def start_edit_tariff_traffic_topup(
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}')])
 
     await callback.message.edit_text(
-        f'📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n'
+        f'📈 <b>Докупка трафика для «{html.escape(tariff.name)}»</b>\n\n'
         f'Статус: {status}\n\n'
         f'<b>Пакеты:</b>\n{packages_display}\n\n'
         f'<b>Макс. лимит:</b> {max_limit_display}\n\n'
@@ -1887,7 +1889,7 @@ async def toggle_tariff_traffic_topup(
 
     try:
         await callback.message.edit_text(
-            f'📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n'
+            f'📈 <b>Докупка трафика для «{html.escape(tariff.name)}»</b>\n\n'
             f'Статус: {status}\n\n'
             f'<b>Пакеты:</b>\n{packages_display}\n\n'
             f'<b>Макс. лимит:</b> {max_limit_display}\n\n'
@@ -1931,7 +1933,7 @@ async def start_edit_traffic_topup_packages(
 
     await callback.message.edit_text(
         f'📦 <b>Настройка пакетов докупки трафика</b>\n\n'
-        f'Тариф: <b>{tariff.name}</b>\n\n'
+        f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
         f'<b>Текущие пакеты:</b>\n{packages_display}\n\n'
         'Введите пакеты в формате:\n'
         f'<code>{current_packages}</code>\n\n'
@@ -2010,7 +2012,7 @@ async def process_edit_traffic_topup_packages(
 
     await message.answer(
         f'✅ <b>Пакеты обновлены!</b>\n\n'
-        f'📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n'
+        f'📈 <b>Докупка трафика для «{html.escape(tariff.name)}»</b>\n\n'
         f'Статус: ✅ Включено\n\n'
         f'<b>Пакеты:</b>\n{packages_display}\n\n'
         f'<b>Макс. лимит:</b> {max_limit_display}\n\n'
@@ -2051,7 +2053,7 @@ async def start_edit_max_topup_traffic(
 
     await callback.message.edit_text(
         f'📊 <b>Максимальный лимит трафика</b>\n\n'
-        f'Тариф: <b>{tariff.name}</b>\n'
+        f'Тариф: <b>{html.escape(tariff.name)}</b>\n'
         f'Текущий лимит: <b>{current_display}</b>\n\n'
         f'Введите максимальный общий объем трафика (в ГБ), который может быть на подписке после всех докупок.\n\n'
         f'• Например, если тариф дает 100 ГБ и лимит 200 ГБ — пользователь сможет докупить еще 100 ГБ\n'
@@ -2127,7 +2129,7 @@ async def process_edit_max_topup_traffic(
 
     await message.answer(
         f'✅ <b>Лимит обновлен!</b>\n\n'
-        f'📈 <b>Докупка трафика для «{tariff.name}»</b>\n\n'
+        f'📈 <b>Докупка трафика для «{html.escape(tariff.name)}»</b>\n\n'
         f'Статус: ✅ Включено\n\n'
         f'<b>Пакеты:</b>\n{packages_display}\n\n'
         f'<b>Макс. лимит:</b> {max_limit_display}\n\n'
@@ -2163,7 +2165,7 @@ async def confirm_delete_tariff(
         warning = f'\n\n⚠️ <b>Внимание!</b> На этом тарифе {subs_count} подписок.\nОни будут отвязаны от тарифа.'
 
     await callback.message.edit_text(
-        f'🗑️ <b>Удаление тарифа</b>\n\nВы действительно хотите удалить тариф <b>{tariff.name}</b>?{warning}',
+        f'🗑️ <b>Удаление тарифа</b>\n\nВы действительно хотите удалить тариф <b>{html.escape(tariff.name)}</b>?{warning}',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -2278,7 +2280,7 @@ async def start_edit_tariff_squads(
     selected_count = len(current_squads)
 
     await callback.message.edit_text(
-        f'🌐 <b>Серверы для тарифа «{tariff.name}»</b>\n\n'
+        f'🌐 <b>Серверы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
         f'Выбрано: {selected_count} из {len(squads)}\n\n'
         'Если не выбран ни один сервер - доступны все.\n'
         'Нажмите на сервер для выбора/отмены:',
@@ -2341,7 +2343,7 @@ async def toggle_tariff_squad(
 
     try:
         await callback.message.edit_text(
-            f'🌐 <b>Серверы для тарифа «{tariff.name}»</b>\n\n'
+            f'🌐 <b>Серверы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
             f'Выбрано: {len(current_squads)} из {len(squads)}\n\n'
             'Если не выбран ни один сервер - доступны все.\n'
             'Нажмите на сервер для выбора/отмены:',
@@ -2406,7 +2408,7 @@ async def clear_tariff_squads(
 
     try:
         await callback.message.edit_text(
-            f'🌐 <b>Серверы для тарифа «{tariff.name}»</b>\n\n'
+            f'🌐 <b>Серверы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
             f'Выбрано: 0 из {len(squads)}\n\n'
             'Если не выбран ни один сервер - доступны все.\n'
             'Нажмите на сервер для выбора/отмены:',
@@ -2470,7 +2472,7 @@ async def select_all_tariff_squads(
 
     try:
         await callback.message.edit_text(
-            f'🌐 <b>Серверы для тарифа «{tariff.name}»</b>\n\n'
+            f'🌐 <b>Серверы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
             f'Выбрано: {len(squads)} из {len(squads)}\n\n'
             'Если не выбран ни один сервер - доступны все.\n'
             'Нажмите на сервер для выбора/отмены:',
@@ -2540,7 +2542,7 @@ async def start_edit_tariff_promo_groups(
     selected_count = len(current_groups)
 
     await callback.message.edit_text(
-        f'👥 <b>Промогруппы для тарифа «{tariff.name}»</b>\n\n'
+        f'👥 <b>Промогруппы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
         f'Выбрано: {selected_count}\n\n'
         'Если не выбрана ни одна группа - тариф доступен всем.\n'
         'Выберите группы, которым доступен этот тариф:',
@@ -2608,7 +2610,7 @@ async def toggle_tariff_promo_group(
 
     try:
         await callback.message.edit_text(
-            f'👥 <b>Промогруппы для тарифа «{tariff.name}»</b>\n\n'
+            f'👥 <b>Промогруппы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
             f'Выбрано: {len(current_groups)}\n\n'
             'Если не выбрана ни одна группа - тариф доступен всем.\n'
             'Выберите группы, которым доступен этот тариф:',
@@ -2665,7 +2667,7 @@ async def clear_tariff_promo_groups(
 
     try:
         await callback.message.edit_text(
-            f'👥 <b>Промогруппы для тарифа «{tariff.name}»</b>\n\n'
+            f'👥 <b>Промогруппы для тарифа «{html.escape(tariff.name)}»</b>\n\n'
             f'Выбрано: 0\n\n'
             'Если не выбрана ни одна группа - тариф доступен всем.\n'
             'Выберите группы, которым доступен этот тариф:',
@@ -2731,7 +2733,7 @@ async def start_edit_traffic_reset_mode(
     current_mode = getattr(tariff, 'traffic_reset_mode', None)
 
     await callback.message.edit_text(
-        f'🔄 <b>Режим сброса трафика для тарифа «{tariff.name}»</b>\n\n'
+        f'🔄 <b>Режим сброса трафика для тарифа «{html.escape(tariff.name)}»</b>\n\n'
         f'Текущий режим: {_format_traffic_reset_mode(current_mode)}\n\n'
         'Выберите, когда сбрасывать использованный трафик у подписчиков этого тарифа:\n\n'
         '• <b>Глобальная настройка</b> — использовать значение из конфига бота\n'
@@ -2775,7 +2777,7 @@ async def set_traffic_reset_mode(
 
     # Обновляем клавиатуру
     await callback.message.edit_text(
-        f'🔄 <b>Режим сброса трафика для тарифа «{tariff.name}»</b>\n\n'
+        f'🔄 <b>Режим сброса трафика для тарифа «{html.escape(tariff.name)}»</b>\n\n'
         f'Текущий режим: {mode_display}\n\n'
         'Выберите, когда сбрасывать использованный трафик у подписчиков этого тарифа:\n\n'
         '• <b>Глобальная настройка</b> — использовать значение из конфига бота\n'

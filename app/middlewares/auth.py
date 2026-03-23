@@ -243,8 +243,12 @@ class AuthMiddleware(BaseMiddleware):
                 logger.debug('AuthMiddleware: bot blocked by user, skipping')
                 return None
             except TelegramBadRequest as e:
-                if 'query is too old' in str(e):
+                error_msg = str(e).lower()
+                if 'query is too old' in error_msg:
                     logger.debug('AuthMiddleware: callback query expired, skipping')
+                    return None
+                if 'message is not modified' in error_msg:
+                    logger.debug('AuthMiddleware: message not modified, skipping')
                     return None
                 raise
             except Exception as e:

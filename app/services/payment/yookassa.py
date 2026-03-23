@@ -409,6 +409,14 @@ class YooKassaPaymentMixin:
                 )
                 return True
 
+            # Reject test-mode payments in production
+            if getattr(payment, 'test_mode', False) and not getattr(settings, 'YOOKASSA_TEST_MODE', False):
+                logger.warning(
+                    'YooKassa: rejecting test_mode payment in production',
+                    yookassa_payment_id=payment.yookassa_payment_id,
+                )
+                return False
+
             payment_module = import_module('app.services.payment_service')
 
             # Проверяем, не обрабатывается ли уже этот платеж (защита от дублирования)
@@ -1243,7 +1251,9 @@ class YooKassaPaymentMixin:
         try:
             amount_rubles = payment.amount_kopeks / 100
             # Формируем описание из настроек (включает сумму и ID пользователя)
-            receipt_name = settings.get_balance_payment_description(payment.amount_kopeks, telegram_user_id)
+            receipt_name = settings.get_balance_payment_description(
+                payment.amount_kopeks, telegram_user_id=telegram_user_id
+            )
 
             receipt_uuid = await self.nalogo_service.create_receipt(
                 name=receipt_name,

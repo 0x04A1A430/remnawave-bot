@@ -367,6 +367,7 @@ class Settings(BaseSettings):
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_RECURRENT_ENABLED: bool = False
     YOOKASSA_RECURRENT_REQUIRED: bool = False
+    YOOKASSA_TEST_MODE: bool = False
     SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
@@ -462,6 +463,7 @@ class Settings(BaseSettings):
     PLATEGA_FAILED_URL: str | None = None
     PLATEGA_CURRENCY: str = 'RUB'
     PLATEGA_ACTIVE_METHODS: str = '2,10,11,12,13'
+    PLATEGA_INLINE_METHODS: bool = True
     PLATEGA_MIN_AMOUNT_KOPEKS: int = 10000
     PLATEGA_MAX_AMOUNT_KOPEKS: int = 100000000
     PLATEGA_WEBHOOK_PATH: str = '/platega-webhook'
@@ -582,6 +584,13 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
     MINIAPP_STATIC_PATH: str = 'miniapp'
+
+    # Media upload settings (news article images/videos)
+    MEDIA_UPLOAD_DIR: str = './uploads'
+    MEDIA_MAX_IMAGE_SIZE_MB: int = 10
+    MEDIA_MAX_VIDEO_SIZE_MB: int = 50
+    MEDIA_IMAGE_MAX_DIMENSION: int = 2048
+    MEDIA_JPEG_QUALITY: int = 85
     MINIAPP_PURCHASE_URL: str = ''
     MINIAPP_SERVICE_NAME_EN: str = 'Bedolaga VPN'
     MINIAPP_SERVICE_NAME_RU: str = 'Bedolaga VPN'
@@ -2207,13 +2216,17 @@ class Settings(BaseSettings):
         except (ValueError, AttributeError):
             return [30, 60, 90, 180, 360]
 
-    def get_balance_payment_description(self, amount_kopeks: int, telegram_user_id: int | None = None) -> str:
+    def get_balance_payment_description(
+        self, amount_kopeks: int, telegram_user_id: int | None = None, user_db_id: int | None = None
+    ) -> str:
         # Базовое описание
         description = f'{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}'
 
-        # Если передан user_id, добавляем его
+        # Добавляем идентификатор пользователя (TG ID приоритет, fallback на DB ID)
         if telegram_user_id is not None:
             description += f' (ID {telegram_user_id})'
+        elif user_db_id is not None:
+            description += f' (U{user_db_id})'
 
         # Формируем финальную строку по шаблону
         return self.PAYMENT_BALANCE_TEMPLATE.format(service_name=self.PAYMENT_SERVICE_NAME, description=description)
@@ -2625,6 +2638,9 @@ class Settings(BaseSettings):
         if not raw_path:
             raw_path = 'miniapp'
         return Path(raw_path)
+
+    def get_media_upload_path(self) -> Path:
+        return Path(self.MEDIA_UPLOAD_DIR)
 
     # Cabinet methods
     def is_cabinet_enabled(self) -> bool:

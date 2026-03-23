@@ -507,10 +507,9 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
     bot_referral_link = settings.get_bot_referral_link(db_user.referral_code, bot_username)
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
 
-    invite_text = texts.t('REFERRAL_INVITE_TITLE', '🎉 Присоединяйся к VPN сервису!')
-
+    bonus_block = ''
     if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
-        invite_text += '\n\n' + texts.t(
+        bonus_block = '\n\n' + texts.t(
             'REFERRAL_INVITE_BONUS',
             '💎 При первом пополнении от {minimum} ты получишь {bonus} бонусом на баланс!',
         ).format(
@@ -518,40 +517,26 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
             bonus=texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
         )
 
-    invite_text += (
-        '\n\n'
-        + texts.t('REFERRAL_INVITE_FEATURE_FAST', '🚀 Быстрое подключение')
-        + '\n'
-        + texts.t('REFERRAL_INVITE_FEATURE_SERVERS', '🌍 Серверы по всему миру')
-        + '\n'
-        + texts.t('REFERRAL_INVITE_FEATURE_SECURE', '🔒 Надежная защита')
-        + '\n\n'
-        + texts.t('REFERRAL_INVITE_LINK_PROMPT', '👇 Переходи по ссылке:')
-        + f'\n{bot_referral_link}'
-    )
-
+    cabinet_block = ''
     if cabinet_referral_link:
-        invite_text += (
-            '\n\n'
-            + texts.t('REFERRAL_INVITE_CABINET_LINK', '🌐 Или через личный кабинет:')
-            + f'\n{cabinet_referral_link}'
-        )
+        cabinet_block = f'\n\n🌐 {cabinet_referral_link}'
 
-    # Compact share text for switch_inline_query (256-char limit)
-    share_text = invite_text
-    if len(share_text) > 256:
-        share_text = texts.t('REFERRAL_INVITE_TITLE', '🎉 Присоединяйся к VPN сервису!') + f'\n\n👇 {bot_referral_link}'
-        if cabinet_referral_link and len(share_text) + len(cabinet_referral_link) + 5 <= 256:
-            share_text += f'\n🌐 {cabinet_referral_link}'
-        share_text = share_text[:256]
+    invite_text = texts.t(
+        'REFERRAL_INVITE_TEXT',
+        '🎉 Присоединяйся к VPN сервису!{bonus_block}\n\n'
+        '🚀 Быстрое подключение\n'
+        '🌍 Серверы по всему миру\n'
+        '🔒 Надежная защита\n\n'
+        '👇 Переходи по ссылке:\n'
+        '{link}{cabinet_block}',
+    ).format(
+        bonus_block=bonus_block,
+        link=bot_referral_link,
+        cabinet_block=cabinet_block,
+    )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_SHARE_BUTTON', '📤 Поделиться'), switch_inline_query=share_text
-                )
-            ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_referrals')],
         ]
     )
@@ -563,10 +548,10 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
             + '\n\n'
             + texts.t(
                 'REFERRAL_INVITE_CREATED_INSTRUCTION',
-                'Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:',
+                'Нажмите на текст ниже, чтобы скопировать:',
             )
             + '\n\n'
-            f'<code>{html_escape(invite_text)}</code>'
+            f'<blockquote><code>{html_escape(invite_text)}</code></blockquote>'
         ),
         keyboard,
     )

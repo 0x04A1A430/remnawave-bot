@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -179,6 +180,35 @@ async def _prepare_auto_extend_context(
     tariff_id = cart_data.get('tariff_id')
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
+
+    # Validate period_days against tariff or global renewal periods
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+
+        _tariff = await _get_tariff(db, tariff_id)
+        if _tariff and _tariff.period_prices and not getattr(_tariff, 'is_daily', False):
+            available_periods = [int(p) for p in _tariff.period_prices.keys()]
+            if period_days not in available_periods:
+                logger.warning(
+                    '🔁 Автопокупка: period_days из корзины не входит в доступные периоды тарифа',
+                    period_days=period_days,
+                    available_periods=available_periods,
+                    tariff_id=tariff_id,
+                    format_user_id=_format_user_id(user),
+                )
+                return None
+    else:
+        from app.config import settings as _settings
+
+        available_periods = _settings.get_available_renewal_periods()
+        if period_days not in available_periods:
+            logger.warning(
+                '🔁 Автопокупка: period_days из корзины не входит в доступные периоды продления',
+                period_days=period_days,
+                available_periods=available_periods,
+                format_user_id=_format_user_id(user),
+            )
+            return None
 
     from app.database.crud.user import lock_user_for_pricing
     from app.services.pricing_engine import pricing_engine as _pricing_engine
@@ -620,6 +650,29 @@ async def _auto_purchase_tariff(
             format_user_id=_format_user_id(user),
         )
         return False
+
+    # Validate period_days against tariff's configured periods (prevent arbitrary periods from saved cart)
+    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    if not is_daily_tariff:
+        if tariff.period_prices:
+            available_periods = [int(p) for p in tariff.period_prices.keys()]
+        else:
+            available_periods = []
+        custom_days_allowed = (
+            hasattr(tariff, 'can_purchase_custom_days')
+            and tariff.can_purchase_custom_days()
+            and hasattr(tariff, 'get_price_for_custom_days')
+            and tariff.get_price_for_custom_days(period_days) is not None
+        )
+        if period_days not in available_periods and not custom_days_allowed:
+            logger.warning(
+                '🔁 Автопокупка тарифа: period_days не входит в доступные периоды тарифа',
+                tariff_id=tariff_id,
+                period_days=period_days,
+                available_periods=available_periods,
+                format_user_id=_format_user_id(user),
+            )
+            return False
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
@@ -1157,7 +1210,7 @@ async def _auto_purchase_daily_tariff(
             texts = get_texts(getattr(user, 'language', 'ru'))
 
             message = (
-                f'✅ <b>Суточный тариф «{tariff.name}» активирован!</b>\n\n'
+                f'✅ <b>Суточный тариф «{html.escape(tariff.name)}» активирован!</b>\n\n'
                 f'💰 Списано: {final_price / 100:.0f} ₽ за первый день\n'
                 f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
                 f'ℹ️ Вы можете приостановить подписку в любой момент.'
@@ -2375,15 +2428,60 @@ async def try_resume_disabled_daily_after_topup(
             error=error,
         )
 
+    # Restore connected_squads from tariff if cleared by deactivation sync
+    try:
+        if not subscription.connected_squads:
+            squads = tariff.allowed_squads or []
+            if not squads:
+                from app.database.crud.server_squad import get_all_server_squads
+
+                all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+                squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+            if squads:
+                subscription.connected_squads = squads
+                await db.commit()
+                await db.refresh(subscription)
+    except Exception as error:
+        logger.warning(
+            '⚠️ Авто-возобновление daily: не удалось восстановить connected_squads',
+            format_user_id=_format_user_id(user),
+            error=error,
+        )
+
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.create_remnawave_user(
-            db,
-            subscription,
-            reset_traffic=False,
-            reset_reason=None,
-        )
+        if getattr(user, 'remnawave_uuid', None):
+            await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+                sync_squads=True,
+            )
+        else:
+            await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=False,
+                reset_reason=None,
+            )
+            # POST may ignore activeInternalSquads — follow up with PATCH
+            await db.refresh(user)
+            if getattr(user, 'remnawave_uuid', None) and subscription.connected_squads:
+                try:
+                    await subscription_service.update_remnawave_user(
+                        db,
+                        subscription,
+                        reset_traffic=False,
+                        sync_squads=True,
+                    )
+                except Exception as patch_err:
+                    logger.warning(
+                        '⚠️ Авто-возобновление daily: не удалось синхронизировать сквады',
+                        format_user_id=_format_user_id(user),
+                        error=patch_err,
+                    )
     except Exception as error:
         logger.error(
             '⚠️ Авто-возобновление daily: не удалось обновить RemnaWave',
@@ -2426,7 +2524,7 @@ async def try_resume_disabled_daily_after_topup(
                 '💳 Списано: {amount}\n'
                 '💰 Остаток: {balance}',
             ).format(
-                tariff_name=tariff.name,
+                tariff_name=html.escape(tariff.name),
                 amount=settings.format_price(daily_price),
                 balance=settings.format_price(user.balance_kopeks),
             )

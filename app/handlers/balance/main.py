@@ -1,3 +1,5 @@
+import html
+
 import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest
@@ -233,7 +235,7 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         )
 
         text += f'{emoji} {amount_text}\n'
-        text += f'📝 {transaction.description}\n'
+        text += f'📝 {html.escape(transaction.description or "")}\n'
         text += f'📅 {transaction.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []
@@ -266,7 +268,7 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
@@ -563,7 +565,16 @@ async def handle_topup_amount_callback(
 
     try:
         # Особые случаи, требующие специальной логики
-        if method == 'platega':
+        if method.startswith('platega_m'):
+            from app.database.database import AsyncSessionLocal
+
+            from .platega import process_platega_payment_amount
+
+            platega_method_code = int(method[len('platega_m') :])
+            await state.update_data(payment_method='platega', platega_method=platega_method_code)
+            async with AsyncSessionLocal() as db:
+                await process_platega_payment_amount(callback.message, db_user, db, amount_kopeks, state)
+        elif method == 'platega':
             from app.database.database import AsyncSessionLocal
 
             from .platega import process_platega_payment_amount, start_platega_payment
@@ -633,12 +644,16 @@ def register_balance_handlers(dp: Dispatcher):
         F.data.startswith('pal24_method_'),
     )
 
-    from .platega import handle_platega_method_selection, start_platega_payment
+    from .platega import handle_platega_method_selection, start_platega_direct_method, start_platega_payment
 
     dp.callback_query.register(start_platega_payment, F.data == 'topup_platega')
     dp.callback_query.register(
         handle_platega_method_selection,
         F.data.startswith('platega_method_'),
+    )
+    dp.callback_query.register(
+        start_platega_direct_method,
+        F.data.regexp(r'^topup_platega_m\d+$'),
     )
 
     from .yookassa import check_yookassa_payment_status

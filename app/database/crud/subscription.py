@@ -826,18 +826,19 @@ async def update_subscription_autopay(
     return subscription
 
 
-async def deactivate_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:
+async def deactivate_subscription(db: AsyncSession, subscription: Subscription, *, commit: bool = True) -> Subscription:
     subscription.status = SubscriptionStatus.DISABLED.value
     subscription.updated_at = datetime.now(UTC)
 
-    await db.commit()
-    await db.refresh(subscription)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
 
     logger.info('❌ Подписка пользователя деактивирована', user_id=subscription.user_id)
     return subscription
 
 
-async def reactivate_subscription(db: AsyncSession, subscription: Subscription) -> Subscription:
+async def reactivate_subscription(db: AsyncSession, subscription: Subscription, *, commit: bool = True) -> Subscription:
     """Реактивация подписки (например, после повторной подписки на канал или докупки трафика).
 
     Активирует если подписка была DISABLED или EXPIRED и ещё не истекла по времени.
@@ -861,8 +862,9 @@ async def reactivate_subscription(db: AsyncSession, subscription: Subscription) 
     subscription.status = SubscriptionStatus.ACTIVE.value
     subscription.updated_at = now
 
-    await db.commit()
-    await db.refresh(subscription)
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
 
     logger.info(
         '✅ Подписка реактивирована',

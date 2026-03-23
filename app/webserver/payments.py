@@ -203,7 +203,14 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
 
-            if settings.TRIBUTE_API_KEY and not tribute_api.verify_webhook_signature(payload, signature):
+            if not settings.TRIBUTE_API_KEY:
+                logger.error('Tribute webhook received but API key is not configured, rejecting')
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'service_not_configured'},
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            if not tribute_api.verify_webhook_signature(payload, signature):
                 return JSONResponse(
                     {'status': 'error', 'reason': 'invalid_signature'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -313,20 +320,26 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             signature = request.headers.get('Crypto-Pay-API-Signature')
             secret = settings.CRYPTOBOT_API_TOKEN
-            if secret:
-                if not signature:
-                    return JSONResponse(
-                        {'status': 'error', 'reason': 'missing_signature'},
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                    )
+            if not secret:
+                logger.error('CryptoBot webhook received but API token is not configured, rejecting')
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'service_not_configured'},
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
-                from app.external.cryptobot import CryptoBotService
+            if not signature:
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'missing_signature'},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
 
-                if not CryptoBotService().verify_webhook_signature(payload_text, signature):
-                    return JSONResponse(
-                        {'status': 'error', 'reason': 'invalid_signature'},
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                    )
+            from app.external.cryptobot import CryptoBotService
+
+            if not CryptoBotService().verify_webhook_signature(payload_text, signature):
+                return JSONResponse(
+                    {'status': 'error', 'reason': 'invalid_signature'},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
 
             try:
                 success = await _process_payment_service_callback(
@@ -686,7 +699,10 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             if not merchant_id and not secret and not raw_body.strip():
                 logger.info('Platega webhook verification ping (no auth headers, empty body)')
                 return JSONResponse({'status': 'ok'})
-            if merchant_id != (settings.PLATEGA_MERCHANT_ID or '') or secret != (settings.PLATEGA_SECRET or ''):
+            if not (
+                hmac.compare_digest(merchant_id, settings.PLATEGA_MERCHANT_ID or '')
+                and hmac.compare_digest(secret, settings.PLATEGA_SECRET or '')
+            ):
                 return JSONResponse(
                     {'status': 'error', 'reason': 'unauthorized'},
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -766,21 +782,18 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     headers=dict(request.headers),
                 )
 
-                # Проверяем подпись только если она пришла и API_SECRET настроен
+                # Проверяем подпись если API_SECRET настроен
                 # CloudPayments использует заголовок X-Content-HMAC или Content-HMAC
                 signature = request.headers.get('X-Content-HMAC') or request.headers.get('Content-HMAC') or ''
-                if settings.CLOUDPAYMENTS_API_SECRET and signature:
+                if settings.CLOUDPAYMENTS_API_SECRET:
+                    if not signature:
+                        logger.warning('CloudPayments webhook: signature header missing, rejecting')
+                        return JSONResponse({'code': 13})
                     if not cloudpayments_service.verify_webhook_signature(
                         raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
                     ):
-                        logger.warning(
-                            'CloudPayments check webhook: invalid signature, sig=...',
-                            signature=signature[:20] if signature else 'empty',
-                        )
-                        return JSONResponse({'code': 13})  # Отклонить
-                elif settings.CLOUDPAYMENTS_API_SECRET and not signature:
-                    # Подпись не пришла, но API_SECRET настроен - пропускаем проверку с предупреждением
-                    logger.warning('CloudPayments check webhook: no signature header, skipping verification')
+                        logger.warning('CloudPayments webhook: invalid signature')
+                        return JSONResponse({'code': 13})
 
                 # Разрешаем платёж
                 logger.info('CloudPayments check webhook: allowing payment, returning code=0')
@@ -796,13 +809,16 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             """Pay webhook - вызывается после успешной оплаты."""
             raw_body = await request.body()
 
-            # Проверяем подпись только если она пришла и API_SECRET настроен
+            # Проверяем подпись если API_SECRET настроен
             signature = request.headers.get('X-Content-HMAC') or request.headers.get('Content-HMAC') or ''
-            if settings.CLOUDPAYMENTS_API_SECRET and signature:
+            if settings.CLOUDPAYMENTS_API_SECRET:
+                if not signature:
+                    logger.warning('CloudPayments webhook: signature header missing, rejecting')
+                    return JSONResponse({'code': 13})
                 if not cloudpayments_service.verify_webhook_signature(
                     raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
                 ):
-                    logger.warning('CloudPayments pay webhook: invalid signature')
+                    logger.warning('CloudPayments webhook: invalid signature')
                     return JSONResponse({'code': 13})
 
             # Парсим данные формы
@@ -828,13 +844,16 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             """Fail webhook - вызывается при неуспешной оплате."""
             raw_body = await request.body()
 
-            # Проверяем подпись только если она пришла и API_SECRET настроен
+            # Проверяем подпись если API_SECRET настроен
             signature = request.headers.get('X-Content-HMAC') or request.headers.get('Content-HMAC') or ''
-            if settings.CLOUDPAYMENTS_API_SECRET and signature:
+            if settings.CLOUDPAYMENTS_API_SECRET:
+                if not signature:
+                    logger.warning('CloudPayments webhook: signature header missing, rejecting')
+                    return JSONResponse({'code': 13})
                 if not cloudpayments_service.verify_webhook_signature(
                     raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
                 ):
-                    logger.warning('CloudPayments fail webhook: invalid signature')
+                    logger.warning('CloudPayments webhook: invalid signature')
                     return JSONResponse({'code': 13})
 
             # Парсим данные формы
@@ -868,9 +887,12 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     headers=dict(request.headers),
                 )
 
-                # Проверяем подпись только если она пришла и API_SECRET настроен
+                # Проверяем подпись если API_SECRET настроен
                 signature = request.headers.get('X-Content-HMAC') or request.headers.get('Content-HMAC') or ''
-                if settings.CLOUDPAYMENTS_API_SECRET and signature:
+                if settings.CLOUDPAYMENTS_API_SECRET:
+                    if not signature:
+                        logger.warning('CloudPayments webhook: signature header missing, rejecting')
+                        return JSONResponse({'code': 13})
                     if not cloudpayments_service.verify_webhook_signature(
                         raw_body, signature, settings.CLOUDPAYMENTS_API_SECRET
                     ):
@@ -958,16 +980,10 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.FREEKASSA_WEBHOOK_PATH)
         async def freekassa_webhook(request: Request) -> Response:
-            # Получаем IP клиента с учетом прокси
-            x_forwarded_for = request.headers.get('X-Forwarded-For')
-            if x_forwarded_for:
-                client_ip = x_forwarded_for.split(',')[0].strip()
-            else:
-                real_ip = request.headers.get('X-Real-IP')
-                if real_ip:
-                    client_ip = real_ip.strip()
-                else:
-                    client_ip = request.client.host if request.client else '127.0.0.1'
+            # Use transport-layer IP as primary source; only trust proxy headers
+            # when the direct connection comes from a known proxy.
+            # This prevents X-Forwarded-For spoofing by external attackers.
+            client_ip = request.client.host if request.client else '127.0.0.1'
 
             # Получаем данные формы
             try:

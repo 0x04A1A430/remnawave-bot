@@ -603,6 +603,14 @@ async def _resolve_user_from_init_data(
             detail='User not found',
         )
 
+    # Block access for banned/deleted users
+    user_status = getattr(user, 'status', None)
+    if user_status in ('blocked', 'deleted'):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail='Account is blocked or deleted',
+        )
+
     return user, webapp_data
 
 
@@ -898,6 +906,12 @@ async def create_payment_link(
 ) -> MiniAppPaymentCreateResponse:
     user, _ = await _resolve_user_from_init_data(db, payload.init_data)
 
+    if getattr(user, 'restriction_topup', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail='Balance top-up is restricted for this account',
+        )
+
     method = (payload.method or '').strip().lower()
     if not method:
         raise HTTPException(
@@ -934,7 +948,9 @@ async def create_payment_link(
             payment_service = PaymentService(bot)
             invoice_link = await payment_service.create_stars_invoice(
                 amount_kopeks=amount_kopeks,
-                description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+                description=settings.get_balance_payment_description(
+                    amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
                 payload=invoice_payload,
                 stars_amount=stars_amount,
             )
@@ -971,7 +987,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
         )
         confirmation_url = result.get('confirmation_url') if result else None
         if not result or not confirmation_url:
@@ -1009,7 +1027,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
         )
         if not result or not result.get('confirmation_url'):
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
@@ -1041,7 +1061,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             language=user.language,
         )
         if not result or not result.get('payment_url'):
@@ -1083,7 +1105,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             language=user.language or settings.DEFAULT_LANGUAGE,
             payment_method_code=method_code,
         )
@@ -1121,7 +1145,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             language=user.language,
         )
         payment_url = result.get('payment_url') if result else None
@@ -1160,7 +1186,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
         if not result:
@@ -1238,7 +1266,9 @@ async def create_payment_link(
             user_id=user.id,
             amount_usd=amount_usd,
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             payload=f'balance_{user.id}_{amount_kopeks}',
         )
         if not result:
@@ -1288,7 +1318,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
 
@@ -1333,7 +1365,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             telegram_id=user.telegram_id,
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
@@ -1374,7 +1408,9 @@ async def create_payment_link(
             db=db,
             user_id=user.id,
             amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks, telegram_user_id=user.telegram_id),
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
             email=getattr(user, 'email', None),
             language=user.language or settings.DEFAULT_LANGUAGE,
         )
@@ -1405,7 +1441,9 @@ async def create_payment_link(
             payment_url = await tribute_service.create_payment_link(
                 user_id=user.telegram_id,
                 amount_kopeks=amount_kopeks or 0,
-                description=settings.get_balance_payment_description(amount_kopeks or 0),
+                description=settings.get_balance_payment_description(
+                    amount_kopeks or 0, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
             )
         finally:
             await bot.session.close()
@@ -4692,6 +4730,14 @@ async def _authorize_miniapp_user(
             detail={'code': 'user_not_found', 'message': 'User not found'},
         )
 
+    # Block access for banned/deleted users
+    user_status = getattr(user, 'status', None)
+    if user_status in ('blocked', 'deleted'):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={'code': 'account_blocked', 'message': 'Account is blocked or deleted'},
+        )
+
     return user
 
 
@@ -5101,6 +5147,16 @@ async def submit_subscription_renewal_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                'code': 'subscription_restricted',
+                'message': 'Subscription purchases are restricted for this account',
+            },
+        )
+
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
@@ -5413,6 +5469,15 @@ async def subscription_purchase_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionPurchaseResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
+
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                'code': 'subscription_restricted',
+                'message': 'Subscription purchases are restricted for this account',
+            },
+        )
 
     from app.database.crud.user import lock_user_for_pricing
 
@@ -6363,6 +6428,15 @@ async def purchase_tariff_endpoint(
     """Покупка или смена тарифа."""
     user = await _authorize_miniapp_user(payload.init_data, db)
 
+    if getattr(user, 'restriction_subscription', False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                'code': 'subscription_restricted',
+                'message': 'Subscription purchases are restricted for this account',
+            },
+        )
+
     if not settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -7268,16 +7342,80 @@ async def toggle_daily_subscription_pause_endpoint(
 
     # Синхронизация с RemnaWave только при возобновлении из DISABLED/EXPIRED
     if not new_paused_state and was_disabled:
+        # Restore connected_squads from tariff if cleared by deactivation sync
+        try:
+            if not subscription.connected_squads:
+                squads = tariff.allowed_squads or []
+                if not squads:
+                    from app.database.crud.server_squad import get_all_server_squads
+
+                    all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
+                    squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
+                if squads:
+                    subscription.connected_squads = squads
+                    await db.commit()
+                    await db.refresh(subscription)
+        except Exception as sq_err:
+            logger.warning('Failed to restore connected_squads (miniapp)', error=sq_err)
+
+        # Sync with RemnaWave
         try:
             service = SubscriptionService()
-            await service.create_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=False,
-                reset_reason=None,
-            )
+            if getattr(user, 'remnawave_uuid', None):
+                await service.update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                    sync_squads=True,
+                )
+            else:
+                await service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=False,
+                    reset_reason=None,
+                )
+                # POST /api/users may ignore activeInternalSquads —
+                # follow up with PATCH to ensure internal squads are assigned
+                await db.refresh(user)
+                if getattr(user, 'remnawave_uuid', None) and subscription.connected_squads:
+                    try:
+                        await service.update_remnawave_user(
+                            db,
+                            subscription,
+                            reset_traffic=False,
+                            sync_squads=True,
+                        )
+                    except Exception as squad_err:
+                        logger.warning('Failed to sync squads after user creation (miniapp)', error=squad_err)
         except Exception as e:
             logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=e)
+
+        # Send admin notification about daily subscription resume
+        if resume_transaction is not None:
+            try:
+                from app.bot_factory import create_bot
+                from app.services.admin_notification_service import AdminNotificationService
+
+                if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
+                    bot = create_bot()
+                    try:
+                        notification_service = AdminNotificationService(bot)
+                        await notification_service.send_subscription_purchase_notification(
+                            db=db,
+                            user=user,
+                            subscription=subscription,
+                            transaction=resume_transaction,
+                            period_days=1,
+                            was_trial_conversion=False,
+                            amount_kopeks=daily_price,
+                            purchase_type='renewal',
+                        )
+                    finally:
+                        await bot.session.close()
+            except Exception as notif_err:
+                logger.error('Failed to send admin notification for daily resume (miniapp)', error=notif_err)
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
     if new_paused_state:

@@ -1,4 +1,5 @@
 import asyncio
+import html
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ from app.database.crud.subscription import (
     get_expired_subscriptions,
     get_expiring_subscriptions,
     get_subscriptions_for_autopay,
+    reactivate_subscription,
 )
 from app.database.crud.user import (
     cleanup_expired_promo_offer_discounts,
@@ -585,13 +587,9 @@ class MonitoringService:
         When CHANNEL_REQUIRED_FOR_ALL is True, checks ALL active subscriptions
         (not just trials). Otherwise only checks trial subscriptions.
         """
-        from app.database.crud.subscription import is_active_paid_subscription, is_recently_updated_by_webhook
+        from app.database.crud.subscription import is_recently_updated_by_webhook
 
         if not settings.CHANNEL_IS_REQUIRED_SUB:
-            return
-
-        if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE and not settings.CHANNEL_REQUIRED_FOR_ALL:
-            logger.debug('Channel unsubscribe check disabled')
             return
 
         if not self.bot:
@@ -605,6 +603,14 @@ class MonitoringService:
         channels = await channel_subscription_service.get_required_channels()
         if not channels:
             return
+
+        # When no channel has any disable-on-leave rule, skip deactivation but
+        # still run reactivation to restore orphaned DISABLED subscriptions
+        # (e.g., admin turned off disable flags after subscriptions were already disabled).
+        has_any_disable_rule = any(
+            ch.get('disable_trial_on_leave', True) or ch.get('disable_paid_on_leave', False) for ch in channels
+        )
+        skip_deactivation = not has_any_disable_rule and not settings.CHANNEL_REQUIRED_FOR_ALL
 
         # Ensure bot is set on service
         if not channel_subscription_service.bot:
@@ -623,9 +629,13 @@ class MonitoringService:
             last_id = 0
 
             # Build the trial/all filter based on CHANNEL_REQUIRED_FOR_ALL setting
+            # Also include paid subs if any channel has disable_paid_on_leave=True,
+            # so monitoring can reconcile missed real-time events for paid users.
             from sqlalchemy import true as sa_true
 
-            is_trial_filter = sa_true() if settings.CHANNEL_REQUIRED_FOR_ALL else Subscription.is_trial.is_(True)
+            has_paid_disable_rule = any(ch.get('disable_paid_on_leave', False) for ch in channels)
+            include_all = settings.CHANNEL_REQUIRED_FOR_ALL or has_paid_disable_rule
+            is_trial_filter = sa_true() if include_all else Subscription.is_trial.is_(True)
 
             while True:
                 # Fresh session per batch to avoid long-running connections
@@ -666,6 +676,10 @@ class MonitoringService:
                         if not user or not user.telegram_id:
                             continue
 
+                        # Skip admins -- consistent with channel_member.py and channel_checker.py
+                        if settings.is_admin(user.telegram_id):
+                            continue
+
                         # Existing guard: skip if recently updated by webhook
                         if is_recently_updated_by_webhook(subscription):
                             logger.debug(
@@ -678,6 +692,7 @@ class MonitoringService:
 
                         # Rate-limited check for ALL channels
                         all_subscribed = True
+                        unsubscribed_channels: list[dict] = []
                         for ch in channels:
                             is_member = await channel_subscription_service._rate_limited_check(
                                 user.telegram_id, ch['channel_id']
@@ -688,14 +703,22 @@ class MonitoringService:
 
                             if not is_member:
                                 all_subscribed = False
+                                unsubscribed_channels.append(ch)
 
                         # DEACTIVATE: was active, now not subscribed to all
                         if subscription.status == SubscriptionStatus.ACTIVE.value and not all_subscribed:
-                            # Guard: always skip paid subscriptions (user paid money)
-                            if is_active_paid_subscription(subscription):
+                            if skip_deactivation:
                                 continue
 
-                            subscription = await deactivate_subscription(batch_db, subscription)
+                            # Respect per-channel disable_trial_on_leave / disable_paid_on_leave settings
+                            should_disable = any(
+                                channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
+                                for ch in unsubscribed_channels
+                            )
+                            if not should_disable:
+                                continue
+
+                            subscription = await deactivate_subscription(batch_db, subscription, commit=False)
                             disabled_count += 1
                             logger.info(
                                 'Subscription deactivated (channel unsubscribe)',
@@ -728,6 +751,7 @@ class MonitoringService:
                                             user.id,
                                             subscription.id,
                                             'trial_channel_unsubscribed',
+                                            commit=False,
                                         )
 
                         # REACTIVATE: was disabled, now subscribed to all
@@ -761,10 +785,12 @@ class MonitoringService:
                                 )
                                 continue
 
-                            subscription.status = SubscriptionStatus.ACTIVE.value
-                            subscription.updated_at = datetime.now(UTC)
-                            restored_count += 1
+                            subscription = await reactivate_subscription(batch_db, subscription, commit=False)
+                            if subscription.status != SubscriptionStatus.ACTIVE.value:
+                                # reactivate_subscription silently skipped (expired or wrong status)
+                                continue
 
+                            restored_count += 1
                             logger.info(
                                 'Subscription restored (channel resubscribe)',
                                 telegram_id=user.telegram_id,
@@ -774,8 +800,11 @@ class MonitoringService:
 
                             try:
                                 if user.remnawave_uuid:
-                                    await self.subscription_service.update_remnawave_user(batch_db, subscription)
+                                    await self.subscription_service.enable_remnawave_user(user.remnawave_uuid)
                                 else:
+                                    # create_remnawave_user calls db.commit() internally --
+                                    # flush accumulated batch state first to preserve atomicity.
+                                    await batch_db.commit()
                                     await self.subscription_service.create_remnawave_user(batch_db, subscription)
                             except Exception as api_error:
                                 logger.error(
@@ -788,6 +817,7 @@ class MonitoringService:
                                 batch_db,
                                 subscription.id,
                                 'trial_channel_unsubscribed',
+                                commit=False,
                             )
 
                     # Commit all changes for this batch
@@ -1886,9 +1916,12 @@ class MonitoringService:
                         title = title[:57] + '...'
 
                     # Детали пользователя: имя, Telegram ID и username
-                    full_name = ticket.user.full_name if ticket.user else 'Unknown'
+                    full_name = html.escape(ticket.user.full_name or '') if ticket.user else 'Unknown'
                     telegram_id_display = ticket.user.telegram_id if ticket.user else '—'
-                    username_display = (ticket.user.username or 'отсутствует') if ticket.user else 'отсутствует'
+                    username_display = html.escape(
+                        (ticket.user.username or 'отсутствует') if ticket.user else 'отсутствует'
+                    )
+                    safe_title = html.escape(title) if title else '—'
 
                     text = (
                         f'⏰ <b>Ожидание ответа на тикет превышено</b>\n\n'
@@ -1896,7 +1929,7 @@ class MonitoringService:
                         f'👤 <b>Пользователь:</b> {full_name}\n'
                         f'🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
                         f'📱 <b>Username:</b> @{username_display}\n'
-                        f'📝 <b>Заголовок:</b> {title or "—"}\n'
+                        f'📝 <b>Заголовок:</b> {safe_title}\n'
                         f'⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n'
                     )
 

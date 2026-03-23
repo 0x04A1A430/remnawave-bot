@@ -28,6 +28,7 @@ from sqlalchemy import (
     Time,
     TypeDecorator,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
@@ -2364,7 +2365,7 @@ class SubscriptionServer(Base):
     __tablename__ = 'subscription_servers'
 
     id = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey('subscriptions.id'), nullable=False)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
     server_squad_id = Column(Integer, ForeignKey('server_squads.id'), nullable=False)
 
     connected_at = Column(AwareDateTime(), default=func.now())
@@ -3299,3 +3300,75 @@ class GuestPurchase(Base):
     def __repr__(self) -> str:
         token_prefix = self.token[:5] if self.token else '?'
         return f"<GuestPurchase token='{token_prefix}...' status='{self.status}'>"
+
+
+class NewsArticle(Base):
+    """News article for the cabinet news section."""
+
+    __tablename__ = 'news_articles'
+    __table_args__ = (
+        # Covers the main public list query: WHERE is_published = true ORDER BY published_at DESC
+        Index('ix_news_articles_published_at_published', 'is_published', 'published_at'),
+        # Covers the category-filtered public list: WHERE is_published = true AND category = ?
+        Index('ix_news_articles_published_category', 'is_published', 'category'),
+        # Covers the admin list query: ORDER BY created_at DESC
+        Index('ix_news_articles_created_at', 'created_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    slug = Column(String(500), unique=True, nullable=False, index=True)
+    content = Column(Text, nullable=False, default='', server_default='')
+    excerpt = Column(Text, nullable=True)
+    category = Column(String(100), nullable=False, default='', server_default='')
+    category_color = Column(String(20), nullable=False, default='#00e5a0', server_default='#00e5a0')
+    tag = Column(String(50), nullable=True)
+    featured_image_url = Column(Text, nullable=True)
+    is_published = Column(Boolean, nullable=False, default=False, server_default='false')
+    is_featured = Column(Boolean, nullable=False, default=False, server_default='false')
+    published_at = Column(AwareDateTime(), nullable=True)
+    read_time_minutes = Column(Integer, nullable=False, default=1, server_default='1')
+    views_count = Column(Integer, nullable=False, default=0, server_default='0')
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
+
+    category_id = Column(Integer, ForeignKey('news_categories.id', ondelete='SET NULL'), nullable=True)
+    tag_id = Column(Integer, ForeignKey('news_tags.id', ondelete='SET NULL'), nullable=True)
+
+    author = relationship('User', backref='created_news_articles', foreign_keys=[created_by])
+    category_obj = relationship('NewsCategory', foreign_keys=[category_id], lazy='noload')
+    tag_obj = relationship('NewsTag', foreign_keys=[tag_id], lazy='noload')
+
+    def __repr__(self) -> str:
+        return f"<NewsArticle id={self.id} slug='{self.slug}' published={self.is_published}>"
+
+
+class NewsCategory(Base):
+    """Managed news category with a display color."""
+
+    __tablename__ = 'news_categories'
+    __table_args__ = (Index('ix_news_categories_name_lower', text('lower(name)'), unique=True),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    color = Column(String(20), nullable=False, server_default='#00e5a0')
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<NewsCategory id={self.id} name='{self.name}'>"
+
+
+class NewsTag(Base):
+    """Managed news tag with a display color."""
+
+    __tablename__ = 'news_tags'
+    __table_args__ = (Index('ix_news_tags_name_lower', text('lower(name)'), unique=True),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), nullable=False)
+    color = Column(String(20), nullable=False, server_default='#94a3b8')
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<NewsTag id={self.id} name='{self.name}'>"

@@ -125,8 +125,8 @@ class CryptoBotService:
         # По документации CryptoBot, ключ ВСЕГДА SHA256 от API токена
         token = self.api_token
         if not token:
-            logger.warning('CryptoBot API token не настроен, пропуск проверки подписи')
-            return True
+            logger.error('CryptoBot API token не настроен, отклоняем webhook')
+            return False
 
         try:
             secret_hash = hashlib.sha256(token.encode()).digest()

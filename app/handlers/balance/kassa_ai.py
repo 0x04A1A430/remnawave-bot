@@ -1,5 +1,7 @@
 """Handler for KassaAI balance top-up."""
 
+import html
+
 import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
@@ -45,7 +47,7 @@ async def _check_topup_restriction(callback: types.CallbackQuery, db_user: User)
     if not getattr(db_user, 'restriction_topup', False):
         return False
     texts = get_texts(db_user.language)
-    reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+    reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
     support_url = settings.get_support_contact_url()
     keyboard = []
     if support_url:
@@ -173,7 +175,7 @@ async def process_kassa_ai_payment_amount(
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором'
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
