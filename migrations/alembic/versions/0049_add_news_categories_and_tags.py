@@ -117,8 +117,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('ix_news_articles_tag_id', 'news_articles')
-    op.drop_index('ix_news_articles_category_id', 'news_articles')
+    op.execute(sa.text('DROP INDEX IF EXISTS ix_news_articles_tag_id'))
+    op.execute(sa.text('DROP INDEX IF EXISTS ix_news_articles_category_id'))
     op.drop_constraint('fk_news_articles_tag_id', 'news_articles', type_='foreignkey')
     op.drop_constraint('fk_news_articles_category_id', 'news_articles', type_='foreignkey')
     op.drop_column('news_articles', 'tag_id')
