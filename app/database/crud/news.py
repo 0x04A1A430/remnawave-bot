@@ -1,0 +1,225 @@
+"""CRUD operations for news articles."""
+
+from datetime import UTC, datetime
+
+import structlog
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.database.models import NewsArticle
+
+
+logger = structlog.get_logger(__name__)
+
+
+async def create_news_article(
+    db: AsyncSession,
+    *,
+    title: str,
+    slug: str,
+    content: str = '',
+    excerpt: str | None = None,
+    category: str = '',
+    category_color: str = '#00e5a0',
+    tag: str | None = None,
+    featured_image_url: str | None = None,
+    is_published: bool = False,
+    is_featured: bool = False,
+    published_at: datetime | None = None,
+    read_time_minutes: int = 1,
+    created_by: int | None = None,
+) -> NewsArticle:
+    """Create a new news article."""
+    # Auto-set published_at when publishing without explicit date
+    if is_published and published_at is None:
+        published_at = datetime.now(UTC)
+
+    article = NewsArticle(
+        title=title,
+        slug=slug,
+        content=content,
+        excerpt=excerpt,
+        category=category,
+        category_color=category_color,
+        tag=tag,
+        featured_image_url=featured_image_url,
+        is_published=is_published,
+        is_featured=is_featured,
+        published_at=published_at,
+        read_time_minutes=read_time_minutes,
+        created_by=created_by,
+    )
+
+    db.add(article)
+    await db.commit()
+    await db.refresh(article)
+
+    logger.info(
+        'Created news article',
+        article_id=article.id,
+        slug=article.slug,
+        is_published=article.is_published,
+    )
+    return article
+
+
+async def get_news_article_by_id(db: AsyncSession, article_id: int) -> NewsArticle | None:
+    """Get a news article by ID with author relationship."""
+    result = await db.execute(
+        select(NewsArticle).options(selectinload(NewsArticle.author)).where(NewsArticle.id == article_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_news_article_by_slug(db: AsyncSession, slug: str) -> NewsArticle | None:
+    """Get a news article by slug with author relationship."""
+    result = await db.execute(
+        select(NewsArticle).options(selectinload(NewsArticle.author)).where(NewsArticle.slug == slug)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_published_news(
+    db: AsyncSession,
+    *,
+    category: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[NewsArticle]:
+    """Get published news articles, ordered by published_at descending."""
+    stmt = (
+        select(NewsArticle)
+        .options(selectinload(NewsArticle.author))
+        .where(NewsArticle.is_published.is_(True))
+        .order_by(NewsArticle.published_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    if category:
+        stmt = stmt.where(NewsArticle.category == category)
+
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_published_news_count(
+    db: AsyncSession,
+    *,
+    category: str | None = None,
+) -> int:
+    """Get count of published news articles, optionally filtered by category."""
+    stmt = select(func.count(NewsArticle.id)).where(NewsArticle.is_published.is_(True))
+    if category:
+        stmt = stmt.where(NewsArticle.category == category)
+
+    result = await db.execute(stmt)
+    return result.scalar_one() or 0
+
+
+async def get_all_news(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[NewsArticle]:
+    """Get all news articles (admin), ordered by created_at descending."""
+    stmt = (
+        select(NewsArticle)
+        .options(selectinload(NewsArticle.author))
+        .order_by(NewsArticle.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_all_news_count(db: AsyncSession) -> int:
+    """Get total count of all news articles."""
+    result = await db.execute(select(func.count(NewsArticle.id)))
+    return result.scalar_one() or 0
+
+
+async def get_news_categories(db: AsyncSession) -> list[str]:
+    """Get distinct categories from published articles."""
+    result = await db.execute(
+        select(NewsArticle.category)
+        .where(NewsArticle.is_published.is_(True))
+        .where(NewsArticle.category != '')
+        .distinct()
+        .order_by(NewsArticle.category)
+    )
+    return list(result.scalars().all())
+
+
+async def update_news_article(
+    db: AsyncSession,
+    article: NewsArticle,
+    **kwargs,
+) -> NewsArticle:
+    """Update a news article. Only whitelisted fields are applied."""
+    allowed_fields = {
+        'title',
+        'slug',
+        'content',
+        'excerpt',
+        'category',
+        'category_color',
+        'tag',
+        'featured_image_url',
+        'is_published',
+        'is_featured',
+        'published_at',
+        'read_time_minutes',
+    }
+
+    nullable_fields = {
+        'excerpt',
+        'tag',
+        'featured_image_url',
+        'published_at',
+    }
+
+    update_data: dict = {}
+    for key, value in kwargs.items():
+        if key not in allowed_fields:
+            continue
+        if value is None and key not in nullable_fields:
+            continue
+        update_data[key] = value
+
+    # Auto-set published_at when transitioning to published
+    if update_data.get('is_published') and not article.is_published and not update_data.get('published_at'):
+        if article.published_at is None:
+            update_data['published_at'] = datetime.now(UTC)
+
+    if not update_data:
+        return article
+
+    update_data['updated_at'] = datetime.now(UTC)
+
+    await db.execute(update(NewsArticle).where(NewsArticle.id == article.id).values(**update_data))
+    await db.commit()
+    await db.refresh(article)
+
+    logger.info(
+        'Updated news article', article_id=article.id, slug=article.slug, updated_fields=list(update_data.keys())
+    )
+    return article
+
+
+async def delete_news_article(db: AsyncSession, article: NewsArticle) -> bool:
+    """Delete a news article."""
+    await db.execute(delete(NewsArticle).where(NewsArticle.id == article.id))
+    await db.commit()
+    logger.info('Deleted news article', article_id=article.id, slug=article.slug)
+    return True
+
+
+async def increment_views(db: AsyncSession, article_id: int) -> None:
+    """Increment the views counter for a news article (fire-and-forget)."""
+    await db.execute(
+        update(NewsArticle).where(NewsArticle.id == article_id).values(views_count=NewsArticle.views_count + 1)
+    )
+    await db.commit()

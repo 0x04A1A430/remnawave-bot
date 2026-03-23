@@ -3299,3 +3299,35 @@ class GuestPurchase(Base):
     def __repr__(self) -> str:
         token_prefix = self.token[:5] if self.token else '?'
         return f"<GuestPurchase token='{token_prefix}...' status='{self.status}'>"
+
+
+class NewsArticle(Base):
+    """News article for the cabinet news section."""
+
+    __tablename__ = 'news_articles'
+    __table_args__ = (
+        Index('ix_news_articles_published_at_published', 'is_published', 'published_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    slug = Column(String(500), unique=True, nullable=False, index=True)
+    content = Column(Text, nullable=False, default='', server_default='')
+    excerpt = Column(Text, nullable=True)
+    category = Column(String(100), nullable=False, default='', server_default='')
+    category_color = Column(String(20), nullable=False, default='#00e5a0', server_default='#00e5a0')
+    tag = Column(String(50), nullable=True)
+    featured_image_url = Column(Text, nullable=True)
+    is_published = Column(Boolean, nullable=False, default=False, server_default='false')
+    is_featured = Column(Boolean, nullable=False, default=False, server_default='false')
+    published_at = Column(AwareDateTime(), nullable=True)
+    read_time_minutes = Column(Integer, nullable=False, default=1, server_default='1')
+    views_count = Column(Integer, nullable=False, default=0, server_default='0')
+    created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
+
+    author = relationship('User', backref='created_news_articles', foreign_keys=[created_by])
+
+    def __repr__(self) -> str:
+        return f"<NewsArticle id={self.id} slug='{self.slug}' published={self.is_published}>"
