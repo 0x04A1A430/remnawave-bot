@@ -77,11 +77,7 @@ async def delete_tag(db: AsyncSession, tag: NewsTag) -> None:
     """Delete a news tag and clear tag fields from all linked articles."""
     tag_id, tag_name = tag.id, tag.name
     # Clear legacy string field on articles that reference this tag
-    await db.execute(
-        update(NewsArticle)
-        .where(NewsArticle.tag_id == tag_id)
-        .values(tag=None, tag_id=None)
-    )
+    await db.execute(update(NewsArticle).where(NewsArticle.tag_id == tag_id).values(tag=None, tag_id=None))
     await db.delete(tag)
     await db.commit()
     logger.info('Deleted news tag', tag_id=tag_id, name=tag_name)
