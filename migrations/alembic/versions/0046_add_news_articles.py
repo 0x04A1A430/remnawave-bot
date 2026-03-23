@@ -62,8 +62,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('ix_news_articles_created_at', table_name='news_articles')
-    op.drop_index('ix_news_articles_published_category', table_name='news_articles')
-    op.drop_index('ix_news_articles_published_at_published', table_name='news_articles')
-    op.drop_index('ix_news_articles_slug', table_name='news_articles')
+    # drop_table cascades to all indexes on the table automatically
     op.drop_table('news_articles')
