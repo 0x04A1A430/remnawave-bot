@@ -132,10 +132,12 @@ router.include_router(admin_apps_router)
 router.include_router(admin_roles_router)
 router.include_router(admin_policies_router)
 router.include_router(admin_audit_log_router)
-router.include_router(admin_news_router)
+# Categories/tags/media routers MUST be before the main news router
+# to avoid /admin/news/{article_id} catching /admin/news/categories etc.
 router.include_router(admin_news_categories_router)
 router.include_router(admin_news_tags_router)
 router.include_router(admin_news_media_router)
+router.include_router(admin_news_router)
 
 # WebSocket route
 router.include_router(websocket_router)
