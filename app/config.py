@@ -582,6 +582,13 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
     MINIAPP_STATIC_PATH: str = 'miniapp'
+
+    # Media upload settings (news article images/videos)
+    MEDIA_UPLOAD_DIR: str = './uploads'
+    MEDIA_MAX_IMAGE_SIZE_MB: int = 10
+    MEDIA_MAX_VIDEO_SIZE_MB: int = 50
+    MEDIA_IMAGE_MAX_DIMENSION: int = 2048
+    MEDIA_JPEG_QUALITY: int = 85
     MINIAPP_PURCHASE_URL: str = ''
     MINIAPP_SERVICE_NAME_EN: str = 'Bedolaga VPN'
     MINIAPP_SERVICE_NAME_RU: str = 'Bedolaga VPN'
@@ -2625,6 +2632,9 @@ class Settings(BaseSettings):
         if not raw_path:
             raw_path = 'miniapp'
         return Path(raw_path)
+
+    def get_media_upload_path(self) -> Path:
+        return Path(self.MEDIA_UPLOAD_DIR)
 
     # Cabinet methods
     def is_cabinet_enabled(self) -> bool:

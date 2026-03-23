@@ -33,7 +33,7 @@ WORKDIR /app
 
 COPY --chown=app:app . .
 
-RUN mkdir -p logs data && chown app:app logs data
+RUN mkdir -p logs data uploads && chown app:app logs data uploads
 
 USER app
 
