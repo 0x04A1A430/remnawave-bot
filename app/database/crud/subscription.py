@@ -203,7 +203,7 @@ async def create_trial_subscription(
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
         connected_squads=final_squads,
-        autopay_enabled=settings.is_autopay_enabled_by_default(),
+        autopay_enabled=False,
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
         tariff_id=tariff_id,
         remnawave_short_id=short_id,
@@ -2089,6 +2089,54 @@ async def get_subscription_by_user_and_tariff(db: AsyncSession, user_id: int, ta
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def deactivate_user_trial_subscriptions(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    exclude_subscription_id: int | None = None,
+) -> list[Subscription]:
+    """Deactivate all trial subscriptions for a user.
+
+    Called when user purchases a paid tariff — trial is a probe that must die on purchase.
+    Returns remaining trial time in seconds (for TRIAL_ADD_REMAINING_DAYS_TO_PAID).
+    Handles both tariff-based and squad-based trials uniformly.
+    """
+    result = await db.execute(
+        select(Subscription).where(
+            Subscription.user_id == user_id,
+            Subscription.is_trial.is_(True),
+            Subscription.status.in_(
+                [
+                    SubscriptionStatus.ACTIVE.value,
+                    SubscriptionStatus.TRIAL.value,
+                ]
+            ),
+        )
+    )
+    trial_subs = list(result.scalars().all())
+
+    deactivated = []
+    for sub in trial_subs:
+        if exclude_subscription_id and sub.id == exclude_subscription_id:
+            continue
+        sub.status = SubscriptionStatus.DISABLED.value
+        sub.is_trial = False
+        sub.autopay_enabled = False
+        sub.updated_at = datetime.now(UTC)
+        deactivated.append(sub)
+        logger.info(
+            'Trial subscription deactivated on paid purchase',
+            subscription_id=sub.id,
+            user_id=user_id,
+            tariff_id=sub.tariff_id,
+        )
+
+    if deactivated:
+        await db.flush()
+
+    return deactivated
 
 
 async def get_all_subscriptions_by_user_id(db: AsyncSession, user_id: int) -> list[Subscription]:

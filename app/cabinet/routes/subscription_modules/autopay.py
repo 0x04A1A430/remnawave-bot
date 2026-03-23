@@ -45,9 +45,16 @@ async def update_autopay(
             detail='No subscription found',
         )
 
-    # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
-    # глобальный autopay для них запрещён
     if request.enabled:
+        # Триальные подписки — пробник, автопродление не имеет смысла
+        if subscription.is_trial:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Autopay is not available for trial subscriptions',
+            )
+
+        # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
+        # глобальный autopay для них запрещён
         await db.refresh(subscription, ['tariff'])
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             raise HTTPException(

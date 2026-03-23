@@ -1109,8 +1109,39 @@ class MiniAppSubscriptionPurchaseService:
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error('Failed to register subscription servers', error=error)
 
+        # Kill remaining trial subscriptions (trial = probe, dies on any paid purchase)
+        from app.database.crud.subscription import (
+            deactivate_user_trial_subscriptions,
+            decrement_subscription_server_counts,
+        )
+
+        killed_trials = await deactivate_user_trial_subscriptions(db, user.id, exclude_subscription_id=subscription.id)
+
+        # Add remaining trial time from OTHER killed trials (current trial already handled above)
+        if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID and killed_trials:
+            extra_seconds = 0
+            for _kt in killed_trials:
+                if _kt.end_date and _kt.end_date > now:
+                    extra_seconds += max(0, (_kt.end_date - now).total_seconds())
+            if extra_seconds > 0:
+                subscription.end_date = subscription.end_date + timedelta(seconds=extra_seconds)
+                await db.commit()
+                await db.refresh(subscription)
+
         subscription_service = SubscriptionService()
-        # При покупке подписки ВСЕГДА сбрасываем трафик в панели
+
+        # Disable killed trials on RemnaWave panel
+        for trial_sub in killed_trials:
+            try:
+                _trial_uuid = trial_sub.remnawave_uuid or (
+                    getattr(user, 'remnawave_uuid', None) if not settings.is_multi_tariff_enabled() else None
+                )
+                if _trial_uuid:
+                    await subscription_service.disable_remnawave_user(_trial_uuid)
+                await decrement_subscription_server_counts(db, trial_sub)
+            except Exception as trial_err:
+                logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
+
         try:
             _purch_uuid = (
                 subscription.remnawave_uuid

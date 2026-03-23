@@ -10,7 +10,7 @@ POST /subscription/trial
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -22,6 +22,7 @@ from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.subscription import (
     create_paid_subscription,
     create_trial_subscription,
+    decrement_subscription_server_counts,
     extend_subscription,
     get_subscription_by_user_id,
 )
@@ -771,6 +772,30 @@ async def purchase_tariff(
             payment_method=PaymentMethod.BALANCE,
         )
 
+        # --- Trial cleanup: find and kill all trials BEFORE creating/extending ---
+        from app.database.crud.subscription import deactivate_user_trial_subscriptions
+
+        # Collect remaining trial seconds for TRIAL_ADD_REMAINING_DAYS_TO_PAID
+        _bonus_seconds = 0
+        _now_trial = datetime.now(UTC)
+        killed_trials = await deactivate_user_trial_subscriptions(
+            db,
+            user.id,
+            exclude_subscription_id=subscription.id if subscription else None,
+        )
+        if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+            for _kt in killed_trials:
+                if _kt.end_date and _kt.end_date > _now_trial:
+                    _bonus_seconds += max(0, (_kt.end_date - _now_trial).total_seconds())
+
+        # If existing subscription IS the trial being extended — it's already deactivated
+        # as trial by deactivate_user_trial_subscriptions (is_trial=False, status=DISABLED).
+        # We need to re-activate it for extend to work correctly.
+        if subscription and subscription.id in {kt.id for kt in killed_trials}:
+            subscription.status = 'active'
+            subscription.is_trial = False
+            await db.flush()
+
         if subscription:
             # Extend/change tariff — сохраняем докупленные устройства при продлении того же тарифа
             subscription = await extend_subscription(
@@ -794,6 +819,17 @@ async def purchase_tariff(
                 tariff_id=tariff.id,
             )
 
+        # Add remaining trial time to paid subscription
+        if _bonus_seconds > 0 and subscription:
+            subscription.end_date = subscription.end_date + timedelta(seconds=_bonus_seconds)
+            await db.commit()
+            await db.refresh(subscription)
+            logger.info(
+                'Added remaining trial time to paid subscription',
+                bonus_seconds=int(_bonus_seconds),
+                subscription_id=subscription.id,
+            )
+
         # For daily tariffs, set last_daily_charge_at
         if is_daily_tariff:
             subscription.last_daily_charge_at = datetime.now(UTC)
@@ -801,9 +837,20 @@ async def purchase_tariff(
             await db.commit()
             await db.refresh(subscription)
 
-        # Sync with RemnaWave
-        # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+        # --- Disable killed trials on RemnaWave panel ---
         service = SubscriptionService()
+        for trial_sub in killed_trials:
+            if trial_sub.id == (subscription.id if subscription else None):
+                continue  # This trial became the paid subscription, don't disable
+            try:
+                _trial_uuid = trial_sub.remnawave_uuid or (
+                    getattr(user, 'remnawave_uuid', None) if not settings.is_multi_tariff_enabled() else None
+                )
+                if _trial_uuid:
+                    await service.disable_remnawave_user(_trial_uuid)
+                await decrement_subscription_server_counts(db, trial_sub)
+            except Exception as trial_err:
+                logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
         try:
             if subscription.remnawave_uuid:
                 # Existing subscription with Remnawave user — update it
