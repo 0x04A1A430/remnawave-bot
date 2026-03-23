@@ -181,6 +181,35 @@ async def _prepare_auto_extend_context(
     if tariff_id:
         tariff_id = _safe_int(tariff_id)
 
+    # Validate period_days against tariff or global renewal periods
+    if tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+
+        _tariff = await _get_tariff(db, tariff_id)
+        if _tariff and _tariff.period_prices and not getattr(_tariff, 'is_daily', False):
+            available_periods = [int(p) for p in _tariff.period_prices.keys()]
+            if period_days not in available_periods:
+                logger.warning(
+                    '🔁 Автопокупка: period_days из корзины не входит в доступные периоды тарифа',
+                    period_days=period_days,
+                    available_periods=available_periods,
+                    tariff_id=tariff_id,
+                    format_user_id=_format_user_id(user),
+                )
+                return None
+    else:
+        from app.config import settings as _settings
+
+        available_periods = _settings.get_available_renewal_periods()
+        if period_days not in available_periods:
+            logger.warning(
+                '🔁 Автопокупка: period_days из корзины не входит в доступные периоды продления',
+                period_days=period_days,
+                available_periods=available_periods,
+                format_user_id=_format_user_id(user),
+            )
+            return None
+
     from app.database.crud.user import lock_user_for_pricing
     from app.services.pricing_engine import pricing_engine as _pricing_engine
     from app.utils.promo_offer import get_user_active_promo_discount_percent
@@ -621,6 +650,29 @@ async def _auto_purchase_tariff(
             format_user_id=_format_user_id(user),
         )
         return False
+
+    # Validate period_days against tariff's configured periods (prevent arbitrary periods from saved cart)
+    is_daily_tariff = getattr(tariff, 'is_daily', False)
+    if not is_daily_tariff:
+        if tariff.period_prices:
+            available_periods = [int(p) for p in tariff.period_prices.keys()]
+        else:
+            available_periods = []
+        custom_days_allowed = (
+            hasattr(tariff, 'can_purchase_custom_days')
+            and tariff.can_purchase_custom_days()
+            and hasattr(tariff, 'get_price_for_custom_days')
+            and tariff.get_price_for_custom_days(period_days) is not None
+        )
+        if period_days not in available_periods and not custom_days_allowed:
+            logger.warning(
+                '🔁 Автопокупка тарифа: period_days не входит в доступные периоды тарифа',
+                tariff_id=tariff_id,
+                period_days=period_days,
+                available_periods=available_periods,
+                format_user_id=_format_user_id(user),
+            )
+            return False
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
