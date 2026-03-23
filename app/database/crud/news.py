@@ -184,6 +184,18 @@ async def get_news_categories(db: AsyncSession) -> list[str]:
     return list(result.scalars().all())
 
 
+async def unfeature_all_news(db: AsyncSession) -> None:
+    """Remove featured flag from all articles (so only one can be featured).
+
+    Does NOT commit. The caller must commit the session to persist this change.
+    This is intentional — the caller should commit both this operation and the
+    subsequent feature operation atomically.
+    """
+    await db.execute(
+        update(NewsArticle).where(NewsArticle.is_featured.is_(True)).values(is_featured=False)
+    )
+
+
 async def update_news_article(
     db: AsyncSession,
     article: NewsArticle,
