@@ -5151,7 +5151,10 @@ async def submit_subscription_renewal_endpoint(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail={'code': 'subscription_restricted', 'message': 'Subscription purchases are restricted for this account'},
+            detail={
+                'code': 'subscription_restricted',
+                'message': 'Subscription purchases are restricted for this account',
+            },
         )
 
     subscription = _ensure_paid_subscription(
@@ -5470,7 +5473,10 @@ async def subscription_purchase_endpoint(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail={'code': 'subscription_restricted', 'message': 'Subscription purchases are restricted for this account'},
+            detail={
+                'code': 'subscription_restricted',
+                'message': 'Subscription purchases are restricted for this account',
+            },
         )
 
     from app.database.crud.user import lock_user_for_pricing
@@ -6425,7 +6431,10 @@ async def purchase_tariff_endpoint(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail={'code': 'subscription_restricted', 'message': 'Subscription purchases are restricted for this account'},
+            detail={
+                'code': 'subscription_restricted',
+                'message': 'Subscription purchases are restricted for this account',
+            },
         )
 
     if not settings.is_tariffs_mode():
