@@ -1,6 +1,5 @@
 """Public news routes for cabinet - user-facing news/blog section."""
 
-import asyncio
 import time
 from typing import Any
 
@@ -126,16 +125,13 @@ async def list_published_news(
 ) -> NewsListResponse:
     """Get paginated list of published news articles.
 
-    The three DB queries (articles, count, categories) are independent — run
-    them concurrently via asyncio.gather to cut latency to the slowest query
-    instead of the sequential sum of all three.
+    SQLAlchemy AsyncSession does not support concurrent operations, so
+    queries run sequentially.
     """
     try:
-        articles, total, categories = await asyncio.gather(
-            get_published_news(db, category=category, limit=limit, offset=offset),
-            get_published_news_count(db, category=category),
-            get_news_categories(db),
-        )
+        articles = await get_published_news(db, category=category, limit=limit, offset=offset)
+        total = await get_published_news_count(db, category=category)
+        categories = await get_news_categories(db)
 
         items = [NewsArticleListItem(**_article_to_response(a, include_content=False)) for a in articles]
 

@@ -1,6 +1,5 @@
 """Admin routes for managing news articles in cabinet."""
 
-import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -72,15 +71,10 @@ async def list_all_news(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> NewsListResponse:
-    """Get all news articles (admin view, includes unpublished).
-
-    articles and total are independent — run them concurrently.
-    """
+    """Get all news articles (admin view, includes unpublished)."""
     try:
-        articles, total = await asyncio.gather(
-            get_all_news(db, limit=limit, offset=offset),
-            get_all_news_count(db),
-        )
+        articles = await get_all_news(db, limit=limit, offset=offset)
+        total = await get_all_news_count(db)
 
         items = [NewsArticleListItem.model_validate(a) for a in articles]
 
