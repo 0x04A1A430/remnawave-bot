@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,7 @@ from app.services.user_cart_service import user_cart_service
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import DevicePurchaseRequest
-from .helpers import _apply_addon_discount
+from .helpers import _apply_addon_discount, resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -40,6 +40,7 @@ router = APIRouter()
 @router.post('/devices')
 async def purchase_devices_legacy(
     request: DevicePurchaseRequest,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -55,11 +56,13 @@ async def purchase_devices_legacy(
         )
 
     # Lock subscription row to prevent concurrent device purchases exceeding the limit
+    _sub_filter = (
+        Subscription.id == subscription_id
+        if subscription_id and settings.is_multi_tariff_enabled()
+        else Subscription.user_id == user.id
+    )
     result = await db.execute(
-        select(Subscription)
-        .where(Subscription.user_id == user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+        select(Subscription).where(_sub_filter).with_for_update().execution_options(populate_existing=True)
     )
     subscription = result.scalar_one_or_none()
 
@@ -265,6 +268,7 @@ async def purchase_devices_legacy(
 @router.post('/devices/purchase')
 async def purchase_devices(
     request: DevicePurchaseRequest,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -277,11 +281,13 @@ async def purchase_devices(
 
     try:
         # Lock subscription row to prevent concurrent device purchases exceeding the limit
+        _sub_filter = (
+            Subscription.id == subscription_id
+            if subscription_id and settings.is_multi_tariff_enabled()
+            else Subscription.user_id == user.id
+        )
         result = await db.execute(
-            select(Subscription)
-            .where(Subscription.user_id == user.id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            select(Subscription).where(_sub_filter).with_for_update().execution_options(populate_existing=True)
         )
         subscription = result.scalar_one_or_none()
 
@@ -530,12 +536,12 @@ async def purchase_devices(
 @router.post('/devices/save-cart')
 async def save_devices_cart(
     request: DevicePurchaseRequest,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, bool]:
     """Save cart for device purchase (for insufficient balance flow)."""
-    await db.refresh(user, ['subscriptions'])
-    subscription = user.subscription
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     if not subscription:
         raise HTTPException(
@@ -619,12 +625,12 @@ async def save_devices_cart(
 @router.get('/devices/price')
 async def get_device_price(
     devices: int = 1,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get price for additional devices."""
-    await db.refresh(user, ['subscriptions'])
-    subscription = user.subscription
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     if not subscription or subscription.status not in ['active', 'trial']:
         return {
@@ -727,15 +733,16 @@ async def get_device_price(
 
 @router.get('/devices')
 async def get_devices(
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Get list of connected devices."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
@@ -745,7 +752,7 @@ async def get_devices(
         return {
             'devices': [],
             'total': 0,
-            'device_limit': user.subscription.device_limit or 0,
+            'device_limit': subscription.device_limit or 0,
         }
 
     try:
@@ -773,7 +780,7 @@ async def get_devices(
             return {
                 'devices': formatted_devices,
                 'total': response.get('total', len(formatted_devices)),
-                'device_limit': user.subscription.device_limit or 0,
+                'device_limit': subscription.device_limit or 0,
             }
 
     except Exception as e:
@@ -781,22 +788,23 @@ async def get_devices(
         return {
             'devices': [],
             'total': 0,
-            'device_limit': user.subscription.device_limit or 0,
+            'device_limit': subscription.device_limit or 0,
         }
 
 
 @router.delete('/devices/{hwid}')
 async def delete_device(
     hwid: str,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Delete a specific device by HWID."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
@@ -830,15 +838,16 @@ async def delete_device(
 
 @router.delete('/devices')
 async def delete_all_devices(
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Delete all connected devices."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
@@ -901,15 +910,16 @@ async def delete_all_devices(
 
 @router.get('/devices/reduction-info')
 async def get_device_reduction_info(
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
     """Get info about device limit reduction availability."""
     from app.services.remnawave_service import RemnaWaveService
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         return {
             'available': False,
             'reason': 'No subscription found',
@@ -918,8 +928,6 @@ async def get_device_reduction_info(
             'can_reduce': 0,
             'connected_devices_count': 0,
         }
-
-    subscription = user.subscription
 
     # Check if it's a trial subscription
     if subscription.is_trial:
@@ -979,6 +987,7 @@ async def get_device_reduction_info(
 @router.post('/devices/reduce')
 async def reduce_devices(
     request: dict[str, int],
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict[str, Any]:
@@ -993,11 +1002,13 @@ async def reduce_devices(
         )
 
     # Lock subscription to prevent concurrent device modifications
+    _sub_filter = (
+        Subscription.id == subscription_id
+        if subscription_id and settings.is_multi_tariff_enabled()
+        else Subscription.user_id == user.id
+    )
     result = await db.execute(
-        select(Subscription)
-        .where(Subscription.user_id == user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+        select(Subscription).where(_sub_filter).with_for_update().execution_options(populate_existing=True)
     )
     subscription = result.scalar_one_or_none()
 

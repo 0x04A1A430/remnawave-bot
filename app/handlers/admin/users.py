@@ -437,7 +437,7 @@ async def show_users_ready_to_renew(
     current_time = datetime.now(UTC)
 
     for user in users_data['users']:
-        subscription = user.subscription
+        subscription = user.subscription  # Uses primary subscription (multi-tariff compatible via property)
         status_emoji = '✅' if user.status == UserStatus.ACTIVE.value else '🚫'
         subscription_emoji = '❌'
         expired_days = '?'
@@ -564,7 +564,7 @@ async def show_potential_customers(
     keyboard = []
 
     for user in users_data['users']:
-        subscription = user.subscription
+        subscription = user.subscription  # Uses primary subscription (multi-tariff compatible via property)
         status_emoji = '✅' if user.status == UserStatus.ACTIVE.value else '🚫'
         subscription_emoji = '❌'
 
@@ -3964,16 +3964,23 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
         return False
 
 
-async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int, admin_id: int) -> bool:
+async def _extend_subscription_by_days(
+    db: AsyncSession, user_id: int, days: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
     try:
         from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
         from app.services.subscription_service import SubscriptionService
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            subscription = active_subs[0] if active_subs else None
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                subscription = active_subs[0] if active_subs else None
         else:
             subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
@@ -3998,7 +4005,9 @@ async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int
         return False
 
 
-async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, admin_id: int) -> bool:
+async def _add_subscription_traffic(
+    db: AsyncSession, user_id: int, gb: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
     try:
         from app.database.crud.subscription import (
             add_subscription_traffic,
@@ -4008,10 +4017,15 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
         from app.services.subscription_service import SubscriptionService
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            subscription = active_subs[0] if active_subs else None
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                subscription = active_subs[0] if active_subs else None
         else:
             subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
@@ -4047,7 +4061,9 @@ async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, adm
         return False
 
 
-async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
+async def _deactivate_user_subscription(
+    db: AsyncSession, user_id: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
     try:
         from app.database.crud.subscription import (
             deactivate_subscription,
@@ -4056,10 +4072,15 @@ async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id
         from app.services.subscription_service import SubscriptionService
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            subscription = active_subs[0] if active_subs else None
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                subscription = active_subs[0] if active_subs else None
         else:
             subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
@@ -4081,17 +4102,24 @@ async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id
         return False
 
 
-async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
+async def _activate_user_subscription(
+    db: AsyncSession, user_id: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
     try:
         from app.database.crud.subscription import get_subscription_by_user_id
         from app.database.models import SubscriptionStatus
         from app.services.subscription_service import SubscriptionService
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            subscription = active_subs[0] if active_subs else None
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                subscription = active_subs[0] if active_subs else None
         else:
             subscription = await get_subscription_by_user_id(db, user_id)
         if not subscription:
@@ -4116,16 +4144,23 @@ async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: 
         return False
 
 
-async def _grant_trial_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
+async def _grant_trial_subscription(
+    db: AsyncSession, user_id: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
     try:
         from app.database.crud.subscription import create_trial_subscription, get_subscription_by_user_id
         from app.services.subscription_service import SubscriptionService
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            existing_subscription = active_subs[0] if active_subs else None
+                existing_subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                existing_subscription = active_subs[0] if active_subs else None
         else:
             existing_subscription = await get_subscription_by_user_id(db, user_id)
         if existing_subscription:
@@ -4153,17 +4188,24 @@ async def _grant_trial_subscription(db: AsyncSession, user_id: int, admin_id: in
         return False
 
 
-async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, admin_id: int) -> bool:
+async def _grant_paid_subscription(
+    db: AsyncSession, user_id: int, days: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
     try:
         from app.config import settings
         from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
         from app.services.subscription_service import SubscriptionService
 
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            if subscription_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
 
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            existing_subscription = active_subs[0] if active_subs else None
+                existing_subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+            else:
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+                existing_subscription = active_subs[0] if active_subs else None
         else:
             existing_subscription = await get_subscription_by_user_id(db, user_id)
         if existing_subscription:

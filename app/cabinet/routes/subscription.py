@@ -29,6 +29,7 @@ from .subscription_modules.status import get_subscription as _get_subscription_h
 
 router = APIRouter(prefix='/subscription', tags=['Cabinet Subscription'])
 
+
 # Root endpoint: GET /subscription (empty path — must be on this router directly)
 @router.get('', response_model=SubscriptionStatusResponse)
 async def get_subscription(

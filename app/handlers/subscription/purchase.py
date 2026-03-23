@@ -189,6 +189,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     await db.refresh(db_user)
 
     texts = get_texts(db_user.language)
+    # Multi-tariff: this branch is only reached in single-tariff mode (multi-tariff
+    # is redirected to show_my_subscriptions above). db_user.subscription returns
+    # the first active or most recent subscription, which is correct here.
     subscription = db_user.subscription
 
     if not subscription:
@@ -595,6 +598,9 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
 
     # Проверяем, использовал ли пользователь триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: db_user.subscription returns the first active/most recent
+    # subscription. In multi-tariff mode a user can have multiple subscriptions, but
+    # trial eligibility is still "has any subscription" so this check is correct.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -794,6 +800,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
     # Проверяем, использовал ли пользователь триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: db_user.subscription returns the first active/most recent
+    # subscription. Trial eligibility is "has any subscription" so this check is correct.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -1313,6 +1321,8 @@ async def start_subscription_purchase(
         keyboard,
     )
 
+    # Multi-tariff note: this path is only reached in classic (non-tariff) mode.
+    # Tariff mode redirects to show_tariffs_list above. db_user.subscription is safe.
     subscription = getattr(db_user, 'subscription', None)
 
     if settings.is_devices_selection_enabled():
@@ -1580,7 +1590,26 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
         return
 
     texts = get_texts(db_user.language)
-    subscription = db_user.subscription
+
+    if settings.is_multi_tariff_enabled():
+        parts = (callback.data or '').split(':')
+        sub_id = None
+        if len(parts) >= 2:
+            try:
+                sub_id = int(parts[-1])
+            except (ValueError, TypeError):
+                pass
+        if sub_id:
+            from app.database.crud.subscription import get_subscription_by_id_for_user
+
+            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+            if not subscription:
+                await callback.answer('Подписка не найдена', show_alert=True)
+                return
+        else:
+            subscription = db_user.subscription
+    else:
+        subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
         await callback.message.edit_text(
@@ -1770,6 +1799,10 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         )
         return
 
+    # Multi-tariff note: this handler is registered for 'extend_period_' callbacks
+    # which are only shown in the classic (non-tariff) renewal flow. In multi-tariff
+    # mode, tariff-based renewal uses a different callback path. db_user.subscription
+    # is safe here as it only runs in single-subscription context.
     subscription = db_user.subscription
 
     if not subscription:
@@ -2314,6 +2347,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             await callback.answer()
             return
 
+        # Multi-tariff note: confirm_purchase runs in classic (non-tariff) mode only.
+        # In tariff mode, start_subscription_purchase redirects to show_tariffs_list.
+        # db_user.subscription is the correct single subscription for trial conversion.
         existing_subscription = db_user.subscription
         if devices_selection_enabled:
             selected_devices = devices_selected
@@ -2787,6 +2823,10 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         return
 
     texts = get_texts(db_user.language)
+    # Multi-tariff note: this handler is reached via 'subscription_settings' callback
+    # which is shown in the single-subscription info keyboard. In multi-tariff mode,
+    # show_subscription_info redirects to show_my_subscriptions, so per-subscription
+    # settings are handled from the my_subscriptions flow. db_user.subscription is safe.
     subscription = db_user.subscription
 
     # Получаем тариф подписки если есть
@@ -2874,6 +2914,10 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
+    # Multi-tariff note: 'toggle_daily_subscription_pause' callback is shown inside
+    # the subscription info view which redirects to show_my_subscriptions in multi-tariff
+    # mode. Per-subscription pause is therefore routed correctly before reaching here.
+    # db_user.subscription is safe as a fallback for single-tariff daily subscriptions.
     subscription = db_user.subscription
 
     if not subscription:
@@ -3066,6 +3110,8 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
     # Проверяем права на триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: trial eligibility is "has any subscription", so checking
+    # db_user.subscription (first active/most recent) is correct in all modes.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -3461,6 +3507,8 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
     # Проверяем права на триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: trial eligibility is "has any subscription", so checking
+    # db_user.subscription (first active/most recent) is correct in all modes.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True

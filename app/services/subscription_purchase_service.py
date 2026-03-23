@@ -1025,12 +1025,21 @@ class MiniAppSubscriptionPurchaseService:
                     refresh_error=refresh_error,
                 )
         else:
-            result = await db.execute(
-                select(Subscription)
-                .where(Subscription.user_id == user.id)
-                .order_by(Subscription.created_at.desc())
-                .limit(1)
-            )
+            context_subscription_id: int | None = context.payload.get('subscription_id')
+            if settings.is_multi_tariff_enabled() and context_subscription_id is not None:
+                result = await db.execute(
+                    select(Subscription).where(
+                        Subscription.user_id == user.id,
+                        Subscription.id == context_subscription_id,
+                    )
+                )
+            else:
+                result = await db.execute(
+                    select(Subscription)
+                    .where(Subscription.user_id == user.id)
+                    .order_by(Subscription.created_at.desc())
+                    .limit(1)
+                )
             subscription = result.scalar_one_or_none()
             if subscription is not None:
                 context.subscription = subscription

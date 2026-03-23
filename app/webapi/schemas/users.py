@@ -29,6 +29,8 @@ class SubscriptionSummary(BaseModel):
     subscription_url: str | None = None
     subscription_crypto_link: str | None = None
     connected_squads: list[str] = Field(default_factory=list)
+    tariff_id: int | None = None
+    tariff_name: str | None = None
 
 
 class UserResponse(BaseModel):
@@ -50,6 +52,7 @@ class UserResponse(BaseModel):
     last_activity: datetime | None = None
     promo_group: PromoGroupSummary | None = None
     subscription: SubscriptionSummary | None = None
+    subscriptions: list[SubscriptionSummary] = Field(default_factory=list)
 
 
 class UserListResponse(BaseModel):

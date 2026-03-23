@@ -660,6 +660,7 @@ async def purchase_tariff(
                     'allowed_squads': tariff.allowed_squads or [],
                     'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
+                    'subscription_id': existing_subscription.id if existing_subscription else None,
                 }
             else:
                 cart_data = {
@@ -678,6 +679,7 @@ async def purchase_tariff(
                     'discount_percent': discount_percent,
                     'consume_promo_offer': promo_offer_discount_value > 0,
                     'source': 'cabinet',
+                    'subscription_id': existing_subscription.id if existing_subscription else None,
                 }
 
             try:

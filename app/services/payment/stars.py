@@ -249,6 +249,7 @@ class TelegramStarsMixin:
                 db=db,
                 user_id=user.id,
                 period_days=period_days,
+                subscription_id=payload_data.subscription_id,
             )
         except Exception as error:
             logger.error(

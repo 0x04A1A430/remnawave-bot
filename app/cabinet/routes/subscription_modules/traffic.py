@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -32,7 +32,7 @@ from ...schemas.subscription import (
     TrafficPackageResponse,
     TrafficPurchaseRequest,
 )
-from .helpers import _apply_addon_discount
+from .helpers import _apply_addon_discount, resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -44,18 +44,18 @@ router = APIRouter()
 async def get_traffic_packages(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
     """Get available traffic packages."""
     from app.database.crud.tariff import get_tariff_by_id
-    from app.database.crud.user import get_user_by_id
 
-    fresh_user = await get_user_by_id(db, user.id)
-    if not fresh_user or not fresh_user.subscription:
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
         return []
 
     # Режим тарифов - берём пакеты из тарифа
-    if settings.is_tariffs_mode() and fresh_user.subscription.tariff_id:
-        tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
+    if settings.is_tariffs_mode() and subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if not tariff:
             return []
 
@@ -89,8 +89,8 @@ async def get_traffic_packages(
         return []
 
     # Проверяем настройку тарифа пользователя (allow_traffic_topup)
-    if fresh_user.subscription.tariff_id:
-        tariff = await get_tariff_by_id(db, fresh_user.subscription.tariff_id)
+    if subscription.tariff_id:
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if tariff and not tariff.allow_traffic_topup:
             return []
 
@@ -120,6 +120,7 @@ async def purchase_traffic(
     request: TrafficPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
     """Purchase additional traffic."""
     if getattr(user, 'restriction_subscription', False):
@@ -132,15 +133,13 @@ async def purchase_traffic(
     from app.database.crud.tariff import get_tariff_by_id
     from app.utils.pricing_utils import calculate_prorated_price
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
-
-    subscription = user.subscription
     tariff = None
     base_price_kopeks = 0
     is_tariff_mode = settings.is_tariffs_mode() and subscription.tariff_id
@@ -386,11 +385,11 @@ async def save_traffic_cart(
     request: TrafficPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, bool]:
     """Save cart for traffic purchase (for insufficient balance flow)."""
 
-    await db.refresh(user, ['subscriptions'])
-    subscription = user.subscription
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     if not subscription:
         raise HTTPException(
@@ -496,25 +495,26 @@ async def switch_traffic_package(
     request: TrafficPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Switch to a different traffic package (change limit)."""
     from app.utils.pricing_utils import calculate_prorated_price
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
 
-    if user.subscription.is_trial:
+    if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Traffic management is only available for paid subscriptions',
         )
 
-    current_traffic = user.subscription.traffic_limit_gb or 0
+    current_traffic = subscription.traffic_limit_gb or 0
     new_traffic = request.gb
 
     if current_traffic == new_traffic:
@@ -554,7 +554,7 @@ async def switch_traffic_package(
         )
 
         # Prorated calculation
-        final_price, days_charged = calculate_prorated_price(price_diff, user.subscription.end_date)
+        final_price, days_charged = calculate_prorated_price(price_diff, subscription.end_date)
 
         if user.balance_kopeks < final_price:
             raise HTTPException(
@@ -590,25 +590,25 @@ async def switch_traffic_package(
 
     from app.database.models import TrafficPurchase
 
-    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == user.subscription.id))
-    user.subscription.traffic_limit_gb = new_traffic
-    user.subscription.purchased_traffic_gb = 0  # Reset purchased traffic on switch
-    user.subscription.traffic_reset_at = None  # Reset traffic reset date
-    user.subscription.updated_at = datetime.now(UTC)
+    await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
+    subscription.traffic_limit_gb = new_traffic
+    subscription.purchased_traffic_gb = 0  # Reset purchased traffic on switch
+    subscription.traffic_reset_at = None  # Reset traffic reset date
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
         if getattr(user, 'remnawave_uuid', None):
-            await subscription_service.update_remnawave_user(db, user.subscription)
+            await subscription_service.update_remnawave_user(db, subscription)
         else:
-            await subscription_service.create_remnawave_user(db, user.subscription)
+            await subscription_service.create_remnawave_user(db, subscription)
     except Exception as e:
         logger.error('Failed to sync traffic switch with RemnaWave', error=e)
 
     await db.refresh(user)
-    await db.refresh(user.subscription)
+    await db.refresh(subscription)
 
     return {
         'success': True,
@@ -633,23 +633,26 @@ TRAFFIC_CACHE_TTL = 60  # Cache traffic data for 60 seconds
 async def refresh_traffic(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
     """
     Refresh traffic usage from RemnaWave panel.
     Rate limited to 1 request per 60 seconds.
     """
-    if not user.subscription:
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No active subscription',
         )
 
-    # Используем user.id для rate limit и кеша (работает и для email-пользователей)
-    user_cache_id = user.id
+    # Use per-subscription key when subscription_id is available so that refreshing
+    # Sub B is not blocked by a previous refresh of Sub A (multi-tariff mode).
+    cache_suffix = f'{user.id}_{subscription_id}' if subscription_id is not None else str(user.id)
 
     # Check rate limit
     is_limited = await RateLimitCache.is_rate_limited(
-        user_cache_id,
+        cache_suffix,
         'traffic_refresh',
         TRAFFIC_REFRESH_RATE_LIMIT,
         TRAFFIC_REFRESH_RATE_WINDOW,
@@ -657,7 +660,7 @@ async def refresh_traffic(
 
     if is_limited:
         # Check if we have cached data
-        traffic_cache_key = cache_key('traffic', user_cache_id)
+        traffic_cache_key = cache_key('traffic', cache_suffix)
         cached_data = await cache.get(traffic_cache_key)
 
         if cached_data:
@@ -690,17 +693,17 @@ async def refresh_traffic(
         if not traffic_stats:
             # Return current database values if RemnaWave unavailable
             traffic_data = {
-                'traffic_used_bytes': int((user.subscription.traffic_used_gb or 0) * (1024**3)),
-                'traffic_used_gb': round(user.subscription.traffic_used_gb or 0, 2),
-                'traffic_limit_bytes': int((user.subscription.traffic_limit_gb or 0) * (1024**3)),
-                'traffic_limit_gb': user.subscription.traffic_limit_gb or 0,
+                'traffic_used_bytes': int((subscription.traffic_used_gb or 0) * (1024**3)),
+                'traffic_used_gb': round(subscription.traffic_used_gb or 0, 2),
+                'traffic_limit_bytes': int((subscription.traffic_limit_gb or 0) * (1024**3)),
+                'traffic_limit_gb': subscription.traffic_limit_gb or 0,
                 'traffic_used_percent': round(
-                    ((user.subscription.traffic_used_gb or 0) / (user.subscription.traffic_limit_gb or 1)) * 100
-                    if user.subscription.traffic_limit_gb
+                    ((subscription.traffic_used_gb or 0) / (subscription.traffic_limit_gb or 1)) * 100
+                    if subscription.traffic_limit_gb
                     else 0,
                     1,
                 ),
-                'is_unlimited': (user.subscription.traffic_limit_gb or 0) == 0,
+                'is_unlimited': (subscription.traffic_limit_gb or 0) == 0,
             }
             return {
                 'success': True,
@@ -711,13 +714,13 @@ async def refresh_traffic(
 
         # Update subscription with fresh data
         used_gb = traffic_stats.get('used_traffic_gb', 0)
-        if abs((user.subscription.traffic_used_gb or 0) - used_gb) > 0.01:
-            user.subscription.traffic_used_gb = used_gb
-            user.subscription.updated_at = datetime.now(UTC)
+        if abs((subscription.traffic_used_gb or 0) - used_gb) > 0.01:
+            subscription.traffic_used_gb = used_gb
+            subscription.updated_at = datetime.now(UTC)
             await db.commit()
 
         # Calculate percentage
-        limit_gb = user.subscription.traffic_limit_gb or 0
+        limit_gb = subscription.traffic_limit_gb or 0
         if limit_gb > 0:
             percent = min(100, (used_gb / limit_gb) * 100)
         else:
@@ -735,7 +738,7 @@ async def refresh_traffic(
         }
 
         # Cache the result
-        traffic_cache_key = cache_key('traffic', user_cache_id)
+        traffic_cache_key = cache_key('traffic', cache_suffix)
         await cache.set(traffic_cache_key, traffic_data, TRAFFIC_CACHE_TTL)
 
         return {

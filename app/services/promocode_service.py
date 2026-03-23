@@ -270,29 +270,29 @@ class PromoCodeService:
             if not active_subs:
                 raise ValueError('no_subscription_for_days')
 
-            # Extend ALL active subscriptions
-            for subscription in active_subs:
-                # Конвертация триала в платную подписку при активации промокода на дни
-                if subscription.is_trial:
-                    subscription.is_trial = False
-                    if subscription.status == SubscriptionStatus.TRIAL.value:
-                        subscription.status = SubscriptionStatus.ACTIVE.value
-                    subscription.updated_at = datetime.now(UTC)
-                    logger.info(
-                        '🎓 Промокод: конвертация триала в платную подписку',
-                        subscription_id=subscription.id,
-                        code=promocode.code,
-                    )
+            # In multi-tariff mode extend only the first active subscription, not all
+            target_sub = active_subs[0]
+            # Конвертация триала в платную подписку при активации промокода на дни
+            if target_sub.is_trial:
+                target_sub.is_trial = False
+                if target_sub.status == SubscriptionStatus.TRIAL.value:
+                    target_sub.status = SubscriptionStatus.ACTIVE.value
+                target_sub.updated_at = datetime.now(UTC)
+                logger.info(
+                    '🎓 Промокод: конвертация триала в платную подписку',
+                    subscription_id=target_sub.id,
+                    code=promocode.code,
+                )
 
-                await extend_subscription(db, subscription, promocode.subscription_days)
-                await self.subscription_service.update_remnawave_user(db, subscription)
+            await extend_subscription(db, target_sub, promocode.subscription_days)
+            await self.subscription_service.update_remnawave_user(db, target_sub)
 
             effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
             logger.info(
-                '✅ Подписки пользователя продлены на дней в RemnaWave',
+                '✅ Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
                 subscription_days=promocode.subscription_days,
-                subscriptions_count=len(active_subs),
+                subscription_id=target_sub.id,
             )
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:

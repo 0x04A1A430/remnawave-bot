@@ -61,6 +61,7 @@ def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSu
     if not subscription:
         return None
 
+    tariff = getattr(subscription, 'tariff', None)
     return SubscriptionSummary(
         id=subscription.id,
         status=subscription.status,
@@ -76,12 +77,15 @@ def _serialize_subscription(subscription: Subscription | None) -> SubscriptionSu
         subscription_url=subscription.subscription_url,
         subscription_crypto_link=subscription.subscription_crypto_link,
         connected_squads=list(subscription.connected_squads or []),
+        tariff_id=subscription.tariff_id,
+        tariff_name=tariff.name if tariff is not None else None,
     )
 
 
 def _serialize_user(user: User) -> UserResponse:
     subscription = getattr(user, 'subscription', None)
     promo_group = getattr(user, 'promo_group', None)
+    all_subscriptions = getattr(user, 'subscriptions', None) or []
 
     return UserResponse(
         id=user.id,
@@ -102,6 +106,7 @@ def _serialize_user(user: User) -> UserResponse:
         last_activity=user.last_activity,
         promo_group=_serialize_promo_group(promo_group),
         subscription=_serialize_subscription(subscription),
+        subscriptions=[_serialize_subscription(s) for s in all_subscriptions if s is not None],
     )
 
 

@@ -919,8 +919,12 @@ class YooKassaPaymentMixin:
                         # Активируем pending подписку пользователя
                         from app.database.crud.subscription import activate_pending_subscription
 
+                        order_subscription_id = int(order_id) if order_id is not None else None
                         subscription = await activate_pending_subscription(
-                            db=db, user_id=user.id, period_days=subscription_period
+                            db=db,
+                            user_id=user.id,
+                            period_days=subscription_period,
+                            subscription_id=order_subscription_id,
                         )
 
                         if subscription:

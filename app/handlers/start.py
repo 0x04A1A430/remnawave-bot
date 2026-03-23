@@ -2413,6 +2413,7 @@ async def required_sub_channel_check(
             logger.info('🗑️ CHANNEL CHECK: Redis payload удален после успешной проверки подписки')
 
         if user and user.status != UserStatus.DELETED.value:
+            # Uses primary subscription (multi-tariff compatible via property)
             has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
 
             menu_text = await get_main_menu_text(user, texts, db)
@@ -2436,7 +2437,7 @@ async def required_sub_channel_check(
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription,
+                subscription=user.subscription,  # Uses primary subscription (multi-tariff compatible via property)
                 is_moderator=is_moderator,
                 custom_buttons=custom_buttons,
             )
@@ -2581,6 +2582,7 @@ async def required_sub_channel_check(
                             logger.error('Ошибка отправки сообщения о бонусе кампании', error=e)
 
                     # Показываем главное меню после создания пользователя
+                    # Uses primary subscription (multi-tariff compatible via property)
                     has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
 
                     menu_text = await get_main_menu_text(user, texts, db)
@@ -2604,7 +2606,7 @@ async def required_sub_channel_check(
                         has_active_subscription=has_active_subscription,
                         subscription_is_active=subscription_is_active,
                         balance_kopeks=user.balance_kopeks,
-                        subscription=user.subscription,
+                        subscription=user.subscription,  # Uses primary subscription (multi-tariff compatible via property)
                         is_moderator=is_moderator,
                         custom_buttons=custom_buttons,
                     )

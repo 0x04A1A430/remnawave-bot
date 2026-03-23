@@ -15,6 +15,7 @@ from app.database.crud.subscription import (
     create_paid_subscription,
     extend_subscription,
     get_active_subscriptions_by_user_id,
+    get_subscription_by_id_for_user,
     get_subscription_by_user_id,
 )
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
@@ -576,6 +577,14 @@ async def select_tariff(
         else:
             missing = daily_price - user_balance
 
+            # Ищем существующую подписку для передачи subscription_id в корзину
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+                _daily_existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+            else:
+                _daily_existing_sub = await get_subscription_by_user_id(db, db_user.id)
+
             # Сохраняем данные корзины для автопокупки суточного тарифа
             cart_data = {
                 'cart_mode': 'daily_tariff_purchase',
@@ -591,6 +600,7 @@ async def select_tariff(
                 'traffic_limit_gb': tariff.traffic_limit_gb,
                 'device_limit': tariff.device_limit,
                 'allowed_squads': tariff.allowed_squads or [],
+                'subscription_id': _daily_existing_sub.id if _daily_existing_sub else None,
             }
             await user_cart_service.save_user_cart(db_user.id, cart_data)
 
@@ -1143,6 +1153,14 @@ async def select_tariff_period(
         # Недостаточно средств - сохраняем корзину для автопокупки
         missing = final_price - user_balance
 
+        # Ищем существующую подписку для передачи subscription_id в корзину
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            _existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+        else:
+            _existing_sub = await get_subscription_by_user_id(db, db_user.id)
+
         # Сохраняем данные корзины для автопокупки после пополнения
         cart_data = {
             'cart_mode': 'tariff_purchase',
@@ -1158,6 +1176,7 @@ async def select_tariff_period(
             'device_limit': tariff.device_limit,
             'allowed_squads': tariff.allowed_squads or [],
             'discount_percent': discount_percent,
+            'subscription_id': _existing_sub.id if _existing_sub else None,
         }
         await user_cart_service.save_user_cart(db_user.id, cart_data)
 
@@ -1783,8 +1802,18 @@ async def show_tariff_extend(
     get_texts(db_user.language)
 
     if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = active_subs[0] if active_subs else None
+        sub_id = None
+        parts = (callback.data or '').split(':')
+        if len(parts) >= 2:
+            try:
+                sub_id = int(parts[-1])
+            except (ValueError, TypeError):
+                pass
+        if sub_id:
+            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+        else:
+            active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+            subscription = active_subs[0] if active_subs else None
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription or not subscription.tariff_id:

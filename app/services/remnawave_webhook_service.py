@@ -825,12 +825,28 @@ class RemnaWaveWebhookService:
                 subscription.connected_squads = []
                 subscription.updated_at = datetime.now(UTC)
 
+            # In multi-tariff mode clear per-subscription UUID here
+            if settings.is_multi_tariff_enabled():
+                subscription.remnawave_uuid = None
+
             # Remove SubscriptionServer link rows (panel user no longer exists)
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
-        # Clear remnawave linkage
-        if user.remnawave_uuid:
-            user.remnawave_uuid = None
+        # Clear remnawave linkage — only in single-tariff mode (multi-tariff uses per-subscription UUIDs)
+        if not settings.is_multi_tariff_enabled():
+            if user.remnawave_uuid:
+                user.remnawave_uuid = None
+        # In multi-tariff mode, subscription.remnawave_uuid was cleared above.
+        # If subscription was None (fallback path), extract panel UUID from data and
+        # clear it from the matching subscription manually.
+        elif subscription is None:
+            panel_uuid = data.get('uuid') or data.get('userUuid')
+            if panel_uuid:
+                for sub in getattr(user, 'subscriptions', None) or []:
+                    if getattr(sub, 'remnawave_uuid', None) == panel_uuid:
+                        sub.remnawave_uuid = None
+                        sub.remnawave_short_uuid = None
+                        break
 
         await db.commit()
 

@@ -10,13 +10,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.services.subscription_service import SubscriptionService
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from .helpers import resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -28,23 +29,23 @@ router = APIRouter()
 async def get_available_countries(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Get available countries/servers for the user."""
     from app.database.crud.server_squad import get_available_server_squads
     from app.utils.pricing_utils import apply_percentage_discount, calculate_prorated_price
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     promo_group_id = user.promo_group_id
     available_servers = await get_available_server_squads(db, promo_group_id=promo_group_id)
 
     connected_squads = []
     days_left = 0
-    if user.subscription:
-        connected_squads = user.subscription.connected_squads or []
-        # Calculate days left for prorated pricing
-        if user.subscription.end_date:
-            delta = user.subscription.end_date - datetime.now(UTC)
+    if subscription:
+        connected_squads = subscription.connected_squads or []
+        if subscription.end_date:
+            delta = subscription.end_date - datetime.now(UTC)
             days_left = max(0, delta.days)
 
     # Get discount from promo group via PricingEngine (respects apply_discounts_to_addons flag)
@@ -64,10 +65,10 @@ async def get_available_countries(
 
         # Calculate prorated price if subscription exists
         prorated_price = discounted_price
-        if user.subscription and user.subscription.end_date:
+        if subscription and subscription.end_date:
             prorated_price, _ = calculate_prorated_price(
                 discounted_price,
-                user.subscription.end_date,
+                subscription.end_date,
             )
 
         countries.append(
@@ -89,7 +90,7 @@ async def get_available_countries(
     return {
         'countries': countries,
         'connected_count': len(connected_squads),
-        'has_subscription': user.subscription is not None,
+        'has_subscription': subscription is not None,
         'days_left': days_left,
         'discount_percent': servers_discount_percent,
     }
@@ -100,6 +101,7 @@ async def update_countries(
     request: dict[str, Any],
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Update subscription countries/servers."""
     from app.database.crud.server_squad import add_user_to_servers, get_available_server_squads, get_server_ids_by_uuids
@@ -109,15 +111,15 @@ async def update_countries(
     from app.database.models import TransactionType
     from app.utils.pricing_utils import apply_percentage_discount, calculate_prorated_price
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
 
-    if user.subscription.is_trial:
+    if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Country management is not available for trial subscriptions',
@@ -130,7 +132,7 @@ async def update_countries(
             detail='At least one country must be selected',
         )
 
-    current_countries = user.subscription.connected_squads or []
+    current_countries = subscription.connected_squads or []
     promo_group_id = user.promo_group_id
 
     available_servers = await get_available_server_squads(db, promo_group_id=promo_group_id)
@@ -182,7 +184,7 @@ async def update_countries(
 
             charged_price, charged_days = calculate_prorated_price(
                 discounted_per_month,
-                user.subscription.end_date,
+                subscription.end_date,
             )
 
             total_cost += charged_price
@@ -220,33 +222,33 @@ async def update_countries(
     if added:
         added_server_ids = await get_server_ids_by_uuids(db, added)
         if added_server_ids:
-            await add_subscription_servers(db, user.subscription, added_server_ids, added_server_prices)
+            await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
             try:
                 await add_user_to_servers(db, added_server_ids)
             except Exception as e:
                 logger.error('Ошибка обновления счётчика серверов', error=e)
 
     # Update connected squads
-    user.subscription.connected_squads = selected_countries
-    user.subscription.updated_at = datetime.now(UTC)
+    subscription.connected_squads = selected_countries
+    subscription.updated_at = datetime.now(UTC)
     await db.commit()
 
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
         if getattr(user, 'remnawave_uuid', None):
-            await subscription_service.update_remnawave_user(db, user.subscription, sync_squads=True)
+            await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)
         else:
-            await subscription_service.create_remnawave_user(db, user.subscription)
+            await subscription_service.create_remnawave_user(db, subscription)
     except Exception as e:
         logger.error('Failed to sync countries with RemnaWave', error=e)
 
-    await db.refresh(user.subscription)
+    await db.refresh(subscription)
 
     return {
         'message': 'Countries updated successfully',
         'added': added_names,
         'removed': removed_names,
         'amount_paid_kopeks': total_cost,
-        'connected_squads': user.subscription.connected_squads,
+        'connected_squads': subscription.connected_squads,
     }

@@ -531,20 +531,8 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
     db_user = await lock_user_for_pricing(db, db_user.id)
 
     texts = get_texts(db_user.language)
-    if settings.is_multi_tariff_enabled():
-        parts = (callback.data or '').split(':')
-        sub_id = None
-        if len(parts) >= 2:
-            try:
-                sub_id = int(parts[-1])
-            except (ValueError, TypeError):
-                pass
-        if sub_id:
-            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-        else:
-            subscription = db_user.subscription
-    else:
-        subscription = db_user.subscription
+    # Re-resolve after lock since db_user was refreshed
+    subscription, _ = await _resolve_subscription(callback, db_user, db)
     if not subscription:
         await callback.answer(
             texts.t('NO_ACTIVE_SUBSCRIPTION', '⚠️ У вас нет активной подписки'),
@@ -1567,6 +1555,7 @@ async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: 
             device_type,
             db_user.language,
             has_other_apps=bool(other_apps),
+            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )
@@ -1672,6 +1661,7 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
             app,
             device_type,
             db_user.language,
+            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )

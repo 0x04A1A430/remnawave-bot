@@ -357,10 +357,17 @@ async def delete_subscription(
 
     await deactivate_subscription(db, subscription)
 
-    # Деактивируем пользователя в RemnaWave, если есть UUID
-    if subscription.user and subscription.user.remnawave_uuid:
+    # Деактивируем пользователя в RemnaWave (per-subscription UUID в мульти-тарифе)
+    from app.config import settings
+
+    disable_uuid = (
+        subscription.remnawave_uuid
+        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+        else (subscription.user.remnawave_uuid if subscription.user else None)
+    )
+    if disable_uuid:
         subscription_service = SubscriptionService()
-        await subscription_service.disable_remnawave_user(subscription.user.remnawave_uuid)
+        await subscription_service.disable_remnawave_user(disable_uuid)
 
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)

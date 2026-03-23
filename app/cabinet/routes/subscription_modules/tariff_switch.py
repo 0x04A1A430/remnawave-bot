@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,7 @@ from app.services.subscription_service import SubscriptionService
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import TariffPurchaseRequest
-from .helpers import _subscription_to_response
+from .helpers import _subscription_to_response, resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -38,6 +38,7 @@ async def preview_tariff_switch(
     request: TariffPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Preview tariff switch - shows cost calculation."""
     if not settings.is_tariffs_mode():
@@ -46,16 +47,16 @@ async def preview_tariff_switch(
             detail='Tariffs mode is not enabled',
         )
 
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription or not user.subscription.tariff_id:
+    if not subscription or not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='No active subscription with tariff',
         )
 
     # Use actual_status for correct status check (handles time-based expiration)
-    actual_status = user.subscription.actual_status
+    actual_status = subscription.actual_status
     if actual_status == 'expired':
         # For expired subscriptions, user should purchase a new tariff, not switch
         raise HTTPException(
@@ -76,7 +77,7 @@ async def preview_tariff_switch(
             },
         )
 
-    current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
+    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
     new_tariff = await get_tariff_by_id(db, request.tariff_id)
 
     if not new_tariff or not new_tariff.is_active:
@@ -85,7 +86,7 @@ async def preview_tariff_switch(
             detail='Tariff not found or inactive',
         )
 
-    if user.subscription.tariff_id == request.tariff_id:
+    if subscription.tariff_id == request.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Already on this tariff',
@@ -105,8 +106,8 @@ async def preview_tariff_switch(
 
     # Calculate remaining days
     remaining_days = 0
-    if user.subscription.end_date and user.subscription.end_date > datetime.now(UTC):
-        delta = user.subscription.end_date - datetime.now(UTC)
+    if subscription.end_date and subscription.end_date > datetime.now(UTC):
+        delta = subscription.end_date - datetime.now(UTC)
         remaining_days = max(0, delta.days)
 
     # Calculate switch cost (PricingEngine handles all cases: periodic<->periodic, daily->periodic, periodic->daily)
@@ -157,6 +158,7 @@ async def switch_tariff(
     request: TariffPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Switch to a different tariff without changing end date."""
     if not settings.is_tariffs_mode():
@@ -165,9 +167,9 @@ async def switch_tariff(
             detail='Tariffs mode is not enabled',
         )
 
-    await db.refresh(user, ['subscriptions'])
+    resolved = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription or not user.subscription.tariff_id:
+    if not resolved or not resolved.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='No active subscription with tariff',
@@ -176,7 +178,7 @@ async def switch_tariff(
     # Lock subscription row to prevent concurrent tariff switches
     locked_result = await db.execute(
         select(Subscription)
-        .where(Subscription.id == user.subscription.id)
+        .where(Subscription.id == resolved.id)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
@@ -204,7 +206,7 @@ async def switch_tariff(
             },
         )
 
-    current_tariff = await get_tariff_by_id(db, user.subscription.tariff_id)
+    current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
     new_tariff = await get_tariff_by_id(db, request.tariff_id)
 
     if not new_tariff or not new_tariff.is_active:
@@ -213,7 +215,7 @@ async def switch_tariff(
             detail='Tariff not found or inactive',
         )
 
-    if user.subscription.tariff_id == request.tariff_id:
+    if subscription.tariff_id == request.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Already on this tariff',
@@ -337,8 +339,7 @@ async def switch_tariff(
 
     # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
     # (subtract_user_balance re-selects User with populate_existing=True which expires relationships)
-    await db.refresh(user, ['subscriptions'])
-    subscription = user.subscription
+    await db.refresh(subscription)
 
     subscription.tariff_id = new_tariff.id
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb

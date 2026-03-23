@@ -132,6 +132,7 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
             db_user.language,
             subscription.end_date,
             servers_discount_percent,
+            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )
@@ -239,6 +240,7 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
                 db_user.language,
                 subscription.end_date,
                 servers_discount_percent,
+                sub_id=sub_id,
             )
         )
         logger.info('✅ Клавиатура обновлена')
@@ -288,10 +290,10 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     # TOCTOU protection: lock user row before reading discount and charging balance
     db_user = await lock_user_for_pricing(db, db_user.id)
-    if settings.is_multi_tariff_enabled() and sub_id:
-        subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-    else:
-        subscription = db_user.subscription
+    # Re-resolve after lock since db_user was refreshed
+    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     servers_discount_percent = PricingEngine.get_addon_discount_percent(
         db_user,
@@ -764,6 +766,7 @@ async def handle_add_country_to_subscription(
                 db_user.language,
                 subscription.end_date,
                 servers_discount_percent,
+                sub_id=sub_id,
             )
         )
         logger.info('✅ Клавиатура обновлена')
@@ -833,10 +836,10 @@ async def confirm_add_countries_to_subscription(
 
     # TOCTOU protection: lock user row before reading discount and charging balance
     db_user = await lock_user_for_pricing(db, db_user.id)
-    if settings.is_multi_tariff_enabled() and sub_id:
-        subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-    else:
-        subscription = db_user.subscription
+    # Re-resolve after lock since db_user was refreshed
+    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     total_price = 0
     new_countries_names = []

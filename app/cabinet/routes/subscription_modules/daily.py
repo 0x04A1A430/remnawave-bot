@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -18,6 +18,7 @@ from app.database.models import User
 from app.services.subscription_service import SubscriptionService
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from .helpers import resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -29,17 +30,18 @@ router = APIRouter()
 async def toggle_subscription_pause(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Toggle pause/resume for daily subscription."""
-    await db.refresh(user, ['subscriptions'])
+    subscription = await resolve_subscription(db, user, subscription_id)
 
-    if not user.subscription:
+    if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
 
-    tariff_id = getattr(user.subscription, 'tariff_id', None)
+    tariff_id = getattr(subscription, 'tariff_id', None)
     if not tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -56,8 +58,8 @@ async def toggle_subscription_pause(
     # Determine current state
     from app.database.models import SubscriptionStatus
 
-    is_currently_paused = getattr(user.subscription, 'is_daily_paused', False)
-    was_disabled = user.subscription.status in (
+    is_currently_paused = getattr(subscription, 'is_daily_paused', False)
+    was_disabled = subscription.status in (
         SubscriptionStatus.DISABLED.value,
         SubscriptionStatus.EXPIRED.value,
         SubscriptionStatus.LIMITED.value,
@@ -69,7 +71,7 @@ async def toggle_subscription_pause(
         new_paused_state = False  # Force resume path
     else:
         new_paused_state = not is_currently_paused
-    user.subscription.is_daily_paused = new_paused_state
+    subscription.is_daily_paused = new_paused_state
 
     raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
 
@@ -138,12 +140,12 @@ async def toggle_subscription_pause(
                     logger.warning('Failed to create resume transaction', error=exc)
 
             # Balance deducted successfully — now activate
-            user.subscription.status = SubscriptionStatus.ACTIVE.value
-            user.subscription.last_daily_charge_at = datetime.now(UTC)
-            user.subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+            subscription.status = SubscriptionStatus.ACTIVE.value
+            subscription.last_daily_charge_at = datetime.now(UTC)
+            subscription.end_date = datetime.now(UTC) + timedelta(days=1)
 
     await db.commit()
-    await db.refresh(user.subscription)
+    await db.refresh(subscription)
     await db.refresh(user)
 
     # Sync with RemnaWave only when resuming from DISABLED state
@@ -152,7 +154,7 @@ async def toggle_subscription_pause(
             subscription_service = SubscriptionService()
             await subscription_service.create_remnawave_user(
                 db,
-                user.subscription,
+                subscription,
                 reset_traffic=False,
                 reset_reason=None,
             )

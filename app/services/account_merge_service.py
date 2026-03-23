@@ -263,9 +263,27 @@ async def _handle_subscription_merge(
     # Multi-tariff mode: transfer ALL subscriptions from secondary to primary
     if settings.is_multi_tariff_enabled():
         secondary_subs = list(getattr(secondary, 'subscriptions', None) or [])
+        secondary_legacy_uuid = secondary.remnawave_uuid
         if secondary_subs:
             for sub in secondary_subs:
                 sub.user_id = primary.id
+                sub_remnawave_uuid = getattr(sub, 'remnawave_uuid', None)
+                logger.info(
+                    'Transferred subscription during account merge',
+                    subscription_id=sub.id,
+                    tariff_id=getattr(sub, 'tariff_id', None),
+                    from_user=secondary.id,
+                    to_user=primary.id,
+                    remnawave_uuid=sub_remnawave_uuid,
+                )
+                if sub_remnawave_uuid and secondary_legacy_uuid and sub_remnawave_uuid == secondary_legacy_uuid:
+                    logger.warning(
+                        'Transferred subscription remnawave_uuid matches secondary legacy uuid — manual panel review required',
+                        subscription_id=sub.id,
+                        remnawave_uuid=sub_remnawave_uuid,
+                        secondary_user_id=secondary.id,
+                        primary_user_id=primary.id,
+                    )
             await db.flush()
             logger.info(
                 'Мерж подписок (multi-tariff): перенесено подписок secondary на primary',

@@ -206,7 +206,7 @@ async def show_main_menu(
         has_active_subscription=has_active_subscription,
         subscription_is_active=subscription_is_active,
         balance_kopeks=db_user.balance_kopeks,
-        subscription=db_user.subscription,
+        subscription=db_user.subscription,  # Uses primary subscription (multi-tariff compatible via property)
         show_resume_checkout=show_resume_checkout,
         has_saved_cart=has_saved_cart,
         custom_buttons=custom_buttons,
@@ -1050,7 +1050,7 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         has_active_subscription=has_active_subscription,
         subscription_is_active=subscription_is_active,
         balance_kopeks=db_user.balance_kopeks,
-        subscription=db_user.subscription,
+        subscription=db_user.subscription,  # Uses primary subscription (multi-tariff compatible via property)
         show_resume_checkout=show_resume_checkout,
         has_saved_cart=has_saved_cart,
         custom_buttons=custom_buttons,

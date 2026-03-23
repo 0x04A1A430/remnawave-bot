@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.exc import StaleDataError
@@ -80,7 +80,14 @@ def is_active_paid_subscription(subscription: Subscription | None) -> bool:
 
 
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscription | None:
-    """Deprecated: returns single subscription. Use get_active_subscriptions_by_user_id for multi-tariff."""
+    """Get primary subscription for user.
+
+    Returns the first active/trial subscription, or the most recently created one.
+    Multi-tariff compatible: prioritizes active subscriptions.
+    For multi-tariff operations on a specific subscription, use get_subscription_by_id_for_user().
+    """
+    from app.database.models import SubscriptionStatus
+
     result = await db.execute(
         select(Subscription)
         .options(
@@ -88,7 +95,15 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Subscri
             selectinload(Subscription.tariff),
         )
         .where(Subscription.user_id == user_id)
-        .order_by(Subscription.created_at.desc())
+        .order_by(
+            # Active/trial subscriptions first, then by creation date
+            case(
+                (Subscription.status == SubscriptionStatus.ACTIVE.value, 0),
+                (Subscription.status == SubscriptionStatus.TRIAL.value, 1),
+                else_=2,
+            ),
+            Subscription.created_at.desc(),
+        )
         .limit(1)
     )
     subscription = result.scalar_one_or_none()
@@ -149,7 +164,17 @@ async def create_trial_subscription(
     end_date = datetime.now(UTC) + timedelta(days=duration_days)
 
     # Check for existing PENDING trial subscription (retry after failed payment)
-    existing = await get_subscription_by_user_id(db, user_id)
+    # In multi-tariff mode, only reuse a subscription for the SAME tariff to avoid
+    # overwriting a paid subscription for a different tariff.
+    existing = None
+    if settings.is_multi_tariff_enabled() and tariff_id:
+        for sub in await get_active_subscriptions_by_user_id(db, user_id):
+            if sub.tariff_id == tariff_id:
+                existing = sub
+                break
+    else:
+        existing = await get_subscription_by_user_id(db, user_id)
+
     if existing and existing.is_trial and existing.status == SubscriptionStatus.PENDING.value:
         existing.status = SubscriptionStatus.ACTIVE.value
         existing.start_date = datetime.now(UTC)
@@ -1571,15 +1596,30 @@ async def create_pending_trial_subscription(
     )
 
 
-async def activate_pending_subscription(db: AsyncSession, user_id: int, period_days: int = None) -> Subscription | None:
+async def activate_pending_subscription(
+    db: AsyncSession,
+    user_id: int,
+    period_days: int = None,
+    subscription_id: int | None = None,
+) -> Subscription | None:
     """Активирует pending подписку пользователя, меняя её статус на ACTIVE."""
-    logger.info('Активация pending подписки: пользователь период дней', user_id=user_id, period_days=period_days)
+    logger.info(
+        'Активация pending подписки: пользователь период дней',
+        user_id=user_id,
+        period_days=period_days,
+        subscription_id=subscription_id,
+    )
 
-    # Находим pending подписку пользователя
+    # Находим pending подписку пользователя (последнюю созданную при наличии нескольких)
+    conditions = [
+        Subscription.user_id == user_id,
+        Subscription.status == SubscriptionStatus.PENDING.value,
+    ]
+    if subscription_id is not None:
+        conditions.append(Subscription.id == subscription_id)
+
     result = await db.execute(
-        select(Subscription).where(
-            and_(Subscription.user_id == user_id, Subscription.status == SubscriptionStatus.PENDING.value)
-        )
+        select(Subscription).where(and_(*conditions)).order_by(Subscription.created_at.desc()).limit(1)
     )
     pending_subscription = result.scalar_one_or_none()
 
@@ -2030,7 +2070,10 @@ async def get_subscription_by_user_and_tariff(db: AsyncSession, user_id: int, ta
 
 
 async def get_all_subscriptions_by_user_id(db: AsyncSession, user_id: int) -> list[Subscription]:
-    """Get all subscriptions for a user (any status)."""
+    """Get all subscriptions for a user (any status).
+
+    Ordering: active first, then trial, then everything else — newest first within each group.
+    """
     result = await db.execute(
         select(Subscription)
         .options(
@@ -2038,6 +2081,13 @@ async def get_all_subscriptions_by_user_id(db: AsyncSession, user_id: int) -> li
             selectinload(Subscription.tariff),
         )
         .where(Subscription.user_id == user_id)
-        .order_by(Subscription.created_at.desc())
+        .order_by(
+            case(
+                (Subscription.status == SubscriptionStatus.ACTIVE.value, 0),
+                (Subscription.status == SubscriptionStatus.TRIAL.value, 1),
+                else_=2,
+            ),
+            Subscription.created_at.desc(),
+        )
     )
     return list(result.scalars().all())

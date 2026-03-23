@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
-    get_active_subscriptions_by_user_id,
+    get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
 )
 from app.database.models import User
@@ -26,10 +26,33 @@ logger = structlog.get_logger(__name__)
 router = Router()
 
 
+def _status_emoji(sub) -> str:
+    """Return status emoji based on subscription's actual status."""
+    actual = sub.actual_status
+    if actual in ('active', 'trial'):
+        return '🟢'
+    if actual == 'limited':
+        return '🟡'
+    return '🔴'
+
+
+def _status_label(sub) -> str:
+    """Return a short human-readable status label for non-active subscriptions."""
+    actual = sub.actual_status
+    if actual == 'expired':
+        return ' (Истекла)'
+    if actual == 'disabled':
+        return ' (Отключена)'
+    if actual == 'limited':
+        return ' (Лимит)'
+    return ''
+
+
 def _format_subscription_line(sub, idx: int) -> str:
     """Format a single subscription for the list view."""
     tariff_name = sub.tariff.name if sub.tariff else 'Подписка'
-    status_emoji = '🟢' if sub.is_active else '🔴'
+    emoji = _status_emoji(sub)
+    label = _status_label(sub)
 
     # Traffic info
     if sub.traffic_limit_gb == 0:
@@ -44,7 +67,7 @@ def _format_subscription_line(sub, idx: int) -> str:
     # End date
     end_date = sub.end_date.strftime('%d.%m.%Y') if sub.end_date else '—'
 
-    parts = [f'{status_emoji} <b>{idx}. {tariff_name}</b>']
+    parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
     parts.append(f'   📊 Трафик: {traffic}')
     if devices:
         parts.append(f'   📱 Устройства: {devices}')
@@ -85,17 +108,27 @@ def _build_subscriptions_keyboard(subscriptions: list, language: str) -> types.I
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _build_subscription_detail_keyboard(
-    sub_id: int,
-) -> types.InlineKeyboardMarkup:
-    """Build keyboard for single subscription management."""
-    buttons = [
-        [types.InlineKeyboardButton(text='🔗 Ссылка подключения', callback_data=f'sl:{sub_id}')],
-        [types.InlineKeyboardButton(text='🔄 Продлить', callback_data=f'se:{sub_id}')],
-        [types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')],
-        [types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')],
-        [types.InlineKeyboardButton(text='◀️ К списку подписок', callback_data='my_subscriptions')],
-    ]
+def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKeyboardMarkup:
+    """Build keyboard for single subscription management.
+
+    For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
+    connection link and traffic/device management are irrelevant.
+    """
+    is_inactive = sub is not None and sub.actual_status in ('expired', 'disabled')
+
+    buttons = []
+
+    if not is_inactive:
+        buttons.append([types.InlineKeyboardButton(text='🔗 Ссылка подключения', callback_data=f'sl:{sub_id}')])
+
+    buttons.append([types.InlineKeyboardButton(text='🔄 Продлить', callback_data=f'se:{sub_id}')])
+
+    if not is_inactive:
+        buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
+        buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
+
+    buttons.append([types.InlineKeyboardButton(text='◀️ К списку подписок', callback_data='my_subscriptions')])
+
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -110,10 +143,10 @@ async def show_my_subscriptions(
         # Fallback to legacy single subscription view
         return
 
-    subscriptions = await get_active_subscriptions_by_user_id(db, db_user.id)
+    subscriptions = await get_all_subscriptions_by_user_id(db, db_user.id)
 
     if not subscriptions:
-        text = '📋 <b>Мои подписки</b>\n\nУ вас нет активных подписок.'
+        text = '📋 <b>Мои подписки</b>\n\nУ вас нет подписок.'
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='🛒 Купить подписку', callback_data='menu_buy')],
@@ -175,7 +208,7 @@ async def show_subscription_detail(
     if subscription.subscription_url:
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'
 
-    keyboard = _build_subscription_detail_keyboard(sub_id)
+    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)
 
     if callback.message:
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')

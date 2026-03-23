@@ -226,7 +226,7 @@ async def handle_connect_subscription(callback: types.CallbackQuery, db_user: Us
 
         await callback.message.edit_text(
             device_text,
-            reply_markup=get_device_selection_keyboard(db_user.language, platforms=platforms),
+            reply_markup=get_device_selection_keyboard(db_user.language, platforms=platforms, sub_id=sub_id),
             parse_mode='HTML',
         )
 

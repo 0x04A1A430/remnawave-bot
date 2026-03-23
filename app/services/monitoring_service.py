@@ -327,7 +327,14 @@ class MonitoringService:
                 return None
 
             user = await get_user_by_id(db, subscription.user_id)
-            if not user or not user.remnawave_uuid:
+            remnawave_uuid = (
+                subscription.remnawave_uuid
+                if settings.is_multi_tariff_enabled() and getattr(subscription, 'remnawave_uuid', None)
+                else user.remnawave_uuid
+                if user
+                else None
+            )
+            if not user or not remnawave_uuid:
                 logger.error('RemnaWave UUID не найден для пользователя', user_id=subscription.user_id)
                 return None
 
@@ -378,7 +385,7 @@ class MonitoringService:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
                 update_kwargs = dict(
-                    uuid=user.remnawave_uuid,
+                    uuid=remnawave_uuid,
                     status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.DISABLED,
                     expire_at=subscription.end_date
                     if is_active
@@ -408,7 +415,7 @@ class MonitoringService:
                 status_text = 'активным' if is_active else 'истёкшим'
                 logger.info(
                     '✅ Обновлен RemnaWave пользователь со статусом',
-                    remnawave_uuid=user.remnawave_uuid,
+                    remnawave_uuid=remnawave_uuid,
                     status_text=status_text,
                 )
                 return updated_user

@@ -19,6 +19,38 @@ from ...schemas.subscription import (
 logger = structlog.get_logger(__name__)
 
 
+async def resolve_subscription(
+    db: AsyncSession,
+    user: User,
+    subscription_id: int | None,
+) -> Subscription | None:
+    """Resolve target subscription: by ID in multi-tariff mode, or legacy fallback.
+
+    Args:
+        db: Database session.
+        user: Current user.
+        subscription_id: Optional subscription ID (from query param).
+
+    Returns:
+        Target Subscription or None if not found.
+
+    Raises:
+        HTTPException: If subscription_id provided but not found for this user.
+    """
+    from fastapi import HTTPException
+
+    from app.database.crud.subscription import get_subscription_by_id_for_user
+
+    if subscription_id and settings.is_multi_tariff_enabled():
+        subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
+        if not subscription:
+            raise HTTPException(status_code=404, detail='Subscription not found')
+        return subscription
+
+    await db.refresh(user, ['subscriptions'])
+    return user.subscription
+
+
 def _get_addon_discount_percent(
     user: User | None,
     category: str,

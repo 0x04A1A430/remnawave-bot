@@ -573,12 +573,17 @@ async def get_user_detail(
     spending_stats = await get_users_spending_stats(db, [user.id])
     user_stats = spending_stats.get(user.id, {'total_spent': 0, 'purchase_count': 0})
 
-    # Build subscription info
-    subscription_info = None
+    # Build subscription info (all subscriptions + legacy single)
     subs = getattr(user, 'subscriptions', None) or []
-    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
-    if subscription:
-        subscription_info = await _build_subscription_info_async(db, subscription)
+    all_subscriptions_info = []
+    for sub in subs:
+        all_subscriptions_info.append(await _build_subscription_info_async(db, sub))
+
+    # Legacy: pick first active or most recent for backward compat
+    subscription_info = None
+    primary_sub = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    if primary_sub:
+        subscription_info = await _build_subscription_info_async(db, primary_sub)
 
     # Build promo group info
     promo_group_info = None
@@ -670,6 +675,7 @@ async def get_user_detail(
         last_activity=user.last_activity,
         cabinet_last_login=user.cabinet_last_login,
         subscription=subscription_info,
+        subscriptions=all_subscriptions_info,
         promo_group=promo_group_info,
         referral=referral_info,
         total_spent_kopeks=user_stats.get('total_spent', 0),
@@ -981,14 +987,25 @@ async def update_user_subscription(
         )
 
     subs = getattr(user, 'subscriptions', None) or []
-    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    is_multi_tariff = settings.is_multi_tariff_enabled()
+
+    # Select target subscription
+    if request.subscription_id:
+        subscription = next((s for s in subs if s.id == request.subscription_id), None)
+        if not subscription and request.action != 'create':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Subscription {request.subscription_id} not found for this user',
+            )
+    else:
+        subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
 
     if request.action == 'create':
-        # Create new subscription
-        if subscription:
+        # In multi-tariff mode, allow creating additional subscriptions
+        if subscription and not is_multi_tariff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='User already has a subscription',
+                detail='User already has a subscription. Enable multi-tariff mode to add more.',
             )
 
         from app.database.crud.subscription import create_paid_subscription

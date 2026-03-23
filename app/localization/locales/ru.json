@@ -1146,6 +1146,7 @@
   "MULENPAY_TOPUP_PROMPT": "💳 <b>Оплата через {mulenpay_name_html}</b>\n\nВведите сумму для пополнения от 100 до 100 000 ₽.\nОплата происходит через защищенную платформу {mulenpay_name}.",
   "MY_BALANCE_BUTTON": "💰 Мой баланс",
   "MY_SUBSCRIPTION_BUTTON": "📱 Моя подписка",
+  "MY_SUBSCRIPTIONS_BUTTON": "📱 Мои подписки",
   "MY_TICKETS_BUTTON": "📋 Мои тикеты",
   "MY_TICKETS_TITLE": "📋 Ваши тикеты:",
   "NO": "❌ Нет",

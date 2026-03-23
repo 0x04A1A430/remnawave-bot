@@ -105,7 +105,7 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
 
     await callback.message.edit_text(
         text,
-        reply_markup=get_autopay_keyboard(db_user.language),
+        reply_markup=get_autopay_keyboard(db_user.language, sub_id=sub_id),
         parse_mode='HTML',
     )
     await callback.answer()

@@ -160,7 +160,17 @@ async def _prepare_auto_extend_context(
             subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
         else:
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            subscription = active_subs[0] if active_subs else None
+            if len(active_subs) == 1:
+                subscription = active_subs[0]
+            elif len(active_subs) > 1:
+                logger.warning(
+                    'Multi-tariff: multiple active subscriptions found, skipping auto-extend without explicit subscription_id',
+                    user_id=user.id,
+                    count=len(active_subs),
+                )
+                return None
+            else:
+                subscription = None
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
         if subscription is not None and saved_subscription_id is not None:
@@ -607,6 +617,7 @@ async def _auto_extend_subscription(
     try:
         await notify_user_subscription_renewed(
             user_id=user.id,
+            subscription_id=subscription.id if subscription else None,
             new_expires_at=new_end_date.isoformat() if new_end_date else '',
             amount_kopeks=prepared.price_kopeks,
         )
@@ -956,6 +967,7 @@ async def _auto_purchase_tariff(
             # Renewal of existing subscription
             await notify_user_subscription_renewed(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 amount_kopeks=final_price,
             )
@@ -963,6 +975,7 @@ async def _auto_purchase_tariff(
             # New subscription activation
             await notify_user_subscription_activated(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 tariff_name=tariff.name,
             )
@@ -1290,6 +1303,7 @@ async def _auto_purchase_daily_tariff(
             # Renewal/upgrade of existing subscription
             await notify_user_subscription_renewed(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 amount_kopeks=final_price,
             )
@@ -1297,6 +1311,7 @@ async def _auto_purchase_daily_tariff(
             # New subscription activation
             await notify_user_subscription_activated(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 tariff_name=tariff.name,
             )
@@ -1653,7 +1668,17 @@ async def _auto_add_traffic(
             subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
         else:
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            subscription = active_subs[0] if active_subs else None
+            if len(active_subs) == 1:
+                subscription = active_subs[0]
+            elif len(active_subs) > 1:
+                logger.warning(
+                    'Multi-tariff: multiple active subscriptions found, skipping auto-add-traffic without explicit subscription_id',
+                    user_id=user.id,
+                    count=len(active_subs),
+                )
+                return False
+            else:
+                subscription = None
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
@@ -2271,6 +2296,7 @@ async def try_auto_extend_expired_after_topup(
     try:
         await notify_user_subscription_renewed(
             user_id=user.id,
+            subscription_id=subscription.id if subscription else None,
             new_expires_at=new_end_date.isoformat() if new_end_date else '',
             amount_kopeks=renewal_cost,
         )
@@ -2628,6 +2654,7 @@ async def try_resume_disabled_daily_after_topup(
     try:
         await notify_user_subscription_renewed(
             user_id=user.id,
+            subscription_id=subscription.id if subscription else None,
             new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
             amount_kopeks=daily_price,
         )
@@ -2900,6 +2927,7 @@ async def auto_purchase_saved_cart_after_topup(
             # Trial conversion = activation
             await notify_user_subscription_activated(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
                 tariff_name='',
             )
@@ -2907,6 +2935,7 @@ async def auto_purchase_saved_cart_after_topup(
             # Regular purchase = renewal or new activation
             await notify_user_subscription_renewed(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 new_expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
                 amount_kopeks=pricing.final_total,
             )

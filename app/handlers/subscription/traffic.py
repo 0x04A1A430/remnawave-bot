@@ -135,6 +135,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
                 packages,
                 subscription.end_date,
                 traffic_discount_percent,
+                sub_id=sub_id,
             ),
             parse_mode='HTML',
         )
@@ -182,6 +183,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
             db_user.language,
             subscription.end_date,
             traffic_discount_percent,
+            sub_id=sub_id,
         ),
         parse_mode='HTML',
     )
@@ -297,22 +299,10 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, db_user: User, db
     db_user = await lock_user_for_pricing(db, db_user.id)
 
     texts = get_texts(db_user.language)
-    if settings.is_multi_tariff_enabled():
-        # Re-resolve after lock since db_user was refreshed
-        # Get sub_id from callback data
-        parts = (callback.data or '').split(':')
-        sub_id = None
-        if len(parts) >= 2:
-            try:
-                sub_id = int(parts[-1])
-            except (ValueError, TypeError):
-                pass
-        if sub_id:
-            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-        else:
-            subscription = db_user.subscription
-    else:
-        subscription = db_user.subscription
+    # Re-resolve after lock since db_user was refreshed
+    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     reset_price = _calculate_traffic_reset_price(subscription)
 
@@ -528,10 +518,10 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     from app.database.crud.user import lock_user_for_pricing
 
     db_user = await lock_user_for_pricing(db, db_user.id)
-    if settings.is_multi_tariff_enabled() and sub_id:
-        subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-    else:
-        subscription = db_user.subscription
+    # Re-resolve after lock since db_user was refreshed
+    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
 
     period_hint_days = _get_period_hint_from_subscription(subscription)
     discounted_per_month, discount_per_month, traffic_discount_pct = PricingEngine.calculate_traffic_discount(
@@ -868,22 +858,10 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
     db_user = await lock_user_for_pricing(db, db_user.id)
 
     texts = get_texts(db_user.language)
-    if settings.is_multi_tariff_enabled():
-        # Re-resolve after lock since db_user was refreshed
-        # Get sub_id from callback data
-        parts = (callback.data or '').split(':')
-        sub_id = None
-        if len(parts) >= 2:
-            try:
-                sub_id = int(parts[-1])
-            except (ValueError, TypeError):
-                pass
-        if sub_id:
-            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-        else:
-            subscription = db_user.subscription
-    else:
-        subscription = db_user.subscription
+    # Re-resolve after lock since db_user was refreshed
+    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    if subscription is None:
+        return
     current_traffic = subscription.traffic_limit_gb
 
     # Recompute price under lock (callback-baked value may be stale)

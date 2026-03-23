@@ -489,9 +489,14 @@ class SubscriptionService:
                 updated_user = await api.update_user(**update_kwargs)
 
                 if reset_traffic:
+                    reset_uuid = (
+                        subscription.remnawave_uuid
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                        else user.remnawave_uuid
+                    )
                     await self._reset_user_traffic(
                         api,
-                        user.remnawave_uuid,
+                        reset_uuid,
                         user,
                         reset_reason,
                     )
@@ -604,11 +609,16 @@ class SubscriptionService:
     async def revoke_subscription(self, db: AsyncSession, subscription: Subscription) -> str | None:
         try:
             user = await get_user_by_id(db, subscription.user_id)
-            if not user or not user.remnawave_uuid:
+            revoke_uuid = (
+                subscription.remnawave_uuid
+                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                else user.remnawave_uuid
+            )
+            if not user or not revoke_uuid:
                 return None
 
             async with self.get_api_client() as api:
-                updated_user = await api.revoke_user_subscription(user.remnawave_uuid)
+                updated_user = await api.revoke_user_subscription(revoke_uuid)
 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
@@ -635,11 +645,16 @@ class SubscriptionService:
     async def sync_subscription_usage(self, db: AsyncSession, subscription: Subscription) -> bool:
         try:
             user = await get_user_by_id(db, subscription.user_id)
-            if not user or not user.remnawave_uuid:
+            sync_uuid = (
+                subscription.remnawave_uuid
+                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                else user.remnawave_uuid
+            )
+            if not user or not sync_uuid:
                 return False
 
             async with self.get_api_client() as api:
-                remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                remnawave_user = await api.get_user_by_uuid(sync_uuid)
                 if not remnawave_user:
                     return False
 
@@ -676,7 +691,8 @@ class SubscriptionService:
                 return False, 'user_not_found'
 
             # Проверяем, нужна ли синхронизация
-            needs_sync = not subscription.subscription_url or not user.remnawave_uuid
+            sub_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
+            needs_sync = not subscription.subscription_url or not sub_uuid
 
             if not needs_sync:
                 # Проверяем, существует ли пользователь в RemnaWave
