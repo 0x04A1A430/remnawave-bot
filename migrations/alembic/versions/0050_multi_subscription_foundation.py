@@ -1,7 +1,7 @@
 """multi subscription foundation
 
-Revision ID: 0041
-Revises: 0040
+Revision ID: 0050
+Revises: 0049
 Create Date: 2026-03-19
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0041'
-down_revision: Union[str, None] = '0040'
+revision: str = '0050'
+down_revision: Union[str, None] = '0049'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
