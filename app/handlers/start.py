@@ -178,10 +178,16 @@ async def _claim_phantom_user(
         existing = await get_user_by_telegram_id(db, telegram_id)
         return False, existing
     await db.refresh(phantom, ['subscription'])
-    logger.info(
-        'Claimed phantom user from guest purchase',
+    # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
+    # Telegram usernames are changeable/reassignable, so the claimer may not be the intended
+    # recipient. This is logged at WARNING for admin audit. A confirmation flow would be needed
+    # to fully prevent username spoofing attacks on phantom claims.
+    logger.warning(
+        'Phantom user claimed by username match (verify intended recipient)',
         phantom_user_id=phantom.id,
         telegram_id=telegram_id,
+        username=username,
+        has_subscription=phantom.subscription is not None,
     )
 
     # Sync Remnawave panel with updated user data (telegram_id, username, etc.)
@@ -212,10 +218,11 @@ async def _merge_phantom_into_active_user(
     """
     from sqlalchemy import update
 
-    logger.info(
-        'Merging phantom user into active user',
+    logger.warning(
+        'Merging phantom user into active user (audit: username-only match)',
         phantom_id=phantom.id,
         active_user_id=active_user.id,
+        active_user_telegram_id=active_user.telegram_id,
         phantom_username=phantom.username,
     )
 
@@ -239,10 +246,12 @@ async def _merge_phantom_into_active_user(
     if phantom.subscription and not active_user.subscription:
         # Transfer subscription from phantom to active user
         phantom.subscription.user_id = active_user.id
-        # Transfer remnawave_uuid
+        # Transfer remnawave_uuid (clear first to avoid unique constraint violation on flush)
         if phantom.remnawave_uuid and not active_user.remnawave_uuid:
-            active_user.remnawave_uuid = phantom.remnawave_uuid
+            uuid_to_transfer = phantom.remnawave_uuid
             phantom.remnawave_uuid = None
+            await db.flush()
+            active_user.remnawave_uuid = uuid_to_transfer
         await db.flush()
         logger.info(
             'Transferred subscription from phantom to active user',
@@ -263,11 +272,12 @@ async def _merge_phantom_into_active_user(
                 logger.warning('Failed to disable phantom Remnawave user', error=str(exc))
         await decrement_subscription_server_counts(db, phantom.subscription)
 
-    # Soft-delete phantom: clear identifiers to prevent future matches,
-    # preserve record for audit trail and avoid CASCADE deletion of payments/transactions
+    # Soft-delete phantom: clear unique identifiers to prevent future matches
+    # and constraint violations. Preserve record for audit trail.
     phantom.status = UserStatus.DELETED.value
     phantom.username = None
     phantom.remnawave_uuid = None
+    phantom.referral_code = None
     await db.flush()
 
     logger.info('Phantom user merged and soft-deleted', phantom_id=phantom.id, active_user_id=active_user.id)
@@ -705,6 +715,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             if phantom and phantom.id != user.id:
                 try:
                     await _merge_phantom_into_active_user(db, phantom, user)
+                    await db.commit()
                     await db.refresh(user, ['subscription'])
                 except Exception:
                     await db.rollback()
@@ -1528,7 +1539,20 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 referrer_id=referrer_id,
             )
             if not claimed and user:
-                # IntegrityError fallback — use existing user
+                # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
+                # Merge phantom's subscription + GuestPurchase records into the existing user.
+                if phantom.id != user.id:
+                    try:
+                        await db.refresh(phantom, ['subscription'])
+                        await _merge_phantom_into_active_user(db, phantom, user)
+                        await db.commit()
+                    except Exception:
+                        await db.rollback()
+                        logger.exception(
+                            'Failed to merge phantom into existing user during registration',
+                            phantom_id=phantom.id,
+                            active_user_id=user.id,
+                        )
                 await db.refresh(user, ['subscription'])
             elif not claimed:
                 logger.critical(
@@ -1828,6 +1852,20 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 referrer_id=referrer_id,
             )
             if not claimed and user:
+                # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
+                # Merge phantom's subscription + GuestPurchase records into the existing user.
+                if phantom.id != user.id:
+                    try:
+                        await db.refresh(phantom, ['subscription'])  # Re-sync after rollback in _claim_phantom_user
+                        await _merge_phantom_into_active_user(db, phantom, user)
+                        await db.commit()
+                    except Exception:
+                        await db.rollback()
+                        logger.exception(
+                            'Failed to merge phantom into existing user during registration',
+                            phantom_id=phantom.id,
+                            active_user_id=user.id,
+                        )
                 await db.refresh(user, ['subscription'])
             elif not claimed:
                 logger.critical(
@@ -1899,7 +1937,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 logger.warning(
                     '⚠️ Не удалось активировать промокод',
                     promocode_to_activate=promocode_to_activate,
-                    get=promocode_result.get('error'),
+                    error=promocode_result.get('error'),
                 )
         except Exception as e:
             logger.error('❌ Ошибка при активации промокода', promocode_to_activate=promocode_to_activate, error=e)
@@ -2433,6 +2471,20 @@ async def required_sub_channel_check(
                             referrer_id=referrer_id,
                         )
                         if not claimed and user:
+                            # Phantom claim failed (IntegrityError — user with this telegram_id already exists).
+                            # Merge phantom's subscription + GuestPurchase records into the existing user.
+                            if phantom.id != user.id:
+                                try:
+                                    await db.refresh(phantom, ['subscription'])
+                                    await _merge_phantom_into_active_user(db, phantom, user)
+                                    await db.commit()
+                                except Exception:
+                                    await db.rollback()
+                                    logger.exception(
+                                        'Failed to merge phantom into existing user during registration',
+                                        phantom_id=phantom.id,
+                                        active_user_id=user.id,
+                                    )
                             await db.refresh(user, ['subscription'])
                         elif not claimed:
                             logger.critical(

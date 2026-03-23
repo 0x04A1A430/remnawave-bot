@@ -139,6 +139,7 @@ async def find_phantom_user_by_username(db: AsyncSession, username: str) -> User
         .where(
             User.telegram_id.is_(None),
             User.auth_type == 'telegram',
+            User.status != UserStatus.DELETED.value,
             func.lower(User.username) == normalized,
         )
         .with_for_update()

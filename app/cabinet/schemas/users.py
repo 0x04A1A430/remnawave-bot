@@ -387,6 +387,21 @@ class UpdateReferralCommissionResponse(BaseModel):
     message: str
 
 
+class AssignReferrerRequest(BaseModel):
+    """Request to manually assign a referrer to a user."""
+
+    referrer_id: int = Field(..., gt=0, description='ID of the referrer user')
+
+
+class AssignReferrerResponse(BaseModel):
+    """Response after referrer assignment."""
+
+    success: bool
+    old_referrer_id: int | None = None
+    new_referrer_id: int | None = None
+    message: str
+
+
 class DeviceInfo(BaseModel):
     """Individual device info."""
 

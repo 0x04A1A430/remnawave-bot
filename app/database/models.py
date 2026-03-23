@@ -2364,7 +2364,7 @@ class SubscriptionServer(Base):
     __tablename__ = 'subscription_servers'
 
     id = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey('subscriptions.id'), nullable=False)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
     server_squad_id = Column(Integer, ForeignKey('server_squads.id'), nullable=False)
 
     connected_at = Column(AwareDateTime(), default=func.now())

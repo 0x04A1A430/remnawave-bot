@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, and_, delete as sa_delete, func, or_, select
+from sqlalchemy import Integer, and_, delete as sa_delete, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,12 +42,15 @@ from app.database.models import (
     UserPromoGroup,
     UserStatus,
 )
+from app.services.permission_service import PermissionService
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.users import (
     AdminUserGiftItem,
     AdminUserGiftsResponse,
+    AssignReferrerRequest,
+    AssignReferrerResponse,
     DeleteDeviceResponse,
     DeleteUserRequest,
     DeleteUserResponse,
@@ -1696,6 +1699,13 @@ async def update_user_referral_commission(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user's individual referral commission percentage."""
+    # Prevent admin from modifying their own commission
+    if user_id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Admin cannot modify their own referral commission',
+        )
+
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
@@ -1706,6 +1716,14 @@ async def update_user_referral_commission(
     old_commission = user.referral_commission_percent
     user.referral_commission_percent = request.commission_percent
     user.updated_at = datetime.now(UTC)
+    await PermissionService.log_action(
+        db,
+        user_id=admin.id,
+        action='update_referral_commission',
+        resource_type='user',
+        resource_id=str(user_id),
+        details={'old_commission': old_commission, 'new_commission': request.commission_percent},
+    )
     await db.commit()
 
     logger.info(
@@ -1722,6 +1740,103 @@ async def update_user_referral_commission(
         new_commission_percent=request.commission_percent,
         message='Referral commission updated',
     )
+
+
+# === Assign Referrer ===
+
+
+@router.post('/{user_id}/assign-referrer', response_model=AssignReferrerResponse)
+async def assign_user_referrer(
+    user_id: int,
+    request: AssignReferrerRequest,
+    admin: User = Depends(require_permission('users:referral')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Manually assign a referrer to a user (e.g. cabinet-registered users without telegram_id).
+
+    Bonuses are NOT triggered immediately — they will apply on the user's next topup.
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    if user_id == request.referrer_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='User cannot be their own referrer',
+        )
+
+    # Prevent admin self-enrichment
+    if request.referrer_id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Admin cannot assign themselves as referrer',
+        )
+
+    referrer = await get_user_by_id(db, request.referrer_id)
+    if not referrer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Referrer user not found',
+        )
+
+    # Prevent circular referral chains of any depth via recursive CTE
+    if await _would_create_referral_cycle(db, user_id, request.referrer_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Circular referral: assigning this referrer would create a cycle in the referral chain',
+        )
+
+    old_referrer_id = user.referred_by_id
+    user.referred_by_id = request.referrer_id
+    user.updated_at = datetime.now(UTC)
+    await PermissionService.log_action(
+        db,
+        user_id=admin.id,
+        action='assign_referrer',
+        resource_type='user',
+        resource_id=str(user_id),
+        details={'old_referrer_id': old_referrer_id, 'new_referrer_id': request.referrer_id},
+    )
+    await db.commit()
+
+    logger.info(
+        'Admin assigned referrer to user',
+        admin_id=admin.id,
+        user_id=user_id,
+        old_referrer_id=old_referrer_id,
+        new_referrer_id=request.referrer_id,
+    )
+
+    return AssignReferrerResponse(
+        success=True,
+        old_referrer_id=old_referrer_id,
+        new_referrer_id=request.referrer_id,
+        message='Referrer assigned successfully. Bonuses will apply on next user topup.',
+    )
+
+
+async def _would_create_referral_cycle(db: AsyncSession, user_id: int, referrer_id: int) -> bool:
+    """Walk the referrer's ancestor chain; if user_id appears, a cycle would form."""
+    max_depth = 50
+    anchor = (
+        select(User.id, User.referred_by_id, literal(0).label('depth'))
+        .where(User.id == referrer_id)
+        .cte(name='ancestors', recursive=True)
+    )
+    rpart = (
+        select(User.id, User.referred_by_id, (anchor.c.depth + 1).label('depth'))
+        .join(anchor, User.id == anchor.c.referred_by_id)
+        .where(anchor.c.depth < max_depth)
+    )
+    ancestors_cte = anchor.union_all(rpart)
+    result = await db.execute(
+        select(literal(1)).where(ancestors_cte.c.id == user_id).select_from(ancestors_cte).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 # === Devices ===
