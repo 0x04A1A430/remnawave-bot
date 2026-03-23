@@ -41,10 +41,20 @@ ALLOWED_VIDEO_SIGNATURES: dict[bytes, str] = {
 
 # Known ISO base media file format brands for video.
 # Rejects HEIC/HEIF image brands (heic, heix, mif1, msf1, avif) that share the ftyp box format.
-_MP4_VIDEO_BRANDS: frozenset[bytes] = frozenset({
-    b'isom', b'mp41', b'mp42', b'M4V ', b'avc1',
-    b'iso5', b'iso6', b'mmp4', b'dash', b'mp71',
-})
+_MP4_VIDEO_BRANDS: frozenset[bytes] = frozenset(
+    {
+        b'isom',
+        b'mp41',
+        b'mp42',
+        b'M4V ',
+        b'avc1',
+        b'iso5',
+        b'iso6',
+        b'mmp4',
+        b'dash',
+        b'mp71',
+    }
+)
 
 _IMAGES_DIR = 'images'
 _VIDEOS_DIR = 'videos'

@@ -90,9 +90,7 @@ async def upload_media(
         ) from None
 
     # Enforce per-type size limits
-    max_size_mb = (
-        settings.MEDIA_MAX_IMAGE_SIZE_MB if media_type == 'image' else settings.MEDIA_MAX_VIDEO_SIZE_MB
-    )
+    max_size_mb = settings.MEDIA_MAX_IMAGE_SIZE_MB if media_type == 'image' else settings.MEDIA_MAX_VIDEO_SIZE_MB
     if len(data) > max_size_mb * _BYTES_PER_MB:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

@@ -277,7 +277,9 @@ async def _process_single_subscription(
         logger.warning('YooKassa сервис не сконфигурирован для рекуррентных платежей')
         return 'skipped'
 
-    description = settings.get_balance_payment_description(topup_amount_kopeks)
+    description = settings.get_balance_payment_description(
+        topup_amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+    )
     metadata = {
         'user_id': str(user.id),
         'user_telegram_id': str(user.telegram_id) if user.telegram_id else '',

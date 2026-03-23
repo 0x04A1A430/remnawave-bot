@@ -1243,7 +1243,9 @@ class YooKassaPaymentMixin:
         try:
             amount_rubles = payment.amount_kopeks / 100
             # Формируем описание из настроек (включает сумму и ID пользователя)
-            receipt_name = settings.get_balance_payment_description(payment.amount_kopeks, telegram_user_id)
+            receipt_name = settings.get_balance_payment_description(
+                payment.amount_kopeks, telegram_user_id=telegram_user_id
+            )
 
             receipt_uuid = await self.nalogo_service.create_receipt(
                 name=receipt_name,
