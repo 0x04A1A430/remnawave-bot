@@ -1896,9 +1896,9 @@ class RemnaWaveService:
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id as _get_subs_upd
 
                 _subs_upd = await _get_subs_upd(db, user.id)
-                # Match by panel_user UUID
+                # Strict match by panel_user UUID — never fallback to another subscription
                 subscription = next(
-                    (s for s in _subs_upd if s.remnawave_uuid == panel_user.uuid), _subs_upd[0] if _subs_upd else None
+                    (s for s in _subs_upd if s.remnawave_uuid == panel_user.uuid), None
                 )
             else:
                 subscription = await get_subscription_by_user_id(db, user.id)
