@@ -265,6 +265,8 @@ class AdminNotificationService:
             PromoCodeType.BALANCE.value: '💰 Бонус на баланс',
             PromoCodeType.SUBSCRIPTION_DAYS.value: '⏰ Доп. дни подписки',
             PromoCodeType.TRIAL_SUBSCRIPTION.value: '🎁 Триал подписка',
+            PromoCodeType.PROMO_GROUP.value: '👥 Промогруппа',
+            PromoCodeType.DISCOUNT.value: '💸 Скидка',
         }
 
         if not promo_type:
@@ -1013,13 +1015,21 @@ class AdminNotificationService:
                 f'📊 Использования: {usage_info}',
             ]
 
+            promo_type = promocode_data.get('type')
             balance_bonus = promocode_data.get('balance_bonus_kopeks', 0)
-            if balance_bonus:
-                message_lines.append(f'💰 Бонус на баланс: {settings.format_price(balance_bonus)}')
-
             subscription_days = promocode_data.get('subscription_days', 0)
-            if subscription_days:
-                message_lines.append(f'📅 Доп. дни подписки: {subscription_days}')
+
+            if promo_type == PromoCodeType.DISCOUNT.value:
+                message_lines.append(f'💸 Скидка: {balance_bonus}%')
+                if subscription_days:
+                    message_lines.append(f'⏳ Срок действия скидки: {subscription_days} ч.')
+                else:
+                    message_lines.append('⏳ Срок действия скидки: до первой покупки')
+            else:
+                if balance_bonus:
+                    message_lines.append(f'💰 Бонус на баланс: {settings.format_price(balance_bonus)}')
+                if subscription_days:
+                    message_lines.append(f'📅 Доп. дни подписки: {subscription_days}')
 
             valid_until = promocode_data.get('valid_until')
             if valid_until:
