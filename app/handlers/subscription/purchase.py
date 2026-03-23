@@ -2504,7 +2504,12 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         subscription_service = SubscriptionService()
         # При покупке подписки ВСЕГДА сбрасываем трафик в панели
-        if db_user.remnawave_uuid:
+        _purchase_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if _purchase_uuid:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
                 subscription,

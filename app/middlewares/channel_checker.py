@@ -386,16 +386,22 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         telegram_id=telegram_id,
                     )
 
-                if user.remnawave_uuid:
-                    service = SubscriptionService()
-                    try:
-                        await service.disable_remnawave_user(user.remnawave_uuid)
-                    except Exception as api_error:
-                        logger.error(
-                            'Failed to disable RemnaWave user',
-                            remnawave_uuid=user.remnawave_uuid,
-                            api_error=api_error,
-                        )
+                service = SubscriptionService()
+                for subscription in active_subs:
+                    panel_uuid = (
+                        subscription.remnawave_uuid
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                        else user.remnawave_uuid
+                    )
+                    if panel_uuid:
+                        try:
+                            await service.disable_remnawave_user(panel_uuid)
+                        except Exception as api_error:
+                            logger.error(
+                                'Failed to disable RemnaWave user',
+                                remnawave_uuid=panel_uuid,
+                                api_error=api_error,
+                            )
 
                 # Notify user about deactivation
                 try:
@@ -458,16 +464,22 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     )
 
                 # Enable in RemnaWave
-                if user.remnawave_uuid:
-                    service = SubscriptionService()
-                    try:
-                        await service.enable_remnawave_user(user.remnawave_uuid)
-                    except Exception as api_error:
-                        logger.error(
-                            'Failed to enable RemnaWave user',
-                            remnawave_uuid=user.remnawave_uuid,
-                            api_error=api_error,
-                        )
+                service = SubscriptionService()
+                for subscription in disabled_subs:
+                    panel_uuid = (
+                        subscription.remnawave_uuid
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                        else user.remnawave_uuid
+                    )
+                    if panel_uuid:
+                        try:
+                            await service.enable_remnawave_user(panel_uuid)
+                        except Exception as api_error:
+                            logger.error(
+                                'Failed to enable RemnaWave user',
+                                remnawave_uuid=panel_uuid,
+                                api_error=api_error,
+                            )
 
                 # Notify user about reactivation
                 try:

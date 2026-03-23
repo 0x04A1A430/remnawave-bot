@@ -367,6 +367,9 @@ class RemnaWaveWebhookService:
                 user_id=user.id,
             )
 
+        if settings.is_multi_tariff_enabled():
+            # In multi-tariff mode, don't fall back to arbitrary subscription
+            return user, None
         subscription = await get_subscription_by_user_id(db, user.id)
         return user, subscription
 

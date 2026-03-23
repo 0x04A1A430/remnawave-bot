@@ -1405,6 +1405,7 @@ async def create_subscription_no_commit(
     if connected_squads is None:
         connected_squads = []
 
+    short_id = await generate_unique_short_id(db)
     subscription = Subscription(
         user_id=user_id,
         status=status,
@@ -1415,6 +1416,7 @@ async def create_subscription_no_commit(
         device_limit=device_limit,
         connected_squads=connected_squads,
         remnawave_short_uuid=remnawave_short_uuid,
+        remnawave_short_id=short_id,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
         autopay_enabled=(settings.is_autopay_enabled_by_default() if autopay_enabled is None else autopay_enabled),
@@ -1455,6 +1457,7 @@ async def create_subscription(
     if connected_squads is None:
         connected_squads = []
 
+    short_id = await generate_unique_short_id(db)
     subscription = Subscription(
         user_id=user_id,
         status=status,
@@ -1465,6 +1468,7 @@ async def create_subscription(
         device_limit=device_limit,
         connected_squads=connected_squads,
         remnawave_short_uuid=remnawave_short_uuid,
+        remnawave_short_id=short_id,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
         autopay_enabled=(settings.is_autopay_enabled_by_default() if autopay_enabled is None else autopay_enabled),
@@ -1502,7 +1506,23 @@ async def create_pending_subscription(
     current_time = datetime.now(UTC)
     end_date = current_time + timedelta(days=duration_days)
 
-    existing_subscription = await get_subscription_by_user_id(db, user_id)
+    if settings.is_multi_tariff_enabled() and tariff_id:
+        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+        existing_subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
+        if not existing_subscription:
+            # Also check non-active subs for this tariff
+            result = await db.execute(
+                select(Subscription)
+                .where(
+                    Subscription.user_id == user_id,
+                    Subscription.tariff_id == tariff_id,
+                )
+                .order_by(Subscription.created_at.desc())
+                .limit(1)
+            )
+            existing_subscription = result.scalar_one_or_none()
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, user_id)
 
     if existing_subscription:
         if (
@@ -1540,6 +1560,7 @@ async def create_pending_subscription(
         )
         return existing_subscription
 
+    short_id = await generate_unique_short_id(db)
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.PENDING.value,
@@ -1552,6 +1573,7 @@ async def create_pending_subscription(
         tariff_id=tariff_id,
         autopay_enabled=settings.is_autopay_enabled_by_default(),
         autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
+        remnawave_short_id=short_id,
     )
 
     db.add(subscription)

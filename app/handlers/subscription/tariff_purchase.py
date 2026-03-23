@@ -898,9 +898,7 @@ async def handle_custom_confirm(
     # Проверяем есть ли уже подписка
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        existing_subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff.id), active_subs[0] if active_subs else None
-        )
+        existing_subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
     else:
         existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
@@ -1553,9 +1551,7 @@ async def confirm_daily_tariff_purchase(
     # Проверяем есть ли уже подписка
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        existing_subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff.id), active_subs[0] if active_subs else None
-        )
+        existing_subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
     else:
         existing_subscription = await get_subscription_by_user_id(db, db_user.id)
 
@@ -2690,13 +2686,18 @@ async def confirm_tariff_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        if db_user.remnawave_uuid:
+        _reset_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if _reset_uuid:
             try:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(db_user.remnawave_uuid)
+                    await api.reset_user_devices(_reset_uuid)
                     logger.info('🔧 Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
             except Exception as e:
                 logger.error('Ошибка сброса устройств при смене тарифа', error=e)

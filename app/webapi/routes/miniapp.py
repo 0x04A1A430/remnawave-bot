@@ -3025,8 +3025,8 @@ def _is_trial_available_for_user(user: User) -> bool:
     if getattr(user, 'has_had_paid_subscription', False):
         return False
 
-    subscription = getattr(user, 'subscription', None)
-    if subscription is not None:
+    subs = getattr(user, 'subscriptions', None) or []
+    if any(s.is_active for s in subs):
         return False
 
     return True
@@ -7167,8 +7167,13 @@ async def purchase_traffic_topup_endpoint(
         service = SubscriptionService()
         await service.update_remnawave_user(db, subscription)
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
-            await service.enable_remnawave_user(user.remnawave_uuid)
+        _en_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _en_uuid and subscription.status == 'active':
+            await service.enable_remnawave_user(_en_uuid)
     except Exception as e:
         logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=e)
 
@@ -7236,8 +7241,15 @@ async def toggle_daily_subscription_pause_endpoint(
     # and to ensure is_daily_paused mutation is not overwritten by populate_existing
     from app.database.crud.user import lock_user_for_pricing
 
+    target_sub_id = subscription.id
     user = await lock_user_for_pricing(db, user.id)
-    subscription = user.subscription
+    locked_subs = getattr(user, 'subscriptions', None) or []
+    subscription = next((s for s in locked_subs if s.id == target_sub_id), None)
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={'code': 'subscription_lost', 'message': 'Subscription not found after lock'},
+        )
 
     # Определяем состояние из LOCKED экземпляра
     from app.database.models import SubscriptionStatus

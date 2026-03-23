@@ -632,8 +632,13 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         await subscription_service.update_remnawave_user(db, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if db_user.remnawave_uuid and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(db_user.remnawave_uuid)
+        _en_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if _en_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(_en_uuid)
 
         await create_transaction(
             db=db,
@@ -923,8 +928,13 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
         await subscription_service.update_remnawave_user(db, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if db_user.remnawave_uuid and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(db_user.remnawave_uuid)
+        _en_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if _en_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(_en_uuid)
 
         await db.refresh(db_user)
         await db.refresh(subscription)

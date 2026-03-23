@@ -415,11 +415,16 @@ async def switch_tariff(
 
     # Reset all devices on tariff switch
     devices_reset = False
-    if user.remnawave_uuid:
+    _switch_uuid = (
+        subscription.remnawave_uuid
+        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+        else user.remnawave_uuid
+    )
+    if _switch_uuid:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                await api.reset_user_devices(user.remnawave_uuid)
+                await api.reset_user_devices(_switch_uuid)
                 devices_reset = True
                 logger.info('Reset all devices for user on tariff switch', user_id=user.id)
         except Exception as e:

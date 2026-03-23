@@ -508,7 +508,7 @@ class SubscriptionService:
                 status_text = 'активным' if is_actually_active else 'истёкшим'
                 logger.info(
                     '✅ Обновлен RemnaWave пользователь со статусом',
-                    remnawave_uuid=user.remnawave_uuid,
+                    remnawave_uuid=remnawave_uuid,
                     status_text=status_text,
                 )
                 strategy_name = settings.DEFAULT_TRAFFIC_RESET_STRATEGY
@@ -698,12 +698,12 @@ class SubscriptionService:
                 # Проверяем, существует ли пользователь в RemnaWave
                 try:
                     async with self.get_api_client() as api:
-                        remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                        remnawave_user = await api.get_user_by_uuid(sub_uuid)
                         if not remnawave_user:
                             needs_sync = True
                             logger.warning(
                                 'Пользователь не найден в RemnaWave, требуется синхронизация',
-                                remnawave_uuid=user.remnawave_uuid,
+                                remnawave_uuid=sub_uuid,
                             )
                 except Exception as check_error:
                     logger.warning('Не удалось проверить пользователя в RemnaWave', check_error=check_error)
@@ -716,12 +716,12 @@ class SubscriptionService:
                 'Синхронизация подписки с RemnaWave (subscription_url=, remnawave_uuid=)',
                 subscription_id=subscription.id,
                 subscription_url=bool(subscription.subscription_url),
-                remnawave_uuid=bool(user.remnawave_uuid),
+                remnawave_uuid=bool(sub_uuid),
             )
 
             # Пытаемся синхронизировать
             result = None
-            if user.remnawave_uuid:
+            if sub_uuid:
                 # Пробуем обновить существующего пользователя
                 result = await self.update_remnawave_user(
                     db,
@@ -732,10 +732,13 @@ class SubscriptionService:
                 if not result:
                     logger.warning(
                         'Не удалось обновить пользователя в RemnaWave, пробуем создать заново',
-                        remnawave_uuid=user.remnawave_uuid,
+                        remnawave_uuid=sub_uuid,
                     )
                     # Сбрасываем старый UUID, create_remnawave_user установит новый
-                    user.remnawave_uuid = None
+                    if settings.is_multi_tariff_enabled():
+                        subscription.remnawave_uuid = None
+                    else:
+                        user.remnawave_uuid = None
                     result = await self.create_remnawave_user(
                         db,
                         subscription,
@@ -938,7 +941,12 @@ class SubscriptionService:
                 async with semaphore:
                     try:
                         user = users_map.get(sub.user_id)
-                        if not user or not user.remnawave_uuid:
+                        remnawave_uuid = (
+                            sub.remnawave_uuid
+                            if settings.is_multi_tariff_enabled() and sub.remnawave_uuid
+                            else (user.remnawave_uuid if user else None)
+                        )
+                        if not user or not remnawave_uuid:
                             return False
 
                         current_time = datetime.now(UTC)
@@ -952,7 +960,7 @@ class SubscriptionService:
                         hwid_limit = resolve_hwid_device_limit_for_payload(sub)
 
                         update_kwargs = dict(
-                            uuid=user.remnawave_uuid,
+                            uuid=remnawave_uuid,
                             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
                             expire_at=sub.end_date
                             if is_actually_active

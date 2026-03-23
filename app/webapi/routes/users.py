@@ -470,7 +470,11 @@ async def create_user_subscription(
                 update_server_counters=True,
             )
 
-        # Создаем пользователя в RemnaWave для платных подписок
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(db, subscription)
+
+    # Provision trial subscriptions in RemnaWave as well
+    if payload.is_trial:
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(db, subscription)
 

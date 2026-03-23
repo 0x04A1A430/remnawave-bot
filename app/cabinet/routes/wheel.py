@@ -20,6 +20,7 @@ from app.cabinet.schemas.wheel import (
     WheelConfigResponse,
     WheelPrizeDisplay,
 )
+from app.config import settings
 from app.database.crud.wheel import (
     get_or_create_wheel_config,
     get_user_spin_history,

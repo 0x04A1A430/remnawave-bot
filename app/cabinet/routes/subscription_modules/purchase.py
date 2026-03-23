@@ -968,35 +968,33 @@ async def get_trial_info(
         logger.error('Error getting trial tariff for info', error=e)
 
     # Check if user already has an active subscription
-    if user.subscription:
-        now = datetime.now(UTC)
-        is_active = (
-            user.subscription.status == 'active' and user.subscription.end_date and user.subscription.end_date > now
-        )
-        if is_active:
-            return TrialInfoResponse(
-                is_available=False,
-                duration_days=duration_days,
-                traffic_limit_gb=traffic_limit_gb,
-                device_limit=device_limit,
-                requires_payment=requires_payment,
-                price_kopeks=price_kopeks,
-                price_rubles=price_kopeks / 100,
-                reason_unavailable='You already have an active subscription',
-            )
+    subs = getattr(user, 'subscriptions', None) or []
+    has_active = any(s.status == 'active' and s.end_date and s.end_date > datetime.now(UTC) for s in subs)
+    has_used_trial = any(s.is_trial for s in subs) or user.has_had_paid_subscription
 
-        # Check if user already used trial
-        if user.subscription.is_trial or user.has_had_paid_subscription:
-            return TrialInfoResponse(
-                is_available=False,
-                duration_days=duration_days,
-                traffic_limit_gb=traffic_limit_gb,
-                device_limit=device_limit,
-                requires_payment=requires_payment,
-                price_kopeks=price_kopeks,
-                price_rubles=price_kopeks / 100,
-                reason_unavailable='Trial already used',
-            )
+    if has_active:
+        return TrialInfoResponse(
+            is_available=False,
+            duration_days=duration_days,
+            traffic_limit_gb=traffic_limit_gb,
+            device_limit=device_limit,
+            requires_payment=requires_payment,
+            price_kopeks=price_kopeks,
+            price_rubles=price_kopeks / 100,
+            reason_unavailable='You already have an active subscription',
+        )
+
+    if has_used_trial:
+        return TrialInfoResponse(
+            is_available=False,
+            duration_days=duration_days,
+            traffic_limit_gb=traffic_limit_gb,
+            device_limit=device_limit,
+            requires_payment=requires_payment,
+            price_kopeks=price_kopeks,
+            price_rubles=price_kopeks / 100,
+            reason_unavailable='Trial already used',
+        )
 
     return TrialInfoResponse(
         is_available=True,
@@ -1025,23 +1023,20 @@ async def activate_trial(
         )
 
     # Check if user already has an active subscription
-    if user.subscription:
-        now = datetime.now(UTC)
-        is_active = (
-            user.subscription.status == 'active' and user.subscription.end_date and user.subscription.end_date > now
+    subs = getattr(user, 'subscriptions', None) or []
+    has_active = any(s.status == 'active' and s.end_date and s.end_date > datetime.now(UTC) for s in subs)
+    if has_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='You already have an active subscription',
         )
-        if is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='You already have an active subscription',
-            )
 
-        # Check if user already used trial
-        if user.subscription.is_trial or user.has_had_paid_subscription:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Trial already used',
-            )
+    # Check if user already used trial
+    if any(s.is_trial for s in subs) or user.has_had_paid_subscription:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Trial already used',
+        )
 
     # Check if trial requires payment
     requires_payment = bool(settings.TRIAL_PAYMENT_ENABLED)

@@ -1112,7 +1112,12 @@ class MiniAppSubscriptionPurchaseService:
         subscription_service = SubscriptionService()
         # При покупке подписки ВСЕГДА сбрасываем трафик в панели
         try:
-            if getattr(user, 'remnawave_uuid', None):
+            _purch_uuid = (
+                subscription.remnawave_uuid
+                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                else getattr(user, 'remnawave_uuid', None)
+            )
+            if _purch_uuid:
                 await subscription_service.update_remnawave_user(
                     db,
                     subscription,

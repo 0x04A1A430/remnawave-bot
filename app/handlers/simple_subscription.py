@@ -42,6 +42,10 @@ async def start_simple_subscription_purchase(
         await callback.answer('❌ Простая покупка подписки временно недоступна', show_alert=True)
         return
 
+    if settings.is_multi_tariff_enabled():
+        await callback.answer('Используйте выбор тарифа для управления подписками', show_alert=True)
+        return
+
     # Проверка ограничения на покупку/продление подписки
     if getattr(db_user, 'restriction_subscription', False):
         reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')

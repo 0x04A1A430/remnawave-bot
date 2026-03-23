@@ -73,9 +73,10 @@ def _get_remnawave_uuid(subscription, db_user):
     return getattr(subscription, 'remnawave_uuid', None) or db_user.remnawave_uuid
 
 
-async def get_current_devices_detailed(db_user: User) -> dict:
+async def get_current_devices_detailed(db_user: User, subscription=None) -> dict:
     try:
-        if not db_user.remnawave_uuid:
+        uuid = _get_remnawave_uuid(subscription, db_user) if subscription else db_user.remnawave_uuid
+        if not uuid:
             return {'count': 0, 'devices': []}
 
         from app.services.remnawave_service import RemnaWaveService
@@ -83,7 +84,7 @@ async def get_current_devices_detailed(db_user: User) -> dict:
         service = RemnaWaveService()
 
         async with service.get_api_client() as api:
-            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            response = await api._make_request('GET', f'/api/hwid/devices/{uuid}')
 
             if response and 'response' in response:
                 devices_info = response['response']
@@ -144,9 +145,10 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
         return f'{len(squad_uuids)} стран'
 
 
-async def get_current_devices_count(db_user: User) -> str:
+async def get_current_devices_count(db_user: User, subscription=None) -> str:
     try:
-        if not db_user.remnawave_uuid:
+        uuid = _get_remnawave_uuid(subscription, db_user) if subscription else db_user.remnawave_uuid
+        if not uuid:
             return '—'
 
         from app.services.remnawave_service import RemnaWaveService
@@ -154,7 +156,7 @@ async def get_current_devices_count(db_user: User) -> str:
         service = RemnaWaveService()
 
         async with service.get_api_client() as api:
-            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            response = await api._make_request('GET', f'/api/hwid/devices/{uuid}')
 
             if response and 'response' in response:
                 total_devices = response['response'].get('total', 0)

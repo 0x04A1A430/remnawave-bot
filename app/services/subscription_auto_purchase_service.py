@@ -1529,8 +1529,13 @@ async def _auto_add_devices(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+        _panel_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _panel_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(_panel_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя',
@@ -1849,8 +1854,13 @@ async def _auto_add_traffic(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+        _panel_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _panel_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(_panel_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя',

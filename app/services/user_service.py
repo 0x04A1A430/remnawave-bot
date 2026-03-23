@@ -683,11 +683,30 @@ class UserService:
                     remnawave_uuid=user.remnawave_uuid,
                 )
             else:
-                if user.remnawave_uuid:
-                    try:
-                        from app.services.subscription_service import SubscriptionService
+                from app.services.subscription_service import SubscriptionService
 
-                        subscription_service = SubscriptionService()
+                subscription_service = SubscriptionService()
+
+                if settings.is_multi_tariff_enabled():
+                    # In multi-tariff mode, disable each subscription's panel user individually
+                    for sub in subs:
+                        panel_uuid = sub.remnawave_uuid
+                        if panel_uuid:
+                            try:
+                                await subscription_service.disable_remnawave_user(panel_uuid)
+                                logger.info(
+                                    '✅ RemnaWave пользователь деактивирован при блокировке',
+                                    remnawave_uuid=panel_uuid,
+                                    subscription_id=sub.id,
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    '❌ Ошибка деактивации RemnaWave при блокировке',
+                                    error=e,
+                                    subscription_id=sub.id,
+                                )
+                elif user.remnawave_uuid:
+                    try:
                         await subscription_service.disable_remnawave_user(user.remnawave_uuid)
                         logger.info(
                             '✅ RemnaWave пользователь деактивирован при блокировке',
@@ -769,91 +788,89 @@ class UserService:
                 '🗑️ Начинаем полное удаление пользователя (ID: )', user_id=user_id, user_id_display=user_id_display
             )
 
-            if user.remnawave_uuid:
-                from app.config import settings
-                from app.database.crud.subscription import is_active_paid_subscription
+            from app.config import settings
+            from app.database.crud.subscription import is_active_paid_subscription
 
-                if not force_panel_delete and any(
-                    is_active_paid_subscription(sub) for sub in (getattr(user, 'subscriptions', None) or [])
-                ):
+            # Collect all panel UUIDs to process
+            subs = getattr(user, 'subscriptions', None) or []
+            if settings.is_multi_tariff_enabled():
+                panel_uuids = [sub.remnawave_uuid for sub in subs if sub.remnawave_uuid]
+            else:
+                panel_uuids = [user.remnawave_uuid] if user.remnawave_uuid else []
+
+            if panel_uuids:
+                if not force_panel_delete and any(is_active_paid_subscription(sub) for sub in subs):
                     logger.info(
                         '⏭️ Пропуск отключения RemnaWave при удалении: у пользователя активная оплаченная подписка',
                         user_id=user_id,
-                        remnawave_uuid=user.remnawave_uuid,
                     )
                 else:
                     delete_mode = 'delete' if force_panel_delete else settings.get_remnawave_user_delete_mode()
 
-                    try:
-                        from app.services.remnawave_service import RemnaWaveService
+                    for panel_uuid in panel_uuids:
+                        try:
+                            from app.services.remnawave_service import RemnaWaveService
 
-                        remnawave_service = RemnaWaveService()
+                            remnawave_service = RemnaWaveService()
 
-                        if delete_mode == 'delete':
-                            # Удаляем пользователя из панели Remnawave
-                            async with remnawave_service.get_api_client() as api:
-                                delete_success = await api.delete_user(user.remnawave_uuid)
-                                if delete_success:
-                                    result.panel_deleted = True
-                                    logger.info(
-                                        '✅ RemnaWave пользователь удален из панели',
-                                        remnawave_uuid=user.remnawave_uuid,
-                                    )
-                                else:
-                                    result.panel_error = 'Remnawave API вернул ошибку удаления'
-                                    logger.warning(
-                                        '⚠️ Не удалось удалить пользователя из панели Remnawave',
-                                        remnawave_uuid=user.remnawave_uuid,
-                                    )
-                        else:
-                            # Деактивируем пользователя в панели Remnawave
-                            from app.services.subscription_service import SubscriptionService
-
-                            subscription_service = SubscriptionService()
-                            disabled = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                            result.panel_deleted = disabled
-                            if disabled:
-                                logger.info(
-                                    '✅ RemnaWave пользователь деактивирован',
-                                    remnawave_uuid=user.remnawave_uuid,
-                                    delete_mode=delete_mode,
-                                )
+                            if delete_mode == 'delete':
+                                async with remnawave_service.get_api_client() as api:
+                                    delete_success = await api.delete_user(panel_uuid)
+                                    if delete_success:
+                                        result.panel_deleted = True
+                                        logger.info(
+                                            '✅ RemnaWave пользователь удален из панели',
+                                            remnawave_uuid=panel_uuid,
+                                        )
+                                    else:
+                                        result.panel_error = 'Remnawave API вернул ошибку удаления'
+                                        logger.warning(
+                                            '⚠️ Не удалось удалить пользователя из панели Remnawave',
+                                            remnawave_uuid=panel_uuid,
+                                        )
                             else:
-                                result.panel_error = 'disable_remnawave_user вернул False'
-                                logger.warning(
-                                    '⚠️ Не удалось деактивировать пользователя в RemnaWave',
-                                    remnawave_uuid=user.remnawave_uuid,
-                                    delete_mode=delete_mode,
-                                )
-
-                    except Exception as e:
-                        result.panel_error = 'Ошибка обработки пользователя в Remnawave'
-                        logger.warning(
-                            '⚠️ Ошибка обработки пользователя в Remnawave (режим: )',
-                            delete_mode=delete_mode,
-                            error=e,
-                        )
-                        # Если основное действие не удалось, попытаемся хотя бы деактивировать
-                        if delete_mode == 'delete':
-                            try:
                                 from app.services.subscription_service import SubscriptionService
 
                                 subscription_service = SubscriptionService()
-                                disabled = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                                disabled = await subscription_service.disable_remnawave_user(panel_uuid)
+                                result.panel_deleted = disabled
                                 if disabled:
-                                    result.panel_deleted = True
-                                    result.panel_error = 'Удаление не удалось, пользователь деактивирован'
                                     logger.info(
-                                        '✅ RemnaWave пользователь деактивирован как fallback',
-                                        remnawave_uuid=user.remnawave_uuid,
+                                        '✅ RemnaWave пользователь деактивирован',
+                                        remnawave_uuid=panel_uuid,
+                                        delete_mode=delete_mode,
                                     )
                                 else:
+                                    result.panel_error = 'disable_remnawave_user вернул False'
                                     logger.warning(
-                                        '⚠️ Fallback деактивация RemnaWave тоже не удалась',
-                                        remnawave_uuid=user.remnawave_uuid,
+                                        '⚠️ Не удалось деактивировать пользователя в RemnaWave',
+                                        remnawave_uuid=panel_uuid,
+                                        delete_mode=delete_mode,
                                     )
-                            except Exception as fallback_e:
-                                logger.error('❌ Ошибка деактивации RemnaWave как fallback', fallback_e=fallback_e)
+
+                        except Exception as e:
+                            result.panel_error = 'Ошибка обработки пользователя в Remnawave'
+                            logger.warning(
+                                '⚠️ Ошибка обработки пользователя в Remnawave',
+                                delete_mode=delete_mode,
+                                remnawave_uuid=panel_uuid,
+                                error=e,
+                            )
+                            if delete_mode == 'delete':
+                                try:
+                                    from app.services.subscription_service import SubscriptionService
+
+                                    subscription_service = SubscriptionService()
+                                    disabled = await subscription_service.disable_remnawave_user(panel_uuid)
+                                    if disabled:
+                                        result.panel_deleted = True
+                                        result.panel_error = 'Удаление не удалось, пользователь деактивирован'
+                                        logger.info(
+                                            '✅ RemnaWave пользователь деактивирован как fallback',
+                                            remnawave_uuid=panel_uuid,
+                                        )
+                                except Exception as fallback_e:
+                                    logger.error('❌ Ошибка деактивации RemnaWave как fallback', fallback_e=fallback_e)
 
             try:
                 async with db.begin_nested():

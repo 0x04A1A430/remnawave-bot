@@ -316,11 +316,15 @@ async def purchase_traffic(
     # Синхронизируем с RemnaWave
     try:
         subscription_service = SubscriptionService()
-        if getattr(user, 'remnawave_uuid', None):
+        _panel_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _panel_uuid:
             await subscription_service.update_remnawave_user(db, subscription)
-            # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
             if subscription.status == 'active':
-                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+                await subscription_service.enable_remnawave_user(_panel_uuid)
         else:
             await subscription_service.create_remnawave_user(db, subscription)
     except Exception as e:
@@ -600,7 +604,12 @@ async def switch_traffic_package(
     # Sync with RemnaWave
     try:
         subscription_service = SubscriptionService()
-        if getattr(user, 'remnawave_uuid', None):
+        _panel_uuid2 = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _panel_uuid2:
             await subscription_service.update_remnawave_user(db, subscription)
         else:
             await subscription_service.create_remnawave_user(db, subscription)
@@ -682,11 +691,16 @@ async def refresh_traffic(
     try:
         remnawave_service = RemnaWaveService()
 
-        # Для email-пользователей (без telegram_id) используем UUID
-        if user.telegram_id:
+        # Resolve panel UUID for traffic lookup
+        _traffic_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else user.remnawave_uuid
+        )
+        if user.telegram_id and not settings.is_multi_tariff_enabled():
             traffic_stats = await remnawave_service.get_user_traffic_stats(user.telegram_id)
-        elif user.remnawave_uuid:
-            traffic_stats = await remnawave_service.get_user_traffic_stats_by_uuid(user.remnawave_uuid)
+        elif _traffic_uuid:
+            traffic_stats = await remnawave_service.get_user_traffic_stats_by_uuid(_traffic_uuid)
         else:
             traffic_stats = None
 

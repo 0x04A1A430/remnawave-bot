@@ -734,13 +734,18 @@ class MonitoringService:
                                 is_trial=subscription.is_trial,
                             )
 
-                            if user.remnawave_uuid:
+                            panel_uuid = (
+                                subscription.remnawave_uuid
+                                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                                else user.remnawave_uuid
+                            )
+                            if panel_uuid:
                                 try:
-                                    await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                                    await self.subscription_service.disable_remnawave_user(panel_uuid)
                                 except Exception as api_error:
                                     logger.error(
                                         'Failed to disable RemnaWave user',
-                                        remnawave_uuid=user.remnawave_uuid,
+                                        remnawave_uuid=panel_uuid,
                                         api_error=api_error,
                                     )
 
@@ -806,8 +811,13 @@ class MonitoringService:
                             )
 
                             try:
-                                if user.remnawave_uuid:
-                                    await self.subscription_service.enable_remnawave_user(user.remnawave_uuid)
+                                panel_uuid_restore = (
+                                    subscription.remnawave_uuid
+                                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                                    else user.remnawave_uuid
+                                )
+                                if panel_uuid_restore:
+                                    await self.subscription_service.enable_remnawave_user(panel_uuid_restore)
                                 else:
                                     # create_remnawave_user calls db.commit() internally --
                                     # flush accumulated batch state first to preserve atomicity.
