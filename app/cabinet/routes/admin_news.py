@@ -1,6 +1,8 @@
 """Admin routes for managing news articles in cabinet."""
 
+import asyncio
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,10 +15,9 @@ from app.database.crud.news import (
     get_all_news,
     get_all_news_count,
     get_news_article_by_id,
-    get_news_article_by_slug,
     update_news_article,
 )
-from app.database.models import User
+from app.database.models import NewsArticle, User
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.news import (
@@ -34,9 +35,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/admin/news', tags=['Cabinet Admin News'])
 
 
-def _article_to_detail(article) -> dict:
-    """Convert NewsArticle ORM instance to full detail dict."""
-    author_name = None
+def _article_to_detail(article: NewsArticle) -> dict[str, Any]:
+    """Convert NewsArticle ORM instance to full detail dict.
+
+    Expects the ``author`` relationship to be eagerly loaded.
+    """
+    author_name: str | None = None
     if article.author:
         author_name = article.author.first_name or article.author.username or f'#{article.author.id}'
 
@@ -68,35 +72,23 @@ async def list_all_news(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> NewsListResponse:
-    """Get all news articles (admin view, includes unpublished)."""
-    try:
-        articles = await get_all_news(db, limit=limit, offset=offset)
-        total = await get_all_news_count(db)
+    """Get all news articles (admin view, includes unpublished).
 
-        items = [
-            NewsArticleListItem(
-                id=a.id,
-                title=a.title,
-                slug=a.slug,
-                excerpt=a.excerpt,
-                category=a.category,
-                category_color=a.category_color,
-                tag=a.tag,
-                featured_image_url=a.featured_image_url,
-                is_published=a.is_published,
-                is_featured=a.is_featured,
-                published_at=a.published_at,
-                read_time_minutes=a.read_time_minutes,
-                views_count=a.views_count,
-            )
-            for a in articles
-        ]
+    articles and total are independent — run them concurrently.
+    """
+    try:
+        articles, total = await asyncio.gather(
+            get_all_news(db, limit=limit, offset=offset),
+            get_all_news_count(db),
+        )
+
+        items = [NewsArticleListItem.model_validate(a) for a in articles]
 
         return NewsListResponse(items=items, total=total)
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error('Failed to list all news', error=str(e), exc_info=True)
+    except Exception:
+        logger.exception('Failed to list all news')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load news articles',
@@ -127,14 +119,6 @@ async def create_article(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Create a new news article."""
-    # Check slug uniqueness
-    existing = await get_news_article_by_slug(db, request.slug)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='An article with this slug already exists',
-        )
-
     try:
         article = await create_news_article(
             db,
@@ -148,29 +132,29 @@ async def create_article(
             featured_image_url=request.featured_image_url,
             is_published=request.is_published,
             is_featured=request.is_featured,
-            published_at=None,
             read_time_minutes=request.read_time_minutes,
             created_by=admin.id,
         )
-
-        # Reload with author relationship
-        article = await get_news_article_by_id(db, article.id)
-        if not article:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to reload article')
-        return NewsArticleResponse(**_article_to_detail(article))
-    except HTTPException:
-        raise
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail='An article with this slug already exists',
         )
-    except Exception as e:
-        logger.error('Failed to create news article', error=str(e), exc_info=True)
+    except Exception:
+        logger.exception('Failed to create news article')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to create article',
         )
+
+    # Reload with author relationship
+    article = await get_news_article_by_id(db, article.id)
+    if not article:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to reload article after creation',
+        )
+    return NewsArticleResponse(**_article_to_detail(article))
 
 
 @router.put('/{article_id}', response_model=NewsArticleResponse)
@@ -188,37 +172,29 @@ async def update_article(
             detail='Article not found',
         )
 
-    # Check slug uniqueness if slug is being changed
-    if request.slug and request.slug != article.slug:
-        existing = await get_news_article_by_slug(db, request.slug)
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail='An article with this slug already exists',
-            )
-
     try:
         update_data = request.model_dump(exclude_unset=True)
         article = await update_news_article(db, article, **update_data)
-
-        # Reload with author relationship
-        article = await get_news_article_by_id(db, article.id)
-        if not article:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to reload article')
-        return NewsArticleResponse(**_article_to_detail(article))
-    except HTTPException:
-        raise
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail='An article with this slug already exists',
         )
-    except Exception as e:
-        logger.error('Failed to update news article', article_id=article_id, error=str(e), exc_info=True)
+    except Exception:
+        logger.exception('Failed to update news article', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to update article',
         )
+
+    # Reload with author relationship (update used bulk UPDATE, author not populated)
+    article = await get_news_article_by_id(db, article.id)
+    if not article:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to reload article after update',
+        )
+    return NewsArticleResponse(**_article_to_detail(article))
 
 
 @router.delete('/{article_id}', status_code=status.HTTP_204_NO_CONTENT)
@@ -237,8 +213,8 @@ async def remove_article(
 
     try:
         await delete_news_article(db, article)
-    except Exception as e:
-        logger.error('Failed to delete news article', article_id=article_id, error=str(e), exc_info=True)
+    except Exception:
+        logger.exception('Failed to delete news article', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to delete article',
@@ -261,7 +237,7 @@ async def toggle_publish(
 
     new_published = not article.is_published
 
-    update_kwargs: dict = {'is_published': new_published}
+    update_kwargs: dict[str, Any] = {'is_published': new_published}
     # Auto-set published_at on first publish
     if new_published and article.published_at is None:
         update_kwargs['published_at'] = datetime.now(UTC)
@@ -274,8 +250,8 @@ async def toggle_publish(
             is_featured=article.is_featured,
             published_at=article.published_at,
         )
-    except Exception as e:
-        logger.error('Failed to toggle publish', article_id=article_id, error=str(e), exc_info=True)
+    except Exception:
+        logger.exception('Failed to toggle publish', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to toggle publish status',
@@ -304,8 +280,8 @@ async def toggle_featured(
             is_featured=article.is_featured,
             published_at=article.published_at,
         )
-    except Exception as e:
-        logger.error('Failed to toggle featured', article_id=article_id, error=str(e), exc_info=True)
+    except Exception:
+        logger.exception('Failed to toggle featured', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to toggle featured status',

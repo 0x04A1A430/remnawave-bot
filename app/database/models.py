@@ -3306,7 +3306,12 @@ class NewsArticle(Base):
 
     __tablename__ = 'news_articles'
     __table_args__ = (
+        # Covers the main public list query: WHERE is_published = true ORDER BY published_at DESC
         Index('ix_news_articles_published_at_published', 'is_published', 'published_at'),
+        # Covers the category-filtered public list: WHERE is_published = true AND category = ?
+        Index('ix_news_articles_published_category', 'is_published', 'category'),
+        # Covers the admin list query: ORDER BY created_at DESC
+        Index('ix_news_articles_created_at', 'created_at'),
     )
 
     id = Column(Integer, primary_key=True, index=True)

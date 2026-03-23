@@ -1,9 +1,11 @@
 """CRUD operations for news articles."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, nullslast, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +13,34 @@ from app.database.models import NewsArticle
 
 
 logger = structlog.get_logger(__name__)
+
+# Fields that can be set via update_news_article
+_ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
+    {
+        'title',
+        'slug',
+        'content',
+        'excerpt',
+        'category',
+        'category_color',
+        'tag',
+        'featured_image_url',
+        'is_published',
+        'is_featured',
+        'published_at',
+        'read_time_minutes',
+    }
+)
+
+# Fields that can be explicitly set to None
+_NULLABLE_UPDATE_FIELDS: frozenset[str] = frozenset(
+    {
+        'excerpt',
+        'tag',
+        'featured_image_url',
+        'published_at',
+    }
+)
 
 
 async def create_news_article(
@@ -30,7 +60,11 @@ async def create_news_article(
     read_time_minutes: int = 1,
     created_by: int | None = None,
 ) -> NewsArticle:
-    """Create a new news article."""
+    """Create a new news article.
+
+    Raises:
+        IntegrityError: if slug is not unique (caller must handle).
+    """
     # Auto-set published_at when publishing without explicit date
     if is_published and published_at is None:
         published_at = datetime.now(UTC)
@@ -52,7 +86,11 @@ async def create_news_article(
     )
 
     db.add(article)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise
     await db.refresh(article)
 
     logger.info(
@@ -87,17 +125,16 @@ async def get_published_news(
     limit: int = 20,
     offset: int = 0,
 ) -> list[NewsArticle]:
-    """Get published news articles, ordered by published_at descending."""
-    stmt = (
-        select(NewsArticle)
-        .options(selectinload(NewsArticle.author))
-        .where(NewsArticle.is_published.is_(True))
-        .order_by(NewsArticle.published_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    """Get published news articles, ordered by published_at descending.
+
+    Does NOT load the author relationship -- list views do not need it.
+    """
+    stmt = select(NewsArticle).where(NewsArticle.is_published.is_(True))
     if category:
         stmt = stmt.where(NewsArticle.category == category)
+
+    # NULLs last so articles without published_at don't float to the top in DESC
+    stmt = stmt.order_by(nullslast(NewsArticle.published_at.desc())).offset(offset).limit(limit)
 
     result = await db.execute(stmt)
     return list(result.scalars().all())
@@ -124,13 +161,7 @@ async def get_all_news(
     offset: int = 0,
 ) -> list[NewsArticle]:
     """Get all news articles (admin), ordered by created_at descending."""
-    stmt = (
-        select(NewsArticle)
-        .options(selectinload(NewsArticle.author))
-        .order_by(NewsArticle.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    stmt = select(NewsArticle).order_by(NewsArticle.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -156,36 +187,18 @@ async def get_news_categories(db: AsyncSession) -> list[str]:
 async def update_news_article(
     db: AsyncSession,
     article: NewsArticle,
-    **kwargs,
+    **kwargs: Any,
 ) -> NewsArticle:
-    """Update a news article. Only whitelisted fields are applied."""
-    allowed_fields = {
-        'title',
-        'slug',
-        'content',
-        'excerpt',
-        'category',
-        'category_color',
-        'tag',
-        'featured_image_url',
-        'is_published',
-        'is_featured',
-        'published_at',
-        'read_time_minutes',
-    }
+    """Update a news article. Only whitelisted fields are applied.
 
-    nullable_fields = {
-        'excerpt',
-        'tag',
-        'featured_image_url',
-        'published_at',
-    }
-
-    update_data: dict = {}
+    Raises:
+        IntegrityError: if slug conflicts with another article (caller must handle).
+    """
+    update_data: dict[str, Any] = {}
     for key, value in kwargs.items():
-        if key not in allowed_fields:
+        if key not in _ALLOWED_UPDATE_FIELDS:
             continue
-        if value is None and key not in nullable_fields:
+        if value is None and key not in _NULLABLE_UPDATE_FIELDS:
             continue
         update_data[key] = value
 
@@ -200,26 +213,46 @@ async def update_news_article(
     update_data['updated_at'] = datetime.now(UTC)
 
     await db.execute(update(NewsArticle).where(NewsArticle.id == article.id).values(**update_data))
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise
     await db.refresh(article)
 
     logger.info(
-        'Updated news article', article_id=article.id, slug=article.slug, updated_fields=list(update_data.keys())
+        'Updated news article',
+        article_id=article.id,
+        slug=article.slug,
+        updated_fields=list(update_data.keys()),
     )
     return article
 
 
-async def delete_news_article(db: AsyncSession, article: NewsArticle) -> bool:
+async def delete_news_article(db: AsyncSession, article: NewsArticle) -> None:
     """Delete a news article."""
-    await db.execute(delete(NewsArticle).where(NewsArticle.id == article.id))
+    # Capture fields before commit expires the ORM instance attributes
+    article_id = article.id
+    article_slug = article.slug
+
+    await db.execute(delete(NewsArticle).where(NewsArticle.id == article_id))
     await db.commit()
-    logger.info('Deleted news article', article_id=article.id, slug=article.slug)
-    return True
+
+    logger.info('Deleted news article', article_id=article_id, slug=article_slug)
 
 
-async def increment_views(db: AsyncSession, article_id: int) -> None:
-    """Increment the views counter for a news article (fire-and-forget)."""
-    await db.execute(
-        update(NewsArticle).where(NewsArticle.id == article_id).values(views_count=NewsArticle.views_count + 1)
+async def increment_views(db: AsyncSession, article_id: int) -> int:
+    """Atomically increment the views counter and return the new count.
+
+    Uses UPDATE … RETURNING so the caller can patch the ORM instance directly
+    without issuing a second SELECT (db.refresh).
+    """
+    result = await db.execute(
+        update(NewsArticle)
+        .where(NewsArticle.id == article_id)
+        .values(views_count=NewsArticle.views_count + 1)
+        .returning(NewsArticle.views_count)
     )
     await db.commit()
+    row = result.fetchone()
+    return row[0] if row else 0

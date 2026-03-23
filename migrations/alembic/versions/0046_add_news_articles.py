@@ -7,15 +7,15 @@ Create Date: 2026-03-23
 Adds news_articles table for the cabinet news/blog feature.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = '0046'
 down_revision: str | None = '0045'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -39,11 +39,31 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
+
+    # Unique index on slug (model: unique=True, index=True)
     op.create_index('ix_news_articles_slug', 'news_articles', ['slug'], unique=True)
-    op.create_index('ix_news_articles_published_at', 'news_articles', ['published_at'])
+
+    # Composite: covers WHERE is_published = true ORDER BY published_at DESC
+    op.create_index(
+        'ix_news_articles_published_at_published',
+        'news_articles',
+        ['is_published', 'published_at'],
+    )
+
+    # Composite: covers WHERE is_published = true AND category = ?
+    op.create_index(
+        'ix_news_articles_published_category',
+        'news_articles',
+        ['is_published', 'category'],
+    )
+
+    # Covers admin list: ORDER BY created_at DESC
+    op.create_index('ix_news_articles_created_at', 'news_articles', ['created_at'])
 
 
 def downgrade() -> None:
-    op.drop_index('ix_news_articles_published_at', table_name='news_articles')
+    op.drop_index('ix_news_articles_created_at', table_name='news_articles')
+    op.drop_index('ix_news_articles_published_category', table_name='news_articles')
+    op.drop_index('ix_news_articles_published_at_published', table_name='news_articles')
     op.drop_index('ix_news_articles_slug', table_name='news_articles')
     op.drop_table('news_articles')
