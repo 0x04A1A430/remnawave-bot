@@ -13,10 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
+    decrement_subscription_server_counts,
     get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
 )
-from app.database.models import User
+from app.database.models import SubscriptionStatus, User
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 
@@ -101,3 +102,55 @@ async def get_subscription_detail(
             detail='Subscription not found',
         )
     return _subscription_to_list_item(subscription)
+
+
+@router.delete('/{subscription_id}')
+async def delete_subscription(
+    subscription_id: int,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict:
+    """Delete an expired/disabled subscription. Active subscriptions cannot be deleted."""
+    subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Subscription not found',
+        )
+
+    # Only expired/disabled subscriptions can be deleted
+    deletable_statuses = {
+        SubscriptionStatus.EXPIRED.value,
+        SubscriptionStatus.DISABLED.value,
+    }
+    if subscription.status not in deletable_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Only expired or disabled subscriptions can be deleted',
+        )
+
+    # Disable on RemnaWave panel if has UUID
+    if subscription.remnawave_uuid:
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            service = SubscriptionService()
+            await service.disable_remnawave_user(subscription.remnawave_uuid)
+        except Exception as e:
+            logger.warning('Failed to disable RemnaWave user on subscription delete', error=e)
+
+    # Decrement server counts
+    await decrement_subscription_server_counts(db, subscription)
+
+    # Delete the subscription
+    await db.delete(subscription)
+    await db.commit()
+
+    logger.info(
+        'Subscription deleted by user',
+        subscription_id=subscription_id,
+        user_id=user.id,
+        tariff_id=subscription.tariff_id,
+    )
+
+    return {'message': 'Subscription deleted'}
