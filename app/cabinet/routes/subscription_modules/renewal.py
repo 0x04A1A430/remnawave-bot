@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -94,6 +94,7 @@ async def renew_subscription(
     request: RenewalRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Renew subscription (pay from balance)."""
     if getattr(user, 'restriction_subscription', False):
@@ -102,10 +103,12 @@ async def renew_subscription(
             detail='Subscription renewal is restricted for this account',
         )
 
-    if settings.is_multi_tariff_enabled() and request.subscription_id:
+    # Support subscription_id from both query param and body (backward compat)
+    _sub_id = subscription_id or request.subscription_id
+    if settings.is_multi_tariff_enabled() and _sub_id:
         from app.database.crud.subscription import get_subscription_by_id_for_user
 
-        subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
+        subscription = await get_subscription_by_id_for_user(db, _sub_id, user.id)
         if not subscription:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
