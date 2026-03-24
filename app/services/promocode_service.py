@@ -37,7 +37,9 @@ class PromoCodeService:
             return f'{user.id} ({user.email})'
         return f'#{user.id}'
 
-    async def activate_promocode(self, db: AsyncSession, user_id: int, code: str) -> dict[str, Any]:
+    async def activate_promocode(
+        self, db: AsyncSession, user_id: int, code: str, *, subscription_id: int | None = None
+    ) -> dict[str, Any]:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
@@ -270,8 +272,29 @@ class PromoCodeService:
             if not active_subs:
                 raise ValueError('no_subscription_for_days')
 
-            # In multi-tariff mode extend only the first active subscription, not all
-            target_sub = active_subs[0]
+            # Multi-tariff: require subscription selection if >1 non-daily subscriptions
+            non_daily = [s for s in active_subs if not (s.tariff and getattr(s.tariff, 'is_daily', False))]
+            eligible = non_daily or active_subs
+
+            if subscription_id:
+                target_sub = next((s for s in eligible if s.id == subscription_id), None)
+                if not target_sub:
+                    return {'success': False, 'error': 'subscription_not_found'}
+            elif len(eligible) == 1:
+                target_sub = eligible[0]
+            elif len(eligible) > 1 and settings.is_multi_tariff_enabled():
+                # Need user to choose — return list of eligible subscriptions
+                return {
+                    'success': False,
+                    'error': 'select_subscription',
+                    'eligible_subscriptions': [
+                        {'id': s.id, 'tariff_name': s.tariff.name if s.tariff else f'#{s.id}', 'days_left': s.days_left}
+                        for s in eligible
+                    ],
+                    'code': code,
+                }
+            else:
+                target_sub = eligible[0] if eligible else active_subs[0]
             # Конвертация триала в платную подписку при активации промокода на дни
             if target_sub.is_trial:
                 target_sub.is_trial = False
