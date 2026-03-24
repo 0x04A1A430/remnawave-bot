@@ -1297,6 +1297,9 @@ async def update_user_subscription(
     if request.action == 'cancel':
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
+        # For daily tariffs: mark as paused to prevent auto-resume by DailySubscriptionService
+        if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+            subscription.is_daily_paused = True
         await db.commit()
         await db.refresh(subscription)
 
@@ -2389,6 +2392,10 @@ async def disable_user(
         if is_active_paid_subscription(sub):
             continue
         await deactivate_subscription(db, sub)
+        # For daily: mark paused to prevent auto-resume
+        if sub.tariff and getattr(sub.tariff, 'is_daily', False):
+            sub.is_daily_paused = True
+            await db.commit()
         subscription_deactivated = True
     if subscription_deactivated:
         logger.info('Deactivated subscriptions for user', user_id=user_id)
