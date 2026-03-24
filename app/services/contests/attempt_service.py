@@ -297,8 +297,10 @@ class ContestAttemptService:
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                # Contest prize applies to first active sub (contest has no subscription picker)
-                subscription = active_subs[0] if active_subs else None
+                # Contest prize: prefer non-daily subscription with most days left
+                non_daily = [s for s in active_subs if not (s.tariff and getattr(s.tariff, 'is_daily', False))]
+                eligible = non_daily or active_subs
+                subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
             else:
                 subscription = await get_subscription_by_user_id(db, user_id)
             if not subscription:
