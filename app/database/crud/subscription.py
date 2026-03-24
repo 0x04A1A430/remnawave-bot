@@ -298,6 +298,20 @@ async def create_paid_subscription(
     else:
         await db.flush()
 
+    # Kill all trial subscriptions when creating a paid subscription
+    # Trial = probe, must die on any paid purchase (regardless of path: bot, cabinet, webhook)
+    if not is_trial:
+        try:
+            killed = await deactivate_user_trial_subscriptions(db, user_id, exclude_subscription_id=subscription.id)
+            if killed:
+                logger.info(
+                    'Deactivated trial subscriptions on paid purchase',
+                    user_id=user_id,
+                    killed_count=len(killed),
+                )
+        except Exception as trial_err:
+            logger.warning('Failed to deactivate trials on paid purchase', error=trial_err)
+
     logger.info(
         '💎 Создана платная подписка для пользователя ID: статус',
         user_id=user_id,
@@ -683,6 +697,21 @@ async def extend_subscription(
         await db.flush()
 
     await clear_notifications(db, subscription.id, commit=commit)
+
+    # Kill other trial subscriptions if this extension converts trial to paid
+    if not subscription.is_trial and days > 0:
+        try:
+            killed = await deactivate_user_trial_subscriptions(
+                db, subscription.user_id, exclude_subscription_id=subscription.id
+            )
+            if killed:
+                logger.info(
+                    'Deactivated trial subscriptions on extend',
+                    user_id=subscription.user_id,
+                    killed_count=len(killed),
+                )
+        except Exception as trial_err:
+            logger.warning('Failed to deactivate trials on extend', error=trial_err)
 
     logger.info('✅ Подписка продлена до', end_date=subscription.end_date)
     logger.info('📊 Новые параметры: статус=, окончание', status=subscription.status, end_date=subscription.end_date)

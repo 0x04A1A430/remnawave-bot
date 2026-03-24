@@ -8,7 +8,7 @@ from app.database.crud.saved_payment_method import (
     deactivate_payment_method,
     get_active_payment_methods_by_user,
 )
-from app.database.crud.subscription import get_subscription_by_id_for_user, update_subscription_autopay
+from app.database.crud.subscription import update_subscription_autopay
 from app.database.models import User
 from app.keyboards.inline import (
     _get_payment_method_display_name,
@@ -37,28 +37,11 @@ from .countries import (
 from .pricing import _build_subscription_period_prompt
 
 
-async def _resolve_subscription(callback, db_user, db):
-    """Resolve subscription from callback_data (multi-tariff) or db_user (legacy)."""
-    if settings.is_multi_tariff_enabled():
-        parts = (callback.data or '').split(':')
-        if len(parts) >= 2:
-            try:
-                sub_id = int(parts[-1])
-                sub = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-                if not sub:
-                    await callback.answer('Подписка не найдена', show_alert=True)
-                    return None, None
-                return sub, sub_id
-            except (ValueError, TypeError):
-                pass
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+async def _resolve_subscription(callback, db_user, db, state=None):
+    """Resolve subscription — delegates to shared resolve_subscription_from_context."""
+    from .common import resolve_subscription_from_context
 
-        subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        if len(subs) == 1:
-            return subs[0], subs[0].id
-        await callback.answer('Выберите подписку', show_alert=True)
-        return None, None
-    return db_user.subscription, getattr(db_user.subscription, 'id', None)
+    return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
 async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):

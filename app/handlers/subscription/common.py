@@ -25,6 +25,64 @@ logger = structlog.get_logger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()
 
+
+async def resolve_subscription_from_context(
+    callback,
+    db_user: User,
+    db,
+    state=None,
+) -> tuple[Subscription | None, int | None]:
+    """Resolve subscription for multi-tariff bot handlers.
+
+    Priority:
+    1. callback_data 'prefix:sub_id' (colon-separated, last part is int)
+    2. FSM state 'active_subscription_id' (set by my_subscriptions delegation)
+    3. Single active subscription (auto-select)
+    4. Legacy: db_user.subscription (single-tariff mode)
+    """
+    from app.database.crud.subscription import (
+        get_active_subscriptions_by_user_id,
+        get_subscription_by_id_for_user,
+        get_subscription_by_user_id,
+    )
+
+    if not settings.is_multi_tariff_enabled():
+        sub = await get_subscription_by_user_id(db, db_user.id)
+        return sub, getattr(sub, 'id', None) if sub else None
+
+    # 1. Try callback_data 'prefix:sub_id'
+    parts = (callback.data or '').split(':')
+    if len(parts) >= 2:
+        try:
+            sub_id = int(parts[-1])
+            sub = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+            if sub:
+                return sub, sub_id
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Try FSM state
+    if state:
+        try:
+            data = await state.get_data()
+            fsm_sub_id = data.get('active_subscription_id')
+            if fsm_sub_id:
+                sub = await get_subscription_by_id_for_user(db, fsm_sub_id, db_user.id)
+                if sub:
+                    return sub, fsm_sub_id
+        except Exception:
+            pass
+
+    # 3. Auto-select if only one active subscription
+    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+    if len(active_subs) == 1:
+        return active_subs[0], active_subs[0].id
+
+    # 4. Cannot determine
+    await callback.answer('Выберите подписку', show_alert=True)
+    return None, None
+
+
 # ── App config cache ──
 _app_config_cache: dict[str, Any] = {}
 _app_config_cache_ts: float = 0.0

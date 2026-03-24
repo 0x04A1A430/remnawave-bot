@@ -17,7 +17,7 @@ from app.database.crud.subscription import (
     get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
 )
-from app.database.models import User
+from app.database.models import Subscription, User
 from app.localization.texts import get_texts
 
 
@@ -215,6 +215,28 @@ async def show_subscription_detail(
     await callback.answer()
 
 
+async def _resolve_and_store_sub(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> Subscription | None:
+    """Extract sub_id from callback, validate ownership, store in FSM state."""
+    sub_id = _extract_sub_id(callback)
+    if sub_id is None:
+        await callback.answer('Неверный формат', show_alert=True)
+        return None
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    if not subscription:
+        await callback.answer('Подписка не найдена', show_alert=True)
+        return None
+
+    # Store in FSM state so downstream handlers can use it
+    await state.update_data(active_subscription_id=sub_id)
+    return subscription
+
+
 async def handle_subscription_link(
     callback: types.CallbackQuery,
     db_user: User,
@@ -222,14 +244,8 @@ async def handle_subscription_link(
     state: FSMContext,
 ) -> None:
     """Delegation: sl:{sub_id} → connect subscription link handler."""
-    sub_id = _extract_sub_id(callback)
-    if sub_id is None:
-        await callback.answer('Неверный формат', show_alert=True)
-        return
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    subscription = await _resolve_and_store_sub(callback, db_user, db, state)
     if not subscription:
-        await callback.answer('Подписка не найдена', show_alert=True)
         return
 
     from .links import handle_connect_subscription
@@ -244,14 +260,8 @@ async def handle_subscription_extend(
     state: FSMContext,
 ) -> None:
     """Delegation: se:{sub_id} → extend/renew subscription handler."""
-    sub_id = _extract_sub_id(callback)
-    if sub_id is None:
-        await callback.answer('Неверный формат', show_alert=True)
-        return
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    subscription = await _resolve_and_store_sub(callback, db_user, db, state)
     if not subscription:
-        await callback.answer('Подписка не найдена', show_alert=True)
         return
 
     from .purchase import handle_extend_subscription
@@ -266,14 +276,8 @@ async def handle_subscription_traffic(
     state: FSMContext,
 ) -> None:
     """Delegation: st:{sub_id} → traffic management handler."""
-    sub_id = _extract_sub_id(callback)
-    if sub_id is None:
-        await callback.answer('Неверный формат', show_alert=True)
-        return
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    subscription = await _resolve_and_store_sub(callback, db_user, db, state)
     if not subscription:
-        await callback.answer('Подписка не найдена', show_alert=True)
         return
 
     from .traffic import handle_add_traffic
@@ -288,14 +292,8 @@ async def handle_subscription_devices(
     state: FSMContext,
 ) -> None:
     """Delegation: sd:{sub_id} → devices management handler."""
-    sub_id = _extract_sub_id(callback)
-    if sub_id is None:
-        await callback.answer('Неверный формат', show_alert=True)
-        return
-
-    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    subscription = await _resolve_and_store_sub(callback, db_user, db, state)
     if not subscription:
-        await callback.answer('Подписка не найдена', show_alert=True)
         return
 
     from .devices import handle_change_devices
