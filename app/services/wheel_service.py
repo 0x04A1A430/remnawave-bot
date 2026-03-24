@@ -25,6 +25,7 @@ from app.database.crud.wheel import (
 from app.database.models import (
     PromoCode,
     PromoCodeType,
+    Subscription,
     User,
     WheelConfig,
     WheelPrize,
