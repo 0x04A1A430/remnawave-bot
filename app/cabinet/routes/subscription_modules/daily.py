@@ -71,14 +71,22 @@ async def toggle_subscription_pause(
         new_paused_state = False  # Force resume path
     else:
         new_paused_state = not is_currently_paused
-    subscription.is_daily_paused = new_paused_state
 
     raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
 
     # Lock user BEFORE discount computation to prevent TOCTOU on promo group
+    # IMPORTANT: must happen BEFORE modifying subscription — lock_user_for_pricing
+    # reloads subscriptions via selectinload which resets in-memory changes
     from app.database.crud.user import lock_user_for_pricing
 
     user = await lock_user_for_pricing(db, user.id)
+
+    # Re-fetch subscription after lock (selectinload may have replaced the ORM object)
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=404, detail='Subscription not found after lock')
+
+    subscription.is_daily_paused = new_paused_state
 
     # Apply group discount to daily price (consistent with DailySubscriptionService and miniapp resume)
     from app.services.pricing_engine import PricingEngine
