@@ -38,6 +38,8 @@ class SubscriptionListItem(BaseModel):
     subscription_url: str | None = None
     subscription_crypto_link: str | None = None
     is_trial: bool = False
+    is_daily: bool = False
+    is_daily_paused: bool = False
     autopay_enabled: bool = False
     connected_squads: list[str] | None = None
 
@@ -64,6 +66,8 @@ def _subscription_to_list_item(sub) -> SubscriptionListItem:
         subscription_url=sub.subscription_url,
         subscription_crypto_link=sub.subscription_crypto_link,
         is_trial=sub.is_trial or False,
+        is_daily=bool(sub.tariff and getattr(sub.tariff, 'is_daily', False)),
+        is_daily_paused=bool(getattr(sub, 'is_daily_paused', False)),
         autopay_enabled=sub.autopay_enabled or False,
         connected_squads=sub.connected_squads,
     )
