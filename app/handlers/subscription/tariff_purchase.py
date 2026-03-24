@@ -1879,9 +1879,7 @@ async def select_tariff_extend_period(
 
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     actual_device_limit = (subscription.device_limit if subscription else None) or tariff.device_limit
@@ -1996,9 +1994,7 @@ async def confirm_tariff_extend(
 
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
@@ -2384,9 +2380,7 @@ async def select_tariff_switch(
         # Проверяем текущую подписку на оставшиеся дни
         if settings.is_multi_tariff_enabled():
             active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-            current_subscription = next(
-                (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-            )
+            current_subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
         else:
             current_subscription = await get_subscription_by_user_id(db, db_user.id)
         days_warning = ''
@@ -2516,9 +2510,7 @@ async def select_tariff_switch_period(
     # Получаем текущую подписку для расчёта оставшегося времени
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff.id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if subscription and subscription.end_date:
@@ -2596,9 +2588,7 @@ async def confirm_tariff_switch(
     # Проверяем наличие подписки (need device_limit for pricing)
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
@@ -2819,9 +2809,7 @@ async def confirm_daily_tariff_switch(
     # Проверяем наличие подписки
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
@@ -3223,9 +3211,7 @@ async def preview_instant_switch(
     # Если данных нет в state, получаем заново
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription or not subscription.tariff_id:
@@ -3391,9 +3377,7 @@ async def confirm_instant_switch(
     # Проверяем подписку
     if settings.is_multi_tariff_enabled():
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id), active_subs[0] if active_subs else None
-        )
+        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription:
