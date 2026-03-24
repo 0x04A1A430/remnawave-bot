@@ -2195,41 +2195,42 @@ async def reset_user_trial(
     if subs:
         from app.database.crud.subscription import is_active_paid_subscription
 
-        has_active_paid = any(is_active_paid_subscription(s) for s in subs)
-        if has_active_paid:
-            logger.info(
-                '⏭️ Пропуск удаления подписки и RemnaWave: у пользователя активная оплаченная подписка',
-                user_id=user_id,
-                remnawave_uuid=user.remnawave_uuid,
-            )
-        else:
-            # Deactivate in Remnawave panel first
-            from app.services.subscription_service import SubscriptionService
+        # In multi-tariff: only delete trial subscriptions, keep paid ones
+        trial_subs = [s for s in subs if s.is_trial]
+        non_trial_subs = [s for s in subs if not s.is_trial]
 
-            subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                for sub in subs:
-                    _sub_uuid = sub.remnawave_uuid
+        subs_to_delete = trial_subs if (settings.is_multi_tariff_enabled() and non_trial_subs) else subs
+
+        if not subs_to_delete:
+            logger.info('No trial subscriptions to delete', user_id=user_id)
+        else:
+            # Check if we'd be deleting paid subscriptions
+            has_active_paid = any(is_active_paid_subscription(s) for s in subs_to_delete)
+            if has_active_paid:
+                logger.info(
+                    '⏭️ Пропуск удаления: среди удаляемых есть активная оплаченная подписка',
+                    user_id=user_id,
+                )
+            else:
+                # Deactivate in Remnawave panel first
+                from app.services.subscription_service import SubscriptionService
+
+                subscription_service = SubscriptionService()
+                for sub in subs_to_delete:
+                    _sub_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
                     if _sub_uuid:
                         try:
                             await subscription_service.disable_remnawave_user(_sub_uuid)
-                            logger.info('Disabled Remnawave user for trial reset', remnawave_uuid=_sub_uuid)
                         except Exception as e:
-                            logger.warning('Failed to disable Remnawave sub during trial reset', error=e)
-            elif user.remnawave_uuid:
-                try:
-                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                    logger.info('Disabled Remnawave user for trial reset', remnawave_uuid=user.remnawave_uuid)
-                except Exception as e:
-                    logger.warning('Failed to disable Remnawave user during trial reset', error=e)
+                            logger.warning('Failed to disable Remnawave during trial reset', error=e)
 
-            # Delete all subscriptions from database
-            from sqlalchemy import delete
+                # Delete only target subscriptions
+                from sqlalchemy import delete
 
-            for sub in subs:
-                await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
-            await db.execute(delete(Subscription).where(Subscription.user_id == user_id))
-            subscription_deleted = True
+                for sub in subs_to_delete:
+                    await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
+                    await db.execute(delete(Subscription).where(Subscription.id == sub.id))
+                subscription_deleted = True
 
     # Reset trial flag
     user.has_used_trial = False
