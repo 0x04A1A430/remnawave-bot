@@ -463,12 +463,12 @@ async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_us
         await callback.answer()
 
 
-async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     from app.database.crud.tariff import get_tariff_by_id
 
     traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
