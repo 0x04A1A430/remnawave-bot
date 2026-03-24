@@ -300,16 +300,21 @@ async def get_purchase_options(
             tariffs = await get_tariffs_for_user(db, promo_group_id)
 
             if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                purchased_tariff_ids = {
+                    s.tariff_id for s in active_subs if s.tariff_id and s.status in ('active', 'trial')
+                }
+
                 if subscription_id:
                     from app.database.crud.subscription import get_subscription_by_id_for_user
 
                     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
                 else:
-                    from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                    active_subs = await get_active_subscriptions_by_user_id(db, user.id)
                     subscription = active_subs[0] if active_subs else None
             else:
+                purchased_tariff_ids = set()
                 subscription = await get_subscription_by_user_id(db, user.id)
             current_tariff_id = subscription.tariff_id if subscription else None
             language = getattr(user, 'language', 'ru') or 'ru'
@@ -324,6 +329,11 @@ async def get_purchase_options(
             tariff_responses = []
             for tariff in tariffs:
                 tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user, subscription)
+                # In multi-tariff mode: mark purchased tariffs so frontend can filter them
+                if settings.is_multi_tariff_enabled() and tariff.id in purchased_tariff_ids:
+                    tariff_data['is_purchased'] = True
+                else:
+                    tariff_data['is_purchased'] = False
                 tariff_responses.append(tariff_data)
 
             return {
@@ -336,6 +346,10 @@ async def get_purchase_options(
                 'subscription_status': subscription_status,
                 'subscription_is_expired': subscription_is_expired,
                 'has_subscription': subscription is not None,
+                # Multi-tariff: all tariffs purchased flag for frontend fallback
+                'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
+                if settings.is_multi_tariff_enabled()
+                else False,
             }
 
         # Classic mode - return periods

@@ -1897,9 +1897,7 @@ class RemnaWaveService:
 
                 _subs_upd = await _get_subs_upd(db, user.id)
                 # Strict match by panel_user UUID — never fallback to another subscription
-                subscription = next(
-                    (s for s in _subs_upd if s.remnawave_uuid == panel_user.uuid), None
-                )
+                subscription = next((s for s in _subs_upd if s.remnawave_uuid == panel_user.uuid), None)
             else:
                 subscription = await get_subscription_by_user_id(db, user.id)
 
