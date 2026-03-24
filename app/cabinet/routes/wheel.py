@@ -73,6 +73,14 @@ async def get_wheel_config(
         for p in prizes
     ]
 
+    # Build eligible subscriptions for frontend picker
+    eligible_subs_display = None
+    if availability.eligible_subscriptions:
+        eligible_subs_display = [
+            {'id': s.id, 'tariff_name': s.tariff_name, 'days_left': s.days_left}
+            for s in availability.eligible_subscriptions
+        ]
+
     return WheelConfigResponse(
         is_enabled=config.is_enabled,
         name=config.name,
@@ -90,6 +98,7 @@ async def get_wheel_config(
         user_balance_kopeks=availability.user_balance_kopeks,
         required_balance_kopeks=availability.required_balance_kopeks,
         has_subscription=has_subscription,
+        eligible_subscriptions=eligible_subs_display,
     )
 
 
@@ -121,7 +130,7 @@ async def spin_wheel(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Крутить колесо удачи."""
-    result = await wheel_service.spin(db, user, request.payment_type.value)
+    result = await wheel_service.spin(db, user, request.payment_type.value, subscription_id=request.subscription_id)
 
     if not result.success:
         # Возвращаем ошибку в теле ответа, а не HTTP exception
