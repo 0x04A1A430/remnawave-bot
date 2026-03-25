@@ -92,6 +92,11 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                     if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
                     else db_user.remnawave_uuid
                 )
+                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                    logger.warning(
+                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                        subscription_id=getattr(subscription, 'id', None),
+                    )
                 if _uuid:
                     try:
                         await service.enable_remnawave_user(_uuid)
@@ -171,6 +176,11 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                     if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
                     else db_user.remnawave_uuid
                 )
+                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                    logger.warning(
+                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                        subscription_id=getattr(subscription, 'id', None),
+                    )
                 if _uuid:
                     try:
                         await service.disable_remnawave_user(_uuid)

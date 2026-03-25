@@ -253,7 +253,17 @@ async def _merge_phantom_into_active_user(
         for sub in phantom_subs:
             sub.user_id = active_user.id
         # Transfer remnawave_uuid (clear first to avoid unique constraint violation on flush)
-        if phantom.remnawave_uuid and not active_user.remnawave_uuid:
+        if settings.is_multi_tariff_enabled():
+            # In multi-tariff, transfer user-level UUID only if no subscription-level UUIDs exist
+            if phantom.remnawave_uuid and not active_user.remnawave_uuid:
+                phantom_subs = getattr(phantom, 'subscriptions', []) or []
+                has_sub_uuids = any(getattr(s, 'remnawave_uuid', None) for s in phantom_subs)
+                if not has_sub_uuids:
+                    uuid_to_transfer = phantom.remnawave_uuid
+                    phantom.remnawave_uuid = None
+                    await db.flush()
+                    active_user.remnawave_uuid = uuid_to_transfer
+        elif phantom.remnawave_uuid and not active_user.remnawave_uuid:
             uuid_to_transfer = phantom.remnawave_uuid
             phantom.remnawave_uuid = None
             await db.flush()

@@ -780,10 +780,25 @@ class YooKassaPaymentMixin:
                     full_subs = getattr(full_user, 'subscriptions', []) if full_user else []
                     fallback_subs = getattr(user, 'subscriptions', [])
                     all_subs = full_subs or fallback_subs
-                    subscription = next(
-                        (s for s in all_subs if s.status in ('active', 'trial')),
-                        all_subs[0] if all_subs else None,
-                    )
+                    _active = [s for s in all_subs if s.status in ('active', 'trial')]
+                    if _active:
+                        _non_daily = [s for s in _active if not getattr(s, 'is_daily_tariff', False)]
+                        _pool = _non_daily or _active
+                        subscription = max(_pool, key=lambda s: s.days_left)
+                    else:
+                        subscription = all_subs[0] if all_subs else None
+
+                    # Validate subscription_id from metadata matches the resolved subscription
+                    if is_recurrent_topup and subscription is not None:
+                        _meta_sub_id = payment_metadata.get('subscription_id')
+                        if _meta_sub_id and str(subscription.id) != _meta_sub_id:
+                            logger.warning(
+                                'Recurrent payment subscription_id mismatch',
+                                expected_sub_id=_meta_sub_id,
+                                actual_sub_id=subscription.id,
+                                user_id=user.id,
+                            )
+
                     promo_group = (
                         full_user.get_primary_promo_group()
                         if full_user

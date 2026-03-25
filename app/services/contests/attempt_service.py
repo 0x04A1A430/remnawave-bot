@@ -307,7 +307,11 @@ class ContestAttemptService:
                 return ''
             days = int(prize_value) if prize_value.isdigit() else 1
             await extend_subscription(db, subscription, days)
-            return texts.t('CONTEST_PRIZE_GRANTED', 'Бонус {days} дней зачислен!').format(days=days)
+            tariff_name = getattr(subscription.tariff, 'name', None) if subscription.tariff else None
+            prize_text = texts.t('CONTEST_PRIZE_GRANTED', 'Бонус {days} дней зачислен!').format(days=days)
+            if tariff_name:
+                prize_text += f' (подписка "{tariff_name}")'
+            return prize_text
 
         if prize_type == PrizeType.BALANCE.value:
             user = await get_user_by_id(db, user_id)
