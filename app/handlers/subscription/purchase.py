@@ -60,6 +60,13 @@ from app.utils.decorators import error_handler
 logger = structlog.get_logger(__name__)
 
 
+async def _resolve_subscription(callback, db_user, db, state=None):
+    """Resolve subscription — delegates to shared resolve_subscription_from_context."""
+    from .common import resolve_subscription_from_context
+
+    return await resolve_subscription_from_context(callback, db_user, db, state)
+
+
 def _serialize_markup(markup: InlineKeyboardMarkup | None) -> Any | None:
     if markup is None:
         return None
@@ -298,13 +305,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     if show_devices:
         try:
-            if db_user.remnawave_uuid:
+            _device_uuid = (
+                getattr(subscription, 'remnawave_uuid', None)
+                if settings.is_multi_tariff_enabled() and subscription
+                else None
+            ) or db_user.remnawave_uuid
+            if _device_uuid:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
 
                 async with service.get_api_client() as api:
-                    response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+                    response = await api._make_request('GET', f'/api/hwid/devices/{_device_uuid}')
 
                     if response and 'response' in response:
                         devices_info = response['response']
@@ -1583,7 +1595,12 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
     await callback.answer('✅ Корзина восстановлена!')
 
 
-async def handle_extend_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_extend_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
@@ -1592,22 +1609,9 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
     texts = get_texts(db_user.language)
 
     if settings.is_multi_tariff_enabled():
-        parts = (callback.data or '').split(':')
-        sub_id = None
-        if len(parts) >= 2:
-            try:
-                sub_id = int(parts[-1])
-            except (ValueError, TypeError):
-                pass
-        if sub_id:
-            from app.database.crud.subscription import get_subscription_by_id_for_user
-
-            subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
-            if not subscription:
-                await callback.answer('Подписка не найдена', show_alert=True)
-                return
-        else:
-            subscription = db_user.subscription
+        subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
+        if subscription is None:
+            return
     else:
         subscription = db_user.subscription
 
@@ -2509,6 +2513,11 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
             else db_user.remnawave_uuid
         )
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+            logger.warning(
+                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                subscription_id=getattr(subscription, 'id', None),
+            )
         if _purchase_uuid:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,

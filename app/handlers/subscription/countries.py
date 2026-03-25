@@ -53,7 +53,7 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
         return
 
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -167,7 +167,7 @@ async def handle_manage_country(callback: types.CallbackQuery, db_user: User, db
 
     country_uuid = callback.data.split('_')[2]
 
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     if not subscription or subscription.is_trial:
@@ -241,7 +241,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     await save_subscription_checkout_draft(db_user.id, dict(data))
     resume_callback = 'subscription_resume_checkout' if should_offer_checkout_resume(db_user, True) else None
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -273,7 +273,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
     # TOCTOU protection: lock user row before reading discount and charging balance
     db_user = await lock_user_for_pricing(db, db_user.id)
     # Re-resolve after lock since db_user was refreshed
-    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -705,7 +705,7 @@ async def handle_add_country_to_subscription(
         logger.info('🔍 Добавлена страна', country_uuid=country_uuid)
 
     total_price = 0
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     period_hint_days = _get_period_hint_from_subscription(subscription)
@@ -797,7 +797,7 @@ async def confirm_add_countries_to_subscription(
 ):
     data = await state.get_data()
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -819,7 +819,7 @@ async def confirm_add_countries_to_subscription(
     # TOCTOU protection: lock user row before reading discount and charging balance
     db_user = await lock_user_for_pricing(db, db_user.id)
     # Re-resolve after lock since db_user was refreshed
-    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 

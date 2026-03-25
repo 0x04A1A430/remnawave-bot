@@ -34,6 +34,13 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 logger = structlog.get_logger(__name__)
 
 
+async def _resolve_subscription(callback, db_user, db, state=None):
+    """Resolve subscription — delegates to shared resolve_subscription_from_context."""
+    from .common import resolve_subscription_from_context
+
+    return await resolve_subscription_from_context(callback, db_user, db, state)
+
+
 def _apply_promo_discount(price: int, group_pct: int, offer_pct: int = 0) -> int:
     """Применяет стекинг скидок к цене (sequential floor division, как PricingEngine)."""
     from app.services.pricing_engine import PricingEngine
@@ -1809,7 +1816,12 @@ async def show_tariff_extend(
             subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
         else:
             active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-            subscription = active_subs[0] if active_subs else None
+            if active_subs:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                subscription = max(_pool, key=lambda s: s.days_left)
+            else:
+                subscription = None
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
     if not subscription or not subscription.tariff_id:
@@ -2284,13 +2296,8 @@ async def show_tariff_switch_list(
     await state.clear()
 
     # Проверяем наличие активной подписки
-    if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = active_subs[0] if active_subs else None
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
-        await callback.answer('У вас нет активной подписки', show_alert=True)
         return
 
     current_tariff_id = subscription.tariff_id
@@ -2681,6 +2688,11 @@ async def confirm_tariff_switch(
             if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
             else db_user.remnawave_uuid
         )
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+            logger.warning(
+                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                subscription_id=getattr(subscription, 'id', None),
+            )
         if _reset_uuid:
             try:
                 from app.services.remnawave_service import RemnaWaveService
@@ -2892,13 +2904,23 @@ async def confirm_daily_tariff_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        if db_user.remnawave_uuid:
+        _reset_uuid_daily = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+            logger.warning(
+                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                subscription_id=getattr(subscription, 'id', None),
+            )
+        if _reset_uuid_daily:
             try:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(db_user.remnawave_uuid)
+                    await api.reset_user_devices(_reset_uuid_daily)
                     logger.info('🔧 Сброшены устройства при смене на суточный тариф для user_id', db_user_id=db_user.id)
             except Exception as e:
                 logger.error('Ошибка сброса устройств при смене тарифа', error=e)
@@ -3115,13 +3137,8 @@ async def show_instant_switch_list(
     await state.clear()
 
     # Проверяем наличие активной подписки
-    if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = active_subs[0] if active_subs else None
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
-        await callback.answer('У вас нет активной подписки', show_alert=True)
         return
 
     if not subscription.tariff_id:
@@ -3544,13 +3561,23 @@ async def confirm_instant_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        if db_user.remnawave_uuid:
+        _reset_uuid_instant = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+            logger.warning(
+                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                subscription_id=getattr(subscription, 'id', None),
+            )
+        if _reset_uuid_instant:
             try:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(db_user.remnawave_uuid)
+                    await api.reset_user_devices(_reset_uuid_instant)
                     logger.info(
                         '🔧 Сброшены устройства при мгновенном переключении тарифа для user_id', db_user_id=db_user.id
                     )

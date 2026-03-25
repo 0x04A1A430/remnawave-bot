@@ -2,6 +2,7 @@ import html as html_mod
 from datetime import UTC, datetime
 
 from aiogram import types
+from aiogram.fsm.context import FSMContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -150,9 +151,11 @@ async def get_current_devices_count(db_user: User, subscription=None) -> str:
         return '—'
 
 
-async def handle_change_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_change_devices(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -251,10 +254,12 @@ async def handle_change_devices(callback: types.CallbackQuery, db_user: User, db
     await callback.answer()
 
 
-async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def confirm_change_devices(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -508,7 +513,9 @@ async def confirm_change_devices(callback: types.CallbackQuery, db_user: User, d
     await callback.answer()
 
 
-async def execute_change_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def execute_change_devices(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     callback_parts = callback.data.split('_')
     new_devices_count = int(callback_parts[3])
 
@@ -516,7 +523,7 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
 
     texts = get_texts(db_user.language)
     # Re-resolve after lock since db_user was refreshed
-    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
             texts.t('NO_ACTIVE_SUBSCRIPTION', '⚠️ У вас нет активной подписки'),
@@ -782,9 +789,11 @@ async def execute_change_devices(callback: types.CallbackQuery, db_user: User, d
     await callback.answer()
 
 
-async def handle_device_management(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_device_management(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -892,10 +901,10 @@ async def show_devices_page(callback: types.CallbackQuery, db_user: User, device
     )
 
 
-async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     page = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     remnawave_uuid = _get_remnawave_uuid(subscription, db_user) if subscription else db_user.remnawave_uuid
 
     try:
@@ -923,9 +932,11 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
         )
 
 
-async def handle_single_device_reset(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_single_device_reset(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     remnawave_uuid = _get_remnawave_uuid(subscription, db_user) if subscription else db_user.remnawave_uuid
     try:
         callback_parts = callback.data.split('_')
@@ -1038,9 +1049,11 @@ async def handle_single_device_reset(callback: types.CallbackQuery, db_user: Use
         )
 
 
-async def handle_all_devices_reset_from_management(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_all_devices_reset_from_management(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     remnawave_uuid = _get_remnawave_uuid(subscription, db_user) if subscription else db_user.remnawave_uuid
 
     if not remnawave_uuid:
@@ -1165,10 +1178,10 @@ async def handle_all_devices_reset_from_management(callback: types.CallbackQuery
     await callback.answer()
 
 
-async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -1422,18 +1435,22 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
     await callback.answer()
 
 
-async def handle_reset_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    await handle_device_management(callback, db_user, db)
+async def handle_reset_devices(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    await handle_device_management(callback, db_user, db, state)
 
 
-async def confirm_reset_devices(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    await handle_device_management(callback, db_user, db)
+async def confirm_reset_devices(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    await handle_device_management(callback, db_user, db, state)
 
 
-async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_device_guide(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     device_type = callback.data.split('_')[2]
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     subscription_link = get_display_subscription_link(subscription)
@@ -1574,14 +1591,16 @@ async def handle_app_selection(callback: types.CallbackQuery, db_user: User, db:
     await callback.answer()
 
 
-async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_specific_app_guide(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     parts = callback.data.split('_', 2)
     if len(parts) < 3:
         await callback.answer('Invalid callback data', show_alert=True)
         return
     _, device_type, app_id = parts
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -1652,8 +1671,10 @@ async def handle_specific_app_guide(callback: types.CallbackQuery, db_user: User
     await callback.answer()
 
 
-async def show_device_connection_help(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+async def show_device_connection_help(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     subscription_link = get_display_subscription_link(subscription)

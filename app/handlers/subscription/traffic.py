@@ -53,12 +53,12 @@ async def _resolve_subscription(callback, db_user, db, state=None):
     return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
-async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     from app.config import settings
     from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -209,7 +209,9 @@ def _calculate_traffic_reset_price(subscription) -> int:
     return base_price
 
 
-async def handle_reset_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_reset_traffic(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     from app.config import settings
 
     if settings.is_traffic_topup_blocked():
@@ -217,7 +219,7 @@ async def handle_reset_traffic(callback: types.CallbackQuery, db_user: User, db:
         return
 
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -268,7 +270,9 @@ async def handle_reset_traffic(callback: types.CallbackQuery, db_user: User, db:
     await callback.answer()
 
 
-async def confirm_reset_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def confirm_reset_traffic(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     from app.config import settings
 
     if settings.is_traffic_topup_blocked():
@@ -281,7 +285,7 @@ async def confirm_reset_traffic(callback: types.CallbackQuery, db_user: User, db
 
     texts = get_texts(db_user.language)
     # Re-resolve after lock since db_user was refreshed
-    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -500,7 +504,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
     db_user = await lock_user_for_pricing(db, db_user.id)
     # Re-resolve after lock since db_user was refreshed
-    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -673,7 +677,9 @@ async def handle_no_traffic_packages(callback: types.CallbackQuery, db_user: Use
     )
 
 
-async def handle_switch_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_switch_traffic(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     from app.config import settings
 
     if settings.is_traffic_topup_blocked():
@@ -681,7 +687,7 @@ async def handle_switch_traffic(callback: types.CallbackQuery, db_user: User, db
         return
 
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -736,10 +742,12 @@ async def handle_switch_traffic(callback: types.CallbackQuery, db_user: User, db
     await callback.answer()
 
 
-async def confirm_switch_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def confirm_switch_traffic(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     new_traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
@@ -835,7 +843,9 @@ async def confirm_switch_traffic(callback: types.CallbackQuery, db_user: User, d
     await callback.answer()
 
 
-async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def execute_switch_traffic(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     callback_parts = callback.data.split('_')
     new_traffic_gb = int(callback_parts[3])
 
@@ -845,7 +855,7 @@ async def execute_switch_traffic(callback: types.CallbackQuery, db_user: User, d
 
     texts = get_texts(db_user.language)
     # Re-resolve after lock since db_user was refreshed
-    subscription, _ = await _resolve_subscription(callback, db_user, db)
+    subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     current_traffic = subscription.traffic_limit_gb

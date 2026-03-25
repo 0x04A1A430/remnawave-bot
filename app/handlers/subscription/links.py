@@ -1,4 +1,5 @@
 from aiogram import types
+from aiogram.fsm.context import FSMContext
 from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,14 +27,16 @@ async def _resolve_subscription(callback: types.CallbackQuery, db_user: User, db
     return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
-async def handle_connect_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_connect_subscription(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
         return
 
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     subscription_link = get_display_subscription_link(subscription)
@@ -214,9 +217,11 @@ async def handle_connect_subscription(callback: types.CallbackQuery, db_user: Us
     await callback.answer()
 
 
-async def handle_open_subscription_link(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_open_subscription_link(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     texts = get_texts(db_user.language)
-    subscription, sub_id = await _resolve_subscription(callback, db_user, db)
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
     subscription_link = get_display_subscription_link(subscription)
