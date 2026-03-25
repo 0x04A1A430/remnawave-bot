@@ -1146,6 +1146,7 @@
     "MULENPAY_TOPUP_PROMPT": "💳 <b>شارژ MulenPay</b>\n\nمبلغ وارد کنید.\nحداقل: {min_amount}، حداکثر: {max_amount}",
     "MY_BALANCE_BUTTON": "💰 موجودی من",
     "MY_SUBSCRIPTION_BUTTON": "📱 اشتراک من",
+    "MY_SUBSCRIPTIONS_BUTTON": "📱 اشتراک‌های من",
     "MY_TICKETS_BUTTON": "📋 تیکت‌های من",
     "MY_TICKETS_TITLE": "📋 <b>تیکت‌های من</b>",
     "NO": "❌ خیر",

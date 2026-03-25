@@ -1125,6 +1125,7 @@
   "MULENPAY_TOPUP_PROMPT": "💳 <b>{mulenpay_name_html} payment</b>\n\nEnter an amount between 100 and 100,000 ₽.\nThe payment is processed by the secure {mulenpay_name} platform.",
   "MY_BALANCE_BUTTON": "💰 My balance",
   "MY_SUBSCRIPTION_BUTTON": "📱 My subscription",
+  "MY_SUBSCRIPTIONS_BUTTON": "📱 My subscriptions",
   "MY_TICKETS_BUTTON": "📋 My tickets",
   "MY_TICKETS_TITLE": "📋 Your tickets:",
   "NO": "❌ No",

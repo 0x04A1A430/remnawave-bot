@@ -359,41 +359,49 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
-                if not user or not user.subscription:
+                subs = getattr(user, 'subscriptions', None) or []
+                if not user or not subs:
                     return
 
-                subscription = user.subscription
-
-                if subscription.status != SubscriptionStatus.ACTIVE.value:
+                active_subs = [s for s in subs if s.status == SubscriptionStatus.ACTIVE.value]
+                if not active_subs:
                     return
 
                 # Per-channel settings: check if any unsubscribed channel requires deactivation
                 unsubscribed = [ch for ch in channels if not ch.get('is_subscribed', False)]
-                should_disable = any(
-                    channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
-                    for ch in unsubscribed
-                )
-                if not should_disable:
-                    return
 
-                await deactivate_subscription(db, subscription)
-                sub_type = 'trial' if subscription.is_trial else 'paid'
-                logger.info(
-                    'Subscription deactivated after channel unsubscribe',
-                    sub_type=sub_type,
-                    telegram_id=telegram_id,
-                )
+                for subscription in active_subs:
+                    should_disable = any(
+                        channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
+                        for ch in unsubscribed
+                    )
+                    if not should_disable:
+                        continue
 
-                if user.remnawave_uuid:
-                    service = SubscriptionService()
-                    try:
-                        await service.disable_remnawave_user(user.remnawave_uuid)
-                    except Exception as api_error:
-                        logger.error(
-                            'Failed to disable RemnaWave user',
-                            remnawave_uuid=user.remnawave_uuid,
-                            api_error=api_error,
-                        )
+                    await deactivate_subscription(db, subscription)
+                    sub_type = 'trial' if subscription.is_trial else 'paid'
+                    logger.info(
+                        'Subscription deactivated after channel unsubscribe',
+                        sub_type=sub_type,
+                        telegram_id=telegram_id,
+                    )
+
+                service = SubscriptionService()
+                for subscription in active_subs:
+                    panel_uuid = (
+                        subscription.remnawave_uuid
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                        else user.remnawave_uuid
+                    )
+                    if panel_uuid:
+                        try:
+                            await service.disable_remnawave_user(panel_uuid)
+                        except Exception as api_error:
+                            logger.error(
+                                'Failed to disable RemnaWave user',
+                                remnawave_uuid=panel_uuid,
+                                api_error=api_error,
+                            )
 
                 # Notify user about deactivation
                 try:
@@ -428,7 +436,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         async with AsyncSessionLocal() as db:
             try:
                 user = await get_user_by_telegram_id(db, telegram_id)
-                if not user or not user.subscription:
+                subs = getattr(user, 'subscriptions', None) or []
+                if not user or not subs:
                     return
 
                 # Do NOT reactivate for blocked users
@@ -436,35 +445,41 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     logger.info('Skipping reactivation for blocked user', telegram_id=telegram_id)
                     return
 
-                subscription = user.subscription
-
-                # Only reactivate DISABLED subscriptions
-                if subscription.status != SubscriptionStatus.DISABLED.value:
+                disabled_subs = [
+                    s
+                    for s in subs
+                    if s.status == SubscriptionStatus.DISABLED.value
+                    and (not s.end_date or s.end_date > datetime.now(UTC))
+                ]
+                if not disabled_subs:
                     return
 
-                # Check subscription has not expired
-                if subscription.end_date and subscription.end_date <= datetime.now(UTC):
-                    return
-
-                await reactivate_subscription(db, subscription)
-                sub_type = 'trial' if subscription.is_trial else 'paid'
-                logger.info(
-                    'Subscription reactivated after channel subscribe',
-                    sub_type=sub_type,
-                    telegram_id=telegram_id,
-                )
+                for subscription in disabled_subs:
+                    await reactivate_subscription(db, subscription)
+                    sub_type = 'trial' if subscription.is_trial else 'paid'
+                    logger.info(
+                        'Subscription reactivated after channel subscribe',
+                        sub_type=sub_type,
+                        telegram_id=telegram_id,
+                    )
 
                 # Enable in RemnaWave
-                if user.remnawave_uuid:
-                    service = SubscriptionService()
-                    try:
-                        await service.enable_remnawave_user(user.remnawave_uuid)
-                    except Exception as api_error:
-                        logger.error(
-                            'Failed to enable RemnaWave user',
-                            remnawave_uuid=user.remnawave_uuid,
-                            api_error=api_error,
-                        )
+                service = SubscriptionService()
+                for subscription in disabled_subs:
+                    panel_uuid = (
+                        subscription.remnawave_uuid
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                        else user.remnawave_uuid
+                    )
+                    if panel_uuid:
+                        try:
+                            await service.enable_remnawave_user(panel_uuid)
+                        except Exception as api_error:
+                            logger.error(
+                                'Failed to enable RemnaWave user',
+                                remnawave_uuid=panel_uuid,
+                                api_error=api_error,
+                            )
 
                 # Notify user about reactivation
                 try:

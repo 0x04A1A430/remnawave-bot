@@ -300,8 +300,19 @@ class RemnaWaveWebhookService:
 
         Handles both user-scope events (top-level telegramId/uuid) and
         device-scope events (userUuid, or nested user.telegramId/user.uuid).
+
+        In multi-tariff mode, resolves subscription by remnawave_uuid from payload
+        (each subscription has its own Remnawave user).
         """
         user: User | None = None
+        remnawave_uuid: str | None = None
+
+        # Extract Remnawave UUID from payload (used for subscription lookup in multi-tariff)
+        remnawave_uuid = data.get('uuid') or data.get('userUuid')
+        if not remnawave_uuid:
+            nested_user = data.get('user')
+            if isinstance(nested_user, dict):
+                remnawave_uuid = nested_user.get('uuid')
 
         # Try top-level telegramId first
         telegram_id = data.get('telegramId')
@@ -312,10 +323,8 @@ class RemnaWaveWebhookService:
                 pass
 
         # Try top-level uuid
-        if not user:
-            uuid = data.get('uuid') or data.get('userUuid')
-            if uuid:
-                user = await get_user_by_remnawave_uuid(db, uuid)
+        if not user and remnawave_uuid:
+            user = await get_user_by_remnawave_uuid(db, remnawave_uuid)
 
         # Try nested user object (e.g. user_hwid_devices events)
         if not user:
@@ -332,9 +341,54 @@ class RemnaWaveWebhookService:
                     if nested_uuid:
                         user = await get_user_by_remnawave_uuid(db, nested_uuid)
 
+        # Multi-tariff: try finding user through subscription's remnawave_uuid
+        if not user and remnawave_uuid and settings.is_multi_tariff_enabled():
+            from sqlalchemy import select as sa_select
+            from sqlalchemy.orm import selectinload as sa_selectinload
+
+            sub_result = await db.execute(
+                sa_select(Subscription)
+                .options(
+                    sa_selectinload(Subscription.user)
+                    .selectinload(User.subscriptions)
+                    .selectinload(Subscription.tariff),
+                    sa_selectinload(Subscription.tariff),
+                )
+                .where(Subscription.remnawave_uuid == remnawave_uuid)
+            )
+            found_sub = sub_result.scalar_one_or_none()
+            if found_sub and found_sub.user:
+                return found_sub.user, found_sub
+
         if not user:
             return None, None
 
+        # In multi-tariff mode, find subscription by remnawave_uuid (per-subscription)
+        if settings.is_multi_tariff_enabled() and remnawave_uuid:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            result = await db.execute(
+                select(Subscription)
+                .options(selectinload(Subscription.tariff))
+                .where(
+                    Subscription.remnawave_uuid == remnawave_uuid,
+                    Subscription.user_id == user.id,
+                )
+            )
+            subscription = result.scalar_one_or_none()
+            if subscription:
+                return user, subscription
+            # Fallback to legacy lookup if no subscription found by UUID
+            logger.warning(
+                'Webhook: подписка не найдена по remnawave_uuid, fallback на user_id',
+                remnawave_uuid=remnawave_uuid,
+                user_id=user.id,
+            )
+
+        if settings.is_multi_tariff_enabled():
+            # In multi-tariff mode, don't fall back to arbitrary subscription
+            return user, None
         subscription = await get_subscription_by_user_id(db, user.id)
         return user, subscription
 
@@ -793,12 +847,29 @@ class RemnaWaveWebhookService:
                 subscription.connected_squads = []
                 subscription.updated_at = datetime.now(UTC)
 
+            # In multi-tariff mode clear per-subscription UUID here
+            if settings.is_multi_tariff_enabled():
+                subscription.remnawave_uuid = None
+
             # Remove SubscriptionServer link rows (panel user no longer exists)
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
-        # Clear remnawave linkage
-        if user.remnawave_uuid:
-            user.remnawave_uuid = None
+        # Clear remnawave linkage — only in single-tariff mode (multi-tariff uses per-subscription UUIDs)
+        if not settings.is_multi_tariff_enabled():
+            if user.remnawave_uuid:
+                user.remnawave_uuid = None
+        # In multi-tariff mode, subscription.remnawave_uuid was cleared above.
+        # If subscription was None (fallback path), extract panel UUID from data and
+        # clear it from the matching subscription manually.
+        elif subscription is None:
+            panel_uuid = data.get('uuid') or data.get('userUuid')
+            if panel_uuid:
+                await db.refresh(user, ['subscriptions'])
+                for sub in getattr(user, 'subscriptions', None) or []:
+                    if getattr(sub, 'remnawave_uuid', None) == panel_uuid:
+                        sub.remnawave_uuid = None
+                        sub.remnawave_short_uuid = None
+                        break
 
         await db.commit()
 

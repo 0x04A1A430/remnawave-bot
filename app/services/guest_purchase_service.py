@@ -340,7 +340,18 @@ async def fulfill_purchase(
             return purchase
 
         # Check if user already has a subscription
-        existing_subscription = await get_subscription_by_user_id(db, user.id)
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+            _active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            if _active_subs:
+                _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or _active_subs
+                existing_subscription = max(_pool, key=lambda s: s.days_left)
+            else:
+                existing_subscription = None
+        else:
+            existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription is not None and (existing_subscription.is_active or purchase.is_gift):
             # Active subscription or gift with any existing subscription — hold for manual activation
             purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
@@ -1009,7 +1020,6 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
     notification_language = user.language or 'ru'
 
     try:
-        existing_subscription = await get_subscription_by_user_id(db, user.id)
         subscription_service = SubscriptionService()
 
         squads = list(tariff.allowed_squads or [])
@@ -1019,31 +1029,69 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
             all_servers, _ = await get_all_server_squads(db, available_only=True)
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-        if existing_subscription is not None:
-            subscription = await replace_subscription(
-                db,
-                existing_subscription,
-                duration_days=purchase.period_days,
-                traffic_limit_gb=tariff.traffic_limit_gb,
-                device_limit=tariff.device_limit,
-                connected_squads=squads,
-                is_trial=False,
-                update_server_counters=True,
-                commit=False,
-            )
-            subscription.tariff_id = tariff.id
+        # In multi-tariff mode, always create a new subscription (new Remnawave user)
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing_for_tariff = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
+            if existing_for_tariff:
+                subscription = await replace_subscription(
+                    db,
+                    existing_for_tariff,
+                    duration_days=purchase.period_days,
+                    traffic_limit_gb=tariff.traffic_limit_gb,
+                    device_limit=tariff.device_limit,
+                    connected_squads=squads,
+                    is_trial=False,
+                    update_server_counters=True,
+                    commit=False,
+                )
+                subscription.tariff_id = tariff.id
+            else:
+                subscription = await create_paid_subscription(
+                    db=db,
+                    user_id=user.id,
+                    duration_days=purchase.period_days,
+                    traffic_limit_gb=tariff.traffic_limit_gb,
+                    device_limit=tariff.device_limit,
+                    connected_squads=squads,
+                    tariff_id=tariff.id,
+                    update_server_counters=True,
+                    commit=False,
+                )
         else:
-            subscription = await create_paid_subscription(
-                db=db,
-                user_id=user.id,
-                duration_days=purchase.period_days,
-                traffic_limit_gb=tariff.traffic_limit_gb,
-                device_limit=tariff.device_limit,
-                connected_squads=squads,
-                tariff_id=tariff.id,
-                update_server_counters=True,
-                commit=False,
-            )
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                _active = await get_active_subscriptions_by_user_id(db, user.id)
+                existing_subscription = _active[0] if _active else None
+            else:
+                existing_subscription = await get_subscription_by_user_id(db, user.id)
+            if existing_subscription is not None:
+                subscription = await replace_subscription(
+                    db,
+                    existing_subscription,
+                    duration_days=purchase.period_days,
+                    traffic_limit_gb=tariff.traffic_limit_gb,
+                    device_limit=tariff.device_limit,
+                    connected_squads=squads,
+                    is_trial=False,
+                    update_server_counters=True,
+                    commit=False,
+                )
+                subscription.tariff_id = tariff.id
+            else:
+                subscription = await create_paid_subscription(
+                    db=db,
+                    user_id=user.id,
+                    duration_days=purchase.period_days,
+                    traffic_limit_gb=tariff.traffic_limit_gb,
+                    device_limit=tariff.device_limit,
+                    connected_squads=squads,
+                    tariff_id=tariff.id,
+                    update_server_counters=True,
+                    commit=False,
+                )
 
         await subscription_service.create_remnawave_user(db, subscription)
         await db.refresh(subscription)

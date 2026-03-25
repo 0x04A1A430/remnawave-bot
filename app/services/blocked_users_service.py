@@ -204,7 +204,7 @@ class BlockedUsersService:
         result = BlockedUsersScanResult()
 
         # Формируем запрос
-        query = select(User).options(selectinload(User.subscription))
+        query = select(User).options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
         if only_active:
             query = query.where(User.status == UserStatus.ACTIVE.value)
         query = query.where(User.telegram_id.isnot(None))
@@ -292,7 +292,9 @@ class BlockedUsersService:
         try:
             # Получаем пользователя
             user_result = await db.execute(
-                select(User).options(selectinload(User.subscription)).where(User.id == user_id)
+                select(User)
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
+                .where(User.id == user_id)
             )
             user = user_result.scalar_one_or_none()
 
@@ -319,12 +321,10 @@ class BlockedUsersService:
             # 2. Транзакции (после платежей)
             await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
 
-            # 3. Подписки
-            if user.subscription:
-                await db.execute(
-                    delete(SubscriptionServer).where(SubscriptionServer.subscription_id == user.subscription.id)
-                )
-                await db.execute(delete(Subscription).where(Subscription.user_id == user.id))
+            # 3. Подписки — cleanup ALL subscriptions' servers, then delete all subscriptions
+            for sub in getattr(user, 'subscriptions', None) or []:
+                await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
+            await db.execute(delete(Subscription).where(Subscription.user_id == user.id))
             await db.execute(delete(SubscriptionConversion).where(SubscriptionConversion.user_id == user.id))
             await db.execute(delete(SubscriptionEvent).where(SubscriptionEvent.user_id == user.id))
 

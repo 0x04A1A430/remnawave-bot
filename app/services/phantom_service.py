@@ -89,7 +89,7 @@ async def claim_phantom(
         )
         existing = await get_user_by_telegram_id(db, telegram_id)
         return False, existing
-    await db.refresh(phantom, ['subscription'])
+    await db.refresh(phantom, ['subscriptions'])
 
     # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
     # Telegram usernames are changeable/reassignable, so the claimer may not be the intended
@@ -132,11 +132,11 @@ async def merge_phantom_into_user(
     Remnawave panel AFTER commit via ``sync_remnawave_after_phantom_merge``).
     """
     # Determine which subscription to keep: phantom's if active user has none, otherwise active's
-    await db.refresh(phantom, ['subscription'])
-    await db.refresh(active_user, ['subscription'])
-    keep_from: Literal['primary', 'secondary'] = (
-        'secondary' if phantom.subscription and not active_user.subscription else 'primary'
-    )
+    await db.refresh(phantom, ['subscriptions'])
+    await db.refresh(active_user, ['subscriptions'])
+    phantom_subs = getattr(phantom, 'subscriptions', None) or []
+    active_subs = getattr(active_user, 'subscriptions', None) or []
+    keep_from: Literal['primary', 'secondary'] = 'secondary' if phantom_subs and not active_subs else 'primary'
 
     logger.warning(
         'Merging phantom user into active user via execute_merge',
@@ -188,12 +188,14 @@ async def sync_remnawave_after_phantom_merge(db: AsyncSession, user: User) -> No
 
     Must be called AFTER db.commit() to avoid holding FOR UPDATE locks during HTTP calls.
     """
-    await db.refresh(user, ['subscription'])
-    if not user.subscription:
+    await db.refresh(user, ['subscriptions'])
+    subs = getattr(user, 'subscriptions', None) or []
+    if not subs:
         return
     try:
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, user.subscription)
+        for sub in subs:
+            await subscription_service.update_remnawave_user(db, sub)
     except Exception:
         logger.warning(
             'Failed to update Remnawave panel after phantom merge',

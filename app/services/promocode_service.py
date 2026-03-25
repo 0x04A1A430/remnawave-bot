@@ -4,6 +4,7 @@ from typing import Any
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.promocode import (
     check_user_promocode_usage,
@@ -36,7 +37,9 @@ class PromoCodeService:
             return f'{user.id} ({user.email})'
         return f'#{user.id}'
 
-    async def activate_promocode(self, db: AsyncSession, user_id: int, code: str) -> dict[str, Any]:
+    async def activate_promocode(
+        self, db: AsyncSession, user_id: int, code: str, *, subscription_id: int | None = None
+    ) -> dict[str, Any]:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
@@ -258,39 +261,80 @@ class PromoCodeService:
             effects.append(f'💰 Баланс пополнен на {balance_bonus_rubles}₽')
 
         if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
-            if not subscription:
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            else:
+                single_sub = await get_subscription_by_user_id(db, user.id)
+                active_subs = [single_sub] if single_sub else []
+
+            if not active_subs:
                 raise ValueError('no_subscription_for_days')
 
+            # Multi-tariff: require subscription selection if >1 non-daily subscriptions
+            non_daily = [s for s in active_subs if not (s.tariff and getattr(s.tariff, 'is_daily', False))]
+            eligible = non_daily or active_subs
+
+            if subscription_id:
+                target_sub = next((s for s in eligible if s.id == subscription_id), None)
+                if not target_sub:
+                    return {'success': False, 'error': 'subscription_not_found'}
+            elif len(eligible) == 1:
+                target_sub = eligible[0]
+            elif len(eligible) > 1 and settings.is_multi_tariff_enabled():
+                # Need user to choose — return list of eligible subscriptions
+                return {
+                    'success': False,
+                    'error': 'select_subscription',
+                    'eligible_subscriptions': [
+                        {'id': s.id, 'tariff_name': s.tariff.name if s.tariff else f'#{s.id}', 'days_left': s.days_left}
+                        for s in eligible
+                    ],
+                    'code': code,
+                }
+            # Prefer non-daily subscription with most days remaining
+            elif eligible:
+                target_sub = max(eligible, key=lambda s: s.days_left)
+            else:
+                non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                pool = non_daily or active_subs
+                target_sub = max(pool, key=lambda s: s.days_left) if pool else None
             # Конвертация триала в платную подписку при активации промокода на дни
-            if subscription.is_trial:
-                subscription.is_trial = False
-                if subscription.status == SubscriptionStatus.TRIAL.value:
-                    subscription.status = SubscriptionStatus.ACTIVE.value
-                subscription.updated_at = datetime.now(UTC)
+            if target_sub.is_trial:
+                target_sub.is_trial = False
+                if target_sub.status == SubscriptionStatus.TRIAL.value:
+                    target_sub.status = SubscriptionStatus.ACTIVE.value
+                target_sub.updated_at = datetime.now(UTC)
                 logger.info(
                     '🎓 Промокод: конвертация триала в платную подписку',
-                    subscription_id=subscription.id,
+                    subscription_id=target_sub.id,
                     code=promocode.code,
                 )
 
-            await extend_subscription(db, subscription, promocode.subscription_days)
-
-            await self.subscription_service.update_remnawave_user(db, subscription)
+            await extend_subscription(db, target_sub, promocode.subscription_days)
+            await self.subscription_service.update_remnawave_user(db, target_sub)
 
             effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
             logger.info(
-                '✅ Подписка пользователя продлена на дней в RemnaWave с текущими сквадами',
+                '✅ Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
                 subscription_days=promocode.subscription_days,
+                subscription_id=target_sub.id,
             )
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.config import settings
             from app.database.crud.subscription import create_trial_subscription
 
-            subscription = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Trial promo: block if ANY active subscription exists
+                subscription = next(iter(active_subs), None)
+            else:
+                subscription = await get_subscription_by_user_id(db, user.id)
 
             if not subscription:
                 trial_days = (

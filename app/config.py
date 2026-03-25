@@ -208,6 +208,10 @@ class Settings(BaseSettings):
     # - tariffs: режим тарифов (готовые пакеты с фиксированными параметрами)
     SALES_MODE: str = 'tariffs'
 
+    # Multi-tariff mode: allows users to purchase multiple tariffs simultaneously
+    # Only works when SALES_MODE='tariffs'
+    MULTI_TARIFF_ENABLED: bool = False
+
     # ID тарифа для триала в режиме тарифов (0 = использовать стандартные настройки триала)
     # Если указан ID тарифа, параметры триала берутся из тарифа (traffic_limit_gb, device_limit, allowed_squads)
     # Длительность триала всё равно берётся из TRIAL_DURATION_DAYS
@@ -1675,6 +1679,10 @@ class Settings(BaseSettings):
 
     def get_disabled_mode_device_limit(self) -> int | None:
         return self.get_devices_selection_disabled_amount()
+
+    def is_multi_tariff_enabled(self) -> bool:
+        """Проверяет, включен ли мультитарифный режим."""
+        return self.MULTI_TARIFF_ENABLED and self.SALES_MODE == 'tariffs'
 
     def is_tariffs_mode(self) -> bool:
         """Проверяет, включен ли режим продаж 'Тарифы'."""

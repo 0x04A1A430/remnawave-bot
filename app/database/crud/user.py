@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.crud.promo_group import get_default_promo_group
 from app.database.crud.promo_offer_log import log_promo_offer_action
@@ -86,7 +87,7 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -106,7 +107,7 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> User | 
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -134,7 +135,7 @@ async def find_phantom_user_by_username(db: AsyncSession, username: str) -> User
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
         )
         .where(
             User.telegram_id.is_(None),
@@ -156,7 +157,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -177,7 +178,7 @@ async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Use
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
@@ -196,13 +197,28 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
         .where(User.remnawave_uuid == remnawave_uuid)
     )
     user = result.scalar_one_or_none()
+
+    # Multi-tariff: UUID lives on Subscription, not User
+    if not user and settings.is_multi_tariff_enabled():
+        from app.database.models import Subscription as _Subscription
+
+        sub_result = await db.execute(
+            select(_Subscription)
+            .options(
+                selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
+            )
+            .where(_Subscription.remnawave_uuid == remnawave_uuid)
+        )
+        sub = sub_result.scalar_one_or_none()
+        if sub and sub.user:
+            user = sub.user
 
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
@@ -422,7 +438,7 @@ async def lock_user_for_update(db: AsyncSession, user: User) -> User:
         select(User)
         .where(User.id == user.id)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.promo_group),
             selectinload(User.referrer),
@@ -450,7 +466,7 @@ async def add_user_balance(
             select(User)
             .where(User.id == user.id)
             .options(
-                selectinload(User.subscription),
+                selectinload(User.subscriptions).selectinload(Subscription.tariff),
                 selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
                 selectinload(User.promo_group),
                 selectinload(User.referrer),
@@ -550,7 +566,7 @@ async def lock_user_for_pricing(db: AsyncSession, user_id: int) -> User:
         .options(
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.promo_group),
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
         )
         .with_for_update()
         .execution_options(populate_existing=True)
@@ -589,7 +605,7 @@ async def subtract_user_balance(
         select(User)
         .where(User.id == user.id)
         .options(
-            selectinload(User.subscription),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.promo_group),
             selectinload(User.referrer),
@@ -810,7 +826,7 @@ async def get_users_list(
     order_by_purchase_count: bool = False,
 ) -> list[User]:
     query = select(User).options(
-        selectinload(User.subscription).selectinload(Subscription.tariff),
+        selectinload(User.subscriptions).selectinload(Subscription.tariff),
         selectinload(User.promo_group),
         selectinload(User.referrer),
     )
@@ -970,7 +986,7 @@ async def get_referrals(db: AsyncSession, user_id: int) -> list[User]:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -995,7 +1011,7 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[Us
     base_query = (
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
@@ -1057,7 +1073,7 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
     result = await db.execute(
         select(User)
         .options(
-            selectinload(User.subscription).selectinload(Subscription.tariff),
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
             selectinload(User.promo_group),
@@ -1141,7 +1157,7 @@ async def get_users_with_active_subscriptions(db: AsyncSession) -> list[User]:
                 Subscription.end_date > current_time,
             )
         )
-        .options(selectinload(User.subscription).selectinload(Subscription.tariff))
+        .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
     )
 
     return result.scalars().unique().all()
@@ -1469,3 +1485,14 @@ async def create_user_by_oauth(
         logger.warning('Failed to emit user.created event', error=error)
 
     return user
+
+
+async def lock_user_subscriptions_for_update(db: AsyncSession, user_id: int) -> list[Subscription]:
+    """Lock all subscriptions for a user using SELECT FOR UPDATE."""
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user_id)
+        .with_for_update()
+        .order_by(Subscription.created_at.desc())
+    )
+    return list(result.scalars().all())

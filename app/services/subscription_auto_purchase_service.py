@@ -147,24 +147,65 @@ async def _prepare_auto_extend_context(
 ) -> AutoExtendContext | None:
     from app.database.crud.subscription import get_subscription_by_user_id
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    saved_subscription_id = cart_data.get('subscription_id')
+
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import (
+            get_active_subscriptions_by_user_id,
+            get_subscription_by_id_for_user,
+        )
+
+        if saved_subscription_id is not None:
+            parsed_sub_id = _safe_int(saved_subscription_id)
+            subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
+        else:
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            if len(active_subs) == 1:
+                subscription = active_subs[0]
+            elif len(active_subs) > 1:
+                # Multi-tariff: process each subscription with autopay independently
+                # The calling code iterates subscriptions_needing_topup which already
+                # selects the specific subscription. This fallback means we're in a
+                # context without explicit subscription — pick the one with autopay enabled.
+                autopay_subs = [s for s in active_subs if getattr(s, 'autopay_enabled', False)]
+                if len(autopay_subs) == 1:
+                    subscription = autopay_subs[0]
+                elif autopay_subs:
+                    # Multiple with autopay — log and pick most urgent (fewest days left)
+                    subscription = min(autopay_subs, key=lambda s: s.days_left)
+                    logger.info(
+                        'Multi-tariff: multiple autopay subscriptions, processing most urgent',
+                        user_id=user.id,
+                        selected_sub_id=subscription.id,
+                        days_left=subscription.days_left,
+                    )
+                else:
+                    logger.warning(
+                        'Multi-tariff: multiple active subscriptions but none with autopay enabled',
+                        user_id=user.id,
+                        count=len(active_subs),
+                    )
+                    return None
+            else:
+                subscription = None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription is not None and saved_subscription_id is not None:
+            parsed_sub_id = _safe_int(saved_subscription_id, subscription.id)
+            if parsed_sub_id != subscription.id:
+                logger.warning(
+                    '🔁 Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
+                    saved_subscription_id=parsed_sub_id,
+                    subscription_id=subscription.id,
+                    format_user_id=_format_user_id(user),
+                )
+                return None
+
     if subscription is None:
         logger.info(
             '🔁 Автопокупка: у пользователя нет активной подписки для продления', format_user_id=_format_user_id(user)
         )
         return None
-
-    saved_subscription_id = cart_data.get('subscription_id')
-    if saved_subscription_id is not None:
-        saved_subscription_id = _safe_int(saved_subscription_id, subscription.id)
-        if saved_subscription_id != subscription.id:
-            logger.warning(
-                '🔁 Автопокупка: сохранённая подписка не совпадает с текущей у пользователя',
-                saved_subscription_id=saved_subscription_id,
-                subscription_id=subscription.id,
-                format_user_id=_format_user_id(user),
-            )
-            return None
 
     period_days = _safe_int(cart_data.get('period_days'))
 
@@ -593,6 +634,7 @@ async def _auto_extend_subscription(
     try:
         await notify_user_subscription_renewed(
             user_id=user.id,
+            subscription_id=subscription.id if subscription else None,
             new_expires_at=new_end_date.isoformat() if new_end_date else '',
             amount_kopeks=prepared.price_kopeks,
         )
@@ -677,7 +719,16 @@ async def _auto_purchase_tariff(
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
     from app.database.crud.user import lock_user_for_pricing
 
-    existing_subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        existing_subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id),
+            None,
+        )
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
 
     user = await lock_user_for_pricing(db, user.id)
 
@@ -933,6 +984,7 @@ async def _auto_purchase_tariff(
             # Renewal of existing subscription
             await notify_user_subscription_renewed(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 amount_kopeks=final_price,
             )
@@ -940,6 +992,7 @@ async def _auto_purchase_tariff(
             # New subscription activation
             await notify_user_subscription_activated(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 tariff_name=tariff.name,
             )
@@ -1063,7 +1116,16 @@ async def _auto_purchase_daily_tariff(
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
     # Проверяем есть ли уже подписка
-    existing_subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        existing_subscription = next(
+            (s for s in active_subs if s.tariff_id == tariff_id),
+            None,
+        )
+    else:
+        existing_subscription = await get_subscription_by_user_id(db, user.id)
 
     try:
         if existing_subscription:
@@ -1258,6 +1320,7 @@ async def _auto_purchase_daily_tariff(
             # Renewal/upgrade of existing subscription
             await notify_user_subscription_renewed(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 amount_kopeks=final_price,
             )
@@ -1265,6 +1328,7 @@ async def _auto_purchase_daily_tariff(
             # New subscription activation
             await notify_user_subscription_activated(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
                 tariff_name=tariff.name,
             )
@@ -1482,8 +1546,13 @@ async def _auto_add_devices(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+        _panel_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _panel_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(_panel_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка устройств: не удалось обновить Remnawave для пользователя',
@@ -1609,7 +1678,47 @@ async def _auto_add_traffic(
         return False
 
     # Verify subscription
-    subscription = await get_subscription_by_user_id(db, user.id)
+    saved_subscription_id = cart_data.get('subscription_id')
+
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        if saved_subscription_id is not None:
+            from app.database.crud.subscription import get_subscription_by_id_for_user
+
+            parsed_sub_id = _safe_int(saved_subscription_id)
+            subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
+        else:
+            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+            if len(active_subs) == 1:
+                subscription = active_subs[0]
+            elif len(active_subs) > 1:
+                # Multi-tariff: pick the subscription with autopay enabled for add-traffic.
+                # The calling code iterates per-subscription, so this fallback handles
+                # contexts where no explicit subscription_id was provided.
+                autopay_subs = [s for s in active_subs if getattr(s, 'autopay_enabled', False)]
+                if len(autopay_subs) == 1:
+                    subscription = autopay_subs[0]
+                elif autopay_subs:
+                    # Multiple with autopay — pick most urgent (fewest days left)
+                    subscription = min(autopay_subs, key=lambda s: s.days_left)
+                    logger.info(
+                        'Multi-tariff: multiple autopay subscriptions for add-traffic, processing most urgent',
+                        user_id=user.id,
+                        selected_sub_id=subscription.id,
+                        days_left=subscription.days_left,
+                    )
+                else:
+                    logger.warning(
+                        'Multi-tariff: multiple active subscriptions but none with autopay enabled for add-traffic',
+                        user_id=user.id,
+                        count=len(active_subs),
+                    )
+                    return False
+            else:
+                subscription = None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
         logger.warning('🔁 Автопокупка трафика: у пользователя нет подписки', format_user_id=_format_user_id(user))
         await user_cart_service.delete_user_cart(user.id)
@@ -1778,8 +1887,13 @@ async def _auto_add_traffic(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        if getattr(user, 'remnawave_uuid', None) and subscription.status == 'active':
-            await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+        _panel_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _panel_uuid and subscription.status == 'active':
+            await subscription_service.enable_remnawave_user(_panel_uuid)
     except Exception as error:
         logger.warning(
             '⚠️ Автопокупка трафика: не удалось обновить Remnawave для пользователя',
@@ -1898,7 +2012,25 @@ async def try_auto_extend_expired_after_topup(
     if not user or not getattr(user, 'id', None):
         return False
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        if len(active_subs) == 1:
+            subscription = active_subs[0]
+        elif active_subs:
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or active_subs
+            subscription = max(_pool, key=lambda s: s.days_left)
+            logger.warning(
+                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
+                user_id=user.id,
+                count=len(active_subs),
+            )
+        else:
+            subscription = None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         logger.debug(
             '🔄 Автопродление expired: у пользователя нет подписки',
@@ -2219,6 +2351,7 @@ async def try_auto_extend_expired_after_topup(
     try:
         await notify_user_subscription_renewed(
             user_id=user.id,
+            subscription_id=subscription.id if subscription else None,
             new_expires_at=new_end_date.isoformat() if new_end_date else '',
             amount_kopeks=renewal_cost,
         )
@@ -2252,7 +2385,25 @@ async def try_resume_disabled_daily_after_topup(
     if not user or not getattr(user, 'id', None):
         return False
 
-    subscription = await get_subscription_by_user_id(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        if len(active_subs) == 1:
+            subscription = active_subs[0]
+        elif active_subs:
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or active_subs
+            subscription = max(_pool, key=lambda s: s.days_left)
+            logger.warning(
+                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
+                user_id=user.id,
+                count=len(active_subs),
+            )
+        else:
+            subscription = None
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
         return False
 
@@ -2570,6 +2721,7 @@ async def try_resume_disabled_daily_after_topup(
     try:
         await notify_user_subscription_renewed(
             user_id=user.id,
+            subscription_id=subscription.id if subscription else None,
             new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
             amount_kopeks=daily_price,
         )
@@ -2617,7 +2769,25 @@ async def auto_purchase_saved_cart_after_topup(
     # выше по цепочке (common.py), и если он не возобновил — причина сохраняется.
     from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
 
-    _existing_sub = await _get_sub(db, user.id)
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        _active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        if len(_active_subs) == 1:
+            _existing_sub = _active_subs[0]
+        elif _active_subs:
+            _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or _active_subs
+            _existing_sub = max(_pool, key=lambda s: s.days_left)
+            logger.warning(
+                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
+                user_id=user.id,
+                count=len(_active_subs),
+            )
+        else:
+            _existing_sub = None
+    else:
+        _existing_sub = await _get_sub(db, user.id)
     if _existing_sub and _existing_sub.status == SubscriptionStatus.DISABLED.value:
         logger.warning(
             '🔁 Автопокупка: пропускаем — подписка DISABLED, корзина устарела',
@@ -2836,6 +3006,7 @@ async def auto_purchase_saved_cart_after_topup(
             # Trial conversion = activation
             await notify_user_subscription_activated(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
                 tariff_name='',
             )
@@ -2843,6 +3014,7 @@ async def auto_purchase_saved_cart_after_topup(
             # Regular purchase = renewal or new activation
             await notify_user_subscription_renewed(
                 user_id=user.id,
+                subscription_id=subscription.id if subscription else None,
                 new_expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
                 amount_kopeks=pricing.final_total,
             )

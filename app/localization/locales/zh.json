@@ -1062,6 +1062,7 @@
 "MULENPAY_TOPUP_PROMPT": "💳<b>通过{mulenpay_name_html}付款</b>\n\n请输入充值金额，范围100至100000₽。\n付款通过{mulenpay_name}安全平台进行。",
 "MY_BALANCE_BUTTON": "💰我的余额",
 "MY_SUBSCRIPTION_BUTTON": "📱我的订阅",
+"MY_SUBSCRIPTIONS_BUTTON": "📱 我的订阅",
 "MY_TICKETS_BUTTON": "📋我的工单",
 "MY_TICKETS_TITLE": "📋您的工单：",
 "NO": "❌否",

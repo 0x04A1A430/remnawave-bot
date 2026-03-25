@@ -319,26 +319,56 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
             logger.info('Found subscription in panel for email', email=user.email, uuid=panel_user.uuid)
 
             # Check if another user already owns this remnawave_uuid
-            from app.database.crud.user import get_user_by_remnawave_uuid
+            if settings.is_multi_tariff_enabled():
+                # In multi-tariff mode UUIDs live on subscriptions, not users
+                from sqlalchemy import select as _select
 
-            existing_owner = await get_user_by_remnawave_uuid(db, panel_user.uuid)
-            if existing_owner and existing_owner.id != user.id:
-                logger.warning(
-                    'Panel UUID already belongs to another user, skipping sync',
-                    email=user.email,
-                    panel_uuid=panel_user.uuid,
-                    existing_owner_id=existing_owner.id,
+                from app.database.models import Subscription as _Subscription
+
+                _sub_result = await db.execute(
+                    _select(_Subscription).where(_Subscription.remnawave_uuid == panel_user.uuid)
                 )
-                return
+                _existing_sub = _sub_result.scalar_one_or_none()
+                if _existing_sub and _existing_sub.user_id != user.id:
+                    logger.warning(
+                        'Panel UUID already owned by another user subscription, skipping sync',
+                        email=user.email,
+                        panel_uuid=panel_user.uuid,
+                        existing_owner_id=_existing_sub.user_id,
+                    )
+                    return
+            else:
+                from app.database.crud.user import get_user_by_remnawave_uuid
 
-            # Link user to panel
-            user.remnawave_uuid = panel_user.uuid
+                existing_owner = await get_user_by_remnawave_uuid(db, panel_user.uuid)
+                if existing_owner and existing_owner.id != user.id:
+                    logger.warning(
+                        'Panel UUID already belongs to another user, skipping sync',
+                        email=user.email,
+                        panel_uuid=panel_user.uuid,
+                        existing_owner_id=existing_owner.id,
+                    )
+                    return
+
+            # Link user to panel (only in single-tariff mode; multi-tariff uses per-subscription UUIDs)
+            if not settings.is_multi_tariff_enabled():
+                user.remnawave_uuid = panel_user.uuid
 
             # Create or update subscription
             from app.database.crud.subscription import get_subscription_by_user_id
             from app.database.models import Subscription, SubscriptionStatus
 
-            existing_sub = await get_subscription_by_user_id(db, user.id)
+            if settings.is_multi_tariff_enabled():
+                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                # Match subscription by panel UUID instead of blindly taking first
+                existing_sub = next(
+                    (s for s in active_subs if s.remnawave_uuid == panel_user.uuid),
+                    None,
+                )
+            else:
+                existing_sub = await get_subscription_by_user_id(db, user.id)
 
             # Parse panel data — panel returns local time with misleading +00:00 offset
             expire_at = panel_datetime_to_utc(panel_user.expire_at)

@@ -38,13 +38,15 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
     await callback.answer()
 
 
-async def activate_promocode_for_registration(db: AsyncSession, user_id: int, code: str, bot: Bot = None) -> dict:
+async def activate_promocode_for_registration(
+    db: AsyncSession, user_id: int, code: str, bot: Bot = None, *, subscription_id: int | None = None
+) -> dict:
     """
-    Активирует промокод для пользователя во время регистрации.
+    Активирует промокод для пользователя.
     Возвращает результат активации без отправки сообщений.
     """
     promocode_service = PromoCodeService()
-    result = await promocode_service.activate_promocode(db, user_id, code)
+    result = await promocode_service.activate_promocode(db, user_id, code, subscription_id=subscription_id)
 
     if result['success']:
         logger.info('✅ Пользователь активировал промокод при регистрации', user_id=user_id, code=code)
@@ -129,6 +131,32 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             texts.PROMOCODE_SUCCESS.format(description=result['description']),
             reply_markup=get_back_keyboard(db_user.language),
         )
+        await state.clear()
+    elif result.get('error') == 'select_subscription':
+        # Multi-tariff: user needs to choose which subscription to apply days to
+        eligible = result.get('eligible_subscriptions', [])
+        promo_code = result.get('code', code)
+        buttons = []
+        for sub in eligible:
+            name = sub.get('tariff_name', f'#{sub["id"]}')
+            days = sub.get('days_left', 0)
+            buttons.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=f'{name} ({days} дн.)',
+                        callback_data=f'promo_sub:{sub["id"]}:{promo_code}',
+                    )
+                ]
+            )
+        buttons.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='back_to_menu')])
+        await message.answer(
+            texts.t(
+                'PROMOCODE_SELECT_SUBSCRIPTION',
+                '🎟️ К какой подписке применить промокод?',
+            ),
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
+        )
+        await state.clear()
     else:
         # Записываем неудачную попытку только для not_found (перебор)
         if result['error'] == 'not_found':
@@ -160,11 +188,48 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
 
         error_text = error_messages.get(result['error'], texts.PROMOCODE_INVALID)
         await message.answer(error_text, reply_markup=get_back_keyboard(db_user.language))
+        await state.clear()
 
-    await state.clear()
+
+async def handle_promo_subscription_select(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    """Handle subscription selection for promocode with days in multi-tariff."""
+    parts = (callback.data or '').split(':')
+    if len(parts) < 3:
+        await callback.answer('Неверный формат', show_alert=True)
+        return
+
+    try:
+        sub_id = int(parts[1])
+        code = ':'.join(parts[2:])  # code may contain colons
+    except (ValueError, IndexError):
+        await callback.answer('Ошибка', show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+    result = await activate_promocode_for_registration(db, db_user.id, code, callback.bot, subscription_id=sub_id)
+
+    if result['success']:
+        from app.utils.promo_rate_limiter import promo_limiter
+
+        promo_limiter.record_activation(callback.from_user.id)
+        if callback.message:
+            await callback.message.edit_text(
+                texts.PROMOCODE_SUCCESS.format(description=result['description']),
+                reply_markup=get_back_keyboard(db_user.language),
+            )
+    else:
+        error_text = texts.PROMOCODE_INVALID
+        if result.get('error') == 'subscription_not_found':
+            error_text = texts.t('PROMOCODE_SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена')
+        if callback.message:
+            await callback.message.edit_text(error_text, reply_markup=get_back_keyboard(db_user.language))
+    await callback.answer()
 
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promocode_menu, F.data == 'menu_promocode')
+    dp.callback_query.register(handle_promo_subscription_select, F.data.startswith('promo_sub:'))
 
     dp.message.register(process_promocode, PromoCodeStates.waiting_for_code)

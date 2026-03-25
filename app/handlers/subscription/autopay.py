@@ -37,9 +37,16 @@ from .countries import (
 from .pricing import _build_subscription_period_prompt
 
 
-async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def _resolve_subscription(callback, db_user, db, state=None):
+    """Resolve subscription — delegates to shared resolve_subscription_from_context."""
+    from .common import resolve_subscription_from_context
+
+    return await resolve_subscription_from_context(callback, db_user, db, state)
+
+
+async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     texts = get_texts(db_user.language)
-    subscription = db_user.subscription
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
             texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
@@ -81,15 +88,17 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
 
     await callback.message.edit_text(
         text,
-        reply_markup=get_autopay_keyboard(db_user.language),
+        reply_markup=get_autopay_keyboard(db_user.language, sub_id=sub_id),
         parse_mode='HTML',
     )
     await callback.answer()
 
 
-async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    subscription = db_user.subscription
-    enable = callback.data == 'autopay_enable'
+async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if subscription is None:
+        return
+    enable = callback.data.startswith('autopay_enable')
 
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
     # глобальный autopay для них запрещён
@@ -136,9 +145,12 @@ async def show_autopay_days(callback: types.CallbackQuery, db_user: User):
     await callback.answer()
 
 
-async def set_autopay_days(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    days = int(callback.data.split('_')[2])
-    subscription = db_user.subscription
+async def set_autopay_days(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if subscription is None:
+        return
+    base_data = callback.data.split(':')[0]
+    days = int(base_data.split('_')[2])
 
     await update_subscription_autopay(db, subscription, subscription.autopay_enabled, days)
 

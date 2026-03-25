@@ -177,8 +177,11 @@ class UserDetailResponse(BaseModel):
     last_activity: datetime | None = None
     cabinet_last_login: datetime | None = None
 
-    # Subscription
+    # Subscription (legacy single, kept for backward compat)
     subscription: UserSubscriptionInfo | None = None
+
+    # All subscriptions (multi-tariff)
+    subscriptions: list[UserSubscriptionInfo] = []
 
     # Promo group
     promo_group: UserPromoGroupInfo | None = None
@@ -284,6 +287,9 @@ class UpdateSubscriptionRequest(BaseModel):
     action: str = Field(
         ..., description='Action: extend, shorten, set_end_date, change_tariff, set_traffic, toggle_autopay, cancel'
     )
+
+    # Target subscription (required in multi-tariff mode for non-create actions)
+    subscription_id: int | None = Field(None, description='Subscription ID to target (multi-tariff)')
 
     # For extend action
     days: int | None = Field(None, ge=1, le=3650, description='Days to extend')
