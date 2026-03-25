@@ -2907,12 +2907,8 @@ async def confirm_daily_tariff_switch(
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
-    # Проверяем наличие подписки
-    if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    # Проверяем наличие подписки — ищем подписку FROM (текущую), не TO (новый тариф)
+    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
