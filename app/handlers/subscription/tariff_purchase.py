@@ -74,9 +74,12 @@ def format_tariffs_list_text(
     tariffs: list[Tariff],
     db_user: User | None = None,
     has_period_discounts: bool = False,
+    purchased_tariff_ids: set[int] | None = None,
 ) -> str:
     """Форматирует текст со списком тарифов для отображения."""
     lines = ['📦 <b>Выберите тариф</b>']
+    if purchased_tariff_ids is None:
+        purchased_tariff_ids = set()
 
     if has_period_discounts:
         lines.append('🎁 <i>Скидки по периодам</i>')
@@ -117,7 +120,10 @@ def format_tariffs_list_text(
                 price_text = f'от {format_price_kopeks(min_price, compact=True)}{discount_icon}'
 
         # Компактный формат: Название — 250 ГБ / 10 📱 от 179₽🔥
-        lines.append(f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} 📱 {price_text}')
+        purchased_mark = ' ✅' if tariff.id in purchased_tariff_ids else ''
+        lines.append(
+            f'<b>{html.escape(tariff.name)}</b>{purchased_mark} — {traffic} / {tariff.device_limit} 📱 {price_text}'
+        )
 
         # Описание тарифа если есть
         if tariff.description:
@@ -131,13 +137,19 @@ def format_tariffs_list_text(
 def get_tariffs_keyboard(
     tariffs: list[Tariff],
     language: str,
+    purchased_tariff_ids: set[int] | None = None,
 ) -> InlineKeyboardMarkup:
     """Создает компактную клавиатуру выбора тарифов (только названия)."""
     texts = get_texts(language)
+    if purchased_tariff_ids is None:
+        purchased_tariff_ids = set()
     buttons = []
 
     for tariff in tariffs:
-        buttons.append([InlineKeyboardButton(text=tariff.name, callback_data=f'tariff_select:{tariff.id}')])
+        if tariff.id in purchased_tariff_ids:
+            buttons.append([InlineKeyboardButton(text=f'✅ {tariff.name}', callback_data=f'tariff_select:{tariff.id}')])
+        else:
+            buttons.append([InlineKeyboardButton(text=tariff.name, callback_data=f'tariff_select:{tariff.id}')])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
@@ -512,10 +524,17 @@ async def show_tariffs_list(
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')]]
             ),
-            parse_mode='HTML',
         )
         await callback.answer()
         return
+
+    # В мульти-тарифе определяем какие тарифы уже куплены
+    purchased_tariff_ids: set[int] = set()
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and s.status in ('active', 'trial')}
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
@@ -528,10 +547,11 @@ async def show_tariffs_list(
             has_period_discounts = True
 
     # Формируем текст со списком тарифов и их характеристиками
-    tariffs_text = format_tariffs_list_text(tariffs, db_user, has_period_discounts)
+    tariffs_text = format_tariffs_list_text(tariffs, db_user, has_period_discounts, purchased_tariff_ids)
 
     await callback.message.edit_text(
-        tariffs_text, reply_markup=get_tariffs_keyboard(tariffs, db_user.language), parse_mode='HTML'
+        tariffs_text,
+        reply_markup=get_tariffs_keyboard(tariffs, db_user.language, purchased_tariff_ids),
     )
 
     await callback.answer()
@@ -551,6 +571,20 @@ async def select_tariff(
     if not tariff or not tariff.is_active:
         await callback.answer('Тариф недоступен', show_alert=True)
         return
+
+    # В мульти-тарифе проверяем не куплен ли уже этот тариф
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        _active = await get_active_subscriptions_by_user_id(db, db_user.id)
+        _existing = next((s for s in _active if s.tariff_id == tariff_id and s.status in ('active', 'trial')), None)
+        if _existing:
+            days_left = max(0, (_existing.end_date - datetime.now(UTC)).days) if _existing.end_date else 0
+            await callback.answer(
+                f'Тариф «{tariff.name}» уже активен ({days_left} дн.). Продлите через "Мои подписки".',
+                show_alert=True,
+            )
+            return
 
     # Проверяем, суточный ли это тариф
     is_daily = getattr(tariff, 'is_daily', False)
