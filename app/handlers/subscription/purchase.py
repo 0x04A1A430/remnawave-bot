@@ -3994,6 +3994,8 @@ def register_handlers(dp: Dispatcher):
 
     # Multi-tariff delegation handlers from subscription detail view
     from app.handlers.subscription.my_subscriptions import (
+        handle_change_devices_menu,
+        handle_device_management_menu,
         handle_subscription_devices,
         handle_subscription_extend,
         handle_subscription_link,
@@ -4004,6 +4006,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_subscription_extend, F.data.startswith('se:'))
     dp.callback_query.register(handle_subscription_traffic, F.data.startswith('st:'))
     dp.callback_query.register(handle_subscription_devices, F.data.startswith('sd:'))
+    dp.callback_query.register(handle_change_devices_menu, F.data.startswith('change_devices_menu:'))
+    dp.callback_query.register(handle_device_management_menu, F.data.startswith('device_management:'))
 
     dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 

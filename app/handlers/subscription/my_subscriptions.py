@@ -291,14 +291,74 @@ async def handle_subscription_devices(
     db: AsyncSession,
     state: FSMContext,
 ) -> None:
-    """Delegation: sd:{sub_id} → devices management handler."""
+    """Delegation: sd:{sub_id} → devices menu with buy + manage options."""
+    subscription = await _resolve_and_store_sub(callback, db_user, db, state)
+    if not subscription:
+        return
+
+    sub_id = subscription.id
+
+    # Проверяем доступность докупки устройств
+    can_buy_devices = False
+    if subscription.tariff_id:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
+        can_buy_devices = bool(tariff_device_price and tariff_device_price > 0)
+    else:
+        can_buy_devices = settings.is_devices_selection_enabled()
+
+    current_devices = subscription.device_limit or 0
+    text = f'📱 <b>Устройства</b>\n\nТекущий лимит: {current_devices} устройств\n\nВыберите действие:'
+
+    keyboard = []
+    if can_buy_devices:
+        keyboard.append(
+            [types.InlineKeyboardButton(text='➕ Докупить устройства', callback_data=f'change_devices_menu:{sub_id}')]
+        )
+    keyboard.append(
+        [types.InlineKeyboardButton(text='📱 Управление устройствами', callback_data=f'device_management:{sub_id}')]
+    )
+    keyboard.append([types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'sm:{sub_id}')])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+    )
+    await callback.answer()
+
+
+async def handle_change_devices_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Delegation: change_devices_menu:{sub_id} → buy/change device limit."""
     subscription = await _resolve_and_store_sub(callback, db_user, db, state)
     if not subscription:
         return
 
     from .devices import handle_change_devices
 
-    await handle_change_devices(callback, db_user, db)
+    await handle_change_devices(callback, db_user, db, state)
+
+
+async def handle_device_management_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Delegation: device_management:{sub_id} → manage connected devices."""
+    subscription = await _resolve_and_store_sub(callback, db_user, db, state)
+    if not subscription:
+        return
+
+    from .devices import handle_device_management
+
+    await handle_device_management(callback, db_user, db, state)
 
 
 def _extract_sub_id(callback: types.CallbackQuery) -> int | None:
