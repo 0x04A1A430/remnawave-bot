@@ -1971,11 +1971,7 @@ async def select_tariff_extend_period(
         await callback.answer('Тариф недоступен', show_alert=True)
         return
 
-    if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     actual_device_limit = (subscription.device_limit if subscription else None) or tariff.device_limit
 
     # Calculate price via PricingEngine (per-category discounts: period + devices)
@@ -2060,6 +2056,7 @@ async def select_tariff_extend_period(
         extend_tariff_id=tariff_id,
         extend_period=period,
         extend_discount_percent=discount_percent,
+        active_subscription_id=subscription.id if subscription else None,
     )
     await callback.answer()
 
@@ -2086,11 +2083,7 @@ async def confirm_tariff_extend(
         await callback.answer('Период недоступен', show_alert=True)
         return
 
-    if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = next((s for s in active_subs if s.tariff_id == tariff_id), None)
-    else:
-        subscription = await get_subscription_by_user_id(db, db_user.id)
+    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer('Подписка не найдена', show_alert=True)
         return
