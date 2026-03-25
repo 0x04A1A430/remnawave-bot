@@ -2252,6 +2252,7 @@ def get_change_devices_keyboard(
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
     tariff=None,  # Тариф для цены за устройство
+    back_callback: str = 'subscription_settings',
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -2337,13 +2338,16 @@ def get_change_devices_keyboard(
             0, [InlineKeyboardButton(text=current_button, callback_data=f'change_devices_{current_devices}')]
         )
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='subscription_settings')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_confirm_change_devices_keyboard(
-    new_devices_count: int, price: int, language: str = DEFAULT_LANGUAGE
+    new_devices_count: int,
+    price: int,
+    language: str = DEFAULT_LANGUAGE,
+    back_callback: str = 'subscription_settings',
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -2355,7 +2359,7 @@ def get_confirm_change_devices_keyboard(
                     callback_data=f'confirm_change_devices_{new_devices_count}_{price}',
                 )
             ],
-            [InlineKeyboardButton(text=texts.CANCEL, callback_data='subscription_settings')],
+            [InlineKeyboardButton(text=texts.CANCEL, callback_data=back_callback)],
         ]
     )
 
@@ -2777,7 +2781,10 @@ def get_cryptobot_payment_keyboard(
 
 
 def get_devices_management_keyboard(
-    devices: list[dict], pagination, language: str = DEFAULT_LANGUAGE
+    devices: list[dict],
+    pagination,
+    language: str = DEFAULT_LANGUAGE,
+    back_callback: str = 'subscription_settings',
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -2827,7 +2834,7 @@ def get_devices_management_keyboard(
         ]
     )
 
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='subscription_settings')])
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

@@ -770,8 +770,8 @@ async def handle_switch_traffic(
             subscription.end_date,
             traffic_discount_percent,
             base_traffic_gb=base_traffic,
+            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
         ),
-        parse_mode='HTML',
     )
 
     await callback.answer()

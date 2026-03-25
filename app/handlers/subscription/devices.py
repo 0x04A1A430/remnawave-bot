@@ -239,6 +239,9 @@ async def handle_change_devices(
             ),
         ).format(current_devices=current_devices)
 
+    # В мульти-тарифе кнопка "назад" ведёт к детальному виду подписки
+    back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
+
     await callback.message.edit_text(
         prompt_text,
         reply_markup=get_change_devices_keyboard(
@@ -247,8 +250,8 @@ async def handle_change_devices(
             subscription.end_date,
             devices_discount_percent,
             tariff=tariff,
+            back_callback=back_cb,
         ),
-        parse_mode='HTML',
     )
 
     await callback.answer()
@@ -506,8 +509,12 @@ async def confirm_change_devices(
 
     await callback.message.edit_text(
         confirm_text,
-        reply_markup=get_confirm_change_devices_keyboard(new_devices_count, price, db_user.language),
-        parse_mode='HTML',
+        reply_markup=get_confirm_change_devices_keyboard(
+            new_devices_count,
+            price,
+            db_user.language,
+            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+        ),
     )
 
     await callback.answer()
@@ -896,8 +903,12 @@ async def show_devices_page(callback: types.CallbackQuery, db_user: User, device
 
     await callback.message.edit_text(
         devices_text,
-        reply_markup=get_devices_management_keyboard(pagination.items, pagination, db_user.language),
-        parse_mode='HTML',
+        reply_markup=get_devices_management_keyboard(
+            pagination.items,
+            pagination,
+            db_user.language,
+            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+        ),
     )
 
 

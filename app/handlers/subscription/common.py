@@ -531,6 +531,7 @@ def get_traffic_switch_keyboard(
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
     base_traffic_gb: int = None,
+    back_callback: str = 'subscription_settings',
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -608,7 +609,7 @@ def get_traffic_switch_keyboard(
         [
             InlineKeyboardButton(
                 text='⬅️ Назад' if language_code in {'ru', 'fa'} else '⬅️ Back',
-                callback_data='subscription_settings',
+                callback_data=back_callback,
             )
         ]
     )
