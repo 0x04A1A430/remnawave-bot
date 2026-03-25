@@ -395,7 +395,12 @@ async def switch_tariff(
 
     try:
         subscription_service = SubscriptionService()
-        if getattr(user, 'remnawave_uuid', None):
+        _has_panel = (
+            getattr(subscription, 'remnawave_uuid', None)
+            if settings.is_multi_tariff_enabled()
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _has_panel:
             await subscription_service.update_remnawave_user(
                 db,
                 subscription,

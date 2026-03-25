@@ -736,7 +736,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                     await db.refresh(user, ['subscriptions'])
                 except Exception:
                     await db.rollback()
-                    await db.refresh(user, ['subscription'])
+                    await db.refresh(user, ['subscriptions'])
                     logger.exception(
                         'Failed to merge phantom user',
                         phantom_id=phantom.id,

@@ -250,7 +250,7 @@ async def handle_subscription_link(
 
     from .links import handle_connect_subscription
 
-    await handle_connect_subscription(callback, db_user, db)
+    await handle_connect_subscription(callback, db_user, db, state)
 
 
 async def handle_subscription_extend(
@@ -266,7 +266,7 @@ async def handle_subscription_extend(
 
     from .purchase import handle_extend_subscription
 
-    await handle_extend_subscription(callback, db_user, db)
+    await handle_extend_subscription(callback, db_user, db, state)
 
 
 async def handle_subscription_traffic(
@@ -282,7 +282,7 @@ async def handle_subscription_traffic(
 
     from .traffic import handle_add_traffic
 
-    await handle_add_traffic(callback, db_user, db)
+    await handle_add_traffic(callback, db_user, db, state)
 
 
 async def handle_subscription_devices(

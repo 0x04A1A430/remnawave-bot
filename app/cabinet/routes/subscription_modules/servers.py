@@ -235,8 +235,15 @@ async def update_countries(
 
     # Sync with RemnaWave
     try:
+        from app.config import settings
+
         subscription_service = SubscriptionService()
-        if getattr(user, 'remnawave_uuid', None):
+        _has_panel = (
+            getattr(subscription, 'remnawave_uuid', None)
+            if settings.is_multi_tariff_enabled()
+            else getattr(user, 'remnawave_uuid', None)
+        )
+        if _has_panel:
             await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)
         else:
             await subscription_service.create_remnawave_user(db, subscription)
