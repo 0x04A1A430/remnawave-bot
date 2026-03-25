@@ -101,7 +101,7 @@ def _build_subscriptions_keyboard(subscriptions: list, language: str) -> types.I
     # Back button
     buttons.append(
         [
-            types.InlineKeyboardButton(text='◀️ Назад', callback_data='menu_main'),
+            types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu'),
         ]
     )
 
@@ -150,7 +150,7 @@ async def show_my_subscriptions(
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='🛒 Купить подписку', callback_data='menu_buy')],
-                [types.InlineKeyboardButton(text='◀️ Назад', callback_data='menu_main')],
+                [types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')],
             ]
         )
     else:
