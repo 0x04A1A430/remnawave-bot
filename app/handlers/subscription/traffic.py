@@ -871,7 +871,12 @@ async def confirm_switch_traffic(
 
     await callback.message.edit_text(
         confirm_text,
-        reply_markup=get_confirm_switch_traffic_keyboard(new_traffic_gb, total_price_difference, db_user.language),
+        reply_markup=get_confirm_switch_traffic_keyboard(
+            new_traffic_gb,
+            total_price_difference,
+            db_user.language,
+            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+        ),
         parse_mode='HTML',
     )
 

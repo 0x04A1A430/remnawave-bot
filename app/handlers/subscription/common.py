@@ -515,12 +515,14 @@ def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
     return redirect_link or scheme_link or subscription_url
 
 
-def get_reset_devices_confirm_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
+def get_reset_devices_confirm_keyboard(
+    language: str = 'ru', back_callback: str = 'menu_subscription'
+) -> InlineKeyboardMarkup:
     get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text='✅ Да, сбросить все устройства', callback_data='confirm_reset_devices')],
-            [InlineKeyboardButton(text='❌ Отмена', callback_data='menu_subscription')],
+            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
         ]
     )
 
@@ -618,7 +620,7 @@ def get_traffic_switch_keyboard(
 
 
 def get_confirm_switch_traffic_keyboard(
-    new_traffic_gb: int, price_difference: int, language: str = 'ru'
+    new_traffic_gb: int, price_difference: int, language: str = 'ru', back_callback: str = 'subscription_settings'
 ) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -628,6 +630,6 @@ def get_confirm_switch_traffic_keyboard(
                     callback_data=f'confirm_switch_traffic_{new_traffic_gb}_{price_difference}',
                 )
             ],
-            [InlineKeyboardButton(text='❌ Отмена', callback_data='subscription_settings')],
+            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
         ]
     )

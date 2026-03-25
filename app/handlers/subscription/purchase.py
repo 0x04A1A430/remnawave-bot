@@ -1788,7 +1788,9 @@ async def handle_extend_subscription(
     await callback.answer()
 
 
-async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def confirm_extend_subscription(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     if not callback.data:
         await callback.answer('⚠ Ошибка данных', show_alert=True)
         return
@@ -1803,11 +1805,17 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         )
         return
 
-    # Multi-tariff note: this handler is registered for 'extend_period_' callbacks
-    # which are only shown in the classic (non-tariff) renewal flow. In multi-tariff
-    # mode, tariff-based renewal uses a different callback path. db_user.subscription
-    # is safe here as it only runs in single-subscription context.
-    subscription = db_user.subscription
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_id_for_user
+
+        _state_data = await state.get_data() if state else {}
+        _fsm_sub_id = _state_data.get('active_subscription_id')
+        if _fsm_sub_id:
+            subscription = await get_subscription_by_id_for_user(db, _fsm_sub_id, db_user.id)
+        else:
+            subscription = db_user.subscription
+    else:
+        subscription = db_user.subscription
 
     if not subscription:
         await callback.answer('⚠ У вас нет активной подписки', show_alert=True)
