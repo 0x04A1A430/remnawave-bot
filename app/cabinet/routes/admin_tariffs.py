@@ -661,7 +661,7 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                         getattr(sub, 'remnawave_uuid', None)
                         if settings.is_multi_tariff_enabled()
                         else (sub.user.remnawave_uuid if sub.user else None)
-                    ) or (sub.user.remnawave_uuid if sub.user else None)
+                    )
                     if not remnawave_uuid:
                         return
                     async with semaphore:
@@ -776,7 +776,7 @@ async def sync_tariff_squads(
                 getattr(sub, 'remnawave_uuid', None)
                 if settings.is_multi_tariff_enabled()
                 else (sub.user.remnawave_uuid if sub.user else None)
-            ) or (sub.user.remnawave_uuid if sub.user else None)
+            )
             if not remnawave_uuid:
                 skipped_count += 1
                 return 'skipped'

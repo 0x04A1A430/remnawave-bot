@@ -1408,6 +1408,12 @@ async def confirm_tariff_purchase(
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
             )
+            # Restore promo offer if consumed
+            if consume_promo and saved_promo_percent > 0:
+                db_user.promo_offer_discount_percent = saved_promo_percent
+                db_user.promo_offer_discount_source = saved_promo_source
+                db_user.promo_offer_discount_expires_at = saved_promo_expires
+                await db.commit()
         except Exception as refund_error:
             logger.critical('CRITICAL: не удалось вернуть средства', user_id=db_user.id, refund_error=refund_error)
         await callback.answer('У вас уже есть активная подписка на этот тариф', show_alert=True)
