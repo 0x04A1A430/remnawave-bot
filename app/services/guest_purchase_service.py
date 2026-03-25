@@ -344,7 +344,12 @@ async def fulfill_purchase(
             from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
             _active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            existing_subscription = _active_subs[0] if _active_subs else None
+            if _active_subs:
+                _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or _active_subs
+                existing_subscription = max(_pool, key=lambda s: s.days_left)
+            else:
+                existing_subscription = None
         else:
             existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription is not None and (existing_subscription.is_active or purchase.is_gift):

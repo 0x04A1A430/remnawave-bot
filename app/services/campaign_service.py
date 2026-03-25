@@ -133,7 +133,12 @@ class AdvertisingCampaignService:
             from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            existing_subscription = active_subs[0] if active_subs else None
+            if active_subs:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                existing_subscription = max(_pool, key=lambda s: s.days_left)
+            else:
+                existing_subscription = None
         else:
             existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription:
@@ -241,7 +246,12 @@ class AdvertisingCampaignService:
             from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            existing_subscription = active_subs[0] if active_subs else None
+            if active_subs:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                existing_subscription = max(_pool, key=lambda s: s.days_left)
+            else:
+                existing_subscription = None
         else:
             existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription:

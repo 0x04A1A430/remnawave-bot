@@ -210,7 +210,12 @@ class UserService:
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                subscription = active_subs[0] if active_subs else None
+                if active_subs:
+                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                    _pool = _non_daily or active_subs
+                    subscription = max(_pool, key=lambda s: s.days_left)
+                else:
+                    subscription = None
             else:
                 subscription = await get_subscription_by_user_id(db, user_id)
             transactions_count = await get_user_transactions_count(db, user_id)
@@ -1369,7 +1374,12 @@ class UserService:
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                subscription = active_subs[0] if active_subs else None
+                if active_subs:
+                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                    _pool = _non_daily or active_subs
+                    subscription = max(_pool, key=lambda s: s.days_left)
+                else:
+                    subscription = None
             else:
                 subscription = await get_subscription_by_user_id(db, user_id)
             transactions_count = await get_user_transactions_count(db, user_id)

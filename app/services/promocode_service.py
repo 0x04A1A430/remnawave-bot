@@ -293,8 +293,13 @@ class PromoCodeService:
                     ],
                     'code': code,
                 }
+            # Prefer non-daily subscription with most days remaining
+            elif eligible:
+                target_sub = max(eligible, key=lambda s: s.days_left)
             else:
-                target_sub = eligible[0] if eligible else active_subs[0]
+                non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                pool = non_daily or active_subs
+                target_sub = max(pool, key=lambda s: s.days_left) if pool else None
             # Конвертация триала в платную подписку при активации промокода на дни
             if target_sub.is_trial:
                 target_sub.is_trial = False
@@ -326,8 +331,8 @@ class PromoCodeService:
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                # Check if user has ANY active subscription (trial not created if any exists)
-                subscription = active_subs[0] if active_subs else None
+                # Trial promo: block if ANY active subscription exists
+                subscription = next(iter(active_subs), None)
             else:
                 subscription = await get_subscription_by_user_id(db, user.id)
 

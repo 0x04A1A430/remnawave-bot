@@ -218,7 +218,12 @@ class DailySubscriptionService:
                 from app.services.subscription_service import SubscriptionService
 
                 subscription_service = SubscriptionService()
-                if getattr(user, 'remnawave_uuid', None):
+                _has_panel_user = (
+                    getattr(subscription, 'remnawave_uuid', None)
+                    if settings.is_multi_tariff_enabled()
+                    else getattr(user, 'remnawave_uuid', None)
+                )
+                if _has_panel_user:
                     await subscription_service.update_remnawave_user(
                         db,
                         subscription,
@@ -235,7 +240,12 @@ class DailySubscriptionService:
                     )
                     # POST может игнорировать activeInternalSquads — отправляем PATCH
                     await db.refresh(user)
-                    if getattr(user, 'remnawave_uuid', None) and subscription.connected_squads:
+                    _sync_uuid = (
+                        getattr(subscription, 'remnawave_uuid', None)
+                        if settings.is_multi_tariff_enabled()
+                        else getattr(user, 'remnawave_uuid', None)
+                    )
+                    if _sync_uuid and subscription.connected_squads:
                         try:
                             await subscription_service.update_remnawave_user(
                                 db,
