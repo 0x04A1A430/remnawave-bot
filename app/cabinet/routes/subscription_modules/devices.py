@@ -226,7 +226,7 @@ async def purchase_devices_legacy(
     # Sync with RemnaWave
     try:
         service = SubscriptionService()
-        if getattr(user, 'remnawave_uuid', None):
+        if _resolve_panel_uuid(subscription, user):
             await service.update_remnawave_user(db, subscription)
         else:
             await service.create_remnawave_user(db, subscription)
@@ -465,7 +465,7 @@ async def purchase_devices(
         # Sync with RemnaWave
         service = SubscriptionService()
         try:
-            if getattr(user, 'remnawave_uuid', None):
+            if _resolve_panel_uuid(subscription, user):
                 await service.update_remnawave_user(db, subscription)
             else:
                 await service.create_remnawave_user(db, subscription)

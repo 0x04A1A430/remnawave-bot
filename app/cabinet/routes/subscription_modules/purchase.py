@@ -311,8 +311,12 @@ async def get_purchase_options(
                     from app.database.crud.subscription import get_subscription_by_id_for_user
 
                     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
+                elif active_subs:
+                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                    _pool = _non_daily or active_subs
+                    subscription = max(_pool, key=lambda s: s.days_left)
                 else:
-                    subscription = active_subs[0] if active_subs else None
+                    subscription = None
             else:
                 purchased_tariff_ids = set()
                 subscription = await get_subscription_by_user_id(db, user.id)

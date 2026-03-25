@@ -55,7 +55,12 @@ async def get_wheel_config(
 
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
         # Check if user has any active subscription for wheel access
-        subscription = active_subs[0] if active_subs else None
+        if active_subs:
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or active_subs
+            subscription = max(_pool, key=lambda s: s.days_left)
+        else:
+            subscription = None
     else:
         from app.database.crud.subscription import get_subscription_by_user_id
 
@@ -241,7 +246,12 @@ async def create_stars_invoice(
 
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
         # Check if user has any active subscription for Stars invoice
-        subscription = active_subs[0] if active_subs else None
+        if active_subs:
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or active_subs
+            subscription = max(_pool, key=lambda s: s.days_left)
+        else:
+            subscription = None
     else:
         from app.database.crud.subscription import get_subscription_by_user_id
 

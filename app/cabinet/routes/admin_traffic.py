@@ -158,15 +158,42 @@ def _compute_date_range(period_days: int) -> tuple[str, str]:
 
 
 async def _load_user_map(db: AsyncSession) -> dict[str, User]:
-    """Load all users with remnawave_uuid, eagerly loading subscription + tariff."""
-    stmt = (
+    """Load all users with remnawave_uuid, eagerly loading subscription + tariff.
+
+    In multi-tariff mode UUIDs live on Subscription rows, not on User.
+    Both sources are merged so the caller gets a complete uuid → User map.
+    """
+    from app.config import settings
+
+    # Build user map from both user-level and subscription-level UUIDs
+    user_map: dict[str, User] = {}
+
+    # Legacy: user-level UUIDs
+    stmt_users = (
         select(User)
         .where(User.remnawave_uuid.isnot(None))
         .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
     )
-    result = await db.execute(stmt)
-    users = result.scalars().all()
-    return {u.remnawave_uuid: u for u in users if u.remnawave_uuid}
+    result_users = await db.execute(stmt_users)
+    users = result_users.scalars().all()
+    for u in users:
+        if u.remnawave_uuid:
+            user_map[u.remnawave_uuid] = u
+
+    # Multi-tariff: subscription-level UUIDs
+    if settings.is_multi_tariff_enabled():
+        stmt_subs = (
+            select(Subscription)
+            .where(Subscription.remnawave_uuid.isnot(None))
+            .options(selectinload(Subscription.user).selectinload(User.subscriptions).selectinload(Subscription.tariff))
+        )
+        result_subs = await db.execute(stmt_subs)
+        subs = result_subs.scalars().all()
+        for sub in subs:
+            if sub.remnawave_uuid and sub.user and sub.remnawave_uuid not in user_map:
+                user_map[sub.remnawave_uuid] = sub.user
+
+    return user_map
 
 
 def _build_traffic_items(

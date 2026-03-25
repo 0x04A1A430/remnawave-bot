@@ -47,6 +47,16 @@ async def resolve_subscription(
             raise HTTPException(status_code=404, detail='Subscription not found')
         return subscription
 
+    if settings.is_multi_tariff_enabled() and not subscription_id:
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        if active_subs:
+            non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            pool = non_daily or active_subs
+            return max(pool, key=lambda s: s.days_left)
+        return None
+
     await db.refresh(user, ['subscriptions'])
     return user.subscription
 
