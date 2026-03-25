@@ -94,7 +94,10 @@ async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSe
     texts = get_texts(db_user.language)
 
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-    subscription = active_subs[0] if active_subs else None
+    # For eligibility: pick best non-daily subscription (most days left)
+    non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+    eligible = non_daily or active_subs
+    subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
     if not _user_allowed(subscription):
         await _reply_not_eligible(callback, db_user.language)
         return
@@ -148,7 +151,10 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
     texts = get_texts(db_user.language)
 
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-    subscription = active_subs[0] if active_subs else None
+    # For eligibility: pick best non-daily subscription (most days left)
+    non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+    eligible = non_daily or active_subs
+    subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
     if not _user_allowed(subscription):
         await _reply_not_eligible(callback, db_user.language)
         return
@@ -263,7 +269,10 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
 
     # Re-check subscription
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-    subscription = active_subs[0] if active_subs else None
+    # For eligibility: pick best non-daily subscription (most days left)
+    non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+    eligible = non_daily or active_subs
+    subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
     if not _user_allowed(subscription):
         await callback.answer(
             texts.t('CONTEST_NOT_ELIGIBLE', 'Игра недоступна без активной подписки.'),

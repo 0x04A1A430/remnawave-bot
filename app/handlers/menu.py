@@ -1258,7 +1258,10 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        subscription = active_subs[0] if active_subs else None
+        # For menu display: prefer non-daily, most days remaining
+        non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+        _eligible = non_daily or active_subs
+        subscription = max(_eligible, key=lambda s: s.days_left) if _eligible else None
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
 
