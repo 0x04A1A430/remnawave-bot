@@ -36,6 +36,42 @@ async def handle_connect_subscription(
         return
 
     texts = get_texts(db_user.language)
+
+    # В режиме мульти-тарифов без явного sub_id в callback — показываем выбор подписки.
+    if settings.is_multi_tariff_enabled() and callback.data == 'subscription_connect':
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+        if len(active_subs) > 1:
+            from datetime import UTC, datetime
+
+            from app.database.crud.tariff import get_tariff_by_id as _get_tariff
+
+            keyboard = []
+            for sub in sorted(active_subs, key=lambda s: s.id):
+                tariff_name = ''
+                if sub.tariff_id:
+                    _t = await _get_tariff(db, sub.tariff_id)
+                    tariff_name = _t.name if _t else f'#{sub.id}'
+                else:
+                    tariff_name = f'Подписка #{sub.id}'
+                days_left = max(0, (sub.end_date - datetime.now(UTC)).days) if sub.end_date else 0
+                keyboard.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=f'🔗 {tariff_name} ({days_left}д.)',
+                            callback_data=f'sl:{sub.id}',
+                        )
+                    ]
+                )
+            keyboard.append([types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
+            await callback.message.edit_text(
+                '🔗 <b>Подключиться</b>\n\nВыберите подписку:',
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            )
+            await callback.answer()
+            return
+
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
