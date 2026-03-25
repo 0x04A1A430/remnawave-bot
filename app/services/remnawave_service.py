@@ -1758,7 +1758,21 @@ class RemnaWaveService:
             all_subs = subs_result.scalars().all()
             subs_by_uuid = {sub.remnawave_uuid: sub for sub in all_subs}
 
-            logger.info('📊 [multi-tariff] Подписок с remnawave_uuid', subs_count=len(subs_by_uuid))
+            # Fallback: build user-level UUID → user map for legacy migration
+            from app.database.models import User
+
+            users_result = await db.execute(
+                select(User)
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
+                .where(User.remnawave_uuid.isnot(None))
+            )
+            users_by_uuid = {u.remnawave_uuid: u for u in users_result.scalars().all() if u.remnawave_uuid}
+
+            logger.info(
+                '📊 [multi-tariff] Подписок с remnawave_uuid',
+                subs_count=len(subs_by_uuid),
+                users_legacy_count=len(users_by_uuid),
+            )
 
             # Match and update
             for panel_user in panel_users:
@@ -1767,6 +1781,28 @@ class RemnaWaveService:
                     continue
 
                 subscription = subs_by_uuid.get(panel_uuid)
+                if not subscription:
+                    # Fallback: check if this UUID belongs to a user (legacy single-tariff)
+                    # and auto-link it to the user's best active subscription
+                    legacy_user = users_by_uuid.get(panel_uuid)
+                    if legacy_user:
+                        user_subs = getattr(legacy_user, 'subscriptions', []) or []
+                        active = [s for s in user_subs if s.status in ('active', 'trial')]
+                        if active:
+                            non_daily = [s for s in active if not getattr(s, 'is_daily_tariff', False)]
+                            pool = non_daily or active
+                            best = max(pool, key=lambda s: s.days_left)
+                            if not best.remnawave_uuid:
+                                best.remnawave_uuid = panel_uuid
+                                subs_by_uuid[panel_uuid] = best
+                                subscription = best
+                                logger.info(
+                                    '🔗 [multi-tariff] Привязан legacy UUID к подписке',
+                                    panel_uuid=panel_uuid,
+                                    subscription_id=best.id,
+                                    user_id=legacy_user.id,
+                                )
+
                 if not subscription:
                     logger.debug(
                         '⚠️ [multi-tariff] Remnawave юзер не привязан к подписке',
