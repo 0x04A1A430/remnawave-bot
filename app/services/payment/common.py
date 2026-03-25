@@ -60,16 +60,18 @@ class PaymentCommonMixin:
                         result = await session.execute(
                             select(Subscription.status, Subscription.is_trial, Subscription.end_date)
                             .where(Subscription.user_id == user.id)
+                            .where(Subscription.status.in_(['active', 'trial']))
                             .order_by(Subscription.created_at.desc())
-                            .limit(1)
                         )
-                        row = result.one_or_none()
-                        if row:
+                        rows = result.all()
+                        for row in rows:
                             end_date = row.end_date
                             if end_date is not None and end_date.tzinfo is None:
                                 end_date = end_date.replace(tzinfo=UTC)
                             is_active = row.status == 'active' and end_date is not None and end_date > datetime.now(UTC)
-                            has_active_subscription = bool(is_active and not row.is_trial)
+                            if is_active and not row.is_trial:
+                                has_active_subscription = True
+                                break
                 except Exception as db_error:
                     logger.warning(
                         'Не удалось загрузить подписку пользователя из БД',
