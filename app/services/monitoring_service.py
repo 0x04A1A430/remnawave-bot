@@ -450,13 +450,13 @@ class MonitoringService:
                     if not user:
                         continue
 
-                    # Use user.id for key to support both Telegram and email users
-                    user_key = f'user_{user.id}_today'
+                    # Use user.id + subscription.id for key to support multiple subscriptions per user
+                    sub_key = f'user_{user.id}_sub_{subscription.id}_today'
                     user_identifier = user.telegram_id or f'email:{user.id}'
 
                     if (
                         await notification_sent(db, user.id, subscription.id, 'expiring', days)
-                        or user_key in all_processed_users
+                        or sub_key in all_processed_users
                     ):
                         logger.debug(
                             'Уведомление уже отправлено, пропускаем',
@@ -493,7 +493,7 @@ class MonitoringService:
                         )
                         if success:
                             await record_notification(db, user.id, subscription.id, 'expiring', days)
-                            all_processed_users.add(user_key)
+                            all_processed_users.add(sub_key)
                             sent_count += 1
                             logger.info(
                                 '✅ Email-пользователю отправлено уведомление об истечении подписки через дней',
@@ -508,7 +508,7 @@ class MonitoringService:
                         )
                         if success:
                             await record_notification(db, user.id, subscription.id, 'expiring', days)
-                            all_processed_users.add(user_key)
+                            all_processed_users.add(sub_key)
                             sent_count += 1
                             logger.info(
                                 '✅ Пользователю отправлено уведомление об истечении подписки через дней',
@@ -1211,7 +1211,9 @@ class MonitoringService:
 
                         # Send notification via appropriate channel
                         if user.telegram_id and self.bot:
-                            await self._send_autopay_success_notification(user, charge_amount, autopay_period)
+                            await self._send_autopay_success_notification(
+                                user, charge_amount, autopay_period, subscription=subscription
+                            )
                         elif not user.telegram_id:
                             # Email-only user - use notification delivery service
                             await notification_delivery_service.notify_autopay_success(
@@ -1387,9 +1389,13 @@ class MonitoringService:
                     )
 
             end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
+            # Add tariff name for multi-subscription clarity
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
+                tariff_label = f' «{subscription.tariff.name}»'
             message = texts.t(
                 'SUBSCRIPTION_EXPIRING_PAID',
-                '\n⚠️ <b>Подписка истекает через {days_text}!</b>\n\n'
+                '\n⚠️ <b>Подписка{tariff_label} истекает через {days_text}!</b>\n\n'
                 'Ваша платная подписка истекает {end_date}.\n\n'
                 '💳 <b>Автоплатеж:</b> {autopay_status}\n\n'
                 '{action_text}\n',
@@ -1398,6 +1404,7 @@ class MonitoringService:
                 end_date=end_date,
                 autopay_status=autopay_status,
                 action_text=action_text,
+                tariff_label=tariff_label,
             )
 
             from aiogram.types import InlineKeyboardMarkup
@@ -1728,10 +1735,22 @@ class MonitoringService:
             logger.error('Ошибка отправки скидочного уведомления пользователю', telegram_id=user.telegram_id, e=e)
             return False
 
-    async def _send_autopay_success_notification(self, user: User, amount: int, days: int):
+    async def _send_autopay_success_notification(
+        self, user: User, amount: int, days: int, *, subscription: Subscription | None = None
+    ):
         try:
             texts = get_texts(user.language)
+            tariff_label = ''
+            if (
+                settings.is_multi_tariff_enabled()
+                and subscription
+                and hasattr(subscription, 'tariff')
+                and subscription.tariff
+            ):
+                tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
+            if tariff_label:
+                message += f'\n📦 Тариф:{tariff_label}'
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,
