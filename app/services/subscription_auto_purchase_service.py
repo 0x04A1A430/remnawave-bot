@@ -163,12 +163,29 @@ async def _prepare_auto_extend_context(
             if len(active_subs) == 1:
                 subscription = active_subs[0]
             elif len(active_subs) > 1:
-                logger.warning(
-                    'Multi-tariff: multiple active subscriptions found, skipping auto-extend without explicit subscription_id',
-                    user_id=user.id,
-                    count=len(active_subs),
-                )
-                return None
+                # Multi-tariff: process each subscription with autopay independently
+                # The calling code iterates subscriptions_needing_topup which already
+                # selects the specific subscription. This fallback means we're in a
+                # context without explicit subscription — pick the one with autopay enabled.
+                autopay_subs = [s for s in active_subs if getattr(s, 'autopay_enabled', False)]
+                if len(autopay_subs) == 1:
+                    subscription = autopay_subs[0]
+                elif autopay_subs:
+                    # Multiple with autopay — log and pick most urgent (fewest days left)
+                    subscription = min(autopay_subs, key=lambda s: s.days_left)
+                    logger.info(
+                        'Multi-tariff: multiple autopay subscriptions, processing most urgent',
+                        user_id=user.id,
+                        selected_sub_id=subscription.id,
+                        days_left=subscription.days_left,
+                    )
+                else:
+                    logger.warning(
+                        'Multi-tariff: multiple active subscriptions but none with autopay enabled',
+                        user_id=user.id,
+                        count=len(active_subs),
+                    )
+                    return None
             else:
                 subscription = None
     else:
@@ -1676,12 +1693,28 @@ async def _auto_add_traffic(
             if len(active_subs) == 1:
                 subscription = active_subs[0]
             elif len(active_subs) > 1:
-                logger.warning(
-                    'Multi-tariff: multiple active subscriptions found, skipping auto-add-traffic without explicit subscription_id',
-                    user_id=user.id,
-                    count=len(active_subs),
-                )
-                return False
+                # Multi-tariff: pick the subscription with autopay enabled for add-traffic.
+                # The calling code iterates per-subscription, so this fallback handles
+                # contexts where no explicit subscription_id was provided.
+                autopay_subs = [s for s in active_subs if getattr(s, 'autopay_enabled', False)]
+                if len(autopay_subs) == 1:
+                    subscription = autopay_subs[0]
+                elif autopay_subs:
+                    # Multiple with autopay — pick most urgent (fewest days left)
+                    subscription = min(autopay_subs, key=lambda s: s.days_left)
+                    logger.info(
+                        'Multi-tariff: multiple autopay subscriptions for add-traffic, processing most urgent',
+                        user_id=user.id,
+                        selected_sub_id=subscription.id,
+                        days_left=subscription.days_left,
+                    )
+                else:
+                    logger.warning(
+                        'Multi-tariff: multiple active subscriptions but none with autopay enabled for add-traffic',
+                        user_id=user.id,
+                        count=len(active_subs),
+                    )
+                    return False
             else:
                 subscription = None
     else:
@@ -1983,7 +2016,19 @@ async def try_auto_extend_expired_after_topup(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        subscription = active_subs[0] if active_subs else None
+        if len(active_subs) == 1:
+            subscription = active_subs[0]
+        elif active_subs:
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or active_subs
+            subscription = max(_pool, key=lambda s: s.days_left)
+            logger.warning(
+                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
+                user_id=user.id,
+                count=len(active_subs),
+            )
+        else:
+            subscription = None
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
@@ -2344,7 +2389,19 @@ async def try_resume_disabled_daily_after_topup(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        subscription = active_subs[0] if active_subs else None
+        if len(active_subs) == 1:
+            subscription = active_subs[0]
+        elif active_subs:
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or active_subs
+            subscription = max(_pool, key=lambda s: s.days_left)
+            logger.warning(
+                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
+                user_id=user.id,
+                count=len(active_subs),
+            )
+        else:
+            subscription = None
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
@@ -2716,7 +2773,19 @@ async def auto_purchase_saved_cart_after_topup(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         _active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        _existing_sub = _active_subs[0] if _active_subs else None
+        if len(_active_subs) == 1:
+            _existing_sub = _active_subs[0]
+        elif _active_subs:
+            _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
+            _pool = _non_daily or _active_subs
+            _existing_sub = max(_pool, key=lambda s: s.days_left)
+            logger.warning(
+                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
+                user_id=user.id,
+                count=len(_active_subs),
+            )
+        else:
+            _existing_sub = None
     else:
         _existing_sub = await _get_sub(db, user.id)
     if _existing_sub and _existing_sub.status == SubscriptionStatus.DISABLED.value:
