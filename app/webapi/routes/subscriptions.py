@@ -149,7 +149,12 @@ async def create_subscription(
             if existing and existing.user_id != payload.user_id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
         elif payload.replace_existing and active_subs:
-            existing = active_subs[0]
+            if len(active_subs) == 1:
+                existing = active_subs[0]
+            else:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                existing = max(_pool, key=lambda s: s.days_left)
         else:
             existing = None
         if active_subs and not payload.replace_existing:

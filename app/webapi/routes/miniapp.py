@@ -3105,7 +3105,18 @@ async def get_subscription_details(
             detail=detail,
         )
 
-    subscription = getattr(user, 'subscription', None)
+    subs = getattr(user, 'subscriptions', None) or []
+    if subs:
+        # Prefer non-daily active subscription with most days remaining
+        active = [s for s in subs if s.is_active]
+        if active:
+            non_daily = [s for s in active if not getattr(s, 'is_daily_tariff', False)]
+            pool = non_daily or active
+            subscription = max(pool, key=lambda s: s.days_left)
+        else:
+            subscription = max(subs, key=lambda s: s.id) if subs else None
+    else:
+        subscription = None
     usage_synced = False
 
     if subscription and _is_remnawave_configured():
@@ -6375,7 +6386,14 @@ async def get_tariffs_endpoint(
     tariffs = await get_tariffs_for_user(db, promo_group_id)
 
     # Текущий тариф пользователя
-    subscription = getattr(user, 'subscription', None)
+    subs = getattr(user, 'subscriptions', None) or []
+    active = [s for s in subs if s.is_active]
+    if active:
+        non_daily = [s for s in active if not getattr(s, 'is_daily_tariff', False)]
+        pool = non_daily or active
+        subscription = max(pool, key=lambda s: s.days_left)
+    else:
+        subscription = subs[0] if subs else None
     current_tariff_id = subscription.tariff_id if subscription else None
     current_tariff_model: MiniAppCurrentTariff | None = None
     current_tariff = None
@@ -6485,10 +6503,10 @@ async def purchase_tariff_endpoint(
         payload.period_days = 1
 
     # Calculate price via PricingEngine (single source of truth)
-    subscription = getattr(user, 'subscription', None)
-    device_limit = None
-    if subscription and subscription.tariff_id == tariff.id:
-        device_limit = subscription.device_limit
+    subs = getattr(user, 'subscriptions', None) or []
+    # Find subscription with same tariff for device limit inheritance
+    matching_sub = next((s for s in subs if s.tariff_id == tariff.id and s.is_active), None)
+    device_limit = matching_sub.device_limit if matching_sub else None
 
     result = await pricing_engine.calculate_tariff_purchase_price(
         tariff,
@@ -6681,7 +6699,13 @@ async def preview_tariff_switch_endpoint(
             detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
-    subscription = getattr(user, 'subscription', None)
+    subs = getattr(user, 'subscriptions', None) or []
+    active = [s for s in subs if s.is_active and s.tariff_id]
+    subscription = active[0] if len(active) == 1 else None
+    if not subscription:
+        # If multiple active or none, require explicit subscription_id
+        if hasattr(payload, 'subscription_id') and payload.subscription_id:
+            subscription = next((s for s in subs if s.id == payload.subscription_id), None)
     if not subscription or not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

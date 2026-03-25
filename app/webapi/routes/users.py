@@ -384,7 +384,12 @@ async def create_user_subscription(
             if existing and existing.user_id != user.id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
         elif payload.replace_existing and active_subs:
-            existing = active_subs[0]
+            if len(active_subs) == 1:
+                existing = active_subs[0]
+            else:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                existing = max(_pool, key=lambda s: s.days_left)
         else:
             existing = None
         if active_subs and not payload.replace_existing:
@@ -508,7 +513,14 @@ async def delete_user_subscription(
             from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            subscription = active_subs[0] if active_subs else None
+            if not active_subs:
+                subscription = None
+            elif len(active_subs) == 1:
+                subscription = active_subs[0]
+            else:
+                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+                _pool = _non_daily or active_subs
+                subscription = max(_pool, key=lambda s: s.days_left)
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
