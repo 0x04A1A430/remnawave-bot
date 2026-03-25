@@ -341,6 +341,25 @@ class RemnaWaveWebhookService:
                     if nested_uuid:
                         user = await get_user_by_remnawave_uuid(db, nested_uuid)
 
+        # Multi-tariff: try finding user through subscription's remnawave_uuid
+        if not user and remnawave_uuid and settings.is_multi_tariff_enabled():
+            from sqlalchemy import select as sa_select
+            from sqlalchemy.orm import selectinload as sa_selectinload
+
+            sub_result = await db.execute(
+                sa_select(Subscription)
+                .options(
+                    sa_selectinload(Subscription.user)
+                    .selectinload(User.subscriptions)
+                    .selectinload(Subscription.tariff),
+                    sa_selectinload(Subscription.tariff),
+                )
+                .where(Subscription.remnawave_uuid == remnawave_uuid)
+            )
+            found_sub = sub_result.scalar_one_or_none()
+            if found_sub and found_sub.user:
+                return found_sub.user, found_sub
+
         if not user:
             return None, None
 
@@ -845,6 +864,7 @@ class RemnaWaveWebhookService:
         elif subscription is None:
             panel_uuid = data.get('uuid') or data.get('userUuid')
             if panel_uuid:
+                await db.refresh(user, ['subscriptions'])
                 for sub in getattr(user, 'subscriptions', None) or []:
                     if getattr(sub, 'remnawave_uuid', None) == panel_uuid:
                         sub.remnawave_uuid = None

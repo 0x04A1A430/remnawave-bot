@@ -806,6 +806,13 @@ async def execute_merge(
         )
 
     # 14. Помечаем secondary как удалённый и очищаем ВСЕ unique constraint и FK поля
+    # In multi-tariff, clear subscription-level UUIDs for secondary user's subs that won't be kept
+    if settings.is_multi_tariff_enabled():
+        secondary_subs = getattr(secondary, 'subscriptions', []) or []
+        for sub in secondary_subs:
+            if getattr(sub, 'remnawave_uuid', None):
+                sub.remnawave_uuid = None
+                sub.remnawave_short_uuid = None
     secondary.status = UserStatus.DELETED.value
     secondary.referral_code = None
     secondary.remnawave_uuid = None

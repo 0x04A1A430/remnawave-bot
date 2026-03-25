@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.crud.promo_group import get_default_promo_group
 from app.database.crud.promo_offer_log import log_promo_offer_action
@@ -203,6 +204,21 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
         .where(User.remnawave_uuid == remnawave_uuid)
     )
     user = result.scalar_one_or_none()
+
+    # Multi-tariff: UUID lives on Subscription, not User
+    if not user and settings.is_multi_tariff_enabled():
+        from app.database.models import Subscription as _Subscription
+
+        sub_result = await db.execute(
+            select(_Subscription)
+            .options(
+                selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
+            )
+            .where(_Subscription.remnawave_uuid == remnawave_uuid)
+        )
+        sub = sub_result.scalar_one_or_none()
+        if sub and sub.user:
+            user = sub.user
 
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
