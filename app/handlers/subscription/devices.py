@@ -840,7 +840,7 @@ async def handle_device_management(
                     await callback.answer()
                     return
 
-                await show_devices_page(callback, db_user, devices_list, page=1)
+                await show_devices_page(callback, db_user, devices_list, page=1, sub_id=sub_id)
             else:
                 await callback.answer(
                     texts.t(
@@ -863,7 +863,9 @@ async def handle_device_management(
     await callback.answer()
 
 
-async def show_devices_page(callback: types.CallbackQuery, db_user: User, devices_list: list[dict], page: int = 1):
+async def show_devices_page(
+    callback: types.CallbackQuery, db_user: User, devices_list: list[dict], page: int = 1, sub_id: int | None = None
+):
     texts = get_texts(db_user.language)
     devices_per_page = 5
 
@@ -928,7 +930,7 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
 
             if response and 'response' in response:
                 devices_list = response['response'].get('devices', [])
-                await show_devices_page(callback, db_user, devices_list, page=page)
+                await show_devices_page(callback, db_user, devices_list, page=page, sub_id=sub_id)
             else:
                 await callback.answer(
                     texts.t('DEVICE_FETCH_ERROR', '❌ Ошибка получения устройств'),
@@ -1018,7 +1020,7 @@ async def handle_single_device_reset(
                                 if not updated_pagination.items and page > 1:
                                     page = page - 1
 
-                                await show_devices_page(callback, db_user, updated_devices, page=page)
+                                await show_devices_page(callback, db_user, updated_devices, page=page, sub_id=sub_id)
                             else:
                                 await callback.message.edit_text(
                                     texts.t(
