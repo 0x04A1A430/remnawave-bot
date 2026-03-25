@@ -89,7 +89,7 @@ async def claim_phantom(
         )
         existing = await get_user_by_telegram_id(db, telegram_id)
         return False, existing
-    await db.refresh(phantom, ['subscription'])
+    await db.refresh(phantom, ['subscriptions'])
 
     # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
     # Telegram usernames are changeable/reassignable, so the claimer may not be the intended

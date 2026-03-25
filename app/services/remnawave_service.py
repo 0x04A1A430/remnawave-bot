@@ -1020,18 +1020,23 @@ class RemnaWaveService:
                 if not had_target_before:
                     new_squads.append(target_uuid)
 
-                if subscription.user and subscription.user.remnawave_uuid:
+                _uuid = (
+                    getattr(subscription, 'remnawave_uuid', None)
+                    if settings.is_multi_tariff_enabled()
+                    else (subscription.user.remnawave_uuid if subscription.user else None)
+                )
+                if _uuid:
                     if api is None:
                         panel_failed += 1
                         logger.error(
                             '❌ RemnaWave API недоступен для обновления пользователя',
-                            telegram_id=subscription.user.telegram_id,
+                            telegram_id=subscription.user.telegram_id if subscription.user else None,
                         )
                         continue
 
                     try:
                         await api.update_user(
-                            uuid=subscription.user.remnawave_uuid,
+                            uuid=_uuid,
                             active_internal_squads=new_squads,
                         )
                         panel_updated += 1
@@ -1343,9 +1348,12 @@ class RemnaWaveService:
 
                             _subs = await _get_subs(db, db_user.id)
                             # Match by remnawave_uuid from panel
-                            existing_sub = next(
-                                (s for s in _subs if s.remnawave_uuid == panel_user.uuid), _subs[0] if _subs else None
-                            )
+                            existing_sub = next((s for s in _subs if s.remnawave_uuid == panel_user.uuid), None)
+                            if not existing_sub and _subs:
+                                # No UUID match — fall back to best non-daily subscription
+                                _non_daily = [s for s in _subs if not getattr(s, 'is_daily_tariff', False)]
+                                _pool = _non_daily or _subs
+                                existing_sub = max(_pool, key=lambda s: s.days_left)
                         else:
                             from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
 
@@ -1455,8 +1463,13 @@ class RemnaWaveService:
                                 _subs_e = await _get_subs_email(db, db_user.id)
                                 existing_sub = next(
                                     (s for s in _subs_e if s.remnawave_uuid == panel_user.uuid),
-                                    _subs_e[0] if _subs_e else None,
+                                    None,
                                 )
+                                if not existing_sub and _subs_e:
+                                    # No UUID match — fall back to best non-daily subscription
+                                    _non_daily_e = [s for s in _subs_e if not getattr(s, 'is_daily_tariff', False)]
+                                    _pool_e = _non_daily_e or _subs_e
+                                    existing_sub = max(_pool_e, key=lambda s: s.days_left)
                             else:
                                 from app.database.crud.subscription import get_subscription_by_user_id as _get_sub_email
 
@@ -2182,7 +2195,10 @@ class RemnaWaveService:
                                     try:
                                         await api.update_user(**update_kwargs)
                                         # Сохраняем UUID если его не было
-                                        if not user.remnawave_uuid:
+                                        if settings.is_multi_tariff_enabled():
+                                            # In multi-tariff, UUID should be on the subscription, not the user
+                                            pass  # subscription UUID is set elsewhere
+                                        elif not user.remnawave_uuid:
                                             user.remnawave_uuid = panel_uuid
                                         return ('updated', sub, None)
                                     except RemnaWaveAPIError as api_error:
@@ -2215,7 +2231,10 @@ class RemnaWaveService:
                         action, sub, new_user = result
                         if action == 'created':
                             if new_user and sub.user:
-                                sub.user.remnawave_uuid = new_user.uuid
+                                if settings.is_multi_tariff_enabled():
+                                    sub.remnawave_uuid = new_user.uuid
+                                else:
+                                    sub.user.remnawave_uuid = new_user.uuid
                                 sub.remnawave_short_uuid = new_user.short_uuid
                             stats['created'] += 1
                         elif action == 'updated':
@@ -2579,14 +2598,23 @@ class RemnaWaveService:
 
             logger.info('🗑️ ПРИНУДИТЕЛЬНАЯ полная очистка данных пользователя', user_id_display=user_id_display)
 
-            if user.remnawave_uuid:
+            # Reset devices for all subscription UUIDs in multi-tariff, or user UUID in single-tariff
+            _uuids_to_reset = set()
+            if settings.is_multi_tariff_enabled():
+                user_subs = getattr(user, 'subscriptions', []) or []
+                for sub in user_subs:
+                    _sub_uuid = getattr(sub, 'remnawave_uuid', None)
+                    if _sub_uuid:
+                        _uuids_to_reset.add(_sub_uuid)
+            if not _uuids_to_reset and user.remnawave_uuid:
+                _uuids_to_reset.add(user.remnawave_uuid)
+
+            for _uuid in _uuids_to_reset:
                 try:
                     async with self.get_api_client() as api:
-                        devices_reset = await api.reset_user_devices(user.remnawave_uuid)
-                        if devices_reset:
-                            logger.info('🔧 Сброшены HWID устройства для', user_id_display=user_id_display)
-                except Exception as hwid_error:
-                    logger.warning('⚠️ Ошибка сброса HWID устройств', hwid_error=hwid_error)
+                        await api.reset_user_devices(_uuid)
+                except Exception as e:
+                    logger.warning('Failed to reset devices for UUID', uuid=_uuid, error=e)
 
             try:
                 from sqlalchemy import delete
@@ -2879,10 +2907,15 @@ class RemnaWaveService:
                             subscription.status = SubscriptionStatus.EXPIRED.value
                             issues_fixed += 1
 
-                        if not subscription.remnawave_short_uuid and user.remnawave_uuid:
+                        _lookup_uuid = (
+                            getattr(subscription, 'remnawave_uuid', None)
+                            if settings.is_multi_tariff_enabled()
+                            else None
+                        ) or getattr(user, 'remnawave_uuid', None)
+                        if not subscription.remnawave_short_uuid and _lookup_uuid:
                             try:
                                 async with self.get_api_client() as api:
-                                    rw_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                                    rw_user = await api.get_user_by_uuid(_lookup_uuid)
                                     if rw_user:
                                         subscription.remnawave_short_uuid = rw_user.short_uuid
                                         subscription.subscription_url = rw_user.subscription_url
