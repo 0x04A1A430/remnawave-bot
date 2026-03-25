@@ -3477,12 +3477,17 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
         await db.commit()
         await db.refresh(subscription)
 
-        if user.remnawave_uuid:
+        _uuid = (
+            getattr(subscription, 'remnawave_uuid', None)
+            if settings.is_multi_tariff_enabled() and subscription
+            else None
+        ) or getattr(user, 'remnawave_uuid', None)
+        if _uuid:
             try:
                 remnawave_service = RemnaWaveService()
                 async with remnawave_service.get_api_client() as api:
                     await api.update_user(
-                        uuid=user.remnawave_uuid,
+                        uuid=_uuid,
                         active_internal_squads=current_squads,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
@@ -3828,13 +3833,19 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
 
     try:
         user = await get_user_by_id(db, user_id)
-        if not user or not user.remnawave_uuid:
+        _uuid = None
+        if settings.is_multi_tariff_enabled():
+            subscription = await _resolve_admin_subscription(db, user_id)
+            _uuid = getattr(subscription, 'remnawave_uuid', None) if subscription else None
+        if not _uuid:
+            _uuid = getattr(user, 'remnawave_uuid', None)
+        if not user or not _uuid:
             await callback.answer('❌ Пользователь не найден или не связан с RemnaWave', show_alert=True)
             return
 
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
-            success = await api.reset_user_devices(user.remnawave_uuid)
+            success = await api.reset_user_devices(_uuid)
 
         if success:
             await callback.message.edit_text(
@@ -3884,12 +3895,17 @@ async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, adm
 
         await db.commit()
 
-        if user.remnawave_uuid:
+        _uuid = (
+            getattr(subscription, 'remnawave_uuid', None)
+            if settings.is_multi_tariff_enabled() and subscription
+            else None
+        ) or getattr(user, 'remnawave_uuid', None)
+        if _uuid:
             try:
                 remnawave_service = RemnaWaveService()
                 async with remnawave_service.get_api_client() as api:
                     await api.update_user(
-                        uuid=user.remnawave_uuid,
+                        uuid=_uuid,
                         hwid_device_limit=devices,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
@@ -3929,14 +3945,19 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
 
         await db.commit()
 
-        if user.remnawave_uuid:
+        _uuid = (
+            getattr(subscription, 'remnawave_uuid', None)
+            if settings.is_multi_tariff_enabled() and subscription
+            else None
+        ) or getattr(user, 'remnawave_uuid', None)
+        if _uuid:
             try:
                 from app.external.remnawave_api import TrafficLimitStrategy
 
                 remnawave_service = RemnaWaveService()
                 async with remnawave_service.get_api_client() as api:
                     await api.update_user(
-                        uuid=user.remnawave_uuid,
+                        uuid=_uuid,
                         traffic_limit_bytes=traffic_gb * (1024**3) if traffic_gb > 0 else 0,
                         traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                         description=settings.format_remnawave_user_description(
@@ -3964,25 +3985,54 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
         return False
 
 
+async def _resolve_admin_subscription(
+    db: AsyncSession, user_id: int, subscription_id: int | None = None
+) -> 'Subscription | None':
+    """Resolve subscription for admin operations.
+
+    In multi-tariff without explicit subscription_id:
+    - 1 active sub → use it
+    - Multiple → prefer non-daily with most days remaining
+    - 0 active → return None
+    """
+    if settings.is_multi_tariff_enabled():
+        if subscription_id:
+            from app.database.crud.subscription import get_subscription_by_id_for_user
+
+            return await get_subscription_by_id_for_user(db, subscription_id, user_id)
+
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
+
+        if not active_subs:
+            return None
+        if len(active_subs) == 1:
+            return active_subs[0]
+
+        non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+        eligible = non_daily or active_subs
+        selected = max(eligible, key=lambda s: s.days_left)
+        logger.warning(
+            'Admin operation: multiple active subscriptions, auto-selected best',
+            user_id=user_id,
+            selected_sub_id=selected.id,
+            total_active=len(active_subs),
+        )
+        return selected
+    from app.database.crud.subscription import get_subscription_by_user_id
+
+    return await get_subscription_by_user_id(db, user_id)
+
+
 async def _extend_subscription_by_days(
     db: AsyncSession, user_id: int, days: int, admin_id: int, subscription_id: int | None = None
 ) -> bool:
     try:
-        from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
+        from app.database.crud.subscription import extend_subscription
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                subscription = active_subs[0] if active_subs else None
-        else:
-            subscription = await get_subscription_by_user_id(db, user_id)
+        subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if not subscription:
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
@@ -4011,23 +4061,11 @@ async def _add_subscription_traffic(
     try:
         from app.database.crud.subscription import (
             add_subscription_traffic,
-            get_subscription_by_user_id,
             reactivate_subscription,
         )
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                subscription = active_subs[0] if active_subs else None
-        else:
-            subscription = await get_subscription_by_user_id(db, user_id)
+        subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if not subscription:
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
@@ -4046,11 +4084,14 @@ async def _add_subscription_traffic(
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
         if subscription.status == 'active':
-            from app.database.crud.user import get_user_by_id
+            _uuid = getattr(subscription, 'remnawave_uuid', None) if settings.is_multi_tariff_enabled() else None
+            if not _uuid:
+                from app.database.crud.user import get_user_by_id
 
-            user = await get_user_by_id(db, user_id)
-            if user and user.remnawave_uuid:
-                await subscription_service.enable_remnawave_user(user.remnawave_uuid)
+                user = await get_user_by_id(db, user_id)
+                _uuid = getattr(user, 'remnawave_uuid', None)
+            if _uuid:
+                await subscription_service.enable_remnawave_user(_uuid)
 
         traffic_text = 'безлимитный' if gb == 0 else f'{gb} ГБ'
         logger.info('Админ добавил трафик пользователю', admin_id=admin_id, traffic_text=traffic_text, user_id=user_id)
@@ -4067,32 +4108,23 @@ async def _deactivate_user_subscription(
     try:
         from app.database.crud.subscription import (
             deactivate_subscription,
-            get_subscription_by_user_id,
         )
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                subscription = active_subs[0] if active_subs else None
-        else:
-            subscription = await get_subscription_by_user_id(db, user_id)
+        subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if not subscription:
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
 
         await deactivate_subscription(db, subscription)
 
-        user = await get_user_by_id(db, user_id)
-        if user and user.remnawave_uuid:
-            subscription_service = SubscriptionService()
-            await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+        subscription_service = SubscriptionService()
+        _uuid = getattr(subscription, 'remnawave_uuid', None) if settings.is_multi_tariff_enabled() else None
+        if not _uuid:
+            user = await get_user_by_id(db, user_id)
+            _uuid = getattr(user, 'remnawave_uuid', None)
+        if _uuid:
+            await subscription_service.disable_remnawave_user(_uuid)
 
         logger.info('Админ деактивировал подписку пользователя', admin_id=admin_id, user_id=user_id)
         return True
@@ -4106,22 +4138,10 @@ async def _activate_user_subscription(
     db: AsyncSession, user_id: int, admin_id: int, subscription_id: int | None = None
 ) -> bool:
     try:
-        from app.database.crud.subscription import get_subscription_by_user_id
         from app.database.models import SubscriptionStatus
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                subscription = active_subs[0] if active_subs else None
-        else:
-            subscription = await get_subscription_by_user_id(db, user_id)
+        subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if not subscription:
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
@@ -4148,21 +4168,10 @@ async def _grant_trial_subscription(
     db: AsyncSession, user_id: int, admin_id: int, subscription_id: int | None = None
 ) -> bool:
     try:
-        from app.database.crud.subscription import create_trial_subscription, get_subscription_by_user_id
+        from app.database.crud.subscription import create_trial_subscription
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                existing_subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                existing_subscription = active_subs[0] if active_subs else None
-        else:
-            existing_subscription = await get_subscription_by_user_id(db, user_id)
+        existing_subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if existing_subscription:
             logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
@@ -4193,21 +4202,10 @@ async def _grant_paid_subscription(
 ) -> bool:
     try:
         from app.config import settings
-        from app.database.crud.subscription import create_paid_subscription, get_subscription_by_user_id
+        from app.database.crud.subscription import create_paid_subscription
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            if subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                existing_subscription = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-            else:
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-                active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-                existing_subscription = active_subs[0] if active_subs else None
-        else:
-            existing_subscription = await get_subscription_by_user_id(db, user_id)
+        existing_subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
         if existing_subscription:
             logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
@@ -4646,10 +4644,13 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                     pass
                 ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
 
-                if target_user.remnawave_uuid:
+                _uuid = (
+                    getattr(subscription, 'remnawave_uuid', None) if settings.is_multi_tariff_enabled() else None
+                ) or getattr(target_user, 'remnawave_uuid', None)
+                if _uuid:
                     async with remnawave_service.get_api_client() as api:
                         update_kwargs = dict(
-                            uuid=target_user.remnawave_uuid,
+                            uuid=_uuid,
                             status=UserStatus.ACTIVE if subscription.is_active else UserStatus.DISABLED,
                             expire_at=subscription.end_date,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3)
@@ -5005,15 +5006,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
 
     target_user = await lock_user_for_pricing(db, target_user.id)
 
-    from app.database.crud.subscription import get_subscription_by_user_id
-
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, target_user.id)
-        existing_subscription = active_subs[0] if active_subs else None
-    else:
-        existing_subscription = await get_subscription_by_user_id(db, target_user.id)
+    existing_subscription = await _resolve_admin_subscription(db, target_user.id)
 
     # Recalculate price from locked state (callback data may be stale)
     from app.services.pricing_engine import PricingEngine
@@ -5078,13 +5071,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
         squads = tariff.allowed_squads or []
 
         # Проверяем есть ли подписка
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-            active_subs = await get_active_subscriptions_by_user_id(db, target_user.id)
-            existing_subscription = active_subs[0] if active_subs else None
-        else:
-            existing_subscription = await get_subscription_by_user_id(db, target_user.id)
+        existing_subscription = await _resolve_admin_subscription(db, target_user.id)
 
         if existing_subscription:
             # Продлеваем существующую подписку
@@ -5214,16 +5201,9 @@ async def change_subscription_type_confirm(callback: types.CallbackQuery, db_use
 
 async def _change_subscription_type(db: AsyncSession, user_id: int, new_type: str, admin_id: int) -> bool:
     try:
-        from app.database.crud.subscription import get_subscription_by_user_id
         from app.services.subscription_service import SubscriptionService
 
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-            active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-            subscription = active_subs[0] if active_subs else None
-        else:
-            subscription = await get_subscription_by_user_id(db, user_id)
+        subscription = await _resolve_admin_subscription(db, user_id)
         if not subscription:
             logger.error('Подписка не найдена для пользователя', user_id=user_id)
             return False
@@ -5282,15 +5262,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
         await callback.answer('❌ Пользователь не найден', show_alert=True)
         return
 
-    from app.database.crud.subscription import get_subscription_by_user_id
-
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-        subscription = active_subs[0] if active_subs else None
-    else:
-        subscription = await get_subscription_by_user_id(db, user_id)
+    subscription = await _resolve_admin_subscription(db, user_id)
 
     if not subscription:
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)
@@ -5370,15 +5342,7 @@ async def select_admin_tariff_change(callback: types.CallbackQuery, db_user: Use
         await callback.answer('❌ Тариф не найден', show_alert=True)
         return
 
-    from app.database.crud.subscription import get_subscription_by_user_id
-
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-        subscription = active_subs[0] if active_subs else None
-    else:
-        subscription = await get_subscription_by_user_id(db, user_id)
+    subscription = await _resolve_admin_subscription(db, user_id)
 
     if not subscription:
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)
@@ -5433,15 +5397,7 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
         await callback.answer('❌ Тариф не найден', show_alert=True)
         return
 
-    from app.database.crud.subscription import get_subscription_by_user_id
-
-    if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-        active_subs = await get_active_subscriptions_by_user_id(db, user_id)
-        subscription = active_subs[0] if active_subs else None
-    else:
-        subscription = await get_subscription_by_user_id(db, user_id)
+    subscription = await _resolve_admin_subscription(db, user_id)
 
     if not subscription:
         await callback.answer('❌ У пользователя нет подписки', show_alert=True)

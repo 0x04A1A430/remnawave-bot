@@ -1991,9 +1991,15 @@ async def _send_offer_to_users(
                     if settings.is_multi_tariff_enabled():
                         _user_subs = getattr(user, 'subscriptions', None) or []
                         _active_subs = [s for s in _user_subs if s.is_active]
-                        _offer_sub_id = (
-                            _active_subs[0].id if _active_subs else (_user_subs[0].id if _user_subs else None)
-                        )
+                        if _active_subs:
+                            _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
+                            _eligible = _non_daily or _active_subs
+                            _best = max(_eligible, key=lambda s: s.days_left)
+                            _offer_sub_id = _best.id
+                        elif _user_subs:
+                            _offer_sub_id = _user_subs[0].id
+                        else:
+                            _offer_sub_id = None
                     else:
                         _offer_sub = getattr(user, 'subscription', None)
                         _offer_sub_id = _offer_sub.id if _offer_sub else None
