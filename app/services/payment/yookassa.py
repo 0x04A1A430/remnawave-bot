@@ -792,12 +792,34 @@ class YooKassaPaymentMixin:
                     if is_recurrent_topup and subscription is not None:
                         _meta_sub_id = payment_metadata.get('subscription_id')
                         if _meta_sub_id and str(subscription.id) != _meta_sub_id:
-                            logger.warning(
-                                'Recurrent payment subscription_id mismatch',
-                                expected_sub_id=_meta_sub_id,
-                                actual_sub_id=subscription.id,
-                                user_id=user.id,
-                            )
+                            # Heuristic picked the wrong sub — resolve correct one from metadata
+                            try:
+                                _correct_sub_id = int(_meta_sub_id)
+                                _correct_sub = next(
+                                    (s for s in all_subs if s.id == _correct_sub_id),
+                                    None,
+                                )
+                                if _correct_sub:
+                                    logger.info(
+                                        'Recurrent payment: resolved correct subscription from metadata',
+                                        meta_sub_id=_meta_sub_id,
+                                        heuristic_sub_id=subscription.id,
+                                        user_id=user.id,
+                                    )
+                                    subscription = _correct_sub
+                                else:
+                                    logger.warning(
+                                        'Recurrent payment subscription_id mismatch, metadata sub not found in user subs',
+                                        expected_sub_id=_meta_sub_id,
+                                        actual_sub_id=subscription.id,
+                                        user_id=user.id,
+                                    )
+                            except (ValueError, TypeError):
+                                logger.warning(
+                                    'Recurrent payment: invalid subscription_id in metadata',
+                                    meta_sub_id=_meta_sub_id,
+                                    user_id=user.id,
+                                )
 
                     promo_group = (
                         full_user.get_primary_promo_group()

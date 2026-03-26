@@ -2068,22 +2068,19 @@ async def try_auto_extend_expired_after_topup(
         return False
 
     if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+        from app.database.crud.subscription import get_all_subscriptions_by_user_id
 
-        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        if len(active_subs) == 1:
-            subscription = active_subs[0]
-        elif active_subs:
-            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-            _pool = _non_daily or active_subs
-            subscription = max(_pool, key=lambda s: s.days_left)
-            logger.warning(
-                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
-                user_id=user.id,
-                count=len(active_subs),
-            )
-        else:
+        all_subs = await get_all_subscriptions_by_user_id(db, user.id)
+        expired_subs = [
+            s
+            for s in all_subs
+            if s.status == SubscriptionStatus.EXPIRED.value and not s.is_trial
+        ]
+        if not expired_subs:
             subscription = None
+        else:
+            # Pick the most recently expired -- most likely what user wants to renew
+            subscription = max(expired_subs, key=lambda s: s.end_date or datetime.min.replace(tzinfo=UTC))
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:
@@ -2441,22 +2438,27 @@ async def try_resume_disabled_daily_after_topup(
         return False
 
     if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+        from app.database.crud.subscription import get_all_subscriptions_by_user_id
 
-        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        if len(active_subs) == 1:
-            subscription = active_subs[0]
-        elif active_subs:
-            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-            _pool = _non_daily or active_subs
-            subscription = max(_pool, key=lambda s: s.days_left)
-            logger.warning(
-                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
-                user_id=user.id,
-                count=len(active_subs),
-            )
-        else:
+        _target_statuses = (
+            SubscriptionStatus.DISABLED.value,
+            SubscriptionStatus.EXPIRED.value,
+            SubscriptionStatus.LIMITED.value,
+        )
+        all_subs = await get_all_subscriptions_by_user_id(db, user.id)
+        disabled_daily = [
+            s
+            for s in all_subs
+            if s.status in _target_statuses
+            and getattr(s, 'is_daily_tariff', False)
+            and not s.is_trial
+            and not getattr(s, 'is_daily_paused', False)
+        ]
+        if not disabled_daily:
             subscription = None
+        else:
+            # get_all orders active first then newest; pick first matching candidate
+            subscription = disabled_daily[0]
     else:
         subscription = await get_subscription_by_user_id(db, user.id)
     if subscription is None:

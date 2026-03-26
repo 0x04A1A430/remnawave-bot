@@ -100,20 +100,23 @@ async def claim_phantom(
         phantom_user_id=phantom.id,
         telegram_id=telegram_id,
         username=username,
-        has_subscription=phantom.subscription is not None,
+        has_subscription=bool(phantom.subscriptions),
     )
 
     # Sync Remnawave panel with updated user data (telegram_id, username, etc.)
-    if phantom.subscription:
-        try:
-            subscription_service = SubscriptionService()
-            await subscription_service.update_remnawave_user(db, phantom.subscription)
-        except Exception:
-            logger.warning(
-                'Failed to update Remnawave panel after phantom claim',
-                phantom_user_id=phantom.id,
-                exc_info=True,
-            )
+    subs = phantom.subscriptions or []
+    if subs:
+        subscription_service = SubscriptionService()
+        for sub in subs:
+            try:
+                await subscription_service.update_remnawave_user(db, sub)
+            except Exception:
+                logger.warning(
+                    'Failed to update Remnawave panel after phantom claim',
+                    phantom_user_id=phantom.id,
+                    subscription_id=sub.id,
+                    exc_info=True,
+                )
 
     return True, phantom
 
