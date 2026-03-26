@@ -4189,11 +4189,12 @@ async def _update_user_traffic(
 
 
 async def _resolve_admin_subscription(
-    db: AsyncSession, user_id: int, subscription_id: int | None = None
+    db: AsyncSession, user_id: int, subscription_id: int | None = None, tariff_id: int | None = None
 ) -> 'Subscription | None':
     """Resolve subscription for admin operations.
 
     In multi-tariff without explicit subscription_id:
+    - If tariff_id provided → find active sub with that tariff only
     - 1 active sub → use it
     - Multiple → prefer non-daily with most days remaining
     - 0 active → return None
@@ -4210,6 +4211,15 @@ async def _resolve_admin_subscription(
 
         if not active_subs:
             return None
+
+        # When buying a specific tariff, only match subscription with the same tariff_id
+        if tariff_id is not None:
+            matching = [s for s in active_subs if s.tariff_id == tariff_id]
+            if matching:
+                return matching[0]
+            # No subscription for this tariff — must create a new one
+            return None
+
         if len(active_subs) == 1:
             return active_subs[0]
 
@@ -5243,7 +5253,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
 
     target_user = await lock_user_for_pricing(db, target_user.id)
 
-    existing_subscription = await _resolve_admin_subscription(db, target_user.id)
+    existing_subscription = await _resolve_admin_subscription(db, target_user.id, tariff_id=tariff_id)
 
     # Recalculate price from locked state (callback data may be stale)
     from app.services.pricing_engine import PricingEngine
@@ -5307,8 +5317,8 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
         # Получаем серверы из тарифа
         squads = tariff.allowed_squads or []
 
-        # Проверяем есть ли подписка
-        existing_subscription = await _resolve_admin_subscription(db, target_user.id)
+        # Проверяем есть ли подписка с этим тарифом
+        existing_subscription = await _resolve_admin_subscription(db, target_user.id, tariff_id=tariff_id)
 
         if existing_subscription:
             # Продлеваем существующую подписку
