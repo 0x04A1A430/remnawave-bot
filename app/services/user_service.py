@@ -96,12 +96,13 @@ class UserService:
                 f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
                 f'Спасибо за использование нашего сервиса! 🎉'
             )
+            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
                             text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                            callback_data='subscription_extend',
+                            callback_data=extend_callback,
                         )
                     ]
                 ]
@@ -117,10 +118,11 @@ class UserService:
                 f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
                 f'👇 <b>Выберите действие:</b>'
             )
+            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='🚀 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='subscription_buy')],
-                    [types.InlineKeyboardButton(text='💎 ПРОДЛИТЬ ПОДПИСКУ', callback_data='subscription_extend')],
+                    [types.InlineKeyboardButton(text='💎 ПРОДЛИТЬ ПОДПИСКУ', callback_data=extend_callback)],
                     [
                         types.InlineKeyboardButton(
                             text='📱 ДОБАВИТЬ УСТРОЙСТВА', callback_data='subscription_add_devices'
@@ -169,11 +171,12 @@ class UserService:
         subs = getattr(user, 'subscriptions', None) or []
         has_extendable = any(sub.status in {'active', 'expired', 'trial'} for sub in subs)
         if has_extendable:
+            extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
                         text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
-                        callback_data='subscription_extend',
+                        callback_data=extend_callback,
                     )
                 ]
             )

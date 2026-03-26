@@ -443,12 +443,17 @@ class RemnaWaveWebhookService:
             return False
         return bool(re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://', value))
 
-    def _get_renew_keyboard(self, user: User) -> InlineKeyboardMarkup:
+    def _get_renew_keyboard(self, user: User, subscription_id: int | None = None) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
+        extend_callback = (
+            f'se:{subscription_id}'
+            if settings.is_multi_tariff_enabled() and subscription_id
+            else 'subscription_extend'
+        )
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=button_text, callback_data='subscription_extend')],
+                [build_miniapp_or_callback_button(text=button_text, callback_data=extend_callback)],
             ]
         )
 
@@ -592,7 +597,11 @@ class RemnaWaveWebhookService:
             else:
                 await db.commit()
 
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRED', reply_markup=self._get_renew_keyboard(user))
+        await self._notify_user(
+            user,
+            'WEBHOOK_SUB_EXPIRED',
+            reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+        )
 
     async def _handle_user_disabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -916,9 +925,17 @@ class RemnaWaveWebhookService:
                 subscription.connected_squads = []
                 subscription.updated_at = datetime.now(UTC)
                 await db.commit()
-                await self._notify_user(user, 'WEBHOOK_SUB_DELETED', reply_markup=self._get_renew_keyboard(user))
+                await self._notify_user(
+                    user,
+                    'WEBHOOK_SUB_DELETED',
+                    reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+                )
         else:
-            await self._notify_user(user, 'WEBHOOK_SUB_DELETED', reply_markup=self._get_renew_keyboard(user))
+            await self._notify_user(
+                user,
+                'WEBHOOK_SUB_DELETED',
+                reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+            )
 
     async def _attempt_panel_recreation(self, db: AsyncSession, user: User, subscription: Subscription) -> bool:
         """Re-create user in RemnaWave panel after spurious user.deleted webhook.
@@ -1010,22 +1027,26 @@ class RemnaWaveWebhookService:
     async def _handle_expires_in_72h(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_72H', reply_markup=self._get_renew_keyboard(user))
+        sub_id = getattr(subscription, 'id', None) if subscription else None
+        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_72H', reply_markup=self._get_renew_keyboard(user, sub_id))
 
     async def _handle_expires_in_48h(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_48H', reply_markup=self._get_renew_keyboard(user))
+        sub_id = getattr(subscription, 'id', None) if subscription else None
+        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_48H', reply_markup=self._get_renew_keyboard(user, sub_id))
 
     async def _handle_expires_in_24h(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_24H', reply_markup=self._get_renew_keyboard(user))
+        sub_id = getattr(subscription, 'id', None) if subscription else None
+        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_24H', reply_markup=self._get_renew_keyboard(user, sub_id))
 
     async def _handle_expired_24h_ago(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user))
+        sub_id = getattr(subscription, 'id', None) if subscription else None
+        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user, sub_id))
 
     async def _handle_first_connected(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict

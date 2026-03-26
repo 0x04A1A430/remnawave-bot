@@ -2720,7 +2720,18 @@ async def sync_user_from_panel(
             # Find user in panel: UUID → telegram_id → email
             panel_user = None
 
-            if user.remnawave_uuid:
+            if settings.is_multi_tariff_enabled():
+                # In multi-tariff mode, user.remnawave_uuid is None; UUIDs live on subscriptions
+                sub_uuids = [
+                    s.remnawave_uuid
+                    for s in (getattr(user, 'subscriptions', None) or [])
+                    if s.remnawave_uuid
+                ]
+                for _uuid in sub_uuids:
+                    panel_user = await api.get_user_by_uuid(_uuid)
+                    if panel_user:
+                        break
+            elif user.remnawave_uuid:
                 panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
 
             if not panel_user and user.telegram_id:
@@ -2763,7 +2774,8 @@ async def sync_user_from_panel(
             )
 
             # Update remnawave_uuid if different
-            if user.remnawave_uuid != panel_user.uuid:
+            # In multi-tariff mode the UUID belongs to the subscription, not the user
+            if not settings.is_multi_tariff_enabled() and user.remnawave_uuid != panel_user.uuid:
                 changes['remnawave_uuid'] = {'old': user.remnawave_uuid, 'new': panel_user.uuid}
                 user.remnawave_uuid = panel_user.uuid
 

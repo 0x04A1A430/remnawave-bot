@@ -1471,7 +1471,27 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     if 'period_days' not in prepared_cart_data:
         await callback.answer('❌ Корзина повреждена. Оформите подписку заново.', show_alert=True)
-        await user_cart_service.delete_user_cart(db_user.id)
+        # Multi-tariff safe: try per-subscription deletion to avoid nuking other carts
+        corrupted_sub_id = None
+        try:
+            raw = cart_data.get('subscription_id')
+            if raw is not None:
+                corrupted_sub_id = int(raw)
+        except (TypeError, ValueError):
+            pass
+
+        if corrupted_sub_id is not None:
+            await user_cart_service.delete_subscription_cart(db_user.id, corrupted_sub_id)
+            global_cart = await user_cart_service.get_user_cart(db_user.id)
+            if global_cart and global_cart.get('subscription_id') is not None:
+                try:
+                    if int(global_cart['subscription_id']) == corrupted_sub_id:
+                        await user_cart_service.delete_global_cart_only(db_user.id)
+                except (TypeError, ValueError):
+                    pass
+        else:
+            # Cart corrupted beyond reading subscription_id -- global cleanup
+            await user_cart_service.delete_user_cart(db_user.id)
         return
 
     if not settings.is_devices_selection_enabled():
@@ -2919,7 +2939,10 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
 
 async def clear_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
-    # Очищаем как FSM, так и Redis
+    # Очищаем как FSM, так и Redis.
+    # NOTE: Intentionally deletes ALL carts (global + per-subscription cascade)
+    # because this is an explicit user action ("clear my cart").  In multi-tariff
+    # mode the user expects a full reset, not per-subscription cleanup.
     await state.clear()
     await user_cart_service.delete_user_cart(db_user.id)
 

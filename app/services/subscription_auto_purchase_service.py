@@ -1416,12 +1416,23 @@ async def _auto_add_devices(
         return False
 
     # Проверяем подписку (with lock to prevent concurrent device modifications)
-    locked_result = await db.execute(
-        select(Subscription)
-        .where(Subscription.user_id == user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
+    _cart_sub_id_devices = _safe_int(cart_data.get('subscription_id'))
+    if settings.is_multi_tariff_enabled() and _cart_sub_id_devices:
+        locked_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.id == _cart_sub_id_devices, Subscription.user_id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    else:
+        locked_result = await db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user.id)
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     subscription = locked_result.scalar_one_or_none()
     if not subscription:
         logger.warning('🔁 Автопокупка устройств: у пользователя нет подписки', format_user_id=_format_user_id(user))
@@ -2062,7 +2073,6 @@ async def try_auto_extend_expired_after_topup(
     """
     from app.cabinet.routes.websocket import notify_user_subscription_renewed
     from app.database.crud.subscription import get_subscription_by_user_id
-    from app.database.crud.transaction import get_user_transactions
 
     if not user or not getattr(user, 'id', None):
         return False
@@ -2166,25 +2176,24 @@ async def try_auto_extend_expired_after_topup(
         )
         return False
 
-    # Race condition guard: skip if a subscription payment was made in the last 60 seconds
+    # Race condition guard (per-subscription): skip if THIS subscription was
+    # modified in the last 60 seconds (indicates a concurrent renewal just landed).
     try:
-        recent_transactions = await get_user_transactions(db, user.id, limit=1)
-        if recent_transactions:
-            last_tx = recent_transactions[0]
-            if (
-                last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
-                and last_tx.created_at
-                and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
-            ):
-                logger.info(
-                    '🔄 Автопродление expired: пропуск — подписка оплачена секунд назад',
-                    format_user_id=_format_user_id(user),
-                    total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
-                )
-                return False
+        await db.refresh(subscription, attribute_names=['updated_at'])
+        if (
+            subscription.updated_at
+            and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60)
+        ):
+            logger.info(
+                '🔄 Автопродление expired: пропуск — подписка обновлена секунд назад',
+                format_user_id=_format_user_id(user),
+                subscription_id=subscription.id,
+                total_seconds=(datetime.now(UTC) - subscription.updated_at).total_seconds(),
+            )
+            return False
     except Exception as check_error:
         logger.warning(
-            '🔄 Автопродление expired: ошибка проверки последней транзакции',
+            '🔄 Автопродление expired: ошибка проверки updated_at подписки',
             format_user_id=_format_user_id(user),
             check_error=check_error,
         )
@@ -2511,26 +2520,24 @@ async def try_resume_disabled_daily_after_topup(
         )
         return False
 
-    # Race condition guard: skip if a subscription payment was made in the last 60 seconds
-    from app.database.crud.transaction import get_user_transactions
-
+    # Race condition guard (per-subscription): skip if THIS daily subscription
+    # was modified in the last 60 seconds (indicates a concurrent charge just landed).
     try:
-        recent_transactions = await get_user_transactions(db, user.id, limit=1)
-        if recent_transactions:
-            last_tx = recent_transactions[0]
-            if (
-                last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
-                and last_tx.created_at
-                and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
-            ):
-                logger.info(
-                    '🔄 Авто-возобновление daily: пропуск — оплата секунд назад',
-                    format_user_id=_format_user_id(user),
-                )
-                return False
+        await db.refresh(subscription, attribute_names=['updated_at'])
+        if (
+            subscription.updated_at
+            and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60)
+        ):
+            logger.info(
+                '🔄 Авто-возобновление daily: пропуск — подписка обновлена секунд назад',
+                format_user_id=_format_user_id(user),
+                subscription_id=subscription.id,
+                total_seconds=(datetime.now(UTC) - subscription.updated_at).total_seconds(),
+            )
+            return False
     except Exception as check_error:
         logger.warning(
-            '🔄 Авто-возобновление daily: ошибка проверки последней транзакции',
+            '🔄 Авто-возобновление daily: ошибка проверки updated_at подписки',
             format_user_id=_format_user_id(user),
             check_error=check_error,
         )
@@ -2853,23 +2860,43 @@ async def _process_single_cart(
         await clear_subscription_checkout_draft(user.id)
         return False
 
-    # Race condition guard: subscription paid in the last 60 seconds
+    # Race condition guard (per-subscription): skip if THIS subscription was
+    # modified in the last 60 seconds (indicates a concurrent purchase just landed).
+    # When cart_sub_id is available we check the specific subscription's updated_at;
+    # otherwise fall back to the user-global last transaction check.
     if cart_mode in ('extend', 'tariff_purchase', 'daily_tariff_purchase'):
         try:
-            recent_transactions = await get_user_transactions(db, user.id, limit=1)
-            if recent_transactions:
-                last_tx = recent_transactions[0]
+            if cart_sub_id:
+                from app.database.crud.subscription import get_subscription_by_id_for_user
+
+                target_sub = await get_subscription_by_id_for_user(db, cart_sub_id, user.id)
                 if (
-                    last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
-                    and last_tx.created_at
-                    and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
+                    target_sub
+                    and target_sub.updated_at
+                    and (datetime.now(UTC) - target_sub.updated_at) < timedelta(seconds=60)
                 ):
                     logger.info(
-                        'Автопокупка: пропускаем -- подписка уже куплена секунд назад',
+                        'Автопокупка: пропускаем -- подписка обновлена секунд назад',
                         format_user_id=_format_user_id(user),
-                        total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
+                        subscription_id=cart_sub_id,
+                        total_seconds=(datetime.now(UTC) - target_sub.updated_at).total_seconds(),
                     )
                     return False
+            else:
+                recent_transactions = await get_user_transactions(db, user.id, limit=1)
+                if recent_transactions:
+                    last_tx = recent_transactions[0]
+                    if (
+                        last_tx.type == TransactionType.SUBSCRIPTION_PAYMENT
+                        and last_tx.created_at
+                        and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
+                    ):
+                        logger.info(
+                            'Автопокупка: пропускаем -- подписка уже куплена секунд назад',
+                            format_user_id=_format_user_id(user),
+                            total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
+                        )
+                        return False
         except Exception as check_error:
             logger.warning(
                 'Автопокупка: ошибка проверки последней транзакции',

@@ -298,7 +298,7 @@ class MonitoringService:
 
                 user = await get_user_by_id(db, subscription.user_id)
                 if user and self.bot:
-                    await self._send_subscription_expired_notification(user)
+                    await self._send_subscription_expired_notification(user, subscription)
 
                 logger.info(
                     "🔴 Подписка пользователя истекла и статус изменен на 'expired'", user_id=subscription.user_id
@@ -1303,7 +1303,7 @@ class MonitoringService:
         except Exception as e:
             logger.error('Ошибка обработки автоплатежей', error=e)
 
-    async def _send_subscription_expired_notification(self, user: User) -> bool:
+    async def _send_subscription_expired_notification(self, user: User, subscription: Subscription) -> bool:
         try:
             message = """
 ⛔ <b>Подписка истекла</b>
@@ -1315,9 +1315,14 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
+            extend_callback = (
+                f'se:{subscription.id}'
+                if settings.is_multi_tariff_enabled()
+                else 'subscription_extend'
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Купить подписку', callback_data='menu_buy')],
+                    [build_miniapp_or_callback_button(text='💎 Продлить подписку', callback_data=extend_callback)],
                     [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
                 ]
             )

@@ -301,8 +301,31 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
     await state.clear()
     await clear_subscription_checkout_draft(db_user.id)
 
-    # Удаляем сохраненную корзину, чтобы не показывать кнопку возврата
-    await user_cart_service.delete_user_cart(db_user.id)
+    # Multi-tariff safe: delete only the cart for the current subscription
+    # to avoid nuking carts belonging to other subscriptions.
+    cart_data = await user_cart_service.get_user_cart(db_user.id)
+    cart_sub_id = None
+    if cart_data:
+        try:
+            raw = cart_data.get('subscription_id')
+            if raw is not None:
+                cart_sub_id = int(raw)
+        except (TypeError, ValueError):
+            pass
+
+    if cart_sub_id is not None:
+        await user_cart_service.delete_subscription_cart(db_user.id, cart_sub_id)
+        # Clean up global key only if it still references this subscription
+        global_cart = await user_cart_service.get_user_cart(db_user.id)
+        if global_cart and global_cart.get('subscription_id') is not None:
+            try:
+                if int(global_cart['subscription_id']) == cart_sub_id:
+                    await user_cart_service.delete_global_cart_only(db_user.id)
+            except (TypeError, ValueError):
+                pass
+    else:
+        # No subscription_id in cart -- safe to delete the global cart
+        await user_cart_service.delete_user_cart(db_user.id)
 
     from app.handlers.menu import show_main_menu
 
