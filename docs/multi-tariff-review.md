@@ -83,97 +83,137 @@
 
 ---
 
-## Этап 2: Функциональное тестирование и оставшиеся MEDIUM/LOW
+## Этап 2: Полный функциональный аудит (6 агентов, ~60 файлов)
 
-### 2.1 Оставшиеся MEDIUM проблемы (не исправлены)
+> Проведён 2026-03-26. Каждый агент проверял свою группу файлов.
 
-| # | Проблема | Файл(ы) | Риск | Рекомендация |
-|---|----------|---------|------|--------------|
-| M1 | **Нет лимита подписок** — юзер может купить неограниченное количество тарифов | Все точки создания | Abuse | Добавить `MAX_ACTIVE_SUBSCRIPTIONS` в config + проверку при покупке |
-| M2 | **Нет валидации `traffic_reset_mode`** — несовместимые режимы сброса трафика не блокируются | `tariff_purchase.py` | Data integrity | Валидация при покупке: сравнить с existing subs |
-| M3 | **Monitoring дедупликация ломается** — при 2+ подписках уведомление о 3-дневном пороге пропускается если другая подписка в 1-дневном | `monitoring_service.py:471-482` | Missed notifications | Переработать дедупликацию per-subscription |
-| M4 | **Campaign бонус блокируется** — любая активная подписка блокирует бонус, даже для другого тарифа | `campaign_service.py:144-150` | Feature gap | Проверять по `tariff_id`, не по наличию подписки |
-| M5 | **MiniApp нет endpoint для списка подписок** — `POST /subscription` возвращает одну | `miniapp.py` | UX gap | Добавить `GET /subscriptions` как в Cabinet |
-| M6 | **Promo restoration не атомична с refund** — краш между commits = потеря промо-скидки | `tariff_purchase.py:1412-1416` | Data loss (low prob) | `commit=False` на `add_user_balance`, единый commit |
-| M7 | **Auto-purchase cart clearing** — после первого автоплатежа очищается cart, ломает второй | `subscription_auto_purchase_service.py:543-544` | Multi-sub autopay | Per-subscription cart keys |
-| M8 | **i18n hardcoded strings в monitoring_service** — кнопки на русском вместо `texts.t(...)` | `monitoring_service.py:1417-1426` | i18n | Использовать `texts.t(...)` |
-| M9 | **`add_user_balance` silent failure** — возвращает `False` без exception, `_persist_failed_refund` не вызывается | `tariff_purchase.py:1445` | Silent money loss | Проверять return value |
+### 2.0 CRITICAL (найдены в Этапе 2)
 
-### 2.2 Оставшиеся LOW проблемы
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S2-C1 | **`update_or_create_subscription()` без multi-tariff guard** — в мульти-режиме перезаписывает самую свежую подписку произвольными данными | `subscription_utils.py` | 55-88 |
+| S2-C2 | **Panel sync перезаписывает `traffic_limit_gb` из панели** — стирает докупленный трафик. Бот = source of truth, панель = нет | `remnawave_service.py` | 1822-1825, 2049-2054 |
+| S2-C3 | **Guest purchase блокирует создание второй подписки** — PENDING_ACTIVATION вместо создания нового тарифа | `guest_purchase_service.py` | 343-357 |
+| S2-C4 | **Auto-purchase cart per-user, не per-subscription** — при 2 autopay подписках cart может указывать на неправильную | `subscription_auto_purchase_service.py` | 152-188, 2772 |
+| S2-C5 | **`_sync_users_from_panel` dict `.uuid` AttributeError** — silent fail, создаёт дубликаты подписок | `remnawave_service.py` | 1351 |
+
+### 2.1 HIGH (найдены в Этапе 2)
+
+#### Bot Handlers
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S2-H1 | **`confirm_extend_subscription` fallback на `db_user.subscription`** когда FSM state отсутствует | `purchase.py` | 1815-1816 |
+| S2-H2 | **`open_subscription_link:{sub_id}` callback не зарегистрирован** — handler только для exact match, мульти-тариф callbacks dropped | `links.py` | 176-178 |
+| S2-H3 | **`subscription_connect:{sub_id}` callback не зарегистрирован** — аналогично H2 | `links.py` | 358-363 |
+| S2-H4 | **`handle_subscription_settings` использует `db_user.subscription`** — device settings на неправильной подписке | `purchase.py` | 2851-2852 |
+| S2-H5 | **`confirm_reset_traffic` без sub_id в callback** — зависит от stale FSM | `traffic.py` | 308-325 |
+
+#### Services
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S2-H6 | **`update_remnawave_user` fallback на `user.remnawave_uuid`** при `subscription.remnawave_uuid=None` — может обновить чужого panel user | `subscription_service.py` | 409-413 |
+| S2-H7 | **`_auto_purchase_tariff` picks `next()` по tariff_id** — при 2 подписках на один тариф продлевает не ту | `subscription_auto_purchase_service.py` | 722-729 |
+| S2-H8 | **`migrate_squad_users` проверяет `user.remnawave_uuid`** — в мульти-режиме всегда None, panel update пропускается | `remnawave_service.py` | 1005-1006 |
+| S2-H9 | **Campaign bonus блокируется любой активной подпиской** | `campaign_service.py` | 132-150, 245-263 |
+| S2-H10 | **`broadcast_service` paid-subscription guard берёт только newest sub** — может ошибочно заблокировать | `broadcast_service.py` | 546-561 |
+| S2-H11 | **`blocked_users_service` хранит только `user.remnawave_uuid`** — DELETE_FROM_REMNAWAVE пропускается для мульти-тариф | `blocked_users_service.py` | 160-181 |
+| S2-H12 | **`unblock_user` логирует `user.remnawave_uuid` вместо `sub.remnawave_uuid`** | `user_service.py` | 758 |
+
+#### Admin
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S2-H13 | **`_grant_trial_subscription` блокирует грант при любой активной подписке** — админ не может дать trial на второй тариф | `admin/users.py` | 4370 |
+| S2-H14 | **`_grant_paid_subscription` аналогично** — блокирует грант | `admin/users.py` | 4403 |
+| S2-H15 | **Promo offers `_build_connect_button_rows` использует `user.subscription`** — кнопка "Подключить" ведёт не к той подписке | `admin/promo_offers.py` | 1904 |
+| S2-H16 | **Promo segment broadcast filter — `user.subscription` вместо всех подписок** — юзеры с squad в secondary sub не фильтруются | `admin/promo_offers.py` | 2122-2130 |
+
+#### CRUD / Utils
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S2-H17 | **`get_users_list` с `order_by_traffic` — outerjoin без `.unique()`** — дублирует юзеров в списке | `user.py` | 884-887 |
+
+#### Frontend (Cabinet)
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S2-H18 | **`refreshTraffic` ставит `subscription_id` в body вместо query param** — backend игнорирует | `api/subscription.ts` | 159-163 |
+
+### 2.2 MEDIUM (найдены в Этапе 2)
 
 | # | Проблема | Файл |
 |---|----------|------|
-| L1 | `get_subscription_expiring_keyboard()` — мёртвый код (никем не вызывается) | `inline.py:1855` |
-| L2 | `select_tariff` блокирует покупку вместо redirect на продление | `tariff_purchase.py:576-587` |
-| L3 | `sync_users_from_panel` перезаписывает `traffic_limit_gb` из панели в мульти-режиме | `remnawave_service.py:1814-1825` |
-| L4 | `current_uses` в promo response — stale (pre-increment значение) | `promocode_service.py:197` |
-| L5 | Stale callbacks `subscription_settings`/`toggle_daily_pause` → `db_user.subscription` | `purchase.py:2841,2933` |
-| L6 | Legacy single-tariff merge без panel sync | `account_merge_service.py:391-436` |
+| S2-M1 | Нет лимита подписок (MAX_ACTIVE_SUBSCRIPTIONS) | config |
+| S2-M2 | Нет валидации `traffic_reset_mode` совместимости | tariff_purchase.py |
+| S2-M3 | Monitoring дедупликация ломается при 2+ подписках | monitoring_service.py:471-482 |
+| S2-M4 | MiniApp нет endpoint для списка подписок | miniapp.py |
+| S2-M5 | Promo restoration не атомична с refund | tariff_purchase.py:1412-1416 |
+| S2-M6 | Auto-purchase cart clearing ломает второй автоплатёж | subscription_auto_purchase_service.py:543-544 |
+| S2-M7 | i18n hardcoded strings в monitoring_service keyboard | monitoring_service.py:1417-1426 |
+| S2-M8 | `add_user_balance` silent failure — `_persist_failed_refund` не вызывается | tariff_purchase.py:1445 |
+| S2-M9 | `handle_toggle_daily_subscription_pause` использует `db_user.subscription` | purchase.py:2943 |
+| S2-M10 | `show_subscription_detail` игнорирует `HIDE_SUBSCRIPTION_LINK` | my_subscriptions.py:208-209 |
+| S2-M11 | `handle_extend_subscription` для daily tariff теряет sub context | purchase.py:1644-1647 |
+| S2-M12 | Traffic/device confirmation callbacks без sub_id (FSM dependency) | inline.py:2180,2248 |
+| S2-M13 | `delete_subscription` в multi_tariff.py использует `status` вместо `actual_status` | multi_tariff.py:126 |
+| S2-M14 | Admin overview/statistics показывают только primary subscription | admin/users.py:1261,2787 |
+| S2-M15 | Tariff switch без guard на already-owned tariff | tariff_switch.py |
+| S2-M16 | Admin traffic table дублирует юзеров (1 row per subscription UUID) | admin_traffic.py:214 |
+| S2-M17 | Frontend: cache invalidation после purchase/promo не scoped по subscriptionId | SubscriptionPurchase.tsx:304-308 |
+| S2-M18 | Panel sync перезаписывает `connected_squads` | remnawave_service.py:2082-2095 |
 
-### 2.3 Чеклист функционального тестирования
+### 2.3 LOW
 
-#### Bot (Telegram)
+| # | Проблема | Файл |
+|---|----------|------|
+| S2-L1 | `get_subscription_expiring_keyboard()` — мёртвый код | inline.py:1855 |
+| S2-L2 | `select_tariff` блокирует покупку вместо redirect на продление | tariff_purchase.py:576-587 |
+| S2-L3 | `current_uses` в promo response — stale | promocode_service.py:197 |
+| S2-L4 | Legacy merge без panel sync | account_merge_service.py:391-436 |
+| S2-L5 | 9x `user.subscription` cache-warmer в user.py (deprecated property) | user.py:99,119,... |
+| S2-L6 | `ensure_single_subscription()` — misnamed, noop in multi-tariff | subscription_utils.py:15 |
+| S2-L7 | `create_trial_subscription` с `tariff_id=None` в мульти-тариф — undefined behavior | subscription.py:175 |
+| S2-L8 | YooKassa admin notification re-queries newest sub вместо resolved | yookassa.py:1039-1046 |
+| S2-L9 | Frontend: `is_purchased` flag на tariff cards не используется визуально | SubscriptionPurchase.tsx |
+| S2-L10 | Auth response не включает subscriptions list | auth.py:98 |
 
-| # | Сценарий | Ожидание | Проверить |
-|---|----------|----------|-----------|
-| B1 | Покупка первого тарифа | Подписка создана, Remnawave юзер создан | `subscription.remnawave_uuid` заполнен |
-| B2 | Покупка второго тарифа (другого) | Вторая подписка создана, свой Remnawave юзер | 2 записи в subscriptions, 2 UUID |
-| B3 | Попытка купить тот же тариф | Сообщение "Тариф уже активен, продлите" | Partial unique index отрабатывает |
-| B4 | "Мои подписки" — список | Показывает обе подписки с кнопками управления | Кнопки `sm:`, `se:`, `sl:` |
-| B5 | Продление конкретной подписки | Продлевается именно выбранная | `end_date` обновлён только у неё |
-| B6 | Докупка трафика для конкретной подписки | Трафик добавлен именно к выбранной | `purchased_traffic_gb` |
-| B7 | Докупка устройств для конкретной подписки | `device_limit` увеличен у выбранной | Remnawave user updated |
-| B8 | Уведомление об истечении одной подписки | Кнопка "Продлить" ведёт к конкретной подписке | `se:{sub_id}` callback |
-| B9 | Истечение одной подписки, вторая активна | Вторая продолжает работать | Status check |
-| B10 | Промокод `SUBSCRIPTION_DAYS` при 2+ подписках | Предложение выбрать подписку | `select_subscription` response |
-| B11 | Промокод `BALANCE` при 2+ подписках | Баланс пополнен без выбора подписки | Не зависит от подписок |
-| B12 | Autopay при 2+ подписках | Каждая подписка с autopay продлевается отдельно | Проверить по каждой |
-| B13 | Конкурентные покупки (2 запроса одновременно) | Только одна операция проходит | `FOR UPDATE` lock |
+### 2.4 Confirmed Correct (проверено, проблем нет)
 
-#### Cabinet (WebApp)
-
-| # | Сценарий | Ожидание | Проверить |
-|---|----------|----------|-----------|
-| W1 | `GET /subscriptions` — список подписок | Возвращает все подписки юзера | JSON array |
-| W2 | `GET /subscription/info?subscription_id=X` | Информация по конкретной подписке | Ownership validated |
-| W3 | `GET /subscription/info` (без ID) | Возвращает подписку с max days_left | `resolve_subscription()` |
-| W4 | `PATCH /subscription/autopay?subscription_id=X` | Autopay для конкретной подписки | Другие подписки не затронуты |
-| W5 | `GET /subscription/renewal-options?subscription_id=X` | Цены для конкретной подписки | Tariff prices |
-| W6 | `POST /subscription/renew` с `subscription_id` | Продление конкретной подписки | Balance deducted, period extended |
-| W7 | `GET /subscription/connection-link?subscription_id=X` | Link от конкретной подписки | Каждая подписка — свой URL |
-| W8 | `POST /devices/purchase?subscription_id=X` | Устройства для конкретной подписки | FOR UPDATE lock, ownership |
-| W9 | `GET /subscription/app-config?subscription_id=X` | Deep links для конкретной подписки | Correct URL/crypto link |
-| W10 | IDOR: `subscription_id` чужой подписки | HTTP 404 | `get_subscription_by_id_for_user` |
-
-#### MiniApp API
-
-| # | Сценарий | Ожидание | Проверить |
-|---|----------|----------|-----------|
-| A1 | `/subscription/autopay` с `subscriptionId` | Autopay для конкретной подписки | `_ensure_paid_subscription` + `_validate_subscription_id` |
-| A2 | `/subscription/renewal/options` с `subscriptionId` | Цены для конкретной подписки | Tariff-aware |
-| A3 | `/subscription/settings` с `subscriptionId` | Настройки конкретной подписки | Ownership |
-| A4 | `/subscription/servers` с `subscriptionId` | Серверы конкретной подписки | Squad list |
-| A5 | `/subscription/traffic` с `subscriptionId` | Трафик конкретной подписки | Traffic limit |
-| A6 | `/subscription/devices` с `subscriptionId` | Устройства конкретной подписки | Device limit |
-| A7 | `/subscription/traffic-topup` с `subscriptionId` | Докупка для конкретной подписки | Balance deducted |
-| A8 | IDOR: `subscriptionId` чужой подписки | HTTP 403 `subscription_mismatch` | `_validate_subscription_id` |
-
-#### Edge Cases
-
-| # | Сценарий | Ожидание |
-|---|----------|----------|
-| E1 | Юзер с 0 подписок, все endpoint'ы | Graceful 404 / empty response |
-| E2 | Юзер с 1 подпиской, без `subscription_id` | Работает как single-tariff (backward compat) |
-| E3 | Account merge: оба юзера с подписками | Все подписки на primary, panel synced |
-| E4 | Webhook с `remnawave_uuid` от перенесённой подписки | Subscription resolved, status updated |
-| E5 | Webhook с unknown `remnawave_uuid` | `(user, None)`, no crash |
-| E6 | `MULTI_TARIFF_ENABLED=false` | Всё работает как раньше, single subscription |
-| E7 | Суточные подписки + мульти-тариф | Daily charge per-subscription |
-| E8 | Failed refund persistence | Transaction с `type='failed_refund'` в БД |
+| Компонент | Файл(ы) |
+|-----------|---------|
+| PricingEngine | pricing_engine.py |
+| SubscriptionRenewalService | subscription_renewal_service.py |
+| Contest attempt service | contests/attempt_service.py |
+| Server squad CRUD | server_squad.py |
+| Backup service | backup_service.py |
+| WebAPI subscriptions | webapi/routes/subscriptions.py |
+| Cabinet multi_tariff module (list/detail/delete) | multi_tariff.py |
+| Cabinet purchase (tariff-aware) | cabinet purchase.py |
+| Cabinet tariff_switch (resolve_subscription) | tariff_switch.py |
+| Cabinet admin_users detail + panel_info | admin_users.py |
+| Cabinet wheel + contests | wheel.py, contests.py |
+| Channel checker middleware | channel_checker.py |
+| Simple subscription (blocks in multi-tariff) | simple_subscription.py |
+| Daily subscription service | daily_subscription_service.py |
+| Frontend: types, routing, Subscription detail, Subscriptions list, Connection, RenewSubscription | bedolaga-cabinet/src/ |
 
 ---
 
-## Файлы изменённые в этом ревью
+## Общая статистика
+
+| Категория | Этап 1 | Этап 2 | Итого |
+|-----------|--------|--------|-------|
+| **CRITICAL** | 7 (все исправлены) | 5 (не исправлены) | 12 |
+| **HIGH** | 6 (все исправлены) | 18 (не исправлены) | 24 |
+| **MEDIUM** | — | 18 | 18 |
+| **LOW** | 6 | 10 | 16 |
+| **Confirmed correct** | — | 15 компонентов | 15 |
+| **Файлов проверено** | 14 (изменены) | ~60 (прочитаны) | ~64 |
+
+## Файлы изменённые в Этапе 1
 
 ```
 app/cabinet/routes/subscription_modules/autopay.py
