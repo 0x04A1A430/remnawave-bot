@@ -202,32 +202,91 @@
 
 ---
 
-## Общая статистика
+## Этап 3: Дополнительный скан (найдены после фиксов Этапа 2)
 
-| Категория | Этап 1 | Этап 2 | Итого |
-|-----------|--------|--------|-------|
-| **CRITICAL** | 7 (все исправлены) | 5 (не исправлены) | 12 |
-| **HIGH** | 6 (все исправлены) | 18 (не исправлены) | 24 |
-| **MEDIUM** | — | 18 | 18 |
-| **LOW** | 6 | 10 | 16 |
-| **Confirmed correct** | — | 15 компонентов | 15 |
-| **Файлов проверено** | 14 (изменены) | ~60 (прочитаны) | ~64 |
+### CRITICAL (3, все исправлены)
 
-## Файлы изменённые в Этапе 1
+| # | Проблема | Файл | Фикс |
+|---|----------|------|------|
+| S3-C1 | `sync_users_to_panel` uses `user.remnawave_uuid` вместо `sub.remnawave_uuid` | `remnawave_service.py:2164` | Conditional per-subscription UUID |
+| S3-C2 | Admin `admin_buy_subscription_execute` saves UUID to `user` вместо `subscription` | `admin/users.py:4945` | Multi-tariff guard → `subscription.remnawave_uuid` |
+| S3-C3 | Wheel `_process_days_payment`/`_apply_prize` falls back to arbitrary sub | `wheel_service.py:339,409,475` | Multi-tariff guards, fallback converts prize to balance |
+
+### HIGH (4, все исправлены)
+
+| # | Проблема | Файл | Фикс |
+|---|----------|------|------|
+| S3-H1 | `phantom_service` uses `phantom.subscription` singular | `phantom_service.py:107` | Iterate `phantom.subscriptions` |
+| S3-H2 | `tariff_purchase.py` 6x `delete_user_cart` | `tariff_purchase.py` | Per-subscription `delete_subscription_cart` |
+| S3-H3 | YooKassa recurrent mismatch logged but not acted on | `yookassa.py:791` | Resolve correct sub from metadata |
+| S3-H4 | `try_auto_extend_expired`/`try_resume_disabled_daily` pick wrong sub | `subscription_auto_purchase_service.py` | Query ALL subs, filter by target status |
+
+---
+
+## Этап 4: Полный интеграционный аудит (6 агентов)
+
+> Проведён 2026-03-26. Покрывает payment integrations, middleware, notifications, DB layer, admin handlers, pattern scan.
+
+### 4.0 CRITICAL (найдены в Этапе 4, НЕ исправлены)
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S4-C1 | **`open_subscription_link` в keyboard builders без `sub_id`** — main menu и subscription info keyboards emit bare callback, user gets wrong subscription link | `inline.py` | 641, 1110, 2546, 2617 |
+| S4-C2 | **Guest purchase `_active[0]` arbitrary pick** — non-tariff activation path picks first sub without ordering | `guest_purchase_service.py` | 1063 |
+| S4-C3 | **Monitoring expired-1d + discount notification `subscription_extend` hardcoded** — no `se:{sub_id}` in multi-tariff | `monitoring_service.py` | 1614, 1709 |
+| S4-C4 | **Tariff deletion orphans active subscriptions** — `ON DELETE SET NULL` with no panel cleanup / user notification | `admin/tariffs.py` | 2161-2201 |
+
+### 4.1 HIGH (найдены в Этапе 4, НЕ исправлены)
+
+| # | Проблема | Файл | Строки |
+|---|----------|------|--------|
+| S4-H1 | **CloudPayments — no subscription renewal path** — pure balance topup, no `subscription_id` in metadata | `cloudpayments.py` | 93-96, 228-247 |
+| S4-H2 | **Heleket — no subscription renewal path** | `heleket.py` | 85-88 |
+| S4-H3 | **Platega — no subscription renewal path** | `platega.py` | 90-94 |
+| S4-H4 | **YooKassa recurrent — heuristic-first, metadata-second** — should lookup by `subscription_id` first | `yookassa.py` | 787-822 |
+| S4-H5 | **`auth.py` middleware — panel description sync only for `user.remnawave_uuid`** — per-subscription UUIDs skipped | `auth.py` | 199-213 |
+| S4-H6 | **Webhook `_get_renew_keyboard` emits `subscription_extend`** — subscription param available but unused | `remnawave_webhook_service.py` | 446-453 |
+| S4-H7 | **Promo handler post-claim CTA — `subscription_extend` without sub_id** | `promo.py` | 352-363 |
+| S4-H8 | **12 payment files pass `user.subscription` to admin notification** — wrong sub in multi-tariff | Multiple payment files | Various |
+| S4-H9 | **`_resolve_panel_uuid` in devices.py — stale `user.remnawave_uuid` fallback** | `devices.py` | 44 |
+| S4-H10 | **Tariff edits — no warning about active subscriptions count** — silent price/limit changes | `admin/tariffs.py` | ~1048 |
+| S4-H11 | **Monitoring force-check uses `settings.PRICE_30_DAYS`** — wrong for multi-tariff | `monitoring_service.py` | 2109 |
+| S4-H12 | **`create_paid_subscription` — no dedup guard for `tariff_id IS NULL`** | `subscription.py` | 243-351 |
+| S4-H13 | **Ticket model — no `subscription_id` column** | `models.py` | 2561-2576 |
+
+### 4.2 MEDIUM (Этап 4)
+
+| # | Проблема | Файл |
+|---|----------|------|
+| S4-M1 | `DisplayNameRestrictionMiddleware` never registered in bot.py (dead code) | `bot.py` |
+| S4-M2 | `SubscriptionStatusMiddleware` not on `pre_checkout_query` | `bot.py:165-166` |
+| S4-M3 | Migration 0051 backfill not safe under concurrent execution | `0051_*.py:30-41` |
+| S4-M4 | `SentNotification` no unique constraint on `(sub_id, type, days_before)` | `models.py:2104` |
+| S4-M5 | `User.subscriptions` order_by uses string expression | `models.py:1220` |
+| S4-M6 | `channel_checker` deactivation loop — partial commit on API failure | `channel_checker.py:366-423` |
+| S4-M7 | `webserver/payments.py` manual async generator driving | `payments.py:131-149` |
+
+---
+
+## Общая статистика (все этапы)
+
+| Категория | Этап 1 | Этап 2 | Этап 3 | Этап 4 | Итого |
+|-----------|--------|--------|--------|--------|-------|
+| **CRITICAL** | 7 ✅ | 5 ✅ | 3 ✅ | 4 ❌ | 19 (15 fixed) |
+| **HIGH** | 6 ✅ | 18 ✅ | 4 ✅ | 13 ❌ | 41 (28 fixed) |
+| **MEDIUM** | — | 18 | — | 7 | 25 |
+| **LOW** | 6 | 10 | — | — | 16 |
+| **Файлов** | 14 | ~60 | 7 | ~40 | ~80+ |
+
+✅ = исправлено и закоммичено, ❌ = найдено, не исправлено
+
+## Коммиты на dev
 
 ```
-app/cabinet/routes/subscription_modules/autopay.py
-app/cabinet/routes/subscription_modules/devices.py
-app/cabinet/routes/subscription_modules/helpers.py
-app/cabinet/routes/subscription_modules/renewal.py
-app/cabinet/routes/subscription_modules/status.py
-app/database/models.py
-app/handlers/subscription/tariff_purchase.py
-app/keyboards/inline.py
-app/services/account_merge_service.py
-app/services/monitoring_service.py
-app/services/promocode_service.py
-app/services/remnawave_webhook_service.py
-app/services/subscription_purchase_service.py
-app/webapi/routes/miniapp.py
+aa7e461c fix: multi-tariff Stage 3 HIGH fixes — phantom, cart, yookassa, auto-extend
+49db5f5e fix: multi-tariff Stage 3 critical fixes — panel sync UUID, admin grant, wheel
+c6bedc6a fix: multi-tariff Stage 2 HIGH fixes — 18 issues across 12 files
+4259ba1c fix: multi-tariff Stage 2 critical fixes — panel sync, guest purchase, cart isolation
+40d2ec67 docs: update multi-tariff review with Stage 2 full audit results
+57249065 fix: multi-tariff code review — 13 critical/high bugs fixed across 14 files
 ```
