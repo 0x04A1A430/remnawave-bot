@@ -140,6 +140,31 @@ def _safe_int(value: object | None, default: int = 0) -> int:
         return default
 
 
+async def _delete_cart_for_subscription(user_id: int, cart_data: dict) -> None:
+    """Delete the correct cart key(s) for a processed cart entry.
+
+    When ``subscription_id`` is present:
+      - deletes the per-subscription key (``user_cart:{uid}:sub:{sid}``)
+      - deletes the global key ONLY if it still references the same
+        subscription_id (avoids nuking another subscription's global cart)
+
+    When ``subscription_id`` is absent:
+      - deletes the global key via ``delete_user_cart`` (which also cascades
+        to any associated per-subscription key).
+    """
+    sub_id = _safe_int(cart_data.get('subscription_id'))
+    if sub_id:
+        await user_cart_service.delete_subscription_cart(user_id, sub_id)
+        # Clean up the global key only when it still holds THIS subscription's data.
+        # We read the global cart to compare, avoiding deletion of a newer cart
+        # that belongs to a different subscription.
+        global_cart = await user_cart_service.get_user_cart(user_id)
+        if global_cart and _safe_int(global_cart.get('subscription_id')) == sub_id:
+            await user_cart_service.delete_global_cart_only(user_id)
+    else:
+        await user_cart_service.delete_user_cart(user_id)
+
+
 async def _prepare_auto_extend_context(
     db: AsyncSession,
     user: User,
@@ -158,6 +183,14 @@ async def _prepare_auto_extend_context(
         if saved_subscription_id is not None:
             parsed_sub_id = _safe_int(saved_subscription_id)
             subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
+            if subscription is None and parsed_sub_id:
+                logger.warning(
+                    'Автопокупка: subscription_id из корзины не найден у пользователя, '
+                    'НЕ используем эвристику (cart привязан к конкретной подписке)',
+                    saved_subscription_id=parsed_sub_id,
+                    user_id=user.id,
+                )
+                return None
         else:
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
             if len(active_subs) == 1:
@@ -540,7 +573,7 @@ async def _auto_extend_subscription(
             error=error,
         )
 
-    await user_cart_service.delete_user_cart(user.id)
+    await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
 
     texts = get_texts(getattr(user, 'language', 'ru'))
@@ -899,8 +932,8 @@ async def _auto_purchase_tariff(
             error=error,
         )
 
-    # Очищаем корзину
-    await user_cart_service.delete_user_cart(user.id)
+    # Очищаем корзину (per-subscription if subscription_id is in cart)
+    await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
 
     # Уведомление администраторам (не зависит от наличия bot)
@@ -1240,8 +1273,8 @@ async def _auto_purchase_daily_tariff(
             error=error,
         )
 
-    # Очищаем корзину
-    await user_cart_service.delete_user_cart(user.id)
+    # Очищаем корзину (per-subscription if subscription_id is in cart)
+    await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
 
     # Уведомление администраторам (не зависит от наличия bot)
@@ -1378,7 +1411,7 @@ async def _auto_add_devices(
     subscription = locked_result.scalar_one_or_none()
     if not subscription:
         logger.warning('🔁 Автопокупка устройств: у пользователя нет подписки', format_user_id=_format_user_id(user))
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
@@ -1387,7 +1420,7 @@ async def _auto_add_devices(
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     # Load tariff for device price and max limit
@@ -1412,7 +1445,7 @@ async def _auto_add_devices(
             tariff_id=subscription.tariff_id,
             tariff_device_price=tariff_device_price,
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     # Check max device limit before charging
@@ -1426,7 +1459,7 @@ async def _auto_add_devices(
             requested=new_device_limit,
             tariff_max_device_limit=tariff_max_device_limit,
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo-offer/group discount
@@ -1517,7 +1550,7 @@ async def _auto_add_devices(
             '🔁 Автопокупка устройств: лимит превышен после оплаты, баланс возвращён',
             format_user_id=_format_user_id(user),
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     # Добавляем устройства (under lock)
@@ -1561,7 +1594,7 @@ async def _auto_add_devices(
         )
 
     # Очищаем корзину (транзакция уже создана в subtract_user_balance)
-    await user_cart_service.delete_user_cart(user.id)
+    await _delete_cart_for_subscription(user.id, cart_data)
 
     logger.info(
         '✅ Автопокупка устройств: пользователь добавил устройств (было , стало) за коп.',
@@ -1688,6 +1721,14 @@ async def _auto_add_traffic(
 
             parsed_sub_id = _safe_int(saved_subscription_id)
             subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
+            if subscription is None and parsed_sub_id:
+                logger.warning(
+                    'Автопокупка трафика: subscription_id из корзины не найден у пользователя, '
+                    'НЕ используем эвристику',
+                    saved_subscription_id=parsed_sub_id,
+                    user_id=user.id,
+                )
+                return False
         else:
             active_subs = await get_active_subscriptions_by_user_id(db, user.id)
             if len(active_subs) == 1:
@@ -1721,7 +1762,7 @@ async def _auto_add_traffic(
         subscription = await get_subscription_by_user_id(db, user.id)
     if not subscription:
         logger.warning('🔁 Автопокупка трафика: у пользователя нет подписки', format_user_id=_format_user_id(user))
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
@@ -1730,19 +1771,19 @@ async def _auto_add_traffic(
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     if subscription.is_trial:
         logger.warning('🔁 Автопокупка трафика: у пользователя пробная подписка', format_user_id=_format_user_id(user))
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     if subscription.traffic_limit_gb == 0:
         logger.warning(
             '🔁 Автопокупка трафика: у пользователя уже безлимитный трафик', format_user_id=_format_user_id(user)
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo-offer/group discount
@@ -1766,7 +1807,7 @@ async def _auto_add_traffic(
             format_user_id=_format_user_id(user),
             traffic_gb=traffic_gb,
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         return False
 
     # Apply traffic discount from promo group
@@ -1902,7 +1943,7 @@ async def _auto_add_traffic(
         )
 
     # Clear cart (transaction already created in subtract_user_balance)
-    await user_cart_service.delete_user_cart(user.id)
+    await _delete_cart_for_subscription(user.id, cart_data)
 
     logger.info(
         '✅ Автопокупка трафика: пользователь добавил ГБ (было , стало) за коп.',
@@ -2735,39 +2776,24 @@ async def try_resume_disabled_daily_after_topup(
     return True
 
 
-async def auto_purchase_saved_cart_after_topup(
+async def _is_subscription_disabled(
     db: AsyncSession,
     user: User,
-    *,
-    bot: Bot | None = None,
+    subscription_id: int | None,
 ) -> bool:
-    """Attempts to automatically purchase a subscription from a saved cart."""
+    """Check whether the target subscription is DISABLED.
 
-    # Lazy imports to avoid circular dependency
-    from app.cabinet.routes.websocket import (
-        notify_user_subscription_activated,
-        notify_user_subscription_renewed,
-    )
-    from app.database.crud.transaction import get_user_transactions
-
-    if not settings.is_auto_purchase_after_topup_enabled():
-        return False
-
-    if not user or not getattr(user, 'id', None):
-        return False
-
-    cart_data = await user_cart_service.get_user_cart(user.id)
-    if not cart_data:
-        return False
-
-    logger.info('🔁 Автопокупка: обнаружена сохранённая корзина у пользователя', format_user_id=_format_user_id(user))
-
-    # Защита от автопокупки на DISABLED подписке — пользователь отключён в панели,
-    # сохранённая корзина устарела. Списание баланса необратимо, а Remnawave-обновление
-    # провалится → баланс потерян навсегда.
-    # Суточные тарифы тоже блокируем: try_resume_disabled_daily_after_topup уже отработал
-    # выше по цепочке (common.py), и если он не возобновил — причина сохраняется.
+    When *subscription_id* is given, only that subscription is checked.
+    Otherwise falls back to heuristic selection (single-tariff or best
+    active subscription).
+    """
     from app.database.crud.subscription import get_subscription_by_user_id as _get_sub
+
+    if subscription_id:
+        from app.database.crud.subscription import get_subscription_by_id_for_user
+
+        sub = await get_subscription_by_id_for_user(db, subscription_id, user.id)
+        return sub is not None and sub.status == SubscriptionStatus.DISABLED.value
 
     if settings.is_multi_tariff_enabled():
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
@@ -2779,29 +2805,39 @@ async def auto_purchase_saved_cart_after_topup(
             _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
             _pool = _non_daily or _active_subs
             _existing_sub = max(_pool, key=lambda s: s.days_left)
-            logger.warning(
-                'Multi-tariff: multiple active subs in auto-extend fallback, selected best',
-                user_id=user.id,
-                count=len(_active_subs),
-            )
         else:
             _existing_sub = None
     else:
         _existing_sub = await _get_sub(db, user.id)
-    if _existing_sub and _existing_sub.status == SubscriptionStatus.DISABLED.value:
+
+    return _existing_sub is not None and _existing_sub.status == SubscriptionStatus.DISABLED.value
+
+
+async def _process_single_cart(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Process a single cart entry.  Returns True if purchase succeeded."""
+    from app.database.crud.transaction import get_user_transactions
+
+    cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
+    cart_sub_id = _safe_int(cart_data.get('subscription_id'))
+
+    # Guard: DISABLED subscription -- stale cart
+    if await _is_subscription_disabled(db, user, cart_sub_id or None):
         logger.warning(
-            '🔁 Автопокупка: пропускаем — подписка DISABLED, корзина устарела',
+            'Автопокупка: пропускаем -- подписка DISABLED, корзина устарела',
             format_user_id=_format_user_id(user),
-            subscription_status=_existing_sub.status,
+            subscription_id=cart_sub_id,
         )
-        await user_cart_service.delete_user_cart(user.id)
+        await _delete_cart_for_subscription(user.id, cart_data)
         await clear_subscription_checkout_draft(user.id)
         return False
 
-    cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
-
-    # Защита от race condition: если подписка была куплена/продлена в последние 60 секунд,
-    # пропускаем автопокупку чтобы избежать двойного списания
+    # Race condition guard: subscription paid in the last 60 seconds
     if cart_mode in ('extend', 'tariff_purchase', 'daily_tariff_purchase'):
         try:
             recent_transactions = await get_user_transactions(db, user.id, limit=1)
@@ -2813,50 +2849,131 @@ async def auto_purchase_saved_cart_after_topup(
                     and (datetime.now(UTC) - last_tx.created_at) < timedelta(seconds=60)
                 ):
                     logger.info(
-                        '🔁 Автопокупка: пропускаем для пользователя - подписка уже куплена секунд назад',
+                        'Автопокупка: пропускаем -- подписка уже куплена секунд назад',
                         format_user_id=_format_user_id(user),
                         total_seconds=(datetime.now(UTC) - last_tx.created_at).total_seconds(),
                     )
-                    # Корзину не очищаем: транзакция могла быть из другого потока
-                    # (например, фоновое автопродление), чтобы не потерять явный выбор пользователя.
                     return False
         except Exception as check_error:
             logger.warning(
-                '🔁 Автопокупка: ошибка проверки последней транзакции для',
+                'Автопокупка: ошибка проверки последней транзакции',
                 format_user_id=_format_user_id(user),
                 check_error=check_error,
             )
 
-    # Обработка продления подписки
     if cart_mode == 'extend':
         return await _auto_extend_subscription(db, user, cart_data, bot=bot)
-
-    # Обработка покупки периодного тарифа
     if cart_mode == 'tariff_purchase':
         return await _auto_purchase_tariff(db, user, cart_data, bot=bot)
-
-    # Обработка покупки суточного тарифа
     if cart_mode == 'daily_tariff_purchase':
         return await _auto_purchase_daily_tariff(db, user, cart_data, bot=bot)
-
-    # Обработка докупки устройств
     if cart_mode == 'add_devices':
         return await _auto_add_devices(db, user, cart_data, bot=bot)
-
-    # Обработка докупки трафика
     if cart_mode == 'add_traffic':
         return await _auto_add_traffic(db, user, cart_data, bot=bot)
+
+    logger.warning(
+        'Автопокупка: неизвестный cart_mode, пропускаем',
+        format_user_id=_format_user_id(user),
+        cart_mode=cart_mode,
+    )
+    return False
+
+
+async def auto_purchase_saved_cart_after_topup(
+    db: AsyncSession,
+    user: User,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Attempts to automatically purchase subscriptions from saved carts.
+
+    Supports both per-subscription carts (``user_cart:{user_id}:sub:{sub_id}``)
+    and the legacy global cart (``user_cart:{user_id}``).  When multiple
+    per-subscription carts exist (multi-tariff mode), each is processed
+    independently so that one subscription's cart cannot shadow another's.
+    """
+
+    if not settings.is_auto_purchase_after_topup_enabled():
+        return False
+
+    if not user or not getattr(user, 'id', None):
+        return False
+
+    # Collect all carts: per-subscription + global (deduplicated)
+    carts_to_process: list[dict] = []
+    seen_subscription_ids: set[int] = set()
+
+    # 1. Per-subscription carts (multi-tariff safe)
+    per_sub_carts = await user_cart_service.get_all_subscription_carts(user.id)
+    for cart in per_sub_carts:
+        sub_id = _safe_int(cart.get('subscription_id'))
+        if sub_id:
+            seen_subscription_ids.add(sub_id)
+        carts_to_process.append(cart)
+
+    # 2. Global cart (backward compat): only add if its subscription_id
+    #    is not already covered by a per-subscription cart.
+    global_cart = await user_cart_service.get_user_cart(user.id)
+    if global_cart:
+        global_sub_id = _safe_int(global_cart.get('subscription_id'))
+        if global_sub_id and global_sub_id in seen_subscription_ids:
+            pass  # Already covered by per-subscription cart
+        else:
+            carts_to_process.append(global_cart)
+
+    if not carts_to_process:
+        return False
+
+    logger.info(
+        'Автопокупка: обнаружено корзин у пользователя',
+        format_user_id=_format_user_id(user),
+        cart_count=len(carts_to_process),
+    )
+
+    any_succeeded = False
+    for cart_data in carts_to_process:
+        cart_mode = cart_data.get('cart_mode') or cart_data.get('mode')
+
+        # For non-mode carts (legacy generic purchase), handle separately below
+        if cart_mode:
+            result = await _process_single_cart(db, user, cart_data, bot=bot)
+            if result:
+                any_succeeded = True
+            continue
+
+        # Legacy generic purchase flow (no cart_mode -- old-style cart from FSM state)
+        result = await _process_legacy_generic_cart(db, user, cart_data, bot=bot)
+        if result:
+            any_succeeded = True
+
+    return any_succeeded
+
+
+async def _process_legacy_generic_cart(
+    db: AsyncSession,
+    user: User,
+    cart_data: dict,
+    *,
+    bot: Bot | None = None,
+) -> bool:
+    """Handle old-style carts without an explicit cart_mode (generic FSM carts)."""
+    # Lazy imports to avoid circular dependency
+    from app.cabinet.routes.websocket import (
+        notify_user_subscription_activated,
+        notify_user_subscription_renewed,
+    )
 
     try:
         prepared = await _prepare_auto_purchase(db, user, cart_data)
     except PurchaseValidationError as error:
         logger.error(
-            '❌ Автопокупка: ошибка валидации корзины пользователя', format_user_id=_format_user_id(user), error=error
+            'Автопокупка: ошибка валидации корзины пользователя', format_user_id=_format_user_id(user), error=error
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: непредвиденная ошибка при подготовке корзины',
+            'Автопокупка: непредвиденная ошибка при подготовке корзины',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
@@ -2871,7 +2988,7 @@ async def auto_purchase_saved_cart_after_topup(
 
     if pricing.final_total <= 0:
         logger.warning(
-            '❌ Автопокупка: итоговая сумма для пользователя некорректна',
+            'Автопокупка: итоговая сумма для пользователя некорректна',
             format_user_id=_format_user_id(user),
             final_total=pricing.final_total,
         )
@@ -2879,7 +2996,7 @@ async def auto_purchase_saved_cart_after_topup(
 
     if user.balance_kopeks < pricing.final_total:
         logger.info(
-            '🔁 Автопокупка: у пользователя недостаточно средств (<)',
+            'Автопокупка: у пользователя недостаточно средств',
             format_user_id=_format_user_id(user),
             balance_kopeks=user.balance_kopeks,
             final_total=pricing.final_total,
@@ -2896,26 +3013,26 @@ async def auto_purchase_saved_cart_after_topup(
         )
     except PurchaseBalanceError:
         logger.info(
-            '🔁 Автопокупка: баланс пользователя изменился и стал недостаточным', format_user_id=_format_user_id(user)
+            'Автопокупка: баланс пользователя изменился и стал недостаточным', format_user_id=_format_user_id(user)
         )
         return False
     except PurchaseValidationError as error:
         logger.error(
-            '❌ Автопокупка: не удалось подтвердить корзину пользователя',
+            'Автопокупка: не удалось подтвердить корзину пользователя',
             format_user_id=_format_user_id(user),
             error=error,
         )
         return False
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            '❌ Автопокупка: ошибка оформления подписки для пользователя',
+            'Автопокупка: ошибка оформления подписки для пользователя',
             format_user_id=_format_user_id(user),
             error=error,
             exc_info=True,
         )
         return False
 
-    await user_cart_service.delete_user_cart(user.id)
+    await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
 
     subscription = purchase_result.get('subscription')
@@ -2937,7 +3054,7 @@ async def auto_purchase_saved_cart_after_topup(
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                '⚠️ Автопокупка: не удалось отправить уведомление админам',
+                'Автопокупка: не удалось отправить уведомление админам',
                 format_user_id=_format_user_id(user),
                 error=error,
             )
@@ -2989,13 +3106,13 @@ async def auto_purchase_saved_cart_after_topup(
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.error(
-                    '⚠️ Автопокупка: не удалось уведомить пользователя',
+                    'Автопокупка: не удалось уведомить пользователя',
                     telegram_id=user.telegram_id or user.id,
                     error=error,
                 )
 
     logger.info(
-        '✅ Автопокупка: подписка на дней оформлена для пользователя',
+        'Автопокупка: подписка оформлена для пользователя',
         days=selection.period.days,
         format_user_id=_format_user_id(user),
     )
@@ -3020,7 +3137,7 @@ async def auto_purchase_saved_cart_after_topup(
             )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка: не удалось отправить WS уведомление для',
+            'Автопокупка: не удалось отправить WS уведомление',
             format_user_id=_format_user_id(user),
             ws_error=ws_error,
         )

@@ -1348,7 +1348,7 @@ class RemnaWaveService:
 
                             _subs = await _get_subs(db, db_user.id)
                             # Match by remnawave_uuid from panel
-                            existing_sub = next((s for s in _subs if s.remnawave_uuid == panel_user.uuid), None)
+                            existing_sub = next((s for s in _subs if s.remnawave_uuid == panel_user.get('uuid')), None)
                             if not existing_sub and _subs:
                                 # No UUID match — fall back to best non-daily subscription
                                 _non_daily = [s for s in _subs if not getattr(s, 'is_daily_tariff', False)]
@@ -1462,7 +1462,7 @@ class RemnaWaveService:
 
                                 _subs_e = await _get_subs_email(db, db_user.id)
                                 existing_sub = next(
-                                    (s for s in _subs_e if s.remnawave_uuid == panel_user.uuid),
+                                    (s for s in _subs_e if s.remnawave_uuid == panel_user.get('uuid')),
                                     None,
                                 )
                                 if not existing_sub and _subs_e:
@@ -1818,11 +1818,7 @@ class RemnaWaveService:
                     if abs(subscription.traffic_used_gb - traffic_used_gb) > 0.01:
                         subscription.traffic_used_gb = traffic_used_gb
 
-                    # Update traffic limit
-                    traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0) or 0
-                    traffic_limit_gb = traffic_limit_bytes // (1024**3) if traffic_limit_bytes > 0 else 0
-                    if subscription.traffic_limit_gb != traffic_limit_gb:
-                        subscription.traffic_limit_gb = traffic_limit_gb
+                    # traffic_limit_gb: bot is source of truth, do not overwrite from panel
 
                     # Update subscription URL
                     sub_url = panel_user.get('subscriptionUrl')
@@ -1946,7 +1942,7 @@ class RemnaWaveService:
 
                 _subs_upd = await _get_subs_upd(db, user.id)
                 # Strict match by panel_user UUID — never fallback to another subscription
-                subscription = next((s for s in _subs_upd if s.remnawave_uuid == panel_user.uuid), None)
+                subscription = next((s for s in _subs_upd if s.remnawave_uuid == panel_user.get('uuid')), None)
             else:
                 subscription = await get_subscription_by_user_id(db, user.id)
 
@@ -2046,17 +2042,7 @@ class RemnaWaveService:
                 subscription.traffic_used_gb = traffic_used_gb
                 logger.debug('Обновлен использованный трафик', traffic_used_gb=traffic_used_gb)
 
-            traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0)
-            traffic_limit_gb = traffic_limit_bytes // (1024**3) if traffic_limit_bytes > 0 else 0
-
-            if subscription.traffic_limit_gb != traffic_limit_gb:
-                subscription.traffic_limit_gb = traffic_limit_gb
-                logger.debug('Обновлен лимит трафика', traffic_limit_gb=traffic_limit_gb)
-
-            device_limit = panel_user.get('hwidDeviceLimit', 1) or 1
-            if subscription.device_limit != device_limit:
-                subscription.device_limit = device_limit
-                logger.debug('Обновлен лимит устройств', device_limit=device_limit)
+            # traffic_limit_gb, device_limit: bot is source of truth, do not overwrite from panel
 
             new_short_uuid = panel_user.get('shortUuid')
             if new_short_uuid and subscription.remnawave_short_uuid != new_short_uuid:
@@ -2079,21 +2065,7 @@ class RemnaWaveService:
             if panel_crypto_link and subscription.subscription_crypto_link != panel_crypto_link:
                 subscription.subscription_crypto_link = panel_crypto_link
 
-            active_squads = panel_user.get('activeInternalSquads', [])
-            squad_uuids = []
-            if isinstance(active_squads, list):
-                for squad in active_squads:
-                    if isinstance(squad, dict) and 'uuid' in squad:
-                        squad_uuids.append(squad['uuid'])
-                    elif isinstance(squad, str):
-                        squad_uuids.append(squad)
-
-            current_squads = set(subscription.connected_squads or [])
-            new_squads = set(squad_uuids)
-
-            if current_squads != new_squads:
-                subscription.connected_squads = squad_uuids
-                logger.debug('Обновлены подключенные сквады', squad_uuids=squad_uuids)
+            # connected_squads: bot is source of truth (tariff.allowed_squads), do not overwrite from panel
 
             # Коммитим изменения позже, в основном цикле, чтобы уменьшить количество транзакций
             logger.debug('✅ Обновлена подписка для пользователя', telegram_id=user.telegram_id)

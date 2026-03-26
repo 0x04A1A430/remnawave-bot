@@ -341,15 +341,11 @@ async def fulfill_purchase(
 
         # Check if user already has a subscription
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
-            _active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            if _active_subs:
-                _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
-                _pool = _non_daily or _active_subs
-                existing_subscription = max(_pool, key=lambda s: s.days_left)
-            else:
-                existing_subscription = None
+            # In multi-tariff mode, only block if user already has THIS SPECIFIC tariff active.
+            # Different tariffs can be purchased simultaneously — that's the whole point.
+            existing_subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
         else:
             existing_subscription = await get_subscription_by_user_id(db, user.id)
         if existing_subscription is not None and (existing_subscription.is_active or purchase.is_gift):
