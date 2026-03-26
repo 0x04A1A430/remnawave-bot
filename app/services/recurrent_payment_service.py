@@ -55,9 +55,7 @@ _daily_guard = _DailyGuard()
 def _build_extend_keyboard(texts, subscription_id: int | None = None) -> InlineKeyboardMarkup:
     """Клавиатура с кнопкой продления подписки для уведомлений."""
     extend_callback = (
-        f'se:{subscription_id}'
-        if settings.is_multi_tariff_enabled() and subscription_id
-        else 'subscription_extend'
+        f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
     )
     return InlineKeyboardMarkup(
         inline_keyboard=[

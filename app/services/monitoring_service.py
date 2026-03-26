@@ -1315,11 +1315,7 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            extend_callback = (
-                f'se:{subscription.id}'
-                if settings.is_multi_tariff_enabled()
-                else 'subscription_extend'
-            )
+            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [build_miniapp_or_callback_button(text='💎 Продлить подписку', callback_data=extend_callback)],
@@ -1414,16 +1410,8 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
-            extend_callback = (
-                f'se:{subscription.id}'
-                if settings.is_multi_tariff_enabled()
-                else 'subscription_extend'
-            )
-            sub_btn_text = (
-                '📱 Мои подписки'
-                if settings.is_multi_tariff_enabled()
-                else '📱 Моя подписка'
-            )
+            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
+            sub_btn_text = '📱 Мои подписки' if settings.is_multi_tariff_enabled() else '📱 Моя подписка'
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -1611,11 +1599,7 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-            extend_callback = (
-                f'se:{subscription.id}'
-                if settings.is_multi_tariff_enabled()
-                else 'subscription_extend'
-            )
+            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1707,11 +1691,7 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-            extend_callback = (
-                f'se:{subscription.id}'
-                if settings.is_multi_tariff_enabled()
-                else 'subscription_extend'
-            )
+            extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[

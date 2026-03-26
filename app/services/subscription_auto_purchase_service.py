@@ -1748,8 +1748,7 @@ async def _auto_add_traffic(
             subscription = await get_subscription_by_id_for_user(db, parsed_sub_id, user.id) if parsed_sub_id else None
             if subscription is None and parsed_sub_id:
                 logger.warning(
-                    'Автопокупка трафика: subscription_id из корзины не найден у пользователя, '
-                    'НЕ используем эвристику',
+                    'Автопокупка трафика: subscription_id из корзины не найден у пользователя, НЕ используем эвристику',
                     saved_subscription_id=parsed_sub_id,
                     user_id=user.id,
                 )
@@ -2081,11 +2080,7 @@ async def try_auto_extend_expired_after_topup(
         from app.database.crud.subscription import get_all_subscriptions_by_user_id
 
         all_subs = await get_all_subscriptions_by_user_id(db, user.id)
-        expired_subs = [
-            s
-            for s in all_subs
-            if s.status == SubscriptionStatus.EXPIRED.value and not s.is_trial
-        ]
+        expired_subs = [s for s in all_subs if s.status == SubscriptionStatus.EXPIRED.value and not s.is_trial]
         if not expired_subs:
             subscription = None
         else:
@@ -2180,10 +2175,7 @@ async def try_auto_extend_expired_after_topup(
     # modified in the last 60 seconds (indicates a concurrent renewal just landed).
     try:
         await db.refresh(subscription, attribute_names=['updated_at'])
-        if (
-            subscription.updated_at
-            and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60)
-        ):
+        if subscription.updated_at and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60):
             logger.info(
                 '🔄 Автопродление expired: пропуск — подписка обновлена секунд назад',
                 format_user_id=_format_user_id(user),
@@ -2524,10 +2516,7 @@ async def try_resume_disabled_daily_after_topup(
     # was modified in the last 60 seconds (indicates a concurrent charge just landed).
     try:
         await db.refresh(subscription, attribute_names=['updated_at'])
-        if (
-            subscription.updated_at
-            and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60)
-        ):
+        if subscription.updated_at and (datetime.now(UTC) - subscription.updated_at) < timedelta(seconds=60):
             logger.info(
                 '🔄 Авто-возобновление daily: пропуск — подписка обновлена секунд назад',
                 format_user_id=_format_user_id(user),

@@ -413,8 +413,7 @@ class RemnaWaveWebhookService:
 
             # Fallback 2: all lookups exhausted
             logger.warning(
-                'Webhook: подписка не найдена ни по одному методу поиска, '
-                'возвращаем (user, None)',
+                'Webhook: подписка не найдена ни по одному методу поиска, возвращаем (user, None)',
                 remnawave_uuid=remnawave_uuid,
                 user_id=user.id,
             )
@@ -447,9 +446,7 @@ class RemnaWaveWebhookService:
         texts = get_texts(user.language)
         button_text = texts.get('WEBHOOK_RENEW_BUTTON', 'Renew subscription')
         extend_callback = (
-            f'se:{subscription_id}'
-            if settings.is_multi_tariff_enabled() and subscription_id
-            else 'subscription_extend'
+            f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
         )
         return InlineKeyboardMarkup(
             inline_keyboard=[
@@ -928,13 +925,17 @@ class RemnaWaveWebhookService:
                 await self._notify_user(
                     user,
                     'WEBHOOK_SUB_DELETED',
-                    reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+                    reply_markup=self._get_renew_keyboard(
+                        user, getattr(subscription, 'id', None) if subscription else None
+                    ),
                 )
         else:
             await self._notify_user(
                 user,
                 'WEBHOOK_SUB_DELETED',
-                reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+                reply_markup=self._get_renew_keyboard(
+                    user, getattr(subscription, 'id', None) if subscription else None
+                ),
             )
 
     async def _attempt_panel_recreation(self, db: AsyncSession, user: User, subscription: Subscription) -> bool:
@@ -1046,7 +1047,9 @@ class RemnaWaveWebhookService:
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         sub_id = getattr(subscription, 'id', None) if subscription else None
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user, sub_id))
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user, sub_id)
+        )
 
     async def _handle_first_connected(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict

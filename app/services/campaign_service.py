@@ -179,7 +179,9 @@ class AdvertisingCampaignService:
             try:
                 await self.subscription_service.update_remnawave_user(db, existing_subscription)
             except Exception as error:
-                logger.error('❌ Ошибка синхронизации RemnaWave при продлении кампании', campaign_id=campaign.id, error=error)
+                logger.error(
+                    '❌ Ошибка синхронизации RemnaWave при продлении кампании', campaign_id=campaign.id, error=error
+                )
 
             logger.info(
                 '🎁 Подписка пользователя продлена по кампании на дней',
@@ -354,7 +356,9 @@ class AdvertisingCampaignService:
             try:
                 await self.subscription_service.create_remnawave_user(db, new_subscription)
             except Exception as error:
-                logger.error('❌ Ошибка синхронизации RemnaWave для тарифа кампании', campaign_id=campaign.id, error=error)
+                logger.error(
+                    '❌ Ошибка синхронизации RemnaWave для тарифа кампании', campaign_id=campaign.id, error=error
+                )
 
             logger.info(
                 '🎁 Пользователю выдан тариф по кампании на дней',

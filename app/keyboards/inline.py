@@ -1874,9 +1874,7 @@ def get_subscription_expiring_keyboard(subscription_id: int, language: str = DEF
         else texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
     )
 
-    extend_callback = (
-        f'se:{subscription_id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-    )
+    extend_callback = f'se:{subscription_id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -2553,7 +2551,11 @@ def get_device_selection_keyboard(
             keyboard.append(row)
 
     if settings.CONNECT_BUTTON_MODE == 'guide':
-        _osl_cb = f'open_subscription_link:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'open_subscription_link'
+        _osl_cb = (
+            f'open_subscription_link:{sub_id}'
+            if sub_id and settings.is_multi_tariff_enabled()
+            else 'open_subscription_link'
+        )
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -2671,7 +2673,9 @@ def get_connection_guide_keyboard(
             ]
         )
 
-    _sc_cb = f'subscription_connect:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'subscription_connect'
+    _sc_cb = (
+        f'subscription_connect:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'subscription_connect'
+    )
     keyboard.extend(
         [
             [

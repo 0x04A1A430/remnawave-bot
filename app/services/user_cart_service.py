@@ -355,9 +355,7 @@ class UserCartService:
             global_cart = await self.get_user_cart(user_id)
             if global_cart and global_cart.get('subscription_id') is not None:
                 sub_id = global_cart['subscription_id']
-                already_covered = any(
-                    c.get('subscription_id') == sub_id for c in results
-                )
+                already_covered = any(c.get('subscription_id') == sub_id for c in results)
                 if not already_covered:
                     results.append(global_cart)
         except Exception as e:

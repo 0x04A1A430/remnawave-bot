@@ -2184,8 +2184,7 @@ async def confirm_delete_tariff(
     warning = ''
     if subs_count > 0:
         warning = (
-            f'\n\n⚠️ <b>Внимание!</b> На этом тарифе {subs_count} неактивных подписок.\n'
-            f'Они потеряют привязку к тарифу.'
+            f'\n\n⚠️ <b>Внимание!</b> На этом тарифе {subs_count} неактивных подписок.\nОни потеряют привязку к тарифу.'
         )
 
     await callback.message.edit_text(

@@ -758,7 +758,9 @@ class UserService:
                         logger.info(
                             '✅ RemnaWave подписка восстановлена при разблокировке',
                             subscription_id=sub.id,
-                            remnawave_uuid=sub.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid,
+                            remnawave_uuid=sub.remnawave_uuid
+                            if settings.is_multi_tariff_enabled()
+                            else user.remnawave_uuid,
                         )
                     except Exception as e:
                         logger.error(

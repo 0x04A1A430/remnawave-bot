@@ -2128,7 +2128,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
         for user in users:
             if settings.is_multi_tariff_enabled():
                 all_squads: set[str] = set()
-                for s in (getattr(user, 'subscriptions', None) or []):
+                for s in getattr(user, 'subscriptions', None) or []:
                     all_squads.update(s.connected_squads or [])
                 connected = all_squads
             else:
