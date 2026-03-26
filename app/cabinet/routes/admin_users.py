@@ -283,7 +283,7 @@ async def _sync_subscription_to_panel(
         changes = {}
         async with service.get_api_client() as api:
             # Multi-tariff: each subscription has its own panel user
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid:
+            if settings.is_multi_tariff_enabled():
                 panel_uuid = subscription.remnawave_uuid
             else:
                 panel_uuid = user.remnawave_uuid
