@@ -260,8 +260,12 @@ async def handle_change_devices(
 async def confirm_change_devices(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
-    new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
+    try:
+        new_devices_count = int(callback.data.split('_')[2])
+    except (ValueError, IndexError):
+        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        return
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
@@ -524,11 +528,14 @@ async def execute_change_devices(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
     callback_parts = callback.data.split('_')
-    new_devices_count = int(callback_parts[3])
+    texts = get_texts(db_user.language)
+    try:
+        new_devices_count = int(callback_parts[3])
+    except (ValueError, IndexError):
+        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        return
 
     db_user = await lock_user_for_pricing(db, db_user.id)
-
-    texts = get_texts(db_user.language)
     # Re-resolve after lock since db_user was refreshed
     subscription, _ = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:

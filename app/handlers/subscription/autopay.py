@@ -188,7 +188,11 @@ async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, 
 
 async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
-    card_id = int(callback.data.split('_')[-1])
+    try:
+        card_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
+        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        return
 
     cards = await get_active_payment_methods_by_user(db, db_user.id)
     card = next((c for c in cards if c.id == card_id), None)
@@ -224,7 +228,11 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
 
 async def handle_confirm_unlink(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
-    card_id = int(callback.data.split('_')[-1])
+    try:
+        card_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
+        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        return
 
     success = await deactivate_payment_method(db, card_id, db_user.id)
 

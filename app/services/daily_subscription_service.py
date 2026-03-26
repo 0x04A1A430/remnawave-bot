@@ -93,7 +93,6 @@ class DailySubscriptionService:
                                 exc_info=True,
                             )
                             stats['errors'] += 1
-                    await db.commit()
                 except Exception as e:
                     logger.error('Ошибка при обработке подписок', error=e, exc_info=True)
                     await db.rollback()
@@ -163,19 +162,22 @@ class DailySubscriptionService:
         description = f'Суточная оплата тарифа «{tariff.name}»'
 
         try:
+            # commit=False для атомарности: баланс, транзакция и charge_time коммитятся вместе
             deducted = await subtract_user_balance(
                 db,
                 user,
                 daily_price,
                 description,
                 mark_as_paid_subscription=True,
+                commit=False,
             )
 
             if not deducted:
+                await db.rollback()
                 logger.warning('Не удалось списать средства для подписки', subscription_id=subscription.id)
                 return 'error'
 
-            # Создаём транзакцию
+            # Создаём транзакцию (без коммита — часть атомарной операции)
             transaction = await create_transaction(
                 db=db,
                 user_id=user.id,
@@ -183,11 +185,16 @@ class DailySubscriptionService:
                 amount_kopeks=daily_price,
                 description=description,
                 payment_method=PaymentMethod.BALANCE,
+                commit=False,
             )
 
-            # Обновляем время последнего списания и продлеваем подписку
+            # Обновляем время последнего списания и продлеваем подписку (без коммита)
             old_end_date = subscription.end_date
-            subscription = await update_daily_charge_time(db, subscription)
+            subscription = await update_daily_charge_time(db, subscription, commit=False)
+
+            # Атомарный коммит: баланс + транзакция + charge_time
+            await db.commit()
+            await db.refresh(user)
 
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
             logger.info(
@@ -284,6 +291,7 @@ class DailySubscriptionService:
             return 'charged'
 
         except Exception as e:
+            await db.rollback()
             logger.error(
                 'Ошибка при списании средств для подписки', subscription_id=subscription.id, error=e, exc_info=True
             )

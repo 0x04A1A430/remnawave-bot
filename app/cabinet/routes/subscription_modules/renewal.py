@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
-from app.database.models import PaymentMethod, User
+from app.database.models import PaymentMethod, SubscriptionStatus, User
 from app.services.pricing_engine import pricing_engine
 from app.services.subscription_renewal_service import (
     SubscriptionRenewalChargeError,
@@ -45,6 +45,11 @@ async def get_renewal_options(
 
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
+        return []
+
+    _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}
+    _actual_status = getattr(subscription, 'actual_status', subscription.status)
+    if _actual_status in _non_renewable:
         return []
 
     # Determine available periods
@@ -103,6 +108,15 @@ async def renew_subscription(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
         )
+
+    _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}
+    _actual_status = getattr(subscription, 'actual_status', subscription.status)
+    if _actual_status in _non_renewable:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Cannot renew subscription with status: {_actual_status}',
+        )
+
     if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
         available_periods = [int(p) for p in subscription.tariff.period_prices.keys()]
     else:
