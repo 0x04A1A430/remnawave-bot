@@ -49,7 +49,7 @@ from app.services.pinned_message_service import (
     get_active_pinned_message,
 )
 from app.services.privacy_policy_service import PrivacyPolicyService
-from app.services.referral_service import process_referral_registration
+from app.services.referral_service import process_referral_registration, save_pending_referral
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
@@ -704,6 +704,15 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     if referral_code:
         await state.update_data(referral_code=referral_code)
+        # Persist referral to Redis immediately so it survives if user opens miniapp/cabinet
+        # Only for new users — existing users don't need pending referral
+        if not db_user:
+            try:
+                referrer = await get_user_by_referral_code(db, referral_code)
+                if referrer and referrer.telegram_id != message.from_user.id:
+                    await save_pending_referral(message.from_user.id, referral_code, referrer.id)
+            except Exception as exc:
+                logger.warning('Failed to persist pending referral', referral_code=referral_code, error=exc)
 
     user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
 

@@ -506,6 +506,22 @@ async def auth_telegram(
         except Exception as e:
             logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
 
+    # Fallback: check Redis for pending referral from /start (user opened cabinet before completing bot registration)
+    if not referrer_id and not user and telegram_id:
+        try:
+            from app.services.referral_service import get_pending_referral
+
+            pending = await get_pending_referral(telegram_id)
+            if pending and pending.get('referrer_id'):
+                referrer_id = pending['referrer_id']
+                logger.info(
+                    'Resolved referral from Redis pending_referral (cabinet)',
+                    telegram_id=telegram_id,
+                    referrer_id=referrer_id,
+                )
+        except Exception as e:
+            logger.warning('Failed to check pending referral', error=e)
+
     is_new_user = not user
     if not user:
         # Create new user from Telegram initData
@@ -552,6 +568,15 @@ async def auth_telegram(
 
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
+
+    # Clear Redis pending referral after successful user creation with referral
+    if referrer_id:
+        try:
+            from app.services.referral_service import clear_pending_referral
+
+            await clear_pending_referral(telegram_id)
+        except Exception:
+            pass
 
     # Process campaign bonus
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
@@ -650,6 +675,15 @@ async def auth_telegram_widget(
 
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
+
+    # Clear Redis pending referral after successful registration
+    if referrer_id and request.id:
+        try:
+            from app.services.referral_service import clear_pending_referral
+
+            await clear_pending_referral(request.id)
+        except Exception:
+            pass
 
     # Process campaign bonus
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
@@ -788,6 +822,15 @@ async def auth_telegram_oidc(
 
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
+
+    # Clear Redis pending referral after successful registration
+    if referrer_id and telegram_id:
+        try:
+            from app.services.referral_service import clear_pending_referral
+
+            await clear_pending_referral(telegram_id)
+        except Exception:
+            pass
 
     response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
     if response.campaign_bonus:

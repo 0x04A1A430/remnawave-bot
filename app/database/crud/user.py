@@ -332,6 +332,23 @@ async def create_user(
         referral_code = await create_unique_referral_code(db)
     normalized_language = _normalize_language_code(language)
 
+    # If no referrer provided, check Redis for pending referral from /start
+    if not referred_by_id and telegram_id:
+        try:
+            from app.services.referral_service import clear_pending_referral, get_pending_referral
+
+            pending = await get_pending_referral(telegram_id)
+            if pending and pending.get('referrer_id'):
+                referred_by_id = pending['referrer_id']
+                logger.info(
+                    'Resolved referral from Redis pending_referral',
+                    telegram_id=telegram_id,
+                    referrer_id=referred_by_id,
+                )
+                await clear_pending_referral(telegram_id)
+        except Exception as e:
+            logger.warning('Failed to check pending referral from Redis', error=e)
+
     attempts = 3
 
     for attempt in range(1, attempts + 1):
