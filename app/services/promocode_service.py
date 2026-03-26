@@ -345,32 +345,69 @@ class PromoCodeService:
             )
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
-            from app.config import settings
             from app.database.crud.subscription import create_trial_subscription
 
+            # Determine trial tariff first — needed for duplicate check in multi-tariff
+            trial_tariff = None
+            tariff_id_for_trial = None
+            trial_traffic_limit = None
+            trial_device_limit = None
+            trial_squads: list[str] = []
+
+            try:
+                from app.database.crud.tariff import get_tariff_by_id as get_tariff, get_trial_tariff
+
+                trial_tariff = await get_trial_tariff(db)
+                if not trial_tariff:
+                    trial_tariff_id = settings.get_trial_tariff_id()
+                    if trial_tariff_id > 0:
+                        trial_tariff = await get_tariff(db, trial_tariff_id)
+
+                if trial_tariff:
+                    trial_traffic_limit = trial_tariff.traffic_limit_gb
+                    trial_device_limit = trial_tariff.device_limit
+                    tariff_id_for_trial = trial_tariff.id
+                    if trial_tariff.allowed_squads:
+                        trial_squads = trial_tariff.allowed_squads
+            except Exception as e:
+                logger.error('Ошибка получения триального тарифа для промокода', error=e)
+
+            # Check if user already has a subscription that blocks trial
+            has_blocking_subscription = False
             if settings.is_multi_tariff_enabled():
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                # Trial promo: block if ANY active subscription exists
-                subscription = next(iter(active_subs), None)
+                if tariff_id_for_trial:
+                    # Block only if user already has this specific tariff
+                    has_blocking_subscription = any(s.tariff_id == tariff_id_for_trial for s in active_subs)
+                else:
+                    # No trial tariff configured — block if any subscription exists
+                    has_blocking_subscription = len(active_subs) > 0
             else:
-                subscription = await get_subscription_by_user_id(db, user.id)
+                existing_sub = await get_subscription_by_user_id(db, user.id)
+                has_blocking_subscription = existing_sub is not None
 
-            if not subscription:
+            if not has_blocking_subscription:
                 trial_days = (
                     promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS
                 )
+                # Override with tariff trial_duration_days if available
+                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None) if trial_tariff else None
+                if tariff_trial_days and promocode.subscription_days <= 0:
+                    trial_days = tariff_trial_days
 
-                forced_devices = None
-                if not settings.is_devices_selection_enabled():
-                    forced_devices = settings.get_disabled_mode_device_limit()
+                if trial_device_limit is None and not settings.is_devices_selection_enabled():
+                    trial_device_limit = settings.get_disabled_mode_device_limit()
 
                 trial_subscription = await create_trial_subscription(
                     db,
                     user.id,
                     duration_days=trial_days,
-                    device_limit=forced_devices,
+                    traffic_limit_gb=trial_traffic_limit,
+                    device_limit=trial_device_limit,
+                    connected_squads=trial_squads or None,
+                    tariff_id=tariff_id_for_trial,
                 )
 
                 await self.subscription_service.create_remnawave_user(db, trial_subscription)
@@ -380,6 +417,7 @@ class PromoCodeService:
                     '✅ Создана триал подписка для пользователя на дней',
                     _format_user_log=self._format_user_log(user),
                     trial_days=trial_days,
+                    tariff_id=tariff_id_for_trial,
                 )
             else:
                 effects.append('ℹ️ У вас уже есть активная подписка')
