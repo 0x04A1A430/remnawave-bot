@@ -1162,37 +1162,93 @@ def _insert_random_message(base_text: str, random_message: str, action_prompt: s
     return f'{base_text}\n\n{random_message}'
 
 
+async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, str]:
+    """Build subscription status text and tariff block for multi-tariff mode.
+
+    Returns (subscription_status, tariff_info_block).
+    """
+    from app.database.crud.subscription import get_all_subscriptions_by_user_id
+
+    subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+
+    if not subscriptions:
+        return texts.t('SUB_STATUS_NONE', '❌ Отсутствует'), ''
+
+    current_time = datetime.now(UTC)
+    lines: list[str] = []
+    for sub in subscriptions:
+        tariff_name = html.escape(sub.tariff.name) if sub.tariff else 'Подписка'
+        actual = sub.actual_status
+
+        if actual in ('active', 'trial'):
+            emoji = '🟢'
+        elif actual == 'limited':
+            emoji = '🟡'
+        else:
+            emoji = '🔴'
+
+        if actual == 'expired':
+            status_suffix = ' — истекла'
+        elif actual == 'disabled':
+            status_suffix = ' — отключена'
+        elif actual == 'limited':
+            status_suffix = ' — лимит трафика'
+        elif sub.end_date and sub.end_date > current_time:
+            days_left = (sub.end_date - current_time).days
+            end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
+            status_suffix = f' — до {end_str} ({days_left} дн.)'
+        else:
+            status_suffix = ''
+
+        lines.append(f'{emoji} <b>{tariff_name}</b>{status_suffix}')
+
+    status_text = '\n<blockquote>' + '\n'.join(lines) + '</blockquote>'
+    return status_text, ''
+
+
 async def get_main_menu_text(user, texts, db: AsyncSession):
     from app.config import settings
 
-    # Загружаем информацию о тарифе если включен режим тарифов
-    tariff = None
-    is_daily_tariff = False
-    tariff_info_block = ''
+    # Multi-tariff: show summary of all subscriptions
+    if settings.is_multi_tariff_enabled():
+        subscriptions_status, tariff_info_block = await _get_multi_tariff_status(user, texts, db)
 
-    subscription = getattr(user, 'subscription', None)
-    if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
-        try:
-            from app.database.crud.tariff import get_tariff_by_id
+        base_text = texts.MAIN_MENU.format(
+            user_name=html.escape(user.full_name or ''),
+            subscription_status=subscriptions_status,
+        )
 
-            tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            if tariff:
-                is_daily_tariff = getattr(tariff, 'is_daily', False)
-                # Формируем краткий блок информации о тарифе для главного меню
-                tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
-        except Exception as e:
-            logger.debug('Не удалось загрузить тариф для главного меню', error=e)
+        if tariff_info_block:
+            action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+            if action_prompt_text in base_text:
+                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
+    else:
+        # Single-tariff mode: legacy behavior
+        tariff = None
+        is_daily_tariff = False
+        tariff_info_block = ''
 
-    base_text = texts.MAIN_MENU.format(
-        user_name=html.escape(user.full_name or ''),
-        subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
-    )
+        subscription = getattr(user, 'subscription', None)
+        if settings.is_tariffs_mode() and subscription and subscription.tariff_id:
+            try:
+                from app.database.crud.tariff import get_tariff_by_id
 
-    # Добавляем информацию о тарифе перед "Выберите действие"
-    if tariff_info_block:
-        action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-        if action_prompt_text in base_text:
-            base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
+                tariff = await get_tariff_by_id(db, subscription.tariff_id)
+                if tariff:
+                    is_daily_tariff = getattr(tariff, 'is_daily', False)
+                    tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
+            except Exception as e:
+                logger.debug('Не удалось загрузить тариф для главного меню', error=e)
+
+        base_text = texts.MAIN_MENU.format(
+            user_name=html.escape(user.full_name or ''),
+            subscription_status=_get_subscription_status(user, texts, is_daily_tariff),
+        )
+
+        if tariff_info_block:
+            action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+            if action_prompt_text in base_text:
+                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
 
