@@ -314,6 +314,12 @@ async def confirm_reset_traffic(
         await callback.answer('⚠️ В текущем режиме трафик фиксированный', show_alert=True)
         return
 
+    if settings.is_multi_tariff_enabled():
+        _state_data = await state.get_data() if state else {}
+        if not _state_data.get('active_subscription_id'):
+            await callback.answer('Выберите подписку через "Мои подписки"', show_alert=True)
+            return
+
     from app.database.crud.user import lock_user_for_pricing
 
     db_user = await lock_user_for_pricing(db, db_user.id)

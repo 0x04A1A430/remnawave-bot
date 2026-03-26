@@ -544,14 +544,11 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
                 from app.database.crud.subscription import is_active_paid_subscription
 
                 sub_result = await session.execute(
-                    select(Subscription)
-                    .where(Subscription.user_id == user.id)
-                    .order_by(Subscription.created_at.desc())
-                    .limit(1)
+                    select(Subscription).where(Subscription.user_id == user.id)
                 )
-                user_subscription = sub_result.scalar_one_or_none()
+                all_subs = sub_result.scalars().all()
 
-                if is_active_paid_subscription(user_subscription):
+                if any(is_active_paid_subscription(s) for s in all_subs):
                     logger.info(
                         '⏭️ Пропуск отключения подписки: у пользователя активная оплаченная подписка',
                         telegram_id=telegram_id,

@@ -1003,7 +1003,12 @@ class RemnaWaveService:
 
         try:
             needs_panel_update = any(
-                subscription.user and subscription.user.remnawave_uuid for subscription in subscriptions
+                (
+                    subscription.remnawave_uuid
+                    if settings.is_multi_tariff_enabled()
+                    else (subscription.user and subscription.user.remnawave_uuid)
+                )
+                for subscription in subscriptions
             )
 
             api = None

@@ -1902,7 +1902,11 @@ async def show_selected_user_details(
 
 
 def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardButton]]:
-    subscription = getattr(user, 'subscription', None)
+    if settings.is_multi_tariff_enabled():
+        subs = getattr(user, 'subscriptions', None) or []
+        subscription = next((s for s in subs if s.subscription_url), None)
+    else:
+        subscription = getattr(user, 'subscription', None)
     if not subscription:
         return []
 
@@ -2122,8 +2126,14 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     if template.offer_type == 'test_access' and squad_uuid:
         filtered_users: list[User] = []
         for user in users:
-            subscription = getattr(user, 'subscription', None)
-            connected = set(subscription.connected_squads or []) if subscription else set()
+            if settings.is_multi_tariff_enabled():
+                all_squads: set[str] = set()
+                for s in (getattr(user, 'subscriptions', None) or []):
+                    all_squads.update(s.connected_squads or [])
+                connected = all_squads
+            else:
+                subscription = getattr(user, 'subscription', None)
+                connected = set(subscription.connected_squads or []) if subscription else set()
             if squad_uuid in connected:
                 continue
             filtered_users.append(user)

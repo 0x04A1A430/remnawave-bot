@@ -901,7 +901,7 @@ async def get_users_list(
     query = query.offset(offset).limit(limit)
 
     result = await db.execute(query)
-    users = result.scalars().all()
+    users = result.scalars().unique().all()
 
     # Загружаем дополнительные зависимости для всех пользователей
     for user in users:

@@ -1813,7 +1813,9 @@ async def confirm_extend_subscription(
         if _fsm_sub_id:
             subscription = await get_subscription_by_id_for_user(db, _fsm_sub_id, db_user.id)
         else:
-            subscription = db_user.subscription
+            # Multi-tariff without FSM state — cannot determine which subscription
+            await callback.answer('Выберите подписку через "Мои подписки"', show_alert=True)
+            return
     else:
         subscription = db_user.subscription
 
@@ -2845,10 +2847,11 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         return
 
     texts = get_texts(db_user.language)
-    # Multi-tariff note: this handler is reached via 'subscription_settings' callback
-    # which is shown in the single-subscription info keyboard. In multi-tariff mode,
-    # show_subscription_info redirects to show_my_subscriptions, so per-subscription
-    # settings are handled from the my_subscriptions flow. db_user.subscription is safe.
+
+    if settings.is_multi_tariff_enabled():
+        await callback.answer('Настройки доступны через "Мои подписки"', show_alert=True)
+        return
+
     subscription = db_user.subscription
 
     # Получаем тариф подписки если есть
@@ -4137,7 +4140,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(handle_happ_download_back, F.data == 'happ_download_back')
 
-    dp.callback_query.register(handle_connect_subscription, F.data == 'subscription_connect')
+    dp.callback_query.register(handle_connect_subscription, F.data.startswith('subscription_connect'))
 
     dp.callback_query.register(handle_device_guide, F.data.startswith('device_guide_'))
 
@@ -4145,7 +4148,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(handle_specific_app_guide, F.data.startswith('app_') & ~F.data.startswith('app_list_'))
 
-    dp.callback_query.register(handle_open_subscription_link, F.data == 'open_subscription_link')
+    dp.callback_query.register(handle_open_subscription_link, F.data.startswith('open_subscription_link'))
 
     dp.callback_query.register(handle_subscription_settings, F.data == 'subscription_settings')
 

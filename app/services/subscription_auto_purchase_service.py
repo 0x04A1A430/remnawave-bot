@@ -756,10 +756,17 @@ async def _auto_purchase_tariff(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        existing_subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id),
-            None,
-        )
+        _cart_sub_id = cart_data.get('subscription_id')
+        if _cart_sub_id:
+            existing_subscription = next(
+                (s for s in active_subs if s.id == int(_cart_sub_id)),
+                None,
+            )
+        else:
+            existing_subscription = next(
+                (s for s in active_subs if s.tariff_id == tariff_id),
+                None,
+            )
     else:
         existing_subscription = await get_subscription_by_user_id(db, user.id)
 
@@ -1153,10 +1160,17 @@ async def _auto_purchase_daily_tariff(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        existing_subscription = next(
-            (s for s in active_subs if s.tariff_id == tariff_id),
-            None,
-        )
+        _cart_sub_id = cart_data.get('subscription_id')
+        if _cart_sub_id:
+            existing_subscription = next(
+                (s for s in active_subs if s.id == int(_cart_sub_id)),
+                None,
+            )
+        else:
+            existing_subscription = next(
+                (s for s in active_subs if s.tariff_id == tariff_id),
+                None,
+            )
     else:
         existing_subscription = await get_subscription_by_user_id(db, user.id)
 

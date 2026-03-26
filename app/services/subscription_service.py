@@ -406,11 +406,17 @@ class SubscriptionService:
                 return None
 
             # Resolve the Remnawave UUID: prefer subscription-level in multi-tariff mode
-            remnawave_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else user.remnawave_uuid
-            )
+            if settings.is_multi_tariff_enabled():
+                remnawave_uuid = subscription.remnawave_uuid
+                if not remnawave_uuid:
+                    logger.warning(
+                        'Multi-tariff: subscription has no remnawave_uuid, cannot update panel',
+                        subscription_id=subscription.id,
+                        user_id=subscription.user_id,
+                    )
+                    return None
+            else:
+                remnawave_uuid = user.remnawave_uuid
             if not remnawave_uuid:
                 logger.error('RemnaWave UUID не найден для пользователя', user_id=subscription.user_id)
                 return None
@@ -489,17 +495,23 @@ class SubscriptionService:
                 updated_user = await api.update_user(**update_kwargs)
 
                 if reset_traffic:
-                    reset_uuid = (
-                        subscription.remnawave_uuid
-                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                        else user.remnawave_uuid
-                    )
-                    await self._reset_user_traffic(
-                        api,
-                        reset_uuid,
-                        user,
-                        reset_reason,
-                    )
+                    if settings.is_multi_tariff_enabled():
+                        reset_uuid = subscription.remnawave_uuid
+                        if not reset_uuid:
+                            logger.warning(
+                                'Multi-tariff: subscription has no remnawave_uuid, skipping traffic reset',
+                                subscription_id=subscription.id,
+                                user_id=subscription.user_id,
+                            )
+                    else:
+                        reset_uuid = user.remnawave_uuid
+                    if reset_uuid:
+                        await self._reset_user_traffic(
+                            api,
+                            reset_uuid,
+                            user,
+                            reset_reason,
+                        )
 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
@@ -609,12 +621,20 @@ class SubscriptionService:
     async def revoke_subscription(self, db: AsyncSession, subscription: Subscription) -> str | None:
         try:
             user = await get_user_by_id(db, subscription.user_id)
-            revoke_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else user.remnawave_uuid
-            )
-            if not user or not revoke_uuid:
+            if not user:
+                return None
+            if settings.is_multi_tariff_enabled():
+                revoke_uuid = subscription.remnawave_uuid
+                if not revoke_uuid:
+                    logger.warning(
+                        'Multi-tariff: subscription has no remnawave_uuid, cannot revoke',
+                        subscription_id=subscription.id,
+                        user_id=subscription.user_id,
+                    )
+                    return None
+            else:
+                revoke_uuid = user.remnawave_uuid
+            if not revoke_uuid:
                 return None
 
             async with self.get_api_client() as api:
@@ -645,12 +665,20 @@ class SubscriptionService:
     async def sync_subscription_usage(self, db: AsyncSession, subscription: Subscription) -> bool:
         try:
             user = await get_user_by_id(db, subscription.user_id)
-            sync_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else user.remnawave_uuid
-            )
-            if not user or not sync_uuid:
+            if not user:
+                return False
+            if settings.is_multi_tariff_enabled():
+                sync_uuid = subscription.remnawave_uuid
+                if not sync_uuid:
+                    logger.warning(
+                        'Multi-tariff: subscription has no remnawave_uuid, cannot sync usage',
+                        subscription_id=subscription.id,
+                        user_id=subscription.user_id,
+                    )
+                    return False
+            else:
+                sync_uuid = user.remnawave_uuid
+            if not sync_uuid:
                 return False
 
             async with self.get_api_client() as api:
@@ -941,12 +969,20 @@ class SubscriptionService:
                 async with semaphore:
                     try:
                         user = users_map.get(sub.user_id)
-                        remnawave_uuid = (
-                            sub.remnawave_uuid
-                            if settings.is_multi_tariff_enabled() and sub.remnawave_uuid
-                            else (user.remnawave_uuid if user else None)
-                        )
-                        if not user or not remnawave_uuid:
+                        if not user:
+                            return False
+                        if settings.is_multi_tariff_enabled():
+                            remnawave_uuid = sub.remnawave_uuid
+                            if not remnawave_uuid:
+                                logger.warning(
+                                    'Multi-tariff: subscription has no remnawave_uuid, skipping squad sync',
+                                    subscription_id=sub.id,
+                                    user_id=sub.user_id,
+                                )
+                                return False
+                        else:
+                            remnawave_uuid = user.remnawave_uuid
+                        if not remnawave_uuid:
                             return False
 
                         current_time = datetime.now(UTC)

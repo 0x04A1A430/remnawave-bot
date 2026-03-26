@@ -4375,7 +4375,7 @@ async def _grant_trial_subscription(
         from app.services.subscription_service import SubscriptionService
 
         existing_subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
-        if existing_subscription:
+        if existing_subscription and not settings.is_multi_tariff_enabled():
             logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
 
@@ -4409,7 +4409,7 @@ async def _grant_paid_subscription(
         from app.services.subscription_service import SubscriptionService
 
         existing_subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
-        if existing_subscription:
+        if existing_subscription and not settings.is_multi_tariff_enabled():
             logger.error('У пользователя уже есть подписка', user_id=user_id)
             return False
 
