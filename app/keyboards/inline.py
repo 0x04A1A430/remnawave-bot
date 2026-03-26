@@ -1866,35 +1866,6 @@ def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFA
     )
 
 
-def get_subscription_expiring_keyboard(subscription_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    sub_btn_text = (
-        texts.t('MY_SUBSCRIPTIONS_BUTTON', '📱 Мои подписки')
-        if settings.is_multi_tariff_enabled()
-        else texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
-    )
-
-    extend_callback = f'se:{subscription_id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                build_miniapp_or_callback_button(
-                    text=texts.MENU_EXTEND_SUBSCRIPTION,
-                    callback_data=extend_callback,
-                    cabinet_path='/subscription',
-                )
-            ],
-            [
-                build_miniapp_or_callback_button(
-                    text=texts.t('TOPUP_BALANCE_BUTTON', '💳 Пополнить баланс'), callback_data='balance_topup'
-                )
-            ],
-            [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
-        ]
-    )
-
-
 def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 

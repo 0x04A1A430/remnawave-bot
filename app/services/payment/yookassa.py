@@ -1056,21 +1056,10 @@ class YooKassaPaymentMixin:
                                     )
                                     full_user = full_user_result.scalar_one_or_none()
 
-                                    # Загружаем подписку отдельно, если нужно
-                                    # Используем limit(1) вместо scalar_one_or_none() —
-                                    # у пользователя может быть несколько подписок (multi-tariff)
-                                    subscription_result = await db.execute(
-                                        select(SubscriptionModel)
-                                        .where(SubscriptionModel.user_id == user.id)
-                                        .order_by(SubscriptionModel.created_at.desc())
-                                        .limit(1)
-                                    )
-                                    subscription_db = subscription_result.scalar_one_or_none()
-
                                     await notification_service.send_subscription_purchase_notification(
                                         db,
                                         full_user or user,
-                                        subscription_db or subscription,
+                                        subscription,
                                         transaction,
                                         subscription_period,
                                         was_trial_conversion=False,

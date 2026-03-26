@@ -123,7 +123,7 @@ async def delete_subscription(
         SubscriptionStatus.EXPIRED.value,
         SubscriptionStatus.DISABLED.value,
     }
-    if subscription.status not in deletable_statuses:
+    if getattr(subscription, 'actual_status', subscription.status) not in deletable_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Only expired or disabled subscriptions can be deleted',

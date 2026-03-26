@@ -411,7 +411,6 @@ class DailySubscriptionService:
                                 exc_info=True,
                             )
                             stats['errors'] += 1
-                    await db.commit()
                 except Exception as e:
                     logger.error('Ошибка при обработке сброса трафика', error=e, exc_info=True)
                     await db.rollback()

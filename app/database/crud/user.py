@@ -458,6 +458,7 @@ async def add_user_balance(
     transaction_type: TransactionType = TransactionType.DEPOSIT,
     bot=None,
     payment_method: PaymentMethod | None = None,
+    commit: bool = True,
 ) -> bool:
     try:
         # Lock the user row to prevent concurrent balance race conditions
@@ -500,8 +501,9 @@ async def add_user_balance(
                 payment_method=payment_method,
             )
 
-        await db.commit()
-        await db.refresh(user)
+        if commit:
+            await db.commit()
+            await db.refresh(user)
 
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         logger.info(
@@ -521,7 +523,8 @@ async def add_user_balance(
 
     except Exception as e:
         logger.error('Ошибка изменения баланса пользователя', user_id=user.id, error=e)
-        await db.rollback()
+        if commit:
+            await db.rollback()
         return False
 
 

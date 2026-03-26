@@ -205,7 +205,7 @@ async def show_subscription_detail(
         f'📅 До: {end_date}\n'
     )
 
-    if subscription.subscription_url:
+    if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'
 
     keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)

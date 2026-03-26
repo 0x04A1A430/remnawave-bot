@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import (
     DiscountOffer,
@@ -31,7 +32,12 @@ class PromoOfferService:
         user: User,
         offer: DiscountOffer,
     ) -> tuple[bool, list[str] | None, datetime | None, str]:
-        subscription = getattr(user, 'subscription', None)
+        if settings.is_multi_tariff_enabled():
+            subs = getattr(user, 'subscriptions', None) or []
+            non_daily = [s for s in subs if s.is_active and not getattr(s, 'is_daily_tariff', False)]
+            subscription = max(non_daily, key=lambda s: s.days_left) if non_daily else (subs[0] if subs else None)
+        else:
+            subscription = getattr(user, 'subscription', None)
         if not subscription:
             return False, None, None, 'subscription_missing'
 

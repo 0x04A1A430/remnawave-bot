@@ -888,10 +888,11 @@ async def decrement_subscription_server_counts(
 
 
 async def update_subscription_autopay(
-    db: AsyncSession, subscription: Subscription, enabled: bool, days_before: int = 3
+    db: AsyncSession, subscription: Subscription, enabled: bool, days_before: int | None = None
 ) -> Subscription:
     subscription.autopay_enabled = enabled
-    subscription.autopay_days_before = days_before
+    if days_before is not None:
+        subscription.autopay_days_before = days_before
     subscription.updated_at = datetime.now(UTC)
 
     await db.commit()
@@ -1996,9 +1997,9 @@ async def update_daily_charge_time(
 
     if commit:
         await db.commit()
+        await db.refresh(subscription)
     else:
         await db.flush()
-    await db.refresh(subscription)
 
     return subscription
 

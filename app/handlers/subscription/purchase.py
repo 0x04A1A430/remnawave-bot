@@ -2962,10 +2962,17 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
-    # Multi-tariff note: 'toggle_daily_subscription_pause' callback is shown inside
-    # the subscription info view which redirects to show_my_subscriptions in multi-tariff
-    # mode. Per-subscription pause is therefore routed correctly before reaching here.
-    # db_user.subscription is safe as a fallback for single-tariff daily subscriptions.
+
+    if settings.is_multi_tariff_enabled():
+        await callback.answer(
+            texts.t(
+                'DAILY_PAUSE_MULTI_TARIFF_REDIRECT',
+                'Управление суточными подписками доступно через "Мои подписки"',
+            ),
+            show_alert=True,
+        )
+        return
+
     subscription = db_user.subscription
 
     if not subscription:

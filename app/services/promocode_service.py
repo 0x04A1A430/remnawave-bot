@@ -194,7 +194,7 @@ class PromoCodeService:
                 'balance_bonus_kopeks': promocode.balance_bonus_kopeks,
                 'subscription_days': promocode.subscription_days,
                 'max_uses': promocode.max_uses,
-                'current_uses': promocode.current_uses,
+                'current_uses': promocode.current_uses + 1,  # +1 because we just incremented atomically
                 'valid_until': promocode.valid_until,
                 'promo_group_id': promocode.promo_group_id,
             }

@@ -471,7 +471,7 @@ class MonitoringService:
                     for other_days in warning_days:
                         if other_days < days:
                             other_subs = await self._get_expiring_paid_subscriptions(db, other_days)
-                            if any(s.user_id == user.id for s in other_subs):
+                            if any(s.id == subscription.id for s in other_subs):
                                 should_send = False
                                 logger.debug(
                                     '🎯 Пропускаем уведомление на дней для пользователя есть более срочное на дней',
@@ -1411,17 +1411,25 @@ class MonitoringService:
             from aiogram.types import InlineKeyboardMarkup
 
             extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            sub_btn_text = '📱 Мои подписки' if settings.is_multi_tariff_enabled() else '📱 Моя подписка'
+            sub_btn_text = texts.t(
+                'BTN_MY_SUBSCRIPTIONS' if settings.is_multi_tariff_enabled() else 'BTN_MY_SUBSCRIPTION',
+                '📱 Мои подписки' if settings.is_multi_tariff_enabled() else '📱 Моя подписка',
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         build_miniapp_or_callback_button(
-                            text='⏰ Продлить подписку',
+                            text=texts.t('BTN_RENEW_SUBSCRIPTION', '⏰ Продлить подписку'),
                             callback_data=extend_callback,
                             cabinet_path='/subscription',
                         )
                     ],
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BTN_TOPUP_BALANCE', '💳 Пополнить баланс'),
+                            callback_data='balance_topup',
+                        )
+                    ],
                     [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
                 ]
             )

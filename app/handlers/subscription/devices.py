@@ -346,49 +346,25 @@ async def confirm_change_devices(
 
         devices_price_per_month = chargeable_devices * price_per_device
 
-        # Проверяем является ли тариф суточным
-        is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
+        # Считаем стоимость по оставшимся дням подписки
+        now = datetime.now(UTC)
+        days_left = max(1, (subscription.end_date - now).days)
+        period_hint_days = days_left
 
-        if is_daily_tariff:
-            # Для суточных тарифов считаем по дням (как в кабинете)
-            now = datetime.now(UTC)
-            days_left = max(1, (subscription.end_date - now).days)
-            period_hint_days = days_left
-
-            devices_discount_percent = PricingEngine.get_addon_discount_percent(
-                db_user,
-                'devices',
-                period_hint_days,
-            )
-            discounted_per_month, discount_per_month = apply_percentage_discount(
-                devices_price_per_month,
-                devices_discount_percent,
-            )
-            # Цена = месячная_цена * days_left / 30
-            price = int(discounted_per_month * days_left / 30)
-            price = max(100, price)  # Минимум 1 рубль
-            total_discount = int(discount_per_month * days_left / 30)
-            period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
-        else:
-            # Для обычных тарифов - по дням (как в кабинете)
-            now = datetime.now(UTC)
-            days_left = max(1, (subscription.end_date - now).days)
-            period_hint_days = days_left
-
-            devices_discount_percent = PricingEngine.get_addon_discount_percent(
-                db_user,
-                'devices',
-                period_hint_days,
-            )
-            discounted_per_month, discount_per_month = apply_percentage_discount(
-                devices_price_per_month,
-                devices_discount_percent,
-            )
-            # Цена = месячная_цена * days_left / 30
-            price = int(discounted_per_month * days_left / 30)
-            price = max(100, price)  # Минимум 1 рубль
-            total_discount = int(discount_per_month * days_left / 30)
-            period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
+        devices_discount_percent = PricingEngine.get_addon_discount_percent(
+            db_user,
+            'devices',
+            period_hint_days,
+        )
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            devices_price_per_month,
+            devices_discount_percent,
+        )
+        # Цена = месячная_цена * days_left / 30
+        price = int(discounted_per_month * days_left / 30)
+        price = max(100, price)  # Минимум 1 рубль
+        total_discount = int(discount_per_month * days_left / 30)
+        period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
 
         if price > 0 and db_user.balance_kopeks < price:
             missing_kopeks = price - db_user.balance_kopeks

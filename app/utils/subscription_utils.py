@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from urllib.parse import quote, urlparse, urlunparse
 
 import structlog
@@ -10,82 +9,6 @@ from app.database.models import Subscription
 
 
 logger = structlog.get_logger(__name__)
-
-
-async def ensure_single_subscription(db: AsyncSession, user_id: int) -> Subscription | None:
-    """В multi-tariff режиме возвращает последнюю подписку без удаления остальных."""
-    result = await db.execute(
-        select(Subscription).where(Subscription.user_id == user_id).order_by(Subscription.created_at.desc())
-    )
-    subscriptions = result.scalars().all()
-
-    if len(subscriptions) <= 1:
-        return subscriptions[0] if subscriptions else None
-
-    latest_subscription = subscriptions[0]
-
-    # В multi-tariff режиме несколько подписок — это нормально, не удаляем
-    if settings.is_multi_tariff_enabled():
-        return latest_subscription
-
-    old_subscriptions = subscriptions[1:]
-
-    logger.warning(
-        '🚨 Обнаружено подписок у пользователя . Удаляем старых.',
-        subscriptions_count=len(subscriptions),
-        user_id=user_id,
-        old_subscriptions_count=len(old_subscriptions),
-    )
-
-    for old_sub in old_subscriptions:
-        await db.delete(old_sub)
-        logger.info('🗑️ Удалена подписка ID от', old_sub_id=old_sub.id, created_at=old_sub.created_at)
-
-    await db.commit()
-    await db.refresh(latest_subscription)
-
-    logger.info(
-        '✅ Оставлена подписка ID от',
-        latest_subscription_id=latest_subscription.id,
-        created_at=latest_subscription.created_at,
-    )
-    return latest_subscription
-
-
-async def update_or_create_subscription(db: AsyncSession, user_id: int, **subscription_data) -> Subscription:
-    existing_subscription = await ensure_single_subscription(db, user_id)
-
-    if existing_subscription:
-        for key, value in subscription_data.items():
-            if hasattr(existing_subscription, key):
-                setattr(existing_subscription, key, value)
-
-        existing_subscription.updated_at = datetime.now(UTC)
-        await db.commit()
-        await db.refresh(existing_subscription)
-
-        logger.info('🔄 Обновлена существующая подписка ID', existing_subscription_id=existing_subscription.id)
-        return existing_subscription
-
-    subscription_defaults = dict(subscription_data)
-    autopay_enabled = subscription_defaults.pop('autopay_enabled', None)
-    autopay_days_before = subscription_defaults.pop('autopay_days_before', None)
-
-    new_subscription = Subscription(
-        user_id=user_id,
-        autopay_enabled=(settings.is_autopay_enabled_by_default() if autopay_enabled is None else autopay_enabled),
-        autopay_days_before=(
-            settings.DEFAULT_AUTOPAY_DAYS_BEFORE if autopay_days_before is None else autopay_days_before
-        ),
-        **subscription_defaults,
-    )
-
-    db.add(new_subscription)
-    await db.commit()
-    await db.refresh(new_subscription)
-
-    logger.info('🆕 Создана новая подписка ID', new_subscription_id=new_subscription.id)
-    return new_subscription
 
 
 async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:

@@ -1020,20 +1020,28 @@ async def handle_custom_confirm(
         try:
             from app.database.crud.user import add_user_balance
 
-            await add_user_balance(
+            refund_success = await add_user_balance(
                 db,
                 db_user,
                 total_price,
                 'Возврат: ошибка покупки кастомного тарифа',
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
+                commit=False,
             )
+            if not refund_success:
+                await _persist_failed_refund(
+                    user_id=db_user.id,
+                    amount_kopeks=total_price,
+                    reason='Возврат: ошибка покупки кастомного тарифа',
+                    error=Exception('add_user_balance returned False'),
+                )
             # Restore promo offer if consumed
             if consume_promo and saved_promo_percent > 0:
                 db_user.promo_offer_discount_percent = saved_promo_percent
                 db_user.promo_offer_discount_source = saved_promo_source
                 db_user.promo_offer_discount_expires_at = saved_promo_expires
-                await db.commit()
+            await db.commit()
         except Exception as refund_error:
             logger.critical(
                 'CRITICAL: не удалось вернуть средства после ошибки покупки кастомного тарифа',
@@ -1402,6 +1410,39 @@ async def confirm_tariff_purchase(
                     connected_squads=squads,
                 )
             else:
+                # Guard: enforce MAX_ACTIVE_SUBSCRIPTIONS limit
+                active_count = len(await get_active_subscriptions_by_user_id(db, db_user.id))
+                if active_count >= settings.get_max_active_subscriptions():
+                    from app.database.crud.user import add_user_balance
+
+                    refund_success = await add_user_balance(
+                        db,
+                        db_user,
+                        final_price,
+                        'Возврат: превышен лимит подписок',
+                        create_transaction=True,
+                        transaction_type=TransactionType.REFUND,
+                        commit=False,
+                    )
+                    if not refund_success:
+                        await _persist_failed_refund(
+                            user_id=db_user.id,
+                            amount_kopeks=final_price,
+                            reason='Возврат: превышен лимит подписок',
+                            error=Exception('add_user_balance returned False'),
+                        )
+                    # Restore promo offer if consumed
+                    if consume_promo and saved_promo_percent > 0:
+                        db_user.promo_offer_discount_percent = saved_promo_percent
+                        db_user.promo_offer_discount_source = saved_promo_source
+                        db_user.promo_offer_discount_expires_at = saved_promo_expires
+                    await db.commit()
+                    await callback.answer(
+                        f'Максимум подписок: {settings.get_max_active_subscriptions()}',
+                        show_alert=True,
+                    )
+                    return
+
                 # Create NEW subscription for this tariff (multi-tariff: new Remnawave user)
                 subscription = await create_paid_subscription(
                     db=db,
@@ -1446,20 +1487,28 @@ async def confirm_tariff_purchase(
         try:
             from app.database.crud.user import add_user_balance
 
-            await add_user_balance(
+            refund_success = await add_user_balance(
                 db,
                 db_user,
                 final_price,
                 'Возврат: тариф уже активен',
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
+                commit=False,
             )
-            # Restore promo offer if consumed
+            if not refund_success:
+                await _persist_failed_refund(
+                    user_id=db_user.id,
+                    amount_kopeks=final_price,
+                    reason='Возврат: тариф уже активен (add_user_balance returned False)',
+                    error=Exception('add_user_balance returned False'),
+                )
+            # Restore promo offer if consumed (atomic with refund)
             if consume_promo and saved_promo_percent > 0:
                 db_user.promo_offer_discount_percent = saved_promo_percent
                 db_user.promo_offer_discount_source = saved_promo_source
                 db_user.promo_offer_discount_expires_at = saved_promo_expires
-                await db.commit()
+            await db.commit()
         except Exception as refund_error:
             logger.critical('CRITICAL: не удалось вернуть средства', user_id=db_user.id, refund_error=refund_error)
             await _persist_failed_refund(
@@ -1477,20 +1526,28 @@ async def confirm_tariff_purchase(
         try:
             from app.database.crud.user import add_user_balance
 
-            await add_user_balance(
+            refund_success = await add_user_balance(
                 db,
                 db_user,
                 final_price,
                 'Возврат: ошибка покупки тарифа',
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
+                commit=False,
             )
-            # Restore promo offer if consumed
+            if not refund_success:
+                await _persist_failed_refund(
+                    user_id=db_user.id,
+                    amount_kopeks=final_price,
+                    reason='Возврат: ошибка покупки тарифа (add_user_balance returned False)',
+                    error=Exception('add_user_balance returned False'),
+                )
+            # Restore promo offer if consumed (atomic with refund)
             if consume_promo and saved_promo_percent > 0:
                 db_user.promo_offer_discount_percent = saved_promo_percent
                 db_user.promo_offer_discount_source = saved_promo_source
                 db_user.promo_offer_discount_expires_at = saved_promo_expires
-                await db.commit()
+            await db.commit()
         except Exception as refund_error:
             logger.critical(
                 'CRITICAL: не удалось вернуть средства после ошибки покупки тарифа',
@@ -1740,14 +1797,23 @@ async def confirm_daily_tariff_purchase(
         try:
             from app.database.crud.user import add_user_balance
 
-            await add_user_balance(
+            refund_success = await add_user_balance(
                 db,
                 db_user,
                 final_daily_price,
                 'Возврат: ошибка покупки суточного тарифа',
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
+                commit=False,
             )
+            if not refund_success:
+                await _persist_failed_refund(
+                    user_id=db_user.id,
+                    amount_kopeks=final_daily_price,
+                    reason='Возврат: ошибка покупки суточного тарифа',
+                    error=Exception('add_user_balance returned False'),
+                )
+            await db.commit()
         except Exception as refund_error:
             logger.critical(
                 'CRITICAL: не удалось вернуть средства после ошибки покупки суточного тарифа',
@@ -3144,14 +3210,23 @@ async def confirm_daily_tariff_switch(
         try:
             from app.database.crud.user import add_user_balance
 
-            await add_user_balance(
+            refund_success = await add_user_balance(
                 db,
                 db_user,
                 final_daily_price,
                 'Возврат: ошибка смены на суточный тариф',
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
+                commit=False,
             )
+            if not refund_success:
+                await _persist_failed_refund(
+                    user_id=db_user.id,
+                    amount_kopeks=final_daily_price,
+                    reason='Возврат: ошибка смены на суточный тариф',
+                    error=Exception('add_user_balance returned False'),
+                )
+            await db.commit()
         except Exception as refund_error:
             logger.critical(
                 'CRITICAL: не удалось вернуть средства после ошибки смены на суточный тариф',
