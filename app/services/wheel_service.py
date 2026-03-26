@@ -336,6 +336,8 @@ class FortuneWheelService:
         Возвращает эквивалент в копейках.
         """
         if not subscription:
+            if settings.is_multi_tariff_enabled():
+                raise ValueError('Необходимо указать подписку для оплаты днями (мульти-тариф)')
             subscription = await get_subscription_by_user_id(db, user.id)
 
         if not subscription or not subscription.is_active:
@@ -406,6 +408,21 @@ class FortuneWheelService:
         if prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value:
             # Дни подписки — use provided subscription or fallback
             if not subscription:
+                if settings.is_multi_tariff_enabled():
+                    # Multi-tariff: нельзя выбрать произвольную подписку, начисляем на баланс
+                    await add_user_balance(
+                        db,
+                        user,
+                        prize.prize_value_kopeks,
+                        description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс, мульти-тариф)',
+                        create_transaction=True,
+                    )
+                    logger.info(
+                        'Мульти-тариф: дни конвертированы в баланс (подписка не указана)',
+                        prize_value=prize.prize_value,
+                        user_id=user.id,
+                    )
+                    return None
                 subscription = await get_subscription_by_user_id(db, user.id)
             if subscription:
                 # Проверяем суточный тариф - для него конвертируем дни в баланс
@@ -472,6 +489,21 @@ class FortuneWheelService:
         if prize_type == WheelPrizeType.TRAFFIC_GB.value:
             # Бонусный трафик — use provided subscription or fallback
             if not subscription:
+                if settings.is_multi_tariff_enabled():
+                    # Multi-tariff: нельзя выбрать произвольную подписку, начисляем на баланс
+                    await add_user_balance(
+                        db,
+                        user,
+                        prize.prize_value_kopeks,
+                        description=f'Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс, мульти-тариф)',
+                        create_transaction=True,
+                    )
+                    logger.info(
+                        'Мульти-тариф: трафик конвертирован в баланс (подписка не указана)',
+                        prize_value=prize.prize_value,
+                        user_id=user.id,
+                    )
+                    return None
                 subscription = await get_subscription_by_user_id(db, user.id)
             if subscription and subscription.traffic_limit_gb > 0:
                 subscription.traffic_limit_gb += prize.prize_value
@@ -582,6 +614,18 @@ class FortuneWheelService:
             elif not settings.is_multi_tariff_enabled():
                 # Single-tariff: auto-resolve
                 target_subscription = await get_subscription_by_user_id(db, user.id)
+
+            # Multi-tariff guard: subscription_id is required for days payment
+            if (
+                settings.is_multi_tariff_enabled()
+                and not target_subscription
+                and payment_type == WheelSpinPaymentType.SUBSCRIPTION_DAYS.value
+            ):
+                return SpinResult(
+                    success=False,
+                    error='subscription_required',
+                    message='Выберите подписку для оплаты днями',
+                )
 
             # 2. Обрабатываем оплату
             if payment_type == WheelSpinPaymentType.TELEGRAM_STARS.value:

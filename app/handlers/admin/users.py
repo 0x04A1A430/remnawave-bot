@@ -4942,7 +4942,10 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                         remnawave_user = await api.create_user(**create_kwargs)
 
                     if remnawave_user and hasattr(remnawave_user, 'uuid'):
-                        target_user.remnawave_uuid = remnawave_user.uuid
+                        if settings.is_multi_tariff_enabled() and subscription:
+                            subscription.remnawave_uuid = remnawave_user.uuid
+                        else:
+                            target_user.remnawave_uuid = remnawave_user.uuid
                         await db.commit()
 
                 if remnawave_user:

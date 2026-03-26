@@ -2161,7 +2161,7 @@ class RemnaWaveService:
                                     create_kwargs['external_squad_uuid'] = sub.tariff.external_squad_uuid
 
                                 # Определяем UUID для обновления
-                                panel_uuid = user.remnawave_uuid
+                                panel_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
 
                                 # Если нет UUID в базе, ищем пользователя по telegram_id в панели
                                 if not panel_uuid and user.telegram_id:
