@@ -71,6 +71,8 @@ from .links import (
     handle_open_subscription_link,
 )
 from .my_subscriptions import (
+    handle_subscription_delete_confirm,
+    handle_subscription_delete_execute,
     handle_subscription_devices,
     handle_subscription_extend,
     handle_subscription_link,
@@ -189,6 +191,8 @@ __all__ = [
     'handle_specific_app_guide',
     'handle_subscription_cancel',
     'handle_subscription_config_back',
+    'handle_subscription_delete_confirm',
+    'handle_subscription_delete_execute',
     'handle_subscription_devices',
     'handle_subscription_extend',
     'handle_subscription_link',

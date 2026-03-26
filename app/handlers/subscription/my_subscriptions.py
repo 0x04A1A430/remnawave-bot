@@ -14,11 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import (
+    decrement_subscription_server_counts,
     get_all_subscriptions_by_user_id,
     get_subscription_by_id_for_user,
 )
-from app.database.models import Subscription, User
+from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import get_texts
+from app.services.subscription_service import SubscriptionService
 
 
 logger = structlog.get_logger(__name__)
@@ -126,6 +128,9 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
     if not is_inactive:
         buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
+
+    if is_inactive:
+        buttons.append([types.InlineKeyboardButton(text='🗑 Удалить подписку', callback_data=f'sub_del:{sub_id}')])
 
     buttons.append([types.InlineKeyboardButton(text='◀️ К списку подписок', callback_data='my_subscriptions')])
 
@@ -359,6 +364,97 @@ async def handle_device_management_menu(
     from .devices import handle_device_management
 
     await handle_device_management(callback, db_user, db, state)
+
+
+async def handle_subscription_delete_confirm(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Show delete confirmation for an expired/disabled subscription."""
+    sub_id = _extract_sub_id(callback)
+    if sub_id is None:
+        await callback.answer('Неверный формат', show_alert=True)
+        return
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    if not subscription:
+        await callback.answer('Подписка не найдена', show_alert=True)
+        return
+
+    if subscription.actual_status not in ('expired', 'disabled'):
+        await callback.answer('Можно удалить только истекшую или отключённую подписку', show_alert=True)
+        return
+
+    tariff_name = subscription.tariff.name if subscription.tariff else 'Подписка'
+
+    text = (
+        f'🗑 <b>Удалить подписку «{tariff_name}»?</b>\n\n'
+        '⚠️ Подписка будет удалена безвозвратно.\n'
+        'Все данные, устройства и настройки будут потеряны.\n'
+        'Это действие нельзя отменить.'
+    )
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [types.InlineKeyboardButton(text='🗑 Да, удалить', callback_data=f'sub_del_yes:{sub_id}')],
+            [types.InlineKeyboardButton(text='◀️ Отмена', callback_data=f'sm:{sub_id}')],
+        ]
+    )
+
+    if callback.message:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.answer()
+
+
+async def handle_subscription_delete_execute(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    """Actually delete an expired/disabled subscription."""
+    sub_id = _extract_sub_id(callback)
+    if sub_id is None:
+        await callback.answer('Неверный формат', show_alert=True)
+        return
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
+    if not subscription:
+        await callback.answer('Подписка не найдена', show_alert=True)
+        return
+
+    deletable_statuses = {SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value}
+    if getattr(subscription, 'actual_status', subscription.status) not in deletable_statuses:
+        await callback.answer('Можно удалить только истекшую или отключённую подписку', show_alert=True)
+        return
+
+    # Delete from RemnaWave panel (stops webhooks / phantom notifications)
+    if subscription.remnawave_uuid:
+        try:
+            service = SubscriptionService()
+            await service.delete_remnawave_user(subscription.remnawave_uuid)
+        except Exception as e:
+            logger.warning('Failed to delete RemnaWave user on subscription delete', error=e)
+
+    # Decrement server counts
+    await decrement_subscription_server_counts(db, subscription)
+
+    # Hard delete from DB
+    await db.delete(subscription)
+    await db.commit()
+
+    logger.info(
+        'Subscription deleted by user via bot',
+        subscription_id=sub_id,
+        user_id=db_user.id,
+    )
+
+    await callback.answer('Подписка удалена', show_alert=True)
+
+    # Return to subscriptions list
+    await show_my_subscriptions(callback, db_user, db, state)
 
 
 def _extract_sub_id(callback: types.CallbackQuery) -> int | None:

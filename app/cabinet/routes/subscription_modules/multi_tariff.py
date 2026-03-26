@@ -129,15 +129,15 @@ async def delete_subscription(
             detail='Only expired or disabled subscriptions can be deleted',
         )
 
-    # Disable on RemnaWave panel if has UUID
+    # Delete from RemnaWave panel (stops webhooks / phantom notifications)
     if subscription.remnawave_uuid:
         try:
             from app.services.subscription_service import SubscriptionService
 
             service = SubscriptionService()
-            await service.disable_remnawave_user(subscription.remnawave_uuid)
+            await service.delete_remnawave_user(subscription.remnawave_uuid)
         except Exception as e:
-            logger.warning('Failed to disable RemnaWave user on subscription delete', error=e)
+            logger.warning('Failed to delete RemnaWave user on subscription delete', error=e)
 
     # Decrement server counts
     await decrement_subscription_server_counts(db, subscription)

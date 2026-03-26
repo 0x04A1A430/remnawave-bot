@@ -580,6 +580,22 @@ class SubscriptionService:
             logger.error('Ошибка отключения RemnaWave пользователя', error=e)
             return False
 
+    async def delete_remnawave_user(self, user_uuid: str) -> bool:
+        """Полное удаление пользователя из панели RemnaWave (хуки прекращаются)."""
+        try:
+            async with self.get_api_client() as api:
+                await api.delete_user(user_uuid)
+                logger.info('🗑 Удалён RemnaWave пользователь', user_uuid=user_uuid)
+                return True
+
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'not found' in error_msg or 'not exist' in error_msg:
+                logger.info('🗑 RemnaWave пользователь уже удалён', user_uuid=user_uuid)
+                return True
+            logger.error('Ошибка удаления RemnaWave пользователя', error=e, user_uuid=user_uuid)
+            return False
+
     async def enable_remnawave_user(self, user_uuid: str) -> bool:
         """Включить пользователя в RemnaWave (реактивация)."""
         try:

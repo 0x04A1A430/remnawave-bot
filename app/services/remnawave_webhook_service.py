@@ -567,114 +567,127 @@ class RemnaWaveWebhookService:
     async def _handle_user_expired(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription:
-            # Суточные подписки управляются DailySubscriptionService.
-            # Remnawave может прислать user.expired если sync не дошёл (старый end_date),
-            # но локально подписка ещё жива — не экспайрим её.
-            tariff = getattr(subscription, 'tariff', None)
-            is_active_daily = (
-                tariff is not None
-                and getattr(tariff, 'is_daily', False)
-                and not getattr(subscription, 'is_daily_paused', False)
-            )
-            if is_active_daily:
-                logger.info(
-                    'Webhook: пропуск expire для суточной подписки (управляет DailySubscriptionService)',
-                    subscription_id=subscription.id,
-                    user_id=user.id,
-                )
-                self._stamp_webhook_update(subscription)
-                await db.commit()
-                return
+        if not subscription:
+            # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
+            logger.info('Webhook user.expired: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
 
+        # Суточные подписки управляются DailySubscriptionService.
+        # Remnawave может прислать user.expired если sync не дошёл (старый end_date),
+        # но локально подписка ещё жива — не экспайрим её.
+        tariff = getattr(subscription, 'tariff', None)
+        is_active_daily = (
+            tariff is not None
+            and getattr(tariff, 'is_daily', False)
+            and not getattr(subscription, 'is_daily_paused', False)
+        )
+        if is_active_daily:
+            logger.info(
+                'Webhook: пропуск expire для суточной подписки (управляет DailySubscriptionService)',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
             self._stamp_webhook_update(subscription)
-            if subscription.status != SubscriptionStatus.EXPIRED.value:
-                await expire_subscription(db, subscription)
-                logger.info('Webhook: subscription expired for user', subscription_id=subscription.id, user_id=user.id)
-            else:
-                await db.commit()
+            await db.commit()
+            return
+
+        self._stamp_webhook_update(subscription)
+        if subscription.status != SubscriptionStatus.EXPIRED.value:
+            await expire_subscription(db, subscription)
+            logger.info('Webhook: subscription expired for user', subscription_id=subscription.id, user_id=user.id)
+        else:
+            await db.commit()
 
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRED',
-            reply_markup=self._get_renew_keyboard(user, getattr(subscription, 'id', None) if subscription else None),
+            reply_markup=self._get_renew_keyboard(user, subscription.id),
         )
 
     async def _handle_user_disabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription:
-            # Суточные подписки управляются DailySubscriptionService — не деактивируем
-            tariff = getattr(subscription, 'tariff', None)
-            is_active_daily = (
-                tariff is not None
-                and getattr(tariff, 'is_daily', False)
-                and not getattr(subscription, 'is_daily_paused', False)
-            )
-            if is_active_daily:
-                logger.info(
-                    'Webhook: пропуск disabled для суточной подписки',
-                    subscription_id=subscription.id,
-                    user_id=user.id,
-                )
-                self._stamp_webhook_update(subscription)
-                await db.commit()
-                return
+        if not subscription:
+            # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
+            logger.info('Webhook user.disabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
 
+        # Суточные подписки управляются DailySubscriptionService — не деактивируем
+        tariff = getattr(subscription, 'tariff', None)
+        is_active_daily = (
+            tariff is not None
+            and getattr(tariff, 'is_daily', False)
+            and not getattr(subscription, 'is_daily_paused', False)
+        )
+        if is_active_daily:
+            logger.info(
+                'Webhook: пропуск disabled для суточной подписки',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
             self._stamp_webhook_update(subscription)
-            if subscription.status != SubscriptionStatus.DISABLED.value:
-                await deactivate_subscription(db, subscription)
-                logger.info('Webhook: subscription disabled for user', subscription_id=subscription.id, user_id=user.id)
-            else:
-                await db.commit()
+            await db.commit()
+            return
+
+        self._stamp_webhook_update(subscription)
+        if subscription.status != SubscriptionStatus.DISABLED.value:
+            await deactivate_subscription(db, subscription)
+            logger.info('Webhook: subscription disabled for user', subscription_id=subscription.id, user_id=user.id)
+        else:
+            await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_DISABLED', reply_markup=self._get_subscription_keyboard(user))
 
     async def _handle_user_enabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription:
-            self._stamp_webhook_update(subscription)
-            if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
-                await reactivate_subscription(db, subscription)
-                logger.info(
-                    'Webhook: subscription re-enabled for user', subscription_id=subscription.id, user_id=user.id
-                )
-            else:
-                await db.commit()
+        if not subscription:
+            logger.info('Webhook user.enabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        self._stamp_webhook_update(subscription)
+        if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
+            await reactivate_subscription(db, subscription)
+            logger.info('Webhook: subscription re-enabled for user', subscription_id=subscription.id, user_id=user.id)
+        else:
+            await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_ENABLED', reply_markup=self._get_connect_keyboard(user))
 
     async def _handle_user_limited(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription:
-            self._stamp_webhook_update(subscription)
-            if subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value):
-                subscription.status = SubscriptionStatus.LIMITED.value
-                subscription.updated_at = datetime.now(UTC)
-                await db.commit()
-                await db.refresh(subscription)
-                logger.info(
-                    'Webhook: subscription limited (traffic) for user', subscription_id=subscription.id, user_id=user.id
-                )
-            else:
-                await db.commit()
+        if not subscription:
+            logger.info('Webhook user.limited: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        self._stamp_webhook_update(subscription)
+        if subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value):
+            subscription.status = SubscriptionStatus.LIMITED.value
+            subscription.updated_at = datetime.now(UTC)
+            await db.commit()
+            await db.refresh(subscription)
+            logger.info(
+                'Webhook: subscription limited (traffic) for user', subscription_id=subscription.id, user_id=user.id
+            )
+        else:
+            await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user))
 
     async def _handle_user_traffic_reset(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription:
-            self._stamp_webhook_update(subscription)
-            await update_subscription_usage(db, subscription, 0.0)
-            # Re-enable if was disabled/limited due to traffic limit
-            if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
-                await reactivate_subscription(db, subscription)
-            logger.info(
-                'Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id
-            )
+        if not subscription:
+            logger.info('Webhook user.traffic_reset: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        self._stamp_webhook_update(subscription)
+        await update_subscription_usage(db, subscription, 0.0)
+        # Re-enable if was disabled/limited due to traffic limit
+        if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
+            await reactivate_subscription(db, subscription)
+        logger.info('Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id)
 
         await self._notify_user(user, 'WEBHOOK_SUB_TRAFFIC_RESET', reply_markup=self._get_subscription_keyboard(user))
 
@@ -991,32 +1004,35 @@ class RemnaWaveWebhookService:
     async def _handle_user_revoked(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        if subscription:
-            new_url = data.get('subscriptionUrl')
-            new_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get('cryptoLink', '')
-            changed = False
+        if not subscription:
+            logger.info('Webhook user.revoked: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
 
-            if new_url and self._is_valid_url(new_url) and subscription.subscription_url != new_url:
-                subscription.subscription_url = new_url
-                changed = True
-            if new_crypto_link and self._is_valid_link(new_crypto_link):
-                if subscription.subscription_crypto_link != new_crypto_link:
-                    subscription.subscription_crypto_link = new_crypto_link
-                    changed = True
-            elif new_url and subscription.subscription_crypto_link:
-                subscription.subscription_crypto_link = None
-                changed = True
+        new_url = data.get('subscriptionUrl')
+        new_crypto_link = data.get('subscriptionCryptoLink') or (data.get('happ') or {}).get('cryptoLink', '')
+        changed = False
 
-            # Always stamp to protect from sync overwrite
-            self._stamp_webhook_update(subscription)
-            if changed:
-                subscription.updated_at = datetime.now(UTC)
-                logger.info(
-                    'Webhook: subscription credentials revoked/updated for user',
-                    subscription_id=subscription.id,
-                    user_id=user.id,
-                )
-            await db.commit()
+        if new_url and self._is_valid_url(new_url) and subscription.subscription_url != new_url:
+            subscription.subscription_url = new_url
+            changed = True
+        if new_crypto_link and self._is_valid_link(new_crypto_link):
+            if subscription.subscription_crypto_link != new_crypto_link:
+                subscription.subscription_crypto_link = new_crypto_link
+                changed = True
+        elif new_url and subscription.subscription_crypto_link:
+            subscription.subscription_crypto_link = None
+            changed = True
+
+        # Always stamp to protect from sync overwrite
+        self._stamp_webhook_update(subscription)
+        if changed:
+            subscription.updated_at = datetime.now(UTC)
+            logger.info(
+                'Webhook: subscription credentials revoked/updated for user',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+        await db.commit()
 
         await self._notify_user(user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user))
 
@@ -1028,27 +1044,41 @@ class RemnaWaveWebhookService:
     async def _handle_expires_in_72h(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        sub_id = getattr(subscription, 'id', None) if subscription else None
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_72H', reply_markup=self._get_renew_keyboard(user, sub_id))
+        if not subscription:
+            logger.info('Webhook expires_72h: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_EXPIRES_72H', reply_markup=self._get_renew_keyboard(user, subscription.id)
+        )
 
     async def _handle_expires_in_48h(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        sub_id = getattr(subscription, 'id', None) if subscription else None
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_48H', reply_markup=self._get_renew_keyboard(user, sub_id))
+        if not subscription:
+            logger.info('Webhook expires_48h: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_EXPIRES_48H', reply_markup=self._get_renew_keyboard(user, subscription.id)
+        )
 
     async def _handle_expires_in_24h(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        sub_id = getattr(subscription, 'id', None) if subscription else None
-        await self._notify_user(user, 'WEBHOOK_SUB_EXPIRES_24H', reply_markup=self._get_renew_keyboard(user, sub_id))
+        if not subscription:
+            logger.info('Webhook expires_24h: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_EXPIRES_24H', reply_markup=self._get_renew_keyboard(user, subscription.id)
+        )
 
     async def _handle_expired_24h_ago(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        sub_id = getattr(subscription, 'id', None) if subscription else None
+        if not subscription:
+            logger.info('Webhook expired_24h_ago: подписка не найдена в БД, пропуск', user_id=user.id)
+            return
         await self._notify_user(
-            user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user, sub_id)
+            user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user, subscription.id)
         )
 
     async def _handle_first_connected(
