@@ -23,6 +23,15 @@ from app.services.subscription_service import SubscriptionService
 logger = structlog.get_logger(__name__)
 
 
+class _SelectSubscriptionRequired(Exception):
+    """Raised when multi-tariff promo requires user to select a subscription."""
+
+    def __init__(self, eligible_subscriptions: list[dict], code: str):
+        self.eligible_subscriptions = eligible_subscriptions
+        self.code = code
+        super().__init__('select_subscription')
+
+
 class PromoCodeService:
     def __init__(self):
         self.remnawave_service = RemnaWaveService()
@@ -83,16 +92,28 @@ class PromoCodeService:
                 return {'success': False, 'error': 'already_used_by_user'}
 
             try:
-                result_description = await self._apply_promocode_effects(db, user, promocode)
+                result_description = await self._apply_promocode_effects(
+                    db, user, promocode, subscription_id=subscription_id
+                )
+            except _SelectSubscriptionRequired as e:
+                # Мульти-тариф: нужен выбор подписки — откатываем использование и коммитим
+                await db.delete(promo_use)
+                await db.commit()
+                return {
+                    'success': False,
+                    'error': 'select_subscription',
+                    'eligible_subscriptions': e.eligible_subscriptions,
+                    'code': e.code,
+                }
             except ValueError as e:
-                # Эффекты не применены — удаляем зарезервированную запись использования
-                async with db.begin_nested():
-                    await db.delete(promo_use)
-                    await db.flush()
+                # Эффекты не применены — удаляем зарезервированную запись использования и коммитим
+                await db.delete(promo_use)
+                await db.commit()
                 error_key = str(e)
                 if error_key in (
                     'active_discount_exists',
                     'no_subscription_for_days',
+                    'subscription_not_found',
                 ):
                     return {'success': False, 'error': error_key}
                 raise
@@ -191,7 +212,9 @@ class PromoCodeService:
             await db.rollback()
             return {'success': False, 'error': 'server_error'}
 
-    async def _apply_promocode_effects(self, db: AsyncSession, user: User, promocode: PromoCode) -> str:
+    async def _apply_promocode_effects(
+        self, db: AsyncSession, user: User, promocode: PromoCode, *, subscription_id: int | None = None
+    ) -> str:
         """
         Применяет эффекты промокода к пользователю.
 
@@ -279,27 +302,25 @@ class PromoCodeService:
             if subscription_id:
                 target_sub = next((s for s in eligible if s.id == subscription_id), None)
                 if not target_sub:
-                    return {'success': False, 'error': 'subscription_not_found'}
+                    raise ValueError('subscription_not_found')
             elif len(eligible) == 1:
                 target_sub = eligible[0]
             elif len(eligible) > 1 and settings.is_multi_tariff_enabled():
-                # Need user to choose — return list of eligible subscriptions
-                return {
-                    'success': False,
-                    'error': 'select_subscription',
-                    'eligible_subscriptions': [
+                # Need user to choose — raise with eligible subscriptions list
+                raise _SelectSubscriptionRequired(
+                    eligible_subscriptions=[
                         {'id': s.id, 'tariff_name': s.tariff.name if s.tariff else f'#{s.id}', 'days_left': s.days_left}
                         for s in eligible
                     ],
-                    'code': code,
-                }
+                    code=promocode.code,
+                )
             # Prefer non-daily subscription with most days remaining
             elif eligible:
                 target_sub = max(eligible, key=lambda s: s.days_left)
             else:
-                non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                pool = non_daily or active_subs
-                target_sub = max(pool, key=lambda s: s.days_left) if pool else None
+                # eligible = non_daily or active_subs, active_subs is guaranteed non-empty (guard above)
+                # This branch is unreachable, but defend against future changes
+                raise ValueError('no_subscription_for_days')
             # Конвертация триала в платную подписку при активации промокода на дни
             if target_sub.is_trial:
                 target_sub.is_trial = False

@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import PaymentMethod, User
 from app.services.pricing_engine import pricing_engine
@@ -39,26 +38,12 @@ router = APIRouter()
 async def get_renewal_options(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = None,
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Get available subscription renewal options with prices."""
-    if settings.is_multi_tariff_enabled():
-        if subscription_id:
-            from app.database.crud.subscription import get_subscription_by_id_for_user
+    from .helpers import resolve_subscription
 
-            subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-        else:
-            from app.database.crud.subscription import get_active_subscriptions_by_user_id
-
-            active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-            if active_subs:
-                _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
-                _pool = _non_daily or active_subs
-                subscription = max(_pool, key=lambda s: s.days_left)
-            else:
-                subscription = None
-    else:
-        subscription = await get_subscription_by_user_id(db, user.id)
+    subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
         return []
 
@@ -109,26 +94,15 @@ async def renew_subscription(
         )
 
     # Support subscription_id from both query param and body (backward compat)
+    from .helpers import resolve_subscription
+
     _sub_id = subscription_id or request.subscription_id
-    if settings.is_multi_tariff_enabled() and _sub_id:
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        subscription = await get_subscription_by_id_for_user(db, _sub_id, user.id)
-        if not subscription:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='Subscription not found',
-            )
-    else:
-        await db.refresh(user, ['subscriptions'])
-
-        if not user.subscription:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail='No subscription found',
-            )
-
-        subscription = user.subscription
+    subscription = await resolve_subscription(db, user, _sub_id)
+    if not subscription:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='No subscription found',
+        )
     if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
         available_periods = [int(p) for p in subscription.tariff.period_prices.keys()]
     else:

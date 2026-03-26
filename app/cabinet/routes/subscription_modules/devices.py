@@ -62,14 +62,16 @@ async def purchase_devices_legacy(
             detail='Subscription purchases are restricted for this account',
         )
 
-    # Lock subscription row to prevent concurrent device purchases exceeding the limit
-    _sub_filter = (
-        and_(Subscription.id == subscription_id, Subscription.user_id == user.id)
-        if subscription_id and settings.is_multi_tariff_enabled()
-        else Subscription.user_id == user.id
-    )
+    # Resolve subscription (ownership validated), then lock the row for concurrent safety
+    resolved = await resolve_subscription(db, user, subscription_id)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
     result = await db.execute(
-        select(Subscription).where(_sub_filter).with_for_update().execution_options(populate_existing=True)
+        select(Subscription)
+        .where(and_(Subscription.id == resolved.id, Subscription.user_id == user.id))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     subscription = result.scalar_one_or_none()
 
@@ -287,14 +289,16 @@ async def purchase_devices(
         )
 
     try:
-        # Lock subscription row to prevent concurrent device purchases exceeding the limit
-        _sub_filter = (
-            and_(Subscription.id == subscription_id, Subscription.user_id == user.id)
-            if subscription_id and settings.is_multi_tariff_enabled()
-            else Subscription.user_id == user.id
-        )
+        # Resolve subscription (ownership validated), then lock the row for concurrent safety
+        resolved = await resolve_subscription(db, user, subscription_id)
+        if not resolved:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='У вас нет активной подписки')
+
         result = await db.execute(
-            select(Subscription).where(_sub_filter).with_for_update().execution_options(populate_existing=True)
+            select(Subscription)
+            .where(and_(Subscription.id == resolved.id, Subscription.user_id == user.id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         subscription = result.scalar_one_or_none()
 
@@ -1012,14 +1016,16 @@ async def reduce_devices(
             detail='Invalid new_device_limit',
         )
 
-    # Lock subscription to prevent concurrent device modifications
-    _sub_filter = (
-        and_(Subscription.id == subscription_id, Subscription.user_id == user.id)
-        if subscription_id and settings.is_multi_tariff_enabled()
-        else Subscription.user_id == user.id
-    )
+    # Resolve subscription (ownership validated), then lock the row for concurrent safety
+    resolved = await resolve_subscription(db, user, subscription_id)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
     result = await db.execute(
-        select(Subscription).where(_sub_filter).with_for_update().execution_options(populate_existing=True)
+        select(Subscription)
+        .where(and_(Subscription.id == resolved.id, Subscription.user_id == user.id))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     subscription = result.scalar_one_or_none()
 

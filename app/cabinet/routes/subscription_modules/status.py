@@ -19,7 +19,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.subscription import get_subscription_by_id_for_user
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import ServerSquad, User
 from app.services.remnawave_service import RemnaWaveService
@@ -30,7 +29,7 @@ from ...schemas.subscription import (
     ServerInfo,
     SubscriptionStatusResponse,
 )
-from .helpers import _subscription_to_response
+from .helpers import _subscription_to_response, resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
@@ -54,13 +53,7 @@ async def get_subscription(
     if not fresh_user:
         return SubscriptionStatusResponse(has_subscription=False, subscription=None)
 
-    # Resolve subscription: specific ID (multi-tariff) or legacy fallback
-    if subscription_id and settings.is_multi_tariff_enabled():
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, fresh_user.id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
-    else:
-        subscription = fresh_user.subscription
+    subscription = await resolve_subscription(db, fresh_user, subscription_id)
 
     if not subscription:
         # Return 200 with has_subscription: false instead of 404
@@ -140,14 +133,7 @@ async def get_connection_link(
         get_happ_cryptolink_redirect_link,
     )
 
-    # Resolve subscription: specific ID (multi-tariff) or legacy fallback
-    if subscription_id and settings.is_multi_tariff_enabled():
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
-    else:
-        await db.refresh(user, ['subscriptions'])
-        subscription = user.subscription
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     if not subscription:
         raise HTTPException(
@@ -420,14 +406,7 @@ async def get_app_config(
     subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Get app configuration for connection with deep links."""
-    # Resolve subscription: specific ID (multi-tariff) or legacy fallback
-    if subscription_id and settings.is_multi_tariff_enabled():
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
-    else:
-        await db.refresh(user, ['subscriptions'])
-        subscription = user.subscription
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     subscription_url = None
     subscription_crypto_link = None

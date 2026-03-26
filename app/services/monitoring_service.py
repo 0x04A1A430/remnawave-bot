@@ -1409,15 +1409,27 @@ class MonitoringService:
 
             from aiogram.types import InlineKeyboardMarkup
 
+            extend_callback = (
+                f'se:{subscription.id}'
+                if settings.is_multi_tariff_enabled()
+                else 'subscription_extend'
+            )
+            sub_btn_text = (
+                '📱 Мои подписки'
+                if settings.is_multi_tariff_enabled()
+                else '📱 Моя подписка'
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         build_miniapp_or_callback_button(
-                            text='⏰ Продлить подписку', callback_data='subscription_extend'
+                            text='⏰ Продлить подписку',
+                            callback_data=extend_callback,
+                            cabinet_path='/subscription',
                         )
                     ],
                     [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
-                    [build_miniapp_or_callback_button(text='📱 Моя подписка', callback_data='menu_subscription')],
+                    [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
                 ]
             )
 

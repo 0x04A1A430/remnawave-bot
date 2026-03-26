@@ -9,8 +9,6 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
-from app.database.crud.subscription import get_subscription_by_id_for_user
 from app.database.models import User
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
@@ -30,14 +28,9 @@ async def update_autopay(
     subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Update autopay settings."""
-    # Resolve subscription: specific ID (multi-tariff) or legacy fallback
-    if subscription_id and settings.is_multi_tariff_enabled():
-        subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-        if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
-    else:
-        await db.refresh(user, ['subscriptions'])
-        subscription = user.subscription
+    from .helpers import resolve_subscription
+
+    subscription = await resolve_subscription(db, user, subscription_id)
 
     if not subscription:
         raise HTTPException(

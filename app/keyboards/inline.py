@@ -1860,11 +1860,17 @@ def get_subscription_expiring_keyboard(subscription_id: int, language: str = DEF
         else texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка')
     )
 
+    extend_callback = (
+        f'se:{subscription_id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
+    )
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 build_miniapp_or_callback_button(
-                    text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data='subscription_extend'
+                    text=texts.MENU_EXTEND_SUBSCRIPTION,
+                    callback_data=extend_callback,
+                    cabinet_path='/subscription',
                 )
             ],
             [

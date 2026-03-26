@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.config import settings
+
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database.models import Subscription, User
 
 from ...schemas.subscription import (

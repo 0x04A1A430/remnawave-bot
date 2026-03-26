@@ -3663,7 +3663,7 @@ async def update_subscription_autopay_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionAutopayResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    subscription = _ensure_paid_subscription(user, subscription_id=payload.subscription_id)
     _validate_subscription_id(payload.subscription_id, subscription)
 
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
@@ -5086,6 +5086,7 @@ async def get_subscription_renewal_options_endpoint(
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
+        subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
 
@@ -5176,6 +5177,7 @@ async def submit_subscription_renewal_endpoint(
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial', 'expired'},
+        subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
 
@@ -5574,6 +5576,7 @@ async def get_subscription_settings_endpoint(
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
+        subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
 
@@ -5594,6 +5597,7 @@ async def update_subscription_servers_endpoint(
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
+        subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
     old_servers = list(getattr(subscription, 'connected_squads', []) or [])
@@ -5827,6 +5831,7 @@ async def update_subscription_traffic_endpoint(
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
+        subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
     old_traffic = subscription.traffic_limit_gb
@@ -5981,6 +5986,7 @@ async def update_subscription_devices_endpoint(
     subscription = _ensure_paid_subscription(
         user,
         allowed_statuses={'active', 'trial'},
+        subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
 
@@ -7047,7 +7053,7 @@ async def purchase_traffic_topup_endpoint(
     from app.webapi.schemas.miniapp import MiniAppTrafficTopupResponse
 
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    subscription = _ensure_paid_subscription(user, subscription_id=payload.subscription_id)
     _validate_subscription_id(payload.subscription_id, subscription)
 
     # Проверяем режим тарифов

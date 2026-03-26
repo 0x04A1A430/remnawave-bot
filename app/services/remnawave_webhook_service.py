@@ -355,6 +355,7 @@ class RemnaWaveWebhookService:
                     sa_selectinload(Subscription.tariff),
                 )
                 .where(Subscription.remnawave_uuid == remnawave_uuid)
+                .limit(1)
             )
             found_sub = sub_result.scalar_one_or_none()
             if found_sub and found_sub.user:
@@ -379,9 +380,41 @@ class RemnaWaveWebhookService:
             subscription = result.scalar_one_or_none()
             if subscription:
                 return user, subscription
-            # Fallback to legacy lookup if no subscription found by UUID
+
+            # Fallback 1: search ALL user's subscriptions by remnawave_uuid
+            # (covers recently merged accounts where user_id might differ)
             logger.warning(
-                'Webhook: подписка не найдена по remnawave_uuid, fallback на user_id',
+                'Webhook: подписка не найдена по remnawave_uuid + user_id, '
+                'fallback на поиск по remnawave_uuid среди всех подписок пользователя',
+                remnawave_uuid=remnawave_uuid,
+                user_id=user.id,
+            )
+            fallback1_result = await db.execute(
+                select(Subscription)
+                .options(selectinload(Subscription.tariff))
+                .where(Subscription.remnawave_uuid == remnawave_uuid)
+                .limit(1)
+            )
+            fallback1_sub = fallback1_result.scalar_one_or_none()
+            if fallback1_sub:
+                if fallback1_sub.user_id == user.id:
+                    return user, fallback1_sub
+                # Subscription belongs to a different user (transferred or merged)
+                logger.warning(
+                    'Webhook: подписка найдена по remnawave_uuid, '
+                    'но принадлежит другому пользователю — игнорируем (IDOR prevention)',
+                    remnawave_uuid=remnawave_uuid,
+                    webhook_user_id=user.id,
+                    subscription_user_id=fallback1_sub.user_id,
+                    subscription_id=fallback1_sub.id,
+                )
+                # Do NOT return cross-user subscription — would mutate another user's data
+                return user, None
+
+            # Fallback 2: all lookups exhausted
+            logger.warning(
+                'Webhook: подписка не найдена ни по одному методу поиска, '
+                'возвращаем (user, None)',
                 remnawave_uuid=remnawave_uuid,
                 user_id=user.id,
             )

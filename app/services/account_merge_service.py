@@ -246,6 +246,65 @@ async def _delete_remnawave_user_with_fallback(remnawave_uuid: str) -> None:
             )
 
 
+async def _sync_transferred_subscriptions_to_panel(
+    primary: User,
+    transferred_subs: list[Subscription],
+) -> None:
+    """Updates RemnaWave panel description for subscriptions transferred to primary user.
+
+    After account merge transfers subscriptions from secondary to primary,
+    the panel still shows the old secondary user's telegramId/username in the
+    description. This function patches each subscription in RemnaWave so admin
+    views reflect the actual owner.
+
+    Failures are logged per-subscription but never propagate — panel desync is
+    non-fatal and can be fixed by a manual resync later.
+    """
+    subs_with_uuid = [s for s in transferred_subs if getattr(s, 'remnawave_uuid', None)]
+    if not subs_with_uuid:
+        return
+
+    new_description = settings.format_remnawave_user_description(
+        full_name=primary.full_name,
+        username=primary.username,
+        telegram_id=primary.telegram_id,
+        email=getattr(primary, 'email', None),
+        user_id=primary.id,
+    )
+
+    try:
+        async with _get_remnawave_api() as api:
+            for sub in subs_with_uuid:
+                try:
+                    await api.update_user(
+                        uuid=sub.remnawave_uuid,
+                        description=new_description,
+                        telegram_id=primary.telegram_id,
+                        email=getattr(primary, 'email', None),
+                    )
+                    logger.info(
+                        'Synced transferred subscription description to panel',
+                        subscription_id=sub.id,
+                        remnawave_uuid=sub.remnawave_uuid,
+                        primary_user_id=primary.id,
+                    )
+                except Exception:
+                    logger.warning(
+                        'Failed to sync transferred subscription to panel',
+                        subscription_id=sub.id,
+                        remnawave_uuid=sub.remnawave_uuid,
+                        primary_user_id=primary.id,
+                        exc_info=True,
+                    )
+    except Exception:
+        logger.warning(
+            'Failed to connect to RemnaWave API for post-merge sync',
+            primary_user_id=primary.id,
+            subscription_count=len(subs_with_uuid),
+            exc_info=True,
+        )
+
+
 async def _handle_subscription_merge(
     db: AsyncSession,
     primary: User,
@@ -291,6 +350,9 @@ async def _handle_subscription_merge(
                 primary_id=primary.id,
                 secondary_id=secondary.id,
             )
+            # Sync transferred subscriptions in RemnaWave panel so description
+            # reflects the primary user (telegramId, username, email).
+            await _sync_transferred_subscriptions_to_panel(primary, secondary_subs)
         # Clean up legacy remnawave_uuid on secondary
         if secondary.remnawave_uuid:
             secondary.remnawave_uuid = None

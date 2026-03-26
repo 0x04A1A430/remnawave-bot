@@ -133,6 +133,7 @@ class TransactionType(Enum):
     WITHDRAWAL = 'withdrawal'
     SUBSCRIPTION_PAYMENT = 'subscription_payment'
     REFUND = 'refund'
+    FAILED_REFUND = 'failed_refund'
     REFERRAL_REWARD = 'referral_reward'
     POLL_REWARD = 'poll_reward'
     GIFT_PAYMENT = 'gift_payment'

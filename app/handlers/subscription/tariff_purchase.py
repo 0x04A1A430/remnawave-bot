@@ -21,7 +21,8 @@ from app.database.crud.subscription import (
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
-from app.database.models import Tariff, TransactionType, User
+from app.database.database import AsyncSessionLocal
+from app.database.models import Tariff, Transaction, TransactionType, User
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
@@ -32,6 +33,47 @@ from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 
 logger = structlog.get_logger(__name__)
+
+
+async def _persist_failed_refund(
+    user_id: int,
+    amount_kopeks: int,
+    reason: str,
+    error: Exception,
+) -> None:
+    """Persist a failed refund record via a fresh DB session so it can be retried later.
+
+    Uses AsyncSessionLocal directly because the caller's session may be in a broken state
+    (e.g. after a rolled-back transaction or connection error).
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            record = Transaction(
+                user_id=user_id,
+                type=TransactionType.FAILED_REFUND.value,
+                amount_kopeks=amount_kopeks,
+                description=f'{reason} | error: {error}',
+                is_completed=False,
+                created_at=datetime.now(UTC),
+            )
+            session.add(record)
+            await session.commit()
+            logger.warning(
+                'Записан failed_refund для последующей обработки',
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+                transaction_id=record.id,
+            )
+    except Exception as persist_error:
+        # Last resort: if even persisting the record fails, log everything needed for manual recovery
+        logger.critical(
+            'НЕВОЗМОЖНО сохранить failed_refund — требуется ручное вмешательство',
+            user_id=user_id,
+            amount_kopeks=amount_kopeks,
+            reason=reason,
+            original_error=str(error),
+            persist_error=persist_error,
+        )
 
 
 async def _resolve_subscription(callback, db_user, db, state=None):
@@ -1416,6 +1458,12 @@ async def confirm_tariff_purchase(
                 await db.commit()
         except Exception as refund_error:
             logger.critical('CRITICAL: не удалось вернуть средства', user_id=db_user.id, refund_error=refund_error)
+            await _persist_failed_refund(
+                user_id=db_user.id,
+                amount_kopeks=final_price,
+                reason='Возврат: тариф уже активен',
+                error=refund_error,
+            )
         await callback.answer('У вас уже есть активная подписка на этот тариф', show_alert=True)
         return
     except Exception as e:
@@ -1445,6 +1493,12 @@ async def confirm_tariff_purchase(
                 user_id=db_user.id,
                 price_kopeks=final_price,
                 refund_error=refund_error,
+            )
+            await _persist_failed_refund(
+                user_id=db_user.id,
+                amount_kopeks=final_price,
+                reason='Возврат: ошибка покупки тарифа',
+                error=refund_error,
             )
         await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
         return

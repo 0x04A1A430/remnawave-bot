@@ -1021,22 +1021,36 @@ class MiniAppSubscriptionPurchaseService:
 
         subscription = context.subscription
         if subscription is not None and getattr(subscription, 'id', None):
-            try:
-                await db.refresh(subscription)
-            except Exception as refresh_error:  # pragma: no cover - defensive logging
+            # Lock subscription row to prevent concurrent extension race
+            result = await db.execute(
+                select(Subscription)
+                .where(Subscription.id == subscription.id, Subscription.user_id == user.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            locked_sub = result.scalar_one_or_none()
+            if locked_sub is not None:
+                subscription = locked_sub
+                context.subscription = locked_sub
+            else:
                 logger.warning(
-                    'Failed to refresh existing subscription',
-                    getattr=getattr(subscription, 'id', None),
-                    refresh_error=refresh_error,
+                    'Subscription from context not found after FOR UPDATE',
+                    subscription_id=getattr(subscription, 'id', None),
+                    user_id=user.id,
                 )
+                subscription = None
+                context.subscription = None
         else:
             context_subscription_id: int | None = context.payload.get('subscription_id')
             if settings.is_multi_tariff_enabled() and context_subscription_id is not None:
                 result = await db.execute(
-                    select(Subscription).where(
+                    select(Subscription)
+                    .where(
                         Subscription.user_id == user.id,
                         Subscription.id == context_subscription_id,
                     )
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             else:
                 result = await db.execute(
@@ -1044,6 +1058,8 @@ class MiniAppSubscriptionPurchaseService:
                     .where(Subscription.user_id == user.id)
                     .order_by(Subscription.created_at.desc())
                     .limit(1)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
                 )
             subscription = result.scalar_one_or_none()
             if subscription is not None:
