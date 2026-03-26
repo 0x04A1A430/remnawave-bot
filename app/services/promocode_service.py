@@ -375,31 +375,49 @@ class PromoCodeService:
             except Exception as e:
                 logger.error('Ошибка получения тарифа для триального промокода', error=e)
 
-            # Check if user already has a subscription that blocks trial
-            has_blocking_subscription = False
+            # Check if user already has a subscription with the same tariff
+            existing_same_tariff_sub = None
+            can_create_new = True
             if settings.is_multi_tariff_enabled():
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
                 if tariff_id_for_trial:
-                    # Block only if user already has this specific tariff
-                    has_blocking_subscription = any(s.tariff_id == tariff_id_for_trial for s in active_subs)
+                    existing_same_tariff_sub = next(
+                        (s for s in active_subs if s.tariff_id == tariff_id_for_trial), None
+                    )
                 else:
-                    # No trial tariff configured — block if any subscription exists
-                    has_blocking_subscription = len(active_subs) > 0
+                    # No tariff configured — block if any subscription exists
+                    can_create_new = len(active_subs) == 0
             else:
                 existing_sub = await get_subscription_by_user_id(db, user.id)
-                has_blocking_subscription = existing_sub is not None
+                if existing_sub:
+                    if tariff_id_for_trial and existing_sub.tariff_id == tariff_id_for_trial:
+                        existing_same_tariff_sub = existing_sub
+                    else:
+                        can_create_new = False
 
-            if not has_blocking_subscription:
-                trial_days = (
-                    promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS
+            trial_days = (
+                promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS
+            )
+            # Override with tariff trial_duration_days if available
+            tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None) if trial_tariff else None
+            if tariff_trial_days and promocode.subscription_days <= 0:
+                trial_days = tariff_trial_days
+
+            if existing_same_tariff_sub:
+                # User already has this tariff — extend it
+                await extend_subscription(db, existing_same_tariff_sub, trial_days)
+                await self.subscription_service.update_remnawave_user(db, existing_same_tariff_sub)
+
+                effects.append(f'⏰ Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней')
+                logger.info(
+                    '✅ Триал промокод: продлена существующая подписка',
+                    _format_user_log=self._format_user_log(user),
+                    trial_days=trial_days,
+                    subscription_id=existing_same_tariff_sub.id,
                 )
-                # Override with tariff trial_duration_days if available
-                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None) if trial_tariff else None
-                if tariff_trial_days and promocode.subscription_days <= 0:
-                    trial_days = tariff_trial_days
-
+            elif can_create_new:
                 if trial_device_limit is None and not settings.is_devices_selection_enabled():
                     trial_device_limit = settings.get_disabled_mode_device_limit()
 
