@@ -638,7 +638,11 @@ def get_main_menu_keyboard(
                     [
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                            callback_data='open_subscription_link',
+                            callback_data=(
+                                'subscription_connect'
+                                if settings.is_multi_tariff_enabled()
+                                else 'open_subscription_link'
+                            ),
                         )
                     ]
                 )
@@ -1066,6 +1070,13 @@ def get_subscription_keyboard(
     texts = get_texts(language)
     keyboard = []
 
+    # Sub ID suffix for multi-tariff callback routing
+    _sub_suffix = (
+        f':{subscription.id}'
+        if settings.is_multi_tariff_enabled() and subscription and hasattr(subscription, 'id')
+        else ''
+    )
+
     if has_subscription:
         subscription_link = get_display_subscription_link(subscription) if subscription else None
         if subscription_link:
@@ -1094,7 +1105,8 @@ def get_subscription_keyboard(
                     keyboard.append(
                         [
                             InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                                text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                                callback_data=f'subscription_connect{_sub_suffix}',
                             )
                         ]
                     )
@@ -1107,7 +1119,7 @@ def get_subscription_keyboard(
                     [
                         InlineKeyboardButton(
                             text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                            callback_data='open_subscription_link',
+                            callback_data=f'open_subscription_link{_sub_suffix}',
                         )
                     ]
                 )
@@ -1115,7 +1127,8 @@ def get_subscription_keyboard(
                 keyboard.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                            text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                            callback_data=f'subscription_connect{_sub_suffix}',
                         )
                     ]
                 )
@@ -1132,7 +1145,8 @@ def get_subscription_keyboard(
             keyboard.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'), callback_data='subscription_connect'
+                        text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
+                        callback_data=f'subscription_connect{_sub_suffix}',
                     )
                 ]
             )
@@ -2539,11 +2553,12 @@ def get_device_selection_keyboard(
             keyboard.append(row)
 
     if settings.CONNECT_BUTTON_MODE == 'guide':
+        _osl_cb = f'open_subscription_link:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'open_subscription_link'
         keyboard.append(
             [
                 InlineKeyboardButton(
                     text=texts.t('SHOW_SUBSCRIPTION_LINK', '📋 Показать ссылку подписки'),
-                    callback_data='open_subscription_link',
+                    callback_data=_osl_cb,
                 )
             ]
         )
@@ -2610,11 +2625,16 @@ def get_connection_guide_keyboard(
                         ]
                     )
                 elif settings.is_happ_cryptolink_mode():
+                    _osl_cb = (
+                        f'open_subscription_link:{sub_id}'
+                        if sub_id and settings.is_multi_tariff_enabled()
+                        else 'open_subscription_link'
+                    )
                     keyboard.append(
                         [
                             InlineKeyboardButton(
                                 text=texts.t('CONNECT_BUTTON', '🔗 Подключиться'),
-                                callback_data='open_subscription_link',
+                                callback_data=_osl_cb,
                                 style='success',
                             )
                         ]
@@ -2651,12 +2671,13 @@ def get_connection_guide_keyboard(
             ]
         )
 
+    _sc_cb = f'subscription_connect:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'subscription_connect'
     keyboard.extend(
         [
             [
                 InlineKeyboardButton(
                     text=texts.t('CHOOSE_ANOTHER_DEVICE', '📱 Выбрать другое устройство'),
-                    callback_data='subscription_connect',
+                    callback_data=_sc_cb,
                 )
             ],
             [InlineKeyboardButton(text=texts.t('BACK_TO_SUBSCRIPTION', '⬅️ К подписке'), callback_data=back_cb)],

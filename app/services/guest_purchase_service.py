@@ -1060,7 +1060,13 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 _active = await get_active_subscriptions_by_user_id(db, user.id)
-                existing_subscription = _active[0] if _active else None
+                if _active:
+                    # Prefer non-daily tariffs; among those pick the one with most days_left
+                    _non_daily = [s for s in _active if not getattr(s, 'is_daily_tariff', False)]
+                    _pool = _non_daily or _active
+                    existing_subscription = max(_pool, key=lambda s: s.days_left)
+                else:
+                    existing_subscription = None
             else:
                 existing_subscription = await get_subscription_by_user_id(db, user.id)
             if existing_subscription is not None:
