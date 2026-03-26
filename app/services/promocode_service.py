@@ -347,7 +347,7 @@ class PromoCodeService:
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription
 
-            # Determine trial tariff first — needed for duplicate check in multi-tariff
+            # Determine trial tariff — use promocode.tariff_id if set, else system default
             trial_tariff = None
             tariff_id_for_trial = None
             trial_traffic_limit = None
@@ -357,11 +357,14 @@ class PromoCodeService:
             try:
                 from app.database.crud.tariff import get_tariff_by_id as get_tariff, get_trial_tariff
 
-                trial_tariff = await get_trial_tariff(db)
-                if not trial_tariff:
-                    trial_tariff_id = settings.get_trial_tariff_id()
-                    if trial_tariff_id > 0:
-                        trial_tariff = await get_tariff(db, trial_tariff_id)
+                if promocode.tariff_id:
+                    trial_tariff = await get_tariff(db, promocode.tariff_id)
+                else:
+                    trial_tariff = await get_trial_tariff(db)
+                    if not trial_tariff:
+                        trial_tariff_id = settings.get_trial_tariff_id()
+                        if trial_tariff_id > 0:
+                            trial_tariff = await get_tariff(db, trial_tariff_id)
 
                 if trial_tariff:
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
@@ -370,7 +373,7 @@ class PromoCodeService:
                     if trial_tariff.allowed_squads:
                         trial_squads = trial_tariff.allowed_squads
             except Exception as e:
-                logger.error('Ошибка получения триального тарифа для промокода', error=e)
+                logger.error('Ошибка получения тарифа для триального промокода', error=e)
 
             # Check if user already has a subscription that blocks trial
             has_blocking_subscription = False

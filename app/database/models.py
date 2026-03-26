@@ -1687,6 +1687,8 @@ class PromoCode(Base):
     is_active = Column(Boolean, default=True)
     first_purchase_only = Column(Boolean, default=False)  # Только для первой покупки
 
+    tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True, index=True)
+
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     promo_group_id = Column(Integer, ForeignKey('promo_groups.id', ondelete='SET NULL'), nullable=True, index=True)
 
@@ -1695,6 +1697,7 @@ class PromoCode(Base):
 
     uses = relationship('PromoCodeUse', back_populates='promocode')
     promo_group = relationship('PromoGroup')
+    tariff = relationship('Tariff', foreign_keys=[tariff_id])
 
     @property
     def is_valid(self) -> bool:

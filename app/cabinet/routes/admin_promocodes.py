@@ -55,6 +55,8 @@ class PromoCodeResponse(BaseModel):
     valid_from: datetime
     valid_until: datetime | None = None
     promo_group_id: int | None = None
+    tariff_id: int | None = None
+    tariff_name: str | None = None
     created_by: int | None = None
     created_at: datetime
     updated_at: datetime
@@ -93,6 +95,7 @@ class PromoCodeCreateRequest(BaseModel):
     is_active: bool = True
     first_purchase_only: bool = False
     promo_group_id: int | None = None
+    tariff_id: int | None = None
 
 
 class PromoCodeUpdateRequest(BaseModel):
@@ -106,6 +109,7 @@ class PromoCodeUpdateRequest(BaseModel):
     is_active: bool | None = None
     first_purchase_only: bool | None = None
     promo_group_id: int | None = None
+    tariff_id: int | None = None
 
 
 # ============== PromoGroup Schemas ==============
@@ -186,6 +190,8 @@ def _serialize_promocode(promocode: PromoCode) -> PromoCodeResponse:
         valid_from=promocode.valid_from,
         valid_until=promocode.valid_until,
         promo_group_id=promocode.promo_group_id,
+        tariff_id=promocode.tariff_id,
+        tariff_name=promocode.tariff.name if promocode.tariff else None,
         created_by=promocode.created_by,
         created_at=promocode.created_at,
         updated_at=promocode.updated_at,
@@ -388,6 +394,8 @@ async def create_promocode_endpoint(
         update_fields['first_purchase_only'] = payload.first_purchase_only
     if payload.promo_group_id is not None:
         update_fields['promo_group_id'] = payload.promo_group_id
+    if payload.tariff_id is not None:
+        update_fields['tariff_id'] = payload.tariff_id
 
     if update_fields:
         promocode = await update_promocode(db, promocode, **update_fields)
@@ -445,6 +453,9 @@ async def update_promocode_endpoint(
 
     if payload.promo_group_id is not None:
         updates['promo_group_id'] = payload.promo_group_id
+
+    if payload.tariff_id is not None:
+        updates['tariff_id'] = payload.tariff_id if payload.tariff_id != 0 else None
 
     if not updates:
         return _serialize_promocode(promocode)
