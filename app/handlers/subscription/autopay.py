@@ -100,6 +100,19 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
         return
     enable = callback.data.startswith('autopay_enable')
 
+    if enable:
+        # Classic subscriptions cannot use autopay when tariff mode is enabled
+        if settings.is_tariffs_mode() and not subscription.tariff_id:
+            texts = get_texts(db_user.language)
+            await callback.answer(
+                texts.t(
+                    'AUTOPAY_NOT_AVAILABLE_CLASSIC',
+                    'Автоплатеж недоступен. Для продления необходимо выбрать тариф.',
+                ),
+                show_alert=True,
+            )
+            return
+
     # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
     # глобальный autopay для них запрещён
     if enable:

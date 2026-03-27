@@ -47,6 +47,10 @@ async def get_renewal_options(
     if not subscription:
         return []
 
+    # Classic subscriptions cannot be renewed when tariff mode is enabled
+    if settings.is_tariffs_mode() and not subscription.tariff_id:
+        return []
+
     _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}
     _actual_status = getattr(subscription, 'actual_status', subscription.status)
     if _actual_status in _non_renewable:
@@ -107,6 +111,13 @@ async def renew_subscription(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='No subscription found',
+        )
+
+    # Classic subscriptions cannot be renewed when tariff mode is enabled
+    if settings.is_tariffs_mode() and not subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Classic subscriptions cannot be renewed. Please purchase a tariff.',
         )
 
     _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}

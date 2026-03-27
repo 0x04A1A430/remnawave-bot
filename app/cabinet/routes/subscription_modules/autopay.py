@@ -39,6 +39,15 @@ async def update_autopay(
         )
 
     if request.enabled:
+        # Classic subscriptions cannot use autopay when tariff mode is enabled
+        from app.config import settings
+
+        if settings.is_tariffs_mode() and not subscription.tariff_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Autopay is not available for classic subscriptions. Please purchase a tariff.',
+            )
+
         # Триальные подписки — пробник, автопродление не имеет смысла
         if subscription.is_trial:
             raise HTTPException(

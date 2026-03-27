@@ -240,6 +240,15 @@ async def _prepare_auto_extend_context(
         )
         return None
 
+    # Block auto-renewal of classic subscriptions when tariff mode is enabled
+    if settings.is_tariffs_mode() and not subscription.tariff_id:
+        logger.info(
+            '🔁 Автопокупка: пропускаем классическую подписку без тарифа (режим тарифов включён)',
+            format_user_id=_format_user_id(user),
+            subscription_id=subscription.id,
+        )
+        return None
+
     period_days = _safe_int(cart_data.get('period_days'))
 
     if period_days <= 0:
