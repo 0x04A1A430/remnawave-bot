@@ -3382,7 +3382,8 @@ async def show_instant_switch_list(
         return
 
     if not subscription.tariff_id:
-        await callback.answer('У вашей подписки нет тарифа', show_alert=True)
+        # Legacy subscription without tariff — redirect to tariff_switch migration flow
+        await show_tariff_switch_list(callback, db_user, db, state)
         return
 
     # Получаем текущий тариф

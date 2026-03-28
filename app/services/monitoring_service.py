@@ -1082,6 +1082,25 @@ class MonitoringService:
                         sub_id=sub.id,
                         user_id=sub.user_id,
                     )
+                    # Notify user once that autopay won't work without a tariff
+                    autopay_legacy_key = f'autopay_legacy_notified:{sub.user_id}'
+                    try:
+                        if not await cache.exists(autopay_legacy_key):
+                            user = sub.user
+                            if user and user.telegram_id and self.bot:
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=(
+                                        '⚠️ <b>Автоплатёж приостановлен</b>\n\n'
+                                        'Ваша подписка была создана до введения тарифов. '
+                                        'Для работы автоплатежа необходимо выбрать тариф.\n\n'
+                                        'Перейдите в раздел «Моя подписка» → «Продлить», чтобы выбрать тариф.'
+                                    ),
+                                    parse_mode='HTML',
+                                )
+                            await cache.set(autopay_legacy_key, 1, expire=86400 * 7)
+                    except Exception as notify_err:
+                        logger.debug('Не удалось уведомить о пропуске autopay для legacy подписки', error=notify_err)
                     continue
 
                 days_before_expiry = (sub.end_date - current_time).days
