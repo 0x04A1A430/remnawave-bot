@@ -1044,7 +1044,7 @@ class Tariff(Base):
     # Видимость в разделе подарков
     show_in_gift = Column(Boolean, default=True, server_default='true', nullable=False)
 
-    # Режим сброса трафика: DAY, WEEK, MONTH, NO_RESET (по умолчанию берётся из конфига)
+    # Режим сброса трафика: DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET (по умолчанию берётся из конфига)
     traffic_reset_mode = Column(String(20), nullable=True, default=None)  # None = использовать глобальную настройку
 
     # Внешний сквад RemnaWave (UUID) — назначается пользователю при создании подписки

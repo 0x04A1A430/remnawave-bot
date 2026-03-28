@@ -112,6 +112,11 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
         if not isinstance(data, dict):
             data = {}
 
+        # Inject meta into data so handlers can access it via data.get('_meta')
+        meta = payload.get('meta')
+        if isinstance(meta, dict):
+            data['_meta'] = meta
+
         # RemnaWave sends event as full qualified name (e.g. "user.modified"),
         # so we use event directly instead of concatenating scope + event.
         event_name = event

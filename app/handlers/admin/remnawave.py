@@ -1088,8 +1088,7 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
     total_realtime_upload = sum(node.get('uploadBytes', 0) for node in realtime_usage)
     total_realtime = total_realtime_download + total_realtime_upload
 
-    total_download_speed = sum(node.get('downloadSpeedBps', 0) for node in realtime_usage)
-    total_upload_speed = sum(node.get('uploadSpeedBps', 0) for node in realtime_usage)
+    total_users_online = sum(node.get('usersOnline', 0) for node in realtime_usage)
 
     periods = {
         'last_2_days': bandwidth_stats.get('bandwidthLastTwoDays', {}),
@@ -1109,15 +1108,11 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
     text = f"""
 📊 <b>Статистика трафика Remnawave</b>
 
-⚡ <b>Реалтайм данные:</b>
+⚡ <b>Трафик по inbounds:</b>
 - Скачивание: {format_bytes(total_realtime_download)}
 - Загрузка: {format_bytes(total_realtime_upload)}
 - Общий трафик: {format_bytes(total_realtime)}
-
-🚀 <b>Текущие скорости:</b>
-- Скорость скачивания: {format_bytes(total_download_speed)}/с
-- Скорость загрузки: {format_bytes(total_upload_speed)}/с
-- Общая скорость: {format_bytes(total_download_speed + total_upload_speed)}/с
+- Пользователи онлайн: {total_users_online}
 
 📈 <b>Статистика по периодам:</b>
 
@@ -1371,12 +1366,11 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
 
         if node_realtime:
             text += f"""
-<b>Реалтайм статистика:</b>
+<b>Трафик по inbounds:</b>
 - Скачано: {format_bytes(node_realtime.get('downloadBytes', 0))}
 - Загружено: {format_bytes(node_realtime.get('uploadBytes', 0))}
 - Общий трафик: {format_bytes(node_realtime.get('totalBytes', 0))}
-- Скорость скачивания: {format_bytes(node_realtime.get('downloadSpeedBps', 0))}/с
-- Скорость загрузки: {format_bytes(node_realtime.get('uploadSpeedBps', 0))}/с
+- Онлайн: {node_realtime.get('usersOnline', 0)}
 """
 
         if node_usage:

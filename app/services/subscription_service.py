@@ -32,7 +32,13 @@ def get_traffic_reset_strategy(tariff=None):
     """
     from app.config import settings
 
-    strategy_mapping = {'NO_RESET': 'NO_RESET', 'DAY': 'DAY', 'WEEK': 'WEEK', 'MONTH': 'MONTH'}
+    strategy_mapping = {
+        'NO_RESET': 'NO_RESET',
+        'DAY': 'DAY',
+        'WEEK': 'WEEK',
+        'MONTH': 'MONTH',
+        'MONTH_ROLLING': 'MONTH_ROLLING',
+    }
 
     # Проверяем настройку тарифа
     if tariff is not None:

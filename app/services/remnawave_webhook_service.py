@@ -114,6 +114,10 @@ _ADMIN_ERROR_EVENTS: dict[str, str] = {
     'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
 }
 
+_ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
+    'torrent_blocker.report': '🚫 Торрент-блокировщик: обнаружен торрент',
+}
+
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
 
 
@@ -158,6 +162,7 @@ class RemnaWaveWebhookService:
             **_ADMIN_SERVICE_EVENTS,
             **_ADMIN_CRM_EVENTS,
             **_ADMIN_ERROR_EVENTS,
+            **_ADMIN_TORRENT_BLOCKER_EVENTS,
         }
 
     def is_admin_event(self, event_name: str) -> bool:
@@ -224,6 +229,21 @@ class RemnaWaveWebhookService:
 
     async def _process_admin_event(self, event_name: str, data: dict) -> bool:
         """Format and send admin notification for infrastructure events."""
+        # Invalidate subscription page config cache on subpage config changes
+        if event_name == 'service.subpage_config_changed':
+            try:
+                from app.handlers.subscription.common import invalidate_app_config_cache
+
+                invalidate_app_config_cache()
+                logger.info(
+                    'Webhook: subpage config changed — app config cache invalidated',
+                    action=data.get('subpageConfig', {}).get('action')
+                    if isinstance(data.get('subpageConfig'), dict)
+                    else None,
+                )
+            except Exception:
+                logger.warning('Failed to invalidate app config cache on subpage_config_changed')
+
         if event_name in _ADMIN_NODE_CONNECTION_EVENTS and not settings.REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS:
             logger.debug('RemnaWave node connection notifications disabled, skipping event', event_name=event_name)
             return True
@@ -255,20 +275,43 @@ class RemnaWaveWebhookService:
             lines.append(f'Версия: <code>{version}</code>')
 
         # CRM billing fields
+        provider_name = html.escape(data.get('providerName') or '')
+        if provider_name:
+            lines.append(f'Провайдер: <code>{provider_name}</code>')
+
         amount = html.escape(str(data.get('amount') or data.get('price') or ''))
         if amount:
             lines.append(f'Сумма: <code>{amount}</code>')
 
-        due_date = html.escape(data.get('dueDate') or data.get('paymentDate') or '')
+        due_date = html.escape(data.get('dueDate') or data.get('paymentDate') or data.get('nextBillingAt') or '')
         if due_date:
             lines.append(f'Дата: <code>{due_date}</code>')
 
-        # Login attempt fields
-        ip_addr = html.escape(data.get('ipAddress') or data.get('ip') or '')
-        if ip_addr and not address:
-            lines.append(f'IP: <code>{ip_addr}</code>')
+        login_url = data.get('loginUrl') or ''
+        if login_url and self._is_valid_url(login_url):
+            lines.append(f'Панель: {html.escape(login_url)}')
 
-        message = html.escape(data.get('message') or '')
+        # Login attempt fields
+        login_data = data.get('loginAttempt')
+        if isinstance(login_data, dict):
+            login_user = html.escape(login_data.get('username') or '')
+            if login_user:
+                lines.append(f'Пользователь: <code>{login_user}</code>')
+            login_ip = html.escape(login_data.get('ip') or '')
+            if login_ip:
+                lines.append(f'IP: <code>{login_ip}</code>')
+            login_ua = html.escape(login_data.get('userAgent') or '')
+            if login_ua:
+                lines.append(f'User-Agent: <code>{login_ua[:100]}</code>')
+            login_desc = html.escape(login_data.get('description') or '')
+            if login_desc:
+                lines.append(f'Описание: {login_desc}')
+        else:
+            ip_addr = html.escape(data.get('ipAddress') or data.get('ip') or '')
+            if ip_addr and not address:
+                lines.append(f'IP: <code>{ip_addr}</code>')
+
+        message = html.escape(data.get('message') or data.get('description') or '')
         if message:
             lines.append(f'Сообщение: {message}')
 
@@ -281,6 +324,25 @@ class RemnaWaveWebhookService:
             sub_uuid = subpage.get('uuid', '')
             if sub_uuid:
                 lines.append(f'UUID: <code>{html.escape(str(sub_uuid))}</code>')
+
+        # Torrent blocker fields
+        if event_name == 'torrent_blocker.report':
+            node_data = data.get('node')
+            user_data = data.get('user')
+            if isinstance(node_data, dict):
+                node_name = html.escape(node_data.get('name') or '')
+                if node_name:
+                    lines.append(f'Нода: <code>{node_name}</code>')
+                node_addr = html.escape(node_data.get('address') or '')
+                if node_addr:
+                    lines.append(f'Адрес: <code>{node_addr}</code>')
+            if isinstance(user_data, dict):
+                username = html.escape(user_data.get('username') or '')
+                if username:
+                    lines.append(f'Пользователь: <code>{username}</code>')
+                user_status = html.escape(user_data.get('status') or '')
+                if user_status:
+                    lines.append(f'Статус: <code>{user_status}</code>')
 
         try:
             await self._admin_service.send_webhook_notification('\n'.join(lines))
@@ -1111,8 +1173,22 @@ class RemnaWaveWebhookService:
     async def _handle_user_not_connected(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        logger.info('Webhook: user has not connected to VPN', user_id=user.id)
-        await self._notify_user(user, 'WEBHOOK_USER_NOT_CONNECTED', reply_markup=self._get_connect_keyboard(user))
+        meta = data.get('_meta') or {}
+        hours = meta.get('notConnectedAfterHours')
+        logger.info(
+            'Webhook: user has not connected to VPN',
+            user_id=user.id,
+            not_connected_after_hours=hours,
+        )
+        format_kwargs: dict[str, Any] = {}
+        if hours is not None:
+            format_kwargs['hours'] = str(hours)
+        await self._notify_user(
+            user,
+            'WEBHOOK_USER_NOT_CONNECTED',
+            reply_markup=self._get_connect_keyboard(user),
+            format_kwargs=format_kwargs if format_kwargs else None,
+        )
 
     # ------------------------------------------------------------------
     # Device event handlers (user_hwid_devices scope)

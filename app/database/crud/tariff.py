@@ -191,7 +191,7 @@ async def create_tariff(
     # Видимость в разделе подарков
     show_in_gift: bool = True,
     # Режим сброса трафика
-    traffic_reset_mode: str | None = None,  # DAY, WEEK, MONTH, NO_RESET, None = глобальная настройка
+    traffic_reset_mode: str | None = None,  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
     # Внешний сквад RemnaWave
     external_squad_uuid: str | None = None,
 ) -> Tariff:

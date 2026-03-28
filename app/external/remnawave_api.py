@@ -27,6 +27,7 @@ class TrafficLimitStrategy(Enum):
     DAY = 'DAY'
     WEEK = 'WEEK'
     MONTH = 'MONTH'
+    MONTH_ROLLING = 'MONTH_ROLLING'
 
 
 @dataclass
@@ -736,7 +737,7 @@ class RemnaWaveAPI:
 
     async def remove_users_from_internal_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из Internal Squad (bulk action)"""
-        response = await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
+        response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
         return response['response']['eventSent']
 
     async def reorder_internal_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveInternalSquad]:
@@ -816,7 +817,7 @@ class RemnaWaveAPI:
 
     async def remove_users_from_external_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из External Squad (bulk action)"""
-        response = await self._make_request('POST', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
+        response = await self._make_request('DELETE', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
         return response['response']['eventSent']
 
     async def reorder_external_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveExternalSquad]:
@@ -868,8 +869,9 @@ class RemnaWaveAPI:
         response = await self._make_request('POST', f'/api/nodes/{uuid}/actions/restart')
         return response['response']['eventSent']
 
-    async def restart_all_nodes(self) -> bool:
-        response = await self._make_request('POST', '/api/nodes/actions/restart-all')
+    async def restart_all_nodes(self, force_restart: bool = False) -> bool:
+        data = {'forceRestart': force_restart}
+        response = await self._make_request('POST', '/api/nodes/actions/restart-all', data)
         return response['response']['eventSent']
 
     async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
@@ -945,8 +947,45 @@ class RemnaWaveAPI:
         response = await self._make_request('GET', '/api/system/stats/nodes')
         return response['response']
 
+    async def get_nodes_metrics(self) -> dict[str, Any]:
+        response = await self._make_request('GET', '/api/system/nodes/metrics')
+        return response.get('response', {})
+
     async def get_nodes_realtime_usage(self) -> list[dict[str, Any]]:
-        return await self.get_bandwidth_stats_nodes_realtime()
+        """Get per-node metrics, transformed to legacy realtime format.
+
+        Uses /api/system/nodes/metrics (replacement for removed /api/bandwidth-stats/nodes/realtime).
+        Returns list of dicts with: nodeUuid, nodeName, downloadBytes, uploadBytes, totalBytes, usersOnline.
+        """
+        try:
+            metrics = await self.get_nodes_metrics()
+            nodes = metrics.get('nodes', [])
+            result = []
+            for node in nodes:
+                # Sum inbound stats (upload/download are strings like "10.5 GB")
+                download_bytes = 0
+                upload_bytes = 0
+                for ib in node.get('inboundsStats', []):
+                    download_bytes += parse_bytes(ib.get('download', '0'))
+                    upload_bytes += parse_bytes(ib.get('upload', '0'))
+
+                result.append(
+                    {
+                        'nodeUuid': node.get('nodeUuid', ''),
+                        'nodeName': node.get('nodeName', ''),
+                        'downloadBytes': download_bytes,
+                        'uploadBytes': upload_bytes,
+                        'totalBytes': download_bytes + upload_bytes,
+                        'usersOnline': node.get('usersOnline', 0),
+                        # Speed not available in new API
+                        'downloadSpeedBps': 0,
+                        'uploadSpeedBps': 0,
+                    }
+                )
+            return result
+        except Exception as e:
+            logger.warning('Failed to get nodes metrics for realtime usage', error=e)
+            return []
 
     async def get_user_stats_usage(self, user_uuid: str, start_date: str, end_date: str) -> dict[str, Any]:
         return await self.get_bandwidth_stats_user_legacy(user_uuid, start_date, end_date)
@@ -956,10 +995,6 @@ class RemnaWaveAPI:
     async def get_bandwidth_stats_nodes(self, start_date: str, end_date: str) -> dict[str, Any]:
         params = {'start': start_date, 'end': end_date}
         response = await self._make_request('GET', '/api/bandwidth-stats/nodes', params=params)
-        return response['response']
-
-    async def get_bandwidth_stats_nodes_realtime(self) -> list[dict[str, Any]]:
-        response = await self._make_request('GET', '/api/bandwidth-stats/nodes/realtime')
         return response['response']
 
     async def get_bandwidth_stats_node_users(
@@ -1317,9 +1352,10 @@ def format_bytes(bytes_value: int) -> str:
 def parse_bytes(size_str: str) -> int:
     size_str = size_str.upper().strip()
 
-    units = {'B': 1, 'KB': 1024, 'MB': 1024**2, 'GB': 1024**3, 'TB': 1024**4}
+    # Check longest suffixes first to avoid 'B' matching 'GB'
+    units = [('TB', 1024**4), ('GB', 1024**3), ('MB', 1024**2), ('KB', 1024), ('B', 1)]
 
-    for unit, multiplier in units.items():
+    for unit, multiplier in units:
         if size_str.endswith(unit):
             try:
                 value = float(size_str[: -len(unit)].strip())

@@ -847,10 +847,10 @@ class RemnaWaveService:
             logger.error('Ошибка управления нодой', node_uuid=node_uuid, error=e)
             return False
 
-    async def restart_all_nodes(self) -> bool:
+    async def restart_all_nodes(self, force_restart: bool = False) -> bool:
         try:
             async with self.get_api_client() as api:
-                result = await api.restart_all_nodes()
+                result = await api.restart_all_nodes(force_restart=force_restart)
 
                 if result:
                     logger.info('✅ Команда перезагрузки всех нод отправлена')

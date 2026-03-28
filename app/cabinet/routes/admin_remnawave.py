@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.server_squad import (
@@ -397,15 +398,21 @@ async def perform_node_action(
     )
 
 
+class RestartAllNodesPayload(BaseModel):
+    force_restart: bool = False
+
+
 @router.post('/nodes/restart-all', response_model=NodeActionResponse)
 async def restart_all_nodes(
+    payload: RestartAllNodesPayload | None = None,
     admin: User = Depends(require_permission('remnawave:manage')),
 ) -> NodeActionResponse:
     """Restart all nodes."""
     service = _get_service()
     _ensure_configured(service)
 
-    success = await service.restart_all_nodes()
+    force = payload.force_restart if payload else False
+    success = await service.restart_all_nodes(force_restart=force)
 
     if success:
         logger.info('Admin restarted all nodes', telegram_id=admin.telegram_id)

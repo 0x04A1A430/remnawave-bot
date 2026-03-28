@@ -264,12 +264,14 @@ async def manage_node(
 
 @router.post('/nodes/restart', response_model=RemnaWaveNodeActionResponse)
 async def restart_all_nodes(
+    body: dict[str, Any] | None = None,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNodeActionResponse:
     service = _get_service()
     _ensure_service_configured(service)
 
-    success = await service.restart_all_nodes()
+    force = (body or {}).get('force_restart', False)
+    success = await service.restart_all_nodes(force_restart=force)
     detail = 'Команда перезапуска отправлена' if success else 'Не удалось перезапустить ноды'
     return RemnaWaveNodeActionResponse(success=success, detail=detail)
 
