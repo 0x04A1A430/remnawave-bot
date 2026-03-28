@@ -966,23 +966,27 @@ class RemnaWaveAPI:
                     ib_ul = parse_bytes(ib.get('upload', '0'))
                     download_bytes += ib_dl
                     upload_bytes += ib_ul
-                    inbounds.append({
-                        'tag': ib.get('tag', 'unknown'),
-                        'downloadBytes': ib_dl,
-                        'uploadBytes': ib_ul,
-                        'totalBytes': ib_dl + ib_ul,
-                    })
+                    inbounds.append(
+                        {
+                            'tag': ib.get('tag', 'unknown'),
+                            'downloadBytes': ib_dl,
+                            'uploadBytes': ib_ul,
+                            'totalBytes': ib_dl + ib_ul,
+                        }
+                    )
 
                 outbounds = []
                 for ob in node.get('outboundsStats', []):
                     ob_dl = parse_bytes(ob.get('download', '0'))
                     ob_ul = parse_bytes(ob.get('upload', '0'))
-                    outbounds.append({
-                        'tag': ob.get('tag', 'unknown'),
-                        'downloadBytes': ob_dl,
-                        'uploadBytes': ob_ul,
-                        'totalBytes': ob_dl + ob_ul,
-                    })
+                    outbounds.append(
+                        {
+                            'tag': ob.get('tag', 'unknown'),
+                            'downloadBytes': ob_dl,
+                            'uploadBytes': ob_ul,
+                            'totalBytes': ob_dl + ob_ul,
+                        }
+                    )
 
                 result.append(
                     {
