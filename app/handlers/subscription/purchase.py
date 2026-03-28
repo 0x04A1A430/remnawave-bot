@@ -1817,6 +1817,14 @@ async def confirm_extend_subscription(
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
 
+    # Block classic subscription renewal when tariff mode is active
+    if settings.is_tariffs_mode():
+        await callback.answer(
+            texts.t('TARIFF_MODE_RENEWAL_BLOCKED', '❌ Продление в этом режиме недоступно. Выберите тариф.'),
+            show_alert=True,
+        )
+        return
+
     # Валидация что период доступен для продления
     available_renewal_periods = settings.get_available_renewal_periods()
     if days not in available_renewal_periods:

@@ -1075,6 +1075,15 @@ class MonitoringService:
                     )
                     continue
 
+                # Skip classic subscriptions (tariff_id=NULL) when tariff mode is active
+                if settings.is_tariffs_mode() and not sub.tariff_id:
+                    logger.debug(
+                        'Пропускаем классическую подписку без тарифа в autopay (tariff mode)',
+                        sub_id=sub.id,
+                        user_id=sub.user_id,
+                    )
+                    continue
+
                 days_before_expiry = (sub.end_date - current_time).days
                 if days_before_expiry <= min(sub.autopay_days_before or 3, 3):
                     autopay_subscriptions.append(sub)

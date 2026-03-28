@@ -5106,6 +5106,14 @@ async def get_subscription_renewal_options_endpoint(
     )
     _validate_subscription_id(payload.subscription_id, subscription)
 
+    # Block classic subscription renewal when tariff mode is active
+    if settings.is_tariffs_mode() and not subscription.tariff_id:
+        return MiniAppSubscriptionRenewalOptionsResponse(
+            periods=[],
+            balance_kopeks=getattr(user, 'balance_kopeks', 0),
+            balance_currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
+        )
+
     periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
         db,
         user,
@@ -5196,6 +5204,16 @@ async def submit_subscription_renewal_endpoint(
         subscription_id=payload.subscription_id,
     )
     _validate_subscription_id(payload.subscription_id, subscription)
+
+    # Block classic subscription renewal when tariff mode is active
+    if settings.is_tariffs_mode() and not subscription.tariff_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'classic_subscription_blocked',
+                'message': 'Classic subscriptions cannot be renewed. Please purchase a tariff.',
+            },
+        )
 
     period_days: int | None = None
     if payload.period_days is not None:
