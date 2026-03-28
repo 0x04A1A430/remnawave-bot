@@ -2767,6 +2767,12 @@ async def sync_user_from_panel(
                 if selected_sub and selected_sub.remnawave_uuid:
                     # Specific subscription requested — use its UUID directly
                     panel_user = await api.get_user_by_uuid(selected_sub.remnawave_uuid)
+                elif selected_sub and not selected_sub.remnawave_uuid:
+                    # Specific subscription requested but not yet linked to panel — cannot sync
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail='This subscription is not linked to the panel yet. Sync to panel first.',
+                    )
                 else:
                     # No specific subscription — iterate all subscription UUIDs
                     sub_uuids = [s.remnawave_uuid for s in from_subs if s.remnawave_uuid]
