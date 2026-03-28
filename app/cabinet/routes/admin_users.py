@@ -2528,6 +2528,7 @@ async def get_user_transactions(
 @router.get('/{user_id}/sync/status', response_model=PanelSyncStatusResponse)
 async def get_user_sync_status(
     user_id: int,
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff sync'),
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -2535,6 +2536,7 @@ async def get_user_sync_status(
     Get sync status between bot and panel for a user.
 
     Shows differences between bot data and panel data.
+    When subscription_id is provided, checks that specific subscription instead of first-active.
     """
     user = await get_user_by_id(db, user_id)
     if not user:
@@ -2552,7 +2554,15 @@ async def get_user_sync_status(
     bot_squads: list[str] = []
 
     subs = getattr(user, 'subscriptions', None) or []
-    active_sub = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    if subscription_id:
+        active_sub = next((s for s in subs if s.id == subscription_id), None)
+        if not active_sub:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Subscription not found',
+            )
+    else:
+        active_sub = next((s for s in subs if s.is_active), subs[0] if subs else None)
     if active_sub:
         bot_sub_status = active_sub.status
         bot_sub_end_date = active_sub.end_date
@@ -2579,9 +2589,16 @@ async def get_user_sync_status(
             async with service.get_api_client() as api:
                 panel_user = None
 
+                # In multi-tariff mode, UUID lives on subscription, not user
+                sync_uuid = (
+                    active_sub.remnawave_uuid
+                    if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid
+                    else user.remnawave_uuid
+                )
+
                 # Try by UUID first (works for all users including OAuth)
-                if user.remnawave_uuid:
-                    panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                if sync_uuid:
+                    panel_user = await api.get_user_by_uuid(sync_uuid)
 
                 # Fallback: search by telegram_id
                 if not panel_user and user.telegram_id:
@@ -2660,11 +2677,23 @@ async def get_user_sync_status(
         logger.warning('Failed to get panel data for user', user_id=user_id, error=e)
         differences.append(f'Error fetching panel data: {e!s}')
 
+    # Resolve tariff name for context
+    sub_tariff_name: str | None = None
+    if active_sub:
+        try:
+            await db.refresh(active_sub, ['tariff'])
+            if active_sub.tariff:
+                sub_tariff_name = active_sub.tariff.name
+        except Exception:
+            pass
+
     return PanelSyncStatusResponse(
         user_id=user.id,
         telegram_id=user.telegram_id,
         remnawave_uuid=user.remnawave_uuid,
         last_sync=user.last_remnawave_sync,
+        subscription_id=active_sub.id if active_sub else None,
+        subscription_tariff_name=sub_tariff_name,
         bot_subscription_status=bot_sub_status,
         bot_subscription_end_date=bot_sub_end_date,
         bot_traffic_limit_gb=bot_traffic_limit,
@@ -2686,6 +2715,7 @@ async def get_user_sync_status(
 @router.post('/{user_id}/sync/from-panel', response_model=SyncFromPanelResponse)
 async def sync_user_from_panel(
     user_id: int,
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff sync'),
     request: SyncFromPanelRequest = SyncFromPanelRequest(),
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -2694,6 +2724,7 @@ async def sync_user_from_panel(
     Sync user data FROM panel TO bot.
 
     Fetches user data from Remnawave panel and updates local database.
+    When subscription_id is provided, syncs that specific subscription instead of first-active.
     """
     user = await get_user_by_id(db, user_id)
     if not user:
@@ -2716,17 +2747,33 @@ async def sync_user_from_panel(
         errors = []
         panel_info = None
 
+        # Select the target subscription for sync
+        from_subs = getattr(user, 'subscriptions', None) or []
+        if subscription_id:
+            selected_sub = next((s for s in from_subs if s.id == subscription_id), None)
+            if not selected_sub:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail='Subscription not found',
+                )
+        else:
+            selected_sub = None
+
         async with service.get_api_client() as api:
             # Find user in panel: UUID → telegram_id → email
             panel_user = None
 
             if settings.is_multi_tariff_enabled():
-                # In multi-tariff mode, user.remnawave_uuid is None; UUIDs live on subscriptions
-                sub_uuids = [s.remnawave_uuid for s in (getattr(user, 'subscriptions', None) or []) if s.remnawave_uuid]
-                for _uuid in sub_uuids:
-                    panel_user = await api.get_user_by_uuid(_uuid)
-                    if panel_user:
-                        break
+                if selected_sub and selected_sub.remnawave_uuid:
+                    # Specific subscription requested — use its UUID directly
+                    panel_user = await api.get_user_by_uuid(selected_sub.remnawave_uuid)
+                else:
+                    # No specific subscription — iterate all subscription UUIDs
+                    sub_uuids = [s.remnawave_uuid for s in from_subs if s.remnawave_uuid]
+                    for _uuid in sub_uuids:
+                        panel_user = await api.get_user_by_uuid(_uuid)
+                        if panel_user:
+                            break
             elif user.remnawave_uuid:
                 panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
 
@@ -2776,8 +2823,8 @@ async def sync_user_from_panel(
                 user.remnawave_uuid = panel_user.uuid
 
             # Update subscription if requested
-            sync_subs = getattr(user, 'subscriptions', None) or []
-            sync_sub = next((s for s in sync_subs if s.is_active), sync_subs[0] if sync_subs else None)
+            # Use explicitly selected subscription or fall back to first-active
+            sync_sub = selected_sub or next((s for s in from_subs if s.is_active), from_subs[0] if from_subs else None)
             if request.update_subscription and sync_sub:
                 sub = sync_sub
 
@@ -2915,6 +2962,7 @@ async def sync_user_from_panel(
 @router.post('/{user_id}/sync/to-panel', response_model=SyncToPanelResponse)
 async def sync_user_to_panel(
     user_id: int,
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff sync'),
     request: SyncToPanelRequest = SyncToPanelRequest(),
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -2923,6 +2971,7 @@ async def sync_user_to_panel(
     Sync user data FROM bot TO panel.
 
     Sends user/subscription data to Remnawave panel, creating or updating as needed.
+    When subscription_id is provided, syncs that specific subscription instead of first-active.
     """
     user = await get_user_by_id(db, user_id)
     if not user:
@@ -2932,7 +2981,15 @@ async def sync_user_to_panel(
         )
 
     push_subs = getattr(user, 'subscriptions', None) or []
-    push_sub = next((s for s in push_subs if s.is_active), push_subs[0] if push_subs else None)
+    if subscription_id:
+        push_sub = next((s for s in push_subs if s.id == subscription_id), None)
+        if not push_sub:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Subscription not found',
+            )
+    else:
+        push_sub = next((s for s in push_subs if s.is_active), push_subs[0] if push_subs else None)
     if not push_sub:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

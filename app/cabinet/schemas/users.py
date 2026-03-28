@@ -629,6 +629,10 @@ class PanelSyncStatusResponse(BaseModel):
     remnawave_uuid: str | None = None
     last_sync: datetime | None = None
 
+    # Multi-tariff context
+    subscription_id: int | None = None
+    subscription_tariff_name: str | None = None
+
     # Bot data
     bot_subscription_status: str | None = None
     bot_subscription_end_date: datetime | None = None
