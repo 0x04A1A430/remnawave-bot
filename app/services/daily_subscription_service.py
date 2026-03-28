@@ -333,8 +333,11 @@ class DailySubscriptionService:
         required_rubles = required_amount / 100
         balance_rubles = user.balance_kopeks / 100
 
+        tariff_label = ''
+        if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
+            tariff_label = f' «{subscription.tariff.name}»'
         message = (
-            f'⚠️ <b>Подписка приостановлена</b>\n\n'
+            f'⚠️ <b>Подписка{tariff_label} приостановлена</b>\n\n'
             f'Недостаточно средств для суточной оплаты.\n\n'
             f'Требуется: {required_rubles:.2f} ₽\n'
             f'Баланс: {balance_rubles:.2f} ₽\n\n'

@@ -996,12 +996,23 @@ class YooKassaPaymentMixin:
                             if getattr(self, 'bot', None) and user.telegram_id:
                                 from aiogram import types
 
+                                tariff_line = ''
+                                if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff_id', None):
+                                    try:
+                                        from app.database.crud.tariff import get_tariff_by_id
+
+                                        _t = await get_tariff_by_id(db, subscription.tariff_id)
+                                        if _t:
+                                            tariff_line = f'\n📦 Тариф: «{_t.name}»'
+                                    except Exception:
+                                        pass
                                 success_message = (
                                     f'✅ <b>Подписка успешно активирована!</b>\n\n'
                                     f'📅 Период: {subscription_period} дней\n'
                                     f'📱 Устройства: 1\n'
                                     f'📊 Трафик: Безлимит\n'
-                                    f'💳 Оплата: {settings.format_price(payment.amount_kopeks)} (YooKassa)\n\n'
+                                    f'💳 Оплата: {settings.format_price(payment.amount_kopeks)} (YooKassa)'
+                                    f'{tariff_line}\n\n'
                                     f"🔗 Для подключения перейдите в раздел 'Моя подписка'"
                                 )
 

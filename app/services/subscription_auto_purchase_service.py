@@ -66,6 +66,7 @@ class AutoExtendContext:
     squad_uuid: str | None = None
     consume_promo_offer: bool = False
     tariff_id: int | None = None
+    tariff_name: str | None = None
     allowed_squads: list | None = None
 
 
@@ -355,6 +356,7 @@ async def _prepare_auto_extend_context(
         squad_uuid=squad_uuid,
         consume_promo_offer=consume_promo_offer,
         tariff_id=tariff_id,
+        tariff_name=tariff_name if tariff_id else None,
         allowed_squads=allowed_squads,
     )
 
@@ -623,6 +625,8 @@ async def _auto_extend_subscription(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
                 '✅ Subscription automatically extended for {period}.',
             ).format(period=period_label)
+            if settings.is_multi_tariff_enabled() and prepared.tariff_name:
+                auto_message += f'\n📦 Тариф: «{prepared.tariff_name}»'
             details_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
                 'New expiration date: {date}.',
@@ -727,6 +731,8 @@ async def _auto_purchase_tariff(
         return False
 
     tariff = await get_tariff_by_id(db, tariff_id)
+    # Capture name before any db.commit() can expire the ORM object
+    tariff_name_for_label = tariff.name if tariff else None
     if not tariff or not tariff.is_active:
         logger.warning(
             '🔁 Автопокупка тарифа: тариф недоступен для пользователя',
@@ -984,6 +990,8 @@ async def _auto_purchase_tariff(
                 'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
                 '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
             ).format(period=period_label)
+            if settings.is_multi_tariff_enabled() and tariff_name_for_label:
+                message += f'\n📦 Тариф: «{tariff_name_for_label}»'
 
             hint = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_HINT',
@@ -2124,6 +2132,8 @@ async def try_auto_extend_expired_after_topup(
 
     # Determine renewal period from tariff or default to 30 days
     tariff = getattr(subscription, 'tariff', None)
+    # Capture name before any db.commit() can expire the ORM object
+    tariff_name_for_label = tariff.name if tariff else None
     if tariff:
         period_days = tariff.get_shortest_period() or 30
     else:
@@ -2359,6 +2369,8 @@ async def try_auto_extend_expired_after_topup(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
                 '✅ Subscription automatically extended for {period}.',
             ).format(period=period_label)
+            if settings.is_multi_tariff_enabled() and tariff_name_for_label:
+                auto_message += f'\n📦 Тариф: «{tariff_name_for_label}»'
             details_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
                 'New expiration date: {date}.',
@@ -3111,6 +3123,15 @@ async def _process_legacy_generic_cart(
                     'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
                     '✅ Subscription purchased automatically after balance top-up ({period}).',
                 ).format(period=period_label)
+                if settings.is_multi_tariff_enabled() and subscription and getattr(subscription, 'tariff_id', None):
+                    try:
+                        from app.database.crud.tariff import get_tariff_by_id as _get_tariff_label
+
+                        _t = await _get_tariff_label(db, subscription.tariff_id)
+                        if _t:
+                            auto_message += f'\n📦 Тариф: «{_t.name}»'
+                    except Exception:
+                        pass
 
                 hint_message = texts.t(
                     'AUTO_PURCHASE_SUBSCRIPTION_HINT',

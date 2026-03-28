@@ -294,11 +294,14 @@ class MonitoringService:
 
                 from app.database.crud.subscription import expire_subscription
 
+                # Capture tariff name before expire_subscription's db.refresh() expires the relationship
+                _tariff_name = subscription.tariff.name if getattr(subscription, 'tariff', None) else None
+
                 await expire_subscription(db, subscription)
 
                 user = await get_user_by_id(db, subscription.user_id)
                 if user and self.bot:
-                    await self._send_subscription_expired_notification(user, subscription)
+                    await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
 
                 logger.info(
                     "🔴 Подписка пользователя истекла и статус изменен на 'expired'", user_id=subscription.user_id
@@ -539,6 +542,7 @@ class MonitoringService:
                 select(Subscription)
                 .join(Subscription.user)
                 .options(
+                    selectinload(Subscription.tariff),
                     selectinload(Subscription.user).selectinload(User.promo_group),
                     selectinload(Subscription.user)
                     .selectinload(User.user_promo_groups)
@@ -1233,7 +1237,9 @@ class MonitoringService:
                     else:
                         failed_count += 1
                         if user.telegram_id and self.bot:
-                            await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
+                            await self._send_autopay_failed_notification(
+                                user, user.balance_kopeks, charge_amount, subscription=subscription
+                            )
                         elif not user.telegram_id:
                             await notification_delivery_service.notify_autopay_failed(
                                 user=user,
@@ -1267,7 +1273,9 @@ class MonitoringService:
 
                     if should_notify:
                         if user.telegram_id and self.bot:
-                            await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
+                            await self._send_autopay_failed_notification(
+                                user, user.balance_kopeks, charge_amount, subscription=subscription
+                            )
                         elif not user.telegram_id:
                             await notification_delivery_service.notify_autopay_failed(
                                 user=user,
@@ -1303,10 +1311,18 @@ class MonitoringService:
         except Exception as e:
             logger.error('Ошибка обработки автоплатежей', error=e)
 
-    async def _send_subscription_expired_notification(self, user: User, subscription: Subscription) -> bool:
+    async def _send_subscription_expired_notification(
+        self, user: User, subscription: Subscription, *, tariff_name: str | None = None
+    ) -> bool:
         try:
-            message = """
-⛔ <b>Подписка истекла</b>
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled():
+                if tariff_name:
+                    tariff_label = f' «{tariff_name}»'
+                elif hasattr(subscription, 'tariff') and subscription.tariff:
+                    tariff_label = f' «{subscription.tariff.name}»'
+            message = f"""
+⛔ <b>Подписка{tariff_label} истекла</b>
 
 Ваша подписка истекла. Для восстановления доступа продлите подписку.
 
@@ -1466,8 +1482,11 @@ class MonitoringService:
         try:
             get_texts(user.language)
 
-            message = """
-🎁 <b>Тестовая подписка скоро закончится!</b>
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
+                tariff_label = f' «{subscription.tariff.name}»'
+            message = f"""
+🎁 <b>Тестовая подписка{tariff_label} скоро закончится!</b>
 
 Ваша тестовая подписка истекает через 2 часа.
 
@@ -1593,16 +1612,20 @@ class MonitoringService:
     async def _send_expired_day1_notification(self, user: User, subscription: Subscription) -> bool:
         try:
             texts = get_texts(user.language)
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
+                tariff_label = f' «{subscription.tariff.name}»'
             template = texts.get(
                 'SUBSCRIPTION_EXPIRED_1D',
                 (
-                    '⛔ <b>Подписка закончилась</b>\n\n'
+                    '⛔ <b>Подписка{tariff_label} закончилась</b>\n\n'
                     'Доступ был отключён {end_date}. Продлите подписку, чтобы вернуться в сервис.'
                 ),
             )
             message = template.format(
                 end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
                 price=settings.format_price(settings.PRICE_30_DAYS),
+                tariff_label=tariff_label,
             )
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1672,11 +1695,15 @@ class MonitoringService:
         try:
             texts = get_texts(user.language)
 
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
+                tariff_label = f' «{subscription.tariff.name}»'
+
             if wave == 'second':
                 template = texts.get(
                     'SUBSCRIPTION_EXPIRED_SECOND_WAVE',
                     (
-                        '🔥 <b>Скидка {percent}% на продление</b>\n\n'
+                        '🔥 <b>Скидка {percent}% на продление{tariff_label}</b>\n\n'
                         'Активируйте предложение, чтобы получить дополнительную скидку. '
                         'Она суммируется с вашей промогруппой и действует до {expires_at}.'
                     ),
@@ -1685,7 +1712,7 @@ class MonitoringService:
                 template = texts.get(
                     'SUBSCRIPTION_EXPIRED_THIRD_WAVE',
                     (
-                        '🎁 <b>Индивидуальная скидка {percent}%</b>\n\n'
+                        '🎁 <b>Индивидуальная скидка {percent}%{tariff_label}</b>\n\n'
                         'Прошло {trigger_days} дней без подписки — возвращайтесь и активируйте дополнительную скидку. '
                         'Она суммируется с промогруппой и действует до {expires_at}.'
                     ),
@@ -1695,6 +1722,7 @@ class MonitoringService:
                 percent=percent,
                 expires_at=format_local_datetime(expires_at, '%d.%m.%Y %H:%M'),
                 trigger_days=trigger_days or '',
+                tariff_label=tariff_label,
             )
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1767,7 +1795,7 @@ class MonitoringService:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
             if tariff_label:
-                message += f'\n📦 Тариф:{tariff_label}'
+                message += f'\n📦 Тариф: {tariff_label}'
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,
@@ -1787,12 +1815,21 @@ class MonitoringService:
         except Exception as e:
             logger.error('Ошибка отправки уведомления об автоплатеже пользователю', telegram_id=user.telegram_id, e=e)
 
-    async def _send_autopay_failed_notification(self, user: User, balance: int, required: int):
+    async def _send_autopay_failed_notification(
+        self, user: User, balance: int, required: int, *, subscription: Subscription | None = None
+    ):
         try:
             texts = get_texts(user.language)
             message = texts.AUTOPAY_FAILED.format(
                 balance=settings.format_price(balance), required=settings.format_price(required)
             )
+            if (
+                settings.is_multi_tariff_enabled()
+                and subscription
+                and hasattr(subscription, 'tariff')
+                and subscription.tariff
+            ):
+                message += f'\n📦 Тариф: «{subscription.tariff.name}»'
 
             from aiogram.types import InlineKeyboardMarkup
 

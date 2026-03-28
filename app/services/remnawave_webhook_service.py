@@ -552,6 +552,7 @@ class RemnaWaveWebhookService:
         *,
         reply_markup: InlineKeyboardMarkup | None = None,
         format_kwargs: dict[str, Any] | None = None,
+        subscription: Subscription | None = None,
     ) -> None:
         """Send a notification to user via appropriate channel.
 
@@ -576,6 +577,15 @@ class RemnaWaveWebhookService:
         if not message:
             logger.warning('Missing locale key for language', text_key=text_key, language=user.language)
             return
+
+        # Inject tariff_label for multi-tariff subscription identification
+        if format_kwargs is None:
+            format_kwargs = {}
+        if 'tariff_label' not in format_kwargs:
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and subscription and getattr(subscription, 'tariff', None):
+                tariff_label = f' «{subscription.tariff.name}»'
+            format_kwargs['tariff_label'] = tariff_label
 
         if format_kwargs:
             try:
@@ -664,6 +674,7 @@ class RemnaWaveWebhookService:
             user,
             'WEBHOOK_SUB_EXPIRED',
             reply_markup=self._get_renew_keyboard(user, subscription.id),
+            subscription=subscription,
         )
 
     async def _handle_user_disabled(
@@ -698,7 +709,9 @@ class RemnaWaveWebhookService:
         else:
             await db.commit()
 
-        await self._notify_user(user, 'WEBHOOK_SUB_DISABLED', reply_markup=self._get_subscription_keyboard(user))
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_DISABLED', reply_markup=self._get_subscription_keyboard(user), subscription=subscription
+        )
 
     async def _handle_user_enabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -714,7 +727,9 @@ class RemnaWaveWebhookService:
         else:
             await db.commit()
 
-        await self._notify_user(user, 'WEBHOOK_SUB_ENABLED', reply_markup=self._get_connect_keyboard(user))
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_ENABLED', reply_markup=self._get_connect_keyboard(user), subscription=subscription
+        )
 
     async def _handle_user_limited(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -735,7 +750,9 @@ class RemnaWaveWebhookService:
         else:
             await db.commit()
 
-        await self._notify_user(user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user))
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_LIMITED', reply_markup=self._get_traffic_keyboard(user), subscription=subscription
+        )
 
     async def _handle_user_traffic_reset(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -751,7 +768,12 @@ class RemnaWaveWebhookService:
             await reactivate_subscription(db, subscription)
         logger.info('Webhook: traffic reset for subscription , user', subscription_id=subscription.id, user_id=user.id)
 
-        await self._notify_user(user, 'WEBHOOK_SUB_TRAFFIC_RESET', reply_markup=self._get_subscription_keyboard(user))
+        await self._notify_user(
+            user,
+            'WEBHOOK_SUB_TRAFFIC_RESET',
+            reply_markup=self._get_subscription_keyboard(user),
+            subscription=subscription,
+        )
 
     async def _handle_user_modified(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -1003,6 +1025,7 @@ class RemnaWaveWebhookService:
                     reply_markup=self._get_renew_keyboard(
                         user, getattr(subscription, 'id', None) if subscription else None
                     ),
+                    subscription=subscription,
                 )
         else:
             await self._notify_user(
@@ -1011,6 +1034,7 @@ class RemnaWaveWebhookService:
                 reply_markup=self._get_renew_keyboard(
                     user, getattr(subscription, 'id', None) if subscription else None
                 ),
+                subscription=subscription,
             )
 
     async def _attempt_panel_recreation(self, db: AsyncSession, user: User, subscription: Subscription) -> bool:
@@ -1096,7 +1120,9 @@ class RemnaWaveWebhookService:
             )
         await db.commit()
 
-        await self._notify_user(user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user))
+        await self._notify_user(
+            user, 'WEBHOOK_SUB_REVOKED', reply_markup=self._get_connect_keyboard(user), subscription=subscription
+        )
 
     async def _handle_user_created(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -1110,7 +1136,10 @@ class RemnaWaveWebhookService:
             logger.info('Webhook expires_72h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
-            user, 'WEBHOOK_SUB_EXPIRES_72H', reply_markup=self._get_renew_keyboard(user, subscription.id)
+            user,
+            'WEBHOOK_SUB_EXPIRES_72H',
+            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            subscription=subscription,
         )
 
     async def _handle_expires_in_48h(
@@ -1120,7 +1149,10 @@ class RemnaWaveWebhookService:
             logger.info('Webhook expires_48h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
-            user, 'WEBHOOK_SUB_EXPIRES_48H', reply_markup=self._get_renew_keyboard(user, subscription.id)
+            user,
+            'WEBHOOK_SUB_EXPIRES_48H',
+            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            subscription=subscription,
         )
 
     async def _handle_expires_in_24h(
@@ -1130,7 +1162,10 @@ class RemnaWaveWebhookService:
             logger.info('Webhook expires_24h: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
-            user, 'WEBHOOK_SUB_EXPIRES_24H', reply_markup=self._get_renew_keyboard(user, subscription.id)
+            user,
+            'WEBHOOK_SUB_EXPIRES_24H',
+            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            subscription=subscription,
         )
 
     async def _handle_expired_24h_ago(
@@ -1140,14 +1175,22 @@ class RemnaWaveWebhookService:
             logger.info('Webhook expired_24h_ago: подписка не найдена в БД, пропуск', user_id=user.id)
             return
         await self._notify_user(
-            user, 'WEBHOOK_SUB_EXPIRED_24H_AGO', reply_markup=self._get_renew_keyboard(user, subscription.id)
+            user,
+            'WEBHOOK_SUB_EXPIRED_24H_AGO',
+            reply_markup=self._get_renew_keyboard(user, subscription.id),
+            subscription=subscription,
         )
 
     async def _handle_first_connected(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         logger.info('Webhook: user first VPN connection', user_id=user.id)
-        await self._notify_user(user, 'WEBHOOK_SUB_FIRST_CONNECTED', reply_markup=self._get_subscription_keyboard(user))
+        await self._notify_user(
+            user,
+            'WEBHOOK_SUB_FIRST_CONNECTED',
+            reply_markup=self._get_subscription_keyboard(user),
+            subscription=subscription,
+        )
 
     async def _handle_bandwidth_threshold(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -1168,6 +1211,7 @@ class RemnaWaveWebhookService:
             'WEBHOOK_SUB_BANDWIDTH_THRESHOLD',
             reply_markup=self._get_traffic_keyboard(user),
             format_kwargs={'percent': percent_str},
+            subscription=subscription,
         )
 
     async def _handle_user_not_connected(
@@ -1188,6 +1232,7 @@ class RemnaWaveWebhookService:
             'WEBHOOK_USER_NOT_CONNECTED',
             reply_markup=self._get_connect_keyboard(user),
             format_kwargs=format_kwargs if format_kwargs else None,
+            subscription=subscription,
         )
 
     # ------------------------------------------------------------------
@@ -1236,6 +1281,7 @@ class RemnaWaveWebhookService:
             'WEBHOOK_DEVICE_ADDED',
             reply_markup=self._get_subscription_keyboard(user),
             format_kwargs={'device': device_name or '—'},
+            subscription=subscription,
         )
 
     async def _handle_device_deleted(
@@ -1248,4 +1294,5 @@ class RemnaWaveWebhookService:
             'WEBHOOK_DEVICE_DELETED',
             reply_markup=self._get_subscription_keyboard(user),
             format_kwargs={'device': device_name or '—'},
+            subscription=subscription,
         )
