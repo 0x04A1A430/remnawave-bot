@@ -948,22 +948,41 @@ class RemnaWaveAPI:
         return response.get('response', {})
 
     async def get_nodes_realtime_usage(self) -> list[dict[str, Any]]:
-        """Get per-node metrics, transformed to legacy realtime format.
+        """Get per-node metrics with per-inbound traffic breakdown.
 
         Uses /api/system/nodes/metrics (replacement for removed /api/bandwidth-stats/nodes/realtime).
-        Returns list of dicts with: nodeUuid, nodeName, downloadBytes, uploadBytes, totalBytes, usersOnline.
+        Returns list of dicts with node totals + inbounds/outbounds arrays.
         """
         try:
             metrics = await self.get_nodes_metrics()
             nodes = metrics.get('nodes', [])
             result = []
             for node in nodes:
-                # Sum inbound stats (upload/download are strings like "10.5 GB")
                 download_bytes = 0
                 upload_bytes = 0
+                inbounds = []
                 for ib in node.get('inboundsStats', []):
-                    download_bytes += parse_bytes(ib.get('download', '0'))
-                    upload_bytes += parse_bytes(ib.get('upload', '0'))
+                    ib_dl = parse_bytes(ib.get('download', '0'))
+                    ib_ul = parse_bytes(ib.get('upload', '0'))
+                    download_bytes += ib_dl
+                    upload_bytes += ib_ul
+                    inbounds.append({
+                        'tag': ib.get('tag', 'unknown'),
+                        'downloadBytes': ib_dl,
+                        'uploadBytes': ib_ul,
+                        'totalBytes': ib_dl + ib_ul,
+                    })
+
+                outbounds = []
+                for ob in node.get('outboundsStats', []):
+                    ob_dl = parse_bytes(ob.get('download', '0'))
+                    ob_ul = parse_bytes(ob.get('upload', '0'))
+                    outbounds.append({
+                        'tag': ob.get('tag', 'unknown'),
+                        'downloadBytes': ob_dl,
+                        'uploadBytes': ob_ul,
+                        'totalBytes': ob_dl + ob_ul,
+                    })
 
                 result.append(
                     {
@@ -973,9 +992,8 @@ class RemnaWaveAPI:
                         'uploadBytes': upload_bytes,
                         'totalBytes': download_bytes + upload_bytes,
                         'usersOnline': node.get('usersOnline', 0),
-                        # Speed not available in new API
-                        'downloadSpeedBps': 0,
-                        'uploadSpeedBps': 0,
+                        'inbounds': inbounds,
+                        'outbounds': outbounds,
                     }
                 )
             return result
