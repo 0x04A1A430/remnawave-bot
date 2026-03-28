@@ -1373,13 +1373,23 @@ def format_bytes(bytes_value: int) -> str:
 
 
 def parse_bytes(size_str: str) -> int:
-    size_str = size_str.upper().strip()
+    size_str = size_str.strip()
 
-    # Check longest suffixes first to avoid 'B' matching 'GB'
-    units = [('TB', 1024**4), ('GB', 1024**3), ('MB', 1024**2), ('KB', 1024), ('B', 1)]
+    # Check longest suffixes first; support both IEC (GiB) and SI (GB) units
+    units = [
+        ('TiB', 1024**4),
+        ('GiB', 1024**3),
+        ('MiB', 1024**2),
+        ('KiB', 1024),
+        ('TB', 1024**4),
+        ('GB', 1024**3),
+        ('MB', 1024**2),
+        ('KB', 1024),
+        ('B', 1),
+    ]
 
     for unit, multiplier in units:
-        if size_str.endswith(unit):
+        if size_str.endswith(unit) or size_str.upper().endswith(unit.upper()):
             try:
                 value = float(size_str[: -len(unit)].strip())
                 return int(value * multiplier)
