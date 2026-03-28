@@ -5110,8 +5110,11 @@ async def get_subscription_renewal_options_endpoint(
     if settings.is_tariffs_mode() and not subscription.tariff_id:
         return MiniAppSubscriptionRenewalOptionsResponse(
             periods=[],
+            currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
             balance_kopeks=getattr(user, 'balance_kopeks', 0),
-            balance_currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
+            balance_label=settings.format_price(getattr(user, 'balance_kopeks', 0)),
+            status_message='Classic subscriptions cannot be renewed. Please purchase a tariff.',
+            sales_mode=settings.get_sales_mode(),
         )
 
     periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
