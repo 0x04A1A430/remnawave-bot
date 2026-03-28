@@ -955,14 +955,17 @@ class RemnaWaveAPI:
         """
         try:
             metrics = await self.get_nodes_metrics()
+            logger.warning(
+                'RAW METRICS KEYS',
+                metrics_keys=list(metrics.keys()) if metrics else 'EMPTY',
+                metrics_type=type(metrics).__name__,
+            )
             nodes = metrics.get('nodes', [])
-            if nodes:
-                logger.info(
-                    'Raw metrics first node sample',
-                    keys=list(nodes[0].keys()),
-                    inboundsStats_sample=nodes[0].get('inboundsStats', [])[:1],
-                    outboundsStats_sample=nodes[0].get('outboundsStats', [])[:1],
-                )
+            if not nodes:
+                # Try alternative key - maybe API wraps differently
+                logger.warning('NO NODES KEY, trying raw metrics as list', is_list=isinstance(metrics, list))
+                if isinstance(metrics, list):
+                    nodes = metrics
             result = []
             for node in nodes:
                 download_bytes = 0
