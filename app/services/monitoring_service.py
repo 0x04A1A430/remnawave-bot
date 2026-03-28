@@ -1795,7 +1795,7 @@ class MonitoringService:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
             if tariff_label:
-                message += f'\n📦 Тариф: {tariff_label}'
+                message += f'\n📦 Тариф:{tariff_label}'
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,

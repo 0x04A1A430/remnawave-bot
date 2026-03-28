@@ -4484,19 +4484,35 @@ def _build_renewal_success_message(
     amount_label = settings.format_price(max(0, charged_amount))
     date_label = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M') if subscription.end_date else ''
 
+    tariff_label = ''
+    if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff', None):
+        tariff_label = f' «{subscription.tariff.name}»'
+
     if language_code in {'ru', 'fa'}:
         if charged_amount > 0:
             message = (
-                f'Подписка продлена до {date_label}. ' if date_label else 'Подписка продлена. '
+                f'Подписка{tariff_label} продлена до {date_label}. '
+                if date_label
+                else f'Подписка{tariff_label} продлена. '
             ) + f'Списано {amount_label}.'
         else:
-            message = f'Подписка продлена до {date_label}.' if date_label else 'Подписка успешно продлена.'
+            message = (
+                f'Подписка{tariff_label} продлена до {date_label}.'
+                if date_label
+                else f'Подписка{tariff_label} успешно продлена.'
+            )
     elif charged_amount > 0:
         message = (
-            f'Subscription renewed until {date_label}. ' if date_label else 'Subscription renewed. '
+            f'Subscription{tariff_label} renewed until {date_label}. '
+            if date_label
+            else f'Subscription{tariff_label} renewed. '
         ) + f'Charged {amount_label}.'
     else:
-        message = f'Subscription renewed until {date_label}.' if date_label else 'Subscription renewed successfully.'
+        message = (
+            f'Subscription{tariff_label} renewed until {date_label}.'
+            if date_label
+            else f'Subscription{tariff_label} renewed successfully.'
+        )
 
     if promo_discount_value > 0:
         discount_label = settings.format_price(promo_discount_value)

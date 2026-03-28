@@ -4990,12 +4990,16 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
         try:
             if callback.bot and target_user.telegram_id:
+                tariff_line = ''
+                if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff', None):
+                    tariff_line = f'\n📦 Тариф: «{subscription.tariff.name}»'
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
                     text=f'💳 <b>Администратор продлил вашу подписку</b>\n\n'
                     f'📅 Подписка продлена на {period_days} дней\n'
                     f'💰 Списано с баланса: {settings.format_price(price_kopeks)}\n'
-                    f'📅 Подписка действительна до: {format_datetime(subscription.end_date)}',
+                    f'📅 Подписка действительна до: {format_datetime(subscription.end_date)}'
+                    f'{tariff_line}',
                     parse_mode='HTML',
                 )
         except Exception as e:

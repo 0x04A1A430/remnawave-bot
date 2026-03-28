@@ -336,7 +336,10 @@ class PromoCodeService:
             await extend_subscription(db, target_sub, promocode.subscription_days)
             await self.subscription_service.update_remnawave_user(db, target_sub)
 
-            effects.append(f'⏰ Подписка продлена на {promocode.subscription_days} дней')
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
+                tariff_label = f' «{target_sub.tariff.name}»'
+            effects.append(f'⏰ Подписка{tariff_label} продлена на {promocode.subscription_days} дней')
             logger.info(
                 '✅ Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
