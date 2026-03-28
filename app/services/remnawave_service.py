@@ -626,11 +626,9 @@ class RemnaWaveService:
                     'users_by_status': system_stats.get('users', {}).get('statusCounts', {}),
                     'server_info': {
                         'cpu_cores': system_stats.get('cpu', {}).get('cores', 0),
-                        'cpu_physical_cores': system_stats.get('cpu', {}).get('physicalCores', 0),
                         'memory_total': system_stats.get('memory', {}).get('total', 0),
                         'memory_used': system_stats.get('memory', {}).get('used', 0),
                         'memory_free': system_stats.get('memory', {}).get('free', 0),
-                        'memory_available': system_stats.get('memory', {}).get('available', 0),
                         'uptime_seconds': uptime_seconds,
                     },
                     'bandwidth': {
@@ -768,6 +766,10 @@ class RemnaWaveService:
                             'users_online': node.users_online,
                             'traffic_used_bytes': node.traffic_used_bytes,
                             'traffic_limit_bytes': node.traffic_limit_bytes,
+                            'xray_uptime': node.xray_uptime,
+                            'versions': node.versions,
+                            'system': node.system,
+                            'active_plugin_uuid': node.active_plugin_uuid,
                         }
                     )
 
@@ -806,7 +808,7 @@ class RemnaWaveService:
                     'is_disabled': node.is_disabled,
                     'is_node_online': node.is_node_online,
                     'is_xray_running': node.is_xray_running,
-                    'users_online': node.users_online or 0,
+                    'users_online': node.users_online,
                     'traffic_used_bytes': node.traffic_used_bytes or 0,
                     'traffic_limit_bytes': node.traffic_limit_bytes or 0,
                     'last_status_change': node.last_status_change,
@@ -816,12 +818,12 @@ class RemnaWaveService:
                     'traffic_reset_day': node.traffic_reset_day,
                     'notify_percent': node.notify_percent,
                     'consumption_multiplier': node.consumption_multiplier,
-                    'cpu_count': node.cpu_count,
-                    'cpu_model': node.cpu_model,
-                    'total_ram': node.total_ram,
                     'created_at': node.created_at,
                     'updated_at': node.updated_at,
                     'provider_uuid': node.provider_uuid,
+                    'versions': node.versions,
+                    'system': node.system,
+                    'active_plugin_uuid': node.active_plugin_uuid,
                 }
 
         except Exception as e:

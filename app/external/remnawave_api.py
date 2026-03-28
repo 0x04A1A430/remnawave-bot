@@ -60,8 +60,6 @@ class RemnaWaveUser:
     created_at: datetime
     updated_at: datetime
     user_traffic: UserTraffic | None = None
-    sub_last_user_agent: str | None = None
-    sub_last_opened_at: datetime | None = None
     sub_revoked_at: datetime | None = None
     last_traffic_reset_at: datetime | None = None
     trojan_password: str | None = None
@@ -148,29 +146,27 @@ class RemnaWaveNode:
     country_code: str
     is_connected: bool
     is_disabled: bool
-    users_online: int | None
+    users_online: int
     traffic_used_bytes: int | None
     traffic_limit_bytes: int | None
     port: int | None = None
     is_connecting: bool = False
-    xray_version: str | None = None
-    node_version: str | None = None
     view_position: int = 0
     tags: list[str] | None = None
-    # Новые поля API
     last_status_change: datetime | None = None
     last_status_message: str | None = None
-    xray_uptime: str | None = None
+    xray_uptime: int = 0
     is_traffic_tracking_active: bool = False
     traffic_reset_day: int | None = None
     notify_percent: int | None = None
     consumption_multiplier: float = 1.0
-    cpu_count: int | None = None
-    cpu_model: str | None = None
-    total_ram: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     provider_uuid: str | None = None
+    # v2.7.0: replaced cpuCount/cpuModel/totalRam/xrayVersion/nodeVersion
+    versions: dict[str, str] | None = None  # {xray, node}
+    system: dict[str, Any] | None = None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
+    active_plugin_uuid: str | None = None
 
     @property
     def is_node_online(self) -> bool:
@@ -1226,8 +1222,6 @@ class RemnaWaveAPI:
             created_at=datetime.fromisoformat(user_data['createdAt'].replace('Z', '+00:00')),
             updated_at=datetime.fromisoformat(user_data['updatedAt'].replace('Z', '+00:00')),
             user_traffic=user_traffic,
-            sub_last_user_agent=user_data.get('subLastUserAgent'),
-            sub_last_opened_at=self._parse_optional_datetime(user_data.get('subLastOpenedAt')),
             sub_revoked_at=self._parse_optional_datetime(user_data.get('subRevokedAt')),
             last_traffic_reset_at=self._parse_optional_datetime(user_data.get('lastTrafficResetAt')),
             trojan_password=user_data.get('trojanPassword'),
@@ -1292,29 +1286,26 @@ class RemnaWaveAPI:
             country_code=node_data.get('countryCode', ''),
             is_connected=node_data.get('isConnected', False),
             is_disabled=node_data.get('isDisabled', False),
-            users_online=node_data.get('usersOnline'),
+            users_online=node_data.get('usersOnline', 0),
             traffic_used_bytes=node_data.get('trafficUsedBytes'),
             traffic_limit_bytes=node_data.get('trafficLimitBytes'),
             port=node_data.get('port'),
             is_connecting=node_data.get('isConnecting', False),
-            xray_version=node_data.get('xrayVersion'),
-            node_version=node_data.get('nodeVersion'),
             view_position=node_data.get('viewPosition', 0),
             tags=node_data.get('tags', []),
-            # Новые поля API
             last_status_change=self._parse_optional_datetime(node_data.get('lastStatusChange')),
             last_status_message=node_data.get('lastStatusMessage'),
-            xray_uptime=node_data.get('xrayUptime'),
+            xray_uptime=int(node_data.get('xrayUptime', 0) or 0),
             is_traffic_tracking_active=node_data.get('isTrafficTrackingActive', False),
             traffic_reset_day=node_data.get('trafficResetDay'),
             notify_percent=node_data.get('notifyPercent'),
             consumption_multiplier=node_data.get('consumptionMultiplier', 1.0),
-            cpu_count=node_data.get('cpuCount'),
-            cpu_model=node_data.get('cpuModel'),
-            total_ram=node_data.get('totalRam'),
             created_at=self._parse_optional_datetime(node_data.get('createdAt')),
             updated_at=self._parse_optional_datetime(node_data.get('updatedAt')),
             provider_uuid=node_data.get('providerUuid'),
+            versions=node_data.get('versions'),
+            system=node_data.get('system'),
+            active_plugin_uuid=node_data.get('activePluginUuid'),
         )
 
     def _parse_subscription_info(self, data: dict) -> SubscriptionInfo:
