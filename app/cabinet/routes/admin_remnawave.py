@@ -135,7 +135,7 @@ def _serialize_node(node_data: dict[str, Any]) -> NodeInfo:
         traffic_limit_bytes=node_data.get('traffic_limit_bytes'),
         last_status_change=_parse_datetime(node_data.get('last_status_change')),
         last_status_message=node_data.get('last_status_message'),
-        xray_uptime=int(node_data.get('xray_uptime', 0) or 0),
+        xray_uptime=node_data.get('xray_uptime', 0) or 0,
         is_traffic_tracking_active=bool(node_data.get('is_traffic_tracking_active', False)),
         traffic_reset_day=node_data.get('traffic_reset_day'),
         notify_percent=node_data.get('notify_percent'),

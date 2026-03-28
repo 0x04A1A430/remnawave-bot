@@ -467,7 +467,7 @@ async def _get_nodes_overview() -> NodesOverview:
                 users_online=n.get('users_online', 0) or 0,
                 traffic_used_bytes=n.get('traffic_used_bytes'),
                 last_status_message=n.get('last_status_message'),
-                xray_uptime=int(n.get('xray_uptime', 0) or 0),
+                xray_uptime=n.get('xray_uptime', 0) or 0,
                 is_xray_running=n.get('is_xray_running'),
                 versions=n.get('versions'),
                 system=n.get('system'),

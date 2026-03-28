@@ -1239,6 +1239,16 @@ class RemnaWaveAPI:
             return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         return None
 
+    @staticmethod
+    def _safe_int(value: Any, default: int = 0) -> int:
+        """Safely convert a value to int, returning default on failure."""
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     def _parse_inbound(self, inbound_data: dict) -> RemnaWaveInbound:
         """Парсит данные inbound"""
         return RemnaWaveInbound(
@@ -1295,7 +1305,7 @@ class RemnaWaveAPI:
             tags=node_data.get('tags', []),
             last_status_change=self._parse_optional_datetime(node_data.get('lastStatusChange')),
             last_status_message=node_data.get('lastStatusMessage'),
-            xray_uptime=int(node_data.get('xrayUptime', 0) or 0),
+            xray_uptime=self._safe_int(node_data.get('xrayUptime')),
             is_traffic_tracking_active=node_data.get('isTrafficTrackingActive', False),
             traffic_reset_day=node_data.get('trafficResetDay'),
             notify_percent=node_data.get('notifyPercent'),

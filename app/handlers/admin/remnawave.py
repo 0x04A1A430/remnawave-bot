@@ -1240,14 +1240,14 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
     updated_at = format_datetime(node['updated_at']) if node.get('updated_at') else '—'
     notify_percent = f'{node["notify_percent"]}%' if node.get('notify_percent') is not None else '—'
     sys_info = (node.get('system') or {}).get('info', {})
-    cpu_model = sys_info.get('cpuModel') or '—'
+    cpu_model = html.escape(str(sys_info.get('cpuModel') or '—'))
     cpu_count = sys_info.get('cpus', 0)
     cpu_info = f'{cpu_count}x {cpu_model}' if cpu_count else cpu_model
     memory_total = sys_info.get('memoryTotal', 0)
     total_ram = format_bytes(memory_total) if memory_total else '—'
     versions = node.get('versions') or {}
-    xray_ver = versions.get('xray') or '—'
-    node_ver = versions.get('node') or '—'
+    xray_ver = html.escape(str(versions.get('xray') or '—'))
+    node_ver = html.escape(str(versions.get('node') or '—'))
     xray_uptime_sec = node.get('xray_uptime', 0)
     if xray_uptime_sec:
         days, rem = divmod(int(xray_uptime_sec), 86400)
@@ -1258,7 +1258,7 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
         xray_uptime_str = '—'
 
     text = f"""
-🖥️ <b>Нода: {node['name']}</b>
+🖥️ <b>Нода: {html.escape(node['name'])}</b>
 
 <b>Статус:</b>
 - Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
@@ -1266,7 +1266,7 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
 - Подключена: {'📡 Да' if node['is_connected'] else '📵 Нет'}
 - Отключена: {'❌ Да' if node['is_disabled'] else '✅ Нет'}
 - Изменение статуса: {status_change}
-- Сообщение: {node.get('last_status_message') or '—'}
+- Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
 - Uptime Xray: {xray_uptime_str}
 
 <b>Версии:</b>
@@ -1274,12 +1274,12 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
 - Node: {node_ver}
 
 <b>Информация:</b>
-- Адрес: {node['address']}
-- Страна: {node['country_code']}
+- Адрес: {html.escape(node['address'])}
+- Страна: {html.escape(node['country_code'])}
 - Пользователей онлайн: {node['users_online']}
 - CPU: {cpu_info}
 - RAM: {total_ram}
-- Провайдер: {node.get('provider_uuid') or '—'}
+- Провайдер: {html.escape(str(node.get('provider_uuid') or '—'))}
 
 <b>Трафик:</b>
 - Использовано: {format_bytes(node['traffic_used_bytes'])}
@@ -1358,7 +1358,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         updated_at = format_datetime(node['updated_at']) if node.get('updated_at') else '—'
         notify_percent = f'{node["notify_percent"]}%' if node.get('notify_percent') is not None else '—'
         sys_info = (node.get('system') or {}).get('info', {})
-        cpu_model = sys_info.get('cpuModel') or '—'
+        cpu_model = html.escape(str(sys_info.get('cpuModel') or '—'))
         cpu_count = sys_info.get('cpus', 0)
         cpu_info = f'{cpu_count}x {cpu_model}' if cpu_count else cpu_model
         memory_total = sys_info.get('memoryTotal', 0)
@@ -1367,11 +1367,11 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         load_avg = sys_stats.get('loadAvg', [])
         load_str = ' / '.join(f'{v:.2f}' for v in load_avg[:3]) if load_avg else '—'
         versions = node.get('versions') or {}
-        xray_ver = versions.get('xray') or '—'
-        node_ver = versions.get('node') or '—'
+        xray_ver = html.escape(str(versions.get('xray') or '—'))
+        node_ver = html.escape(str(versions.get('node') or '—'))
 
         text = f"""
-📊 <b>Статистика ноды: {node['name']}</b>
+📊 <b>Статистика ноды: {html.escape(node['name'])}</b>
 
 <b>Статус:</b>
 - Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
@@ -1379,14 +1379,14 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
 - Node: v{node_ver}
 - Пользователей онлайн: {node['users_online']}
 - Изменение статуса: {status_change}
-- Сообщение: {node.get('last_status_message') or '—'}
+- Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
 - Uptime Xray: {xray_uptime_str}
 
 <b>Ресурсы:</b>
 - CPU: {cpu_info}
 - RAM: {total_ram}
 - Load: {load_str}
-- Провайдер: {node.get('provider_uuid') or '—'}
+- Провайдер: {html.escape(str(node.get('provider_uuid') or '—'))}
 
 <b>Трафик:</b>
 - Использовано: {format_bytes(node['traffic_used_bytes'] or 0)}
@@ -1436,14 +1436,14 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         logger.error('Ошибка получения статистики ноды', node_uuid=node_uuid, error=e)
 
         text = f"""
-📊 <b>Статистика ноды: {node['name']}</b>
+📊 <b>Статистика ноды: {html.escape(node['name'])}</b>
 
 <b>Статус:</b>
 - Онлайн: {status_emoji} {'Да' if node['is_node_online'] else 'Нет'}
 - Xray: {xray_emoji} {'Запущен' if node['is_xray_running'] else 'Остановлен'}
 - Пользователей онлайн: {node['users_online']}
 - Изменение статуса: {format_datetime(node.get('last_status_change')) if node.get('last_status_change') else '—'}
-- Сообщение: {node.get('last_status_message') or '—'}
+- Сообщение: {html.escape(str(node.get('last_status_message') or '—'))}
 - Uptime Xray: {xray_uptime_str}
 
 <b>Трафик:</b>
