@@ -994,6 +994,8 @@ class RemnaWaveAPI:
                     {
                         'nodeUuid': node.get('nodeUuid', ''),
                         'nodeName': node.get('nodeName', ''),
+                        'countryEmoji': node.get('countryEmoji', ''),
+                        'providerName': node.get('providerName', ''),
                         'downloadBytes': download_bytes,
                         'uploadBytes': upload_bytes,
                         'totalBytes': download_bytes + upload_bytes,
