@@ -956,6 +956,13 @@ class RemnaWaveAPI:
         try:
             metrics = await self.get_nodes_metrics()
             nodes = metrics.get('nodes', [])
+            if nodes:
+                logger.info(
+                    'Raw metrics first node sample',
+                    keys=list(nodes[0].keys()),
+                    inboundsStats_sample=nodes[0].get('inboundsStats', [])[:1],
+                    outboundsStats_sample=nodes[0].get('outboundsStats', [])[:1],
+                )
             result = []
             for node in nodes:
                 download_bytes = 0
