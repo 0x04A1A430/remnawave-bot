@@ -346,20 +346,19 @@ async def _handle_subscription_merge(
                 ):
                     # Resolve conflict: keep the subscription with the later end_date
                     primary_conflict = next(
-                        (ps for ps in primary_subs if ps.tariff_id == sub_tariff_id and ps.status in ('active', 'trial')),
+                        (
+                            ps
+                            for ps in primary_subs
+                            if ps.tariff_id == sub_tariff_id and ps.status in ('active', 'trial')
+                        ),
                         None,
                     )
                     if primary_conflict:
                         primary_end = getattr(primary_conflict, 'end_date', None)
                         secondary_end = getattr(sub, 'end_date', None)
                         # None end_date = lifetime/unlimited → always wins over a finite date
-                        secondary_wins = (
-                            (secondary_end is None and primary_end is not None)
-                            or (
-                                secondary_end is not None
-                                and primary_end is not None
-                                and secondary_end > primary_end
-                            )
+                        secondary_wins = (secondary_end is None and primary_end is not None) or (
+                            secondary_end is not None and primary_end is not None and secondary_end > primary_end
                         )
                         if secondary_wins:
                             # Secondary sub is better — expire primary's, transfer secondary's
