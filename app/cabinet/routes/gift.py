@@ -724,7 +724,7 @@ async def activate_gift_by_code(
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     code = body.code.strip()
-    if code.upper().startswith('GIFT-'):
+    if code.upper().startswith('GIFT-') or code.upper().startswith('GIFT_'):
         code = code[5:]
 
     if len(code) < 8:

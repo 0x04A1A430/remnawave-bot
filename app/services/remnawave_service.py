@@ -1746,6 +1746,7 @@ class RemnaWaveService:
                                 'hwidDeviceLimit': user_obj.hwid_device_limit,
                                 'subscriptionUrl': user_obj.subscription_url,
                                 'subscriptionCryptoLink': user_obj.happ_crypto_link,
+                                'activeInternalSquads': user_obj.active_internal_squads,
                             }
                         )
                     if len(users_batch) < size:
@@ -1775,10 +1776,21 @@ class RemnaWaveService:
             )
             users_by_uuid = {u.remnawave_uuid: u for u in users_result.scalars().all() if u.remnawave_uuid}
 
+            # Load all bot users for matching unlinked panel users
+            all_users_result = await db.execute(
+                select(User)
+                .options(selectinload(User.subscriptions))
+            )
+            _all_users = all_users_result.scalars().all()
+            bot_users_by_tg = {u.telegram_id: u for u in _all_users if u.telegram_id}
+            bot_users_by_email = {u.email.lower(): u for u in _all_users if u.email and u.email_verified}
+
             logger.info(
                 '📊 [multi-tariff] Подписок с remnawave_uuid',
                 subs_count=len(subs_by_uuid),
                 users_legacy_count=len(users_by_uuid),
+                bot_users_by_tg=len(bot_users_by_tg),
+                bot_users_by_email=len(bot_users_by_email),
             )
 
             # Match and update
@@ -1811,11 +1823,97 @@ class RemnaWaveService:
                                 )
 
                 if not subscription:
-                    logger.debug(
-                        '⚠️ [multi-tariff] Remnawave юзер не привязан к подписке',
-                        panel_uuid=panel_uuid,
-                        username=panel_user.get('username'),
-                    )
+                    # Try to match panel user to a bot user and create subscription
+                    _panel_tg = panel_user.get('telegramId')
+                    _panel_email = (panel_user.get('email') or '').lower().strip()
+                    _bot_user = None
+                    if _panel_tg:
+                        _bot_user = bot_users_by_tg.get(_panel_tg)
+                    if not _bot_user and _panel_email:
+                        _bot_user = bot_users_by_email.get(_panel_email)
+
+                    if not _bot_user:
+                        logger.debug(
+                            '⚠️ [multi-tariff] Panel user has no matching bot user',
+                            panel_uuid=panel_uuid,
+                            username=panel_user.get('username'),
+                        )
+                        continue
+
+                    # Check MAX_ACTIVE_SUBSCRIPTIONS
+                    _user_subs = getattr(_bot_user, 'subscriptions', []) or []
+                    _active_count = sum(1 for s in _user_subs if s.status in ('active', 'trial'))
+                    if _active_count >= settings.get_max_active_subscriptions():
+                        logger.debug(
+                            '⚠️ [multi-tariff] User at max subscriptions, skipping',
+                            user_id=_bot_user.id,
+                            active_count=_active_count,
+                        )
+                        continue
+
+                    # Check if subscription with this UUID already exists for this user
+                    if any(s.remnawave_uuid == panel_uuid for s in _user_subs):
+                        continue
+
+                    try:
+                        from app.database.crud.subscription import generate_unique_short_id
+
+                        _expire_at = self._parse_remnawave_date(panel_user.get('expireAt', ''))
+                        _now = self._now_utc()
+                        _panel_status = panel_user.get('status', 'ACTIVE')
+                        if _panel_status == 'ACTIVE' and _expire_at > _now:
+                            _sub_status = SubscriptionStatus.ACTIVE
+                        elif _expire_at <= _now:
+                            _sub_status = SubscriptionStatus.EXPIRED
+                        else:
+                            _sub_status = SubscriptionStatus.DISABLED
+
+                        _traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0) or 0
+                        _used_bytes = panel_user.get('usedTrafficBytes', 0) or 0
+                        _squads = panel_user.get('activeInternalSquads', []) or []
+                        _squad_uuids = []
+                        if isinstance(_squads, list):
+                            for _sq in _squads:
+                                if isinstance(_sq, dict) and 'uuid' in _sq:
+                                    _squad_uuids.append(_sq['uuid'])
+                                elif isinstance(_sq, str):
+                                    _squad_uuids.append(_sq)
+
+                        _short_id = await generate_unique_short_id(db)
+
+                        new_sub = Subscription(
+                            user_id=_bot_user.id,
+                            status=_sub_status.value,
+                            is_trial=False,
+                            end_date=_expire_at,
+                            traffic_limit_gb=_traffic_limit_bytes // (1024**3) if _traffic_limit_bytes > 0 else 0,
+                            traffic_used_gb=_used_bytes / (1024**3),
+                            device_limit=panel_user.get('hwidDeviceLimit', 1) or 1,
+                            connected_squads=_squad_uuids,
+                            remnawave_uuid=panel_uuid,
+                            remnawave_short_id=_short_id,
+                            remnawave_short_uuid=panel_user.get('shortUuid'),
+                            subscription_url=panel_user.get('subscriptionUrl', ''),
+                            subscription_crypto_link=panel_user.get('subscriptionCryptoLink', ''),
+                        )
+                        db.add(new_sub)
+                        subs_by_uuid[panel_uuid] = new_sub
+                        # Keep in-memory state consistent for subsequent iterations
+                        if hasattr(_bot_user, 'subscriptions') and isinstance(_bot_user.subscriptions, list):
+                            _bot_user.subscriptions.append(new_sub)
+                        stats['created'] += 1
+                        logger.info(
+                            '✅ [multi-tariff] Создана подписка из панели',
+                            panel_uuid=panel_uuid,
+                            user_id=_bot_user.id,
+                        )
+                    except Exception as create_err:
+                        logger.error(
+                            '❌ [multi-tariff] Ошибка создания подписки из панели',
+                            panel_uuid=panel_uuid,
+                            error=create_err,
+                        )
+                        stats['errors'] += 1
                     continue
 
                 try:
@@ -2134,6 +2232,9 @@ class RemnaWaveService:
                                     email=user.email,
                                     user_id=user.id,
                                 )
+                                # Append permanent short_id suffix in multi-tariff mode
+                                if settings.is_multi_tariff_enabled() and sub.remnawave_short_id:
+                                    username = f'{username}_{sub.remnawave_short_id}'
 
                                 create_kwargs = dict(
                                     username=username,
@@ -2171,23 +2272,47 @@ class RemnaWaveService:
                                 if not panel_uuid and user.telegram_id:
                                     existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                                     if existing_users:
-                                        panel_uuid = existing_users[0].uuid
-                                        logger.debug(
-                                            'Найден пользователь в панели',
-                                            telegram_id=user.telegram_id,
-                                            panel_uuid=panel_uuid,
-                                        )
+                                        if settings.is_multi_tariff_enabled():
+                                            if sub.remnawave_short_id:
+                                                _suffix = f'_{sub.remnawave_short_id}'
+                                                _matched = next(
+                                                    (eu for eu in existing_users if eu.username and eu.username.endswith(_suffix)),
+                                                    None,
+                                                )
+                                                if _matched:
+                                                    panel_uuid = _matched.uuid
+                                            # else: no short_id — can't match safely, skip
+                                        else:
+                                            panel_uuid = existing_users[0].uuid
+                                        if panel_uuid:
+                                            logger.debug(
+                                                'Найден пользователь в панели',
+                                                telegram_id=user.telegram_id,
+                                                panel_uuid=panel_uuid,
+                                            )
 
                                 # Fallback: поиск по email (для OAuth юзеров без telegram_id)
                                 if not panel_uuid and user.email:
                                     existing_users = await api.get_user_by_email(user.email)
                                     if existing_users:
-                                        panel_uuid = existing_users[0].uuid
-                                        logger.debug(
-                                            'Найден пользователь в панели по email',
-                                            email=user.email,
-                                            panel_uuid=panel_uuid,
-                                        )
+                                        if settings.is_multi_tariff_enabled():
+                                            if sub.remnawave_short_id:
+                                                _suffix = f'_{sub.remnawave_short_id}'
+                                                _matched = next(
+                                                    (eu for eu in existing_users if eu.username and eu.username.endswith(_suffix)),
+                                                    None,
+                                                )
+                                                if _matched:
+                                                    panel_uuid = _matched.uuid
+                                            # else: no short_id — can't match safely, skip
+                                        else:
+                                            panel_uuid = existing_users[0].uuid
+                                        if panel_uuid:
+                                            logger.debug(
+                                                'Найден пользователь в панели по email',
+                                                email=user.email,
+                                                panel_uuid=panel_uuid,
+                                            )
 
                                 if panel_uuid:
                                     update_kwargs = dict(
@@ -2213,8 +2338,8 @@ class RemnaWaveService:
                                         await api.update_user(**update_kwargs)
                                         # Сохраняем UUID если его не было
                                         if settings.is_multi_tariff_enabled():
-                                            # In multi-tariff, UUID should be on the subscription, not the user
-                                            pass  # subscription UUID is set elsewhere
+                                            if not sub.remnawave_uuid:
+                                                sub.remnawave_uuid = panel_uuid
                                         elif not user.remnawave_uuid:
                                             user.remnawave_uuid = panel_uuid
                                         return ('updated', sub, None)
@@ -2744,6 +2869,10 @@ class RemnaWaveService:
                             SubscriptionStatus.DISABLED.value,
                             SubscriptionStatus.LIMITED.value,
                         ):
+                            continue
+
+                        # Email-only users have no telegram_id — cannot be matched by panel_telegram_ids
+                        if not user.telegram_id:
                             continue
 
                         if user.telegram_id not in panel_telegram_ids:

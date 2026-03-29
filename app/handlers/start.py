@@ -100,36 +100,67 @@ async def _activate_pending_gift_after_registration(
             .with_for_update()
         )
         gift_purchase = gift_result.scalars().first()
-        if (
-            gift_purchase
-            and gift_purchase.is_gift
-            and gift_purchase.status
-            in (
-                GuestPurchaseStatus.PENDING_ACTIVATION.value,
-                GuestPurchaseStatus.PAID.value,
-            )
-            and (gift_purchase.user_id is None or gift_purchase.user_id == user.id)
-            and gift_purchase.buyer_user_id != user.id  # prevent self-activation
-        ):
-            if gift_purchase.user_id is None:
-                gift_purchase.user_id = user.id
-            # Transition PAID → PENDING_ACTIVATION so activate_purchase() accepts it
-            if gift_purchase.status == GuestPurchaseStatus.PAID.value:
-                gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
-            await db.flush()
-            await svc_activate(db, gift_purchase.token, skip_notification=True)
-            tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
+
+        if not gift_purchase or not gift_purchase.is_gift:
+            logger.warning('Gift not found for deep link token', token_prefix=gift_token[:5])
+            return
+
+        # Prevent self-activation: buyer cannot activate their own gift
+        if gift_purchase.buyer_user_id is not None and gift_purchase.buyer_user_id == user.id:
             await answer_func(
-                f'🎁 <b>Подарок активирован!</b>\n'
-                f'{tariff_name} — {gift_purchase.period_days} дн.\n\n'
-                f'Ваша подписка обновлена.',
+                '⚠️ Нельзя активировать свой собственный подарок.\nОтправьте код другу!',
                 parse_mode=ParseMode.HTML,
             )
+            return
+
+        if gift_purchase.status == GuestPurchaseStatus.DELIVERED.value:
+            await answer_func(
+                'ℹ️ Этот подарок уже был активирован.',
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        activatable_statuses = {
+            GuestPurchaseStatus.PENDING_ACTIVATION.value,
+            GuestPurchaseStatus.PAID.value,
+        }
+        if gift_purchase.status not in activatable_statuses:
+            await answer_func(
+                '❌ Этот подарок невозможно активировать.',
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        if gift_purchase.user_id is not None and gift_purchase.user_id != user.id:
+            logger.warning('Gift belongs to another user', token_prefix=gift_token[:5])
+            return
+
+        if gift_purchase.user_id is None:
+            gift_purchase.user_id = user.id
+        # Transition PAID → PENDING_ACTIVATION so activate_purchase() accepts it
+        if gift_purchase.status == GuestPurchaseStatus.PAID.value:
+            gift_purchase.status = GuestPurchaseStatus.PENDING_ACTIVATION.value
+        await db.flush()
+        await svc_activate(db, gift_purchase.token, skip_notification=True)
+        tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
+        await answer_func(
+            f'🎁 <b>Подарок активирован!</b>\n'
+            f'{tariff_name} — {gift_purchase.period_days} дн.\n\n'
+            f'Ваша подписка обновлена.',
+            parse_mode=ParseMode.HTML,
+        )
     except Exception:
         logger.exception(
             'Failed to auto-activate gift after registration',
             token_prefix=(gift_token or '')[:5],
         )
+        try:
+            await answer_func(
+                '❌ Произошла ошибка при активации подарка. Попробуйте активировать через личный кабинет.',
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception:
+            pass
 
 
 async def _claim_phantom_user(

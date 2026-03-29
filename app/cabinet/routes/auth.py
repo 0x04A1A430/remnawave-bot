@@ -315,125 +315,119 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 logger.debug('No subscription found in panel for email', email=user.email)
                 return
 
-            # Take first user if multiple found
-            panel_user = panel_users[0]
-            logger.info('Found subscription in panel for email', email=user.email, uuid=panel_user.uuid)
-
-            # Check if another user already owns this remnawave_uuid
-            if settings.is_multi_tariff_enabled():
-                # In multi-tariff mode UUIDs live on subscriptions, not users
-                from sqlalchemy import select as _select
-
-                from app.database.models import Subscription as _Subscription
-
-                _sub_result = await db.execute(
-                    _select(_Subscription).where(_Subscription.remnawave_uuid == panel_user.uuid)
-                )
-                _existing_sub = _sub_result.scalar_one_or_none()
-                if _existing_sub and _existing_sub.user_id != user.id:
-                    logger.warning(
-                        'Panel UUID already owned by another user subscription, skipping sync',
-                        email=user.email,
-                        panel_uuid=panel_user.uuid,
-                        existing_owner_id=_existing_sub.user_id,
-                    )
-                    return
-            else:
-                from app.database.crud.user import get_user_by_remnawave_uuid
-
-                existing_owner = await get_user_by_remnawave_uuid(db, panel_user.uuid)
-                if existing_owner and existing_owner.id != user.id:
-                    logger.warning(
-                        'Panel UUID already belongs to another user, skipping sync',
-                        email=user.email,
-                        panel_uuid=panel_user.uuid,
-                        existing_owner_id=existing_owner.id,
-                    )
-                    return
-
-            # Link user to panel (only in single-tariff mode; multi-tariff uses per-subscription UUIDs)
-            if not settings.is_multi_tariff_enabled():
-                user.remnawave_uuid = panel_user.uuid
-
-            # Create or update subscription
-            from app.database.crud.subscription import get_subscription_by_user_id
+            # In multi-tariff mode, sync ALL panel users (each = one subscription)
+            # In single-tariff mode, process only the first
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id, get_subscription_by_user_id
             from app.database.models import Subscription, SubscriptionStatus
 
-            if settings.is_multi_tariff_enabled():
-                from app.database.crud.subscription import get_active_subscriptions_by_user_id
+            panel_users_to_sync = panel_users if settings.is_multi_tariff_enabled() else panel_users[:1]
 
-                active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                # Match subscription by panel UUID instead of blindly taking first
-                existing_sub = next(
-                    (s for s in active_subs if s.remnawave_uuid == panel_user.uuid),
-                    None,
-                )
-            else:
-                existing_sub = await get_subscription_by_user_id(db, user.id)
+            for panel_user in panel_users_to_sync:
+                logger.info('Syncing panel subscription for email', email=user.email, uuid=panel_user.uuid)
 
-            # Parse panel data — panel returns local time with misleading +00:00 offset
-            expire_at = panel_datetime_to_utc(panel_user.expire_at)
-            traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
-            traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
+                # Check if another user already owns this remnawave_uuid
+                if settings.is_multi_tariff_enabled():
+                    from sqlalchemy import select as _select
 
-            # Extract squad UUIDs from active_internal_squads
-            connected_squads = [s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')]
+                    from app.database.models import Subscription as _Subscription
 
-            # Device limit from panel
-            device_limit = panel_user.hwid_device_limit or 0
+                    _sub_result = await db.execute(
+                        _select(_Subscription).where(_Subscription.remnawave_uuid == panel_user.uuid)
+                    )
+                    _existing_sub = _sub_result.scalar_one_or_none()
+                    if _existing_sub and _existing_sub.user_id != user.id:
+                        logger.warning(
+                            'Panel UUID already owned by another user subscription, skipping',
+                            email=user.email,
+                            panel_uuid=panel_user.uuid,
+                            existing_owner_id=_existing_sub.user_id,
+                        )
+                        continue
+                else:
+                    from app.database.crud.user import get_user_by_remnawave_uuid
 
-            # Determine status — expire_at is now naive UTC
-            current_time = datetime.now(UTC)
+                    existing_owner = await get_user_by_remnawave_uuid(db, panel_user.uuid)
+                    if existing_owner and existing_owner.id != user.id:
+                        logger.warning(
+                            'Panel UUID already belongs to another user, skipping',
+                            email=user.email,
+                            panel_uuid=panel_user.uuid,
+                            existing_owner_id=existing_owner.id,
+                        )
+                        continue
 
-            if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
-                sub_status = SubscriptionStatus.ACTIVE
-            elif expire_at <= current_time:
-                sub_status = SubscriptionStatus.EXPIRED
-            else:
-                sub_status = SubscriptionStatus.DISABLED
+                # Link user to panel (only in single-tariff mode)
+                if not settings.is_multi_tariff_enabled():
+                    user.remnawave_uuid = panel_user.uuid
 
-            if existing_sub:
-                # Update existing subscription (expire_at already naive UTC)
-                existing_sub.end_date = expire_at
-                existing_sub.traffic_limit_gb = traffic_limit_gb
-                existing_sub.traffic_used_gb = traffic_used_gb
-                existing_sub.status = sub_status.value
-                existing_sub.remnawave_short_uuid = panel_user.short_uuid
-                existing_sub.subscription_url = panel_user.subscription_url
-                existing_sub.subscription_crypto_link = panel_user.happ_crypto_link
-                existing_sub.connected_squads = connected_squads
-                existing_sub.device_limit = device_limit
-                existing_sub.is_trial = False  # Panel subscription is not trial
-                logger.info(
-                    'Updated subscription for email user squads: devices',
-                    email=user.email,
-                    connected_squads=connected_squads,
-                    device_limit=device_limit,
-                )
-            else:
-                # Create new subscription (expire_at and current_time already naive UTC)
-                new_sub = Subscription(
-                    user_id=user.id,
-                    start_date=current_time,
-                    end_date=expire_at,
-                    traffic_limit_gb=traffic_limit_gb,
-                    traffic_used_gb=traffic_used_gb,
-                    status=sub_status.value,
-                    is_trial=False,
-                    remnawave_uuid=panel_user.uuid if settings.is_multi_tariff_enabled() else None,
-                    remnawave_short_uuid=panel_user.short_uuid,
-                    subscription_url=panel_user.subscription_url,
-                    subscription_crypto_link=panel_user.happ_crypto_link,
-                    connected_squads=connected_squads,
-                    device_limit=device_limit,
-                )
-                db.add(new_sub)
-                logger.info(
-                    'Created subscription for email user squads: devices',
-                    email=user.email,
-                    connected_squads=connected_squads,
-                    device_limit=device_limit,
-                )
+                # Find existing subscription
+                if settings.is_multi_tariff_enabled():
+                    active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+                    existing_sub = next(
+                        (s for s in active_subs if s.remnawave_uuid == panel_user.uuid),
+                        None,
+                    )
+                else:
+                    existing_sub = await get_subscription_by_user_id(db, user.id)
+
+                # Parse panel data
+                expire_at = panel_datetime_to_utc(panel_user.expire_at)
+                traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
+                traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
+                connected_squads = [s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')]
+                device_limit = panel_user.hwid_device_limit or 0
+
+                # Determine status
+                current_time = datetime.now(UTC)
+                if panel_user.status.value == 'ACTIVE' and expire_at > current_time:
+                    sub_status = SubscriptionStatus.ACTIVE
+                elif expire_at <= current_time:
+                    sub_status = SubscriptionStatus.EXPIRED
+                else:
+                    sub_status = SubscriptionStatus.DISABLED
+
+                if existing_sub:
+                    existing_sub.end_date = expire_at
+                    existing_sub.traffic_limit_gb = traffic_limit_gb
+                    existing_sub.traffic_used_gb = traffic_used_gb
+                    existing_sub.status = sub_status.value
+                    existing_sub.remnawave_short_uuid = panel_user.short_uuid
+                    existing_sub.subscription_url = panel_user.subscription_url
+                    existing_sub.subscription_crypto_link = panel_user.happ_crypto_link
+                    existing_sub.connected_squads = connected_squads
+                    existing_sub.device_limit = device_limit
+                    existing_sub.is_trial = False
+                    logger.info(
+                        'Updated subscription for email user',
+                        email=user.email,
+                        uuid=panel_user.uuid,
+                    )
+                else:
+                    from app.database.crud.subscription import generate_unique_short_id
+
+                    _short_id = await generate_unique_short_id(db)
+                    new_sub = Subscription(
+                        user_id=user.id,
+                        start_date=current_time,
+                        end_date=expire_at,
+                        traffic_limit_gb=traffic_limit_gb,
+                        traffic_used_gb=traffic_used_gb,
+                        status=sub_status.value,
+                        is_trial=False,
+                        remnawave_uuid=panel_user.uuid if settings.is_multi_tariff_enabled() else None,
+                        remnawave_short_id=_short_id,
+                        remnawave_short_uuid=panel_user.short_uuid,
+                        subscription_url=panel_user.subscription_url,
+                        subscription_crypto_link=panel_user.happ_crypto_link,
+                        connected_squads=connected_squads,
+                        device_limit=device_limit,
+                    )
+                    db.add(new_sub)
+                    logger.info(
+                        'Created subscription for email user',
+                        email=user.email,
+                        uuid=panel_user.uuid,
+                    )
 
             await db.commit()
 
@@ -1060,6 +1054,11 @@ async def register_email_standalone(
         user.email_verified_at = datetime.now(UTC)
         await db.commit()
         logger.info('Email auto-verified (test or verification disabled)', email=request.email, user_id=user.id)
+        # Sync existing panel subscription (same as manual verification flow)
+        try:
+            await _sync_subscription_from_panel_by_email(db, user)
+        except Exception:
+            logger.warning('Failed to sync panel subscription after auto-verify', user_id=user.id, exc_info=True)
     else:
         # Сгенерировать токен верификации
         verification_token = generate_verification_token()
