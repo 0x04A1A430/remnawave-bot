@@ -372,9 +372,13 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
 
                 # Parse panel data
                 expire_at = panel_datetime_to_utc(panel_user.expire_at)
-                traffic_limit_gb = panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
+                traffic_limit_gb = (
+                    panel_user.traffic_limit_bytes // (1024**3) if panel_user.traffic_limit_bytes > 0 else 0
+                )
                 traffic_used_gb = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes > 0 else 0
-                connected_squads = [s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')]
+                connected_squads = [
+                    s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')
+                ]
                 device_limit = panel_user.hwid_device_limit or 0
 
                 # Determine status

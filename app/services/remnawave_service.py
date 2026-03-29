@@ -1777,10 +1777,7 @@ class RemnaWaveService:
             users_by_uuid = {u.remnawave_uuid: u for u in users_result.scalars().all() if u.remnawave_uuid}
 
             # Load all bot users for matching unlinked panel users
-            all_users_result = await db.execute(
-                select(User)
-                .options(selectinload(User.subscriptions))
-            )
+            all_users_result = await db.execute(select(User).options(selectinload(User.subscriptions)))
             _all_users = all_users_result.scalars().all()
             bot_users_by_tg = {u.telegram_id: u for u in _all_users if u.telegram_id}
             bot_users_by_email = {u.email.lower(): u for u in _all_users if u.email and u.email_verified}
@@ -2276,7 +2273,11 @@ class RemnaWaveService:
                                             if sub.remnawave_short_id:
                                                 _suffix = f'_{sub.remnawave_short_id}'
                                                 _matched = next(
-                                                    (eu for eu in existing_users if eu.username and eu.username.endswith(_suffix)),
+                                                    (
+                                                        eu
+                                                        for eu in existing_users
+                                                        if eu.username and eu.username.endswith(_suffix)
+                                                    ),
                                                     None,
                                                 )
                                                 if _matched:
@@ -2299,7 +2300,11 @@ class RemnaWaveService:
                                             if sub.remnawave_short_id:
                                                 _suffix = f'_{sub.remnawave_short_id}'
                                                 _matched = next(
-                                                    (eu for eu in existing_users if eu.username and eu.username.endswith(_suffix)),
+                                                    (
+                                                        eu
+                                                        for eu in existing_users
+                                                        if eu.username and eu.username.endswith(_suffix)
+                                                    ),
                                                     None,
                                                 )
                                                 if _matched:
