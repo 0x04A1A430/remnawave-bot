@@ -408,6 +408,22 @@ class AssignReferrerResponse(BaseModel):
     message: str
 
 
+class RemoveReferrerResponse(BaseModel):
+    """Response after removing a user's referrer."""
+
+    success: bool
+    old_referrer_id: int | None = None
+    message: str
+
+
+class RemoveReferralResponse(BaseModel):
+    """Response after removing a specific referral from a user."""
+
+    success: bool
+    removed_user_id: int
+    message: str
+
+
 class DeviceInfo(BaseModel):
     """Individual device info."""
 

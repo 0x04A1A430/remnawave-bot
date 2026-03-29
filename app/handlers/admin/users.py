@@ -26,6 +26,7 @@ from app.database.crud.server_squad import (
 from app.database.crud.tariff import get_all_tariffs, get_tariff_by_id
 from app.database.crud.user import (
     get_referrals,
+    get_user_by_email,
     get_user_by_id,
     get_user_by_telegram_id,
     get_user_by_username,
@@ -1916,15 +1917,21 @@ async def process_edit_user_referrals(
         if not normalized:
             continue
 
-        normalized = normalized.removeprefix('@')
-
         user = None
-        if normalized.isdigit():
-            try:
-                user = await get_user_by_telegram_id(db, int(normalized))
-            except ValueError:
-                user = None
+        if normalized.startswith('#') and normalized[1:].isdigit():
+            # Internal user ID lookup: #2351
+            user = await get_user_by_id(db, int(normalized[1:]))
+        elif '@' in normalized and '.' in normalized:
+            # Email lookup: user@example.com
+            user = await get_user_by_email(db, normalized)
+        elif normalized.startswith('@'):
+            # Username lookup: @username
+            user = await get_user_by_username(db, normalized.lstrip('@'))
+        elif normalized.isdigit():
+            # Telegram ID lookup
+            user = await get_user_by_telegram_id(db, int(normalized))
         else:
+            # Fallback: try as username without @
             user = await get_user_by_username(db, normalized)
 
         if not user:

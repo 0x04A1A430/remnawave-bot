@@ -62,6 +62,8 @@ from ..schemas.users import (
     PanelSyncStatusResponse,
     PanelUserInfo,
     PeriodPriceInfo,
+    RemoveReferralResponse,
+    RemoveReferrerResponse,
     ResetDevicesResponse,
     ResetSubscriptionRequest,
     ResetSubscriptionResponse,
@@ -1881,6 +1883,114 @@ async def assign_user_referrer(
         old_referrer_id=old_referrer_id,
         new_referrer_id=request.referrer_id,
         message='Referrer assigned successfully. Bonuses will apply on next user topup.',
+    )
+
+
+# === Remove Referrer ===
+
+
+@router.delete('/{user_id}/referrer', response_model=RemoveReferrerResponse)
+async def remove_user_referrer(
+    user_id: int,
+    admin: User = Depends(require_permission('users:referral')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Remove who referred this user (set referred_by_id to None)."""
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='User not found',
+        )
+
+    if user.referred_by_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='User does not have a referrer',
+        )
+
+    old_referrer_id = user.referred_by_id
+    user.referred_by_id = None
+    user.updated_at = datetime.now(UTC)
+    await PermissionService.log_action(
+        db,
+        user_id=admin.id,
+        action='remove_referrer',
+        resource_type='user',
+        resource_id=str(user_id),
+        details={'old_referrer_id': old_referrer_id},
+    )
+    await db.commit()
+
+    logger.info(
+        'Admin removed referrer from user',
+        admin_id=admin.id,
+        user_id=user_id,
+        old_referrer_id=old_referrer_id,
+    )
+
+    return RemoveReferrerResponse(
+        success=True,
+        old_referrer_id=old_referrer_id,
+        message='Referrer removed successfully',
+    )
+
+
+# === Remove Referral ===
+
+
+@router.delete('/{user_id}/referrals/{referral_user_id}', response_model=RemoveReferralResponse)
+async def remove_user_referral(
+    user_id: int,
+    referral_user_id: int,
+    admin: User = Depends(require_permission('users:referral')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Remove a specific referral from a user (unbind referral_user from this referrer)."""
+    # Verify the referrer user exists
+    referrer = await get_user_by_id(db, user_id)
+    if not referrer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Referrer user not found',
+        )
+
+    referral_user = await get_user_by_id(db, referral_user_id)
+    if not referral_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Referral user not found',
+        )
+
+    if referral_user.referred_by_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This user is not a referral of the specified referrer',
+        )
+
+    referral_user.referred_by_id = None
+    referral_user.updated_at = datetime.now(UTC)
+    await PermissionService.log_action(
+        db,
+        user_id=admin.id,
+        action='remove_referral',
+        resource_type='user',
+        resource_id=str(user_id),
+        details={'removed_referral_user_id': referral_user_id},
+    )
+    await db.commit()
+
+    logger.info(
+        'Admin removed referral from user',
+        admin_id=admin.id,
+        referrer_user_id=user_id,
+        removed_referral_user_id=referral_user_id,
+    )
+
+    return RemoveReferralResponse(
+        success=True,
+        removed_user_id=referral_user_id,
+        message='Referral removed successfully',
     )
 
 
