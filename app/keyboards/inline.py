@@ -1470,7 +1470,7 @@ def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> Inli
     keyboard = []
 
     start_devices = settings.DEFAULT_DEVICE_LIMIT
-    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 50
+    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100
     end_devices = min(max_devices + 1, start_devices + 10)
 
     buttons = []
@@ -2289,7 +2289,6 @@ def get_change_devices_keyboard(
             price_text = ''
         elif devices_count > current_devices:
             emoji = '➕'
-            devices_count - current_devices
 
             current_chargeable = max(0, current_devices - default_device_limit)
             new_chargeable = max(0, devices_count - default_device_limit)

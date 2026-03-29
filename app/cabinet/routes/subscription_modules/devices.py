@@ -770,7 +770,7 @@ async def get_devices(
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            response = await api.get_user_devices(_puuid)
+            response = await api.get_user_devices_all(_puuid)
 
             devices_list = response.get('devices', [])
             formatted_devices = []
@@ -877,16 +877,16 @@ async def delete_all_devices(
         service = RemnaWaveService()
         async with service.get_api_client() as api:
             # Get all devices first
-            response = await api._make_request('GET', f'/api/hwid/devices/{_puuid}')
+            response = await api.get_user_devices_all(_puuid)
 
-            if not response or 'response' not in response:
+            if not response:
                 return {
                     'success': True,
                     'message': 'No devices to delete',
                     'deleted_count': 0,
                 }
 
-            devices_list = response['response'].get('devices', [])
+            devices_list = response.get('devices', [])
             if not devices_list:
                 return {
                     'success': True,
@@ -964,7 +964,7 @@ async def get_device_reduction_info(
     if current_device_limit <= min_device_limit:
         return {
             'available': False,
-            'reason': 'Already at minimum device limit for your tariff',
+            'reason': 'Already at minimum device limit',
             'current_device_limit': current_device_limit,
             'min_device_limit': min_device_limit,
             'can_reduce': 0,
@@ -1126,8 +1126,11 @@ async def reduce_devices(
         )
 
     logger.info(
-        f'User {user_id} reduced device limit from {old_device_limit} to {new_device_limit}'
-        + (f' (removed {devices_removed_count} devices)' if devices_removed_count > 0 else '')
+        'User reduced device limit',
+        user_id=user_id,
+        old_device_limit=old_device_limit,
+        new_device_limit=new_device_limit,
+        devices_removed=devices_removed_count if devices_removed_count > 0 else None,
     )
 
     return {

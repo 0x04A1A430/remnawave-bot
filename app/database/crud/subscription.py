@@ -791,7 +791,7 @@ async def add_subscription_devices(db: AsyncSession, subscription: Subscription,
 
     # Check tariff max device limit
     tariff_max = subscription.tariff.max_device_limit if subscription.tariff else None
-    if tariff_max and new_limit > tariff_max:
+    if tariff_max is not None and tariff_max > 0 and new_limit > tariff_max:
         logger.warning(
             '📱 Попытка превысить лимит устройств тарифа',
             user_id=subscription.user_id,
