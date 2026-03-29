@@ -296,7 +296,7 @@ async def confirm_change_devices(
 
     # Используем max_device_limit из тарифа если есть, иначе глобальную настройку
     tariff_max_devices = getattr(tariff, 'max_device_limit', None) if tariff else None
-    effective_max = tariff_max_devices or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+    effective_max = (tariff_max_devices if tariff_max_devices is not None and tariff_max_devices > 0 else None) or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
     if effective_max and new_devices_count > effective_max:
         await callback.answer(
             texts.t(
@@ -608,7 +608,7 @@ async def execute_change_devices(
         # Re-validate: prevent double-charge and max-limit violation
         if new_devices_count > current_devices:
             tariff_max_recheck = getattr(tariff, 'max_device_limit', None) if tariff else None
-            max_devices = tariff_max_recheck or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
+            max_devices = (tariff_max_recheck if tariff_max_recheck is not None and tariff_max_recheck > 0 else None) or (settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None)
             if max_devices and new_devices_count > max_devices:
                 if price > 0:
                     user_refund = await db.execute(

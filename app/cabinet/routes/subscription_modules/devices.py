@@ -978,9 +978,9 @@ async def get_device_reduction_info(
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api._make_request('GET', f'/api/hwid/devices/{_puuid}')
-                if response and 'response' in response:
-                    connected_devices_count = response['response'].get('total', 0)
+                response = await api.get_user_devices_all(_puuid)
+                if response:
+                    connected_devices_count = response.get('total', 0)
         except Exception as e:
             logger.error('Error getting connected devices count', error=e)
 
@@ -1083,7 +1083,7 @@ async def reduce_devices(
                         # Sort by date (oldest first) and remove the last ones
                         sorted_devices = sorted(
                             devices_list,
-                            key=lambda d: d.get('updatedAt') or d.get('createdAt') or '',
+                            key=lambda d: d.get('updatedAt') or d.get('createdAt') or '\xff',
                         )
                         devices_to_delete = sorted_devices[-devices_to_remove:]
 

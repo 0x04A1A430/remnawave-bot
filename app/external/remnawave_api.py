@@ -1168,7 +1168,7 @@ class RemnaWaveAPI:
 
     async def reset_user_devices(self, user_uuid: str) -> bool:
         try:
-            devices_info = await self.get_user_devices(user_uuid)
+            devices_info = await self.get_user_devices_all(user_uuid)
             devices = devices_info.get('devices', [])
 
             if not devices:

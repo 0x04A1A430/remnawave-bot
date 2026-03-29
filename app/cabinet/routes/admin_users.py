@@ -2051,7 +2051,7 @@ async def get_user_devices(
             return UserDevicesResponse()
 
         async with service.get_api_client() as api:
-            response = await api.get_user_devices(_dev_uuid)
+            response = await api.get_user_devices_all(_dev_uuid)
 
             devices = []
             for d in response.get('devices', []):
@@ -2157,7 +2157,7 @@ async def reset_user_devices(
 
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            devices_info = await api.get_user_devices(_rst_uuid)
+            devices_info = await api.get_user_devices_all(_rst_uuid)
             devices = devices_info.get('devices', [])
             total = len(devices)
 

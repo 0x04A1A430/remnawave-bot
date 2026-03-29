@@ -2797,7 +2797,7 @@ async def _load_devices_info(user: User) -> tuple[int, list[MiniAppDevice]]:
 
     try:
         async with service.get_api_client() as api:
-            response = await api.get_user_devices(remnawave_uuid)
+            response = await api.get_user_devices_all(remnawave_uuid)
     except RemnaWaveConfigurationError:
         logger.debug('RemnaWave configuration missing while loading devices')
         return 0, []
