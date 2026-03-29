@@ -792,7 +792,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 )
             )
 
-        if campaign:
+        if campaign and not campaign.is_none_bonus:
             try:
                 await message.answer(
                     texts.t(
