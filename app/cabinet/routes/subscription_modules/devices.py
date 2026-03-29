@@ -954,13 +954,9 @@ async def get_device_reduction_info(
             'connected_devices_count': 0,
         }
 
-    # Get tariff info for min device limit
-    tariff = None
+    # Minimum device limit for decrease is always 1 (tariff's device_limit is the
+    # number of devices included at purchase, not the floor for decrease)
     min_device_limit = 1
-    if subscription.tariff_id:
-        tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        if tariff:
-            min_device_limit = getattr(tariff, 'device_limit', 1) or 1
 
     current_device_limit = subscription.device_limit or 1
 
@@ -1041,13 +1037,9 @@ async def reduce_devices(
             detail='Device reduction is not available for trial subscriptions',
         )
 
-    # Get tariff info for min device limit
-    tariff = None
+    # Minimum device limit for decrease is always 1 (tariff's device_limit is the
+    # number of devices included at purchase, not the floor for decrease)
     min_device_limit = 1
-    if subscription.tariff_id:
-        tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        if tariff:
-            min_device_limit = getattr(tariff, 'device_limit', 1) or 1
 
     current_device_limit = subscription.device_limit or 1
 
@@ -1072,9 +1064,9 @@ async def reduce_devices(
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api._make_request('GET', f'/api/hwid/devices/{_puuid}')
-                if response and 'response' in response:
-                    devices_list = response['response'].get('devices', [])
+                response = await api.get_user_devices_all(_puuid)
+                if response:
+                    devices_list = response.get('devices', [])
                     connected_devices_count = len(devices_list)
 
                     # If connected devices exceed new limit, remove excess (last connected)

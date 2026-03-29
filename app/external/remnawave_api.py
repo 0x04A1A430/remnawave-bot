@@ -1140,6 +1140,32 @@ class RemnaWaveAPI:
                 return {'total': 0, 'devices': []}
             raise
 
+    async def get_user_devices_all(self, user_uuid: str) -> dict[str, Any]:
+        """GET /api/hwid/devices/{user_uuid} — all devices for a user (paginated)."""
+        all_devices: list[dict[str, Any]] = []
+        start = 0
+        page_size = 1000
+
+        try:
+            while True:
+                response = await self._make_request(
+                    'GET', f'/api/hwid/devices/{user_uuid}', params={'start': start, 'size': page_size}
+                )
+                data = response.get('response', {'devices': [], 'total': 0})
+                devices = data.get('devices', [])
+                total = data.get('total', 0)
+                all_devices.extend(devices)
+
+                if len(all_devices) >= total or not devices:
+                    break
+                start += len(devices)
+        except RemnaWaveAPIError as e:
+            if e.status_code == 404:
+                return {'total': 0, 'devices': []}
+            raise
+
+        return {'devices': all_devices, 'total': len(all_devices)}
+
     async def reset_user_devices(self, user_uuid: str) -> bool:
         try:
             devices_info = await self.get_user_devices(user_uuid)

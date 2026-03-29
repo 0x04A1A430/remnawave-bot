@@ -2274,11 +2274,10 @@ def get_change_devices_keyboard(
     if tariff_max_devices and tariff_max_devices > 0:
         max_devices = tariff_max_devices
     else:
-        max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 20
+        max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100
 
-    # Минимальное количество устройств: device_limit тарифа или 1
-    tariff_min_devices = (getattr(tariff, 'device_limit', 1) or 1) if tariff else 1
-    min_devices = max(1, tariff_min_devices)
+    # Минимум при уменьшении всегда 1 (device_limit тарифа — это "включено при покупке", а не нижняя граница)
+    min_devices = 1
 
     start_range = max(min_devices, min(current_devices - 3, max_devices - 6))
     end_range = min(max_devices + 1, max(current_devices + 4, 7))

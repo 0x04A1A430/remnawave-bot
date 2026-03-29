@@ -203,29 +203,18 @@ async def handle_change_devices(
     if tariff:
         price_per_device = tariff_device_price
         price_text = texts.format_price(price_per_device)
-        tariff_min_devices = getattr(tariff, 'device_limit', 1) or 1
-
-        # Добавляем информацию о минимальном лимите если он больше 1
-        min_devices_info = ''
-        if tariff_min_devices > 1:
-            min_devices_info = texts.t(
-                'CHANGE_DEVICES_MIN_LIMIT_INFO',
-                '\nМинимум для тарифа: {min_devices} устройств\n',
-            ).format(min_devices=tariff_min_devices)
-
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT_TARIFF',
             (
                 '📱 <b>Изменение количества устройств</b>\n\n'
                 'Текущий лимит: {current_devices} устройств\n'
                 'Цена за доп. устройство: {price}/мес\n'
-                '{min_devices_info}'
                 'Выберите новое количество устройств:\n\n'
                 '💡 <b>Важно:</b>\n'
                 '• При увеличении - доплата пропорционально оставшемуся времени\n'
                 '• При уменьшении - возврат средств не производится'
             ),
-        ).format(current_devices=current_devices, price=price_text, min_devices_info=min_devices_info)
+        ).format(current_devices=current_devices, price=price_text)
     else:
         prompt_text = texts.t(
             'CHANGE_DEVICES_PROMPT',
@@ -318,14 +307,13 @@ async def confirm_change_devices(
         )
         return
 
-    # Проверяем минимальное количество устройств на тарифе
-    tariff_min_devices = (getattr(tariff, 'device_limit', 1) or 1) if tariff else 1
-    if new_devices_count < tariff_min_devices:
+    # Минимум при уменьшении всегда 1 (device_limit тарифа — это "включено при покупке", а не нижняя граница)
+    if new_devices_count < 1:
         await callback.answer(
             texts.t(
                 'DEVICES_MIN_LIMIT_REACHED',
-                '⚠️ Минимальное количество устройств для вашего тарифа: {limit}',
-            ).format(limit=tariff_min_devices),
+                '⚠️ Минимальное количество устройств: {limit}',
+            ).format(limit=1),
             show_alert=True,
         )
         return
@@ -548,14 +536,13 @@ async def execute_change_devices(
     else:
         price_per_device = settings.PRICE_PER_DEVICE
 
-    # Проверяем минимальное количество устройств на тарифе
-    tariff_min_devices = (getattr(tariff, 'device_limit', 1) or 1) if tariff else 1
-    if new_devices_count < tariff_min_devices:
+    # Минимум при уменьшении всегда 1 (device_limit тарифа — это "включено при покупке", а не нижняя граница)
+    if new_devices_count < 1:
         await callback.answer(
             texts.t(
                 'DEVICES_MIN_LIMIT_REACHED',
-                '⚠️ Минимальное количество устройств для вашего тарифа: {limit}',
-            ).format(limit=tariff_min_devices),
+                '⚠️ Минимальное количество устройств: {limit}',
+            ).format(limit=1),
             show_alert=True,
         )
         return

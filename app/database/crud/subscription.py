@@ -770,6 +770,7 @@ async def add_subscription_devices(db: AsyncSession, subscription: Subscription,
     locked_result = await db.execute(
         select(Subscription)
         .where(Subscription.id == subscription.id)
+        .options(selectinload(Subscription.tariff))
         .with_for_update()
         .execution_options(populate_existing=True)
     )
@@ -787,6 +788,18 @@ async def add_subscription_devices(db: AsyncSession, subscription: Subscription,
             max_devices=max_devices,
         )
         new_limit = max_devices
+
+    # Check tariff max device limit
+    tariff_max = subscription.tariff.max_device_limit if subscription.tariff else None
+    if tariff_max and new_limit > tariff_max:
+        logger.warning(
+            '📱 Попытка превысить лимит устройств тарифа',
+            user_id=subscription.user_id,
+            current=subscription.device_limit,
+            requested=devices,
+            tariff_max_devices=tariff_max,
+        )
+        new_limit = tariff_max
 
     subscription.device_limit = new_limit
     subscription.updated_at = datetime.now(UTC)
