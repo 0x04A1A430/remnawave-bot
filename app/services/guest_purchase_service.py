@@ -356,7 +356,7 @@ async def fulfill_purchase(
             if recipient_type == 'email' and not purchase.is_gift and is_new_account:
                 purchase.auto_login_token = create_auto_login_token(user.id)
             await db.commit()
-            await db.refresh(purchase, attribute_names=['landing', 'user'])
+            await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
 
             try:
                 await send_guest_notification(
@@ -436,7 +436,7 @@ async def fulfill_purchase(
             purchase.auto_login_token = create_auto_login_token(user.id)
 
         await db.commit()
-        await db.refresh(purchase, attribute_names=['landing', 'user'])
+        await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
 
         # Create transaction so promo group auto-assignment and contest tracking work
         transaction = None
@@ -1104,7 +1104,7 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
 
         # Single atomic commit: subscription + purchase status + user changes
         await db.commit()
-        await db.refresh(purchase, attribute_names=['landing', 'user'])
+        await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
 
         # Create transaction so promo group auto-assignment and contest tracking work
         try:

@@ -1373,9 +1373,9 @@ class AdminNotificationService:
                 message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
 
             if purchase.is_gift:
-                recipient_value = html.escape(purchase.gift_recipient_value or '—')
-                recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
                 if purchase.gift_recipient_value:
+                    recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
+                    recipient_value = html.escape(purchase.gift_recipient_value)
                     message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
                 else:
                     message_lines.append('🔗 Получатель: <i>по коду активации</i>')
