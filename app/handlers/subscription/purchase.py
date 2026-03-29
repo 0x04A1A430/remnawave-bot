@@ -60,6 +60,13 @@ from app.utils.decorators import error_handler
 logger = structlog.get_logger(__name__)
 
 
+async def _resolve_subscription(callback, db_user, db, state=None):
+    """Resolve subscription — delegates to shared resolve_subscription_from_context."""
+    from .common import resolve_subscription_from_context
+
+    return await resolve_subscription_from_context(callback, db_user, db, state)
+
+
 def _serialize_markup(markup: InlineKeyboardMarkup | None) -> Any | None:
     if markup is None:
         return None
@@ -174,6 +181,13 @@ from .traffic import (
 
 
 async def show_subscription_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    # Multi-tariff: redirect to "My subscriptions" list
+    if settings.is_multi_tariff_enabled():
+        from app.handlers.subscription.my_subscriptions import show_my_subscriptions
+
+        await show_my_subscriptions(callback, db_user, db)
+        return
+
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
@@ -182,6 +196,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     await db.refresh(db_user)
 
     texts = get_texts(db_user.language)
+    # Multi-tariff: this branch is only reached in single-tariff mode (multi-tariff
+    # is redirected to show_my_subscriptions above). db_user.subscription returns
+    # the first active or most recent subscription, which is correct here.
     subscription = db_user.subscription
 
     if not subscription:
@@ -288,13 +305,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     if show_devices:
         try:
-            if db_user.remnawave_uuid:
+            _device_uuid = (
+                getattr(subscription, 'remnawave_uuid', None)
+                if settings.is_multi_tariff_enabled() and subscription
+                else None
+            ) or db_user.remnawave_uuid
+            if _device_uuid:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
 
                 async with service.get_api_client() as api:
-                    response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+                    response = await api._make_request('GET', f'/api/hwid/devices/{_device_uuid}')
 
                     if response and 'response' in response:
                         devices_info = response['response']
@@ -588,6 +610,9 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
 
     # Проверяем, использовал ли пользователь триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: db_user.subscription returns the first active/most recent
+    # subscription. In multi-tariff mode a user can have multiple subscriptions, but
+    # trial eligibility is still "has any subscription" so this check is correct.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -787,6 +812,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
 
     # Проверяем, использовал ли пользователь триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: db_user.subscription returns the first active/most recent
+    # subscription. Trial eligibility is "has any subscription" so this check is correct.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -1306,6 +1333,8 @@ async def start_subscription_purchase(
         keyboard,
     )
 
+    # Multi-tariff note: this path is only reached in classic (non-tariff) mode.
+    # Tariff mode redirects to show_tariffs_list above. db_user.subscription is safe.
     subscription = getattr(db_user, 'subscription', None)
 
     if settings.is_devices_selection_enabled():
@@ -1442,7 +1471,27 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     if 'period_days' not in prepared_cart_data:
         await callback.answer('❌ Корзина повреждена. Оформите подписку заново.', show_alert=True)
-        await user_cart_service.delete_user_cart(db_user.id)
+        # Multi-tariff safe: try per-subscription deletion to avoid nuking other carts
+        corrupted_sub_id = None
+        try:
+            raw = cart_data.get('subscription_id')
+            if raw is not None:
+                corrupted_sub_id = int(raw)
+        except (TypeError, ValueError):
+            pass
+
+        if corrupted_sub_id is not None:
+            await user_cart_service.delete_subscription_cart(db_user.id, corrupted_sub_id)
+            global_cart = await user_cart_service.get_user_cart(db_user.id)
+            if global_cart and global_cart.get('subscription_id') is not None:
+                try:
+                    if int(global_cart['subscription_id']) == corrupted_sub_id:
+                        await user_cart_service.delete_global_cart_only(db_user.id)
+                except (TypeError, ValueError):
+                    pass
+        else:
+            # Cart corrupted beyond reading subscription_id -- global cleanup
+            await user_cart_service.delete_user_cart(db_user.id)
         return
 
     if not settings.is_devices_selection_enabled():
@@ -1566,14 +1615,25 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
     await callback.answer('✅ Корзина восстановлена!')
 
 
-async def handle_extend_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_extend_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
         return
 
     texts = get_texts(db_user.language)
-    subscription = db_user.subscription
+
+    if settings.is_multi_tariff_enabled():
+        subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
+        if subscription is None:
+            return
+    else:
+        subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
         await callback.message.edit_text(
@@ -1748,12 +1808,22 @@ async def handle_extend_subscription(callback: types.CallbackQuery, db_user: Use
     await callback.answer()
 
 
-async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def confirm_extend_subscription(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
     if not callback.data:
         await callback.answer('⚠ Ошибка данных', show_alert=True)
         return
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
+
+    # Block classic subscription renewal when tariff mode is active
+    if settings.is_tariffs_mode():
+        await callback.answer(
+            texts.t('TARIFF_MODE_RENEWAL_BLOCKED', '❌ Продление в этом режиме недоступно. Выберите тариф.'),
+            show_alert=True,
+        )
+        return
 
     # Валидация что период доступен для продления
     available_renewal_periods = settings.get_available_renewal_periods()
@@ -1763,7 +1833,19 @@ async def confirm_extend_subscription(callback: types.CallbackQuery, db_user: Us
         )
         return
 
-    subscription = db_user.subscription
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_id_for_user
+
+        _state_data = await state.get_data() if state else {}
+        _fsm_sub_id = _state_data.get('active_subscription_id')
+        if _fsm_sub_id:
+            subscription = await get_subscription_by_id_for_user(db, _fsm_sub_id, db_user.id)
+        else:
+            # Multi-tariff without FSM state — cannot determine which subscription
+            await callback.answer('Выберите подписку через "Мои подписки"', show_alert=True)
+            return
+    else:
+        subscription = db_user.subscription
 
     if not subscription:
         await callback.answer('⚠ У вас нет активной подписки', show_alert=True)
@@ -2307,6 +2389,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             await callback.answer()
             return
 
+        # Multi-tariff note: confirm_purchase runs in classic (non-tariff) mode only.
+        # In tariff mode, start_subscription_purchase redirects to show_tariffs_list.
+        # db_user.subscription is the correct single subscription for trial conversion.
         existing_subscription = db_user.subscription
         if devices_selection_enabled:
             selected_devices = devices_selected
@@ -2461,7 +2546,17 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         subscription_service = SubscriptionService()
         # При покупке подписки ВСЕГДА сбрасываем трафик в панели
-        if db_user.remnawave_uuid:
+        _purchase_uuid = (
+            subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+            else db_user.remnawave_uuid
+        )
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+            logger.warning(
+                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                subscription_id=getattr(subscription, 'id', None),
+            )
+        if _purchase_uuid:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
                 subscription,
@@ -2780,6 +2875,11 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         return
 
     texts = get_texts(db_user.language)
+
+    if settings.is_multi_tariff_enabled():
+        await callback.answer('Настройки доступны через "Мои подписки"', show_alert=True)
+        return
+
     subscription = db_user.subscription
 
     # Получаем тариф подписки если есть
@@ -2847,7 +2947,10 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
 
 async def clear_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
-    # Очищаем как FSM, так и Redis
+    # Очищаем как FSM, так и Redis.
+    # NOTE: Intentionally deletes ALL carts (global + per-subscription cascade)
+    # because this is an explicit user action ("clear my cart").  In multi-tariff
+    # mode the user expects a full reset, not per-subscription cleanup.
     await state.clear()
     await user_cart_service.delete_user_cart(db_user.id)
 
@@ -2867,6 +2970,17 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     from app.database.crud.tariff import get_tariff_by_id
 
     texts = get_texts(db_user.language)
+
+    if settings.is_multi_tariff_enabled():
+        await callback.answer(
+            texts.t(
+                'DAILY_PAUSE_MULTI_TARIFF_REDIRECT',
+                'Управление суточными подписками доступно через "Мои подписки"',
+            ),
+            show_alert=True,
+        )
+        return
+
     subscription = db_user.subscription
 
     if not subscription:
@@ -3059,6 +3173,8 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
     # Проверяем права на триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: trial eligibility is "has any subscription", so checking
+    # db_user.subscription (first active/most recent) is correct in all modes.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -3454,6 +3570,8 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
 
     # Проверяем права на триал
     # PENDING триальные подписки не считаются - пользователь может повторить оплату
+    # Multi-tariff note: trial eligibility is "has any subscription", so checking
+    # db_user.subscription (first active/most recent) is correct in all modes.
     trial_blocked = False
     if db_user.has_had_paid_subscription:
         trial_blocked = True
@@ -3917,6 +4035,33 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(show_subscription_info, F.data == 'menu_subscription')
 
+    # Multi-tariff: "My subscriptions" list and detail views
+    from app.handlers.subscription.my_subscriptions import show_my_subscriptions, show_subscription_detail
+
+    dp.callback_query.register(show_my_subscriptions, F.data == 'my_subscriptions')
+    dp.callback_query.register(show_subscription_detail, F.data.startswith('sm:'))
+
+    # Multi-tariff delegation handlers from subscription detail view
+    from app.handlers.subscription.my_subscriptions import (
+        handle_change_devices_menu,
+        handle_device_management_menu,
+        handle_subscription_delete_confirm,
+        handle_subscription_delete_execute,
+        handle_subscription_devices,
+        handle_subscription_extend,
+        handle_subscription_link,
+        handle_subscription_traffic,
+    )
+
+    dp.callback_query.register(handle_subscription_link, F.data.startswith('sl:'))
+    dp.callback_query.register(handle_subscription_extend, F.data.startswith('se:'))
+    dp.callback_query.register(handle_subscription_traffic, F.data.startswith('st:'))
+    dp.callback_query.register(handle_subscription_devices, F.data.startswith('sd:'))
+    dp.callback_query.register(handle_subscription_delete_confirm, F.data.startswith('sub_del:'))
+    dp.callback_query.register(handle_subscription_delete_execute, F.data.startswith('sub_del_yes:'))
+    dp.callback_query.register(handle_change_devices_menu, F.data.startswith('change_devices_menu:'))
+    dp.callback_query.register(handle_device_management_menu, F.data.startswith('device_management:'))
+
     dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 
     dp.callback_query.register(activate_trial, F.data == 'trial_activate')
@@ -4037,7 +4182,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(handle_happ_download_back, F.data == 'happ_download_back')
 
-    dp.callback_query.register(handle_connect_subscription, F.data == 'subscription_connect')
+    dp.callback_query.register(handle_connect_subscription, F.data.startswith('subscription_connect'))
 
     dp.callback_query.register(handle_device_guide, F.data.startswith('device_guide_'))
 
@@ -4045,7 +4190,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(handle_specific_app_guide, F.data.startswith('app_') & ~F.data.startswith('app_list_'))
 
-    dp.callback_query.register(handle_open_subscription_link, F.data == 'open_subscription_link')
+    dp.callback_query.register(handle_open_subscription_link, F.data.startswith('open_subscription_link'))
 
     dp.callback_query.register(handle_subscription_settings, F.data == 'subscription_settings')
 
