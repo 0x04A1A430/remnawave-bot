@@ -90,6 +90,7 @@ def _serialize_user(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         telegram_id=user.telegram_id,
+        email=user.email,
         username=user.username,
         first_name=user.first_name,
         last_name=user.last_name,
