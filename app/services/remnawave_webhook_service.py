@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from sqlalchemy import delete
+from sqlalchemy import delete, inspect as sa_inspect
 from sqlalchemy.exc import PendingRollbackError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
@@ -583,8 +583,12 @@ class RemnaWaveWebhookService:
             format_kwargs = {}
         if 'tariff_label' not in format_kwargs:
             tariff_label = ''
-            if settings.is_multi_tariff_enabled() and subscription and getattr(subscription, 'tariff', None):
-                tariff_label = f' «{subscription.tariff.name}»'
+            if settings.is_multi_tariff_enabled() and subscription:
+                # Access tariff only if already eagerly loaded to avoid
+                # MissingGreenlet from lazy loading in async context
+                loaded_tariff = sa_inspect(subscription).dict.get('tariff')
+                if loaded_tariff is not None:
+                    tariff_label = f' «{loaded_tariff.name}»'
             format_kwargs['tariff_label'] = tariff_label
 
         if format_kwargs:
@@ -647,7 +651,7 @@ class RemnaWaveWebhookService:
         # Суточные подписки управляются DailySubscriptionService.
         # Remnawave может прислать user.expired если sync не дошёл (старый end_date),
         # но локально подписка ещё жива — не экспайрим её.
-        tariff = getattr(subscription, 'tariff', None)
+        tariff = sa_inspect(subscription).dict.get('tariff')
         is_active_daily = (
             tariff is not None
             and getattr(tariff, 'is_daily', False)
@@ -686,7 +690,7 @@ class RemnaWaveWebhookService:
             return
 
         # Суточные подписки управляются DailySubscriptionService — не деактивируем
-        tariff = getattr(subscription, 'tariff', None)
+        tariff = sa_inspect(subscription).dict.get('tariff')
         is_active_daily = (
             tariff is not None
             and getattr(tariff, 'is_daily', False)
