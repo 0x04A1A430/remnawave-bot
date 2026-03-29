@@ -61,6 +61,7 @@ from ..auth.email_verification import (
     is_token_expired,
 )
 from ..auth.jwt_handler import get_refresh_token_expires_at
+from ..auth.merge_service import create_merge_token
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..ip_utils import get_client_ip
 from ..schemas.auth import (
@@ -419,6 +420,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     traffic_used_gb=traffic_used_gb,
                     status=sub_status.value,
                     is_trial=False,
+                    remnawave_uuid=panel_user.uuid if settings.is_multi_tariff_enabled() else None,
                     remnawave_short_uuid=panel_user.short_uuid,
                     subscription_url=panel_user.subscription_url,
                     subscription_crypto_link=panel_user.happ_crypto_link,
@@ -842,6 +844,7 @@ async def auth_telegram_oidc(
 @router.post('/email/register')
 async def register_email(
     request: EmailRegisterRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -850,7 +853,24 @@ async def register_email(
 
     Requires valid JWT token from Telegram authentication.
     Sends verification email to the provided address.
+    If the email belongs to another active user, offers account merge.
     """
+    # Rate limit
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+
+    # Check if user already has a verified email — block before doing anything else
+    if user.email and user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='You already have a verified email',
+        )
+
     # Check for disposable email
     if disposable_email_service.is_disposable(request.email):
         raise HTTPException(
@@ -858,21 +878,38 @@ async def register_email(
             detail='Disposable email addresses are not allowed',
         )
 
-    # Check if email already exists (case-insensitive)
+    # Check if email already exists (case-insensitive, exclude deleted users)
     email_lower = (request.email or '').strip().lower()
-    existing_user = await db.execute(select(User).where(func.lower(User.email) == email_lower))
-    if existing_user.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This email is already registered',
+    existing_result = await db.execute(
+        select(User).where(
+            func.lower(User.email) == email_lower,
+            User.status != UserStatus.DELETED.value,
         )
-
-    # Check if user already has email
-    if user.email and user.email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You already have a verified email',
+    )
+    existing_email_user = existing_result.scalar_one_or_none()
+    if existing_email_user:
+        if existing_email_user.id == user.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='This email is already linked to your account',
+            )
+        # Offer account merge instead of blocking
+        logger.info(
+            'Email register conflict: email already linked to another user, offering merge',
+            current_user_id=user.id,
+            existing_user_id=existing_email_user.id,
         )
+        merge_token = await create_merge_token(
+            primary_user_id=user.id,
+            secondary_user_id=existing_email_user.id,
+            provider='email',
+            provider_id=email_lower,
+        )
+        return {
+            'message': 'Account merge required',
+            'merge_required': True,
+            'merge_token': merge_token,
+        }
 
     # Update user
     user.email = request.email
