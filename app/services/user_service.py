@@ -820,10 +820,15 @@ class UserService:
                     for panel_uuid in panel_uuids:
                         try:
                             from app.services.remnawave_service import RemnaWaveService
+                            from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
                             remnawave_service = RemnaWaveService()
 
                             if delete_mode == 'delete':
+                                RemnaWaveWebhookService.mark_intentional_panel_deletion(
+                                    panel_uuids=[panel_uuid],
+                                    telegram_id=int(user.telegram_id) if user.telegram_id else None,
+                                )
                                 async with remnawave_service.get_api_client() as api:
                                     delete_success = await api.delete_user(panel_uuid)
                                     if delete_success:
