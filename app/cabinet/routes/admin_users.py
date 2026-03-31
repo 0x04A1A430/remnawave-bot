@@ -709,7 +709,11 @@ async def get_user_detail(
         promo_offer_discount_source=user.promo_offer_discount_source,
         promo_offer_discount_expires_at=user.promo_offer_discount_expires_at,
         recent_transactions=recent_transactions,
-        remnawave_uuid=user.remnawave_uuid,
+        remnawave_uuid=(
+            primary_sub.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and primary_sub and primary_sub.remnawave_uuid
+            else user.remnawave_uuid
+        ),
     )
 
 
@@ -2681,6 +2685,13 @@ async def get_user_sync_status(
         bot_device_limit = active_sub.device_limit or 0
         bot_squads = active_sub.connected_squads or []
 
+    # In multi-tariff mode, UUID lives on subscription, not user
+    effective_uuid = (
+        active_sub.remnawave_uuid
+        if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid
+        else user.remnawave_uuid
+    )
+
     # Panel data
     panel_found = False
     panel_status = None
@@ -2699,16 +2710,9 @@ async def get_user_sync_status(
             async with service.get_api_client() as api:
                 panel_user = None
 
-                # In multi-tariff mode, UUID lives on subscription, not user
-                sync_uuid = (
-                    active_sub.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid
-                    else user.remnawave_uuid
-                )
-
                 # Try by UUID first (works for all users including OAuth)
-                if sync_uuid:
-                    panel_user = await api.get_user_by_uuid(sync_uuid)
+                if effective_uuid:
+                    panel_user = await api.get_user_by_uuid(effective_uuid)
 
                 # Fallback: search by telegram_id
                 if not panel_user and user.telegram_id:
@@ -2800,7 +2804,7 @@ async def get_user_sync_status(
     return PanelSyncStatusResponse(
         user_id=user.id,
         telegram_id=user.telegram_id,
-        remnawave_uuid=user.remnawave_uuid,
+        remnawave_uuid=effective_uuid,
         last_sync=user.last_remnawave_sync,
         subscription_id=active_sub.id if active_sub else None,
         subscription_tariff_name=sub_tariff_name,
