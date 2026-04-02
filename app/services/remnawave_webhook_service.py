@@ -130,6 +130,9 @@ class RemnaWaveWebhookService:
     # Key: subscription_id, Value: datetime of last recreation attempt.
     _recent_recreations: dict[int, datetime] = {}
     _RECREATION_GUARD_SECONDS: int = 120  # 2-minute cooldown
+    _intentional_panel_deletions_by_uuid: dict[str, datetime] = {}
+    _intentional_panel_deletions_by_telegram_id: dict[int, datetime] = {}
+    _INTENTIONAL_PANEL_DELETION_GUARD_SECONDS: int = 300
 
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
@@ -170,12 +173,95 @@ class RemnaWaveWebhookService:
         """Check if the event is admin-scoped (no DB session needed)."""
         return event_name in self._admin_handlers
 
+    @classmethod
+    def _prune_intentional_panel_deletions(cls) -> None:
+        if not cls._intentional_panel_deletions_by_uuid and not cls._intentional_panel_deletions_by_telegram_id:
+            return
+
+        now = datetime.now(UTC)
+        uuid_keys = [
+            key
+            for key, created_at in cls._intentional_panel_deletions_by_uuid.items()
+            if (now - created_at).total_seconds() >= cls._INTENTIONAL_PANEL_DELETION_GUARD_SECONDS
+        ]
+        for key in uuid_keys:
+            del cls._intentional_panel_deletions_by_uuid[key]
+
+        telegram_keys = [
+            key
+            for key, created_at in cls._intentional_panel_deletions_by_telegram_id.items()
+            if (now - created_at).total_seconds() >= cls._INTENTIONAL_PANEL_DELETION_GUARD_SECONDS
+        ]
+        for key in telegram_keys:
+            del cls._intentional_panel_deletions_by_telegram_id[key]
+
+    @classmethod
+    def mark_intentional_panel_deletion(
+        cls,
+        *,
+        panel_uuids: list[str] | None = None,
+        telegram_id: int | None = None,
+    ) -> None:
+        cls._prune_intentional_panel_deletions()
+        now = datetime.now(UTC)
+
+        for panel_uuid in panel_uuids or []:
+            normalized = (panel_uuid or '').strip()
+            if normalized:
+                cls._intentional_panel_deletions_by_uuid[normalized] = now
+
+        if telegram_id:
+            cls._intentional_panel_deletions_by_telegram_id[int(telegram_id)] = now
+
+    @classmethod
+    def _is_intentional_panel_deletion_event(cls, data: dict[str, Any]) -> bool:
+        cls._prune_intentional_panel_deletions()
+
+        candidate_uuids: list[str] = []
+        candidate_telegram_ids: list[int] = []
+
+        for value in (data.get('uuid'), data.get('userUuid')):
+            if value:
+                candidate_uuids.append(str(value).strip())
+
+        telegram_id = data.get('telegramId')
+        if telegram_id:
+            try:
+                candidate_telegram_ids.append(int(telegram_id))
+            except (TypeError, ValueError):
+                pass
+
+        nested_user = data.get('user')
+        if isinstance(nested_user, dict):
+            nested_uuid = nested_user.get('uuid')
+            if nested_uuid:
+                candidate_uuids.append(str(nested_uuid).strip())
+
+            nested_tid = nested_user.get('telegramId')
+            if nested_tid:
+                try:
+                    candidate_telegram_ids.append(int(nested_tid))
+                except (TypeError, ValueError):
+                    pass
+
+        return any(uuid in cls._intentional_panel_deletions_by_uuid for uuid in candidate_uuids) or any(
+            telegram_id in cls._intentional_panel_deletions_by_telegram_id for telegram_id in candidate_telegram_ids
+        )
+
     async def process_event(self, db: AsyncSession | None, event_name: str, data: dict) -> bool:
         """Route event to the appropriate handler.
 
         Returns True if the event was processed, False if skipped/unknown.
         db may be None for admin events that don't require database access.
         """
+        if event_name == 'user.deleted' and self._is_intentional_panel_deletion_event(data):
+            logger.info(
+                'RemnaWave webhook: skipping intentional admin-triggered user.deleted event',
+                telegram_id=data.get('telegramId'),
+                remnawave_uuid=data.get('uuid') or data.get('userUuid'),
+            )
+            return True
+
         # Check admin-scoped handlers (no DB needed)
         if event_name in self._admin_handlers:
             return await self._process_admin_event(event_name, data)
