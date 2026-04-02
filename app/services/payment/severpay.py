@@ -94,12 +94,15 @@ class SeverPayPaymentMixin:
         }
 
         try:
+            # SeverPay требует обязательный client_email
+            target_email = email or (f'{user.telegram_id}@telegram.org' if user and user.telegram_id else f'{tg_id}@telegram.org')
+
             # Используем API для создания платежа
             result = await severpay_service.create_payment(
                 order_id=order_id,
                 amount=amount_rubles,
                 currency=currency,
-                client_email=email or '',
+                client_email=target_email,
                 client_id=str(tg_id),
                 url_return=return_url or settings.SEVERPAY_RETURN_URL,
                 lifetime=lifetime,
