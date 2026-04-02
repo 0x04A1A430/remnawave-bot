@@ -96,7 +96,9 @@ class SeverPayPaymentMixin:
 
         try:
             # SeverPay требует обязательный client_email
-            target_email = email or (f'{user.telegram_id}@telegram.org' if user and user.telegram_id else f'{tg_id}@telegram.org')
+            target_email = email or (
+                f'{user.telegram_id}@telegram.org' if user and user.telegram_id else f'{tg_id}@telegram.org'
+            )
 
             # Используем API для создания платежа
             result = await severpay_service.create_payment(
