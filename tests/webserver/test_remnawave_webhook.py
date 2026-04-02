@@ -54,7 +54,7 @@ def _signature(body: bytes) -> str:
     return hmac.new(secret.encode('utf-8'), body, hashlib.sha256).hexdigest()
 
 
-@pytest.mark.anyio
+@pytest.mark.anyio('asyncio')
 async def test_remnawave_webhook_accepts_event_without_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = AsyncMock()
     process_event = AsyncMock(return_value=True)
@@ -90,7 +90,7 @@ async def test_remnawave_webhook_accepts_event_without_scope(monkeypatch: pytest
     process_event.assert_awaited_once_with(None, 'user.modified', {'uuid': 'user-123'})
 
 
-@pytest.mark.anyio
+@pytest.mark.anyio('asyncio')
 async def test_remnawave_webhook_rejects_payload_without_event() -> None:
     bot = AsyncMock()
     payload = {'data': {'uuid': 'user-123'}}
@@ -111,20 +111,29 @@ async def test_remnawave_webhook_rejects_payload_without_event() -> None:
     assert json.loads(response.body.decode('utf-8')) == {'status': 'error', 'reason': 'missing_event'}
 
 
-@pytest.mark.anyio
-async def test_process_event_skips_intentional_admin_user_deleted() -> None:
-    bot = AsyncMock()
-    service = RemnaWaveWebhookService(bot)
-
+def test_intentional_panel_deletion_guard_marks_and_detects() -> None:
+    """Verify that mark + is_intentional round-trip works correctly."""
     RemnaWaveWebhookService.mark_intentional_panel_deletion(
         panel_uuids=['panel-user-123'],
         telegram_id=8368498066,
     )
 
-    processed = await service.process_event(
-        None,
-        'user.deleted',
-        {'uuid': 'panel-user-123', 'telegramId': 8368498066},
+    assert RemnaWaveWebhookService._is_intentional_panel_deletion_event(
+        {'uuid': 'panel-user-123', 'telegramId': 8368498066}
     )
 
-    assert processed is True
+    # Unknown UUID should not match
+    assert not RemnaWaveWebhookService._is_intentional_panel_deletion_event(
+        {'uuid': 'unknown-uuid', 'telegramId': 99999}
+    )
+
+
+def test_intentional_panel_deletion_guard_respects_hard_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that the guard stops accepting entries after hitting the cap."""
+    monkeypatch.setattr(RemnaWaveWebhookService, '_MAX_INTENTIONAL_ENTRIES', 3)
+
+    RemnaWaveWebhookService.mark_intentional_panel_deletion(panel_uuids=['a', 'b', 'c'])
+    # 3 entries — at capacity
+    RemnaWaveWebhookService.mark_intentional_panel_deletion(panel_uuids=['d'])
+    # 'd' should NOT be stored (cap reached)
+    assert 'd' not in RemnaWaveWebhookService._intentional_panel_deletions_by_uuid

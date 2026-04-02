@@ -125,14 +125,14 @@ _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connect
 class RemnaWaveWebhookService:
     """Processes incoming webhooks from RemnaWave backend."""
 
-    # In-memory guard: tracks recent panel recreations per subscription_id.
-    # Prevents unbounded user.deleted → recreate → user.deleted loops.
-    # Key: subscription_id, Value: datetime of last recreation attempt.
+    # NOTE: In-memory guards. Only correct with a single-worker deployment.
+    # For multi-worker setups, move to Redis or another shared store.
     _recent_recreations: dict[int, datetime] = {}
     _RECREATION_GUARD_SECONDS: int = 120  # 2-minute cooldown
     _intentional_panel_deletions_by_uuid: dict[str, datetime] = {}
     _intentional_panel_deletions_by_telegram_id: dict[int, datetime] = {}
     _INTENTIONAL_PANEL_DELETION_GUARD_SECONDS: int = 300
+    _MAX_INTENTIONAL_ENTRIES: int = 10_000
 
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
@@ -203,6 +203,12 @@ class RemnaWaveWebhookService:
         telegram_id: int | None = None,
     ) -> None:
         cls._prune_intentional_panel_deletions()
+
+        total = len(cls._intentional_panel_deletions_by_uuid) + len(cls._intentional_panel_deletions_by_telegram_id)
+        if total >= cls._MAX_INTENTIONAL_ENTRIES:
+            logger.warning('Intentional deletion guard at capacity, skipping', total=total)
+            return
+
         now = datetime.now(UTC)
 
         for panel_uuid in panel_uuids or []:
@@ -210,7 +216,7 @@ class RemnaWaveWebhookService:
             if normalized:
                 cls._intentional_panel_deletions_by_uuid[normalized] = now
 
-        if telegram_id:
+        if telegram_id is not None:
             cls._intentional_panel_deletions_by_telegram_id[int(telegram_id)] = now
 
     @classmethod
@@ -244,8 +250,8 @@ class RemnaWaveWebhookService:
                 except (TypeError, ValueError):
                     pass
 
-        return any(uuid in cls._intentional_panel_deletions_by_uuid for uuid in candidate_uuids) or any(
-            telegram_id in cls._intentional_panel_deletions_by_telegram_id for telegram_id in candidate_telegram_ids
+        return any(uid in cls._intentional_panel_deletions_by_uuid for uid in candidate_uuids) or any(
+            tid in cls._intentional_panel_deletions_by_telegram_id for tid in candidate_telegram_ids
         )
 
     async def process_event(self, db: AsyncSession | None, event_name: str, data: dict) -> bool:
@@ -254,14 +260,6 @@ class RemnaWaveWebhookService:
         Returns True if the event was processed, False if skipped/unknown.
         db may be None for admin events that don't require database access.
         """
-        if event_name == 'user.deleted' and self._is_intentional_panel_deletion_event(data):
-            logger.info(
-                'RemnaWave webhook: skipping intentional admin-triggered user.deleted event',
-                telegram_id=data.get('telegramId'),
-                remnawave_uuid=data.get('uuid') or data.get('userUuid'),
-            )
-            return True
-
         # Check admin-scoped handlers (no DB needed)
         if event_name in self._admin_handlers:
             return await self._process_admin_event(event_name, data)
@@ -1047,10 +1045,22 @@ class RemnaWaveWebhookService:
                     logger.error('Webhook: user not found after rollback', user_id=user_id)
                     return
 
+        # Intentional admin deletion: cleanup runs (fields cleared above), but skip re-creation
+        is_intentional = self._is_intentional_panel_deletion_event(data)
+        if is_intentional:
+            logger.info(
+                'Webhook user.deleted: intentional admin deletion, cleanup done, skipping re-creation',
+                sub_id=sub_id,
+                user_id=user_id,
+            )
+
         # Check if subscription has a future end_date — likely a spurious user.deleted
         # (e.g., RemnaWave sends user.deleted during panel resync when modifying another user)
         subscription_still_valid = (
-            subscription is not None and subscription.end_date is not None and subscription.end_date > datetime.now(UTC)
+            not is_intentional
+            and subscription is not None
+            and subscription.end_date is not None
+            and subscription.end_date > datetime.now(UTC)
         )
 
         if subscription:
