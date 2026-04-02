@@ -467,7 +467,7 @@ class Settings(BaseSettings):
     PLATEGA_RETURN_URL: str | None = None
     PLATEGA_FAILED_URL: str | None = None
     PLATEGA_CURRENCY: str = 'RUB'
-    PLATEGA_ACTIVE_METHODS: str = '2,10,11,12,13'
+    PLATEGA_ACTIVE_METHODS: str = '2,11,12,13'
     PLATEGA_INLINE_METHODS: bool = True
     PLATEGA_MIN_AMOUNT_KOPEKS: int = 10000
     PLATEGA_MAX_AMOUNT_KOPEKS: int = 100000000
@@ -1839,7 +1839,7 @@ class Settings(BaseSettings):
             except ValueError:
                 logger.warning('Некорректный код метода Platega', part=part)
                 continue
-            if method_code in {2, 10, 11, 12, 13} and method_code not in seen:
+            if method_code in {2, 11, 12, 13} and method_code not in seen:
                 methods.append(method_code)
                 seen.add(method_code)
 
@@ -1852,8 +1852,7 @@ class Settings(BaseSettings):
     def get_platega_method_definitions() -> dict[int, dict[str, str]]:
         return {
             2: {'name': 'СБП (QR)', 'title': '🏦 СБП (QR)'},
-            10: {'name': 'Банковские карты (RUB)', 'title': '💳 Карты (RUB)'},
-            11: {'name': 'Банковские карты', 'title': '💳 Банковские карты'},
+            11: {'name': 'Карты (RUB)', 'title': '💳 Карты (RUB)'},
             12: {'name': 'Международные карты', 'title': '🌍 Международные карты'},
             13: {'name': 'Криптовалюта', 'title': '🪙 Криптовалюта'},
         }
