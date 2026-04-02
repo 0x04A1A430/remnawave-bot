@@ -90,6 +90,8 @@ class MonitoringService:
         self._notified_users: set[str] = set()
         self._last_cleanup = datetime.now(UTC)
         self._sla_task = None
+        # In-memory fallback для cooldown автоплатежей (на случай недоступности Redis)
+        self._autopay_fail_notified_at: dict[int, datetime] = {}
 
     async def _send_message_with_logo(
         self,
@@ -276,8 +278,76 @@ class MonitoringService:
         if (current_time - self._last_cleanup).total_seconds() >= 3600:
             old_count = len(self._notified_users)
             self._notified_users.clear()
+
+            # Чистим просроченные записи cooldown автоплатежей
+            cutoff = current_time - timedelta(seconds=AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS)
+            expired_ids = [uid for uid, ts in self._autopay_fail_notified_at.items() if ts < cutoff]
+            for uid in expired_ids:
+                del self._autopay_fail_notified_at[uid]
+
             self._last_cleanup = current_time
-            logger.info('🧹 Очищен кеш уведомлений ( записей)', old_count=old_count)
+            logger.info(
+                '🧹 Очищен кеш уведомлений',
+                old_count=old_count,
+                autopay_cooldown_evicted=len(expired_ids),
+                autopay_cooldown_remaining=len(self._autopay_fail_notified_at),
+            )
+
+    async def _check_autopay_fail_cooldown(self, user_id: int, user_identifier: str) -> bool:
+        """Проверяет, можно ли отправить уведомление об ошибке автоплатежа.
+
+        Использует Redis как primary хранилище cooldown, с in-memory fallback.
+        Returns True если уведомление можно отправить.
+        """
+        # 1. In-memory fallback (работает даже без Redis)
+        last_notified = self._autopay_fail_notified_at.get(user_id)
+        if last_notified:
+            elapsed = (datetime.now(UTC) - last_notified).total_seconds()
+            if elapsed < AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS:
+                logger.debug(
+                    'Пропуск уведомления об ошибке автоплатежа — in-memory cooldown активен',
+                    user_identifier=user_identifier,
+                    elapsed_seconds=int(elapsed),
+                )
+                return False
+
+        # 2. Redis check (если доступен)
+        cooldown_key = f'autopay_insufficient_balance_notified:{user_id}'
+        try:
+            if await cache.exists(cooldown_key):
+                logger.debug(
+                    'Пропуск уведомления об ошибке автоплатежа — Redis cooldown активен',
+                    user_identifier=user_identifier,
+                )
+                return False
+        except Exception as redis_err:
+            logger.warning(
+                'Ошибка проверки cooldown в Redis, используем in-memory fallback',
+                user_identifier=user_identifier,
+                redis_err=redis_err,
+            )
+
+        return True
+
+    async def _set_autopay_fail_cooldown(self, user_id: int, user_identifier: str) -> None:
+        """Устанавливает cooldown после отправки уведомления об ошибке автоплатежа."""
+        # In-memory (всегда)
+        self._autopay_fail_notified_at[user_id] = datetime.now(UTC)
+
+        # Redis (если доступен)
+        cooldown_key = f'autopay_insufficient_balance_notified:{user_id}'
+        try:
+            await cache.set(
+                cooldown_key,
+                1,
+                expire=AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS,
+            )
+        except Exception as redis_err:
+            logger.warning(
+                'Не удалось установить cooldown в Redis, in-memory fallback активен',
+                user_identifier=user_identifier,
+                redis_err=redis_err,
+            )
 
     async def _check_expired_subscriptions(self, db: AsyncSession):
         try:
@@ -1264,42 +1334,24 @@ class MonitoringService:
                         )
                     else:
                         failed_count += 1
-                        if user.telegram_id and self.bot:
-                            await self._send_autopay_failed_notification(
-                                user, user.balance_kopeks, charge_amount, subscription=subscription
-                            )
-                        elif not user.telegram_id:
-                            await notification_delivery_service.notify_autopay_failed(
-                                user=user,
-                                reason='Ошибка списания средств',
-                            )
+                        if await self._check_autopay_fail_cooldown(user.id, user_identifier):
+                            if user.telegram_id and self.bot:
+                                await self._send_autopay_failed_notification(
+                                    user, user.balance_kopeks, charge_amount, subscription=subscription
+                                )
+                            elif not user.telegram_id:
+                                await notification_delivery_service.notify_autopay_failed(
+                                    user=user,
+                                    reason='Ошибка списания средств',
+                                )
+                            await self._set_autopay_fail_cooldown(user.id, user_identifier)
                         logger.warning(
                             '💳 Ошибка списания средств для автопродления пользователя', user_identifier=user_identifier
                         )
                 else:
                     failed_count += 1
 
-                    # Проверяем кулдаун уведомления через Redis, чтобы не спамить
-                    # при каждом срабатывании мониторинга
-                    cooldown_key = f'autopay_insufficient_balance_notified:{user.id}'
-                    should_notify = True
-
-                    try:
-                        if await cache.exists(cooldown_key):
-                            should_notify = False
-                            logger.debug(
-                                '💳 Пропуск уведомления о недостаточном балансе для пользователя — кулдаун активен',
-                                user_identifier=user_identifier,
-                            )
-                    except Exception as redis_err:
-                        # Fallback: если Redis недоступен — отправляем уведомление
-                        logger.warning(
-                            '⚠️ Ошибка проверки кулдауна в Redis для пользователя : . Отправляем уведомление.',
-                            user_identifier=user_identifier,
-                            redis_err=redis_err,
-                        )
-
-                    if should_notify:
+                    if await self._check_autopay_fail_cooldown(user.id, user_identifier):
                         if user.telegram_id and self.bot:
                             await self._send_autopay_failed_notification(
                                 user, user.balance_kopeks, charge_amount, subscription=subscription
@@ -1309,20 +1361,7 @@ class MonitoringService:
                                 user=user,
                                 reason='Недостаточно средств на балансе',
                             )
-
-                        # Ставим ключ кулдауна после отправки
-                        try:
-                            await cache.set(
-                                cooldown_key,
-                                1,
-                                expire=AUTOPAY_INSUFFICIENT_BALANCE_COOLDOWN_SECONDS,
-                            )
-                        except Exception as redis_err:
-                            logger.warning(
-                                '⚠️ Не удалось установить кулдаун в Redis для пользователя',
-                                user_identifier=user_identifier,
-                                redis_err=redis_err,
-                            )
+                        await self._set_autopay_fail_cooldown(user.id, user_identifier)
 
                     logger.warning(
                         '💳 Недостаточно средств для автопродления у пользователя', user_identifier=user_identifier
