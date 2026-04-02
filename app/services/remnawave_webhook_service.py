@@ -27,6 +27,7 @@ from app.database.crud.subscription import (
     decrement_subscription_server_counts,
     expire_subscription,
     get_subscription_by_user_id,
+    is_recently_updated_by_webhook,
     reactivate_subscription,
     update_subscription_usage,
 )
@@ -699,6 +700,18 @@ class RemnaWaveWebhookService:
         if is_active_daily:
             logger.info(
                 'Webhook: пропуск disabled для суточной подписки',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+            self._stamp_webhook_update(subscription)
+            await db.commit()
+            return
+
+        # Защита от echo-webhook: если подписка была недавно реактивирована
+        # (канал-реподписка ставит last_webhook_update_at), пропускаем
+        if subscription.status == SubscriptionStatus.ACTIVE.value and is_recently_updated_by_webhook(subscription):
+            logger.info(
+                'Webhook user.disabled: подписка недавно реактивирована, пропуск echo-webhook',
                 subscription_id=subscription.id,
                 user_id=user.id,
             )
