@@ -97,17 +97,22 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Extract and validate event info
-        scope = payload.get('scope', '')
-        event = payload.get('event', '')
+        # Extract and validate event info. Recent RemnaWave payloads send only
+        # the fully-qualified event name (for example "user.modified") without
+        # a separate top-level scope field.
+        event = str(payload.get('event', '') or '').strip()
+        scope = str(payload.get('scope', '') or '').strip()
         data = payload.get('data')
 
-        if not scope or not event:
-            logger.warning('RemnaWave webhook: missing scope or event')
+        if not event:
+            logger.warning('RemnaWave webhook: missing event')
             return JSONResponse(
-                {'status': 'error', 'reason': 'missing_scope_or_event'},
+                {'status': 'error', 'reason': 'missing_event'},
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
+
+        if not scope and '.' in event:
+            scope = event.split('.', 1)[0]
 
         if not isinstance(data, dict):
             data = {}

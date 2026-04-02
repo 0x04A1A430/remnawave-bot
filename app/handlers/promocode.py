@@ -34,7 +34,21 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
             else:
                 raise
 
+    # Сохраняем предыдущее состояние, чтобы восстановить после промокода
+    previous_state = await state.get_state()
+    previous_data = await state.get_data()
+
+    # Не перезаписываем сохранённое состояние при повторном входе в промо-флоу
+    if previous_state == PromoCodeStates.waiting_for_code.state:
+        await callback.answer()
+        return
+
+    # Убираем мета-ключи чтобы не создавать вложенность
+    previous_data.pop('_prev_state', None)
+    previous_data.pop('_prev_data', None)
+
     await state.set_state(PromoCodeStates.waiting_for_code)
+    await state.update_data(_prev_state=previous_state, _prev_data=previous_data)
     await callback.answer()
 
 
@@ -75,6 +89,23 @@ async def activate_promocode_for_registration(
     return result
 
 
+_NO_SAVED_STATE = object()
+
+
+async def _restore_previous_state(state: FSMContext) -> None:
+    """Восстанавливает FSM-состояние, которое было до входа в промокод-флоу."""
+    data = await state.get_data()
+    prev_state = data.get('_prev_state', _NO_SAVED_STATE)
+    prev_data = data.get('_prev_data') or {}
+    if prev_state is _NO_SAVED_STATE:
+        # Не было сохранённого состояния — defensive clear
+        await state.clear()
+    else:
+        # Восстанавливаем предыдущее состояние (включая None = меню без FSM)
+        await state.set_state(prev_state)
+        await state.set_data(prev_data)
+
+
 @error_handler
 async def process_promocode(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
     texts = get_texts(db_user.language)
@@ -108,7 +139,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             ).format(cooldown=cooldown),
             reply_markup=get_back_keyboard(db_user.language),
         )
-        await state.clear()
+        await _restore_previous_state(state)
         return
 
     # Лимит на стакинг (макс активаций в день)
@@ -120,7 +151,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
-        await state.clear()
+        await _restore_previous_state(state)
         return
 
     result = await activate_promocode_for_registration(db, db_user.id, code, message.bot)
@@ -131,7 +162,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             texts.PROMOCODE_SUCCESS.format(description=result['description']),
             reply_markup=get_back_keyboard(db_user.language),
         )
-        await state.clear()
+        await _restore_previous_state(state)
     elif result.get('error') == 'select_subscription':
         # Multi-tariff: user needs to choose which subscription to apply days to
         eligible = result.get('eligible_subscriptions', [])
@@ -156,7 +187,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
             ),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         )
-        await state.clear()
+        await _restore_previous_state(state)
     else:
         # Записываем неудачную попытку только для not_found (перебор)
         if result['error'] == 'not_found':
@@ -188,7 +219,7 @@ async def process_promocode(message: types.Message, db_user: User, state: FSMCon
 
         error_text = error_messages.get(result['error'], texts.PROMOCODE_INVALID)
         await message.answer(error_text, reply_markup=get_back_keyboard(db_user.language))
-        await state.clear()
+        await _restore_previous_state(state)
 
 
 async def handle_promo_subscription_select(

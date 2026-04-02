@@ -578,6 +578,7 @@ async def create_topup(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method=option,
             )
 
             if result:
@@ -698,7 +699,7 @@ async def create_topup(
                 )
 
             # Use payment_option to select sbp or card
-            KASSA_AI_OPTION_MAP = {'sbp': 44, 'card': 36}
+            KASSA_AI_OPTION_MAP = {'sbp': 44, 'card': 36, 'sberpay': 43}
             option = (request.payment_option or '').strip().lower()
             ps_id = KASSA_AI_OPTION_MAP.get(option)  # None = use env default
 

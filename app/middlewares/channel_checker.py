@@ -370,6 +370,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 # Per-channel settings: check if any unsubscribed channel requires deactivation
                 unsubscribed = [ch for ch in channels if not ch.get('is_subscribed', False)]
 
+                deactivated_subs = []
                 for subscription in active_subs:
                     should_disable = any(
                         channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
@@ -379,6 +380,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         continue
 
                     await deactivate_subscription(db, subscription)
+                    deactivated_subs.append(subscription)
                     sub_type = 'trial' if subscription.is_trial else 'paid'
                     logger.info(
                         'Subscription deactivated after channel unsubscribe',
@@ -387,7 +389,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     )
 
                 service = SubscriptionService()
-                for subscription in active_subs:
+                for subscription in deactivated_subs:
                     panel_uuid = (
                         subscription.remnawave_uuid
                         if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
@@ -404,29 +406,30 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                             )
 
                 # Notify user about deactivation
-                try:
-                    normalized = _normalize_channels(channels)
-                    texts = get_texts(user.language or DEFAULT_LANGUAGE)
-                    if settings.is_multi_tariff_enabled() and len(active_subs) > 1:
-                        notification_text = texts.t(
-                            'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI',
-                            '🚫 Ваши подписки приостановлены, так как вы отписались от обязательного канала.\n\n'
-                            'Подпишитесь на все каналы для восстановления доступа к VPN.',
+                if deactivated_subs:
+                    try:
+                        normalized = _normalize_channels(channels)
+                        texts = get_texts(user.language or DEFAULT_LANGUAGE)
+                        if settings.is_multi_tariff_enabled() and len(deactivated_subs) > 1:
+                            notification_text = texts.t(
+                                'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI',
+                                '🚫 Ваши подписки приостановлены, так как вы отписались от обязательного канала.\n\n'
+                                'Подпишитесь на все каналы для восстановления доступа к VPN.',
+                            )
+                        else:
+                            notification_text = texts.t(
+                                'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
+                                '🚫 Ваша подписка приостановлена, так как вы отписались от канала.\n\n'
+                                'Подпишитесь на канал снова, чтобы восстановить доступ к VPN.',
+                            )
+                        channel_kb = get_channel_sub_keyboard(normalized, language=user.language)
+                        await bot.send_message(telegram_id, notification_text, reply_markup=channel_kb)
+                    except Exception as notify_error:
+                        logger.error(
+                            'Failed to send deactivation notification to user',
+                            telegram_id=telegram_id,
+                            notify_error=notify_error,
                         )
-                    else:
-                        notification_text = texts.t(
-                            'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
-                            '🚫 Ваша подписка приостановлена, так как вы отписались от канала.\n\n'
-                            'Подпишитесь на канал снова, чтобы восстановить доступ к VPN.',
-                        )
-                    channel_kb = get_channel_sub_keyboard(normalized, language=user.language)
-                    await bot.send_message(telegram_id, notification_text, reply_markup=channel_kb)
-                except Exception as notify_error:
-                    logger.error(
-                        'Failed to send deactivation notification to user',
-                        telegram_id=telegram_id,
-                        notify_error=notify_error,
-                    )
                 await db.commit()
             except Exception as db_error:
                 logger.error(
@@ -463,6 +466,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 for subscription in disabled_subs:
                     await reactivate_subscription(db, subscription)
+                    # Штамп для защиты от echo-webhook user.disabled
+                    subscription.last_webhook_update_at = datetime.now(UTC)
                     sub_type = 'trial' if subscription.is_trial else 'paid'
                     logger.info(
                         'Subscription reactivated after channel subscribe',
