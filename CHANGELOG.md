@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.43.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.43.0...v3.43.1) (2026-03-31)
+
+
+### Bug Fixes
+
+* prevent MissingGreenlet on subscription.tariff lazy load in webhook handlers ([72170b3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/72170b35f5d2af56aa7dcb579a70ecf6af2da3f6))
+* use subscription-level remnawave_uuid in multi-tariff mode for sync and detail pages ([0c284b9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0c284b9e9941b516170fc68a3f63551096cb5a7b))
+
+
+### Documentation
+
+* add Platega partnership to README, highlight partner payment providers ([312cc72](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/312cc728a9321fe9ac90cf1f5201e38465f67f16))
+
 ## [3.43.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.42.0...v3.43.0) (2026-03-29)
 
 
