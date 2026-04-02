@@ -37,6 +37,16 @@ async def show_promocode_menu(callback: types.CallbackQuery, db_user: User, stat
     # Сохраняем предыдущее состояние, чтобы восстановить после промокода
     previous_state = await state.get_state()
     previous_data = await state.get_data()
+
+    # Не перезаписываем сохранённое состояние при повторном входе в промо-флоу
+    if previous_state == PromoCodeStates.waiting_for_code.state:
+        await callback.answer()
+        return
+
+    # Убираем мета-ключи чтобы не создавать вложенность
+    previous_data.pop('_prev_state', None)
+    previous_data.pop('_prev_data', None)
+
     await state.set_state(PromoCodeStates.waiting_for_code)
     await state.update_data(_prev_state=previous_state, _prev_data=previous_data)
     await callback.answer()
@@ -79,16 +89,21 @@ async def activate_promocode_for_registration(
     return result
 
 
+_NO_SAVED_STATE = object()
+
+
 async def _restore_previous_state(state: FSMContext) -> None:
     """Восстанавливает FSM-состояние, которое было до входа в промокод-флоу."""
     data = await state.get_data()
-    prev_state = data.pop('_prev_state', None)
-    prev_data = data.pop('_prev_data', None) or {}
-    if prev_state:
+    prev_state = data.get('_prev_state', _NO_SAVED_STATE)
+    prev_data = data.get('_prev_data') or {}
+    if prev_state is _NO_SAVED_STATE:
+        # Не было сохранённого состояния — defensive clear
+        await state.clear()
+    else:
+        # Восстанавливаем предыдущее состояние (включая None = меню без FSM)
         await state.set_state(prev_state)
         await state.set_data(prev_data)
-    else:
-        await state.clear()
 
 
 @error_handler
