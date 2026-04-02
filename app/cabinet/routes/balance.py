@@ -578,6 +578,7 @@ async def create_topup(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method=option,
             )
 
             if result:
