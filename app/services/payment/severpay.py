@@ -73,6 +73,7 @@ class SeverPayPaymentMixin:
             user = await payment_module.get_user_by_id(db, user_id)
             tg_id = user.telegram_id if user else user_id
         else:
+            user = None
             tg_id = 'guest'
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
