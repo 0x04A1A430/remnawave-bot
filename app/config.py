@@ -558,6 +558,8 @@ class Settings(BaseSettings):
     KASSA_AI_SBP_DISPLAY_NAME: str = 'СБП (KassaAI)'
     KASSA_AI_CARD_ENABLED: bool = False  # Карты РФ — payment_system_id=36
     KASSA_AI_CARD_DISPLAY_NAME: str = 'Карта (KassaAI)'
+    KASSA_AI_SBERPAY_ENABLED: bool = False  # SberPay — payment_system_id=43
+    KASSA_AI_SBERPAY_DISPLAY_NAME: str = 'SberPay (KassaAI)'
 
     # RioPay (api.riopay.online) v2.0.1
     RIOPAY_ENABLED: bool = False
@@ -1979,6 +1981,16 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_card_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_card_display_name())
+
+    def is_kassa_ai_sberpay_enabled(self) -> bool:
+        return self.KASSA_AI_SBERPAY_ENABLED and self.is_kassa_ai_enabled()
+
+    def get_kassa_ai_sberpay_display_name(self) -> str:
+        name = (self.KASSA_AI_SBERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'SberPay (KassaAI)'
+
+    def get_kassa_ai_sberpay_display_name_html(self) -> str:
+        return html.escape(self.get_kassa_ai_sberpay_display_name())
 
     def is_payment_verification_auto_check_enabled(self) -> bool:
         return self.PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED
