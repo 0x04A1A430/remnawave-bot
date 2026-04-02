@@ -370,6 +370,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 # Per-channel settings: check if any unsubscribed channel requires deactivation
                 unsubscribed = [ch for ch in channels if not ch.get('is_subscribed', False)]
 
+                deactivated_subs = []
                 for subscription in active_subs:
                     should_disable = any(
                         channel_subscription_service.should_disable_subscription(ch, subscription.is_trial)
@@ -379,6 +380,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                         continue
 
                     await deactivate_subscription(db, subscription)
+                    deactivated_subs.append(subscription)
                     sub_type = 'trial' if subscription.is_trial else 'paid'
                     logger.info(
                         'Subscription deactivated after channel unsubscribe',
@@ -387,7 +389,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     )
 
                 service = SubscriptionService()
-                for subscription in active_subs:
+                for subscription in deactivated_subs:
                     panel_uuid = (
                         subscription.remnawave_uuid
                         if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
