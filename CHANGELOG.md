@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.45.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.44.0...v3.45.0) (2026-04-03)
+
+
+### New Features
+
+* send torrent blocker notification to user (not just admin) ([2f9d003](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2f9d00343bee2980cc89bd24361259073b97127a))
+
+
+### Bug Fixes
+
+* resolve multiple subscription bugs — LIMITED status, trial tariff blocking, traffic reset strategy, classic mode pricing, 100% discount support ([9b7ac47](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9b7ac47f16076e546da62062ff7ce18d7c308988))
+* restore missing import + rewrite user.deleted webhook to properly deactivate all subscriptions ([819f09a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/819f09a68ec95237294bae97f31c644044a3623f))
+* subscription system bugfixes + torrent notifications + user deletion cleanup ([7d24e8d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7d24e8d7047c7a3a1c417e655a6fbccbe5ae577d))
+
 ## [3.44.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.43.1...v3.44.0) (2026-04-02)
 
 
