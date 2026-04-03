@@ -1357,7 +1357,7 @@ class Subscription(Base):
             'user_id',
             'tariff_id',
             unique=True,
-            postgresql_where=text("tariff_id IS NOT NULL AND status IN ('active', 'trial')"),
+            postgresql_where=text("tariff_id IS NOT NULL AND status IN ('active', 'trial', 'limited')"),
         ),
     )
 
