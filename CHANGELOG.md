@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.45.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.45.0...v3.45.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* add missing WEBHOOK_TORRENT_DETECTED mapping + dedup before uniq… ([4165eae](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4165eaea7adfdaf683b1ece16c8c93a9c4ed216d))
+* add missing WEBHOOK_TORRENT_DETECTED mapping + dedup before unique index in migration 0053 ([3b5d5a1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3b5d5a18a1122ef50868fd038a09109d17795a74))
+
 ## [3.45.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.44.0...v3.45.0) (2026-04-03)
 
 
