@@ -238,6 +238,7 @@ async def _sync_subscription_to_panel(
         from app.config import settings
         from app.external.remnawave_api import UserStatus as PanelUserStatus
         from app.services.remnawave_service import RemnaWaveService
+        from app.services.subscription_service import get_traffic_reset_strategy
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
 
         service = RemnaWaveService()
