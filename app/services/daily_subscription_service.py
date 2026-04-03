@@ -141,8 +141,8 @@ class DailySubscriptionService:
             PricingEngine.apply_discount(raw_daily_price, daily_group_pct) if daily_group_pct > 0 else raw_daily_price
         )
 
-        # Проверяем баланс
-        if user.balance_kopeks < daily_price:
+        # Проверяем баланс (при 100% скидке — пропускаем)
+        if daily_price > 0 and user.balance_kopeks < daily_price:
             # Недостаточно средств - приостанавливаем подписку
             await suspend_daily_subscription_insufficient_balance(db, subscription)
 

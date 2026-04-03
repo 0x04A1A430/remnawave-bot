@@ -576,7 +576,7 @@ async def show_tariffs_list(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
-        purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and s.status in ('active', 'trial')}
+        purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
 
     # Проверяем есть ли у пользователя скидки по периодам
     promo_group = db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
@@ -619,7 +619,7 @@ async def select_tariff(
         from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
         _active = await get_active_subscriptions_by_user_id(db, db_user.id)
-        _existing = next((s for s in _active if s.tariff_id == tariff_id and s.status in ('active', 'trial')), None)
+        _existing = next((s for s in _active if s.tariff_id == tariff_id and not s.is_trial), None)
         if _existing:
             days_left = max(0, (_existing.end_date - datetime.now(UTC)).days) if _existing.end_date else 0
             await callback.answer(
@@ -933,9 +933,9 @@ async def handle_custom_confirm(
         await callback.answer('Выбранный период недоступен для этого тарифа', show_alert=True)
         return
 
-    # Проверяем баланс (user already locked, balance is fresh)
+    # Проверяем баланс (при 100% скидке — пропускаем)
     user_balance = db_user.balance_kopeks or 0
-    if user_balance < total_price:
+    if total_price > 0 and user_balance < total_price:
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
@@ -1353,7 +1353,7 @@ async def confirm_tariff_purchase(
 
     # Проверяем баланс (user already locked, balance is fresh)
     user_balance = db_user.balance_kopeks or 0
-    if user_balance < final_price:
+    if final_price > 0 and user_balance < final_price:
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
@@ -1694,7 +1694,7 @@ async def confirm_daily_tariff_purchase(
 
     # Проверяем баланс (user already locked, balance is fresh)
     user_balance = db_user.balance_kopeks or 0
-    if user_balance < final_daily_price:
+    if final_daily_price > 0 and user_balance < final_daily_price:
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
@@ -2013,8 +2013,6 @@ async def show_tariff_extend(
                 # Show subscription picker for extending
                 keyboard = []
                 for sub in sorted(active_subs, key=lambda s: s.id):
-                    if sub.is_trial:
-                        continue
                     tariff_name = ''
                     if sub.tariff_id:
                         _t = await get_tariff_by_id(db, sub.tariff_id)
@@ -2246,7 +2244,7 @@ async def confirm_tariff_extend(
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
-    if user_balance < final_price:
+    if final_price > 0 and user_balance < final_price:
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
@@ -2266,11 +2264,17 @@ async def confirm_tariff_extend(
             await callback.answer('Ошибка списания баланса', show_alert=True)
             return
 
-        # Продлеваем подписку (параметры тарифа не меняются, только добавляется время)
+        # Запоминаем, был ли триал ДО продления
+        was_trial = subscription.is_trial
+
+        # Продлеваем подписку; для триала передаём tariff_id чтобы сбросить is_trial
         subscription = await extend_subscription(
             db,
             subscription,
             days=period,
+            tariff_id=tariff.id if was_trial else None,
+            traffic_limit_gb=tariff.traffic_limit_gb if was_trial else None,
+            device_limit=actual_device_limit if was_trial else None,
         )
 
         # Обновляем пользователя в Remnawave
@@ -2279,8 +2283,8 @@ async def confirm_tariff_extend(
             await subscription_service.create_remnawave_user(
                 db,
                 subscription,
-                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-                reset_reason='продление тарифа',
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT or was_trial,
+                reset_reason='конвертация триала' if was_trial else 'продление тарифа',
             )
         except Exception as e:
             logger.error('Ошибка обновления Remnawave', error=e)
@@ -2303,7 +2307,7 @@ async def confirm_tariff_extend(
                 subscription,
                 None,  # Транзакция отсутствует, оплата с баланса
                 period,
-                was_trial_conversion=False,
+                was_trial_conversion=was_trial,
                 amount_kopeks=final_price,
                 purchase_type='renewal',
             )
@@ -2836,7 +2840,7 @@ async def confirm_tariff_switch(
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
-    if user_balance < final_price:
+    if final_price > 0 and user_balance < final_price:
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
@@ -3042,7 +3046,7 @@ async def confirm_daily_tariff_switch(
 
     # Проверяем баланс (user already locked, balance is fresh)
     user_balance = db_user.balance_kopeks or 0
-    if user_balance < final_daily_price:
+    if final_daily_price > 0 and user_balance < final_daily_price:
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
@@ -3946,8 +3950,8 @@ async def return_to_saved_tariff_cart(
     user_balance = db_user.balance_kopeks or 0
     traffic = format_traffic(tariff.traffic_limit_gb)
 
-    # Проверяем баланс
-    if user_balance < total_price:
+    # Проверяем баланс (при 100% скидке — пропускаем)
+    if total_price > 0 and user_balance < total_price:
         missing = total_price - user_balance
 
         if cart_mode == 'daily_tariff_purchase':

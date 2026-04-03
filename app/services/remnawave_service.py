@@ -31,9 +31,9 @@ from app.database.models import (
 from app.external.remnawave_api import (
     RemnaWaveAPI,
     RemnaWaveAPIError,
-    TrafficLimitStrategy,
     UserStatus,
 )
+from app.services.subscription_service import get_traffic_reset_strategy
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -2240,7 +2240,7 @@ class RemnaWaveService:
                                     traffic_limit_bytes=sub.traffic_limit_gb * (1024**3)
                                     if sub.traffic_limit_gb > 0
                                     else 0,
-                                    traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                    traffic_limit_strategy=get_traffic_reset_strategy(sub.tariff),
                                     telegram_id=user.telegram_id,
                                     email=user.email,
                                     description=settings.format_remnawave_user_description(
@@ -2325,7 +2325,7 @@ class RemnaWaveService:
                                         status=status,
                                         expire_at=expire_at,
                                         traffic_limit_bytes=create_kwargs['traffic_limit_bytes'],
-                                        traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                        traffic_limit_strategy=get_traffic_reset_strategy(sub.tariff),
                                         email=user.email,
                                         description=create_kwargs['description'],
                                         active_internal_squads=sub.connected_squads,

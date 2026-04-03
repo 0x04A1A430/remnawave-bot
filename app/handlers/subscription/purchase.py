@@ -1537,7 +1537,7 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     total_price = prepared_cart_data.get('total_price', 0)
 
-    if db_user.balance_kopeks < total_price:
+    if total_price > 0 and db_user.balance_kopeks < total_price:
         missing_amount = total_price - db_user.balance_kopeks
         insufficient_keyboard = get_insufficient_balance_keyboard_with_cart(
             db_user.language,
@@ -1635,7 +1635,7 @@ async def handle_extend_subscription(
     else:
         subscription = db_user.subscription
 
-    if not subscription or subscription.is_trial:
+    if not subscription:
         await callback.message.edit_text(
             '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
@@ -1654,24 +1654,53 @@ async def handle_extend_subscription(
         await callback.answer()
         return
 
-    # В режиме тарифов проверяем наличие tariff_id
-    if settings.is_tariffs_mode():
-        if subscription.tariff_id:
-            # Проверяем, суточный ли тариф — у суточных нет period_prices, продление через resume
-            from app.database.crud.tariff import get_tariff_by_id
+    # Триальная подписка с тарифом — направляем на покупку этого тарифа
+    if subscription.is_trial:
+        if subscription.tariff_id and settings.is_tariffs_mode():
+            from .tariff_purchase import show_tariff_extend
 
-            tariff = await get_tariff_by_id(db, subscription.tariff_id)
-            if tariff and getattr(tariff, 'is_daily', False):
-                # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
-                await show_subscription_info(callback, db_user, db)
-                return
+            await show_tariff_extend(callback, db_user, db)
+            return
+        # Триал без тарифа — предлагаем выбрать
+        await callback.message.edit_text(
+            '🎯 <b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', '✖️ Закрыть'),
+                            callback_data='webhook:close',
+                        )
+                    ],
+                ]
+            ),
+            parse_mode='HTML',
+        )
+        await callback.answer()
+        return
 
+    # Подписка с тарифом — всегда используем тарифный flow,
+    # даже если бот в классическом режиме (подписка могла быть куплена через кабинет)
+    if subscription.tariff_id:
+        # Проверяем, суточный ли тариф — у суточных нет period_prices, продление через resume
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        if tariff and getattr(tariff, 'is_daily', False):
+            # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
+            await show_subscription_info(callback, db_user, db)
+            return
+
+        if tariff:
             # У подписки есть тариф - перенаправляем на продление по тарифу
             from .tariff_purchase import show_tariff_extend
 
             await show_tariff_extend(callback, db_user, db)
             return
-        # У подписки нет тарифа - предлагаем выбрать тариф
+
+    if settings.is_tariffs_mode():
+        # У подписки нет тарифа, но режим тарифов включён - предлагаем выбрать тариф
         await callback.message.edit_text(
             '📦 <b>Выберите тариф для продления</b>\n\n'
             'Ваша текущая подписка была создана до введения тарифов.\n'
@@ -1705,6 +1734,10 @@ async def handle_extend_subscription(
 
             # original = price before ALL discounts, final = price with all discounts
             total_original_price = pricing.original_total
+
+            # Пропускаем периоды с нулевой ценой — защита от бесплатного продления
+            if pricing.final_total <= 0 and pricing.base_price <= 0:
+                continue
 
             renewal_prices[days] = {
                 'final': pricing.final_total,
@@ -1899,7 +1932,7 @@ async def confirm_extend_subscription(
         await callback.answer('⚠ Ошибка расчета стоимости', show_alert=True)
         return
 
-    if db_user.balance_kopeks < price:
+    if price > 0 and db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         required_text = texts.format_price(price)
         message_text = texts.t(
@@ -2307,7 +2340,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
         )
     logger.info('ИТОГО: ₽', final_price=final_price / 100)
 
-    if db_user.balance_kopeks < final_price:
+    if final_price > 0 and db_user.balance_kopeks < final_price:
         missing_kopeks = final_price - db_user.balance_kopeks
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
@@ -4415,8 +4448,8 @@ async def _extend_existing_subscription(
         device_limit=device_limit,
     )
 
-    # Проверяем баланс пользователя
-    if db_user.balance_kopeks < price_kopeks:
+    # Проверяем баланс пользователя (при 100% скидке — пропускаем)
+    if price_kopeks > 0 and db_user.balance_kopeks < price_kopeks:
         missing_kopeks = price_kopeks - db_user.balance_kopeks
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',

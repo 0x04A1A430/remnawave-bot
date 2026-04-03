@@ -4162,14 +4162,16 @@ async def _update_user_traffic(
         ) or getattr(user, 'remnawave_uuid', None)
         if _uuid:
             try:
-                from app.external.remnawave_api import TrafficLimitStrategy
+                from app.services.subscription_service import get_traffic_reset_strategy
 
                 remnawave_service = RemnaWaveService()
                 async with remnawave_service.get_api_client() as api:
                     await api.update_user(
                         uuid=_uuid,
                         traffic_limit_bytes=traffic_gb * (1024**3) if traffic_gb > 0 else 0,
-                        traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                        traffic_limit_strategy=get_traffic_reset_strategy(
+                            subscription.tariff if subscription else None
+                        ),
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
                         ),
@@ -4877,8 +4879,9 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
             )
 
             try:
-                from app.external.remnawave_api import TrafficLimitStrategy, UserStatus
+                from app.external.remnawave_api import UserStatus
                 from app.services.remnawave_service import RemnaWaveService
+                from app.services.subscription_service import get_traffic_reset_strategy
 
                 remnawave_service = RemnaWaveService()
 
@@ -4903,7 +4906,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3)
                             if subscription.traffic_limit_gb > 0
                             else 0,
-                            traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                            traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                             description=settings.format_remnawave_user_description(
                                 full_name=target_user.full_name,
                                 username=target_user.username,
@@ -4939,7 +4942,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3)
                             if subscription.traffic_limit_gb > 0
                             else 0,
-                            traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                            traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                             telegram_id=target_user.telegram_id,
                             email=target_user.email,
                             description=settings.format_remnawave_user_description(

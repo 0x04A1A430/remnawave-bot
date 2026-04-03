@@ -425,8 +425,8 @@ async def create_gift_purchase(
             warning=recipient_warning,
         )
 
-    # Balance mode
-    if user.balance_kopeks < price_kopeks:
+    # Balance mode (skip for 100% discount)
+    if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Insufficient balance',
