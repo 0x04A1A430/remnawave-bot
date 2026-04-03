@@ -129,8 +129,9 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
 
         # Process event — return 200 to prevent retries for application-level errors.
         # Only return non-200 for infrastructure failures (DB unavailable).
-        # Admin events (node/service/crm) don't need a DB session.
-        if webhook_service.is_admin_event(event_name):
+        # Admin-only events (node/service/crm) don't need a DB session.
+        # Dual events (admin + user, e.g. torrent_blocker.report) need DB for user handler.
+        if webhook_service.is_admin_event(event_name) and not webhook_service.needs_db_session(event_name):
             try:
                 processed = await webhook_service.process_event(None, event_name, data)
                 return JSONResponse({'status': 'ok', 'processed': processed})
@@ -138,7 +139,7 @@ def create_remnawave_webhook_router(bot: Bot) -> APIRouter:
                 logger.exception('RemnaWave webhook processing error for event', event_name=event_name)
                 return JSONResponse({'status': 'ok', 'processed': False})
 
-        # User events require a DB session
+        # User events and dual events require a DB session
         try:
             async with AsyncSessionLocal() as db:
                 try:

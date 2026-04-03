@@ -1776,5 +1776,6 @@
     "WEBHOOK_USER_NOT_CONNECTED": "📡 <b>هنوز متصل نشده‌اید</b>\n\nاشتراک{tariff_label} شما فعال است اما هنوز اتصال VPN برقرار نشده. برای شروع استفاده متصل شوید.",
     "WEBHOOK_DEVICE_ADDED": "📱 <b>دستگاه جدید</b>\n\nدستگاه جدیدی به اشتراک{tariff_label} شما اضافه شد: <code>{device}</code>",
     "WEBHOOK_DEVICE_DELETED": "📱 <b>دستگاه حذف شد</b>\n\nدستگاهی از اشتراک{tariff_label} شما حذف شد: <code>{device}</code>",
+    "WEBHOOK_TORRENT_DETECTED": "🚫 <b>تورنت شناسایی شد</b>\n\nترافیک تورنت در اتصال{tariff_label} شما شناسایی شد. استفاده از تورنت ممکن است منجر به محدودیت اشتراک شود.",
     "WEBHOOK_CLOSE_BUTTON": "✖️ بستن"
 }

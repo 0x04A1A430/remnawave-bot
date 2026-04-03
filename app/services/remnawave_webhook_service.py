@@ -80,6 +80,7 @@ _TEXT_KEY_TO_SETTING: dict[str, str] = {
     'WEBHOOK_USER_NOT_CONNECTED': 'WEBHOOK_NOTIFY_NOT_CONNECTED',
     'WEBHOOK_DEVICE_ADDED': 'WEBHOOK_NOTIFY_DEVICES',
     'WEBHOOK_DEVICE_DELETED': 'WEBHOOK_NOTIFY_DEVICES',
+    'WEBHOOK_TORRENT_DETECTED': 'WEBHOOK_NOTIFY_TORRENT_DETECTED',
 }
 
 # Admin event display names for notification messages
@@ -158,6 +159,7 @@ class RemnaWaveWebhookService:
             'user.not_connected': self._handle_user_not_connected,
             'user_hwid_devices.added': self._handle_device_added,
             'user_hwid_devices.deleted': self._handle_device_deleted,
+            'torrent_blocker.report': self._handle_torrent_detected,
         }
 
         # Admin-scoped handlers: no user resolution, notify admin chat
@@ -172,6 +174,10 @@ class RemnaWaveWebhookService:
     def is_admin_event(self, event_name: str) -> bool:
         """Check if the event is admin-scoped (no DB session needed)."""
         return event_name in self._admin_handlers
+
+    def needs_db_session(self, event_name: str) -> bool:
+        """Check if the event requires a DB session (user handler or dual event)."""
+        return event_name in self._user_handlers
 
     @classmethod
     def _prune_intentional_panel_deletions(cls) -> None:
@@ -260,12 +266,20 @@ class RemnaWaveWebhookService:
         Returns True if the event was processed, False if skipped/unknown.
         db may be None for admin events that don't require database access.
         """
+        # Check if event has both admin and user handlers (e.g. torrent_blocker.report)
+        user_handler = self._user_handlers.get(event_name)
+        if event_name in self._admin_handlers and user_handler:
+            # Dual event: send admin notification AND process user handler
+            await self._process_admin_event(event_name, data)
+            if db is not None:
+                await self._process_user_event(db, event_name, data, user_handler)
+            return True
+
         # Check admin-scoped handlers (no DB needed)
         if event_name in self._admin_handlers:
             return await self._process_admin_event(event_name, data)
 
         # Check user-scoped handlers (require DB session)
-        user_handler = self._user_handlers.get(event_name)
         if user_handler:
             if db is None:
                 logger.error('RemnaWave webhook: DB session required for user event', event_name=event_name)
@@ -1407,5 +1421,16 @@ class RemnaWaveWebhookService:
             'WEBHOOK_DEVICE_DELETED',
             reply_markup=self._get_subscription_keyboard(user),
             format_kwargs={'device': device_name or '—'},
+            subscription=subscription,
+        )
+
+    async def _handle_torrent_detected(
+        self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
+    ) -> None:
+        logger.info('Webhook: torrent detected for user', user_id=user.id)
+        await self._notify_user(
+            user,
+            'WEBHOOK_TORRENT_DETECTED',
+            reply_markup=self._get_subscription_keyboard(user),
             subscription=subscription,
         )

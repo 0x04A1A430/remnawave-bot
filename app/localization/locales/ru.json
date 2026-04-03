@@ -1779,5 +1779,6 @@
   "WEBHOOK_USER_NOT_CONNECTED": "📡 <b>Вы ещё не подключились</b>\n\nВаша подписка{tariff_label} активна, но VPN-соединение не было установлено. Подключитесь, чтобы начать пользоваться.",
   "WEBHOOK_DEVICE_ADDED": "📱 <b>Новое устройство</b>\n\nК подписке{tariff_label} подключено новое устройство: <code>{device}</code>",
   "WEBHOOK_DEVICE_DELETED": "📱 <b>Устройство удалено</b>\n\nУстройство отключено от подписки{tariff_label}: <code>{device}</code>",
+  "WEBHOOK_TORRENT_DETECTED": "🚫 <b>Обнаружен торрент</b>\n\nВ вашем подключении{tariff_label} обнаружен торрент-трафик. Использование торрентов может привести к ограничению подписки.",
   "WEBHOOK_CLOSE_BUTTON": "✖️ Закрыть"
 }
