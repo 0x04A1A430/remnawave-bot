@@ -944,6 +944,11 @@ class BotConfigurationService:
             'format': 'Булево значение.',
             'example': 'true',
         },
+        'WEBHOOK_NOTIFY_TORRENT_DETECTED': {
+            'description': 'Уведомление пользователю при обнаружении торрент-трафика.',
+            'format': 'Булево значение.',
+            'example': 'true',
+        },
         'RESET_TRAFFIC_ON_TARIFF_SWITCH': {
             'description': (
                 'Автоматически сбрасывает счётчик использованного трафика '

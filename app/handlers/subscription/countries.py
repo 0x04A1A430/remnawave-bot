@@ -861,7 +861,7 @@ async def confirm_add_countries_to_subscription(
         if country['uuid'] in removed_countries:
             removed_countries_names.append(html.escape(country['name']))
 
-    if new_countries and db_user.balance_kopeks < total_price:
+    if new_countries and total_price > 0 and db_user.balance_kopeks < total_price:
         missing_kopeks = total_price - db_user.balance_kopeks
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',

@@ -1643,6 +1643,7 @@
 "WEBHOOK_USER_NOT_CONNECTED": "📡 <b>尚未连接</b>\n\n您的订阅{tariff_label}已激活，但尚未建立VPN连接。请连接以开始使用服务。",
 "WEBHOOK_DEVICE_ADDED": "📱 <b>新设备</b>\n\n订阅{tariff_label}已添加新设备：<code>{device}</code>",
 "WEBHOOK_DEVICE_DELETED": "📱 <b>设备已移除</b>\n\n设备已从订阅{tariff_label}中移除：<code>{device}</code>",
+"WEBHOOK_TORRENT_DETECTED": "🚫 <b>检测到种子下载</b>\n\n在您的连接{tariff_label}中检测到种子流量。使用种子可能导致订阅受限。",
 "WEBHOOK_CLOSE_BUTTON": "✖️ 关闭",
 "BALANCE_TOPPED_UP_CART_SUFFICIENT": "✅ 余额已充值 {amount}！\n\n💰 当前余额：{balance}\n\n🛒 您有一个已保存的购物车，金额为 {cart_total}\n余额足够完成订购。",
 "BALANCE_TOPPED_UP_CART_INSUFFICIENT": "✅ 余额已充值 {amount}！\n\n💰 当前余额：{balance}\n\n🛒 您有一个已保存的购物车，金额为 {cart_total}\n还差：{missing}"

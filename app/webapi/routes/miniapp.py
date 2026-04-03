@@ -6563,8 +6563,8 @@ async def purchase_tariff_endpoint(
     group_pcts = bd.get('group_discount_pct', {})
     discount_percent = group_pcts.get('period', 0)
 
-    # Проверяем баланс
-    if user.balance_kopeks < price_kopeks:
+    # Проверяем баланс (при 100% скидке — пропускаем)
+    if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         missing = price_kopeks - user.balance_kopeks
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -7194,8 +7194,8 @@ async def purchase_traffic_topup_endpoint(
         subscription.end_date,
     )
 
-    # Проверяем баланс
-    if user.balance_kopeks < final_price:
+    # Проверяем баланс (при 100% скидке — пропускаем)
+    if final_price > 0 and user.balance_kopeks < final_price:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={

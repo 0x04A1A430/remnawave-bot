@@ -989,10 +989,12 @@ class MiniAppSubscriptionPurchaseService:
         user = context.user
         texts = get_texts(getattr(user, 'language', None))
 
-        if pricing.final_total <= 0:
+        # Block only if pricing is genuinely invalid (no base price configured).
+        # final_total == 0 with base_original_total > 0 means a valid 100% discount.
+        if pricing.final_total <= 0 and pricing.base_original_total <= 0:
             raise PurchaseValidationError('Invalid total amount', code='calculation_error')
 
-        if user.balance_kopeks < pricing.final_total:
+        if pricing.final_total > 0 and user.balance_kopeks < pricing.final_total:
             raise PurchaseBalanceError(
                 texts.t(
                     'MINIAPP_PURCHASE_STATUS_INSUFFICIENT',

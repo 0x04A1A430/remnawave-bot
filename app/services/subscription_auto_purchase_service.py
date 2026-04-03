@@ -316,7 +316,7 @@ async def _prepare_auto_extend_context(
         )
         return None
 
-    if price_kopeks <= 0:
+    if price_kopeks <= 0 and pricing.base_price <= 0:
         logger.warning(
             '🔁 Автопокупка: некорректная цена продления у пользователя',
             price_kopeks=price_kopeks,
@@ -424,7 +424,7 @@ async def _auto_extend_subscription(
     if prepared is None:
         return False
 
-    if user.balance_kopeks < prepared.price_kopeks:
+    if prepared.price_kopeks > 0 and user.balance_kopeks < prepared.price_kopeks:
         logger.info(
             '🔁 Автопокупка: у пользователя недостаточно средств для продления (<)',
             format_user_id=_format_user_id(user),
@@ -801,7 +801,7 @@ async def _auto_purchase_tariff(
     final_price = result.final_total
     consume_promo = result.promo_offer_discount > 0
 
-    if user.balance_kopeks < final_price:
+    if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
             '🔁 Автопокупка тарифа: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
@@ -1131,7 +1131,7 @@ async def _auto_purchase_daily_tariff(
     final_price, _, _ = PricingEngine.apply_stacked_discounts(daily_price, group_pct, offer_pct)
     consume_promo = offer_pct > 0
 
-    if user.balance_kopeks < final_price:
+    if final_price > 0 and user.balance_kopeks < final_price:
         logger.info(
             '🔁 Автопокупка суточного тарифа: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
@@ -1532,8 +1532,8 @@ async def _auto_add_devices(
             days_left=days_left,
         )
 
-    # Проверяем баланс (с актуальной ценой)
-    if user.balance_kopeks < price_kopeks:
+    # Проверяем баланс (при 100% скидке — пропускаем)
+    if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         logger.info(
             '🔁 Автопокупка устройств: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
@@ -1883,8 +1883,8 @@ async def _auto_add_traffic(
             period_hint_days=period_hint_days,
         )
 
-    # Verify balance (with fresh price)
-    if user.balance_kopeks < price_kopeks:
+    # Verify balance (при 100% скидке — пропускаем)
+    if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         logger.info(
             '🔁 Автопокупка трафика: у пользователя недостаточно средств (<)',
             format_user_id=_format_user_id(user),
@@ -2172,7 +2172,7 @@ async def try_auto_extend_expired_after_topup(
         breakdown=pricing.breakdown,
     )
 
-    if renewal_cost <= 0:
+    if renewal_cost <= 0 and pricing.base_price <= 0:
         logger.warning(
             '❌ Автопродление expired: некорректная стоимость',
             format_user_id=_format_user_id(user),
@@ -2180,8 +2180,8 @@ async def try_auto_extend_expired_after_topup(
         )
         return False
 
-    # Check balance
-    if user.balance_kopeks < renewal_cost:
+    # Check balance (skip for 100% discount)
+    if renewal_cost > 0 and user.balance_kopeks < renewal_cost:
         logger.info(
             '🔄 Автопродление expired: недостаточно средств',
             format_user_id=_format_user_id(user),
@@ -2523,8 +2523,8 @@ async def try_resume_disabled_daily_after_topup(
         PricingEngine.apply_discount(raw_daily_price, daily_group_pct) if daily_group_pct > 0 else raw_daily_price
     )
 
-    # Check balance (uses locked user's balance_kopeks — safe from concurrent reads)
-    if user.balance_kopeks < daily_price:
+    # Check balance (при 100% скидке — пропускаем)
+    if daily_price > 0 and user.balance_kopeks < daily_price:
         logger.info(
             '🔄 Авто-возобновление daily: недостаточно средств',
             format_user_id=_format_user_id(user),
@@ -3039,7 +3039,7 @@ async def _process_legacy_generic_cart(
     pricing = prepared.pricing
     selection = prepared.selection
 
-    if pricing.final_total <= 0:
+    if pricing.final_total <= 0 and pricing.base_original_total <= 0:
         logger.warning(
             'Автопокупка: итоговая сумма для пользователя некорректна',
             format_user_id=_format_user_id(user),
@@ -3047,7 +3047,7 @@ async def _process_legacy_generic_cart(
         )
         return False
 
-    if user.balance_kopeks < pricing.final_total:
+    if pricing.final_total > 0 and user.balance_kopeks < pricing.final_total:
         logger.info(
             'Автопокупка: у пользователя недостаточно средств',
             format_user_id=_format_user_id(user),

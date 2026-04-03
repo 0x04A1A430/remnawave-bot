@@ -1755,5 +1755,6 @@
   "WEBHOOK_USER_NOT_CONNECTED": "📡 <b>Not connected yet</b>\n\nYour subscription{tariff_label} is active but no VPN connection has been made. Connect to start using the service.",
   "WEBHOOK_DEVICE_ADDED": "📱 <b>New device</b>\n\nA new device has been added to your subscription{tariff_label}: <code>{device}</code>",
   "WEBHOOK_DEVICE_DELETED": "📱 <b>Device removed</b>\n\nA device has been removed from your subscription{tariff_label}: <code>{device}</code>",
+  "WEBHOOK_TORRENT_DETECTED": "🚫 <b>Torrent detected</b>\n\nTorrent traffic was detected on your connection{tariff_label}. Using torrents may result in subscription restrictions.",
   "WEBHOOK_CLOSE_BUTTON": "✖️ Close"
 }
