@@ -1,0 +1,1036 @@
+"""Branding routes for cabinet - logo, project name, and theme colors management."""
+
+import asyncio
+import json
+import os
+from pathlib import Path
+from typing import Literal
+
+import structlog
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database.crud.system_setting import get_setting_value
+from app.database.models import SystemSetting, User
+
+from ..dependencies import get_cabinet_db, require_permission
+
+
+logger = structlog.get_logger(__name__)
+
+router = APIRouter(prefix='/branding', tags=['Branding'])
+
+# Directory for storing branding assets
+BRANDING_DIR = Path('data/branding')
+LOGO_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg']
+
+# Settings keys
+BRANDING_NAME_KEY = 'CABINET_BRANDING_NAME'
+BRANDING_LOGO_KEY = 'CABINET_BRANDING_LOGO'  # Stores "custom" or "default"
+THEME_COLORS_KEY = 'CABINET_THEME_COLORS'  # Stores JSON with theme colors
+ENABLED_THEMES_KEY = 'CABINET_ENABLED_THEMES'  # Stores JSON with enabled themes {"dark": true, "light": false}
+ANIMATION_ENABLED_KEY = 'CABINET_ANIMATION_ENABLED'  # Stores "true" or "false"
+FULLSCREEN_ENABLED_KEY = 'CABINET_FULLSCREEN_ENABLED'  # Stores "true" or "false"
+EMAIL_AUTH_ENABLED_KEY = 'CABINET_EMAIL_AUTH_ENABLED'  # Stores "true" or "false"
+YANDEX_METRIKA_ID_KEY = 'CABINET_YANDEX_METRIKA_ID'  # Stores counter ID (numeric string)
+GOOGLE_ADS_ID_KEY = 'CABINET_GOOGLE_ADS_ID'  # Stores conversion ID (e.g. "AW-123456789")
+GOOGLE_ADS_LABEL_KEY = 'CABINET_GOOGLE_ADS_LABEL'  # Stores conversion label (alphanumeric)
+LITE_MODE_ENABLED_KEY = 'CABINET_LITE_MODE_ENABLED'  # Stores "true" or "false"
+GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'  # Stores "true" or "false"
+ANIMATION_CONFIG_KEY = 'CABINET_ANIMATION_CONFIG'  # Stores JSON with animation config
+TELEGRAM_WIDGET_SIZE_KEY = 'TELEGRAM_WIDGET_SIZE'
+TELEGRAM_WIDGET_RADIUS_KEY = 'TELEGRAM_WIDGET_RADIUS'
+TELEGRAM_WIDGET_USERPIC_KEY = 'TELEGRAM_WIDGET_USERPIC'
+TELEGRAM_WIDGET_REQUEST_ACCESS_KEY = 'TELEGRAM_WIDGET_REQUEST_ACCESS'
+TELEGRAM_OIDC_ENABLED_KEY = 'TELEGRAM_OIDC_ENABLED'
+TELEGRAM_OIDC_CLIENT_ID_KEY = 'TELEGRAM_OIDC_CLIENT_ID'
+
+# Default animation config
+DEFAULT_ANIMATION_CONFIG = {
+    'enabled': True,
+    'type': 'aurora',
+    'settings': {},
+    'opacity': 1.0,
+    'blur': 0,
+    'reducedOnMobile': True,
+}
+
+# Allowed image types
+ALLOWED_CONTENT_TYPES = {'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB for larger logos
+
+
+# ============ Schemas ============
+
+
+class BrandingResponse(BaseModel):
+    """Current branding settings."""
+
+    name: str
+    logo_url: str | None = None
+    logo_letter: str
+    has_custom_logo: bool
+
+
+class BrandingNameUpdate(BaseModel):
+    """Request to update branding name."""
+
+    name: str
+
+
+class ThemeColorsResponse(BaseModel):
+    """Theme colors settings."""
+
+    accent: str = '#3b82f6'
+    darkBackground: str = '#0a0f1a'
+    darkSurface: str = '#0f172a'
+    darkText: str = '#f1f5f9'
+    darkTextSecondary: str = '#94a3b8'
+    lightBackground: str = '#F7E7CE'
+    lightSurface: str = '#FEF9F0'
+    lightText: str = '#1F1A12'
+    lightTextSecondary: str = '#7D6B48'
+    success: str = '#22c55e'
+    warning: str = '#f59e0b'
+    error: str = '#ef4444'
+
+
+class ThemeColorsUpdate(BaseModel):
+    """Request to update theme colors (partial update allowed)."""
+
+    accent: str | None = None
+    darkBackground: str | None = None
+    darkSurface: str | None = None
+    darkText: str | None = None
+    darkTextSecondary: str | None = None
+    lightBackground: str | None = None
+    lightSurface: str | None = None
+    lightText: str | None = None
+    lightTextSecondary: str | None = None
+    success: str | None = None
+    warning: str | None = None
+    error: str | None = None
+
+
+class EnabledThemesResponse(BaseModel):
+    """Enabled themes settings."""
+
+    dark: bool = True
+    light: bool = True
+
+
+class EnabledThemesUpdate(BaseModel):
+    """Request to update enabled themes."""
+
+    dark: bool | None = None
+    light: bool | None = None
+
+
+class AnimationEnabledResponse(BaseModel):
+    """Animation enabled setting."""
+
+    enabled: bool = True
+
+
+class AnimationEnabledUpdate(BaseModel):
+    """Request to update animation setting."""
+
+    enabled: bool
+
+
+ALLOWED_BG_TYPES = (
+    'aurora',
+    'sparkles',
+    'vortex',
+    'shooting-stars',
+    'background-beams',
+    'background-beams-collision',
+    'gradient-animation',
+    'wavy',
+    'background-lines',
+    'boxes',
+    'meteors',
+    'grid',
+    'dots',
+    'spotlight',
+    'ripple',
+    'none',
+)
+
+MAX_SETTINGS_KEYS = 20
+MAX_SETTINGS_VALUE_LEN = 200
+
+
+def _validate_settings(v: dict) -> dict:
+    """Validate settings dict: flat structure, bounded size, no nested objects."""
+    if len(v) > MAX_SETTINGS_KEYS:
+        raise ValueError(f'Settings must have at most {MAX_SETTINGS_KEYS} keys')
+    for key, val in v.items():
+        if not isinstance(key, str) or len(key) > 50:
+            raise ValueError('Setting keys must be strings under 50 characters')
+        if isinstance(val, dict | list):
+            raise ValueError('Nested objects/arrays not allowed in settings')
+        if isinstance(val, str) and len(val) > MAX_SETTINGS_VALUE_LEN:
+            raise ValueError(f'String setting values must be under {MAX_SETTINGS_VALUE_LEN} characters')
+    return v
+
+
+class AnimationConfigResponse(BaseModel):
+    """Full animation config."""
+
+    enabled: bool = True
+    type: str = 'aurora'
+    settings: dict = Field(default_factory=dict)
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+    blur: float = Field(default=0, ge=0, le=100)
+    reducedOnMobile: bool = True
+
+
+class AnimationConfigUpdate(BaseModel):
+    """Request to update animation config (partial update)."""
+
+    enabled: bool | None = None
+    type: (
+        Literal[
+            'aurora',
+            'sparkles',
+            'vortex',
+            'shooting-stars',
+            'background-beams',
+            'background-beams-collision',
+            'gradient-animation',
+            'wavy',
+            'background-lines',
+            'boxes',
+            'meteors',
+            'grid',
+            'dots',
+            'spotlight',
+            'ripple',
+            'none',
+        ]
+        | None
+    ) = None
+    settings: dict | None = None
+    opacity: float | None = Field(default=None, ge=0.0, le=1.0)
+    blur: float | None = Field(default=None, ge=0, le=100)
+    reducedOnMobile: bool | None = None
+
+    @field_validator('settings')
+    @classmethod
+    def validate_settings(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return v
+        return _validate_settings(v)
+
+
+class FullscreenEnabledResponse(BaseModel):
+    """Fullscreen enabled setting."""
+
+    enabled: bool = False
+
+
+class FullscreenEnabledUpdate(BaseModel):
+    """Request to update fullscreen setting."""
+
+    enabled: bool
+
+
+class EmailAuthEnabledResponse(BaseModel):
+    """Email auth enabled setting."""
+
+    enabled: bool = True
+    verification_enabled: bool = True
+
+
+class EmailAuthEnabledUpdate(BaseModel):
+    """Request to update email auth setting."""
+
+    enabled: bool
+
+
+class TelegramWidgetConfigResponse(BaseModel):
+    """Public Telegram Login Widget configuration."""
+
+    bot_username: str
+    size: Literal['large', 'medium', 'small'] = 'large'
+    radius: int = Field(default=8, ge=0, le=20)
+    userpic: bool = True
+    request_access: bool = True
+
+    # OIDC fields (frontend decides which flow to use)
+    oidc_enabled: bool = False
+    oidc_client_id: str = ''
+
+
+class LiteModeEnabledResponse(BaseModel):
+    """Lite mode enabled setting."""
+
+    enabled: bool = False
+
+
+class LiteModeEnabledUpdate(BaseModel):
+    """Request to update lite mode setting."""
+
+    enabled: bool
+
+
+class GiftEnabledResponse(BaseModel):
+    """Gift feature enabled setting."""
+
+    enabled: bool = False
+
+
+class GiftEnabledUpdate(BaseModel):
+    """Request to update gift feature setting."""
+
+    enabled: bool
+
+
+class AnalyticsCountersResponse(BaseModel):
+    """Analytics counter settings."""
+
+    yandex_metrika_id: str = ''
+    google_ads_id: str = ''
+    google_ads_label: str = ''
+
+
+class AnalyticsCountersUpdate(BaseModel):
+    """Request to update analytics counters (partial update allowed)."""
+
+    yandex_metrika_id: str | None = None
+    google_ads_id: str | None = None
+    google_ads_label: str | None = None
+
+
+# Default theme colors
+DEFAULT_THEME_COLORS = {
+    'accent': '#3b82f6',
+    'darkBackground': '#0a0f1a',
+    'darkSurface': '#0f172a',
+    'darkText': '#f1f5f9',
+    'darkTextSecondary': '#94a3b8',
+    'lightBackground': '#F7E7CE',
+    'lightSurface': '#FEF9F0',
+    'lightText': '#1F1A12',
+    'lightTextSecondary': '#7D6B48',
+    'success': '#22c55e',
+    'warning': '#f59e0b',
+    'error': '#ef4444',
+}
+
+
+# ============ Helper Functions ============
+
+
+def ensure_branding_dir():
+    """Ensure branding directory exists."""
+    BRANDING_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def set_setting_value(db: AsyncSession, key: str, value: str):
+    """Set a setting value in database."""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    setting = result.scalar_one_or_none()
+
+    if setting:
+        setting.value = value
+    else:
+        setting = SystemSetting(key=key, value=value)
+        db.add(setting)
+
+    await db.commit()
+
+
+def get_logo_path() -> Path | None:
+    """Get the path to the custom logo file (any supported format)."""
+    if not BRANDING_DIR.exists():
+        return None
+
+    # Search for logo file with any supported extension
+    for ext in LOGO_EXTENSIONS:
+        logo_path = BRANDING_DIR / f'logo{ext}'
+        if logo_path.exists():
+            return logo_path
+
+    return None
+
+
+def has_custom_logo() -> bool:
+    """Check if a custom logo exists."""
+    return get_logo_path() is not None
+
+
+# ============ Routes ============
+
+
+@router.get('', response_model=BrandingResponse)
+async def get_branding(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get current branding settings.
+    This is a public endpoint - no authentication required.
+    """
+    # Get name from database or use default from env/settings
+    name = await get_setting_value(db, BRANDING_NAME_KEY)
+    if name is None:  # Only use fallback if not set at all (empty string is valid)
+        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
+
+    # Check for custom logo
+    custom_logo = has_custom_logo()
+
+    # Get first letter for logo fallback (use "V" if name is empty)
+    logo_letter = name[0].upper() if name else 'V'
+
+    return BrandingResponse(
+        name=name,
+        logo_url='/cabinet/branding/logo' if custom_logo else None,
+        logo_letter=logo_letter,
+        has_custom_logo=custom_logo,
+    )
+
+
+@router.get('/logo')
+async def get_logo():
+    """
+    Get the custom logo image.
+    Returns 404 if no custom logo is set.
+    """
+    logo_path = get_logo_path()
+
+    if logo_path is None or not await asyncio.to_thread(logo_path.exists):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No custom logo set')
+
+    # Determine media type from file extension
+    suffix = logo_path.suffix.lower()
+    media_types = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
+    }
+    media_type = media_types.get(suffix, 'image/png')
+
+    return FileResponse(logo_path, media_type=media_type, headers={'Cache-Control': 'public, max-age=3600'})
+
+
+@router.put('/name', response_model=BrandingResponse)
+async def update_branding_name(
+    payload: BrandingNameUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update the project name. Admin only. Empty name allowed (logo only mode)."""
+    name = payload.name.strip() if payload.name else ''
+
+    if len(name) > 50:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Name too long (max 50 characters)')
+
+    await set_setting_value(db, BRANDING_NAME_KEY, name)
+
+    logger.info('Admin updated branding name to', telegram_id=admin.telegram_id, name=name)
+
+    # Return updated branding
+    custom_logo = has_custom_logo()
+    logo_letter = name[0].upper() if name else 'C'
+
+    return BrandingResponse(
+        name=name,
+        logo_url='/cabinet/branding/logo' if custom_logo else None,
+        logo_letter=logo_letter,
+        has_custom_logo=custom_logo,
+    )
+
+
+@router.post('/logo', response_model=BrandingResponse)
+async def upload_logo(
+    file: UploadFile = File(...),
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Upload a custom logo. Admin only."""
+    # Validate content type
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid file type. Allowed: PNG, JPEG, WebP, SVG'
+        )
+
+    # Read file content
+    content = await file.read()
+
+    # Validate file size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'File too large. Maximum size: {MAX_FILE_SIZE // 1024 // 1024}MB',
+        )
+
+    # Ensure directory exists
+    await asyncio.to_thread(ensure_branding_dir)
+
+    # Determine file extension from content type
+    ext_map = {
+        'image/png': '.png',
+        'image/jpeg': '.jpg',
+        'image/jpg': '.jpg',
+        'image/webp': '.webp',
+        'image/svg+xml': '.svg',
+    }
+    extension = ext_map.get(file.content_type, '.png')
+
+    # Remove old logo files with any extension
+    for old_file in await asyncio.to_thread(lambda: list(BRANDING_DIR.glob('logo.*'))):
+        await asyncio.to_thread(old_file.unlink)
+
+    # Save new logo
+    logo_path = BRANDING_DIR / f'logo{extension}'
+    await asyncio.to_thread(logo_path.write_bytes, content)
+
+    # Mark that we have a custom logo
+    await set_setting_value(db, BRANDING_LOGO_KEY, 'custom')
+
+    logger.info('Admin uploaded new logo', telegram_id=admin.telegram_id, logo_path=logo_path)
+
+    # Get current name for response
+    name = await get_setting_value(db, BRANDING_NAME_KEY)
+    if name is None:  # Only use fallback if not set at all (empty string is valid)
+        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
+
+    logo_letter = name[0].upper() if name else 'C'
+
+    return BrandingResponse(
+        name=name,
+        logo_url='/cabinet/branding/logo',
+        logo_letter=logo_letter,
+        has_custom_logo=True,
+    )
+
+
+@router.delete('/logo', response_model=BrandingResponse)
+async def delete_logo(
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Delete custom logo and revert to letter. Admin only."""
+    # Remove logo files
+    for old_file in await asyncio.to_thread(lambda: list(BRANDING_DIR.glob('logo.*'))):
+        await asyncio.to_thread(old_file.unlink)
+
+    # Update setting
+    await set_setting_value(db, BRANDING_LOGO_KEY, 'default')
+
+    logger.info('Admin deleted custom logo', telegram_id=admin.telegram_id)
+
+    # Get current name for response
+    name = await get_setting_value(db, BRANDING_NAME_KEY)
+    if name is None:  # Only use fallback if not set at all (empty string is valid)
+        name = getattr(settings, 'CABINET_BRANDING_NAME', None) or os.getenv('VITE_APP_NAME', 'Cabinet')
+
+    logo_letter = name[0].upper() if name else 'C'
+
+    return BrandingResponse(
+        name=name,
+        logo_url=None,
+        logo_letter=logo_letter,
+        has_custom_logo=False,
+    )
+
+
+# ============ Theme Colors Routes ============
+
+
+def validate_hex_color(color: str) -> bool:
+    """Validate hex color format."""
+    if not color or not isinstance(color, str):
+        return False
+    if not color.startswith('#'):
+        return False
+    hex_part = color[1:]
+    if len(hex_part) not in (3, 6):
+        return False
+    try:
+        int(hex_part, 16)
+        return True
+    except ValueError:
+        return False
+
+
+@router.get('/colors', response_model=ThemeColorsResponse)
+async def get_theme_colors(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get current theme colors.
+    This is a public endpoint - no authentication required.
+    """
+    colors_json = await get_setting_value(db, THEME_COLORS_KEY)
+
+    if colors_json:
+        try:
+            colors = json.loads(colors_json)
+            # Merge with defaults to ensure all fields exist
+            merged = {**DEFAULT_THEME_COLORS, **colors}
+            return ThemeColorsResponse(**merged)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return ThemeColorsResponse(**DEFAULT_THEME_COLORS)
+
+
+@router.patch('/colors', response_model=ThemeColorsResponse)
+async def update_theme_colors(
+    payload: ThemeColorsUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update theme colors. Admin only. Partial update supported."""
+    # Get current colors
+    colors_json = await get_setting_value(db, THEME_COLORS_KEY)
+    current_colors = DEFAULT_THEME_COLORS.copy()
+
+    if colors_json:
+        try:
+            current_colors.update(json.loads(colors_json))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Update with new values (only non-None fields)
+    update_data = payload.model_dump(exclude_none=True)
+
+    # Validate hex colors
+    for key, value in update_data.items():
+        if not validate_hex_color(value):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Invalid hex color for {key}: {value}')
+
+    current_colors.update(update_data)
+
+    # Save to database
+    await set_setting_value(db, THEME_COLORS_KEY, json.dumps(current_colors))
+
+    logger.info('Admin updated theme colors', telegram_id=admin.telegram_id, value=list(update_data.keys()))
+
+    return ThemeColorsResponse(**current_colors)
+
+
+@router.post('/colors/reset', response_model=ThemeColorsResponse)
+async def reset_theme_colors(
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Reset theme colors to defaults. Admin only."""
+    # Save default colors
+    await set_setting_value(db, THEME_COLORS_KEY, json.dumps(DEFAULT_THEME_COLORS))
+
+    logger.info('Admin reset theme colors to defaults', telegram_id=admin.telegram_id)
+
+    return ThemeColorsResponse(**DEFAULT_THEME_COLORS)
+
+
+# ============ Enabled Themes Routes ============
+
+DEFAULT_ENABLED_THEMES = {'dark': True, 'light': True}
+
+
+@router.get('/themes', response_model=EnabledThemesResponse)
+async def get_enabled_themes(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get which themes are enabled.
+    This is a public endpoint - no authentication required.
+    """
+    themes_json = await get_setting_value(db, ENABLED_THEMES_KEY)
+
+    if themes_json:
+        try:
+            themes = json.loads(themes_json)
+            return EnabledThemesResponse(**themes)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return EnabledThemesResponse(**DEFAULT_ENABLED_THEMES)
+
+
+@router.patch('/themes', response_model=EnabledThemesResponse)
+async def update_enabled_themes(
+    payload: EnabledThemesUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update which themes are enabled. Admin only. At least one theme must be enabled."""
+    # Get current settings
+    themes_json = await get_setting_value(db, ENABLED_THEMES_KEY)
+    current_themes = DEFAULT_ENABLED_THEMES.copy()
+
+    if themes_json:
+        try:
+            current_themes.update(json.loads(themes_json))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Update with new values
+    update_data = payload.model_dump(exclude_none=True)
+    current_themes.update(update_data)
+
+    # Ensure at least one theme is enabled
+    if not current_themes.get('dark') and not current_themes.get('light'):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='At least one theme must be enabled')
+
+    # Save to database
+    await set_setting_value(db, ENABLED_THEMES_KEY, json.dumps(current_themes))
+
+    logger.info('Admin updated enabled themes', telegram_id=admin.telegram_id, current_themes=current_themes)
+
+    return EnabledThemesResponse(**current_themes)
+
+
+# ============ Animation Routes ============
+
+
+@router.get('/animation', response_model=AnimationEnabledResponse)
+async def get_animation_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get animation enabled setting.
+    This is a public endpoint - no authentication required.
+    """
+    animation_value = await get_setting_value(db, ANIMATION_ENABLED_KEY)
+
+    if animation_value is not None:
+        enabled = animation_value.lower() == 'true'
+        return AnimationEnabledResponse(enabled=enabled)
+
+    # Default: enabled
+    return AnimationEnabledResponse(enabled=True)
+
+
+@router.patch('/animation', response_model=AnimationEnabledResponse)
+async def update_animation_enabled(
+    payload: AnimationEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update animation enabled setting. Admin only."""
+    await set_setting_value(db, ANIMATION_ENABLED_KEY, str(payload.enabled).lower())
+
+    logger.info('Admin set animation enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+
+    return AnimationEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Animation Config Routes (new JSON-based) ============
+
+
+@router.get('/animation-config', response_model=AnimationConfigResponse)
+async def get_animation_config(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get full animation config. Public endpoint."""
+    config_value = await get_setting_value(db, ANIMATION_CONFIG_KEY)
+
+    if config_value is not None:
+        try:
+            config = json.loads(config_value)
+            return AnimationConfigResponse(**config)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Auto-migrate from old ANIMATION_ENABLED_KEY
+    old_value = await get_setting_value(db, ANIMATION_ENABLED_KEY)
+    if old_value is not None:
+        config = {**DEFAULT_ANIMATION_CONFIG, 'enabled': old_value.lower() == 'true'}
+        await set_setting_value(db, ANIMATION_CONFIG_KEY, json.dumps(config))
+        return AnimationConfigResponse(**config)
+
+    return AnimationConfigResponse(**DEFAULT_ANIMATION_CONFIG)
+
+
+@router.patch('/animation-config', response_model=AnimationConfigResponse)
+async def update_animation_config(
+    payload: AnimationConfigUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update animation config (partial update). Admin only."""
+    # Get current config
+    config_value = await get_setting_value(db, ANIMATION_CONFIG_KEY)
+    if config_value:
+        try:
+            current = json.loads(config_value)
+        except (json.JSONDecodeError, TypeError):
+            current = dict(DEFAULT_ANIMATION_CONFIG)
+    else:
+        current = dict(DEFAULT_ANIMATION_CONFIG)
+
+    # Merge only provided fields
+    update_data = payload.model_dump(exclude_none=True)
+    current.update(update_data)
+
+    await set_setting_value(db, ANIMATION_CONFIG_KEY, json.dumps(current))
+
+    # Also sync old key for backwards compat
+    await set_setting_value(db, ANIMATION_ENABLED_KEY, str(current.get('enabled', True)).lower())
+
+    logger.info(
+        'Admin updated animation config',
+        telegram_id=admin.telegram_id,
+        type=current.get('type'),
+        enabled=current.get('enabled'),
+    )
+
+    return AnimationConfigResponse(**current)
+
+
+# ============ Fullscreen Routes ============
+
+
+@router.get('/fullscreen', response_model=FullscreenEnabledResponse)
+async def get_fullscreen_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get fullscreen enabled setting.
+    This is a public endpoint - no authentication required.
+    """
+    fullscreen_value = await get_setting_value(db, FULLSCREEN_ENABLED_KEY)
+
+    if fullscreen_value is not None:
+        enabled = fullscreen_value.lower() == 'true'
+        return FullscreenEnabledResponse(enabled=enabled)
+
+    # Default: disabled
+    return FullscreenEnabledResponse(enabled=False)
+
+
+@router.patch('/fullscreen', response_model=FullscreenEnabledResponse)
+async def update_fullscreen_enabled(
+    payload: FullscreenEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update fullscreen enabled setting. Admin only."""
+    await set_setting_value(db, FULLSCREEN_ENABLED_KEY, str(payload.enabled).lower())
+
+    logger.info('Admin set fullscreen enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+
+    return FullscreenEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Email Auth Routes ============
+
+
+@router.get('/email-auth', response_model=EmailAuthEnabledResponse)
+async def get_email_auth_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get email auth enabled setting.
+    This is a public endpoint - no authentication required.
+    Controls whether email registration/login is available.
+    """
+    email_auth_value = await get_setting_value(db, EMAIL_AUTH_ENABLED_KEY)
+
+    if email_auth_value is not None:
+        enabled = email_auth_value.lower() == 'true'
+        return EmailAuthEnabledResponse(
+            enabled=enabled,
+            verification_enabled=settings.is_cabinet_email_verification_enabled(),
+        )
+
+    # Default: check config setting
+    return EmailAuthEnabledResponse(
+        enabled=settings.is_cabinet_email_auth_enabled(),
+        verification_enabled=settings.is_cabinet_email_verification_enabled(),
+    )
+
+
+@router.patch('/email-auth', response_model=EmailAuthEnabledResponse)
+async def update_email_auth_enabled(
+    payload: EmailAuthEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update email auth enabled setting. Admin only."""
+    await set_setting_value(db, EMAIL_AUTH_ENABLED_KEY, str(payload.enabled).lower())
+
+    logger.info('Admin set email auth enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+
+    return EmailAuthEnabledResponse(
+        enabled=payload.enabled,
+        verification_enabled=settings.is_cabinet_email_verification_enabled(),
+    )
+
+
+# ============ Telegram Widget Config Routes ============
+
+
+@router.get('/telegram-widget', response_model=TelegramWidgetConfigResponse)
+async def get_telegram_widget_config(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get Telegram Login Widget configuration.
+    This is a public endpoint - no authentication required.
+    Returns widget display settings and bot username for the login page.
+    """
+    bot_username = settings.BOT_USERNAME or ''
+
+    size_val = await get_setting_value(db, TELEGRAM_WIDGET_SIZE_KEY)
+    radius_val = await get_setting_value(db, TELEGRAM_WIDGET_RADIUS_KEY)
+    userpic_val = await get_setting_value(db, TELEGRAM_WIDGET_USERPIC_KEY)
+    request_access_val = await get_setting_value(db, TELEGRAM_WIDGET_REQUEST_ACCESS_KEY)
+
+    oidc_enabled_val = await get_setting_value(db, TELEGRAM_OIDC_ENABLED_KEY)
+    oidc_client_id_val = await get_setting_value(db, TELEGRAM_OIDC_CLIENT_ID_KEY)
+    oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
+    oidc_enabled = (
+        oidc_enabled_val.lower() == 'true' if oidc_enabled_val is not None else settings.TELEGRAM_OIDC_ENABLED
+    ) and bool(oidc_client_id)
+
+    return TelegramWidgetConfigResponse(
+        bot_username=bot_username,
+        size=size_val if size_val in ('large', 'medium', 'small') else settings.TELEGRAM_WIDGET_SIZE,
+        radius=max(0, min(int(radius_val), 20))
+        if radius_val and radius_val.isdigit()
+        else settings.TELEGRAM_WIDGET_RADIUS,
+        userpic=userpic_val.lower() == 'true' if userpic_val is not None else settings.TELEGRAM_WIDGET_USERPIC,
+        request_access=request_access_val.lower() == 'true'
+        if request_access_val is not None
+        else settings.TELEGRAM_WIDGET_REQUEST_ACCESS,
+        oidc_enabled=oidc_enabled,
+        oidc_client_id=oidc_client_id if oidc_enabled else '',
+    )
+
+
+# ============ Analytics Counters Routes ============
+
+
+@router.get('/analytics', response_model=AnalyticsCountersResponse)
+async def get_analytics_counters(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get analytics counter settings.
+    This is a public endpoint - no authentication required.
+    """
+    yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
+    google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
+    google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
+
+    return AnalyticsCountersResponse(
+        yandex_metrika_id=yandex_id,
+        google_ads_id=google_id,
+        google_ads_label=google_label,
+    )
+
+
+@router.patch('/analytics', response_model=AnalyticsCountersResponse)
+async def update_analytics_counters(
+    payload: AnalyticsCountersUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update analytics counter settings. Admin only. Partial update supported."""
+    if payload.yandex_metrika_id is not None:
+        value = payload.yandex_metrika_id.strip()
+        if value and not value.isdigit():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Yandex Metrika counter ID must be numeric',
+            )
+        await set_setting_value(db, YANDEX_METRIKA_ID_KEY, value)
+
+    if payload.google_ads_id is not None:
+        value = payload.google_ads_id.strip()
+        if value and not value.startswith('AW-'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Google Ads conversion ID must start with AW-',
+            )
+        await set_setting_value(db, GOOGLE_ADS_ID_KEY, value)
+
+    if payload.google_ads_label is not None:
+        await set_setting_value(db, GOOGLE_ADS_LABEL_KEY, payload.google_ads_label.strip())
+
+    logger.info('Admin updated analytics counters', telegram_id=admin.telegram_id)
+
+    # Return current state
+    yandex_id = await get_setting_value(db, YANDEX_METRIKA_ID_KEY) or ''
+    google_id = await get_setting_value(db, GOOGLE_ADS_ID_KEY) or ''
+    google_label = await get_setting_value(db, GOOGLE_ADS_LABEL_KEY) or ''
+
+    return AnalyticsCountersResponse(
+        yandex_metrika_id=yandex_id,
+        google_ads_id=google_id,
+        google_ads_label=google_label,
+    )
+
+
+# ============ Lite Mode Routes ============
+
+
+@router.get('/lite-mode', response_model=LiteModeEnabledResponse)
+async def get_lite_mode_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Get lite mode enabled setting.
+    This is a public endpoint - no authentication required.
+    When enabled, shows simplified dashboard with minimal features.
+    """
+    lite_mode_value = await get_setting_value(db, LITE_MODE_ENABLED_KEY)
+
+    if lite_mode_value is not None:
+        enabled = lite_mode_value.lower() == 'true'
+        return LiteModeEnabledResponse(enabled=enabled)
+
+    # Default: disabled
+    return LiteModeEnabledResponse(enabled=False)
+
+
+@router.patch('/lite-mode', response_model=LiteModeEnabledResponse)
+async def update_lite_mode_enabled(
+    payload: LiteModeEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update lite mode enabled setting. Admin only."""
+    await set_setting_value(db, LITE_MODE_ENABLED_KEY, str(payload.enabled).lower())
+
+    logger.info('Admin set lite mode enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+
+    return LiteModeEnabledResponse(enabled=payload.enabled)
+
+
+# ============ Gift Feature Routes ============
+
+
+@router.get('/gift-enabled', response_model=GiftEnabledResponse)
+async def get_gift_enabled(
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Get gift feature enabled setting. Public endpoint."""
+    value = await get_setting_value(db, GIFT_ENABLED_KEY)
+    if value is not None:
+        enabled = value.lower() == 'true'
+        return GiftEnabledResponse(enabled=enabled)
+    return GiftEnabledResponse(enabled=False)
+
+
+@router.patch('/gift-enabled', response_model=GiftEnabledResponse)
+async def update_gift_enabled(
+    payload: GiftEnabledUpdate,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Update gift feature enabled setting. Admin only."""
+    await set_setting_value(db, GIFT_ENABLED_KEY, str(payload.enabled).lower())
+    logger.info('Admin set gift enabled', telegram_id=admin.telegram_id, enabled=payload.enabled)
+    return GiftEnabledResponse(enabled=payload.enabled)
