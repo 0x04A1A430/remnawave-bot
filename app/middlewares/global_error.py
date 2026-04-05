@@ -24,7 +24,7 @@ ERROR_MESSAGE_MAX_LENGTH: Final[int] = 500
 REPORT_SEPARATOR_WIDTH: Final[int] = 50
 DATETIME_FORMAT: Final[str] = '%d.%m.%Y %H:%M:%S'
 DATETIME_FORMAT_FILENAME: Final[str] = '%Y%m%d_%H%M%S'
-DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
+DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/cy6su'
 
 # Фразы ошибок Telegram API
 OLD_QUERY_PHRASES: Final[tuple[str, ...]] = (

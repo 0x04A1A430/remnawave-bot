@@ -1142,7 +1142,7 @@ wheels = [
 ]
 
 [[package]]
-name = "remnawave-bedolaga-telegram-bot"
+name = "remnawave-bot"
 version = "3.38.0"
 source = { virtual = "." }
 dependencies = [
