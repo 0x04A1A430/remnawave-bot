@@ -40,7 +40,7 @@ CRASH_ERROR_MESSAGE_MAX_LENGTH: Final[int] = 1000
 CRASH_ERROR_PREVIEW_LENGTH: Final[int] = 200
 
 # URL-ы
-GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot'
+GITHUB_BOT_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/remnawave-bot'
 GITHUB_CABINET_URL: Final[str] = 'https://github.com/BEDOLAGA-DEV/bedolaga-cabinet'
 COMMUNITY_URL: Final[str] = 'https://t.me/+wTdMtSWq8YdmZmVi'
 DEVELOPER_CONTACT_URL: Final[str] = 'https://t.me/fringg'
