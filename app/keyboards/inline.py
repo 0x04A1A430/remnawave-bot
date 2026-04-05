@@ -503,27 +503,6 @@ def _build_cabinet_main_menu_keyboard(
                     sup_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_SUPPORT
                     row_buttons.append(_cabinet_button(sup_text, '/support', 'menu_support'))
 
-                case 'info':
-                    if not section_cfg.get('enabled', True):
-                        continue
-                    info_text = section_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'Инфо')
-                    row_buttons.append(_cabinet_button(info_text, '/info', 'menu_info'))
-
-                case 'language':
-                    if not section_cfg.get('enabled', True):
-                        continue
-                    if not settings.is_language_selection_enabled():
-                        continue
-                    lang_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_LANGUAGE
-                    resolved_lang_emoji = section_cfg.get('icon_custom_emoji_id') or None
-                    row_buttons.append(
-                        InlineKeyboardButton(
-                            text=lang_text,
-                            callback_data='menu_language',
-                            icon_custom_emoji_id=resolved_lang_emoji,
-                        )
-                    )
-
                 case 'admin':
                     if not is_admin:
                         continue
@@ -743,26 +722,17 @@ def get_main_menu_keyboard(
     except Exception:
         support_enabled = settings.SUPPORT_MENU_ENABLED
 
-    if support_enabled:
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support'))
-
     # Добавляем кнопку активации
     if settings.ACTIVATE_BUTTON_VISIBLE:
         paired_buttons.append(InlineKeyboardButton(text=settings.ACTIVATE_BUTTON_TEXT, callback_data='activate_button'))
 
-    paired_buttons.append(
-        InlineKeyboardButton(
-            text=texts.t('MENU_INFO', 'Инфо'),
-            callback_data='menu_info',
-        )
-    )
-
-    if settings.is_language_selection_enabled():
-        paired_buttons.append(InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
-
     for i in range(0, len(paired_buttons), 2):
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
+
+    # Техподдержка — одна кнопка в самом низу
+    if support_enabled:
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
@@ -1168,9 +1138,9 @@ def get_subscription_keyboard(
 
                 if is_inactive or is_paused:
                     # Подписка остановлена (системой или пользователем) — показываем «Возобновить»
-                    pause_text = texts.t('RESUME_DAILY_BUTTON', '▶️ Возобновить подписку')
+                    pause_text = texts.t('RESUME_DAILY_BUTTON', '🔴 Возобновить подписку')
                 else:
-                    pause_text = texts.t('PAUSE_DAILY_BUTTON', '⏸️ Приостановить подписку')
+                    pause_text = texts.t('PAUSE_DAILY_BUTTON', '🟢 Приостановить подписку')
                 keyboard.append(
                     [InlineKeyboardButton(text=pause_text, callback_data='toggle_daily_subscription_pause')]
                 )
@@ -1185,20 +1155,20 @@ def get_subscription_keyboard(
                     ]
                 )
 
-            # Ряд: [Настройки] [Тариф] (если режим тарифов)
-            settings_row = [
+            # Ряд: [Управление устройствами] [Тариф] (если режим тарифов)
+            devices_row = [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', '️ Настройки'),
-                    callback_data='subscription_settings',
+                    text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
+                    callback_data='subscription_manage_devices',
                 )
             ]
             if settings.is_tariffs_mode() and subscription:
                 # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение
                 tariff_callback = 'tariff_switch' if is_daily_tariff else 'instant_switch'
-                settings_row.append(
+                devices_row.append(
                     InlineKeyboardButton(text=texts.t('CHANGE_TARIFF_BUTTON', 'Тариф'), callback_data=tariff_callback)
                 )
-            keyboard.append(settings_row)
+            keyboard.append(devices_row)
 
             # Кнопка докупки трафика для платных подписок
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
@@ -1885,23 +1855,9 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMar
 
 def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    try:
-        from app.services.support_settings_service import SupportSettingsService
-
-        tickets_enabled = SupportSettingsService.is_tickets_enabled()
-        contact_enabled = SupportSettingsService.is_contact_enabled()
-    except Exception:
-        tickets_enabled = True
-        contact_enabled = True
     rows: list[list[InlineKeyboardButton]] = []
-    # Tickets
-    if tickets_enabled:
-        rows.append(
-            [InlineKeyboardButton(text=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'), callback_data='create_ticket')]
-        )
-        rows.append([InlineKeyboardButton(text=texts.t('MY_TICKETS_BUTTON', 'Мои тикеты'), callback_data='my_tickets')])
     # Direct contact
-    if contact_enabled and settings.get_support_contact_url():
+    if settings.get_support_contact_url():
         rows.append(
             [
                 InlineKeyboardButton(
@@ -1964,13 +1920,17 @@ def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE, sub_id: int | None = 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=texts.t('ENABLE_BUTTON', 'Включить'), callback_data='autopay_enable'),
-                InlineKeyboardButton(text=texts.t('DISABLE_BUTTON', 'Выключить'), callback_data='autopay_disable'),
+                InlineKeyboardButton(text=texts.t('ENABLE_BUTTON', '🔴 Включить'), callback_data='autopay_enable'),
+                InlineKeyboardButton(text=texts.t('DISABLE_BUTTON', '🟢 Выключить'), callback_data='autopay_disable'),
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('AUTOPAY_SET_DAYS_BUTTON', '️ Настроить дни'), callback_data='autopay_set_days'
+                    text=texts.t('AUTOPAY_SET_DAYS_BUTTON', 'Настроить дни'), callback_data='autopay_set_days'
                 )
+            ],
+            [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+        ]
+    )
             ],
             [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
         ]
