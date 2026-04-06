@@ -404,7 +404,7 @@ async def send_cart_notification_after_topup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '←Checkout'),
+                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '← Checkout'),
                             callback_data='return_to_saved_cart',
                         )
                     ],

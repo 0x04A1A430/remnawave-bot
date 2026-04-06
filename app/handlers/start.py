@@ -144,9 +144,7 @@ async def _activate_pending_gift_after_registration(
         await svc_activate(db, gift_purchase.token, skip_notification=True)
         tariff_name = html.escape(gift_purchase.tariff.name) if gift_purchase.tariff else ''
         await answer_func(
-            f'<b>Подарок активирован!</b>\n'
-            f'{tariff_name} — {gift_purchase.period_days} дн.\n\n'
-            f'Ваша подписка обновлена.',
+            f'<b>Подарок активирован!</b>\n{tariff_name} — {gift_purchase.period_days} дн.\n\nВаша подписка обновлена.',
             parse_mode=ParseMode.HTML,
         )
     except Exception:
@@ -1022,9 +1020,7 @@ async def process_language_selection(
     state: FSMContext,
     db: AsyncSession,
 ):
-    logger.info(
-        'LANGUAGE: Пользователь выбрал язык', from_user_id=callback.from_user.id, callback_data=callback.data
-    )
+    logger.info('LANGUAGE: Пользователь выбрал язык', from_user_id=callback.from_user.id, callback_data=callback.data)
 
     if not settings.is_language_selection_enabled():
         data = await state.get_data() or {}
@@ -1214,7 +1210,10 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext,
     texts = get_texts(language)
 
     try:
-        await callback.answer()
+        try:
+            await callback.answer()
+        except TelegramBadRequest:
+            pass
 
         data = await state.get_data() or {}
         language = data.get('language', language)
@@ -2035,9 +2034,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
     # ИСПРАВЛЕНИЕ БАГА: Очищаем Redis payload после успешной регистрации
     await delete_pending_payload_from_redis(message.from_user.id)
-    logger.info(
-        '️ COMPLETE: Redis payload удален после успешной регистрации пользователя', telegram_id=user.telegram_id
-    )
+    logger.info('️ COMPLETE: Redis payload удален после успешной регистрации пользователя', telegram_id=user.telegram_id)
 
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)

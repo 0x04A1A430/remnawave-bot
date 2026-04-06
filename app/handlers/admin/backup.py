@@ -67,7 +67,7 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
         nav_row = []
 
         if page > 1:
-            nav_row.append(InlineKeyboardButton(text='←', callback_data=f'backup_list_page_{page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'backup_list_page_{page - 1}'))
 
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
 

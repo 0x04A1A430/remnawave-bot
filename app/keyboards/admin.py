@@ -680,7 +680,7 @@ def get_referral_contest_manage_keyboard(
     rows.append(
         [
             InlineKeyboardButton(
-                text=_t(texts, 'ADMIN_BACK_TO_LIST', '←К списку'),
+                text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'),
                 callback_data='admin_contests_list',
             )
         ]
@@ -723,7 +723,7 @@ def get_campaign_management_keyboard(campaign_id: int, is_active: bool, language
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_BACK_TO_LIST', '←К списку'), callback_data='admin_campaigns_list'
+                    text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'), callback_data='admin_campaigns_list'
                 )
             ],
         ]
@@ -863,7 +863,7 @@ def get_promocode_management_keyboard(promo_id: int, language: str = 'ru') -> In
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_BACK_TO_LIST', '←К списку'), callback_data='admin_promo_list'
+                    text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'), callback_data='admin_promo_list'
                 )
             ],
         ]
@@ -1326,7 +1326,7 @@ def get_promocode_list_keyboard(
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_promo_list_page_{page - 1}'))
+            pagination_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_promo_list_page_{page - 1}'))
 
         pagination_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -1459,7 +1459,7 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_msg_history_page_{page - 1}'))
+            pagination_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_msg_history_page_{page - 1}'))
 
         pagination_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -1568,7 +1568,7 @@ def get_sync_result_keyboard(sync_type: str, has_errors: bool = False, language:
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_SYNC_BACK', '←К синхронизации'), callback_data='admin_rw_sync'
+                    text=_t(texts, 'ADMIN_SYNC_BACK', '← К синхронизации'), callback_data='admin_rw_sync'
                 )
             ],
             [
@@ -1761,7 +1761,7 @@ def get_monitoring_logs_navigation_keyboard(
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page_info'))
 
@@ -1814,7 +1814,7 @@ def get_log_detail_keyboard(log_id: int, current_page: int = 1, language: str = 
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_MONITORING_BACK_TO_LOGS', '←К списку логов'),
+                    text=_t(texts, 'ADMIN_MONITORING_BACK_TO_LOGS', '← К списку логов'),
                     callback_data=f'admin_mon_logs_page_{current_page}',
                 )
             ],
@@ -1938,7 +1938,7 @@ def get_monitoring_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '←К мониторингу'), callback_data='admin_monitoring'
+                    text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '← К мониторингу'), callback_data='admin_monitoring'
                 )
             ],
         ]
@@ -2064,7 +2064,7 @@ def get_admin_pagination_keyboard(
         row = []
 
         if current_page > 1:
-            row.append(InlineKeyboardButton(text='←', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
+            row.append(InlineKeyboardButton(text='← ', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
 
         row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 

@@ -316,7 +316,7 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
                     callback_data=f'poll_delete:{poll_id}',
                 )
             ],
-            [types.InlineKeyboardButton(text=texts.t('ADMIN_POLLS_BACK', '←К списку'), callback_data='admin_polls')],
+            [types.InlineKeyboardButton(text=texts.t('ADMIN_POLLS_BACK', '← К списку'), callback_data='admin_polls')],
         ]
     )
 

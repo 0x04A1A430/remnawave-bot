@@ -1163,7 +1163,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -1190,7 +1190,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -1211,7 +1211,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
                         )
                     ]
@@ -1232,7 +1232,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                             callback_data='back_to_menu',
                         )
                     ]
@@ -1249,7 +1249,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -2671,7 +2671,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -2698,7 +2698,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -2714,7 +2714,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'), callback_data='back_to_menu'
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'), callback_data='back_to_menu'
                         )
                     ]
                 )
@@ -2734,7 +2734,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'), callback_data='back_to_menu'
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'), callback_data='back_to_menu'
                         )
                     ]
                 )
@@ -2749,7 +2749,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -3471,7 +3471,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                         callback_data='back_to_menu',
                     )
                 ],
@@ -3491,7 +3491,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                         callback_data='back_to_menu',
                     )
                 ],
@@ -3512,7 +3512,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
                 )
             ]
@@ -3533,7 +3533,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
                 )
             ]
@@ -3549,7 +3549,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
                 )
             ],

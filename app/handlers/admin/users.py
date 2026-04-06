@@ -868,7 +868,7 @@ async def _render_user_subscription_overview(
                 )
 
             picker_keyboard.append(
-                [types.InlineKeyboardButton(text='←К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             )
             await callback.message.edit_text(
                 text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=picker_keyboard)
@@ -998,7 +998,7 @@ async def _render_user_subscription_overview(
             ]
         ]
 
-    keyboard.append([types.InlineKeyboardButton(text='←К пользователю', callback_data=f'admin_user_manage_{user_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     return True
@@ -1077,7 +1077,7 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
         text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='←К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             ]
         ),
     )
@@ -2876,7 +2876,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='←К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             ]
         ),
     )
@@ -5104,7 +5104,7 @@ async def admin_buy_tariff_period(callback: types.CallbackQuery, db_user: User, 
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='←К тарифам', callback_data=f'admin_tariff_buy_{user_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='← К тарифам', callback_data=f'admin_tariff_buy_{user_id}')])
 
     await callback.message.edit_text(
         text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'

@@ -2082,7 +2082,7 @@ class RemnaWaveService:
                         new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
                             self._panel_timezone
                         )
-                        direction = '→' if expire_at > local_end_date_utc else '←'
+                        direction = '→' if expire_at > local_end_date_utc else '← '
                         logger.info(
                             'Sync: обновлена end_date для user -> (разница: с, направление: )',
                             value=getattr(user, 'telegram_id', '?'),
