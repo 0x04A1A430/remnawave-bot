@@ -229,7 +229,7 @@ async def handle_change_devices(
         ).format(current_devices=current_devices)
 
     # В мульти-тарифе кнопка "назад" ведёт к детальному виду подписки
-    back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
+    back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'menu_subscription'
 
     await callback.message.edit_text(
         prompt_text,
@@ -483,7 +483,7 @@ async def confirm_change_devices(
             new_devices_count,
             price,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'menu_subscription',
         ),
     )
 
@@ -847,11 +847,7 @@ async def show_devices_page(
 
     devices_text = texts.t(
         'DEVICE_MANAGEMENT_OVERVIEW',
-        (
-            '<b>Управление устройствами</b>\n\n'
-            'Всего подключено: {total} устройств\n'
-            'Страница {page} из {pages}\n\n'
-        ),
+        ('<b>Управление устройствами</b>\n\nВсего подключено: {total} устройств\nСтраница {page} из {pages}\n\n'),
     ).format(total=len(devices_list), page=pagination.page, pages=pagination.total_pages)
 
     if pagination.items:
@@ -859,23 +855,22 @@ async def show_devices_page(
             'DEVICE_MANAGEMENT_CONNECTED_HEADER',
             '<b>Подключенные устройства:</b>\n',
         )
+
+        devices_text += '<blockquote>'
         for i, device in enumerate(pagination.items, 1):
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
-            device_info = f'{platform} - {device_model}'
+            device_info = f'{html_mod.escape(platform)} - {html_mod.escape(device_model)}'
 
             if len(device_info) > 35:
                 device_info = device_info[:32] + '...'
 
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
-                '• {device}\n',
+                '• {device}',
             ).format(device=device_info)
 
-    devices_text += texts.t(
-        'DEVICE_MANAGEMENT_ACTIONS',
-        ('\n<b>Действия:</b>\n• Выберите устройство для сброса\n• Или сбросьте все устройства сразу'),
-    )
+        devices_text += '</blockquote>\n'
 
     await callback.message.edit_text(
         devices_text,
@@ -883,7 +878,7 @@ async def show_devices_page(
             pagination.items,
             pagination,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'menu_subscription',
         ),
     )
 
@@ -973,7 +968,7 @@ async def handle_single_device_reset(
 
                         platform = device.get('platform', 'Unknown')
                         device_model = device.get('deviceModel', 'Unknown')
-                        device_info = f'{platform} - {device_model}'
+                        device_info = f'{html_mod.escape(platform)} - {html_mod.escape(device_model)}'
 
                         await callback.answer(
                             texts.t(
@@ -1094,9 +1089,7 @@ async def handle_all_devices_reset_from_management(
 
                     except Exception as device_error:
                         failed_count += 1
-                        logger.error(
-                            'Ошибка удаления устройства', device_hwid=device_hwid, device_error=device_error
-                        )
+                        logger.error('Ошибка удаления устройства', device_hwid=device_hwid, device_error=device_error)
                 else:
                     failed_count += 1
                     logger.warning('️ У устройства нет HWID', device=device)
@@ -1154,9 +1147,7 @@ async def handle_all_devices_reset_from_management(
                     reply_markup=get_back_keyboard(db_user.language),
                     parse_mode='HTML',
                 )
-                logger.error(
-                    'Не удалось сбросить ни одного устройства у пользователя', telegram_id=db_user.telegram_id
-                )
+                logger.error('Не удалось сбросить ни одного устройства у пользователя', telegram_id=db_user.telegram_id)
 
     except Exception as e:
         logger.error('Ошибка сброса всех устройств', error=e)

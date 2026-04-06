@@ -525,7 +525,6 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User):
         'REFERRAL_INVITE_TEXT',
         'Присоединяйся к VPN сервису!{bonus_block}\n\n'
         'Быстрое подключение\n'
-        'Серверы по всему миру\n'
         'Надежная защита\n\n'
         'Переходи по ссылке:\n'
         '{link}{cabinet_block}',
