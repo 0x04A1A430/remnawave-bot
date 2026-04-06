@@ -209,7 +209,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'support': {
             'type': 'builtin',
             'builtin_id': 'support',
-            'text': {'ru': 'Техподдержка', 'en': 'Support'},
+            'text': {'ru': 'Тех. поддержка', 'en': 'Support'},
             'action': 'menu_support',
             'enabled': True,
             'visibility': 'all',

@@ -42,7 +42,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
             types.InlineKeyboardButton(
                 text=(
                     f'{"" if menu_enabled else ""} '
-                    f'{texts.t("ADMIN_SUPPORT_SETTINGS_MENU_LABEL", "Пункт «Техподдержка» в меню")}'
+                    f'{texts.t("ADMIN_SUPPORT_SETTINGS_MENU_LABEL", "Пункт «Тех. поддержка» в меню")}'
                 ),
                 callback_data='admin_support_toggle_menu',
             )
