@@ -818,7 +818,7 @@ async def get_payment_methods(
         methods.append(
             MiniAppPaymentMethod(
                 id='cryptobot',
-                icon='🪙',
+                icon='',
                 requires_amount=True,
                 currency='RUB',
                 min_amount_kopeks=min_amount_kopeks,
@@ -831,7 +831,7 @@ async def get_payment_methods(
         methods.append(
             MiniAppPaymentMethod(
                 id='heleket',
-                icon='🪙',
+                icon='',
                 requires_amount=True,
                 currency='RUB',
                 min_amount_kopeks=100 * 100,

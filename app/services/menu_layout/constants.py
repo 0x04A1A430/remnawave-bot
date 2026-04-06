@@ -373,7 +373,7 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'name': 'Назад в меню',
         'category': 'menu',
         'icon': '←',
-        'text': {'ru': '←Назад', 'en': '←Back'},
+        'text': {'ru': '← Назад', 'en': '←Back'},
     },
     {
         'callback_data': 'menu_faq',

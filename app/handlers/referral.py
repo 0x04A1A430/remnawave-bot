@@ -391,7 +391,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
     if referrals_data['has_prev']:
         nav_buttons.append(
             types.InlineKeyboardButton(
-                text=texts.t('REFERRAL_LIST_PREV_PAGE', '←Назад'), callback_data=f'referral_list_page_{page - 1}'
+                text=texts.t('REFERRAL_LIST_PREV_PAGE', '← Назад'), callback_data=f'referral_list_page_{page - 1}'
             )
         )
 

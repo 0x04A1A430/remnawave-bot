@@ -1677,7 +1677,7 @@ def get_squad_edit_keyboard(squad_uuid: str, language: str = 'ru') -> InlineKeyb
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_BACK_TO_SQUADS', '←Назад к сквадам'),
+                    text=_t(texts, 'ADMIN_BACK_TO_SQUADS', '← Назад к сквадам'),
                     callback_data=f'admin_squad_manage_{squad_uuid}',
                 )
             ],
@@ -1725,7 +1725,7 @@ def get_monitoring_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text=_t(texts, 'ADMIN_BACK_TO_ADMIN', '←Назад в админку'), callback_data='admin_panel'
+                    text=_t(texts, 'ADMIN_BACK_TO_ADMIN', '← Назад в админку'), callback_data='admin_panel'
                 )
             ],
         ]
@@ -1793,7 +1793,7 @@ def get_monitoring_logs_navigation_keyboard(
     keyboard.append(
         [
             InlineKeyboardButton(
-                text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '←Назад к мониторингу'), callback_data='admin_monitoring'
+                text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '← Назад к мониторингу'), callback_data='admin_monitoring'
             )
         ]
     )

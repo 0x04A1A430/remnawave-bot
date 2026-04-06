@@ -287,11 +287,11 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
 
     if settings.is_cryptobot_enabled():
         keyboard.append(
-            [types.InlineKeyboardButton(text='🪙 CryptoBot', callback_data='simple_subscription_cryptobot')]
+            [types.InlineKeyboardButton(text='CryptoBot', callback_data='simple_subscription_cryptobot')]
         )
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 Heleket', callback_data='simple_subscription_heleket')])
+        keyboard.append([types.InlineKeyboardButton(text='Heleket', callback_data='simple_subscription_heleket')])
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
@@ -1172,7 +1172,7 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='🪙 Оплатить через CryptoBot',
+                            text='Оплатить через CryptoBot',
                             url=payment_url,
                         )
                     ],
@@ -1187,7 +1187,7 @@ async def handle_simple_subscription_payment_method(
             )
 
             message_text = (
-                '🪙 <b>Оплата через CryptoBot</b>\n\n'
+                '<b>Оплата через CryptoBot</b>\n\n'
                 f'Сумма к оплате: {amount_rubles:.0f} ₽\n'
                 f'В долларах: {amount_usd:.2f} USD\n'
                 f'Актив: {crypto_result["asset"]}\n'
@@ -1261,7 +1261,7 @@ async def handle_simple_subscription_payment_method(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='🪙 Оплатить через Heleket',
+                            text='Оплатить через Heleket',
                             url=payment_url,
                         )
                     ],
@@ -1276,13 +1276,13 @@ async def handle_simple_subscription_payment_method(
             )
 
             message_lines = [
-                '🪙 <b>Оплата через Heleket</b>',
+                '<b>Оплата через Heleket</b>',
                 '',
                 f'Сумма: {settings.format_price(price_kopeks)}',
             ]
 
             if payer_amount and payer_currency:
-                message_lines.append(f'🪙 К оплате: {payer_amount} {payer_currency}')
+                message_lines.append(f'К оплате: {payer_amount} {payer_currency}')
                 try:
                     payer_amount_float = float(payer_amount)
                     if payer_amount_float > 0:
@@ -1932,7 +1932,7 @@ async def check_simple_cryptobot_payment_status(
 
     texts = get_texts(language)
     message_lines = [
-        '🪙 <b>Статус платежа CryptoBot</b>',
+        '<b>Статус платежа CryptoBot</b>',
         '',
         f'ID: {payment.invoice_id}',
         f'Сумма: {payment.amount} {payment.asset}',
@@ -2009,7 +2009,7 @@ async def check_simple_heleket_payment_status(
     texts = get_texts(language)
 
     message_lines = [
-        '🪙 Статус платежа Heleket:',
+        'Статус платежа Heleket:',
         '',
         f'UUID: {payment.uuid[:8]}...',
         f'Сумма: {settings.format_price(payment.amount_kopeks)}',
@@ -2018,7 +2018,7 @@ async def check_simple_heleket_payment_status(
     ]
 
     if payment.payer_amount and payment.payer_currency:
-        message_lines.append(f'🪙 Оплата: {payment.payer_amount} {payment.payer_currency}')
+        message_lines.append(f'Оплата: {payment.payer_amount} {payment.payer_currency}')
 
     if payment.is_paid:
         message_lines.append('\nПлатеж успешно завершен! Средства уже зачислены.')

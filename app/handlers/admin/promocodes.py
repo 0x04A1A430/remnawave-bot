@@ -67,7 +67,7 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
         await callback.message.edit_text(
             'Промокоды не найдены',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_promocodes')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_promocodes')]]
             ),
         )
         await callback.answer()
@@ -119,7 +119,7 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Создать', callback_data='admin_promo_create')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_promocodes')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_promocodes')],
         ]
     )
 
@@ -257,7 +257,7 @@ async def show_promocode_edit_menu(callback: types.CallbackQuery, db_user: User,
             1, [types.InlineKeyboardButton(text='Количество дней', callback_data=f'promo_edit_days_{promo.id}')]
         )
 
-    keyboard.extend([[types.InlineKeyboardButton(text='←Назад', callback_data=f'promo_manage_{promo.id}')]])
+    keyboard.extend([[types.InlineKeyboardButton(text='← Назад', callback_data=f'promo_manage_{promo.id}')]])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -463,7 +463,7 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
             await message.answer(
                 'Промогруппы не найдены. Создайте хотя бы одну промогруппу.',
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_promocodes')]]
+                    inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_promocodes')]]
                 ),
             )
             await state.clear()
@@ -1055,7 +1055,7 @@ async def show_promocode_stats(callback: types.CallbackQuery, db_user: User, db:
         text += '- Пока не было использований\n'
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data=f'promo_manage_{promo.id}')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data=f'promo_manage_{promo.id}')]]
     )
 
     await callback.message.edit_text(text, reply_markup=keyboard)
@@ -1082,7 +1082,7 @@ async def show_general_promocode_stats(callback: types.CallbackQuery, db_user: U
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text='К промокодам', callback_data='admin_promo_list')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_promocodes')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_promocodes')],
         ]
     )
 

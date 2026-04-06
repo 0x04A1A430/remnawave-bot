@@ -75,7 +75,7 @@ def _get_logs_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text='Обновить', callback_data='admin_system_logs_refresh')],
             [InlineKeyboardButton(text='⬇️ Скачать лог', callback_data='admin_system_logs_download')],
-            [InlineKeyboardButton(text='←Назад', callback_data='admin_submenu_system')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_system')],
         ]
     )
 

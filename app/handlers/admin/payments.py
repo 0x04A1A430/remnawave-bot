@@ -442,7 +442,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
             )
         if getattr(payment, 'payer_amount', None) and getattr(payment, 'payer_currency', None):
             lines.append(
-                f'🪙 {texts.t("ADMIN_PAYMENT_PAYER_AMOUNT", "Paid amount")}: '
+                f'{texts.t("ADMIN_PAYMENT_PAYER_AMOUNT", "Paid amount")}: '
                 f'{html.escape(str(payment.payer_amount))} {html.escape(str(payment.payer_currency))}'
             )
 
@@ -458,7 +458,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
     if record.method == PaymentMethod.CRYPTOBOT:
         if getattr(payment, 'amount', None) and getattr(payment, 'asset', None):
             lines.append(
-                f'🪙 {texts.t("ADMIN_PAYMENT_CRYPTO_AMOUNT", "Crypto amount")}: '
+                f'{texts.t("ADMIN_PAYMENT_CRYPTO_AMOUNT", "Crypto amount")}: '
                 f'{html.escape(str(payment.amount))} {html.escape(str(payment.asset))}'
             )
         if getattr(payment, 'bot_invoice_url', None) or getattr(payment, 'mini_app_invoice_url', None):

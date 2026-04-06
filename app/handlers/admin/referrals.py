@@ -97,7 +97,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         keyboard_rows.extend(
             [
                 [types.InlineKeyboardButton(text='️ Настройки', callback_data='admin_referrals_settings')],
-                [types.InlineKeyboardButton(text='←Назад', callback_data='admin_panel')],
+                [types.InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
             ]
         )
 
@@ -134,7 +134,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Повторить', callback_data='admin_referrals')],
-                [types.InlineKeyboardButton(text='←Назад', callback_data='admin_panel')],
+                [types.InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
             ]
         )
 
@@ -303,7 +303,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
             keyboard_rows.append(
                 [types.InlineKeyboardButton(text='Тестовое начисление', callback_data='admin_test_referral_earning')]
             )
-        keyboard_rows.append([types.InlineKeyboardButton(text='←Назад', callback_data='admin_referrals')])
+        keyboard_rows.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_referrals')])
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
         await callback.answer()
@@ -340,7 +340,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
             [types.InlineKeyboardButton(text='Тестовое начисление', callback_data='admin_test_referral_earning')]
         )
 
-    keyboard_rows.append([types.InlineKeyboardButton(text='←Назад', callback_data='admin_referrals')])
+    keyboard_rows.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_referrals')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
     await callback.answer()
@@ -1461,7 +1461,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                 f'Ошибка при анализе файла: {html.escape(str(e))}',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='←Назад', callback_data='admin_referral_diagnostics')]
+                        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_referral_diagnostics')]
                     ]
                 ),
             )

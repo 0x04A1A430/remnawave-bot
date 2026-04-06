@@ -666,7 +666,7 @@ async def preview_preset(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text='Применить', callback_data=f'botcfg_preset_apply:{preset_key}')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='botcfg_action:presets')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='botcfg_action:presets')],
         ]
     )
 
@@ -1110,7 +1110,7 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='←Назад в админку',
+                text='← Назад в админку',
                 callback_data='admin_submenu_settings',
             )
         ]
@@ -1246,7 +1246,7 @@ def _build_settings_keyboard(
         label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'stars')])
     elif category_key == 'CRYPTOBOT':
-        label = texts.t('PAYMENT_CRYPTOBOT', '🪙 Криптовалюта (CryptoBot)')
+        label = texts.t('PAYMENT_CRYPTOBOT', 'Криптовалюта (CryptoBot)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'cryptobot')])
     elif category_key == 'FREEKASSA':
         label = texts.t('PAYMENT_FREEKASSA', 'Freekassa')
@@ -1404,7 +1404,7 @@ def _build_setting_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='←Назад',
+                text='← Назад',
                 callback_data=(f'botcfg_cat:{group_key}:{definition.category_key}:{category_page}:{settings_page}'),
             )
         ]
@@ -1722,7 +1722,7 @@ async def show_simple_subscription_squad_selector(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text='←Назад',
+                text='← Назад',
                 callback_data=(f'botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}'),
             )
         ]
@@ -2233,11 +2233,11 @@ async def test_payment_provider(
             '<b>Тестовый платеж CryptoBot</b>\n\n'
             f'Сумма к зачислению: {texts.format_price(amount_kopeks)}\n'
             f'К оплате: {amount_usd:.2f} USD\n'
-            f'🪙 Актив: {payment_result["asset"]}'
+            f'Актив: {payment_result["asset"]}'
         )
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🪙 Открыть счет', url=payment_url)],
+                [types.InlineKeyboardButton(text='Открыть счет', url=payment_url)],
                 [
                     types.InlineKeyboardButton(
                         text='Проверить статус',
@@ -2804,7 +2804,7 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='←Назад', callback_data='admin_submenu_settings')])
+    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_settings')])
 
     await callback.message.edit_text(
         text,
