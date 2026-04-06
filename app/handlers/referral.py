@@ -56,35 +56,35 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         + '\n'
         + texts.t(
             'REFERRAL_STATS_INVITED',
-            '• Приглашено пользователей: <b>{count}</b>',
+            '<code>• Приглашено пользователей: <b>{count}</b></code>',
         ).format(count=summary['invited_count'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_FIRST_TOPUPS',
-            '• Сделали первое пополнение: <b>{count}</b>',
+            '<code>• Сделали первое пополнение: <b>{count}</b></code>',
         ).format(count=summary['paid_referrals_count'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_ACTIVE',
-            '• Активных рефералов: <b>{count}</b>',
+            '<code>• Активных рефералов: <b>{count}</b></code>',
         ).format(count=summary['active_referrals_count'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_CONVERSION',
-            '• Конверсия: <b>{rate}%</b>',
+            '<code>• Конверсия: <b>{rate}%</b></code>',
         ).format(rate=summary['conversion_rate'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_TOTAL_EARNED',
-            '• Заработано всего: <b>{amount}</b>',
+            '<code>• Заработано всего: <b>{amount}</b></code>',
         ).format(amount=texts.format_price(summary['total_earned_kopeks']))
         + '\n'
         + texts.t(
             'REFERRAL_STATS_MONTH_EARNED',
-            '• За последний месяц: <b>{amount}</b>',
+            '<code>• За последний месяц: <b>{amount}</b></code>',
         ).format(amount=texts.format_price(summary['month_earned_kopeks']))
         + '\n\n'
-        + texts.t('REFERRAL_REWARDS_HEADER', '<b>Как работают награды:</b>')
+        + texts.t('REFERRAL_REWARDS_HEADER', '<blockquote><b>Как работают награды:</b>')
     )
 
     if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
@@ -113,7 +113,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     else:
         commission_line = texts.t(
             'REFERRAL_REWARD_COMMISSION',
-            '• Комиссия с каждого пополнения реферала: <b>{percent}%</b>',
+            '• Комиссия с каждого пополнения реферала: <b>{percent}%</b></blockquote>',
         ).format(percent=get_effective_referral_commission_percent(db_user))
 
     referral_text += '\n' + commission_line + '\n\n'
@@ -231,13 +231,6 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                     + '\n'
                 )
 
-        referral_text += '\n'
-
-    referral_text += texts.t(
-        'REFERRAL_INVITE_FOOTER',
-        'Приглашайте друзей и зарабатывайте!',
-    )
-
     await edit_or_answer_photo(
         callback,
         referral_text,
@@ -277,7 +270,7 @@ async def show_referral_qr(
 
     caption = texts.t(
         'REFERRAL_QR_BOT_LINK',
-        'Ссылка на бота:\n{link}',
+        '<b>Ссылка на бота:</b>\n{link}',
     ).format(link=bot_referral_link)
 
     cabinet_referral_link = settings.get_cabinet_referral_link(db_user.referral_code)
@@ -432,7 +425,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_TODAY',
-            '• Сегодня: {amount}',
+            '<blockquote>• Сегодня: {amount}',
         ).format(amount=texts.format_price(analytics['earnings_by_period']['today']))
         + '\n'
     )
@@ -453,7 +446,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_QUARTER',
-            '• За квартал: {amount}',
+            '• За квартал: {amount}</blockquote>',
         ).format(amount=texts.format_price(analytics['earnings_by_period']['quarter']))
         + '\n\n'
     )

@@ -628,7 +628,7 @@ async def show_faq_page(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'),
+                    text=texts.t('PAGINATION_NEXT', '️→'),
                     callback_data=f'menu_faq_page:{page.id}:{current_page + 1}',
                 )
             )
@@ -753,7 +753,7 @@ async def show_privacy_policy(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'),
+                    text=texts.t('PAGINATION_NEXT', '️→'),
                     callback_data=f'menu_privacy_policy:{current_page + 1}',
                 )
             )
@@ -870,7 +870,7 @@ async def show_public_offer(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'),
+                    text=texts.t('PAGINATION_NEXT', '️→'),
                     callback_data=f'menu_public_offer:{current_page + 1}',
                 )
             )

@@ -1893,7 +1893,7 @@ def get_pagination_keyboard(
         if current_page < total_pages:
             row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'), callback_data=f'{callback_prefix}_page_{current_page + 1}'
+                    text=texts.t('PAGINATION_NEXT', '️→'), callback_data=f'{callback_prefix}_page_{current_page + 1}'
                 )
             )
 
@@ -2750,7 +2750,7 @@ def get_devices_management_keyboard(
         if pagination.has_next:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'), callback_data=f'devices_page_{pagination.next_page}'
+                    text=texts.t('PAGINATION_NEXT', '️→'), callback_data=f'devices_page_{pagination.next_page}'
                 )
             )
 
@@ -2947,7 +2947,7 @@ def get_my_tickets_keyboard(
         if current_page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'), callback_data=f'{page_prefix}{current_page + 1}'
+                    text=texts.t('PAGINATION_NEXT', '️→'), callback_data=f'{page_prefix}{current_page + 1}'
                 )
             )
 
@@ -3086,7 +3086,7 @@ def get_admin_tickets_keyboard(
         if current_page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️'), callback_data=f'admin_tickets_page_{scope}_{current_page + 1}'
+                    text=texts.t('PAGINATION_NEXT', '️→'), callback_data=f'admin_tickets_page_{scope}_{current_page + 1}'
                 )
             )
 

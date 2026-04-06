@@ -176,7 +176,6 @@ async def start_simple_subscription_purchase(
     message_lines.extend(
         [
             f'Трафик: {traffic_label}',
-            f'Сервер: {server_label}',
             '',
             f'Стоимость: {settings.format_price(price_kopeks)}',
             f'Ваш баланс: {settings.format_price(user_balance_kopeks)}',
@@ -573,7 +572,6 @@ async def handle_simple_subscription_pay_with_balance(
         success_lines.extend(
             [
                 f'Трафик: {success_traffic_label}',
-                f'Сервер: {server_label}',
                 '',
                 f'Списано с баланса: {settings.format_price(price_kopeks)}',
                 f'Ваш баланс: {settings.format_price(db_user.balance_kopeks)}',
@@ -776,7 +774,6 @@ async def handle_simple_subscription_other_payment_methods(
     message_lines.extend(
         [
             f'Трафик: {payment_traffic_label}',
-            f'Сервер: {server_label}',
             '',
             f'Стоимость: {settings.format_price(price_kopeks)}',
             '',
@@ -1298,13 +1295,7 @@ async def handle_simple_subscription_payment_method(
             message_lines.extend(
                 [
                     '',
-                    '<b>Инструкция:</b>',
-                    "1. Нажмите кнопку 'Оплатить через Heleket'",
-                    '2. Следуйте подсказкам на странице оплаты',
-                    '3. Подтвердите перевод',
-                    '4. Средства зачислятся автоматически',
-                    '',
-                    f'Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}',
+                    f'Если возникнут проблемы, обратитесь к {settings.get_support_contact_display_html()}',
                 ]
             )
 
@@ -1385,12 +1376,8 @@ async def handle_simple_subscription_payment_method(
                     '<b>Оплата через {mulenpay_name_html}</b>\n\n'
                     'Сумма: {amount}\n'
                     'ID платежа: {payment_id}\n\n'
-                    '<b>Инструкция:</b>\n'
-                    "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
-                    '2. Следуйте подсказкам платежной системы\n'
-                    '3. Подтвердите перевод\n'
-                    '4. Средства зачислятся автоматически\n\n'
-                    'Если возникнут проблемы, обратитесь в {support}'
+                    '\n'
+                    'Если возникнут проблемы, обратитесь к {support}'
                 ),
             )
 
@@ -2307,7 +2294,6 @@ async def confirm_simple_subscription_purchase(
         success_lines.extend(
             [
                 f'Трафик: {success_traffic_label}',
-                f'Сервер: {server_label}',
                 '',
                 f'Списано с баланса: {settings.format_price(price_kopeks)}',
                 f'Ваш баланс: {settings.format_price(db_user.balance_kopeks)}',

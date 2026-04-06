@@ -327,13 +327,13 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 ️ Уровень: {tariff.tier_level}
 Порядок: {tariff.display_order}
 
-<b>Параметры:</b>
+<blockquote><b>Параметры:</b>
 • Трафик: {traffic}
 • Устройств: {tariff.device_limit}
 • Макс. устройств: {max_devices_display}
 • Цена за доп. устройство: {device_price_display}
 • Триал: {trial_status}
-• Дней триала: {trial_days_display}
+• Дней триала: {trial_days_display}</blockquote>
 
 <b>Докупка трафика:</b>
 {traffic_topup_display}
