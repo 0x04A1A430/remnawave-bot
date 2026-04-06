@@ -954,7 +954,7 @@ def get_server_status_keyboard(
         if current_page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('SERVER_STATUS_PREV_PAGE', '←Назад'),
+                    text=texts.t('SERVER_STATUS_PREV_PAGE', '← Назад'),
                     callback_data=f'server_status_page:{current_page - 1}',
                 )
             )
@@ -1615,7 +1615,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_CRYPTOBOT', '🪙 Криптовалюта (CryptoBot)'),
+                    text=texts.t('PAYMENT_CRYPTOBOT', 'Криптовалюта (CryptoBot)'),
                     callback_data=_build_callback('cryptobot'),
                 )
             ]
@@ -1626,7 +1626,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('PAYMENT_HELEKET', '🪙 Криптовалюта (Heleket)'),
+                    text=texts.t('PAYMENT_HELEKET', 'Криптовалюта (Heleket)'),
                     callback_data=_build_callback('heleket'),
                 )
             ]
@@ -1927,10 +1927,6 @@ def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE, sub_id: int | None = 
                 InlineKeyboardButton(
                     text=texts.t('AUTOPAY_SET_DAYS_BUTTON', 'Настроить дни'), callback_data='autopay_set_days'
                 )
-            ],
-            [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
-        ]
-    )
             ],
             [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
         ]
@@ -2701,7 +2697,7 @@ def get_cryptobot_payment_keyboard(
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', '🪙 Оплатить'), url=bot_invoice_url)],
+            [InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=bot_invoice_url)],
             [
                 InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),

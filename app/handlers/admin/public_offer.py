@@ -482,7 +482,7 @@ async def show_public_offer_html_help(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT',
-                        '←Назад к редактированию',
+                        '← Назад к редактированию',
                     ),
                     callback_data='admin_public_offer_edit',
                 )

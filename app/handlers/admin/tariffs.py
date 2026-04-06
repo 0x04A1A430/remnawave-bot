@@ -342,7 +342,6 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
 {price_block}
 
-<b>Серверы:</b> {squads_display}
 <b>Промогруппы:</b> {promo_display}
 
 Подписок на тарифе: {subs_count}

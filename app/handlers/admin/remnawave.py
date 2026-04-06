@@ -157,7 +157,7 @@ def _build_auto_sync_view(status: RemnaWaveAutoSyncStatus) -> tuple[str, types.I
             ],
             [
                 types.InlineKeyboardButton(
-                    text='←Назад',
+                    text='← Назад',
                     callback_data='admin_rw_sync',
                 )
             ],
@@ -947,7 +947,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
         await callback.message.edit_text(
             f'Ошибка получения статистики: {stats["error"]}',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
         )
         await callback.answer()
@@ -1051,7 +1051,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
             types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             types.InlineKeyboardButton(text='Синхронизация', callback_data='admin_rw_sync'),
         ],
-        [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -1075,7 +1075,7 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
         await callback.message.edit_text(
             f'Ошибка получения статистики трафика: {e!s}',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
         )
         await callback.answer()
@@ -1171,7 +1171,7 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
             types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             types.InlineKeyboardButton(text='Система', callback_data='admin_rw_system'),
         ],
-        [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -1188,7 +1188,7 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
         await callback.message.edit_text(
             '️ Ноды не найдены или ошибка подключения',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
         )
         await callback.answer()
@@ -1212,7 +1212,7 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Перезагрузить все', callback_data='admin_restart_all_nodes')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -1425,7 +1425,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Обновить', callback_data=f'node_stats_{node_uuid}')],
-                [types.InlineKeyboardButton(text='←Назад', callback_data=f'admin_node_manage_{node_uuid}')],
+                [types.InlineKeyboardButton(text='← Назад', callback_data=f'admin_node_manage_{node_uuid}')],
             ]
         )
 
@@ -1466,7 +1466,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Попробовать снова', callback_data=f'node_stats_{node_uuid}')],
-                [types.InlineKeyboardButton(text='←Назад', callback_data=f'admin_node_manage_{node_uuid}')],
+                [types.InlineKeyboardButton(text='← Назад', callback_data=f'admin_node_manage_{node_uuid}')],
             ]
         )
 
@@ -1628,7 +1628,7 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Сохранить изменения', callback_data=f'sqd_save_{squad_uuid[:8]}')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data=f'sqd_edit_{squad_uuid[:8]}')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data=f'sqd_edit_{squad_uuid[:8]}')],
         ]
     )
 
@@ -1817,7 +1817,7 @@ async def toggle_squad_inbound(callback: types.CallbackQuery, db_user: User, db:
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Сохранить изменения', callback_data=f'sqd_save_{short_squad_uuid}')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data=f'sqd_edit_{short_squad_uuid}')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data=f'sqd_edit_{short_squad_uuid}')],
         ]
     )
 
@@ -2214,7 +2214,7 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
                 callback_data='admin_rw_auto_sync',
             )
         ],
-        [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
     ]
 
     await callback.message.edit_text(
@@ -2545,7 +2545,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
                 types.InlineKeyboardButton(text='Статистика системы', callback_data='admin_rw_system'),
                 types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             ],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -2645,7 +2645,7 @@ async def show_sync_recommendations(callback: types.CallbackQuery, db_user: User
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Другие опции', callback_data='admin_rw_sync')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -2941,7 +2941,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
                 types.InlineKeyboardButton(text='Статистика системы', callback_data='admin_rw_system'),
                 types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             ],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -2977,7 +2977,7 @@ async def show_squads_management(callback: types.CallbackQuery, db_user: User, d
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Создать сквад', callback_data='admin_squad_create')],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 

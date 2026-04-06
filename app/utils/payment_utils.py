@@ -94,7 +94,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cryptobot',
                 'name': 'Криптовалюта',
-                'icon': '🪙',
+                'icon': '',
                 'description': 'через CryptoBot',
                 'callback': 'topup_cryptobot',
             }
@@ -105,7 +105,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'heleket',
                 'name': 'Криптовалюта',
-                'icon': '🪙',
+                'icon': '',
                 'description': 'через Heleket',
                 'callback': 'topup_heleket',
             }

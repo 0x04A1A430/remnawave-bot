@@ -750,10 +750,10 @@ def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = Fals
             keyboard.append(yookassa_methods)
 
     if settings.is_cryptobot_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 CryptoBot', callback_data='trial_payment_cryptobot')])
+        keyboard.append([types.InlineKeyboardButton(text='CryptoBot', callback_data='trial_payment_cryptobot')])
 
     if settings.is_heleket_enabled():
-        keyboard.append([types.InlineKeyboardButton(text='🪙 Heleket', callback_data='trial_payment_heleket')])
+        keyboard.append([types.InlineKeyboardButton(text='Heleket', callback_data='trial_payment_heleket')])
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
@@ -3801,13 +3801,13 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_CRYPTOBOT',
-                    '🪙 <b>Оплата криптовалютой</b>\n\n'
+                    '<b>Оплата криптовалютой</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
                     'Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text='🪙 Оплатить', url=payment_url)],
+                        [InlineKeyboardButton(text='Оплатить', url=payment_url)],
                         [
                             InlineKeyboardButton(
                                 text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
@@ -3839,13 +3839,13 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 texts.t(
                     'PAID_TRIAL_HELEKET',
-                    '🪙 <b>Оплата криптовалютой (Heleket)</b>\n\n'
+                    '<b>Оплата криптовалютой (Heleket)</b>\n\n'
                     'Нажмите кнопку ниже для перехода к оплате.\n\n'
                     'Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text='🪙 Оплатить', url=payment_result['payment_url'])],
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['payment_url'])],
                         [
                             InlineKeyboardButton(
                                 text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),

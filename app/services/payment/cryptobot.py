@@ -366,7 +366,7 @@ class CryptoBotPaymentMixin:
                         message_text = (
                             '<b>Пополнение успешно!</b>\n\n'
                             f'Сумма: {settings.format_price(amount_kopeks)}\n'
-                            f'🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n'
+                            f'Платеж: {updated_payment.amount} {updated_payment.asset}\n'
                             f'Курс: 1 USD = {conversion_rate:.2f}₽\n'
                             f'Транзакция: {invoice_id[:8]}...\n\n'
                             'Баланс пополнен автоматически!'

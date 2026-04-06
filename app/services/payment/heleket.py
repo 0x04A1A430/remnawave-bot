@@ -442,7 +442,7 @@ class HeleketPaymentMixin:
                     ]
                     if updated_payment.payer_amount and updated_payment.payer_currency:
                         message_lines.append(
-                            f'🪙 Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}'
+                            f'Оплата: {updated_payment.payer_amount} {updated_payment.payer_currency}'
                         )
                     if rate_text:
                         message_lines.append(rate_text)

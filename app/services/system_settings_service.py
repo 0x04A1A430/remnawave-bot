@@ -84,8 +84,8 @@ class BotConfigurationService:
         'TELEGRAM': '⭐ Telegram Stars',
         'TELEGRAM_WIDGET': 'Telegram Login Widget',
         'TELEGRAM_OIDC': 'Telegram Login (OIDC)',
-        'CRYPTOBOT': '🪙 CryptoBot',
-        'HELEKET': '🪙 Heleket',
+        'CRYPTOBOT': 'CryptoBot',
+        'HELEKET': 'Heleket',
         'CLOUDPAYMENTS': 'CloudPayments',
         'FREEKASSA': 'Freekassa',
         'KASSA_AI': 'KassaAI',
@@ -425,7 +425,7 @@ class BotConfigurationService:
             ChoiceOption('miniapp_subscription', 'Mini App подписка'),
             ChoiceOption('miniapp_custom', 'Mini App (ссылка)'),
             ChoiceOption('link', 'Прямая ссылка'),
-            ChoiceOption('happ_cryptolink', '🪙 Happ CryptoLink'),
+            ChoiceOption('happ_cryptolink', 'Happ CryptoLink'),
         ],
         'MAIN_MENU_MODE': [
             ChoiceOption('default', 'Полное меню'),
@@ -449,7 +449,7 @@ class BotConfigurationService:
         ],
         'YOOKASSA_PAYMENT_MODE': [
             ChoiceOption('full_payment', 'Полная оплата'),
-            ChoiceOption('partial_payment', '🪙 Частичная оплата'),
+            ChoiceOption('partial_payment', 'Частичная оплата'),
             ChoiceOption('advance', 'Аванс'),
             ChoiceOption('full_prepayment', 'Полная предоплата'),
             ChoiceOption('partial_prepayment', 'Частичная предоплата'),

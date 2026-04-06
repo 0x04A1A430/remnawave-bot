@@ -93,7 +93,7 @@ def _build_server_edit_view(server):
         ],
         [
             types.InlineKeyboardButton(text='️ Удалить', callback_data=f'admin_server_delete_{server.id}'),
-            types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers_list'),
+            types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers_list'),
         ],
     ]
 
@@ -116,7 +116,7 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
     keyboard.append(
         [types.InlineKeyboardButton(text='Сохранить', callback_data=f'admin_server_promo_save_{server_id}')]
     )
-    keyboard.append([types.InlineKeyboardButton(text='←Назад', callback_data=f'admin_server_edit_{server_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data=f'admin_server_edit_{server_id}')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -150,7 +150,7 @@ async def show_servers_menu(callback: types.CallbackQuery, db_user: User, db: As
             types.InlineKeyboardButton(text='Синхронизировать счетчики', callback_data='admin_servers_sync_counts'),
             types.InlineKeyboardButton(text='Подробная статистика', callback_data='admin_servers_stats'),
         ],
-        [types.InlineKeyboardButton(text='←Назад', callback_data='admin_panel')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -207,7 +207,7 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
 
         keyboard.append(nav_row)
 
-    keyboard.extend([[types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')]])
+    keyboard.extend([[types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')]])
 
     await callback.message.edit_text(
         text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
@@ -230,7 +230,7 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
             await callback.message.edit_text(
                 'Не удалось получить данные о сквадах из Remnawave.\n\nПроверьте настройки API.',
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')]]
+                    inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')]]
                 ),
             )
             return
@@ -257,7 +257,7 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
                 types.InlineKeyboardButton(text='Список серверов', callback_data='admin_servers_list'),
                 types.InlineKeyboardButton(text='Повторить', callback_data='admin_servers_sync'),
             ],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')],
         ]
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -267,7 +267,7 @@ async def sync_servers_with_remnawave(callback: types.CallbackQuery, db_user: Us
         await callback.message.edit_text(
             f'Ошибка синхронизации: {e!s}',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')]]
             ),
         )
 
@@ -727,7 +727,7 @@ async def show_server_detailed_stats(callback: types.CallbackQuery, db_user: Use
             types.InlineKeyboardButton(text='Обновить', callback_data='admin_servers_stats'),
             types.InlineKeyboardButton(text='Список', callback_data='admin_servers_list'),
         ],
-        [types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -1097,7 +1097,7 @@ async def sync_server_user_counts_handler(callback: types.CallbackQuery, db_user
                 types.InlineKeyboardButton(text='Список серверов', callback_data='admin_servers_list'),
                 types.InlineKeyboardButton(text='Повторить', callback_data='admin_servers_sync_counts'),
             ],
-            [types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')],
         ]
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -1107,7 +1107,7 @@ async def sync_server_user_counts_handler(callback: types.CallbackQuery, db_user
         await callback.message.edit_text(
             f'Ошибка синхронизации: {e!s}',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='←Назад', callback_data='admin_servers')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_servers')]]
             ),
         )
 

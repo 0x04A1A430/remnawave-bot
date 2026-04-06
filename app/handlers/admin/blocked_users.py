@@ -107,7 +107,7 @@ class BlockedUsersText(Enum):
     BUTTON_MARK_BLOCKED = 'Пометить как заблокированных'
     BUTTON_CONFIRM = 'Подтвердить'
     BUTTON_CANCEL = 'Отмена'
-    BUTTON_BACK = '←Назад'
+    BUTTON_BACK = '← Назад'
     BUTTON_BACK_TO_USERS = '←К пользователям'
 
 

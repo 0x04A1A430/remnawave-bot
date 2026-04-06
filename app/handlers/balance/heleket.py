@@ -60,7 +60,7 @@ async def start_heleket_payment(
         markup_text = None
 
     message_lines = [
-        '🪙 <b>Пополнение через Heleket</b>',
+        '<b>Пополнение через Heleket</b>',
         '\n',
         'Введите сумму пополнения от 100 до 100,000 ₽:',
         '',
@@ -159,13 +159,13 @@ async def process_heleket_payment_amount(
     discount_percent = result.get('discount_percent')
 
     details = [
-        '🪙 <b>Оплата через Heleket</b>',
+        '<b>Оплата через Heleket</b>',
         '',
         f'Сумма к зачислению: {amount_rubles:.0f} ₽',
     ]
 
     if payer_amount and payer_currency:
-        details.append(f'🪙 К оплате: {payer_amount} {payer_currency}')
+        details.append(f'К оплате: {payer_amount} {payer_currency}')
 
     markup_percent: float | None = None
     if discount_percent is not None:
@@ -206,7 +206,7 @@ async def process_heleket_payment_amount(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', '🪙 Оплатить'), url=payment_url)],
+            [types.InlineKeyboardButton(text=texts.t('PAY_WITH_COINS_BUTTON', 'Оплатить'), url=payment_url)],
             [
                 types.InlineKeyboardButton(
                     text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),

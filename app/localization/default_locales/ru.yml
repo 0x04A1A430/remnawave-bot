@@ -19,7 +19,7 @@ SERVER_STATUS:
   OFFLINE: "нет ответа"
   NO_SERVERS: "Нет данных о серверах."
   PAGINATION: "Страница {current} из {total}"
-  PREV_PAGE: "←Назад"
+  PREV_PAGE: "← Назад"
   NEXT_PAGE: "Вперед ️"
   REFRESH: "Обновить"
   ERROR_SHORT: "Не удалось получить данные"

@@ -610,7 +610,7 @@ def get_traffic_switch_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text='←Назад' if language_code in {'ru', 'fa'} else '←Back',
+                text='← Назад' if language_code in {'ru', 'fa'} else '←Back',
                 callback_data=back_callback,
             )
         ]
