@@ -1038,6 +1038,16 @@ class MenuLayoutService:
         if button_config.get('dynamic_text'):
             text = cls._format_dynamic_text(text, context, texts)
 
+        # Спецобработка для кнопки поддержки — всегда URL
+        if effective_button_id == 'support':
+            support_url = settings.get_support_contact_url() or 'https://t.me/'
+            return InlineKeyboardButton(text=text, url=support_url)
+
+        # Спецобработка для кнопки поддержки — всегда URL
+        if effective_button_id == 'support':
+            support_url = settings.get_support_contact_url() or 'https://t.me/'
+            return InlineKeyboardButton(text=text, url=support_url)
+
         # Строим кнопку в зависимости от типа
         if button_type == 'url':
             return InlineKeyboardButton(text=text, url=action)

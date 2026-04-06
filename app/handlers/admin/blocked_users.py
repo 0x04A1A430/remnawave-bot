@@ -108,7 +108,7 @@ class BlockedUsersText(Enum):
     BUTTON_CONFIRM = 'Подтвердить'
     BUTTON_CANCEL = 'Отмена'
     BUTTON_BACK = '← Назад'
-    BUTTON_BACK_TO_USERS = '←К пользователям'
+    BUTTON_BACK_TO_USERS = '← К пользователям'
 
 
 class BlockedUsersCallback(Enum):
@@ -195,7 +195,7 @@ def get_blocked_list_keyboard(
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='←',
+                    text='← ',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page - 1}',
                 )
             )

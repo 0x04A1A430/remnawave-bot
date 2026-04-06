@@ -1577,7 +1577,7 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
@@ -2007,7 +2007,7 @@ async def process_traffic_setting_input(message: Message, state: FSMContext):
 
         back_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text='←К настройкам трафика', callback_data='admin_mon_traffic_settings')]
+                [InlineKeyboardButton(text='← К настройкам трафика', callback_data='admin_mon_traffic_settings')]
             ]
         )
         await message.answer('Настройка сохранена!', reply_markup=back_keyboard)

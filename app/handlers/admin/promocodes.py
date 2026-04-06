@@ -202,7 +202,7 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
             types.InlineKeyboardButton(text='Статистика', callback_data=f'promo_stats_{promo.id}'),
             types.InlineKeyboardButton(text='️ Удалить', callback_data=f'promo_delete_{promo.id}'),
         ],
-        [types.InlineKeyboardButton(text='←К списку', callback_data='admin_promo_list')],
+        [types.InlineKeyboardButton(text='← К списку', callback_data='admin_promo_list')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))

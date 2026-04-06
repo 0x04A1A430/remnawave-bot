@@ -198,7 +198,7 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(types.InlineKeyboardButton(text='←', callback_data=f'admin_servers_list_page_{page - 1}'))
+            nav_row.append(types.InlineKeyboardButton(text='← ', callback_data=f'admin_servers_list_page_{page - 1}'))
 
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -396,7 +396,7 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
         if page > 1:
             navigation_buttons.append(
                 types.InlineKeyboardButton(
-                    text='←Предыдущая',
+                    text='← Предыдущая',
                     callback_data=f'admin_server_users_{server_id}_{page - 1}',
                 )
             )
@@ -418,9 +418,9 @@ async def show_server_users(callback: types.CallbackQuery, db_user: User, db: As
 
         keyboard.append(navigation_buttons)
 
-    keyboard.append([types.InlineKeyboardButton(text='←К серверу', callback_data=f'admin_server_edit_{server_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='← К серверу', callback_data=f'admin_server_edit_{server_id}')])
 
-    keyboard.append([types.InlineKeyboardButton(text='←К списку', callback_data='admin_servers_list')])
+    keyboard.append([types.InlineKeyboardButton(text='← К списку', callback_data='admin_servers_list')])
 
     await callback.message.edit_text(
         text,

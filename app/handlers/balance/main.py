@@ -367,7 +367,7 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='Вернуться к оформлению подписки', callback_data='return_to_saved_cart'
+                            text=' Вернуться к оформлению подписки', callback_data='return_to_saved_cart'
                         )
                     ],
                     [types.InlineKeyboardButton(text='Мой баланс', callback_data='menu_balance')],

@@ -19,7 +19,7 @@ SERVER_STATUS:
   OFFLINE: "no response"
   NO_SERVERS: "No server data available."
   PAGINATION: "Page {current} of {total}"
-  PREV_PAGE: "←Back"
+  PREV_PAGE: "← Back"
   NEXT_PAGE: "Next ️"
   REFRESH: "Refresh"
   ERROR_SHORT: "Failed to fetch data"

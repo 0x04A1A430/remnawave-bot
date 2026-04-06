@@ -210,7 +210,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
             'type': 'builtin',
             'builtin_id': 'support',
             'text': {'ru': 'Тех. поддержка', 'en': 'Support'},
-            'action': 'menu_support',
+            'action': 'https://t.me/',
             'enabled': True,
             'visibility': 'all',
             'conditions': {'support_enabled': True},
@@ -330,7 +330,7 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
     {
         'id': 'support',
         'default_text': {'ru': 'Поддержка', 'en': 'Support'},
-        'callback_data': 'menu_support',
+        'callback_data': None,
         'default_conditions': {'support_enabled': True},
         'supports_dynamic_text': False,
     },
@@ -372,8 +372,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'back_to_menu',
         'name': 'Назад в меню',
         'category': 'menu',
-        'icon': '←',
-        'text': {'ru': '← Назад', 'en': '←Back'},
+        'icon': '← ',
+        'text': {'ru': '← Назад', 'en': '← Back'},
     },
     {
         'callback_data': 'menu_faq',

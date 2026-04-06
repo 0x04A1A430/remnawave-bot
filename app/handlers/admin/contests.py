@@ -1118,7 +1118,7 @@ async def process_virtual_participant_count(
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='К списку', callback_data=f'admin_contest_vp_{contest_id}')],
-                [types.InlineKeyboardButton(text='←К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
+                [types.InlineKeyboardButton(text='← К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
             ]
         ),
     )
@@ -1340,7 +1340,7 @@ async def process_mass_virtual_referrals(
                         text='К списку призраков', callback_data=f'admin_contest_vp_{contest_id}'
                     )
                 ],
-                [types.InlineKeyboardButton(text='←К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
+                [types.InlineKeyboardButton(text='← К конкурсу', callback_data=f'admin_contest_view_{contest_id}')],
             ]
         ),
     )

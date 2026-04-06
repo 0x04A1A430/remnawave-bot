@@ -613,7 +613,7 @@ async def show_faq_page(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'menu_faq_page:{page.id}:{current_page - 1}',
                 )
             )
@@ -638,7 +638,7 @@ async def show_faq_page(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('FAQ_BACK_TO_LIST', '←К списку FAQ'),
+                text=texts.t('FAQ_BACK_TO_LIST', '← К списку FAQ'),
                 callback_data='menu_faq',
             )
         ]
@@ -738,7 +738,7 @@ async def show_privacy_policy(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'menu_privacy_policy:{current_page - 1}',
                 )
             )
@@ -855,7 +855,7 @@ async def show_public_offer(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'menu_public_offer:{current_page - 1}',
                 )
             )

@@ -501,7 +501,8 @@ def _build_cabinet_main_menu_keyboard(
                     if not section_cfg.get('enabled', True):
                         continue
                     sup_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_SUPPORT
-                    row_buttons.append(_cabinet_button(sup_text, '/support', 'menu_support'))
+                    sup_url = settings.get_support_contact_url() or 'https://t.me/'
+                    row_buttons.append(InlineKeyboardButton(text=sup_text, url=sup_url))
 
                 case 'admin':
                     if not is_admin:
@@ -732,7 +733,8 @@ def get_main_menu_keyboard(
 
     # Тех. поддержка — одна кнопка в самом низу
     if support_enabled:
-        keyboard.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
+        support_url = settings.get_support_contact_url() or 'https://t.me/'
+        keyboard.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, url=support_url)])
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
@@ -895,7 +897,7 @@ def get_happ_cryptolink_keyboard(
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '←В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data='back_to_menu',
                 )
             ],
@@ -1882,7 +1884,7 @@ def get_pagination_keyboard(
         if current_page > 1:
             row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'), callback_data=f'{callback_prefix}_page_{current_page - 1}'
+                    text=texts.t('PAGINATION_PREV', '← '), callback_data=f'{callback_prefix}_page_{current_page - 1}'
                 )
             )
 
@@ -2582,7 +2584,7 @@ def get_connection_guide_keyboard(
                     callback_data=_sc_cb,
                 )
             ],
-            [InlineKeyboardButton(text=texts.t('BACK_TO_SUBSCRIPTION', '←К подписке'), callback_data=back_cb)],
+            [InlineKeyboardButton(text=texts.t('BACK_TO_SUBSCRIPTION', '← К подписке'), callback_data=back_cb)],
         ]
     )
 
@@ -2610,7 +2612,7 @@ def get_app_selection_keyboard(device_type: str, apps: list, language: str = DEF
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_SUBSCRIPTION', '←К подписке'), callback_data='menu_subscription'
+                    text=texts.t('BACK_TO_SUBSCRIPTION', '← К подписке'), callback_data='menu_subscription'
                 )
             ],
         ]
@@ -2737,7 +2739,7 @@ def get_devices_management_keyboard(
         if pagination.has_prev:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'), callback_data=f'devices_page_{pagination.prev_page}'
+                    text=texts.t('PAGINATION_PREV', '← '), callback_data=f'devices_page_{pagination.prev_page}'
                 )
             )
 
@@ -2885,7 +2887,7 @@ def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> Inl
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_SUBSCRIPTION', '←К подписке'), callback_data='menu_subscription'
+                    text=texts.t('BACK_TO_SUBSCRIPTION', '← К подписке'), callback_data='menu_subscription'
                 )
             ],
         ]
@@ -2936,7 +2938,7 @@ def get_my_tickets_keyboard(
         if current_page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'), callback_data=f'{page_prefix}{current_page - 1}'
+                    text=texts.t('PAGINATION_PREV', '← '), callback_data=f'{page_prefix}{current_page - 1}'
                 )
             )
 
@@ -3074,7 +3076,8 @@ def get_admin_tickets_keyboard(
         if current_page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '←'), callback_data=f'admin_tickets_page_{scope}_{current_page - 1}'
+                    text=texts.t('PAGINATION_PREV', '← '),
+                    callback_data=f'admin_tickets_page_{scope}_{current_page - 1}',
                 )
             )
 
