@@ -320,24 +320,24 @@ async def show_users_list(
 
     for user in users_data['users']:
         if user.status == UserStatus.ACTIVE.value:
-            status_emoji = ''
+            status_emoji = '🟢'
         elif user.status == UserStatus.BLOCKED.value:
-            status_emoji = ''
+            status_emoji = '🔴'
         else:
-            status_emoji = '️'
+            status_emoji = '️⚫'
 
         subscription_emoji = ''
         subs = getattr(user, 'subscriptions', None) or []
         subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
         if subscription:
             if subscription.is_trial:
-                subscription_emoji = ''
+                subscription_emoji = '🔹'
             elif subscription.is_active:
-                subscription_emoji = ''
+                subscription_emoji = '🔺'
             else:
-                subscription_emoji = ''
+                subscription_emoji = '🔻'
         else:
-            subscription_emoji = ''
+            subscription_emoji = '🔴'
 
         button_text = f'{status_emoji} {subscription_emoji} {user.full_name}'
 
