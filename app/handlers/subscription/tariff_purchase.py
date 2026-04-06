@@ -193,6 +193,7 @@ def get_tariffs_keyboard(
         else:
             buttons.append([InlineKeyboardButton(text=tariff.name, callback_data=f'tariff_select:{tariff.id}')])
 
+    buttons.append([InlineKeyboardButton(text='Кастомный тариф', url='https://t.me/channel6xc?direct')])
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
