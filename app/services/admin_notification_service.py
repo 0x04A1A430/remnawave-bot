@@ -382,7 +382,6 @@ class AdminNotificationService:
                     f'Период: {settings.TRIAL_DURATION_DAYS} дней',
                     f'Трафик: {self._format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB)}',
                     f'Устройства: {trial_device_limit}',
-                    f'Сервер: {subscription.connected_squads[0] if subscription.connected_squads else "По умолчанию"}',
                 ]
             )
 
