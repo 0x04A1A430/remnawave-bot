@@ -1467,17 +1467,17 @@ class Subscription(Base):
         actual_status = self.actual_status
 
         if actual_status == 'expired':
-            return 'Истекла'
+            return '🟡 Истекла'
         if actual_status == 'active':
             if self.is_trial:
                 return 'Тестовая'
             return '🟢 Активна'
         if actual_status == 'disabled':
-            return 'Отключена'
+            return '🟤 Отключена'
         if actual_status == 'limited':
-            return '️ Трафик исчерпан'
+            return '️🟠 Трафик исчерпан'
         if actual_status == 'trial':
-            return 'Тестовая'
+            return '🟣 Тестовая'
 
         return 'Неизвестно'
 
@@ -1486,17 +1486,17 @@ class Subscription(Base):
         actual_status = self.actual_status
 
         if actual_status == 'expired':
-            return ''
+            return '🟡'
         if actual_status == 'active':
             if self.is_trial:
-                return ''
+                return '🟢'
             return ''
         if actual_status == 'disabled':
-            return ''
+            return '🟤'
         if actual_status == 'limited':
-            return '️'
+            return '️🟠'
         if actual_status == 'trial':
-            return ''
+            return '🟣'
 
         return ''
 
