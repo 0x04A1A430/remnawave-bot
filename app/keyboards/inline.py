@@ -730,7 +730,7 @@ def get_main_menu_keyboard(
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
 
-    # Техподдержка — одна кнопка в самом низу
+    # Тех. поддержка — одна кнопка в самом низу
     if support_enabled:
         keyboard.append([InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data='menu_support')])
 
