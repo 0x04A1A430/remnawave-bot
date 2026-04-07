@@ -568,15 +568,12 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         if settings.is_happ_cryptolink_mode():
             subscription_link_display = f'<blockquote expandable><code>{subscription_link}</code></blockquote>'
         else:
-            subscription_link_display = f'<code>{subscription_link}</code>'
+            subscription_link_display = f'<blockquote>{subscription_link}</blockquote>'
 
         message += '\n\n' + texts.t(
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
             '<b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
-        message += '\n\n' + texts.t(
-            'SUBSCRIPTION_CONNECT_LINK_PROMPT',
-        )
 
     await callback.message.edit_text(
         message,
@@ -1118,10 +1115,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
                     + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
@@ -1129,11 +1122,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -1145,7 +1133,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 trial_success_text = (
                     f'{texts.TRIAL_ACTIVATED}\n\n'
                     f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
 
             trial_success_text += payment_note
@@ -2625,10 +2612,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
                     + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 success_text = (
@@ -2638,10 +2621,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                     )
                     + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             else:
                 import_link_section = texts.t(
@@ -2652,7 +2631,6 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 success_text = (
                     f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
                     f'{import_link_section}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
 
             if discount_note:
@@ -3367,11 +3345,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
@@ -3379,11 +3352,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -3395,7 +3363,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 trial_success_text = (
                     f'{texts.TRIAL_ACTIVATED}\n\n'
                     f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", "Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
 
             trial_success_text += payment_note

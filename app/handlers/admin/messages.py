@@ -265,7 +265,7 @@ async def show_pinned_message_menu(
         if pinned_message.media_type:
             media_label = 'Фото' if pinned_message.media_type == 'photo' else 'Видео'
             media_line = f'Медиа: {media_label}\n'
-        position_line = '⬆️ Отправлять перед меню' if pinned_message.send_before_menu else '⬇️ Отправлять после меню'
+        position_line = '↑ Отправлять перед меню' if pinned_message.send_before_menu else '↓ Отправлять после меню'
         start_mode_line = (
             'При каждом /start' if pinned_message.send_on_every_start else 'Только один раз и при обновлении'
         )

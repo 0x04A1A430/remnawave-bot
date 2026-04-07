@@ -49,7 +49,7 @@ async def handle_happ_download_platform_choice(callback: types.CallbackQuery, db
 
     link_text = texts.t(
         'HAPP_DOWNLOAD_LINK_MESSAGE',
-        '⬇️ Скачайте Happ для {platform}:',
+        '↓ Скачайте Happ для {platform}:',
     ).format(platform=platform_names.get(platform, platform.upper()))
 
     keyboard = get_happ_download_link_keyboard(db_user.language, link)

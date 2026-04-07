@@ -911,9 +911,9 @@ def get_pinned_message_keyboard(
     texts = get_texts(language)
 
     position_label = (
-        _t(texts, 'ADMIN_PINNED_POSITION_BEFORE', '⬆️ Показать перед меню')
+        _t(texts, 'ADMIN_PINNED_POSITION_BEFORE', '↑ Показать перед меню')
         if send_before_menu
-        else _t(texts, 'ADMIN_PINNED_POSITION_AFTER', '⬇️ Показать после меню')
+        else _t(texts, 'ADMIN_PINNED_POSITION_AFTER', '↓ Показать после меню')
     )
     toggle_callback = 'admin_pinned_message_position'
 
@@ -1492,7 +1492,7 @@ def get_sync_options_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text=_t(texts, 'ADMIN_SYNC_TO_PANEL', '⬆️ Синхронизация в панель'), callback_data='sync_to_panel'
+                text=_t(texts, 'ADMIN_SYNC_TO_PANEL', '↑ Синхронизация в панель'), callback_data='sync_to_panel'
             )
         ],
         [

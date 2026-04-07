@@ -74,7 +74,7 @@ def _get_logs_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text='Обновить', callback_data='admin_system_logs_refresh')],
-            [InlineKeyboardButton(text='⬇️ Скачать лог', callback_data='admin_system_logs_download')],
+            [InlineKeyboardButton(text='↓ Скачать лог', callback_data='admin_system_logs_download')],
             [InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_system')],
         ]
     )
@@ -124,7 +124,7 @@ async def download_system_logs(
         return
 
     try:
-        await callback.answer('⬇️ Отправляю лог...')
+        await callback.answer('↓ Отправляю лог...')
 
         document = FSInputFile(log_path)
         stats = log_path.stat()
