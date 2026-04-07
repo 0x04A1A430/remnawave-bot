@@ -3277,8 +3277,8 @@ def format_instant_switch_list_text(
         f'Осталось: <b>{remaining_days} дн.</b>',
         '',
         'При переключении остаток дней сохраняется.',
-        '⬆️ Повышение тарифа = доплата за разницу',
-        '⬇️ Понижение = бесплатно',
+        '↑ Повышение тарифа = доплата за разницу',
+        '↓ Понижение = бесплатно',
         '',
     ]
 
@@ -3293,9 +3293,9 @@ def format_instant_switch_list_text(
         cost, is_upgrade = _calculate_instant_switch_cost(current_tariff, tariff, remaining_days, db_user)
 
         if is_upgrade:
-            cost_text = f'⬆️ +{format_price_kopeks(cost, compact=True)}'
+            cost_text = f'↑ +{format_price_kopeks(cost, compact=True)}'
         else:
-            cost_text = '⬇️ Бесплатно'
+            cost_text = '↓ Бесплатно'
 
         lines.append(f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit} {cost_text}')
 
@@ -3570,7 +3570,7 @@ async def preview_instant_switch(
         # Upgrade - нужна доплата
         if user_balance >= upgrade_cost:
             await callback.message.edit_text(
-                f'⬆️ <b>Повышение тарифа</b>\n\n'
+                f'↑ <b>Повышение тарифа</b>\n\n'
                 f'Текущий: <b>{html.escape(current_tariff.name)}</b>\n'
                 f'   • Трафик: {current_traffic}\n'
                 f'   • Устройств: {current_tariff.device_limit}\n\n'
@@ -3598,7 +3598,7 @@ async def preview_instant_switch(
     else:
         # Downgrade или тот же уровень - бесплатно
         await callback.message.edit_text(
-            f'⬇️ <b>Переключение тарифа</b>\n\n'
+            f'↓ <b>Переключение тарифа</b>\n\n'
             f'Текущий: <b>{html.escape(current_tariff.name)}</b>\n'
             f'   • Трафик: {current_traffic}\n'
             f'   • Устройств: {current_tariff.device_limit}\n\n'

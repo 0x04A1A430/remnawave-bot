@@ -148,7 +148,7 @@ class UserService:
         """
         if amount_kopeks > 0:
             # Пополнение
-            emoji = ''
+            emoji = "<tg-emoji emoji-id='5974217466270716579'>💵</tg-emoji>"
             amount_text = f'+{settings.format_price(amount_kopeks)}'
             message = (
                 f'{emoji} <b>Баланс пополнен!</b>\n\n'
@@ -158,7 +158,7 @@ class UserService:
             )
         else:
             # Списание
-            emoji = ''
+            emoji = "<tg-emoji emoji-id='5974217466270716579'>💵</tg-emoji>"
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = (
                 f'{emoji} <b>Средства списаны с баланса</b>\n\n'

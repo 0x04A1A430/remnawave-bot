@@ -2190,7 +2190,7 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
         '• При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы\n'
         '• Рекомендуется делать полную синхронизацию ежедневно\n'
         '• Баланс пользователей НЕ удаляется\n\n'
-        '⬆️ <b>Обратная синхронизация:</b>\n'
+        '↑ <b>Обратная синхронизация:</b>\n'
         '• Отправляет активных пользователей из бота в панель\n'
         '• Используйте при сбоях панели или для восстановления данных\n\n' + '\n'.join(status_lines)
     )
@@ -2204,7 +2204,7 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
         ],
         [
             types.InlineKeyboardButton(
-                text='⬆️ Синхронизация в панель',
+                text='↑ Синхронизация в панель',
                 callback_data='sync_to_panel',
             )
         ],
@@ -2561,7 +2561,7 @@ async def sync_users_to_panel(
     db: AsyncSession,
 ):
     await callback.message.edit_text(
-        '⬆️ Выполняется синхронизация данных бота в панель Remnawave...\n\nЭто может занять несколько минут.',
+        '↑ Выполняется синхронизация данных бота в панель Remnawave...\n\nЭто может занять несколько минут.',
         reply_markup=None,
     )
 

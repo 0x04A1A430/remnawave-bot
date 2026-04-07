@@ -867,7 +867,7 @@ async def show_devices_page(
 
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
-                '• {device}',
+                '{device}',
             ).format(device=device_info)
 
         devices_text += '</blockquote>\n'

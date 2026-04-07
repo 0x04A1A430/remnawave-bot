@@ -536,11 +536,11 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_MOVE_UP', '⬆️ Выше'),
+                text=texts.t('ADMIN_FAQ_PAGE_MOVE_UP', '↑ Выше'),
                 callback_data=f'admin_faq_move:{page.id}:up',
             ),
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', '⬇️ Ниже'),
+                text=texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', '↓ Ниже'),
                 callback_data=f'admin_faq_move:{page.id}:down',
             ),
         ]

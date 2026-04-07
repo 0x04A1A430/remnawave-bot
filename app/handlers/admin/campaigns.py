@@ -42,7 +42,7 @@ _CAMPAIGNS_PAGE_SIZE = 5
 
 
 def _format_campaign_summary(campaign, texts) -> str:
-    status = '🟢 Активна' if campaign.is_active else '️ Выключена'
+    status = '🟢 Активна' if campaign.is_active else '️Выключена'
 
     if campaign.is_balance_bonus:
         bonus_text = texts.format_price(campaign.balance_bonus_kopeks)

@@ -99,7 +99,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'happ_download': {
             'type': 'builtin',
             'builtin_id': 'happ_download',
-            'text': {'ru': '⬇️ Скачать Happ', 'en': '⬇️ Download Happ'},
+            'text': {'ru': '↓ Скачать Happ', 'en': '↓ Download Happ'},
             'action': 'subscription_happ_download',
             'enabled': True,
             'visibility': 'subscribers',
@@ -252,7 +252,7 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
     },
     {
         'id': 'happ_download',
-        'default_text': {'ru': '⬇️ Скачать Happ', 'en': '⬇️ Download Happ'},
+        'default_text': {'ru': '↓ Скачать Happ', 'en': '↓ Download Happ'},
         'callback_data': 'subscription_happ_download',
         'default_conditions': {'happ_enabled': True},
         'supports_dynamic_text': False,
@@ -501,8 +501,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'subscription_upgrade',
         'name': 'Улучшить подписку',
         'category': 'subscription',
-        'icon': '⬆️',
-        'text': {'ru': '⬆️ Улучшить', 'en': '⬆️ Upgrade'},
+        'icon': '↑ ',
+        'text': {'ru': '↑ Улучшить', 'en': '↑ Upgrade'},
         'requires_subscription': True,
     },
     # Подключение устройств

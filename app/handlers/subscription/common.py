@@ -581,7 +581,7 @@ def get_traffic_switch_keyboard(
             action_text = ' (текущий)'
             price_text = ''
         elif total_price_diff > 0:
-            emoji = '⬆️'
+            emoji = '↑ '
             action_text = ''
             price_text = f' (+{total_price_diff // 100}₽{period_text})'
             if discount_percent > 0:
@@ -589,7 +589,7 @@ def get_traffic_switch_keyboard(
                 if discount_total > 0:
                     price_text += f' (скидка {discount_percent}%: -{discount_total // 100}₽)'
         elif total_price_diff < 0:
-            emoji = '⬇️'
+            emoji = '↓ '
             action_text = ''
             price_text = ' (без возврата)'
         else:

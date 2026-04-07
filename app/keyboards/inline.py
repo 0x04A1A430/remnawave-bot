@@ -844,7 +844,7 @@ def get_happ_download_button_row(texts) -> list[InlineKeyboardButton] | None:
 
     return [
         InlineKeyboardButton(
-            text=texts.t('HAPP_DOWNLOAD_BUTTON', '⬇️ Скачать Happ'), callback_data='subscription_happ_download'
+            text=texts.t('HAPP_DOWNLOAD_BUTTON', '↓ Скачать Happ'), callback_data='subscription_happ_download'
         )
     ]
 

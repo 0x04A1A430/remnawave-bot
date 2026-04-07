@@ -2291,7 +2291,7 @@ async def start_edit_tariff_squads(
     buttons = []
     for squad in squads:
         is_selected = squad.squad_uuid in current_squads
-        prefix = '' if is_selected else '⬜'
+        prefix = 'вкл' if is_selected else 'выкл'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2355,7 +2355,7 @@ async def toggle_tariff_squad(
     buttons = []
     for squad in squads:
         is_selected = squad.squad_uuid in current_squads
-        prefix = '' if is_selected else '⬜'
+        prefix = 'вкл' if is_selected else 'выкл'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2424,7 +2424,7 @@ async def clear_tariff_squads(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f'⬜ {squad.display_name}',
+                    text=f'{squad.display_name}',
                     callback_data=f'trf_sq:{tariff_id}:{squad.squad_uuid}',
                 )
             ]
@@ -2554,7 +2554,7 @@ async def start_edit_tariff_promo_groups(
     buttons = []
     for promo_group, _ in promo_groups_data:
         is_selected = promo_group.id in current_groups
-        prefix = '' if is_selected else '⬜'
+        prefix = 'вкл' if is_selected else 'выкл'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2623,7 +2623,7 @@ async def toggle_tariff_promo_group(
     buttons = []
     for promo_group, _ in promo_groups_data:
         is_selected = promo_group.id in current_groups
-        prefix = '' if is_selected else '⬜'
+        prefix = 'вкл' if is_selected else 'выкл'
         buttons.append(
             [
                 InlineKeyboardButton(
@@ -2684,7 +2684,7 @@ async def clear_tariff_promo_groups(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f'⬜ {promo_group.name}',
+                    text=f'{promo_group.name}',
                     callback_data=f'admin_tariff_toggle_promo:{tariff_id}:{promo_group.id}',
                 )
             ]
