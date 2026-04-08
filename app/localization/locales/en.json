@@ -1232,7 +1232,7 @@
   "PLATEGA_AMOUNT_TOO_LOW": "Minimum amount for Platega: {amount}",
   "PLATEGA_AMOUNT_TOO_HIGH": "Maximum amount for Platega: {amount}",
   "PLATEGA_PAYMENT_ERROR": "Failed to create Platega payment. Please try again later or contact support.",
-  "PLATEGA_PAYMENT_INSTRUCTIONS": "<b>Payment via Platega ({method})</b>\n\nAmount: {amount}\nTransaction ID: {transaction}\n\n<b>Instructions:</b>\n1. Tap the ‘Pay’ button\n2. Follow the payment provider instructions\n3. Confirm the transfer\n4. Funds will be credited automatically\n\nIf you have issues, contact {support}",
+  "PLATEGA_PAYMENT_INSTRUCTIONS": "<b>Payment via Platega ({method})</b>\n\nAmount: <code>{amount}</code>\nTransaction ID: <tg-spoiler>{transaction}</tg-spoiler>",
   "PLATEGA_PAY_BUTTON": "Pay via {method}",
   "PLATEGA_PAYMENT_ALREADY_CONFIRMED": "Payment already credited",
   "PLATEGA_PAYMENT_STATUS": "Current payment status: {status}",

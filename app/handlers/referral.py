@@ -477,12 +477,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
                 )
                 + '\n'
             )
-        text += '</blockquote>\n\n'
-
-    text += texts.t(
-        'REFERRAL_ANALYTICS_FOOTER',
-        'Продолжайте развивать свою реферальную сеть!',
-    )
+        text += '</blockquote>\n'
 
     await edit_or_answer_photo(
         callback,
