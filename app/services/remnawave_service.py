@@ -2082,7 +2082,7 @@ class RemnaWaveService:
                         new_end_date_local = expire_at.replace(tzinfo=self._utc_timezone).astimezone(
                             self._panel_timezone
                         )
-                        direction = '→' if expire_at > local_end_date_utc else '← '
+                        direction = '→' if expire_at > local_end_date_utc else '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> '
                         logger.info(
                             'Sync: обновлена end_date для user -> (разница: с, направление: )',
                             value=getattr(user, 'telegram_id', '?'),

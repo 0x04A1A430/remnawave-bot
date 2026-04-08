@@ -444,10 +444,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 Баланс: {balance}
 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
-Информация о подписке
-Тип: {subscription_type}
+<b>Информация о подписке</b>
+<blockquote expandable>Тип: {subscription_type}
 Трафик: {traffic}
-Устройства: {devices_used} / {device_limit}""",
+Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
     else:
         message_template = texts.t(
@@ -456,12 +456,12 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 Баланс: {balance}
 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
 
-Информация о подписке
-Тип: {subscription_type}
+<b>Информация о подписке</b>
+<blockquote expandable>Тип: {subscription_type}
 Действует до: {end_date}
 Осталось: {time_left}
 Трафик: {traffic}
-Устройства: {devices_used} / {device_limit}""",
+Устройства: {devices_used} / {device_limit}</blockquote>""",
         )
 
     if not show_devices:
@@ -568,7 +568,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         if settings.is_happ_cryptolink_mode():
             subscription_link_display = f'<blockquote expandable><code>{subscription_link}</code></blockquote>'
         else:
-            subscription_link_display = f'<blockquote>{subscription_link}</blockquote>'
+            subscription_link_display = f'<blockquote><code>{subscription_link}</code></blockquote>'
 
         message += '\n\n' + texts.t(
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
@@ -1150,7 +1150,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -1177,7 +1177,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -1198,7 +1198,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                             callback_data='back_to_menu',
                         )
                     ]
@@ -1219,7 +1219,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                             callback_data='back_to_menu',
                         )
                     ]
@@ -1236,7 +1236,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -2649,7 +2649,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -2676,7 +2676,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -2692,7 +2692,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'), callback_data='back_to_menu'
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'), callback_data='back_to_menu'
                         )
                     ]
                 )
@@ -2712,7 +2712,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'), callback_data='back_to_menu'
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'), callback_data='back_to_menu'
                         )
                     ]
                 )
@@ -2727,7 +2727,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -3438,7 +3438,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                         callback_data='back_to_menu',
                     )
                 ],
@@ -3458,7 +3458,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                         callback_data='back_to_menu',
                     )
                 ],
@@ -3479,7 +3479,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                     callback_data='back_to_menu',
                 )
             ]
@@ -3500,7 +3500,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                     callback_data='back_to_menu',
                 )
             ]
@@ -3516,7 +3516,7 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'),
                     callback_data='back_to_menu',
                 )
             ],

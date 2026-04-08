@@ -54,35 +54,37 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
         + '\n\n'
         + texts.t('REFERRAL_STATS_HEADER', '<b>Ваша статистика:</b>')
         + '\n'
+        + '<blockquote>'
         + texts.t(
             'REFERRAL_STATS_INVITED',
-            '<code>• Приглашено пользователей: <b>{count}</b></code>',
+            '• Приглашено пользователей: <b>{count}</b>',
         ).format(count=summary['invited_count'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_FIRST_TOPUPS',
-            '<code>• Сделали первое пополнение: <b>{count}</b></code>',
+            '• Сделали первое пополнение: <b>{count}</b>',
         ).format(count=summary['paid_referrals_count'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_ACTIVE',
-            '<code>• Активных рефералов: <b>{count}</b></code>',
+            '• Активных рефералов: <b>{count}</b>',
         ).format(count=summary['active_referrals_count'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_CONVERSION',
-            '<code>• Конверсия: <b>{rate}%</b></code>',
+            '• Конверсия: <b>{rate}%</b>',
         ).format(rate=summary['conversion_rate'])
         + '\n'
         + texts.t(
             'REFERRAL_STATS_TOTAL_EARNED',
-            '<code>• Заработано всего: <b>{amount}</b></code>',
+            '• Заработано всего: <b>{amount}</b>',
         ).format(amount=texts.format_price(summary['total_earned_kopeks']))
         + '\n'
         + texts.t(
             'REFERRAL_STATS_MONTH_EARNED',
-            '<code>• За последний месяц: <b>{amount}</b></code>',
+            '• За последний месяц: <b>{amount}</b>',
         ).format(amount=texts.format_price(summary['month_earned_kopeks']))
+        + '</blockquote>'
         + '\n\n'
         + texts.t('REFERRAL_REWARDS_HEADER', '<blockquote><b>Как работают награды:</b>')
     )
@@ -330,53 +332,53 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
 
         topup_emoji = '' if referral['has_made_first_topup'] else '⏳'
 
-        text += (
+        item = (
             texts.t(
                 'REFERRAL_LIST_ITEM_HEADER',
                 '{index}. {status} <b>{name}</b>',
             ).format(index=i, status=status_emoji, name=html_escape(str(referral['full_name'] or '')))
             + '\n'
         )
-        text += (
+        item += (
             texts.t(
                 'REFERRAL_LIST_ITEM_TOPUPS',
-                '   {emoji} Пополнений: {count}',
+                '{emoji} Пополнений: {count}',
             ).format(emoji=topup_emoji, count=referral['topups_count'])
             + '\n'
         )
-        text += (
+        item += (
             texts.t(
                 'REFERRAL_LIST_ITEM_EARNED',
-                '   Заработано с него: {amount}',
+                'Заработано: {amount}',
             ).format(amount=texts.format_price(referral['total_earned_kopeks']))
             + '\n'
         )
-        text += (
+        item += (
             texts.t(
                 'REFERRAL_LIST_ITEM_REGISTERED',
-                '   Регистрация: {days} дн. назад',
+                'Регистрация: {days} дн. назад',
             ).format(days=referral['days_since_registration'])
             + '\n'
         )
 
         if referral['days_since_activity'] is not None:
-            text += (
+            item += (
                 texts.t(
                     'REFERRAL_LIST_ITEM_ACTIVITY',
-                    '   Активность: {days} дн. назад',
+                    'Активность: {days} дн. назад',
                 ).format(days=referral['days_since_activity'])
                 + '\n'
             )
         else:
-            text += (
+            item += (
                 texts.t(
                     'REFERRAL_LIST_ITEM_ACTIVITY_LONG_AGO',
-                    '   Активность: давно',
+                    'Активность: давно',
                 )
                 + '\n'
             )
 
-        text += '\n'
+        text += f'<blockquote>{item}</blockquote>\n'
 
     keyboard = []
     nav_buttons = []
@@ -384,7 +386,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
     if referrals_data['has_prev']:
         nav_buttons.append(
             types.InlineKeyboardButton(
-                text=texts.t('REFERRAL_LIST_PREV_PAGE', '← Назад'), callback_data=f'referral_list_page_{page - 1}'
+                text=texts.t('REFERRAL_LIST_PREV_PAGE', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад'), callback_data=f'referral_list_page_{page - 1}'
             )
         )
 
@@ -422,34 +424,36 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
         )
         + '\n'
     )
+    text += '<blockquote>'
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_TODAY',
-            '<blockquote>• Сегодня: {amount}',
+            '• Сегодня: <code>{amount}</code>',
         ).format(amount=texts.format_price(analytics['earnings_by_period']['today']))
         + '\n'
     )
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_WEEK',
-            '• За неделю: {amount}',
+            '• За неделю: <code>{amount}</code>',
         ).format(amount=texts.format_price(analytics['earnings_by_period']['week']))
         + '\n'
     )
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_MONTH',
-            '• За месяц: {amount}',
+            '• За месяц: <code>{amount}</code>',
         ).format(amount=texts.format_price(analytics['earnings_by_period']['month']))
         + '\n'
     )
     text += (
         texts.t(
             'REFERRAL_ANALYTICS_EARNINGS_QUARTER',
-            '• За квартал: {amount}</blockquote>',
+            '• За квартал: <code>{amount}</code>',
         ).format(amount=texts.format_price(analytics['earnings_by_period']['quarter']))
-        + '\n\n'
+        + '\n'
     )
+    text += '</blockquote>\n\n'
 
     if analytics['top_referrals']:
         text += (
@@ -459,11 +463,12 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
             ).format(count=len(analytics['top_referrals']))
             + '\n'
         )
+        text += '<blockquote expandable>'
         for i, ref in enumerate(analytics['top_referrals'], 1):
             text += (
                 texts.t(
                     'REFERRAL_ANALYTICS_TOP_ITEM',
-                    '{index}. {name}: {amount} ({count} начислений)',
+                    '{index}. {name}: <code>{amount}</code> ({count} начислений)',
                 ).format(
                     index=i,
                     name=html_escape(str(ref['referral_name'] or '')),
@@ -472,7 +477,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
                 )
                 + '\n'
             )
-        text += '\n'
+        text += '</blockquote>\n\n'
 
     text += texts.t(
         'REFERRAL_ANALYTICS_FOOTER',

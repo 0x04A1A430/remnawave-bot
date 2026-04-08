@@ -847,7 +847,7 @@ async def show_devices_page(
 
     devices_text = texts.t(
         'DEVICE_MANAGEMENT_OVERVIEW',
-        ('<b>Управление устройствами</b>\n\nВсего подключено: {total} устройств\nСтраница {page} из {pages}\n\n'),
+        ('<b>Управление устройствами</b>\n\nВсего подключено: {total} устройств\n'),
     ).format(total=len(devices_list), page=pagination.page, pages=pagination.total_pages)
 
     if pagination.items:
@@ -856,10 +856,17 @@ async def show_devices_page(
             '<b>Подключенные устройства:</b>\n',
         )
 
+        _PLATFORM_EMOJI = {
+            'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+            'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+        }
+
         devices_text += '<blockquote>'
         for i, device in enumerate(pagination.items, 1):
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
+            emoji_tag = _PLATFORM_EMOJI.get(platform, '')
             device_info = f'{html_mod.escape(platform)} - {html_mod.escape(device_model)}'
 
             if len(device_info) > 35:
@@ -868,7 +875,7 @@ async def show_devices_page(
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '{device}',
-            ).format(device=device_info)
+            ).format(device=f'{emoji_tag} {device_info}' if emoji_tag else device_info)
 
         devices_text += '</blockquote>\n'
 

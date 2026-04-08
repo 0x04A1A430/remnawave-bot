@@ -555,7 +555,7 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
         await callback.message.edit_text(
             '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_msg_by_sub')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_msg_by_sub')]]
             ),
             parse_mode='HTML',
         )
@@ -583,7 +583,7 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_msg_by_sub')])
+    buttons.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_msg_by_sub')])
 
     await callback.message.edit_text(
         '<b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
@@ -619,7 +619,7 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 История рассылок пуста.
 Отправьте первую рассылку, чтобы увидеть её здесь.
 """
-        keyboard = [[types.InlineKeyboardButton(text='← Назад', callback_data='admin_messages')]]
+        keyboard = [[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_messages')]]
     else:
         text = f'<b>История рассылок</b> (страница {page}/{total_pages})\n\n'
 
@@ -962,7 +962,7 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
 <b>Промокод</b> — откроет форму ввода промокода
 <b>Подключиться</b> — поможет подключить приложение
 <b>Подписка</b> — покажет состояние подписки
-️ <b>Тех. поддержка</b> — свяжет с поддержкой
+️ <b>Поддержка</b> — свяжет с поддержкой
 
 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{media_info}
 
@@ -1015,7 +1015,7 @@ async def show_button_selector(message: types.Message, db_user: User, state: FSM
 <b>Промокод</b> — откроет форму ввода промокода
 <b>Подключиться</b> — поможет подключить приложение
 <b>Подписка</b> — покажет состояние подписки
-️ <b>Тех. поддержка</b> — свяжет с поддержкой
+️ <b>Поддержка</b> — свяжет с поддержкой
 
 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
 

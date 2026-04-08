@@ -26,6 +26,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.button_emoji import parse_button_label
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.payment_logger import payment_logger as logger
 
@@ -86,9 +87,12 @@ class PaymentCommonMixin:
                 )
 
         # Создаем основную кнопку: если есть активная подписка - продлить, иначе купить
+        _raw_btn_text = texts.MENU_EXTEND_SUBSCRIPTION if has_active_subscription else texts.MENU_BUY_SUBSCRIPTION
+        _parsed = parse_button_label(_raw_btn_text)
         first_button = build_miniapp_or_callback_button(
-            text=(texts.MENU_EXTEND_SUBSCRIPTION if has_active_subscription else texts.MENU_BUY_SUBSCRIPTION),
+            text=_parsed.text,
             callback_data=('subscription_extend' if has_active_subscription else 'menu_buy'),
+            icon_custom_emoji_id=_parsed.icon_custom_emoji_id,
         )
 
         keyboard_rows: list[list[InlineKeyboardButton]] = [
@@ -404,7 +408,7 @@ async def send_cart_notification_after_topup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '← Checkout'),
+                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Checkout'),
                             callback_data='return_to_saved_cart',
                         )
                     ],

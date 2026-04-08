@@ -100,32 +100,37 @@ async def _create_freekassa_payment_and_respond(
     payment_url = result.get('payment_url')
 
     # Create keyboard with payment button
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.t(
-                        'PAY_BUTTON',
-                        'Оплатить {amount}₽',
-                    ).format(amount=f'{amount_rub:.0f}'),
-                    url=payment_url,
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
-                    callback_data='menu_balance',
-                )
-            ],
-        ]
+    from app.utils.button_emoji import parse_button_label
+
+    _pay_raw = texts.t('PAY_BUTTON', 'Оплатить {amount}₽').format(amount=f'{amount_rub:.0f}')
+    _pay_parsed = parse_button_label(_pay_raw)
+
+    keyboard_rows = [
+        [
+            InlineKeyboardButton(
+                text=_pay_parsed.text,
+                url=payment_url,
+                **({'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id} if _pay_parsed.icon_custom_emoji_id else {}),
+            )
+        ],
+    ]
+
+    support_url = settings.get_support_contact_url()
+    if support_url:
+        keyboard_rows.append(
+            [InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), url=support_url)]
+        )
+
+    keyboard_rows.append(
+        [InlineKeyboardButton(text=texts.t('BACK_BUTTON', '◀️ Назад'), callback_data='menu_balance')]
     )
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
     response_text = texts.t(
         'FREEKASSA_PAYMENT_CREATED',
         '<b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount}₽</b>\n\n'
-        'Нажмите кнопку ниже для оплаты.\n'
-        'После успешной оплаты баланс будет пополнен автоматически.',
+        'Сумма: <code>{amount}₽</code>',
     ).format(name=html.escape(display_name), amount=f'{amount_rub:.2f}')
 
     if edit_message:

@@ -252,7 +252,7 @@ async def _show_users_list_filtered(
                 types.InlineKeyboardButton(text='Поиск', callback_data='admin_users_search'),
                 types.InlineKeyboardButton(text='Статистика', callback_data='admin_users_stats'),
             ],
-            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')],
+            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')],
         ]
     )
 
@@ -369,7 +369,7 @@ async def show_users_list(
                 types.InlineKeyboardButton(text='Поиск', callback_data='admin_users_search'),
                 types.InlineKeyboardButton(text='Статистика', callback_data='admin_users_stats'),
             ],
-            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')],
+            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')],
         ]
     )
 
@@ -502,7 +502,7 @@ async def show_users_ready_to_renew(
             ],
             [
                 types.InlineKeyboardButton(
-                    text='← Назад',
+                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад',
                     callback_data='admin_users',
                 )
             ],
@@ -622,7 +622,7 @@ async def show_potential_customers(
             ],
             [
                 types.InlineKeyboardButton(
-                    text='← Назад',
+                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад',
                     callback_data='admin_users',
                 )
             ],
@@ -813,7 +813,7 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Обновить', callback_data='admin_users_stats')],
-                [types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')],
+                [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')],
             ]
         ),
     )
@@ -868,7 +868,7 @@ async def _render_user_subscription_overview(
                 )
 
             picker_keyboard.append(
-                [types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             )
             await callback.message.edit_text(
                 text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=picker_keyboard)
@@ -998,7 +998,7 @@ async def _render_user_subscription_overview(
             ]
         ]
 
-    keyboard.append([types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К пользователю', callback_data=f'admin_user_manage_{user_id}')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     return True
@@ -1077,7 +1077,7 @@ async def show_user_transactions(callback: types.CallbackQuery, db_user: User, d
         text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             ]
         ),
     )
@@ -1151,7 +1151,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
         await message.answer(
             f"По запросу '<b>{html.escape(query)}</b>' ничего не найдено",
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')]]
             ),
         )
         await state.clear()
@@ -1199,7 +1199,7 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
 
         keyboard.append([types.InlineKeyboardButton(text=button_text, callback_data=f'admin_user_manage_{user.id}')])
 
-    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')])
+    keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')])
 
     await message.answer(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await state.clear()
@@ -2674,7 +2674,7 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
         await callback.message.edit_text(
             f'Неактивных пользователей (более {settings.INACTIVE_USER_DELETE_MONTHS} месяцев) не найдено',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')]]
             ),
         )
         await callback.answer()
@@ -2709,7 +2709,7 @@ async def show_inactive_users(callback: types.CallbackQuery, db_user: User, db: 
 
     keyboard = [
         [types.InlineKeyboardButton(text='️ Очистить всех', callback_data='admin_cleanup_inactive')],
-        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')],
+        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -2876,7 +2876,7 @@ async def show_user_statistics(callback: types.CallbackQuery, db_user: User, db:
         text,
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='← К пользователю', callback_data=f'admin_user_manage_{user_id}')]
+                [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К пользователю', callback_data=f'admin_user_manage_{user_id}')]
             ]
         ),
     )
@@ -3503,7 +3503,7 @@ async def _show_servers_for_user(
             await callback.message.edit_text(
                 'Доступные серверы не найдены',
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data=back_cb)]]
+                    inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)]]
                 ),
             )
             return
@@ -3550,7 +3550,7 @@ async def _show_servers_for_user(
         keyboard.append(
             [
                 types.InlineKeyboardButton(text='Готово', callback_data=back_cb),
-                types.InlineKeyboardButton(text='← Назад', callback_data=back_cb),
+                types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb),
             ]
         )
 
@@ -3666,7 +3666,7 @@ async def refresh_server_selection_screen(
             await callback.message.edit_text(
                 'Доступные серверы не найдены',
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data=back_cb)]]
+                    inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)]]
                 ),
             )
             return
@@ -3694,7 +3694,7 @@ async def refresh_server_selection_screen(
         keyboard.append(
             [
                 types.InlineKeyboardButton(text='Готово', callback_data=back_cb),
-                types.InlineKeyboardButton(text='← Назад', callback_data=back_cb),
+                types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb),
             ]
         )
 
@@ -4469,7 +4469,7 @@ async def cleanup_inactive_users(callback: types.CallbackQuery, db_user: User, d
     await callback.message.edit_text(
         text,
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_users')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_users')]]
         ),
     )
     await callback.answer()
@@ -4523,7 +4523,7 @@ async def change_subscription_type(callback: types.CallbackQuery, db_user: User,
             [InlineKeyboardButton(text='Сделать триальной', callback_data=f'admin_sub_type_trial_{user_id}{_sid}')]
         )
 
-    keyboard.append([InlineKeyboardButton(text='← Назад', callback_data=back_cb)])
+    keyboard.append([InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)])
 
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -4678,7 +4678,7 @@ async def admin_buy_subscription_confirm(callback: types.CallbackQuery, db_user:
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='← Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
+                            text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
                         )
                     ]
                 ]
@@ -4947,7 +4947,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='← Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
+                            text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад к подписке', callback_data=f'admin_user_subscription_{user_id}'
                         )
                     ]
                 ]
@@ -5015,7 +5015,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
         await callback.message.edit_text(
             '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data=back_cb)]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)]]
             ),
         )
         await callback.answer()
@@ -5044,7 +5044,7 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data=back_cb)])
+    keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)])
 
     await callback.message.edit_text(
         text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
@@ -5104,7 +5104,7 @@ async def admin_buy_tariff_period(callback: types.CallbackQuery, db_user: User, 
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='← К тарифам', callback_data=f'admin_tariff_buy_{user_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К тарифам', callback_data=f'admin_tariff_buy_{user_id}')])
 
     await callback.message.edit_text(
         text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard), parse_mode='HTML'
@@ -5152,7 +5152,7 @@ async def admin_buy_tariff_confirm(callback: types.CallbackQuery, db_user: User,
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='← Назад', callback_data=f'admin_tariff_buy_select_{user_id}_{tariff_id}'
+                            text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'admin_tariff_buy_select_{user_id}_{tariff_id}'
                         )
                     ]
                 ]
@@ -5504,7 +5504,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
         await callback.message.edit_text(
             '<b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data=back_cb)]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)]]
             ),
         )
         await callback.answer()
@@ -5545,7 +5545,7 @@ async def show_admin_tariff_change(callback: types.CallbackQuery, db_user: User,
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data=back_cb)])
+    keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_cb)])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
