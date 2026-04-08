@@ -46,9 +46,9 @@ async def show_admin_panel(callback: types.CallbackQuery, db_user: User, db: Asy
         admin_text = admin_text.replace(
             '\n\nВыберите раздел для управления:',
             (
-                f'\n\n- 🟢 Онлайн сейчас: {users_online}'
-                f'\n- Онлайн сегодня: {users_today}'
-                f'\n- ️ На этой неделе: {users_week}'
+                f'\n\nОнлайн сейчас: {users_online}'
+                f'\nОнлайн сегодня: {users_today}'
+                f'\nНа этой неделе: {users_week}'
                 '\n\nВыберите раздел для управления:'
             ),
         )
