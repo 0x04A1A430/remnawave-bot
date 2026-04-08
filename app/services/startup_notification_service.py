@@ -235,40 +235,16 @@ class StartupNotificationService:
             timestamp = format_local_datetime(datetime.now(UTC), DATETIME_FORMAT)
 
             message = (
-                f'<b>Remnawave Bedolaga Bot</b>\n\n'
+                f'<b>Remnawave Bot</b>\n\n'
                 f'Бот успешно запущен\n\n'
                 f'<blockquote expandable>{system_info}</blockquote>\n\n'
                 f'<i>{timestamp}</i>'
-            )
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text='Поставить звезду',
-                            url=GITHUB_BOT_URL,
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text='Вебкабинет',
-                            url=GITHUB_CABINET_URL,
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text='Сообщество',
-                            url=COMMUNITY_URL,
-                        ),
-                    ],
-                ]
             )
 
             message_kwargs: dict = {
                 'chat_id': self.chat_id,
                 'text': message,
                 'parse_mode': ParseMode.HTML,
-                'reply_markup': keyboard,
                 'disable_web_page_preview': True,
             }
 
@@ -422,7 +398,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         # Текст сообщения (escape HTML в error_type/message — они могут содержать <class ...>)
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'<b>Remnawave Bot</b>\n\n'
             f'Бот упал с ошибкой\n\n'
             f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
             f'<b>Сообщение:</b> <code>{html.escape(error_message[:CRASH_ERROR_PREVIEW_LENGTH])}</code>\n'

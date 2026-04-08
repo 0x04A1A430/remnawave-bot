@@ -285,7 +285,7 @@ async def send_error_to_admin_chat(
         )
 
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
+            f'<b>Remnawave Bot</b>\n\n'
             f'️ Ошибка во время работы\n\n'
             f'<b>Тип:</b> <code>{error_type}</code>\n'
             f'<b>Ошибок в отчёте:</b> {errors_count}\n'
@@ -300,23 +300,11 @@ async def send_error_to_admin_chat(
 
         message_text += f'\n<i>{timestamp}</i>'
 
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text='Сообщить разработчику',
-                        url=DEVELOPER_CONTACT_URL,
-                    ),
-                ],
-            ]
-        )
-
         message_kwargs: dict = {
             'chat_id': chat_id,
             'document': file,
             'caption': message_text,
             'parse_mode': ParseMode.HTML,
-            'reply_markup': keyboard,
         }
 
         if topic_id:
