@@ -61,6 +61,8 @@ from app.handlers.admin import (
 )
 from app.handlers.channel_member import register_handlers as register_channel_member_handlers
 from app.handlers.gift_activation import register_handlers as register_gift_activation_handlers
+from app.handlers.inline_gift import register_handlers as register_inline_gift_handlers
+from app.handlers.admin.inline_gift import register_handlers as register_admin_inline_gift_handlers
 from app.handlers.stars_payments import register_stars_handlers
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
@@ -131,6 +133,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.message.middleware(ContextVarsMiddleware())
     dp.callback_query.middleware(ContextVarsMiddleware())
     dp.pre_checkout_query.middleware(ContextVarsMiddleware())
+    dp.inline_query.middleware(ContextVarsMiddleware())
+    dp.chosen_inline_result.middleware(ContextVarsMiddleware())
     chat_type_filter = ChatTypeFilterMiddleware()
     dp.message.middleware(chat_type_filter)
     dp.callback_query.middleware(chat_type_filter)
@@ -217,6 +221,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_required_channels.register_handlers(dp)
     register_channel_member_handlers(dp)
     register_gift_activation_handlers(dp)
+    register_inline_gift_handlers(dp)
+    register_admin_inline_gift_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     user_contests.register_handlers(dp)

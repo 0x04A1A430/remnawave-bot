@@ -3406,3 +3406,43 @@ class NewsTag(Base):
 
     def __repr__(self) -> str:
         return f"<NewsTag id={self.id} name='{self.name}'>"
+
+
+class InlineGiftSubscription(Base):
+    """Gift subscription issued by admin via inline query."""
+
+    __tablename__ = 'inline_gift_subscriptions'
+    __table_args__ = (
+        Index('ix_inline_gifts_gift_code', 'gift_code', unique=True),
+        Index('ix_inline_gifts_recipient_tg_id', 'recipient_telegram_id'),
+        Index('ix_inline_gifts_sender_id', 'sender_user_id'),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    gift_code = Column(String(64), unique=True, nullable=False, index=True)
+    # Telegram ID of the intended recipient (the user the admin chose)
+    recipient_telegram_id = Column(BigInteger, nullable=False)
+    # The user who sent the gift (admin)
+    sender_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    # Subscription parameters
+    days = Column(Integer, nullable=False)
+    traffic_limit_gb = Column(Integer, nullable=False, default=0, server_default='0')
+    device_limit = Column(Integer, nullable=False, default=1, server_default='1')
+    # Inline message tracking for button update
+    inline_message_id = Column(String(255), nullable=True)
+    inline_chat_id = Column(BigInteger, nullable=True)
+    inline_msg_id = Column(BigInteger, nullable=True)
+    # Status
+    is_activated = Column(Boolean, nullable=False, default=False, server_default='false')
+    activated_at = Column(AwareDateTime(), nullable=True)
+    activated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    # Created subscription id after activation
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True)
+
+    created_at = Column(AwareDateTime(), server_default=func.now())
+
+    sender = relationship('User', foreign_keys=[sender_user_id], lazy='noload')
+    activated_by = relationship('User', foreign_keys=[activated_by_user_id], lazy='noload')
+
+    def __repr__(self) -> str:
+        return f"<InlineGiftSubscription gift_code='{self.gift_code}' activated={self.is_activated}>"
