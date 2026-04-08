@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.45.2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.45.1...v3.45.2) (2026-04-08)
+
+
+### Bug Fixes
+
+* batch bug fixes from user complaints ([31adcfd](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/31adcfded4b161bf515d4d6b25b4395e543208f4))
+* batch bug fixes from user complaints ([78f963b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/78f963bf5e7b3439d7614584c4041f88be5beb4a))
+* исправление парсинга черного списка (поддержка '#' и извлечение username) ([357d94d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/357d94d1b0d7fc8036b00cbb6b75175c29821751))
+* исправление парсинга черного списка (поддержка '#' и извлечение username) ([2f71846](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2f7184627a0fb598a8c0208905cdecf0e4bb04a7))
+
 ## [3.45.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.45.0...v3.45.1) (2026-04-03)
 
 
