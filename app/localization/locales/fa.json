@@ -1253,7 +1253,7 @@
     "PLATEGA_AMOUNT_TOO_LOW": "حداقل مبلغ پرداخت Platega: {amount}",
     "PLATEGA_AMOUNT_TOO_HIGH": "حداکثر مبلغ پرداخت Platega: {amount}",
     "PLATEGA_PAYMENT_ERROR": "خطا در ایجاد پرداخت Platega. بعداً تلاش کنید یا با پشتیبانی تماس بگیرید.",
-    "PLATEGA_PAYMENT_INSTRUCTIONS": "<b>پرداخت از طریق Platega ({method})</b>\n\nمبلغ: {amount}\nشناسه تراکنش: {transaction}\n\n<b>راهنما:</b>\n1. دکمه «پرداخت» را بزنید\n2. مراحل درگاه پرداخت را دنبال کنید\n3. انتقال را تأیید کنید\n4. مبلغ خودکار واریز می‌شود\n\nدر صورت مشکل با {support} تماس بگیرید",
+    "PLATEGA_PAYMENT_INSTRUCTIONS": "<b>پرداخت از طریق Platega ({method})</b>\n\nمبلغ: <code>{amount}</code>\nشناسه تراکنش: <tg-spoiler>{transaction}</tg-spoiler>",
     "PLATEGA_PAY_BUTTON": "پرداخت از طریق {method}",
     "PLATEGA_PAYMENT_ALREADY_CONFIRMED": "پرداخت قبلاً واریز شده",
     "PLATEGA_PAYMENT_STATUS": "وضعیت فعلی پرداخت: {status}",
