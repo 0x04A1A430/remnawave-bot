@@ -525,6 +525,17 @@ class RemnaWaveWebhookService:
             ]
         )
 
+    def _get_device_added_keyboard(self, user: User) -> InlineKeyboardMarkup:
+        texts = get_texts(user.language)
+        deactivate_text = texts.get('WEBHOOK_DEVICE_DEACTIVATE_BUTTON', 'Деактивировать')
+        home_text = texts.get('WEBHOOK_DEVICE_HOME_BUTTON', 'В главное меню')
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [build_miniapp_or_callback_button(text=deactivate_text, callback_data='subscription_reset_devices')],
+                [build_miniapp_or_callback_button(text=home_text, callback_data='back_to_menu')],
+            ]
+        )
+
     def _get_connect_keyboard(self, user: User) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
         button_text = texts.get('CONNECT_BUTTON', 'Connect')
@@ -1239,12 +1250,18 @@ class RemnaWaveWebhookService:
     # Device event handlers (user_hwid_devices scope)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _extract_device_name(data: dict) -> str:
+    _PLATFORM_EMOJI: dict[str, str] = {
+        'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+        'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+    }
+
+    @classmethod
+    def _extract_device_name(cls, data: dict) -> str:
         """Extract device name from webhook payload.
 
         RemnaWave sends device info in data['hwidUserDevice'] nested object.
-        Builds a composite name: "tag (platform)" or just "platform" or hwid short.
+        Builds a composite name with platform emoji: "🪟 Windows (8a2d6c1e)".
         """
         device_obj = data.get('hwidUserDevice')
         if not isinstance(device_obj, dict):
@@ -1256,20 +1273,24 @@ class RemnaWaveWebhookService:
         platform = (device_obj.get('platform') or '').strip()
         hwid = (device_obj.get('hwid') or '').strip()
 
+        emoji = cls._PLATFORM_EMOJI.get(platform, '')
+
         if tag and platform:
-            return html.escape(f'{tag} ({platform})')
-        if tag:
-            return html.escape(tag)
-        if platform and hwid:
-            # Show platform + short hwid suffix for identification
+            text = html.escape(f'{tag} ({platform})')
+        elif tag:
+            text = html.escape(tag)
+        elif platform and hwid:
             hwid_short = hwid[:8] if len(hwid) > 8 else hwid
-            return html.escape(f'{platform} ({hwid_short})')
-        if platform:
-            return html.escape(platform)
-        if hwid:
+            text = html.escape(f'{platform} ({hwid_short})')
+        elif platform:
+            text = html.escape(platform)
+        elif hwid:
             hwid_short = hwid[:12] if len(hwid) > 12 else hwid
-            return html.escape(hwid_short)
-        return ''
+            text = html.escape(hwid_short)
+        else:
+            return ''
+
+        return f'{emoji} {text}' if emoji else text
 
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
@@ -1279,7 +1300,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
-            reply_markup=self._get_subscription_keyboard(user),
+            reply_markup=self._get_device_added_keyboard(user),
             format_kwargs={'device': device_name or '—'},
             subscription=subscription,
         )

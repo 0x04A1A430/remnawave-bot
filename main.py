@@ -683,7 +683,7 @@ async def main():
             success_message='Aiogram polling запущен',
         ) as stage:
             if polling_enabled:
-                polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=False))
+                polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=False, allowed_updates=dp.resolve_used_update_types()))
                 stage.log('skip_updates=False — накопившиеся обновления будут обработаны')
             else:
                 polling_task = None

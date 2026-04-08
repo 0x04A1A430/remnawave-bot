@@ -1783,5 +1783,22 @@
   "INLINE_GIFT_DAYS_MANY": "{n} days",
   "INLINE_GIFT_LABEL_DAYS_SHORT": "{n} d.",
   "INLINE_GIFT_LABEL_YEAR": "1 yr.",
-  "INLINE_GIFT_LABEL_YEARS": "{n} yr."
+  "INLINE_GIFT_LABEL_YEARS": "{n} yr.",
+  "INLINE_GIFT_TITLE": "Gift subscription",
+  "INLINE_GIFT_CONFIRM_PROMPT": "Would you like to activate it?",
+  "INLINE_GIFT_LABEL_DURATION": "Duration",
+  "INLINE_GIFT_LABEL_TRAFFIC": "Traffic",
+  "INLINE_GIFT_LABEL_DEVICES": "Devices",
+  "INLINE_GIFT_DAYS_SUFFIX": " d.",
+  "INLINE_GIFT_CAPTION_HEADER": "Gift subscription for",
+  "INLINE_GIFT_CAPTION_HINT": "Click the button below to activate.",
+  "INLINE_GIFT_GB_SUFFIX": "GB",
+  "INLINE_GIFT_QUERY_HINT": "@user days [gb [devices]]",
+  "INLINE_GIFT_ITEM_DESCRIPTION_SHORT": "Gift subscription",
+  "INLINE_GIFT_SUCCESS_DAYS": "✅ <b>Gift activated!</b>\n\n+{days_str} added to your account.",
+  "INLINE_GIFT_NO_SUB": "no subscription",
+  "INLINE_GIFT_DEVICES_SUFFIX": "dev.",
+  "INLINE_GIFT_CANCELLED_BUTTON": "✗ Cancelled",
+  "WEBHOOK_DEVICE_DEACTIVATE_BUTTON": "Deactivate",
+  "WEBHOOK_DEVICE_HOME_BUTTON": "Main menu"
 }
