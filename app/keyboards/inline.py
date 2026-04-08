@@ -894,7 +894,7 @@ def get_happ_cryptolink_keyboard(
                 make_button(
                     text=texts.t(
                         'BACK_TO_MAIN_MENU_BUTTON',
-                        '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню',
+                        '← В главное меню',
                     ),
                     callback_data='back_to_menu',
                 )
@@ -955,7 +955,7 @@ def get_server_status_keyboard(
             nav_row.append(
                 make_button(
                     text=texts.t(
-                        'SERVER_STATUS_PREV_PAGE', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад'
+                        'SERVER_STATUS_PREV_PAGE', '← Назад'
                     ),
                     callback_data=f'server_status_page:{current_page - 1}',
                 )
@@ -1862,7 +1862,7 @@ def get_pagination_keyboard(
         if current_page > 1:
             row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> '),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'{callback_prefix}_page_{current_page - 1}',
                 )
             )
@@ -2558,7 +2558,7 @@ def get_connection_guide_keyboard(
             [
                 make_button(
                     text=texts.t(
-                        'BACK_TO_SUBSCRIPTION', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К подписке'
+                        'BACK_TO_SUBSCRIPTION', '← К подписке'
                     ),
                     callback_data=back_cb,
                 )
@@ -2591,7 +2591,7 @@ def get_app_selection_keyboard(device_type: str, apps: list, language: str = DEF
             [
                 make_button(
                     text=texts.t(
-                        'BACK_TO_SUBSCRIPTION', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К подписке'
+                        'BACK_TO_SUBSCRIPTION', '← К подписке'
                     ),
                     callback_data='menu_subscription',
                 )
@@ -2727,7 +2727,7 @@ def get_devices_management_keyboard(
         if pagination.has_prev:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> '),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'devices_page_{pagination.prev_page}',
                 )
             )
@@ -2873,7 +2873,7 @@ def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> Inl
             [
                 make_button(
                     text=texts.t(
-                        'BACK_TO_SUBSCRIPTION', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К подписке'
+                        'BACK_TO_SUBSCRIPTION', '← К подписке'
                     ),
                     callback_data='menu_subscription',
                 )
@@ -2926,7 +2926,7 @@ def get_my_tickets_keyboard(
         if current_page > 1:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> '),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'{page_prefix}{current_page - 1}',
                 )
             )
@@ -3049,7 +3049,7 @@ def get_admin_tickets_keyboard(
         if current_page > 1:
             nav_row.append(
                 make_button(
-                    text=texts.t('PAGINATION_PREV', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> '),
+                    text=texts.t('PAGINATION_PREV', '← '),
                     callback_data=f'admin_tickets_page_{scope}_{current_page - 1}',
                 )
             )

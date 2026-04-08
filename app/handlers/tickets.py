@@ -587,7 +587,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'ticket_view_page_{ticket_id}_{page - 1}')
+                types.InlineKeyboardButton(text='← ', callback_data=f'ticket_view_page_{ticket_id}_{page - 1}')
             )
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
         if page < total_pages:
@@ -948,7 +948,7 @@ async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContex
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_SUPPORT', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К поддержке'), callback_data='menu_support'
+                        text=texts.t('BACK_TO_SUPPORT', '← К поддержке'), callback_data='menu_support'
                     )
                 ]
             ]
@@ -967,7 +967,7 @@ async def cancel_ticket_reply(callback: types.CallbackQuery, state: FSMContext, 
         texts.t('TICKET_REPLY_CANCELLED', 'Ответ отменен.'),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.t('BACK_TO_TICKETS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К тикетам'), callback_data='my_tickets')]
+                [types.InlineKeyboardButton(text=texts.t('BACK_TO_TICKETS', '← К тикетам'), callback_data='my_tickets')]
             ]
         ),
     )

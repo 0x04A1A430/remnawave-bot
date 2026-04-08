@@ -192,7 +192,7 @@ async def list_user_messages(callback: types.CallbackQuery, db_user: User, db: A
 
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'list_user_messages:{page - 1}'))
+        nav_buttons.append(InlineKeyboardButton(text='← Назад', callback_data=f'list_user_messages:{page - 1}'))
 
     nav_buttons.append(InlineKeyboardButton(text='Добавить', callback_data='add_user_message'))
 

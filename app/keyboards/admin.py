@@ -657,7 +657,7 @@ def get_referral_contest_manage_keyboard(
     rows.append(
         [
             make_button(
-                text=_t(texts, 'ADMIN_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку'),
+                text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'),
                 callback_data='admin_contests_list',
             )
         ]
@@ -698,7 +698,7 @@ def get_campaign_management_keyboard(campaign_id: int, is_active: bool, language
                     callback_data=f'admin_campaign_delete_{campaign_id}',
                 )
             ],
-            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку'), callback_data='admin_campaigns_list')],
+            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'), callback_data='admin_campaigns_list')],
         ]
     )
 
@@ -834,7 +834,7 @@ def get_promocode_management_keyboard(promo_id: int, language: str = 'ru') -> In
                     text=_t(texts, 'ADMIN_PROMOCODE_DELETE', '️ Удалить'), callback_data=f'promo_delete_{promo_id}'
                 ),
             ],
-            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку'), callback_data='admin_promo_list')],
+            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'), callback_data='admin_promo_list')],
         ]
     )
 
@@ -1260,7 +1260,7 @@ def get_promocode_list_keyboard(
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_promo_list_page_{page - 1}'))
+            pagination_row.append(make_button(text='← ', callback_data=f'admin_promo_list_page_{page - 1}'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -1379,7 +1379,7 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_msg_history_page_{page - 1}'))
+            pagination_row.append(make_button(text='← ', callback_data=f'admin_msg_history_page_{page - 1}'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -1470,7 +1470,7 @@ def get_sync_result_keyboard(sync_type: str, has_errors: bool = False, language:
                 make_button(text=_t(texts, 'ADMIN_STATS_BUTTON', 'Статистика'), callback_data='admin_rw_system'),
                 make_button(text=_t(texts, 'ADMIN_SYNC_VALIDATE', 'Валидация'), callback_data='sync_validate'),
             ],
-            [make_button(text=_t(texts, 'ADMIN_SYNC_BACK', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К синхронизации'), callback_data='admin_rw_sync')],
+            [make_button(text=_t(texts, 'ADMIN_SYNC_BACK', '← К синхронизации'), callback_data='admin_rw_sync')],
             [make_button(text=_t(texts, 'ADMIN_BACK_TO_MAIN', 'В главное меню'), callback_data='admin_remnawave')],
         ]
     )
@@ -1569,7 +1569,7 @@ def get_squad_edit_keyboard(squad_uuid: str, language: str = 'ru') -> InlineKeyb
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_BACK_TO_SQUADS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад к сквадам'),
+                    text=_t(texts, 'ADMIN_BACK_TO_SQUADS', '← Назад к сквадам'),
                     callback_data=f'admin_squad_manage_{squad_uuid}',
                 )
             ],
@@ -1611,7 +1611,7 @@ def get_monitoring_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 ),
                 make_button(text='️ Настройки трафика', callback_data='admin_mon_traffic_settings'),
             ],
-            [make_button(text=_t(texts, 'ADMIN_BACK_TO_ADMIN', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад в админку'), callback_data='admin_panel')],
+            [make_button(text=_t(texts, 'ADMIN_BACK_TO_ADMIN', '← Назад в админку'), callback_data='admin_panel')],
         ]
     )
 
@@ -1643,7 +1643,7 @@ def get_monitoring_logs_navigation_keyboard(
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(make_button(text='← ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page_info'))
 
@@ -1675,7 +1675,7 @@ def get_monitoring_logs_navigation_keyboard(
     keyboard.append(
         [
             make_button(
-                text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад к мониторингу'), callback_data='admin_monitoring'
+                text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '← Назад к мониторингу'), callback_data='admin_monitoring'
             )
         ]
     )
@@ -1696,7 +1696,7 @@ def get_log_detail_keyboard(log_id: int, current_page: int = 1, language: str = 
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MONITORING_BACK_TO_LOGS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку логов'),
+                    text=_t(texts, 'ADMIN_MONITORING_BACK_TO_LOGS', '← К списку логов'),
                     callback_data=f'admin_mon_logs_page_{current_page}',
                 )
             ],
@@ -1820,7 +1820,7 @@ def get_monitoring_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К мониторингу'), callback_data='admin_monitoring'
+                    text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '← К мониторингу'), callback_data='admin_monitoring'
                 )
             ],
         ]
@@ -1936,12 +1936,12 @@ def get_admin_pagination_keyboard(
         row = []
 
         if current_page > 1:
-            row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
+            row.append(make_button(text='← ', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
 
         row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            row.append(make_button(text='️ →', callback_data=f'{callback_prefix}_page_{current_page + 1}'))
+            row.append(make_button(text=' →', callback_data=f'{callback_prefix}_page_{current_page + 1}'))
 
         keyboard.append(row)
 
