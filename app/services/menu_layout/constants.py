@@ -209,7 +209,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'support': {
             'type': 'builtin',
             'builtin_id': 'support',
-            'text': {'ru': 'Тех. поддержка', 'en': 'Support'},
+            'text': {'ru': 'Поддержка', 'en': 'Support'},
             'action': 'https://t.me/',
             'enabled': True,
             'visibility': 'all',
@@ -372,8 +372,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'back_to_menu',
         'name': 'Назад в меню',
         'category': 'menu',
-        'icon': '← ',
-        'text': {'ru': '← Назад', 'en': '← Back'},
+        'icon': '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
+        'text': {'ru': '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', 'en': '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Back'},
     },
     {
         'callback_data': 'menu_faq',

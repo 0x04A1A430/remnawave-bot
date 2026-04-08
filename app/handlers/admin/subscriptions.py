@@ -96,7 +96,7 @@ async def show_subscriptions_menu(callback: types.CallbackQuery, db_user: User, 
             types.InlineKeyboardButton(text='Статистика', callback_data='admin_subs_stats'),
             types.InlineKeyboardButton(text='География', callback_data='admin_subs_countries'),
         ],
-        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
+        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_panel')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -135,7 +135,7 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(types.InlineKeyboardButton(text='← ', callback_data=f'admin_subs_list_page_{page - 1}'))
+            nav_row.append(types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_subs_list_page_{page - 1}'))
 
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -147,7 +147,7 @@ async def show_subscriptions_list(callback: types.CallbackQuery, db_user: User, 
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Обновить', callback_data='admin_subs_list')],
-            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_subscriptions')],
+            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_subscriptions')],
         ]
     )
 
@@ -201,7 +201,7 @@ async def show_expiring_subscriptions(callback: types.CallbackQuery, db_user: Us
     keyboard = [
         [types.InlineKeyboardButton(text='Отправить напоминания', callback_data='admin_send_expiry_reminders')],
         [types.InlineKeyboardButton(text='Обновить', callback_data='admin_subs_expiring')],
-        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_subscriptions')],
+        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_subscriptions')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -250,7 +250,7 @@ async def show_subscriptions_stats(callback: types.CallbackQuery, db_user: User,
         #     types.InlineKeyboardButton(text="Графики", callback_data="admin_subs_charts")
         # ],
         # [types.InlineKeyboardButton(text="Обновить", callback_data="admin_subs_stats")],
-        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_subscriptions')]
+        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_subscriptions')]
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -337,7 +337,7 @@ async def show_countries_management(callback: types.CallbackQuery, db_user: User
             types.InlineKeyboardButton(text='Статистика нод', callback_data='admin_rw_nodes'),
             types.InlineKeyboardButton(text='Сквады', callback_data='admin_rw_squads'),
         ],
-        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_subscriptions')],
+        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_subscriptions')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -387,7 +387,7 @@ async def send_expiry_reminders(callback: types.CallbackQuery, db_user: User, db
     await callback.message.edit_text(
         f'Напоминания отправлены: {sent_count} из {len(expiring_subs)}',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_subs_expiring')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_subs_expiring')]]
         ),
     )
     await callback.answer()

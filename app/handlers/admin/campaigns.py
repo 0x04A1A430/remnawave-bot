@@ -104,7 +104,7 @@ def _build_campaign_servers_keyboard(
     keyboard.append(
         [
             types.InlineKeyboardButton(text='Сохранить', callback_data=save_callback),
-            types.InlineKeyboardButton(text='← Назад', callback_data=back_callback),
+            types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=back_callback),
         ]
     )
 
@@ -192,7 +192,7 @@ async def show_campaigns_overall_stats(
     await callback.message.edit_text(
         '\n'.join(text),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')]]
         ),
     )
     await callback.answer()
@@ -229,7 +229,7 @@ async def show_campaigns_list(
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='Создать', callback_data='admin_campaigns_create')],
-                    [types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')],
+                    [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')],
                 ]
             ),
         )
@@ -1159,7 +1159,7 @@ async def show_campaign_stats(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='← Назад',
+                        text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад',
                         callback_data=f'admin_campaign_manage_{campaign_id}',
                     )
                 ]
@@ -1232,7 +1232,7 @@ async def start_campaign_creation(
     await callback.message.edit_text(
         '🆕 <b>Создание рекламной кампании</b>\n\nВведите название кампании:',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')]]
         ),
     )
     await state.set_state(AdminStates.creating_campaign_name)
@@ -1312,7 +1312,7 @@ async def select_campaign_bonus_type(
         await callback.message.edit_text(
             'Введите сумму бонуса на баланс (в рублях):',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')]]
             ),
         )
     elif bonus_type == 'subscription':
@@ -1320,7 +1320,7 @@ async def select_campaign_bonus_type(
         await callback.message.edit_text(
             'Введите длительность пробной подписки в днях (1-730):',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')]]
             ),
         )
     elif bonus_type == 'tariff':
@@ -1343,7 +1343,7 @@ async def select_campaign_bonus_type(
                     )
                 ]
             )
-        keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')])
+        keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')])
 
         await state.set_state(AdminStates.creating_campaign_tariff_select)
         await callback.message.edit_text(
@@ -1594,7 +1594,7 @@ async def select_campaign_tariff(
     await callback.message.edit_text(
         f'Выбран тариф: <b>{html.escape(tariff.name)}</b>\n\nВведите длительность тарифа в днях (1-730):',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')]]
+            inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_campaigns')]]
         ),
     )
     await callback.answer()
@@ -1689,7 +1689,7 @@ async def start_edit_campaign_tariff(
                 )
             ]
         )
-    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data=f'admin_campaign_edit_{campaign_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'admin_campaign_edit_{campaign_id}')])
 
     current_tariff_name = 'Не выбран'
     if campaign.tariff:

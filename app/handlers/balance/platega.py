@@ -338,34 +338,43 @@ async def process_platega_payment_amount(
     transaction_id = payment_result.get('transaction_id')
     method_title = settings.get_platega_method_display_title(method_code)
 
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t(
-                        'PLATEGA_PAY_BUTTON',
-                        'Оплатить через {method}',
-                    ).format(method=method_title),
-                    url=redirect_url,
-                )
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
-                    callback_data=f'check_platega_{local_payment_id}',
-                )
-            ],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
-        ]
-    )
+    from app.utils.button_emoji import parse_button_label
+
+    _pay_raw = texts.t('PLATEGA_PAY_BUTTON', 'Оплатить через {method}').format(method=method_title)
+    _pay_parsed = parse_button_label(_pay_raw)
+
+    keyboard_rows = [
+        [
+            types.InlineKeyboardButton(
+                text=_pay_parsed.text,
+                url=redirect_url,
+                **({'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id} if _pay_parsed.icon_custom_emoji_id else {}),
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
+                callback_data=f'check_platega_{local_payment_id}',
+            )
+        ],
+    ]
+
+    support_url = settings.get_support_contact_url()
+    if support_url:
+        keyboard_rows.append(
+            [types.InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), url=support_url)]
+        )
+
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')])
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
     instructions_template = texts.t(
         'PLATEGA_PAYMENT_INSTRUCTIONS',
         (
             '<b>Оплата через Platega ({method})</b>\n\n'
-            'Сумма: {amount}\n'
-            'ID транзакции: {transaction}\n\n'
-            'Если возникнут проблемы, обратитесь в {support}'
+            'Сумма: <code>{amount}</code>\n'
+            'ID транзакции: <tg-spoiler>{transaction}</tg-spoiler>'
         ),
     )
 
@@ -389,7 +398,6 @@ async def process_platega_payment_amount(
             method=method_title,
             amount=settings.format_price(amount_kopeks),
             transaction=transaction_id or local_payment_id,
-            support=settings.get_support_contact_display_html(),
         ),
         reply_markup=keyboard,
         parse_mode='HTML',

@@ -610,7 +610,7 @@ def get_traffic_switch_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text='← Назад' if language_code in {'ru', 'fa'} else '← Back',
+                text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад' if language_code in {'ru', 'fa'} else '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Back',
                 callback_data=back_callback,
             )
         ]

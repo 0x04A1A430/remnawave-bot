@@ -22,7 +22,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'stars',
                 'name': 'Telegram Stars',
-                'icon': '⭐',
+                'icon': "<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji>",
                 'description': 'быстро и удобно',
                 'callback': 'topup_stars',
             }
@@ -94,7 +94,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'cryptobot',
                 'name': 'Криптовалюта',
-                'icon': '',
+                'icon': "<tg-emoji emoji-id='5771755323572359189'>💎</tg-emoji>",
                 'description': 'через CryptoBot',
                 'callback': 'topup_cryptobot',
             }
@@ -116,11 +116,13 @@ def get_available_payment_methods() -> list[dict[str, str]]:
         if settings.PLATEGA_INLINE_METHODS:
             for method_code in settings.get_platega_active_methods():
                 info = settings.get_platega_method_definitions().get(method_code, {})
+                title = info.get('title', info.get('name', f'Метод {method_code}'))
                 methods.append(
                     {
                         'id': f'platega_m{method_code}',
                         'name': info.get('name', f'Метод {method_code}'),
-                        'icon': info.get('title', '').split(' ', 1)[0] if info.get('title') else '',
+                        'icon': '',
+                        'title': title,
                         'description': f'через {platega_name}',
                         'callback': f'topup_platega_m{method_code}',
                     }
@@ -189,7 +191,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             {
                 'id': 'support',
                 'name': 'Через поддержку',
-                'icon': '️',
+                'icon': '',
                 'description': 'другие способы',
                 'callback': 'topup_support',
             }
@@ -244,10 +246,14 @@ def get_payment_methods_text(language: str) -> str:
 
     for method in methods:
         method_id = method['id'].upper()
-        name = texts.t(
-            f'PAYMENT_METHOD_{method_id}_NAME',
-            f'{method["icon"]} <b>{method["name"]}</b>',
-        )
+        # Для platega inline-методов используем title (уже содержит emoji) как имя
+        if method_id.startswith('PLATEGA_M') and method.get('title'):
+            name = method['title']
+        else:
+            name = texts.t(
+                f'PAYMENT_METHOD_{method_id}_NAME',
+                f'{method["icon"]} <b>{method["name"]}</b>',
+            )
         description = texts.t(
             f'PAYMENT_METHOD_{method_id}_DESCRIPTION',
             method['description'],

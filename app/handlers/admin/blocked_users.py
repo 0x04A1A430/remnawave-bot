@@ -107,8 +107,8 @@ class BlockedUsersText(Enum):
     BUTTON_MARK_BLOCKED = 'Пометить как заблокированных'
     BUTTON_CONFIRM = 'Подтвердить'
     BUTTON_CANCEL = 'Отмена'
-    BUTTON_BACK = '← Назад'
-    BUTTON_BACK_TO_USERS = '← К пользователям'
+    BUTTON_BACK = '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад'
+    BUTTON_BACK_TO_USERS = '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К пользователям'
 
 
 class BlockedUsersCallback(Enum):
@@ -195,7 +195,7 @@ def get_blocked_list_keyboard(
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='← ',
+                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page - 1}',
                 )
             )

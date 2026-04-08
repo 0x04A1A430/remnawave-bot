@@ -18,57 +18,57 @@ def get_admin_main_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_USERS_SUBSCRIPTIONS', 'Юзеры/Подписки'),
+                    text=_t(texts, 'ADMIN_MAIN_USERS_SUBSCRIPTIONS', "<tg-emoji emoji-id='5771887475421090729'>👤</tg-emoji> Юзеры/Подписки"),
                     callback_data='admin_submenu_users',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_SERVERS', 'Серверы'),
+                    text=_t(texts, 'ADMIN_MAIN_SERVERS', "<tg-emoji emoji-id='5967816500415827773'>💻</tg-emoji> Серверы"),
                     callback_data='admin_servers',
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_TARIFFS', 'Тарифы'),
+                    text=_t(texts, 'ADMIN_MAIN_TARIFFS', "<tg-emoji emoji-id='5875033614705495771'>🎛</tg-emoji> Тарифы"),
                     callback_data='admin_tariffs',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_PRICING', 'Цены'),
+                    text=_t(texts, 'ADMIN_MAIN_PRICING', "<tg-emoji emoji-id='5875078273775439450'>🔼</tg-emoji> Цены"),
                     callback_data='admin_pricing',
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_PROMO_STATS', 'Промокоды/Статистика'),
+                    text=_t(texts, 'ADMIN_MAIN_PROMO_STATS', "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Промокоды/Статистика"),
                     callback_data='admin_submenu_promo',
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_SUPPORT', 'Поддержка'),
+                    text=_t(texts, 'ADMIN_MAIN_SUPPORT', "<tg-emoji emoji-id='5967280668885913944'>✉️</tg-emoji> Поддержка"),
                     callback_data='admin_submenu_support',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_MESSAGES', 'Сообщения'),
+                    text=_t(texts, 'ADMIN_MAIN_MESSAGES', "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> Сообщения"),
                     callback_data='admin_submenu_communications',
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_SETTINGS', '️ Настройки'),
+                    text=_t(texts, 'ADMIN_MAIN_SETTINGS', "<tg-emoji emoji-id='5877260593903177342'>⚙</tg-emoji> Настройки"),
                     callback_data='admin_submenu_settings',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_SYSTEM', '️ Система'),
+                    text=_t(texts, 'ADMIN_MAIN_SYSTEM', "<tg-emoji emoji-id='5877410604225924969'>🔄</tg-emoji> Система"),
                     callback_data='admin_submenu_system',
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_TRIALS', 'Триалы'),
+                    text=_t(texts, 'ADMIN_MAIN_TRIALS', "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Триалы"),
                     callback_data='admin_trials',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_MAIN_PAYMENTS', 'Пополнения'),
+                    text=_t(texts, 'ADMIN_MAIN_PAYMENTS', "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Пополнения"),
                     callback_data='admin_payments',
                 ),
             ],
@@ -104,7 +104,7 @@ def get_admin_promo_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMark
             [make_button(text=texts.ADMIN_CAMPAIGNS, callback_data='admin_campaigns')],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_CONTESTS', 'Конкурсы'),
+                    text=_t(texts, 'ADMIN_CONTESTS', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Конкурсы"),
                     callback_data='admin_contests',
                 )
             ],
@@ -122,23 +122,23 @@ def get_admin_communications_submenu_keyboard(language: str = 'ru') -> InlineKey
             [make_button(text=texts.ADMIN_MESSAGES, callback_data='admin_messages')],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_COMMUNICATIONS_POLLS', '️ Опросы'),
+                    text=_t(texts, 'ADMIN_COMMUNICATIONS_POLLS', "<tg-emoji emoji-id='5875271289605722323'>🍔</tg-emoji> Опросы"),
                     callback_data='admin_polls',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_COMMUNICATIONS_PROMO_OFFERS', 'Промо-предложения'),
+                    text=_t(texts, 'ADMIN_COMMUNICATIONS_PROMO_OFFERS', "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> Промо-предложения"),
                     callback_data='admin_promo_offers',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_COMMUNICATIONS_WELCOME_TEXT', 'Приветственный текст'),
+                    text=_t(texts, 'ADMIN_COMMUNICATIONS_WELCOME_TEXT', "<tg-emoji emoji-id='5967280668885913944'>✉️</tg-emoji> Приветственный текст"),
                     callback_data='welcome_text_panel',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_COMMUNICATIONS_MENU_MESSAGES', 'Сообщения в меню'),
+                    text=_t(texts, 'ADMIN_COMMUNICATIONS_MENU_MESSAGES', "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> Сообщения в меню"),
                     callback_data='user_messages_panel',
                 ),
             ],
@@ -152,15 +152,15 @@ def get_admin_support_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMa
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [make_button(text=_t(texts, 'ADMIN_SUPPORT_TICKETS', 'Тикеты поддержки'), callback_data='admin_tickets')],
+            [make_button(text=_t(texts, 'ADMIN_SUPPORT_TICKETS', "<tg-emoji emoji-id='5936017305585586269'>🪪</tg-emoji> Тикеты поддержки"), callback_data='admin_tickets')],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SUPPORT_AUDIT', 'Аудит модераторов'), callback_data='admin_support_audit'
+                    text=_t(texts, 'ADMIN_SUPPORT_AUDIT', "<tg-emoji emoji-id='5962916891918864588'>👁</tg-emoji> Аудит модераторов"), callback_data='admin_support_audit'
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SUPPORT_SETTINGS', 'Настройки поддержки'),
+                    text=_t(texts, 'ADMIN_SUPPORT_SETTINGS', "<tg-emoji emoji-id='5875462364110787088'>🗂</tg-emoji> Настройки поддержки"),
                     callback_data='admin_support_settings',
                 )
             ],
@@ -180,49 +180,49 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_BOT_CONFIG', 'Конфигурация бота'),
+                    text=_t(texts, 'ADMIN_SETTINGS_BOT_CONFIG', "<tg-emoji emoji-id='5877260593903177342'>⚙</tg-emoji> Конфигурация бота"),
                     callback_data='admin_bot_config',
                 ),
             ],
             [
                 make_button(
-                    text=texts.t('ADMIN_MONITORING_SETTINGS', '️ Настройки мониторинга'),
+                    text=texts.t('ADMIN_MONITORING_SETTINGS', "<tg-emoji emoji-id='5874986954180791957'>📶</tg-emoji> Настройки мониторинга"),
                     callback_data='admin_mon_settings',
                 )
             ],
             [
                 make_button(text=texts.ADMIN_RULES, callback_data='admin_rules'),
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_MAINTENANCE', 'Техработы'), callback_data='maintenance_panel'
+                    text=_t(texts, 'ADMIN_SETTINGS_MAINTENANCE', "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Техработы"), callback_data='maintenance_panel'
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_PRIVACY_POLICY', '️ Политика конф.'),
+                    text=_t(texts, 'ADMIN_SETTINGS_PRIVACY_POLICY', "<tg-emoji emoji-id='5877301185639091664'>📄</tg-emoji> Политика конф."),
                     callback_data='admin_privacy_policy',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_PUBLIC_OFFER', 'Публичная оферта'),
+                    text=_t(texts, 'ADMIN_SETTINGS_PUBLIC_OFFER', "<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Публичная оферта"),
                     callback_data='admin_public_offer',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_FAQ', 'FAQ'),
+                    text=_t(texts, 'ADMIN_SETTINGS_FAQ', "<tg-emoji emoji-id='5886330010054168711'>📝</tg-emoji> FAQ"),
                     callback_data='admin_faq',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_REQUIRED_CHANNELS', 'Обязательные каналы'),
+                    text=_t(texts, 'ADMIN_SETTINGS_REQUIRED_CHANNELS', "<tg-emoji emoji-id='5909201569898827582'>🔔</tg-emoji> Обязательные каналы"),
                     callback_data='reqch:list',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_APP_CONFIG', 'Конфиг приложений'),
+                    text=_t(texts, 'ADMIN_SETTINGS_APP_CONFIG', "<tg-emoji emoji-id='5875431869842985304'>🎛</tg-emoji> Конфиг приложений"),
                     callback_data='admin_remna_config',
                 )
             ],
@@ -237,11 +237,11 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                make_button(text=_t(texts, 'ADMIN_SYSTEM_UPDATES', 'Обновления'), callback_data='admin_updates'),
-                make_button(text=_t(texts, 'ADMIN_SYSTEM_BACKUPS', '️ Бекапы'), callback_data='backup_panel'),
+                make_button(text=_t(texts, 'ADMIN_SYSTEM_UPDATES', "<tg-emoji emoji-id='5875082500023258804'>⬅️</tg-emoji> Обновления"), callback_data='admin_updates'),
+                make_button(text=_t(texts, 'ADMIN_SYSTEM_BACKUPS', "<tg-emoji emoji-id='5899757765743615694'>⬇️</tg-emoji> Бекапы"), callback_data='backup_panel'),
             ],
-            [make_button(text=_t(texts, 'ADMIN_SYSTEM_LOGS', 'Логи'), callback_data='admin_system_logs')],
-            [make_button(text=texts.t('ADMIN_REPORTS', 'Отчеты'), callback_data='admin_reports')],
+            [make_button(text=_t(texts, 'ADMIN_SYSTEM_LOGS', "<tg-emoji emoji-id='5877316724830768997'>🗃</tg-emoji> Логи"), callback_data='admin_system_logs')],
+            [make_button(text=texts.t('ADMIN_REPORTS', "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Отчеты"), callback_data='admin_reports')],
             [make_button(text=texts.BACK, callback_data='admin_panel')],
         ]
     )
@@ -254,7 +254,7 @@ def get_admin_trials_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_TRIALS_RESET_BUTTON', '️ Сбросить все триалы'),
+                    text=_t(texts, 'ADMIN_TRIALS_RESET_BUTTON', "<tg-emoji emoji-id='5879915802815107172'>🗑</tg-emoji> Сбросить все триалы"),
                     callback_data='admin_trials_reset',
                 )
             ],
@@ -270,17 +270,17 @@ def get_admin_reports_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_REPORTS_PREVIOUS_DAY', 'За вчера'), callback_data='admin_reports_daily'
+                    text=_t(texts, 'ADMIN_REPORTS_PREVIOUS_DAY', "<tg-emoji emoji-id='5877396173135811032'>⌨</tg-emoji> За вчера"), callback_data='admin_reports_daily'
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_REPORTS_LAST_WEEK', '️ За неделю'), callback_data='admin_reports_weekly'
+                    text=_t(texts, 'ADMIN_REPORTS_LAST_WEEK', "<tg-emoji emoji-id='5877396173135811032'>⌨</tg-emoji> За неделю"), callback_data='admin_reports_weekly'
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_REPORTS_LAST_MONTH', 'За месяц'), callback_data='admin_reports_monthly'
+                    text=_t(texts, 'ADMIN_REPORTS_LAST_MONTH', "<tg-emoji emoji-id='5877396173135811032'>⌨</tg-emoji> За месяц"), callback_data='admin_reports_monthly'
                 )
             ],
             [make_button(text=texts.BACK, callback_data='admin_panel')],
@@ -304,26 +304,26 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                make_button(text=_t(texts, 'ADMIN_USERS_ALL', 'Все пользователи'), callback_data='admin_users_list'),
-                make_button(text=_t(texts, 'ADMIN_USERS_SEARCH', 'Поиск'), callback_data='admin_users_search'),
+                make_button(text=_t(texts, 'ADMIN_USERS_ALL', "<tg-emoji emoji-id='5814247475141153332'>👤</tg-emoji> Все пользователи"), callback_data='admin_users_list'),
+                make_button(text=_t(texts, 'ADMIN_USERS_SEARCH', "<tg-emoji emoji-id='5874960879434338403'>🔎</tg-emoji> Поиск"), callback_data='admin_users_search'),
             ],
             [
                 make_button(text=texts.ADMIN_STATISTICS, callback_data='admin_users_stats'),
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_INACTIVE', '️ Неактивные'), callback_data='admin_users_inactive'
+                    text=_t(texts, 'ADMIN_USERS_INACTIVE', "<tg-emoji emoji-id='5909123362839335003'>🔕</tg-emoji> Неактивные"), callback_data='admin_users_inactive'
                 ),
             ],
-            [make_button(text=_t(texts, 'ADMIN_USERS_FILTERS', '️ Фильтры'), callback_data='admin_users_filters')],
+            [make_button(text=_t(texts, 'ADMIN_USERS_FILTERS', "<tg-emoji emoji-id='5875462364110787088'>🗂</tg-emoji> Фильтры"), callback_data='admin_users_filters')],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_BLACKLIST', 'Черный список'),
+                    text=_t(texts, 'ADMIN_USERS_BLACKLIST', "<tg-emoji emoji-id='5879937509579820068'>🗑</tg-emoji> Черный список"),
                     callback_data='admin_blacklist_settings',
                 )
             ],
-            [make_button(text=_t(texts, 'ADMIN_USERS_BULK_BAN', 'Массовый бан'), callback_data='admin_bulk_ban_start')],
+            [make_button(text=_t(texts, 'ADMIN_USERS_BULK_BAN', "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Массовый бан"), callback_data='admin_bulk_ban_start')],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_BLOCKED_CHECK', 'Заблокировавшие бота'),
+                    text=_t(texts, 'ADMIN_USERS_BLOCKED_CHECK', "<tg-emoji emoji-id='5909123362839335003'>🔕</tg-emoji> Заблокировавшие бота"),
                     callback_data='admin_blocked_users',
                 )
             ],
@@ -339,25 +339,25 @@ def get_admin_users_filters_keyboard(language: str = 'ru') -> InlineKeyboardMark
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_FILTER_BALANCE', 'По балансу'),
+                    text=_t(texts, 'ADMIN_USERS_FILTER_BALANCE', "<tg-emoji emoji-id='5875291072225087249'>📊</tg-emoji> По балансу"),
                     callback_data='admin_users_balance_filter',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_FILTER_RENEW_READY', '️ Готовы к продлению'),
+                    text=_t(texts, 'ADMIN_USERS_FILTER_RENEW_READY', "<tg-emoji emoji-id='5877410604225924969'>🔄</tg-emoji> Готовы к продлению"),
                     callback_data='admin_users_ready_to_renew_filter',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_FILTER_POTENTIAL_CUSTOMERS', 'Потенциальные клиенты'),
+                    text=_t(texts, 'ADMIN_USERS_FILTER_POTENTIAL_CUSTOMERS', "<tg-emoji emoji-id='5879770735999717115'>👤</tg-emoji> Потенциальные клиенты"),
                     callback_data='admin_users_potential_customers_filter',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_USERS_FILTER_CAMPAIGN', 'По кампании'),
+                    text=_t(texts, 'ADMIN_USERS_FILTER_CAMPAIGN', "<tg-emoji emoji-id='5875206779196935950'>📁</tg-emoji> По кампании"),
                     callback_data='admin_users_campaign_filter',
                 )
             ],
@@ -372,14 +372,14 @@ def get_admin_subscriptions_keyboard(language: str = 'ru') -> InlineKeyboardMark
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                make_button(text=_t(texts, 'ADMIN_SUBSCRIPTIONS_ALL', 'Все подписки'), callback_data='admin_subs_list'),
+                make_button(text=_t(texts, 'ADMIN_SUBSCRIPTIONS_ALL', "<tg-emoji emoji-id='5877443460725739250'>📁</tg-emoji> Все подписки"), callback_data='admin_subs_list'),
                 make_button(
-                    text=_t(texts, 'ADMIN_SUBSCRIPTIONS_EXPIRING', 'Истекающие'), callback_data='admin_subs_expiring'
+                    text=_t(texts, 'ADMIN_SUBSCRIPTIONS_EXPIRING', "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Истекающие"), callback_data='admin_subs_expiring'
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SUBSCRIPTIONS_COUNTRIES', 'Управление странами'),
+                    text=_t(texts, 'ADMIN_SUBSCRIPTIONS_COUNTRIES', "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Управление странами"),
                     callback_data='admin_subs_countries',
                 )
             ],
@@ -395,12 +395,12 @@ def get_admin_promocodes_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                make_button(text=_t(texts, 'ADMIN_PROMOCODES_ALL', 'Все промокоды'), callback_data='admin_promo_list'),
-                make_button(text=_t(texts, 'ADMIN_PROMOCODES_CREATE', 'Создать'), callback_data='admin_promo_create'),
+                make_button(text=_t(texts, 'ADMIN_PROMOCODES_ALL', "<tg-emoji emoji-id='5839323457015256759'>📄</tg-emoji> Все промокоды"), callback_data='admin_promo_list'),
+                make_button(text=_t(texts, 'ADMIN_PROMOCODES_CREATE', "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Создать"), callback_data='admin_promo_create'),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_PROMOCODES_GENERAL_STATS', 'Общая статистика'),
+                    text=_t(texts, 'ADMIN_PROMOCODES_GENERAL_STATS', "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Общая статистика"),
                     callback_data='admin_promo_general_stats',
                 )
             ],
@@ -416,15 +416,15 @@ def get_admin_campaigns_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_CAMPAIGNS_LIST', 'Список кампаний'), callback_data='admin_campaigns_list'
+                    text=_t(texts, 'ADMIN_CAMPAIGNS_LIST', "<tg-emoji emoji-id='5877680341057015789'>📁</tg-emoji> Список кампаний"), callback_data='admin_campaigns_list'
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_CAMPAIGNS_CREATE', 'Создать'), callback_data='admin_campaigns_create'
+                    text=_t(texts, 'ADMIN_CAMPAIGNS_CREATE', "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Создать"), callback_data='admin_campaigns_create'
                 ),
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_CAMPAIGNS_GENERAL_STATS', 'Общая статистика'),
+                    text=_t(texts, 'ADMIN_CAMPAIGNS_GENERAL_STATS', "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Общая статистика"),
                     callback_data='admin_campaigns_stats',
                 )
             ],
@@ -440,13 +440,13 @@ def get_admin_contests_root_keyboard(language: str = 'ru') -> InlineKeyboardMark
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_CONTESTS_REFERRAL', 'Реферальные конкурсы'),
+                    text=_t(texts, 'ADMIN_CONTESTS_REFERRAL', "<tg-emoji emoji-id='5877465816030515018'>🔗</tg-emoji> Реферальные конкурсы"),
                     callback_data='admin_contests_referral',
                 )
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_CONTESTS_DAILY', 'Ежедневные конкурсы'),
+                    text=_t(texts, 'ADMIN_CONTESTS_DAILY', "<tg-emoji emoji-id='5877410604225924969'>🔄</tg-emoji> Ежедневные конкурсы"),
                     callback_data='admin_contests_daily',
                 )
             ],
@@ -464,11 +464,11 @@ def get_admin_contests_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_CONTESTS_LIST', 'Текущие конкурсы'),
+                    text=_t(texts, 'ADMIN_CONTESTS_LIST', "<tg-emoji emoji-id='5877443460725739250'>📁</tg-emoji> Текущие конкурсы"),
                     callback_data='admin_contests_list',
                 ),
                 make_button(
-                    text=_t(texts, 'ADMIN_CONTESTS_CREATE', 'Новый конкурс'),
+                    text=_t(texts, 'ADMIN_CONTESTS_CREATE', "<tg-emoji emoji-id='5877219383691972108'>➕</tg-emoji> Новый конкурс"),
                     callback_data='admin_contests_create',
                 ),
             ],
@@ -657,7 +657,7 @@ def get_referral_contest_manage_keyboard(
     rows.append(
         [
             make_button(
-                text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'),
+                text=_t(texts, 'ADMIN_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку'),
                 callback_data='admin_contests_list',
             )
         ]
@@ -698,7 +698,7 @@ def get_campaign_management_keyboard(campaign_id: int, is_active: bool, language
                     callback_data=f'admin_campaign_delete_{campaign_id}',
                 )
             ],
-            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'), callback_data='admin_campaigns_list')],
+            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку'), callback_data='admin_campaigns_list')],
         ]
     )
 
@@ -834,7 +834,7 @@ def get_promocode_management_keyboard(promo_id: int, language: str = 'ru') -> In
                     text=_t(texts, 'ADMIN_PROMOCODE_DELETE', '️ Удалить'), callback_data=f'promo_delete_{promo_id}'
                 ),
             ],
-            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '← К списку'), callback_data='admin_promo_list')],
+            [make_button(text=_t(texts, 'ADMIN_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку'), callback_data='admin_promo_list')],
         ]
     )
 
@@ -1260,7 +1260,7 @@ def get_promocode_list_keyboard(
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='← ', callback_data=f'admin_promo_list_page_{page - 1}'))
+            pagination_row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_promo_list_page_{page - 1}'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -1379,7 +1379,7 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='← ', callback_data=f'admin_msg_history_page_{page - 1}'))
+            pagination_row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_msg_history_page_{page - 1}'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
@@ -1470,7 +1470,7 @@ def get_sync_result_keyboard(sync_type: str, has_errors: bool = False, language:
                 make_button(text=_t(texts, 'ADMIN_STATS_BUTTON', 'Статистика'), callback_data='admin_rw_system'),
                 make_button(text=_t(texts, 'ADMIN_SYNC_VALIDATE', 'Валидация'), callback_data='sync_validate'),
             ],
-            [make_button(text=_t(texts, 'ADMIN_SYNC_BACK', '← К синхронизации'), callback_data='admin_rw_sync')],
+            [make_button(text=_t(texts, 'ADMIN_SYNC_BACK', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К синхронизации'), callback_data='admin_rw_sync')],
             [make_button(text=_t(texts, 'ADMIN_BACK_TO_MAIN', 'В главное меню'), callback_data='admin_remnawave')],
         ]
     )
@@ -1569,7 +1569,7 @@ def get_squad_edit_keyboard(squad_uuid: str, language: str = 'ru') -> InlineKeyb
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_BACK_TO_SQUADS', '← Назад к сквадам'),
+                    text=_t(texts, 'ADMIN_BACK_TO_SQUADS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад к сквадам'),
                     callback_data=f'admin_squad_manage_{squad_uuid}',
                 )
             ],
@@ -1611,7 +1611,7 @@ def get_monitoring_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 ),
                 make_button(text='️ Настройки трафика', callback_data='admin_mon_traffic_settings'),
             ],
-            [make_button(text=_t(texts, 'ADMIN_BACK_TO_ADMIN', '← Назад в админку'), callback_data='admin_panel')],
+            [make_button(text=_t(texts, 'ADMIN_BACK_TO_ADMIN', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад в админку'), callback_data='admin_panel')],
         ]
     )
 
@@ -1643,7 +1643,7 @@ def get_monitoring_logs_navigation_keyboard(
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(make_button(text='← ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page_info'))
 
@@ -1675,7 +1675,7 @@ def get_monitoring_logs_navigation_keyboard(
     keyboard.append(
         [
             make_button(
-                text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '← Назад к мониторингу'), callback_data='admin_monitoring'
+                text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад к мониторингу'), callback_data='admin_monitoring'
             )
         ]
     )
@@ -1696,7 +1696,7 @@ def get_log_detail_keyboard(log_id: int, current_page: int = 1, language: str = 
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_MONITORING_BACK_TO_LOGS', '← К списку логов'),
+                    text=_t(texts, 'ADMIN_MONITORING_BACK_TO_LOGS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку логов'),
                     callback_data=f'admin_mon_logs_page_{current_page}',
                 )
             ],
@@ -1820,7 +1820,7 @@ def get_monitoring_settings_keyboard(language: str = 'ru') -> InlineKeyboardMark
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '← К мониторингу'), callback_data='admin_monitoring'
+                    text=_t(texts, 'ADMIN_BACK_TO_MONITORING', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К мониторингу'), callback_data='admin_monitoring'
                 )
             ],
         ]
@@ -1936,7 +1936,7 @@ def get_admin_pagination_keyboard(
         row = []
 
         if current_page > 1:
-            row.append(make_button(text='← ', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
+            row.append(make_button(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
 
         row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
@@ -2107,7 +2107,7 @@ BROADCAST_BUTTONS = {
         'callback': 'menu_subscription',
     },
     'support': {
-        'default_text': '️ Тех. поддержка',
+        'default_text': '️ Поддержка',
         'text_key': 'ADMIN_BROADCAST_BUTTON_SUPPORT',
         'callback': 'menu_support',
     },

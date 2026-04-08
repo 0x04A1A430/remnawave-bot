@@ -150,7 +150,7 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'), callback_data='back_to_menu'
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В главное меню'), callback_data='back_to_menu'
                 )
             ],
         ]
@@ -219,7 +219,7 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
     nav_row = []
     if total_pages > 1:
         if page > 1:
-            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_support_audit_page_{page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_support_audit_page_{page - 1}'))
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
         if page < total_pages:
             nav_row.append(InlineKeyboardButton(text='️', callback_data=f'admin_support_audit_page_{page + 1}'))

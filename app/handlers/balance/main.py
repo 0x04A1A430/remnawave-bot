@@ -234,9 +234,8 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
             else f'-{texts.format_price(abs(transaction.amount_kopeks))}'
         )
 
-        text += f'{emoji} {amount_text}\n'
-        text += f'{html.escape(transaction.description or "")}\n'
-        text += f'{transaction.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
+        text += f'<code>{emoji} {amount_text}</code> — {html.escape(transaction.description or "")}\n'
+        text += f'<code>{transaction.created_at.strftime("%d.%m.%Y %H:%M")}</code>\n\n'
 
     keyboard = []
     total_pages = (total_unique + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
