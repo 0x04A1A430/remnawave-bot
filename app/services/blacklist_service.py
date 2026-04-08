@@ -99,7 +99,7 @@ class BlacklistService:
                             parts = line.split(maxsplit=1)
                             telegram_id = int(parts[0])
                             content = parts[1].strip() if len(parts) > 1 else ''
-                        
+
                         # 2. Обрабатываем контент: вычленяем username, если он есть в начале
                         username = ''
                         reason = 'Занесен в черный список'
@@ -117,7 +117,7 @@ class BlacklistService:
                                 reason = content
 
                         blacklist_data.append((telegram_id, username, reason))
-                        
+
                     except ValueError:
                         # Если не удается преобразовать в число, это не ID
                         logger.warning(
