@@ -1001,7 +1001,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
 - Uptime: {uptime_str}
 
 <b>Пользователи ({system.get('total_users', 0)} всего):</b>
-- 🟢 Онлайн сейчас: {system.get('users_online', 0)}
+- Онлайн сейчас: {system.get('users_online', 0)}
 - За сутки: {system.get('users_last_day', 0)}
 - За неделю: {system.get('users_last_week', 0)}
 - Никогда не заходили: {system.get('users_never_online', 0)}
