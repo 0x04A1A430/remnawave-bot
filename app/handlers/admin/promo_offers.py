@@ -398,7 +398,7 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
+                    text='← ',
                     callback_data=f'promo_offer_logs_page_{page - 1}',
                 )
             )
@@ -575,7 +575,7 @@ async def _render_send_user_list(
         if current_page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
+                    text='← ',
                     callback_data=f'promo_offer_send_user_{template_id}_page_{current_page - 1}',
                 )
             )
@@ -1033,7 +1033,7 @@ async def _render_squad_selection(
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
+                    text='← ',
                     callback_data=f'promo_offer_squad_page_{template.id}_{page - 1}',
                 )
             )
@@ -1876,7 +1876,7 @@ async def show_selected_user_details(
             InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
-                    '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку пользователей',
+                    '← К списку пользователей',
                 ),
                 callback_data=f'promo_offer_send_user_back_{template_id}',
             )
@@ -2180,7 +2180,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     result_keyboard_rows.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К промопредложениям'),
+                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', '← К промопредложениям'),
                 callback_data='admin_promo_offers',
             )
         ]
@@ -2289,7 +2289,7 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
             InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
-                    '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К списку пользователей',
+                    '← К списку пользователей',
                 ),
                 callback_data=f'promo_offer_send_user_back_{template.id}',
             )

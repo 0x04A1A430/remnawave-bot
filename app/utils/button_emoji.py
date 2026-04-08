@@ -31,6 +31,9 @@ def parse_button_label(raw: str) -> ParsedButtonLabel:
     emoji_id = match.group(1)
     full_text = raw
     clean_text = _TG_EMOJI_RE.sub('', full_text).strip()
+    if not clean_text:
+        # Fallback to the emoji character inside the tag (e.g. ◀️)
+        clean_text = match.group(2).strip() or '•'
 
     return ParsedButtonLabel(text=clean_text, icon_custom_emoji_id=emoji_id)
 

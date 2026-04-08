@@ -131,7 +131,7 @@ def _build_notification_settings_view(language: str):
                 )
             ],
             [InlineKeyboardButton(text='Отправить все тесты', callback_data='admin_mon_notify_preview_all')],
-            [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_settings')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_mon_settings')],
         ]
     )
 
@@ -409,7 +409,7 @@ async def admin_monitoring_settings(callback: CallbackQuery):
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text='Уведомления пользователям', callback_data='admin_mon_notify_settings')],
-                [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_submenu_settings')],
+                [InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_settings')],
             ]
         )
 
@@ -690,7 +690,7 @@ async def force_check_callback(callback: CallbackQuery):
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
             keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')]]
+                inline_keyboard=[[InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')]]
             )
 
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
@@ -755,7 +755,7 @@ async def traffic_check_callback(callback: CallbackQuery):
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text='Повторить', callback_data='admin_mon_traffic_check')],
-                [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')],
+                [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
             ]
         )
 
@@ -953,7 +953,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
                 )
                 buttons.append(nalogo_buttons)
 
-            buttons.append([InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')])
+            buttons.append([InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
@@ -1064,7 +1064,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
                 )
                 buttons.append(nalogo_buttons)
 
-            buttons.append([InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')])
+            buttons.append([InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
             await callback.message.edit_text(stats_text, parse_mode='HTML', reply_markup=keyboard)
@@ -1125,7 +1125,7 @@ async def nalogo_pending_callback(callback: CallbackQuery):
         buttons.append(
             [InlineKeyboardButton(text='Очистить всё (проверено)', callback_data='admin_nalogo_clear_pending')]
         )
-        buttons.append([InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_statistics')])
+        buttons.append([InlineKeyboardButton(text='← Назад', callback_data='admin_mon_statistics')])
         keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
@@ -1201,7 +1201,7 @@ async def nalogo_clear_pending_callback(callback: CallbackQuery):
         await callback.message.edit_text(
             'Очередь проверки очищена',
             reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_statistics')]]
+                inline_keyboard=[[InlineKeyboardButton(text='← Назад', callback_data='admin_mon_statistics')]]
             ),
         )
 
@@ -1316,7 +1316,7 @@ async def receipts_link_old_callback(callback: CallbackQuery):
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_statistics')],
+                    [InlineKeyboardButton(text='← Назад', callback_data='admin_mon_statistics')],
                 ]
             )
 
@@ -1366,7 +1366,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
                     reply_markup=InlineKeyboardMarkup(
                         inline_keyboard=[
                             [InlineKeyboardButton(text='Обновить', callback_data='admin_mon_reconcile_logs')],
-                            [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_statistics')],
+                            [InlineKeyboardButton(text='← Назад', callback_data='admin_mon_statistics')],
                         ]
                     ),
                 )
@@ -1409,7 +1409,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
                 f'<b>Ошибка чтения логов</b>\n\n{e!s}',
                 parse_mode='HTML',
                 reply_markup=InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_statistics')]]
+                    inline_keyboard=[[InlineKeyboardButton(text='← Назад', callback_data='admin_mon_statistics')]]
                 ),
             )
             return
@@ -1456,7 +1456,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
             inline_keyboard=[
                 [InlineKeyboardButton(text='Обновить', callback_data='admin_mon_reconcile_logs')],
                 [InlineKeyboardButton(text='Детали', callback_data='admin_mon_reconcile_logs_details')],
-                [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_statistics')],
+                [InlineKeyboardButton(text='← Назад', callback_data='admin_mon_statistics')],
             ]
         )
 
@@ -1552,7 +1552,7 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery):
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_mon_reconcile_logs')],
+                [InlineKeyboardButton(text='← Назад', callback_data='admin_mon_reconcile_logs')],
             ]
         )
 
@@ -1577,7 +1577,7 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
@@ -1592,7 +1592,7 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
                 InlineKeyboardButton(text='Обновить', callback_data='admin_mon_logs'),
                 InlineKeyboardButton(text='️ Очистить', callback_data='admin_mon_clear_logs'),
             ],
-            [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
         ]
     )
 
@@ -1609,7 +1609,7 @@ def get_monitoring_logs_back_keyboard():
                 InlineKeyboardButton(text='Фильтры', callback_data='admin_mon_logs_filters'),
             ],
             [InlineKeyboardButton(text='️ Очистить логи', callback_data='admin_mon_clear_logs')],
-            [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
         ]
     )
 
@@ -1696,7 +1696,7 @@ async def process_notification_value_input(message: Message, state: FSMContext):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.get('BACK', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад'),
+                    text=texts.get('BACK', '← Назад'),
                     callback_data='admin_mon_notify_settings',
                 )
             ]
@@ -1776,7 +1776,7 @@ def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
                 )
             ],
             [InlineKeyboardButton(text=f'⏳ Кулдаун: {cooldown} мин', callback_data='admin_traffic_edit_cooldown')],
-            [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_monitoring')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
         ]
     )
 
@@ -2007,7 +2007,7 @@ async def process_traffic_setting_input(message: Message, state: FSMContext):
 
         back_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К настройкам трафика', callback_data='admin_mon_traffic_settings')]
+                [InlineKeyboardButton(text='← К настройкам трафика', callback_data='admin_mon_traffic_settings')]
             ]
         )
         await message.answer('Настройка сохранена!', reply_markup=back_keyboard)

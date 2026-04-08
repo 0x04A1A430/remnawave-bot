@@ -325,7 +325,7 @@ async def view_admin_ticket(
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
+                types.InlineKeyboardButton(text='← ', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
             )
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
         if page < total_pages:
@@ -494,7 +494,7 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BACK_TO_TICKETS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К тикетам'), callback_data='admin_tickets'
+                            text=texts.t('BACK_TO_TICKETS', '← К тикетам'), callback_data='admin_tickets'
                         )
                     ],
                 ]
@@ -691,7 +691,7 @@ async def cancel_admin_ticket_reply(callback: types.CallbackQuery, state: FSMCon
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_TICKETS', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К тикетам'), callback_data='admin_tickets'
+                        text=texts.t('BACK_TO_TICKETS', '← К тикетам'), callback_data='admin_tickets'
                     )
                 ]
             ]

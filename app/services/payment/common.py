@@ -408,7 +408,7 @@ async def send_cart_notification_after_topup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Checkout'),
+                            text=texts.get('RETURN_TO_SUBSCRIPTION_CHECKOUT', '← Checkout'),
                             callback_data='return_to_saved_cart',
                         )
                     ],

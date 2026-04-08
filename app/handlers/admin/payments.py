@@ -256,7 +256,7 @@ def _build_list_keyboard(
         if page > 1:
             navigation_row.append(
                 InlineKeyboardButton(
-                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
+                    text='← ',
                     callback_data=f'admin_payments_page_{page - 1}',
                 )
             )

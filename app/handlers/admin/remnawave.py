@@ -157,7 +157,7 @@ def _build_auto_sync_view(status: RemnaWaveAutoSyncStatus) -> tuple[str, types.I
             ],
             [
                 types.InlineKeyboardButton(
-                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад',
+                    text='← Назад',
                     callback_data='admin_rw_sync',
                 )
             ],
@@ -225,7 +225,7 @@ def _build_migration_keyboard(
         if page > 1:
             nav_buttons.append(
                 types.InlineKeyboardButton(
-                    text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> ',
+                    text='← ',
                     callback_data=f'{prefix}_page_{page - 1}',
                 )
             )
@@ -747,7 +747,7 @@ async def confirm_squad_migration(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                            '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В Remnawave',
+                            '← В Remnawave',
                         ),
                         callback_data='admin_remnawave',
                     )
@@ -774,7 +774,7 @@ async def confirm_squad_migration(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                            '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В Remnawave',
+                            '← В Remnawave',
                         ),
                         callback_data='admin_remnawave',
                     )
@@ -843,7 +843,7 @@ async def confirm_squad_migration(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                        '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В Remnawave',
+                        '← В Remnawave',
                     ),
                     callback_data='admin_remnawave',
                 )
@@ -881,7 +881,7 @@ async def cancel_squad_migration(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_SQUAD_MIGRATION_BACK_BUTTON',
-                        '<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> В Remnawave',
+                        '← В Remnawave',
                     ),
                     callback_data='admin_remnawave',
                 )
@@ -947,7 +947,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
         await callback.message.edit_text(
             f'Ошибка получения статистики: {stats["error"]}',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
         )
         await callback.answer()
@@ -1051,7 +1051,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
             types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             types.InlineKeyboardButton(text='Синхронизация', callback_data='admin_rw_sync'),
         ],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -1075,7 +1075,7 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
         await callback.message.edit_text(
             f'Ошибка получения статистики трафика: {e!s}',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
         )
         await callback.answer()
@@ -1171,7 +1171,7 @@ async def show_traffic_stats(callback: types.CallbackQuery, db_user: User, db: A
             types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             types.InlineKeyboardButton(text='Система', callback_data='admin_rw_system'),
         ],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -1188,7 +1188,7 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
         await callback.message.edit_text(
             '️ Ноды не найдены или ошибка подключения',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
         )
         await callback.answer()
@@ -1212,7 +1212,7 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Перезагрузить все', callback_data='admin_restart_all_nodes')],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -1425,7 +1425,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Обновить', callback_data=f'node_stats_{node_uuid}')],
-                [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'admin_node_manage_{node_uuid}')],
+                [types.InlineKeyboardButton(text='← Назад', callback_data=f'admin_node_manage_{node_uuid}')],
             ]
         )
 
@@ -1466,7 +1466,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Попробовать снова', callback_data=f'node_stats_{node_uuid}')],
-                [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'admin_node_manage_{node_uuid}')],
+                [types.InlineKeyboardButton(text='← Назад', callback_data=f'admin_node_manage_{node_uuid}')],
             ]
         )
 
@@ -1536,7 +1536,7 @@ async def manage_squad_action(callback: types.CallbackQuery, db_user: User, db: 
             await callback.message.edit_text(
                 'Сквад успешно удален',
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К сквадам', callback_data='admin_rw_squads')]]
+                    inline_keyboard=[[types.InlineKeyboardButton(text='← К сквадам', callback_data='admin_rw_squads')]]
                 ),
             )
         else:
@@ -1628,7 +1628,7 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Сохранить изменения', callback_data=f'sqd_save_{squad_uuid[:8]}')],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'sqd_edit_{squad_uuid[:8]}')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data=f'sqd_edit_{squad_uuid[:8]}')],
         ]
     )
 
@@ -1733,7 +1733,7 @@ async def process_squad_new_name(message: types.Message, db_user: User, db: Asyn
                             text='Детали сквада', callback_data=f'admin_squad_manage_{squad_uuid}'
                         )
                     ],
-                    [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К сквадам', callback_data='admin_rw_squads')],
+                    [types.InlineKeyboardButton(text='← К сквадам', callback_data='admin_rw_squads')],
                 ]
             ),
         )
@@ -1817,7 +1817,7 @@ async def toggle_squad_inbound(callback: types.CallbackQuery, db_user: User, db:
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Сохранить изменения', callback_data=f'sqd_save_{short_squad_uuid}')],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data=f'sqd_edit_{short_squad_uuid}')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data=f'sqd_edit_{short_squad_uuid}')],
         ]
     )
 
@@ -1858,7 +1858,7 @@ async def save_squad_inbounds(callback: types.CallbackQuery, db_user: User, db: 
                 f'<b>Количество инбаундов:</b> {len(selected_inbounds)}',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К сквадам', callback_data='admin_rw_squads')],
+                        [types.InlineKeyboardButton(text='← К сквадам', callback_data='admin_rw_squads')],
                         [
                             types.InlineKeyboardButton(
                                 text='Детали сквада', callback_data=f'admin_squad_manage_{full_squad_uuid}'
@@ -1959,7 +1959,7 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
         await message.answer(
             '<b>Нет доступных инбаундов</b>\n\nДля создания сквада необходимо иметь хотя бы один инбаунд.',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К сквадам', callback_data='admin_rw_squads')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← К сквадам', callback_data='admin_rw_squads')]]
             ),
         )
         await state.clear()
@@ -2095,7 +2095,7 @@ async def finish_squad_creation(callback: types.CallbackQuery, db_user: User, db
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='Список сквадов', callback_data='admin_rw_squads')],
-                    [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К панели Remnawave', callback_data='admin_remnawave')],
+                    [types.InlineKeyboardButton(text='← К панели Remnawave', callback_data='admin_remnawave')],
                 ]
             ),
         )
@@ -2112,7 +2112,7 @@ async def finish_squad_creation(callback: types.CallbackQuery, db_user: User, db
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='Попробовать снова', callback_data='admin_squad_create')],
-                    [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К сквадам', callback_data='admin_rw_squads')],
+                    [types.InlineKeyboardButton(text='← К сквадам', callback_data='admin_rw_squads')],
                 ]
             ),
         )
@@ -2140,14 +2140,14 @@ async def restart_all_nodes(callback: types.CallbackQuery, db_user: User, db: As
         await callback.message.edit_text(
             'Команда перезагрузки всех нод отправлена',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К нодам', callback_data='admin_rw_nodes')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← К нодам', callback_data='admin_rw_nodes')]]
             ),
         )
     else:
         await callback.message.edit_text(
             'Ошибка перезагрузки нод',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К нодам', callback_data='admin_rw_nodes')]]
+                inline_keyboard=[[types.InlineKeyboardButton(text='← К нодам', callback_data='admin_rw_nodes')]]
             ),
         )
 
@@ -2214,7 +2214,7 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
                 callback_data='admin_rw_auto_sync',
             )
         ],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
     ]
 
     await callback.message.edit_text(
@@ -2545,7 +2545,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
                 types.InlineKeyboardButton(text='Статистика системы', callback_data='admin_rw_system'),
                 types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             ],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -2586,7 +2586,7 @@ async def sync_users_to_panel(
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить', callback_data='sync_to_panel')],
         [types.InlineKeyboardButton(text='Полная синхронизация', callback_data='sync_all_users')],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К синхронизации', callback_data='admin_rw_sync')],
+        [types.InlineKeyboardButton(text='← К синхронизации', callback_data='admin_rw_sync')],
     ]
 
     await callback.message.edit_text(
@@ -2645,7 +2645,7 @@ async def show_sync_recommendations(callback: types.CallbackQuery, db_user: User
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Другие опции', callback_data='admin_rw_sync')],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -2693,7 +2693,7 @@ async def validate_subscriptions(callback: types.CallbackQuery, db_user: User, d
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить валидацию', callback_data='sync_validate')],
         [types.InlineKeyboardButton(text='Полная синхронизация', callback_data='sync_all_users')],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К синхронизации', callback_data='admin_rw_sync')],
+        [types.InlineKeyboardButton(text='← К синхронизации', callback_data='admin_rw_sync')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -2740,7 +2740,7 @@ async def cleanup_subscriptions(callback: types.CallbackQuery, db_user: User, db
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить очистку', callback_data='sync_cleanup')],
         [types.InlineKeyboardButton(text='Валидация', callback_data='sync_validate')],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К синхронизации', callback_data='admin_rw_sync')],
+        [types.InlineKeyboardButton(text='← К синхронизации', callback_data='admin_rw_sync')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -2799,7 +2799,7 @@ async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_use
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить очистку', callback_data='force_cleanup_orphaned')],
         [types.InlineKeyboardButton(text='Полная синхронизация', callback_data='sync_all_users')],
-        [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> К синхронизации', callback_data='admin_rw_sync')],
+        [types.InlineKeyboardButton(text='← К синхронизации', callback_data='admin_rw_sync')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
@@ -2941,7 +2941,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
                 types.InlineKeyboardButton(text='Статистика системы', callback_data='admin_rw_system'),
                 types.InlineKeyboardButton(text='Ноды', callback_data='admin_rw_nodes'),
             ],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
@@ -2977,7 +2977,7 @@ async def show_squads_management(callback: types.CallbackQuery, db_user: User, d
     keyboard.extend(
         [
             [types.InlineKeyboardButton(text='Создать сквад', callback_data='admin_squad_create')],
-            [types.InlineKeyboardButton(text='<tg-emoji emoji-id="5877629862306385808">◀️</tg-emoji> Назад', callback_data='admin_remnawave')],
+            [types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')],
         ]
     )
 
