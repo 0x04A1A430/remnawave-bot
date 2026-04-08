@@ -651,14 +651,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     if state_needs_update:
         await state.set_data(data)
 
-    # Handle inline gift deep links: /start <gift_code>
-    # Must run before campaign/referral lookup to avoid misidentifying the code.
-    if start_parameter and len(start_parameter) >= 32:
+    # Handle inline gift deep links: /start bs_<gift_code>
+    if start_parameter and start_parameter.startswith('bs_'):
         from app.handlers.inline_gift import handle_gift_deeplink as _handle_igift
 
-        handled = await _handle_igift(message, start_parameter)
+        handled = await _handle_igift(message, start_parameter[3:])
         if handled:
             return
+        start_parameter = None
 
     # Handle gift code deep links: /start GIFT_{token}
     if start_parameter and start_parameter.startswith('GIFT_'):
