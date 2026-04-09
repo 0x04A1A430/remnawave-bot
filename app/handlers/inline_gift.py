@@ -286,15 +286,28 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             return
 
         days_str = _days_label(gift.days, texts) if gift.days else ''
-        success_text = texts.t(
-            'INLINE_GIFT_SUCCESS',
-            '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена на вашем аккаунте.',
-        )
+        traffic_str = _fmt_traffic(gift.traffic_limit_gb, texts) if gift.traffic_limit_gb else ''
+        devices_val = gift.device_limit or 0
+
+        parts = []
         if days_str:
+            parts.append(texts.t('INLINE_GIFT_SUCCESS_PART_DAYS', '+{days_str}').format(days_str=days_str))
+        if traffic_str:
+            parts.append(texts.t('INLINE_GIFT_SUCCESS_PART_TRAFFIC', '{traffic_str}').format(traffic_str=traffic_str))
+        if devices_val:
+            parts.append(texts.t('INLINE_GIFT_SUCCESS_PART_DEVICES', '{n} уст.').format(n=devices_val))
+
+        if parts:
+            changes = ', '.join(parts)
             success_text = texts.t(
-                'INLINE_GIFT_SUCCESS_DAYS',
-                '✅ <b>Подарок активирован!</b>\n\n+{days_str} добавлено на ваш аккаунт.',
-            ).format(days_str=days_str)
+                'INLINE_GIFT_SUCCESS_CHANGES',
+                '✅ <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
+            ).format(changes=changes)
+        else:
+            success_text = texts.t(
+                'INLINE_GIFT_SUCCESS',
+                '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена на вашем аккаунте.',
+            )
 
         await callback.message.edit_text(success_text, parse_mode='HTML')
 
