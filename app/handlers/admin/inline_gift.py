@@ -36,6 +36,7 @@ from app.localization.texts import get_texts
 logger = structlog.get_logger(__name__)
 
 _GIFT_PREFIX = 'bs_'
+_GIFT_PREFIX_NEW_USER = 'rbs_'  # for recipients not yet registered in the bot
 
 
 def _is_admin(telegram_id: int) -> bool:
@@ -200,7 +201,9 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     # Build gift result
     gift_code = secrets.token_urlsafe(32)
     bot_username = settings.BOT_USERNAME or ''
-    deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX}{gift_code}'
+    # Use rbs_ prefix when recipient is not registered in the bot yet
+    prefix = _GIFT_PREFIX if db_user_found else _GIFT_PREFIX_NEW_USER
+    deep_link = f'https://t.me/{bot_username}?start={prefix}{gift_code}'
 
     caption = _build_caption(username, days, traffic_gb, devices, texts)
 

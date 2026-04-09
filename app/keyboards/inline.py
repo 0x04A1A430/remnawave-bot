@@ -645,7 +645,7 @@ def get_main_menu_keyboard(
         )
         sub_btn = make_button(text=sub_btn_text, callback_data='menu_subscription')
         devices_btn = make_button(
-            text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
+            text=texts.t('MANAGE_DEVICES_BUTTON', 'Устройства'),
             callback_data='subscription_manage_devices',
         )
         keyboard.append([sub_btn, devices_btn])
@@ -740,10 +740,11 @@ def get_main_menu_keyboard(
 
     keyboard.append(promo_ref_row)
 
-    # Поддержка — одна кнопка в самом низу
+    # Поддержка и Инфо — кнопки в самом низу
     if support_enabled:
         support_url = settings.get_support_contact_url() or 'https://t.me/'
         keyboard.append([make_button(text=texts.MENU_SUPPORT, url=support_url)])
+    keyboard.append([make_button(text=texts.t('MENU_INFO', 'Инфо'), callback_data='menu_rules')])
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
@@ -1062,7 +1063,7 @@ def get_subscription_keyboard(
                         make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             web_app=types.WebAppInfo(url=subscription_link),
-                            
+
                         )
                     ]
                 )
@@ -1073,7 +1074,7 @@ def get_subscription_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
-                                
+
                             )
                         ]
                     )
@@ -1083,7 +1084,7 @@ def get_subscription_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 callback_data=f'subscription_connect{_sub_suffix}',
-                                
+
                             )
                         ]
                     )
@@ -1095,7 +1096,7 @@ def get_subscription_keyboard(
                         make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             callback_data=f'open_subscription_link{_sub_suffix}',
-                            
+
                         )
                     ]
                 )
@@ -1105,7 +1106,7 @@ def get_subscription_keyboard(
                         make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             callback_data=f'subscription_connect{_sub_suffix}',
-                            
+
                         )
                     ]
                 )
@@ -1115,7 +1116,7 @@ def get_subscription_keyboard(
                     InlineKeyboardButton(
                         text=_copy_label.text,
                         copy_text=CopyTextButton(text=subscription_link),
-                        
+
                         **({'icon_custom_emoji_id': _copy_label.icon_custom_emoji_id} if _copy_label.icon_custom_emoji_id else {}),
                     )
                 ]
@@ -1126,7 +1127,7 @@ def get_subscription_keyboard(
                     make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
-                        
+
                     )
                 ]
             )
@@ -1136,7 +1137,7 @@ def get_subscription_keyboard(
                     make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         callback_data=f'subscription_connect{_sub_suffix}',
-                        
+
                     )
                 ]
             )
@@ -2494,7 +2495,7 @@ def get_connection_guide_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 url=final_url,
-                                
+
                             )
                         ]
                     )
@@ -2509,7 +2510,7 @@ def get_connection_guide_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 callback_data=_osl_cb,
-                                
+
                             )
                         ]
                     )
@@ -2519,7 +2520,7 @@ def get_connection_guide_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 url=subscription_url,
-                                
+
                             )
                         ]
                     )
@@ -2747,7 +2748,7 @@ def get_devices_management_keyboard(
             make_button(
                 text=texts.t('RESET_ALL_DEVICES_BUTTON', 'Сбросить все устройства'),
                 callback_data='reset_all_devices',
-                
+
             )
         ]
     )
@@ -2848,7 +2849,7 @@ def get_device_reset_confirm_keyboard(
                 make_button(
                     text=texts.t('RESET_DEVICE_CONFIRM_BUTTON', 'Да, сбросить это устройство'),
                     callback_data=f'confirm_reset_device_{device_index}_{page}',
-                    
+
                 )
             ],
             [make_button(text=texts.CANCEL, callback_data=f'devices_page_{page}')],
@@ -2869,7 +2870,7 @@ def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> Inl
             ],
             [
                 make_button(
-                    text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
+                    text=texts.t('MANAGE_DEVICES_BUTTON', 'Устройства'),
                     callback_data='subscription_manage_devices',
                 )
             ],
