@@ -7,8 +7,13 @@ Usage (for admin):
   @botusername @user 30 500 3    — 30 days, 500 GB, 3 devices
   @botusername @user 0 500       — set 500 GB only
   @botusername @user 0 0 3       — set 3 devices only
+  @botusername @user -1          — forever (year 2099)
+  @botusername @user 30 -1       — 30 days + unlimited traffic
+  @botusername @user 30 500 -1   — 30 days, 500 GB, 999 devices
 
 All numeric params default to 0 = no change.
+Special: -1 for days = forever (~year 2099), -1 for traffic_gb = unlimited (0),
+         -1 for devices = 999.
 Deep link prefix: bs_<gift_code>
 """
 
@@ -37,9 +42,15 @@ def _is_admin(telegram_id: int) -> bool:
     return settings.is_admin(telegram_id)
 
 
+_FOREVER_DAYS = (2099 - 2025) * 365  # approx days from now to year 2099
+_UNLIMITED_TRAFFIC = 0  # 0 = unlimited in the DB model
+_MAX_DEVICES = 999
+
+
 def _parse_query(query_text: str) -> tuple[str, int, int, int]:
     """Parse '@user [days] [traffic_gb] [devices]'.
     Returns (username, days, traffic_gb, devices); numeric params default to 0.
+    Special values: -1 for days = forever, -1 for traffic_gb = unlimited, -1 for devices = 999.
     """
     parts = query_text.strip().split()
     if not parts:
@@ -47,20 +58,32 @@ def _parse_query(query_text: str) -> tuple[str, int, int, int]:
 
     username = parts[0].lstrip('@')
 
-    def _int(s: str) -> int:
+    def _int_param(s: str, allow_neg_one: bool = False) -> int:
         try:
-            return max(0, int(s))
+            v = int(s)
         except (ValueError, TypeError):
             return 0
+        if v == -1 and allow_neg_one:
+            return -1
+        return max(0, v)
 
-    days = _int(parts[1]) if len(parts) > 1 else 0
-    traffic_gb = _int(parts[2]) if len(parts) > 2 else 0
-    devices = _int(parts[3]) if len(parts) > 3 else 0
+    days = _int_param(parts[1], allow_neg_one=True) if len(parts) > 1 else 0
+    traffic_gb = _int_param(parts[2], allow_neg_one=True) if len(parts) > 2 else 0
+    devices = _int_param(parts[3], allow_neg_one=True) if len(parts) > 3 else 0
+
+    # Resolve -1 sentinel values
+    if days == -1:
+        days = _FOREVER_DAYS
+    # traffic_gb == -1 means "set to unlimited"; keep as -1 to distinguish from 0 (no change)
+    if devices == -1:
+        devices = _MAX_DEVICES
 
     return username, days, traffic_gb, devices
 
 
 def _days_label_short(days: int, texts) -> str:
+    if days >= _FOREVER_DAYS:
+        return texts.t('INLINE_GIFT_LABEL_FOREVER', 'Навсегда')
     if days < 365:
         return texts.t('INLINE_GIFT_LABEL_DAYS_SHORT', '{n} дн.').format(n=days)
     if days == 365:
@@ -71,7 +94,7 @@ def _days_label_short(days: int, texts) -> str:
 
 
 def _fmt_traffic(gb: int, texts) -> str:
-    if gb == 0:
+    if gb == 0 or gb == -1:
         return texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит')
     return f'{gb} {texts.t("INLINE_GIFT_GB_SUFFIX", "ГБ")}'
 
@@ -83,7 +106,10 @@ def _build_caption(username: str, days: int, traffic_gb: int, devices: int, text
     if days:
         lines.append(f'+{_days_label_short(days, texts)}')
     if traffic_gb:
-        lines.append(f'{traffic_gb} {texts.t("INLINE_GIFT_GB_SUFFIX", "ГБ")}')
+        if traffic_gb == -1:
+            lines.append(texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит'))
+        else:
+            lines.append(_fmt_traffic(traffic_gb, texts))
     if devices:
         lines.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
 
@@ -126,6 +152,10 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             select(User).where(sql_func.lower(User.username) == username.lower())
         )
         db_user = result.scalars().first()
+        cur_days = 0
+        cur_traffic = 0
+        cur_devices = 1
+        sub = None
         if db_user:
             db_user_found = True
             name_parts = [db_user.first_name or '', db_user.last_name or '']
@@ -134,6 +164,9 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
                 recipient_display = f'{full_name} (@{username})'
             sub = await get_subscription_by_user_id(db, db_user.id)
             if sub:
+                cur_days = max(0, sub.days_left) if hasattr(sub, 'days_left') else 0
+                cur_traffic = sub.traffic_limit_gb or 0
+                cur_devices = sub.device_limit or 1
                 gb = sub.traffic_limit_gb
                 traffic_str = texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит') if gb == 0 else f'{gb} ГБ'
                 sub_info_lines.append(f'{sub.days_left} дн.')
@@ -175,14 +208,28 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     if days:
         parts_summary.append(_days_label_short(days, texts))
     if traffic_gb:
-        parts_summary.append(f'{traffic_gb} ГБ')
+        parts_summary.append(_fmt_traffic(traffic_gb, texts))
     if devices:
         parts_summary.append(f'{devices} уст.')
     gift_summary = ', '.join(parts_summary)
 
-    # Description shows: what user has now → what they'll get
-    if sub_info_lines:
-        description = f'{" | ".join(sub_info_lines)} → {gift_summary}'
+    # Description shows: result values after activation
+    result_parts = []
+    if days:
+        result_days = cur_days + days
+        result_parts.append(_days_label_short(result_days, texts))
+    if traffic_gb:
+        # traffic_gb == -1 means unlimited
+        result_parts.append(_fmt_traffic(traffic_gb, texts))
+    elif sub_info_lines and sub:
+        # no traffic change, show current
+        pass
+    if devices:
+        result_devices = max(cur_devices, devices)
+        result_parts.append(f'{result_devices} уст.')
+
+    if sub_info_lines and sub:
+        description = f'{" | ".join(sub_info_lines)} → {", ".join(result_parts)}' if result_parts else f'{" | ".join(sub_info_lines)} → {gift_summary}'
     else:
         description = gift_summary
 

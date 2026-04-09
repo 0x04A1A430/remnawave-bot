@@ -31,8 +31,13 @@ from app.services.subscription_service import SubscriptionService
 
 logger = structlog.get_logger(__name__)
 
+# Must match the sentinel in admin/inline_gift.py
+_FOREVER_DAYS = (2099 - 2025) * 365
+
 
 def _days_label(days: int, texts) -> str:
+    if days >= _FOREVER_DAYS:
+        return texts.t('INLINE_GIFT_LABEL_FOREVER', 'Навсегда')
     if days % 10 == 1 and days % 100 != 11:
         return texts.t('INLINE_GIFT_DAYS_ONE', '{n} день').format(n=days)
     if days % 10 in (2, 3, 4) and days % 100 not in (12, 13, 14):
@@ -41,7 +46,7 @@ def _days_label(days: int, texts) -> str:
 
 
 def _fmt_traffic(gb: int, texts) -> str:
-    if gb == 0:
+    if gb == 0 or gb == -1:
         return texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит')
     return texts.t('INLINE_GIFT_TRAFFIC_GB', '{gb} ГБ').format(gb=gb)
 
@@ -55,6 +60,7 @@ def _build_info_text(
 ) -> str:
     """Build blockquote info. Only shows params that actually change (non-zero gift values).
     gift_days/traffic/devices == 0 means "no change for this param".
+    Special: gift_traffic_gb == -1 means "set to unlimited".
     """
     lines = []
 
@@ -85,16 +91,37 @@ def _build_info_text(
 
         if gift_days:
             new_days = cur_days + gift_days
-            lines.append(
-                f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
-                f'<b>{_days_label(cur_days, texts)}</b> +{gift_days}'
-                f'{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → '
-                f'<b>{_days_label(new_days, texts)}</b>'
-            )
+            forever = gift_days >= _FOREVER_DAYS or new_days >= _FOREVER_DAYS
+            if forever:
+                lines.append(
+                    f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
+                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
+                    f'<b>{_days_label(cur_days, texts)}</b> → '
+                    f'<b>{texts.t("INLINE_GIFT_LABEL_FOREVER", "Навсегда")}</b>'
+                )
+            else:
+                lines.append(
+                    f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
+                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
+                    f'<b>{_days_label(cur_days, texts)}</b> +{gift_days}'
+                    f'{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → '
+                    f'<b>{_days_label(new_days, texts)}</b>'
+                )
 
         if gift_traffic_gb:
-            if cur_traffic == 0:
+            if gift_traffic_gb == -1:
+                # -1 means "set to unlimited"
+                if cur_traffic == 0:
+                    # already unlimited, no meaningful change
+                    pass
+                else:
+                    lines.append(
+                        f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
+                        f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
+                        f'<b>{_fmt_traffic(cur_traffic, texts)}</b> → '
+                        f'<b>{texts.t("INLINE_GIFT_TRAFFIC_UNLIMITED", "Безлимит")}</b>'
+                    )
+            elif cur_traffic == 0:
                 # currently unlimited, no meaningful change to show
                 pass
             else:
@@ -269,17 +296,27 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             subscription_service = SubscriptionService()
 
             if existing_sub:
-                new_traffic = gift.traffic_limit_gb or None  # 0 = don't change
+                # traffic_limit_gb: -1 = set to unlimited (0 in DB), 0 = no change, N = set to N
+                gift_traffic = gift.traffic_limit_gb
+                if gift_traffic == -1:
+                    new_traffic = 0  # set to unlimited
+                elif gift_traffic and gift_traffic != existing_sub.traffic_limit_gb:
+                    new_traffic = gift_traffic
+                else:
+                    new_traffic = None  # no change
+
                 new_devices_val = gift.device_limit or 0
                 cur_devices = existing_sub.device_limit or 1
                 new_devices = max(cur_devices, new_devices_val) if new_devices_val else None
+                if new_devices == cur_devices:
+                    new_devices = None  # no change needed
 
                 subscription = await extend_subscription(
                     db=db,
                     subscription=existing_sub,
                     days=gift.days,
-                    traffic_limit_gb=new_traffic if new_traffic and new_traffic != existing_sub.traffic_limit_gb else None,
-                    device_limit=new_devices if new_devices and new_devices != existing_sub.device_limit else None,
+                    traffic_limit_gb=new_traffic,
+                    device_limit=new_devices,
                     connected_squads=squads if squads else None,
                     commit=False,
                 )
@@ -289,7 +326,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     db=db,
                     user_id=user.id,
                     duration_days=gift.days or 0,
-                    traffic_limit_gb=gift.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
+                    # -1 means unlimited (0 in DB); otherwise use gift value or default
+                    traffic_limit_gb=0 if gift.traffic_limit_gb == -1 else (gift.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB),
                     device_limit=gift.device_limit or settings.DEFAULT_DEVICE_LIMIT,
                     connected_squads=squads,
                     update_server_counters=True,
@@ -311,7 +349,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             return
 
         days_str = _days_label(gift.days, texts) if gift.days else ''
-        traffic_str = _fmt_traffic(gift.traffic_limit_gb, texts) if gift.traffic_limit_gb else ''
+        traffic_str = _fmt_traffic(gift.traffic_limit_gb, texts) if (gift.traffic_limit_gb or gift.traffic_limit_gb == -1) else ''
         devices_val = gift.device_limit or 0
 
         parts = []
