@@ -661,6 +661,7 @@
   "ADMIN_SERVER_EDIT_NAME": "️ Название",
   "ADMIN_SERVER_EDIT_PRICE": "Цена",
   "ADMIN_SERVER_ENABLE": "Включить",
+  "ADMIN_SETTINGS_APP_CONFIG": "Конфиг приложений",
   "ADMIN_SETTINGS_BOT_CONFIG": "Конфигурация бота",
   "ADMIN_SETTINGS_FAQ": "FAQ",
   "ADMIN_SETTINGS_MAINTENANCE": "Техработы",

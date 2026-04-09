@@ -222,7 +222,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
             ],
             [
                 make_button(
-                    text=_t(texts, 'ADMIN_SETTINGS_APP_CONFIG', "<tg-emoji emoji-id='5875431869842985304'>🎛</tg-emoji> Конфиг приложений"),
+                    text=_t(texts, 'ADMIN_SETTINGS_APP_CONFIG', " Конфиг приложений"),
                     callback_data='admin_remna_config',
                 )
             ],
