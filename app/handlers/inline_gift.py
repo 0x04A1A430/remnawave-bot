@@ -348,6 +348,11 @@ async def handle_cancel_callback(callback: types.CallbackQuery) -> None:
     await callback.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED_ALERT', 'Подарок уже активирован.'), show_alert=True)
 
 
+async def handle_noop_callback(callback: types.CallbackQuery) -> None:
+    texts = get_texts(DEFAULT_LANGUAGE)
+    await callback.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED_ALERT', 'Подарок уже активирован.'), show_alert=True)
+
+
 def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(handle_activate_callback, F.data.startswith('igift_activate:'))
     dp.callback_query.register(handle_cancel_callback, F.data.startswith('igift_cancel:'))

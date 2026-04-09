@@ -1776,7 +1776,7 @@
   "WEBHOOK_RENEW_BUTTON": "Продлить подписку",
   "WEBHOOK_USER_NOT_CONNECTED": "<b>Вы ещё не подключились</b>\n\nВаша подписка{tariff_label} активна, но VPN-соединение не было установлено. Подключитесь, чтобы начать пользоваться.",
   "WEBHOOK_DEVICE_ADDED": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> <b>Новое устройство</b>\n\n<blockquote>К подписке{tariff_label} подключено новое устройство: {device}</blockquote>",
-  "WEBHOOK_DEVICE_DELETED": "<b>Устройство удалено</b>\n\nУстройство отключено от подписки{tariff_label}: <code>{device}</code>",
+  "WEBHOOK_DEVICE_DELETED": "<b>Устройство удалено</b>\n\n<blockquote>Устройство отключено от подписки{tariff_label}: {device}</blockquote>",
   "WEBHOOK_CLOSE_BUTTON": "️ Закрыть",
   "INLINE_GIFT_THUMBNAIL_URL": "https://i.imgur.com/dPMGC9b.png",
   "INLINE_GIFT_QUERY_ENTER_USERNAME": "Введите @username",

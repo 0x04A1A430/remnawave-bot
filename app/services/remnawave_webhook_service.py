@@ -1276,12 +1276,12 @@ class RemnaWaveWebhookService:
         emoji = cls._PLATFORM_EMOJI.get(platform, '')
 
         if tag and platform:
-            text = html.escape(f'{tag} ({platform})')
+            text = f'{html.escape(tag)} ({html.escape(platform)})'
         elif tag:
             text = html.escape(tag)
         elif platform and hwid:
             hwid_short = hwid[:8] if len(hwid) > 8 else hwid
-            text = html.escape(f'{platform} ({hwid_short})')
+            text = f'{html.escape(platform)} ({html.escape(hwid_short)})'
         elif platform:
             text = html.escape(platform)
         elif hwid:
