@@ -198,14 +198,18 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             id=gift_code,
             title=f'{recipient_display} — {gift_summary}',
             description=description,
-            input_message_content=types.InputTextMessageContent(
-                message_text=caption,
-                parse_mode='HTML',
-            ),
-            reply_markup=keyboard,
             thumbnail_url=thumbnail_url,
             thumbnail_width=512,
             thumbnail_height=512,
+            input_message_content=types.InputTextMessageContent(
+                message_text=caption,
+                parse_mode='HTML',
+                link_preview_options=types.LinkPreviewOptions(
+                    show_above_text=True,
+                    url=thumbnail_url,
+                ),
+            ),
+            reply_markup=keyboard,
         )
     ]
 
