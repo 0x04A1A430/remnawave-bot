@@ -1021,7 +1021,7 @@
 "MAIN_MENU_BUTTON": "主菜单",
 "MAIN_MENU_TEST_ACCESS_HEADER": "测试服务器已激活：{servers}",
 "MAIN_MENU_TEST_ACCESS_TIMER": "⏳访问剩余时间：{time_left}\n<code>{bar}</code>",
-"MANAGE_DEVICES_BUTTON": "设备管理",
+"MANAGE_DEVICES_BUTTON": "设备",
 "MARK_AS_ANSWERED": "标记为已回复",
 "MENU_ADMIN": "️管理面板",
 "MENU_BALANCE": "余额",

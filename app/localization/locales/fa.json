@@ -1105,7 +1105,7 @@
     "MAIN_MENU_BUTTON": "منوی اصلی",
     "MAIN_MENU_TEST_ACCESS_HEADER": "سرورهای آزمایشی فعال: {servers}",
     "MAIN_MENU_TEST_ACCESS_TIMER": "⏳ اعتبار دسترسی: {time_left}\n<code>{bar}</code>",
-    "MANAGE_DEVICES_BUTTON": "مدیریت دستگاه‌ها",
+    "MANAGE_DEVICES_BUTTON": "دستگاه‌ها",
     "MARK_AS_ANSWERED": "علامت پاسخ‌داده‌شده",
     "MENU_ADMIN": "️ پنل ادمین",
     "MENU_BALANCE": "موجودی",

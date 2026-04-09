@@ -27,7 +27,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
@@ -91,7 +91,7 @@ async def process_cryptobot_payment_amount(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
@@ -172,15 +172,22 @@ async def process_cryptobot_payment_amount(
             await state.clear()
             return
 
+        from app.utils.button_emoji import parse_button_label
+
+        _pay_raw = texts.t('CRYPTOBOT_PAY_BUTTON', 'Оплатить криптовалютой')
+        _pay_parsed = parse_button_label(_pay_raw)
+
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='Оплатить', url=payment_url)],
-                [
-                    types.InlineKeyboardButton(
-                        text='Проверить статус',
-                        callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}',
-                    )
-                ],
+                [types.InlineKeyboardButton(
+                    text=_pay_parsed.text,
+                    url=payment_url,
+                    **({'icon_custom_emoji_id': _pay_parsed.icon_custom_emoji_id} if _pay_parsed.icon_custom_emoji_id else {}),
+                )],
+                [types.InlineKeyboardButton(
+                    text=texts.t('CHECK_STATUS_BUTTON', 'Проверить статус'),
+                    callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}',
+                )],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
             ]
         )
@@ -201,14 +208,11 @@ async def process_cryptobot_payment_amount(
                 logger.warning('Не удалось удалить сообщение с запросом суммы CryptoBot', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'<b>Оплата криптовалютой</b>\n\n'
-            f'Сумма к зачислению: {amount_rubles:.0f} ₽\n'
-            f'К оплате: {amount_usd:.2f} USD\n'
+            f'<b>Оплата криптовалютой (CryptoBot)</b>\n\n'
+            f'Сумма: <code>{amount_rubles:.0f} ₽</code>\n'
+            f'К оплате: <code>{amount_usd:.2f} USD</code>\n'
             f'Актив: {payment_result["asset"]}\n'
-            f'Курс: 1 USD = {current_rate:.2f} ₽\n'
-            f'ID платежа: {payment_result["invoice_id"][:8]}...\n\n'
-            f'Поддерживаемые активы: USDT, TON, BTC, ETH\n\n'
-            f'Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}',
+            f'ID транзакции: <tg-spoiler>{payment_result["invoice_id"]}</tg-spoiler>',
             reply_markup=keyboard,
             parse_mode='HTML',
         )

@@ -104,7 +104,7 @@ async def start_platega_payment(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
@@ -211,7 +211,7 @@ async def start_platega_direct_method(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
@@ -256,7 +256,7 @@ async def process_platega_payment_amount(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
@@ -358,12 +358,6 @@ async def process_platega_payment_amount(
             )
         ],
     ]
-
-    support_url = settings.get_support_contact_url()
-    if support_url:
-        keyboard_rows.append(
-            [types.InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), url=support_url)]
-        )
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')])
 

@@ -164,8 +164,8 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str) -> bool:
                 return True
         else:
             from_username = (message.from_user.username or '').lower()
-            if intended_username and intended_username.lower() != from_username:
-                await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
+            if not intended_username or intended_username.lower() != from_username:
+                await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'), parse_mode='HTML')
                 return True
             gift.recipient_telegram_id = telegram_id
             await session.commit()
@@ -228,11 +228,28 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         if gift.recipient_telegram_id and gift.recipient_telegram_id != 0:
             if telegram_id != gift.recipient_telegram_id:
-                await callback.answer(
+                await callback.answer()
+                await callback.message.edit_text(
                     texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
-                    show_alert=True,
+                    parse_mode='HTML',
                 )
                 return
+        else:
+            # recipient_telegram_id == 0: проверяем по username из inline_message_id
+            raw_stored = gift.inline_message_id or ''
+            intended_username = raw_stored[2:] if raw_stored.startswith('u:') else ''
+            from_username = (callback.from_user.username or '').lower()
+            if not intended_username or intended_username.lower() != from_username:
+                await callback.answer()
+                await callback.message.edit_text(
+                    texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
+                    parse_mode='HTML',
+                )
+                return
+            # Сохраняем telegram_id чтобы больше не проверять по username
+            gift.recipient_telegram_id = telegram_id
+            await db.commit()
+            await db.refresh(gift)
 
         if not user:
             await callback.message.edit_text(texts.t('INLINE_GIFT_NOT_REGISTERED', 'Вы не зарегистрированы в боте. Напишите /start для регистрации.'))

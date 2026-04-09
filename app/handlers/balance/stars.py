@@ -31,7 +31,7 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
@@ -68,7 +68,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
@@ -98,9 +98,11 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             payload=f'balance_{db_user.id}_{amount_kopeks}',
         )
 
+        from app.utils.button_emoji import make_button
+
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⭐ Оплатить', url=invoice_link)],
+                [make_button(text="<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji> Оплатить", url=invoice_link)],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
             ]
         )
@@ -121,10 +123,12 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             except Exception as delete_error:  # pragma: no cover - диагностический лог
                 logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
+        star_emoji = "<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji>"
+
         invoice_message = await message.answer(
-            f'⭐ <b>Оплата через Telegram Stars</b>\n\n'
+            f'{star_emoji} <b>Оплата через Telegram Stars</b>\n\n'
             f'Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'⭐ К оплате: {stars_amount} звезд\n'
+            f'{star_emoji} К оплате: {stars_amount} звезд\n'
             f'Курс: {stars_rate}₽ за звезду\n\n'
             f'Нажмите кнопку ниже для оплаты:',
             reply_markup=keyboard,
