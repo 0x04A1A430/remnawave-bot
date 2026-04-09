@@ -1778,7 +1778,7 @@
   "WEBHOOK_DEVICE_ADDED": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> <b>Новое устройство</b>\n\n<blockquote>К подписке{tariff_label} подключено новое устройство: {device}</blockquote>",
   "WEBHOOK_DEVICE_DELETED": "<b>Устройство удалено</b>\n\n<blockquote>Устройство отключено от подписки{tariff_label}: {device}</blockquote>",
   "WEBHOOK_CLOSE_BUTTON": "️ Закрыть",
-  "INLINE_GIFT_THUMBNAIL_URL": "https://raw.githubusercontent.com/cy7su/sign_steam_alph/refs/heads/main/gift.jpeg",
+  "INLINE_GIFT_THUMBNAIL_URL": "https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png",
   "INLINE_GIFT_QUERY_ENTER_USERNAME": "Введите @username",
   "INLINE_GIFT_ITEM_TITLE": "Подарок {label_days} — {recipient}",
   "INLINE_GIFT_ITEM_DESCRIPTION": "Подарочная подписка на {days} дней для @{username}",

@@ -1757,7 +1757,7 @@
   "WEBHOOK_DEVICE_ADDED": "<b>New device</b>\n\nA new device has been added to your subscription{tariff_label}: <code>{device}</code>",
   "WEBHOOK_DEVICE_DELETED": "<b>Device removed</b>\n\nA device has been removed from your subscription{tariff_label}: <code>{device}</code>",
   "WEBHOOK_CLOSE_BUTTON": "️ Close",
-  "INLINE_GIFT_THUMBNAIL_URL": "https://raw.githubusercontent.com/cy7su/sign_steam_alph/refs/heads/main/gift.jpeg",
+  "INLINE_GIFT_THUMBNAIL_URL": "https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png",
   "INLINE_GIFT_QUERY_ENTER_USERNAME": "Enter @username",
   "INLINE_GIFT_ITEM_TITLE": "Gift {label_days} — {recipient}",
   "INLINE_GIFT_ITEM_DESCRIPTION": "Gift subscription for {days} days for @{username}",
