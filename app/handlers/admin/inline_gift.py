@@ -142,7 +142,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             else:
                 sub_info_lines.append(texts.t('INLINE_GIFT_NO_SUB', 'нет подписки'))
 
-    thumbnail_url = texts.t('INLINE_GIFT_THUMBNAIL_URL', 'https://raw.githubusercontent.com/cy7su/sign_steam_alph/refs/heads/main/gift.jpeg')
+    thumbnail_url = texts.t('INLINE_GIFT_THUMBNAIL_URL', 'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png')
 
     # If no params entered yet — show current subscription state only (no gift to create)
     if days == 0 and traffic_gb == 0 and devices == 0:
