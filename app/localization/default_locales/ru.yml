@@ -90,3 +90,7 @@ INLINE_GIFT:
   LABEL_DAYS_SHORT: "{n} дн."
   LABEL_YEAR: "1 г."
   LABEL_YEARS: "{n} г."
+  EMOJI_GIFT: "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>"
+  EMOJI_CALENDAR: "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji>"
+  EMOJI_TRAFFIC: "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>"
+  EMOJI_DEVICES: "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>"

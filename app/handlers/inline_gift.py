@@ -62,17 +62,20 @@ def _build_info_text(
         # New user — show gift params that are non-zero
         if gift_days:
             lines.append(
-                f'🗓 {texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
+                f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
                 f'<b>{_days_label(gift_days, texts)}</b>'
             )
         if gift_traffic_gb:
             lines.append(
-                f'📶 {texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
+                f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
                 f'<b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
             )
         if gift_devices:
             lines.append(
-                f'📱 {texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
+                f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
                 f'<b>{gift_devices}</b>'
             )
     else:
@@ -83,7 +86,8 @@ def _build_info_text(
         if gift_days:
             new_days = cur_days + gift_days
             lines.append(
-                f'🗓 {texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
+                f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
                 f'<b>{_days_label(cur_days, texts)}</b> +{gift_days}'
                 f'{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → '
                 f'<b>{_days_label(new_days, texts)}</b>'
@@ -97,7 +101,8 @@ def _build_info_text(
                 t_delta = gift_traffic_gb - cur_traffic
                 sign = '+' if t_delta >= 0 else ''
                 lines.append(
-                    f'📶 {texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
+                    f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
+                    f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
                     f'<b>{_fmt_traffic(cur_traffic, texts)}</b> {sign}{t_delta} → '
                     f'<b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
                 )
@@ -107,18 +112,21 @@ def _build_info_text(
             if new_devices != cur_devices:
                 d_delta = new_devices - cur_devices
                 lines.append(
-                    f'📱 {texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
+                    f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
+                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
                     f'<b>{cur_devices}</b> +{d_delta} → <b>{new_devices}</b>'
                 )
             else:
                 lines.append(
-                    f'📱 {texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
+                    f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
+                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
                     f'<b>{cur_devices}</b>'
                 )
 
     body = '\n'.join(lines) if lines else '—'
     return (
-        f'🎁 <b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
+        f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id=\'6032937473162614352\'>🎁</tg-emoji>")} '
+        f'<b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
         f'<blockquote>{body}</blockquote>\n\n'
         f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
     )
