@@ -660,6 +660,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             return
         start_parameter = None
 
+    # Handle inline gift deep links for unregistered users: /start rbs_<gift_code>
+    # User must complete registration first, then the gift dialog is shown automatically.
+    if start_parameter and start_parameter.startswith('rbs_'):
+        gift_code = start_parameter[4:]
+        logger.info('Inline gift deep link for new user detected', gift_code_prefix=gift_code[:5], telegram_id=message.from_user.id)
+        await state.update_data(pending_inline_gift_code=gift_code)
+        start_parameter = None
+
     # Handle gift code deep links: /start GIFT_{token}
     if start_parameter and start_parameter.startswith('GIFT_'):
         gift_token = start_parameter[5:]  # Strip "GIFT_" prefix
@@ -892,7 +900,16 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
         if pinned_message and not pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
+
+        # Show inline gift dialog for already-registered users who followed rbs_ link
+        _igift_code_existing = (await state.get_data()).get('pending_inline_gift_code')
         await state.clear()
+        if _igift_code_existing:
+            from app.handlers.inline_gift import show_pending_inline_gift as _show_igift_existing
+            try:
+                await _show_igift_existing(message, _igift_code_existing)
+            except Exception as e:
+                logger.error('Ошибка показа подарочного диалога для существующего пользователя', error=e)
         return
 
     if user and user.status == UserStatus.DELETED.value:
@@ -1704,13 +1721,10 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, callback.message.answer)
 
-    await state.clear()
+    # Show inline gift dialog for users who arrived via rbs_ link
+    _pending_inline_gift_cb = (await state.get_data()).get('pending_inline_gift_code')
 
-    if campaign_message:
-        try:
-            await callback.message.answer(campaign_message)
-        except Exception as e:
-            logger.error('Ошибка отправки сообщения о бонусе кампании', error=e)
+    await state.clear()
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
 
@@ -1799,6 +1813,14 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
 
     logger.info('Регистрация завершена для пользователя', telegram_id=user.telegram_id)
+
+    # Show inline gift dialog after registration completes (rbs_ deep link)
+    if _pending_inline_gift_cb:
+        from app.handlers.inline_gift import show_pending_inline_gift as _show_igift_cb
+        try:
+            await _show_igift_cb(callback.message, _pending_inline_gift_cb)
+        except Exception as e:
+            logger.error('Ошибка показа подарочного диалога после регистрации (callback)', error=e)
 
 
 async def complete_registration(message: types.Message, state: FSMContext, db: AsyncSession):
@@ -2048,6 +2070,9 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
 
+    # Show inline gift dialog for users who arrived via rbs_ link
+    _pending_inline_gift = (await state.get_data()).get('pending_inline_gift_code')
+
     await state.clear()
 
     if campaign_message:
@@ -2151,6 +2176,14 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
 
     logger.info('Регистрация завершена для пользователя', telegram_id=user.telegram_id)
+
+    # Show inline gift dialog after registration completes (rbs_ deep link)
+    if _pending_inline_gift:
+        from app.handlers.inline_gift import show_pending_inline_gift as _show_igift
+        try:
+            await _show_igift(message, _pending_inline_gift)
+        except Exception as e:
+            logger.error('Ошибка показа подарочного диалога после регистрации', error=e)
 
 
 def _get_subscription_status(user, texts):

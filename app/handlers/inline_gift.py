@@ -311,27 +311,50 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 if new_devices == cur_devices:
                     new_devices = None  # no change needed
 
-                subscription = await extend_subscription(
-                    db=db,
-                    subscription=existing_sub,
-                    days=gift.days,
-                    traffic_limit_gb=new_traffic,
-                    device_limit=new_devices,
-                    connected_squads=squads if squads else None,
-                    commit=False,
-                )
+                # days == _FOREVER_DAYS means "set end_date to year 2099" instead of adding days
+                if gift.days >= _FOREVER_DAYS:
+                    now = datetime.now(UTC)
+                    existing_sub.end_date = now.replace(year=2099)
+                    subscription = await extend_subscription(
+                        db=db,
+                        subscription=existing_sub,
+                        days=0,
+                        traffic_limit_gb=new_traffic,
+                        device_limit=new_devices,
+                        connected_squads=squads if squads else None,
+                        commit=False,
+                    )
+                else:
+                    subscription = await extend_subscription(
+                        db=db,
+                        subscription=existing_sub,
+                        days=gift.days,
+                        traffic_limit_gb=new_traffic,
+                        device_limit=new_devices,
+                        connected_squads=squads if squads else None,
+                        commit=False,
+                    )
                 await subscription_service.update_remnawave_user(db, subscription)
             else:
+                forever_end_date = None
+                duration_days = gift.days or 0
+                if duration_days >= _FOREVER_DAYS:
+                    now = datetime.now(UTC)
+                    forever_end_date = now.replace(year=2099)
+                    duration_days = 1  # create_paid_subscription needs at least 1 day; we'll override end_date after
+
                 subscription = await create_paid_subscription(
                     db=db,
                     user_id=user.id,
-                    duration_days=gift.days or 0,
+                    duration_days=duration_days,
                     # -1 means unlimited (0 in DB); otherwise use gift value or default
                     traffic_limit_gb=0 if gift.traffic_limit_gb == -1 else (gift.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB),
                     device_limit=gift.device_limit or settings.DEFAULT_DEVICE_LIMIT,
                     connected_squads=squads,
                     update_server_counters=True,
                 )
+                if forever_end_date:
+                    subscription.end_date = forever_end_date
                 await subscription_service.create_remnawave_user(db, subscription)
 
             await db.refresh(subscription)
@@ -372,7 +395,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена на вашем аккаунте.',
             )
 
-        await callback.message.edit_text(success_text, parse_mode='HTML')
+        back_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(
+                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                callback_data='back_to_menu',
+            )
+        ]])
+        await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_keyboard)
 
         # Update the inline message: replace URL button with noop callback button
         await _update_inline_button(
@@ -427,6 +456,64 @@ async def handle_cancel_callback(callback: types.CallbackQuery) -> None:
 async def handle_noop_callback(callback: types.CallbackQuery) -> None:
     texts = get_texts(DEFAULT_LANGUAGE)
     await callback.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED_ALERT', 'Подарок уже активирован.'), show_alert=True)
+
+
+async def show_pending_inline_gift(message: types.Message, gift_code: str) -> None:
+    """Called after a new user completes registration when they arrived via rbs_ link.
+
+    Shows the accept/cancel gift dialog immediately after the main menu is shown.
+    """
+    telegram_id = message.from_user.id
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(InlineGiftSubscription).where(
+                InlineGiftSubscription.gift_code == gift_code
+            )
+        )
+        gift = result.scalars().first()
+
+        if not gift:
+            return
+
+        user = await get_user_by_telegram_id(session, telegram_id)
+        language = user.language if user else DEFAULT_LANGUAGE
+        texts = get_texts(language)
+
+        if gift.is_activated:
+            await message.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED', 'Этот подарок уже был активирован.'))
+            return
+
+        # Bind telegram_id to the gift if not yet bound
+        if not gift.recipient_telegram_id or gift.recipient_telegram_id == 0:
+            gift.recipient_telegram_id = telegram_id
+            await session.commit()
+            await session.refresh(gift)
+        elif gift.recipient_telegram_id != telegram_id:
+            await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
+            return
+
+        days = gift.days
+        traffic_gb = gift.traffic_limit_gb
+        devices = gift.device_limit
+
+        existing_sub = await get_subscription_by_user_id(session, user.id) if user else None
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[
+            types.InlineKeyboardButton(
+                text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
+                callback_data=f'igift_activate:{gift_code}',
+            ),
+            types.InlineKeyboardButton(
+                text=texts.t('INLINE_GIFT_CANCEL_BUTTON', 'Отменить'),
+                callback_data=f'igift_cancel:{gift_code}',
+            ),
+        ]]
+    )
+
+    text_out = _build_info_text(days, traffic_gb, devices, texts, existing_sub)
+    await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
 
 
 def register_handlers(dp: Dispatcher) -> None:

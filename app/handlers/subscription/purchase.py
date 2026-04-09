@@ -34,6 +34,7 @@ from app.keyboards.inline import (
     get_traffic_packages_keyboard,
     get_trial_keyboard,
     get_updated_subscription_settings_keyboard,
+    make_button,
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
@@ -1143,7 +1144,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
+                            make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 web_app=types.WebAppInfo(url=subscription_link),
                             )
@@ -1170,7 +1171,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
+                            make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
@@ -1186,7 +1187,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             elif connect_mode == 'link':
                 rows = [
                     [
-                        InlineKeyboardButton(
+                        make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             url=subscription_link,
                         )
@@ -1207,7 +1208,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             elif connect_mode == 'happ_cryptolink':
                 rows = [
                     [
-                        InlineKeyboardButton(
+                        make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             callback_data='open_subscription_link',
                         )
@@ -1229,7 +1230,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
+                            make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 callback_data='subscription_connect',
                             )
@@ -2642,7 +2643,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
+                            make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 web_app=types.WebAppInfo(url=subscription_link),
                             )
@@ -2669,7 +2670,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
+                            make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
@@ -2684,7 +2685,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 )
             elif connect_mode == 'link':
                 rows = [
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', 'Подключиться'), url=subscription_link)]
+                    [make_button(text=texts.t('CONNECT_BUTTON', 'Подключиться'), url=subscription_link)]
                 ]
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
@@ -2700,7 +2701,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             elif connect_mode == 'happ_cryptolink':
                 rows = [
                     [
-                        InlineKeyboardButton(
+                        make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             callback_data='open_subscription_link',
                         )
@@ -2721,7 +2722,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
+                            make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'), callback_data='subscription_connect'
                             )
                         ],
@@ -3426,8 +3427,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
 def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: str) -> InlineKeyboardMarkup:
     """Создает клавиатуру успешной активации триала."""
-    from app.keyboards.inline import make_button
-
     if connect_mode == 'miniapp_subscription':
         return InlineKeyboardMarkup(
             inline_keyboard=[
