@@ -1253,7 +1253,7 @@
   "PLATEGA_AMOUNT_TOO_LOW": "Минимальная сумма для оплаты через Platega: {amount}",
   "PLATEGA_AMOUNT_TOO_HIGH": "Максимальная сумма для оплаты через Platega: {amount}",
   "PLATEGA_PAYMENT_ERROR": "Ошибка создания платежа Platega. Попробуйте позже или обратитесь в поддержку.",
-  "PLATEGA_PAYMENT_INSTRUCTIONS": "<b>Оплата через Platega ({method})</b>\n\nСумма: {amount}\nID транзакции: {transaction}\n\nЕсли возникнут проблемы, обратитесь в {support}",
+  "PLATEGA_PAYMENT_INSTRUCTIONS": "<b>Оплата через Platega ({method})</b>\n\nСумма: <code>{amount}</code>\nID транзакции: <tg-spoiler>{transaction}</tg-spoiler>",
   "PLATEGA_PAY_BUTTON": "Оплатить через {method}",
   "PLATEGA_PAYMENT_ALREADY_CONFIRMED": "Платёж уже зачислен",
   "PLATEGA_PAYMENT_STATUS": "Текущий статус платежа: {status}",

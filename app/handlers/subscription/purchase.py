@@ -3426,14 +3426,16 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
 
 def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: str) -> InlineKeyboardMarkup:
     """Создает клавиатуру успешной активации триала."""
+    from app.keyboards.inline import make_button
 
     if connect_mode == 'miniapp_subscription':
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         web_app=types.WebAppInfo(url=subscription_link),
+                        
                     )
                 ],
                 [
@@ -3451,9 +3453,10 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                        
                     )
                 ],
                 [
@@ -3467,9 +3470,10 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
     if connect_mode == 'link':
         rows = [
             [
-                InlineKeyboardButton(
+                make_button(
                     text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                     url=subscription_link,
+                    
                 )
             ]
         ]
@@ -3488,9 +3492,10 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
     if connect_mode == 'happ_cryptolink':
         rows = [
             [
-                InlineKeyboardButton(
+                make_button(
                     text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                     callback_data='open_subscription_link',
+                    
                 )
             ]
         ]
@@ -3509,9 +3514,10 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
+                make_button(
                     text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                     callback_data='subscription_connect',
+                    
                 )
             ],
             [

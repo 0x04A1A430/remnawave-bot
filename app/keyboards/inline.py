@@ -258,7 +258,7 @@ def get_channel_sub_keyboard(
             if link:
                 if is_subscribed:
                     label = f'{title}' if title else ''
-                    buttons.append([make_button(text=label, url=link, style='success')])
+                    buttons.append([make_button(text=label, url=link)])
                 else:
                     label = title or texts.t('CHANNEL_SUBSCRIBE_BUTTON', 'Подписаться')
                     buttons.append([make_button(text=label, url=link, style='primary')])
@@ -575,6 +575,9 @@ def get_main_menu_keyboard(
     keyboard: list[list[InlineKeyboardButton]] = []
     paired_buttons: list[InlineKeyboardButton] = []
 
+    if not (has_active_subscription and subscription_is_active):
+        keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance')])
+
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
         subscription_link = get_display_subscription_link(subscription)
@@ -630,6 +633,8 @@ def get_main_menu_keyboard(
         else:
             keyboard.append([_fallback_connect_button()])
 
+        keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance')])
+
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             keyboard.append(happ_row)
@@ -638,7 +643,12 @@ def get_main_menu_keyboard(
             if settings.is_multi_tariff_enabled()
             else texts.MENU_SUBSCRIPTION
         )
-        paired_buttons.append(make_button(text=sub_btn_text, callback_data='menu_subscription'))
+        sub_btn = make_button(text=sub_btn_text, callback_data='menu_subscription')
+        devices_btn = make_button(
+            text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
+            callback_data='subscription_manage_devices',
+        )
+        keyboard.append([sub_btn, devices_btn])
 
         # Добавляем кнопку докупки трафика для лимитированных подписок
         # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
@@ -657,7 +667,7 @@ def get_main_menu_keyboard(
                 make_button(text=texts.t('BUY_TRAFFIC_BUTTON', 'Докупить трафик'), callback_data='buy_traffic')
             )
 
-    keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance')])
+
 
     show_trial = not has_had_paid_subscription and not has_active_subscription
 
@@ -702,12 +712,12 @@ def get_main_menu_keyboard(
             if isinstance(button, InlineKeyboardButton):
                 paired_buttons.append(button)
 
-    # Добавляем кнопки промокода и рефералов, учитывая настройки
-    paired_buttons.append(make_button(text=texts.MENU_PROMOCODE, callback_data='menu_promocode'))
+    # Добавляем кнопки промокода и рефералов отдельным рядом
+    promo_ref_row: list[InlineKeyboardButton] = [make_button(text=texts.MENU_PROMOCODE, callback_data='menu_promocode')]
 
     # Добавляем кнопку рефералов, только если программа включена
     if settings.is_referral_program_enabled():
-        paired_buttons.append(make_button(text=texts.MENU_REFERRALS, callback_data='menu_referrals'))
+        promo_ref_row.append(make_button(text=texts.MENU_REFERRALS, callback_data='menu_referrals'))
 
     # Добавляем кнопку конкурсов
     if settings.CONTESTS_ENABLED and settings.CONTESTS_BUTTON_VISIBLE:
@@ -727,6 +737,8 @@ def get_main_menu_keyboard(
     for i in range(0, len(paired_buttons), 2):
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
+
+    keyboard.append(promo_ref_row)
 
     # Поддержка — одна кнопка в самом низу
     if support_enabled:
@@ -1050,6 +1062,7 @@ def get_subscription_keyboard(
                         make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             web_app=types.WebAppInfo(url=subscription_link),
+                            
                         )
                     ]
                 )
@@ -1060,6 +1073,7 @@ def get_subscription_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                                
                             )
                         ]
                     )
@@ -1069,6 +1083,7 @@ def get_subscription_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 callback_data=f'subscription_connect{_sub_suffix}',
+                                
                             )
                         ]
                     )
@@ -1080,6 +1095,7 @@ def get_subscription_keyboard(
                         make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             callback_data=f'open_subscription_link{_sub_suffix}',
+                            
                         )
                     ]
                 )
@@ -1089,6 +1105,7 @@ def get_subscription_keyboard(
                         make_button(
                             text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                             callback_data=f'subscription_connect{_sub_suffix}',
+                            
                         )
                     ]
                 )
@@ -1098,6 +1115,7 @@ def get_subscription_keyboard(
                     InlineKeyboardButton(
                         text=_copy_label.text,
                         copy_text=CopyTextButton(text=subscription_link),
+                        
                         **({'icon_custom_emoji_id': _copy_label.icon_custom_emoji_id} if _copy_label.icon_custom_emoji_id else {}),
                     )
                 ]
@@ -1108,6 +1126,7 @@ def get_subscription_keyboard(
                     make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                        
                     )
                 ]
             )
@@ -1117,6 +1136,7 @@ def get_subscription_keyboard(
                     make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         callback_data=f'subscription_connect{_sub_suffix}',
+                        
                     )
                 ]
             )
@@ -1150,31 +1170,12 @@ def get_subscription_keyboard(
                 else:
                     pause_text = texts.t('PAUSE_DAILY_BUTTON', '🟢 Приостановить подписку')
                 keyboard.append([make_button(text=pause_text, callback_data='toggle_daily_subscription_pause')])
-            else:
-                # Для обычного тарифа: [Автоплатеж]
-                keyboard.append(
-                    [
-                        make_button(
-                            text=texts.t('AUTOPAY_BUTTON', 'Автоплатеж'),
-                            callback_data='subscription_autopay',
-                        ),
-                    ]
-                )
 
-            # Ряд: [Управление устройствами] [Тариф] (если режим тарифов)
-            devices_row = [
-                make_button(
-                    text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
-                    callback_data='subscription_manage_devices',
-                )
-            ]
-            if settings.is_tariffs_mode() and subscription:
-                # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение
-                tariff_callback = 'tariff_switch' if is_daily_tariff else 'instant_switch'
-                devices_row.append(
-                    make_button(text=texts.t('CHANGE_TARIFF_BUTTON', 'Тариф'), callback_data=tariff_callback)
-                )
-            keyboard.append(devices_row)
+            # Ряд: [Устройства]
+            keyboard.append([make_button(
+                text=texts.t('MANAGE_DEVICES_BUTTON', 'Устройства'),
+                callback_data='subscription_manage_devices',
+            )])
 
             # Кнопка докупки трафика для платных подписок
             # В режиме тарифов проверяем can_topup_traffic() у тарифа, в классическом - глобальные настройки
@@ -2493,7 +2494,7 @@ def get_connection_guide_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 url=final_url,
-                                style='success',
+                                
                             )
                         ]
                     )
@@ -2508,7 +2509,7 @@ def get_connection_guide_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 callback_data=_osl_cb,
-                                style='success',
+                                
                             )
                         ]
                     )
@@ -2518,7 +2519,7 @@ def get_connection_guide_keyboard(
                             make_button(
                                 text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                                 url=subscription_url,
-                                style='success',
+                                
                             )
                         ]
                     )
@@ -2746,6 +2747,7 @@ def get_devices_management_keyboard(
             make_button(
                 text=texts.t('RESET_ALL_DEVICES_BUTTON', 'Сбросить все устройства'),
                 callback_data='reset_all_devices',
+                
             )
         ]
     )
@@ -2846,6 +2848,7 @@ def get_device_reset_confirm_keyboard(
                 make_button(
                     text=texts.t('RESET_DEVICE_CONFIRM_BUTTON', 'Да, сбросить это устройство'),
                     callback_data=f'confirm_reset_device_{device_index}_{page}',
+                    
                 )
             ],
             [make_button(text=texts.CANCEL, callback_data=f'devices_page_{page}')],

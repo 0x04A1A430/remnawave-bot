@@ -28,7 +28,7 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     keyboard = []
     support_url = settings.get_support_contact_url()
     if support_url:
-        keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+        keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

@@ -143,7 +143,7 @@ async def process_cloudpayments_payment_amount(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
@@ -209,7 +209,7 @@ async def start_cloudpayments_payment(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(

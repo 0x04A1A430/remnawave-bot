@@ -246,18 +246,19 @@ def get_payment_methods_text(language: str) -> str:
 
     for method in methods:
         method_id = method['id'].upper()
-        # Для platega inline-методов используем title (уже содержит emoji) как имя
+        # Для platega inline-методов используем title/description напрямую (локальных ключей нет)
         if method_id.startswith('PLATEGA_M') and method.get('title'):
             name = method['title']
+            description = method.get('description', '')
         else:
             name = texts.t(
                 f'PAYMENT_METHOD_{method_id}_NAME',
                 f'{method["icon"]} <b>{method["name"]}</b>',
             )
-        description = texts.t(
-            f'PAYMENT_METHOD_{method_id}_DESCRIPTION',
-            method['description'],
-        )
+            description = texts.t(
+                f'PAYMENT_METHOD_{method_id}_DESCRIPTION',
+                method['description'],
+            )
         if method_id == 'MULENPAY':
             mulenpay_name = settings.get_mulenpay_display_name()
             mulenpay_name_html = settings.get_mulenpay_display_name_html()

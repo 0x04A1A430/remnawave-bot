@@ -117,8 +117,14 @@ async def _create_freekassa_payment_and_respond(
 
     support_url = settings.get_support_contact_url()
     if support_url:
+        _support_raw = texts.t('SUPPORT_BUTTON', 'Поддержка')
+        _support_parsed = parse_button_label(_support_raw)
         keyboard_rows.append(
-            [InlineKeyboardButton(text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), url=support_url)]
+            [InlineKeyboardButton(
+                text=_support_parsed.text,
+                url=support_url,
+                **({'icon_custom_emoji_id': _support_parsed.icon_custom_emoji_id} if _support_parsed.icon_custom_emoji_id else {}),
+            )]
         )
 
     keyboard_rows.append(
@@ -170,7 +176,7 @@ async def process_freekassa_payment_amount(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
@@ -259,7 +265,7 @@ async def _start_freekassa_topup_impl(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
