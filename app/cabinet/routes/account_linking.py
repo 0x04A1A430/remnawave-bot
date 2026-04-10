@@ -885,6 +885,25 @@ async def execute_merge_endpoint(
             detail='Failed to load merged user',
         )
 
+    # BUG-7 fix: Resync merged user's subscriptions with RemnaWave panel
+    try:
+        from app.services.remnawave_resync_service import resync_user_subscriptions_with_panel
+
+        resync_result = await resync_user_subscriptions_with_panel(db, merged_user)
+        logger.info(
+            'Post-merge resync completed',
+            primary_user_id=primary_user_id,
+            secondary_user_id=secondary_user_id,
+            synced=resync_result['synced'],
+            failed=resync_result['failed'],
+        )
+    except Exception as resync_error:
+        logger.error(
+            'Post-merge resync failed (non-fatal)',
+            primary_user_id=primary_user_id,
+            error=resync_error,
+        )
+
     # 5. Create auth tokens for the merged user
     try:
         auth_response = await _create_auth_response(merged_user, db)
