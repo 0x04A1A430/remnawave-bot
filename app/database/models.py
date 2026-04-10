@@ -2245,6 +2245,9 @@ class BroadcastHistory(Base):
     created_at = Column(AwareDateTime(), server_default=func.now())
     completed_at = Column(AwareDateTime(), nullable=True)
 
+    # Broadcast category for user notification preferences filtering
+    category = Column(String(20), default='system', nullable=False)  # system|news|promo
+
     # Email broadcast fields
     channel = Column(String(20), default='telegram', nullable=False)  # telegram|email|both
     email_subject = Column(String(255), nullable=True)
