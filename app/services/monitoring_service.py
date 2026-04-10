@@ -245,6 +245,7 @@ class MonitoringService:
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
+                await self._check_low_balance_alerts(db)
                 await self._retry_stuck_guest_purchases(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
@@ -1973,6 +1974,77 @@ class MonitoringService:
                 logger.info('Retried stuck pending_activation purchases', retried=retried_pa)
         except Exception:
             logger.error('Error retrying stuck PENDING_ACTIVATION guest purchases', exc_info=True)
+
+    async def _check_low_balance_alerts(self, db: AsyncSession):
+        """Check users with autopay enabled who have low balance and notify them."""
+        if not self.bot:
+            return
+
+        try:
+            from sqlalchemy import select
+
+            from app.database.crud.notification import notification_sent, record_notification
+            from app.database.models import Subscription, User
+            from app.utils.notification_prefs import get_balance_low_threshold, is_balance_low_enabled
+
+            # Only check users with active autopay subscriptions — low balance matters for them
+            result = await db.execute(
+                select(User)
+                .join(Subscription, Subscription.user_id == User.id)
+                .where(
+                    Subscription.status.in_(['active', 'trial']),
+                    Subscription.autopay_enabled.is_(True),
+                    User.telegram_id.isnot(None),
+                )
+                .distinct()
+            )
+            users = result.scalars().all()
+
+            sent_count = 0
+            for user in users:
+                if not is_balance_low_enabled(user):
+                    continue
+
+                threshold = get_balance_low_threshold(user)
+                balance = int(getattr(user, 'balance_kopeks', 0) or 0)
+
+                if balance >= threshold:
+                    continue
+
+                # Don't spam — check if already notified today
+                if await notification_sent(db, user.id, 0, 'low_balance'):
+                    continue
+
+                try:
+                    texts = get_texts(user.language)
+                    threshold_rub = threshold / 100
+                    balance_rub = balance / 100
+                    message = texts.get(
+                        'LOW_BALANCE_ALERT',
+                        '⚠️ <b>Низкий баланс</b>\n\n'
+                        'Ваш баланс: {balance} ₽\n'
+                        'Порог уведомления: {threshold} ₽\n\n'
+                        'Пополните баланс, чтобы автопродление подписки прошло успешно.',
+                    )
+                    message = message.format(
+                        balance=f'{balance_rub:.0f}',
+                        threshold=f'{threshold_rub:.0f}',
+                    )
+                    await self.bot.send_message(
+                        user.telegram_id,
+                        message,
+                        parse_mode='HTML',
+                    )
+                    await record_notification(db, user.id, 0, 'low_balance')
+                    sent_count += 1
+                except Exception as send_error:
+                    logger.debug('Failed to send low balance alert', user_id=user.id, error=send_error)
+
+            if sent_count > 0:
+                logger.info('Low balance alerts sent', sent_count=sent_count)
+
+        except Exception as error:
+            logger.error('Error checking low balance alerts', error=error)
 
     async def _cleanup_inactive_users(self, db: AsyncSession):
         try:
