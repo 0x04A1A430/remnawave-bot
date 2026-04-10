@@ -1234,6 +1234,13 @@ async def activate_trial(
     except Exception as e:
         logger.error('Error getting trial tariff', error=e)
 
+    # BUG-12 fix: If no squads from tariff, fallback to trial-eligible servers
+    if not trial_squads:
+        from app.database.crud.server_squad import get_random_trial_squad_uuid
+
+        trial_squad_uuid = await get_random_trial_squad_uuid(db)
+        trial_squads = [trial_squad_uuid] if trial_squad_uuid else []
+
     # Create trial subscription
     subscription = await create_trial_subscription(
         db=db,
