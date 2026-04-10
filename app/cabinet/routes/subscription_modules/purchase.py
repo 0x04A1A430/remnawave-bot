@@ -911,6 +911,12 @@ async def purchase_tariff(
                 )
         except Exception as remnawave_error:
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=user.id,
+                action='create' if not subscription.remnawave_uuid else 'update',
+            )
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
@@ -1249,6 +1255,12 @@ async def activate_trial(
             await db.refresh(subscription)
     except Exception as e:
         logger.error('Failed to create RemnaWave user for trial', error=e)
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        remnawave_retry_queue.enqueue(
+            subscription_id=subscription.id,
+            user_id=user.id,
+            action='create',
+        )
 
     # Send admin notification about trial activation
     try:
