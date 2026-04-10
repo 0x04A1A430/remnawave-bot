@@ -217,6 +217,7 @@ class PromoOfferService:
                         exc=exc,
                     )
                     from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                     if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                         remnawave_retry_queue.enqueue(
                             subscription_id=subscription.id,

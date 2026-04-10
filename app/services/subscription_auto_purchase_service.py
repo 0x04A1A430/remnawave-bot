@@ -584,6 +584,7 @@ async def _auto_extend_subscription(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(updated_subscription, 'id') and hasattr(updated_subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=updated_subscription.id,
@@ -961,6 +962,7 @@ async def _auto_purchase_tariff(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
@@ -1318,6 +1320,7 @@ async def _auto_purchase_daily_tariff(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
@@ -1656,6 +1659,7 @@ async def _auto_add_devices(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
@@ -2011,6 +2015,7 @@ async def _auto_add_traffic(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
@@ -2369,6 +2374,7 @@ async def try_auto_extend_expired_after_topup(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(updated_subscription, 'id') and hasattr(updated_subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=updated_subscription.id,
@@ -2756,6 +2762,7 @@ async def try_resume_disabled_daily_after_topup(
             error=error,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,

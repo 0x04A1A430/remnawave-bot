@@ -1189,6 +1189,7 @@ class MiniAppSubscriptionPurchaseService:
         except Exception as remnawave_error:  # pragma: no cover - defensive logging
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=user.id,

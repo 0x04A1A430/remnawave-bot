@@ -235,6 +235,7 @@ async def _claim_phantom_user(
                 error=str(exc),
             )
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             if hasattr(phantom_sub, 'id') and hasattr(phantom_sub, 'user_id'):
                 remnawave_retry_queue.enqueue(
                     subscription_id=phantom_sub.id,
@@ -2451,13 +2452,16 @@ async def required_sub_channel_check(
                     api_error=api_error,
                 )
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                 for sub in _subs:
                     if sub.is_trial and sub.status == SubscriptionStatus.ACTIVE.value:
                         if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
                             remnawave_retry_queue.enqueue(
                                 subscription_id=sub.id,
                                 user_id=sub.user_id,
-                                action='update' if (getattr(sub, 'remnawave_uuid', None) or user.remnawave_uuid) else 'create',
+                                action='update'
+                                if (getattr(sub, 'remnawave_uuid', None) or user.remnawave_uuid)
+                                else 'create',
                             )
 
         await query.answer(

@@ -124,9 +124,7 @@ async def clear_trial_tariff(db: AsyncSession) -> None:
 
 async def get_all_active_tariffs(db: AsyncSession) -> list[Tariff]:
     """Get all active tariffs."""
-    result = await db.execute(
-        select(Tariff).where(Tariff.is_active.is_(True)).order_by(Tariff.tier_level)
-    )
+    result = await db.execute(select(Tariff).where(Tariff.is_active.is_(True)).order_by(Tariff.tier_level))
     return list(result.scalars().all())
 
 

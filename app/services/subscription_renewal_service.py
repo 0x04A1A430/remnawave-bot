@@ -519,6 +519,7 @@ class SubscriptionRenewalService:
                 error=error,
             )
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription_after.id,
                 user_id=subscription_after.user_id,

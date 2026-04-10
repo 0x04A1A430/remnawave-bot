@@ -769,6 +769,7 @@ class UserService:
                             error=e,
                         )
                         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                         if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
                             remnawave_retry_queue.enqueue(
                                 subscription_id=sub.id,

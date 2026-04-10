@@ -1886,6 +1886,7 @@ class RemnaWaveService:
                         if _squad_uuids:
                             try:
                                 from app.database.crud.tariff import get_all_active_tariffs
+
                                 _all_tariffs = await get_all_active_tariffs(db)
                                 for _t in _all_tariffs:
                                     if _t.allowed_squads and set(_squad_uuids).issubset(set(_t.allowed_squads)):

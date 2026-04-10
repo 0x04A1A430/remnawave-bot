@@ -1079,6 +1079,7 @@ async def handle_custom_confirm(
         except Exception as e:
             logger.error('Ошибка обновления Remnawave', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
@@ -1609,6 +1610,7 @@ async def confirm_tariff_purchase(
     except Exception as e:
         logger.error('Ошибка обновления Remnawave', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         remnawave_retry_queue.enqueue(
             subscription_id=subscription.id,
             user_id=db_user.id,
@@ -1888,6 +1890,7 @@ async def confirm_daily_tariff_purchase(
     except Exception as e:
         logger.error('Ошибка обновления Remnawave', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         remnawave_retry_queue.enqueue(
             subscription_id=subscription.id,
             user_id=db_user.id,
@@ -2359,6 +2362,7 @@ async def confirm_tariff_extend(
         except Exception as e:
             logger.error('Ошибка обновления Remnawave', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
@@ -2991,6 +2995,7 @@ async def confirm_tariff_switch(
         except Exception as e:
             logger.error('Ошибка обновления Remnawave при переключении тарифа', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
@@ -3238,6 +3243,7 @@ async def confirm_daily_tariff_switch(
         except Exception as e:
             logger.error('Ошибка обновления Remnawave', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
@@ -3931,6 +3937,7 @@ async def confirm_instant_switch(
         except Exception as e:
             logger.error('Ошибка обновления Remnawave при мгновенном переключении', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,

@@ -550,6 +550,7 @@ async def handle_simple_subscription_pay_with_balance(
                 exc_info=True,
             )
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,
@@ -2297,6 +2298,7 @@ async def confirm_simple_subscription_purchase(
                 exc_info=True,
             )
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,

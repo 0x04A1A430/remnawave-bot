@@ -2624,6 +2624,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             except Exception as retry_error:
                 logger.error('Повторная попытка создания RemnaWave пользователя также не удалась', error=retry_error)
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,
                     user_id=db_user.id,
@@ -3179,6 +3180,7 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
         except Exception as e:
             logger.error('Ошибка синхронизации с Remnawave при возобновлении', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
@@ -4624,6 +4626,7 @@ async def _extend_existing_subscription(
     except Exception as e:
         logger.error('⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         remnawave_retry_queue.enqueue(
             subscription_id=current_subscription.id,
             user_id=db_user.id,

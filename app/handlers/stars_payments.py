@@ -254,6 +254,7 @@ async def _handle_trial_payment(
             logger.error('Ошибка создания пользователя RemnaWave для триала', rw_error=rw_error)
             # Не откатываем подписку, просто логируем - RemnaWave может быть временно недоступен
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,

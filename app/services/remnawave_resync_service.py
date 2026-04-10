@@ -41,7 +41,7 @@ async def resync_user_subscriptions_with_panel(
         )
         return {'synced': 0, 'failed': 0, 'total': 0, 'skipped': True}
 
-    subscriptions = await get_active_subscriptions_by_user_id(db, user.id)
+    subscriptions = await get_active_subscriptions_by_user_id(db, int(user.id))
 
     if not subscriptions:
         logger.info(

@@ -235,6 +235,7 @@ async def purchase_devices_legacy(
     except Exception as e:
         logger.error('Failed to sync devices with RemnaWave (legacy endpoint)', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         remnawave_retry_queue.enqueue(
             subscription_id=subscription.id,
             user_id=user.id,
@@ -482,6 +483,7 @@ async def purchase_devices(
         except Exception as e:
             logger.error('Failed to sync devices with RemnaWave', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=user.id,

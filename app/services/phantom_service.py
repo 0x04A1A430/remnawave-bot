@@ -118,6 +118,7 @@ async def claim_phantom(
                     exc_info=True,
                 )
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                 if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
                     remnawave_retry_queue.enqueue(
                         subscription_id=sub.id,
@@ -213,6 +214,7 @@ async def sync_remnawave_after_phantom_merge(db: AsyncSession, user: User) -> No
             exc_info=True,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         for sub in subs:
             if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
                 remnawave_retry_queue.enqueue(

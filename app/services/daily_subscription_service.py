@@ -265,6 +265,7 @@ class DailySubscriptionService:
             except Exception as e:
                 logger.warning('Не удалось обновить Remnawave', error=e)
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                 if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                     remnawave_retry_queue.enqueue(
                         subscription_id=subscription.id,
@@ -547,6 +548,7 @@ class DailySubscriptionService:
         except Exception as e:
             logger.warning('Не удалось синхронизировать с RemnaWave после сброса трафика', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,

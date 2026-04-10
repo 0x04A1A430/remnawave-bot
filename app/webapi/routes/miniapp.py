@@ -7056,6 +7056,7 @@ async def switch_tariff_endpoint(
     except Exception as e:
         logger.error('Ошибка синхронизации с RemnaWave при смене тарифа', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
@@ -7253,6 +7254,7 @@ async def purchase_traffic_topup_endpoint(
     except Exception as e:
         logger.error('Ошибка синхронизации с RemnaWave при докупке трафика', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
+
         if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
@@ -7499,6 +7501,7 @@ async def toggle_daily_subscription_pause_endpoint(
         except Exception as e:
             logger.error('Ошибка синхронизации с RemnaWave при возобновлении', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
+
             if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,

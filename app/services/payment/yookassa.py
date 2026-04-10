@@ -681,6 +681,7 @@ class YooKassaPaymentMixin:
                                 except Exception as rw_error:
                                     logger.error('Ошибка создания RemnaWave для триала', rw_error=rw_error)
                                     from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                                     remnawave_retry_queue.enqueue(
                                         subscription_id=subscription.id,
                                         user_id=subscription.user_id,
@@ -998,6 +999,7 @@ class YooKassaPaymentMixin:
                                     exc_info=True,
                                 )
                                 from app.services.remnawave_retry_queue import remnawave_retry_queue
+
                                 remnawave_retry_queue.enqueue(
                                     subscription_id=subscription.id,
                                     user_id=subscription.user_id,
