@@ -1516,6 +1516,9 @@ class RemnaWaveService:
                     for telegram_id, db_user in bot_users_by_telegram_id.items()
                     if telegram_id not in panel_telegram_ids
                     and any(True for _ in (getattr(db_user, 'subscriptions', None) or []))
+                    # BUG-6 fix: Skip users who have a remnawave_uuid — they exist in panel
+                    # but may not have telegram_id set there (OAuth users who linked TG later)
+                    and not getattr(db_user, 'remnawave_uuid', None)
                 ]
 
                 if users_to_deactivate:
