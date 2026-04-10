@@ -1985,7 +1985,7 @@ class MonitoringService:
             from sqlalchemy import select
             from sqlalchemy.orm import selectinload
 
-            from app.database.models import Subscription, User
+            from app.database.models import Subscription
             from app.utils.notification_prefs import get_traffic_warning_percent, is_traffic_warning_enabled
 
             # Get active subscriptions with traffic limits (not unlimited)
