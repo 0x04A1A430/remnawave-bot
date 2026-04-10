@@ -144,22 +144,28 @@ async def _store_refresh_token(
     refresh_token: str,
     device_info: str | None = None,
 ) -> None:
-    """Store refresh token hash in database."""
+    """Store refresh token hash in database using upsert to avoid duplicate key errors."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     expires_at = get_refresh_token_expires_at()
 
-    token_record = CabinetRefreshToken(
+    stmt = pg_insert(CabinetRefreshToken).values(
         user_id=user_id,
         token_hash=token_hash,
         device_info=device_info,
         expires_at=expires_at,
     )
-    db.add(token_record)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        logger.debug('Refresh token already exists (duplicate)', user_id=user_id)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=['token_hash'],
+        set_={
+            'expires_at': expires_at,
+            'device_info': device_info,
+            'revoked_at': None,
+        },
+    )
+    await db.execute(stmt)
+    await db.commit()
 
 
 async def _process_campaign_bonus(
