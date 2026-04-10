@@ -2607,12 +2607,21 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         if not remnawave_user:
             logger.error('Не удалось создать/обновить RemnaWave пользователя для', telegram_id=db_user.telegram_id)
-            remnawave_user = await subscription_service.create_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=True,
-                reset_reason='покупка подписки (повторная попытка)',
-            )
+            try:
+                remnawave_user = await subscription_service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason='покупка подписки (повторная попытка)',
+                )
+            except Exception as retry_error:
+                logger.error('Повторная попытка создания RemnaWave пользователя также не удалась', error=retry_error)
+                from app.services.remnawave_retry_queue import remnawave_retry_queue
+                remnawave_retry_queue.enqueue(
+                    subscription_id=subscription.id,
+                    user_id=db_user.id,
+                    action='create',
+                )
 
         transaction = await create_transaction(
             db=db,
@@ -3162,6 +3171,12 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
             )
         except Exception as e:
             logger.error('Ошибка синхронизации с Remnawave при возобновлении', error=e)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=db_user.id,
+                action='update',
+            )
 
         # Отправляем уведомление администраторам о возобновлении суточной подписки
         if resume_transaction is not None:
@@ -4594,6 +4609,12 @@ async def _extend_existing_subscription(
             logger.error('⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
     except Exception as e:
         logger.error('⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        remnawave_retry_queue.enqueue(
+            subscription_id=current_subscription.id,
+            user_id=db_user.id,
+            action='update',
+        )
 
     # Создаём транзакцию
     transaction = await create_transaction(
