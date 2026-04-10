@@ -1931,6 +1931,18 @@ class RemnaWaveService:
                     if crypto_link and subscription.subscription_crypto_link != crypto_link:
                         subscription.subscription_crypto_link = crypto_link
 
+                    # Update squads from panel
+                    _panel_squads = panel_user.get('activeInternalSquads', []) or []
+                    _squad_uuids = []
+                    if isinstance(_panel_squads, list):
+                        for _sq in _panel_squads:
+                            if isinstance(_sq, dict) and 'uuid' in _sq:
+                                _squad_uuids.append(_sq['uuid'])
+                            elif isinstance(_sq, str):
+                                _squad_uuids.append(_sq)
+                    if _squad_uuids and set(_squad_uuids) != set(subscription.connected_squads or []):
+                        subscription.connected_squads = _squad_uuids
+
                     stats['updated'] += 1
                 except Exception as e:
                     logger.error(
@@ -2145,6 +2157,24 @@ class RemnaWaveService:
                 logger.debug('Обновлен использованный трафик', traffic_used_gb=traffic_used_gb)
 
             # traffic_limit_gb, device_limit: bot is source of truth, do not overwrite from panel
+
+            # Update connected_squads from panel (panel is source of truth for squad assignments)
+            active_squads = panel_user.get('activeInternalSquads', [])
+            panel_squad_uuids = []
+            if isinstance(active_squads, list):
+                for squad in active_squads:
+                    if isinstance(squad, dict) and 'uuid' in squad:
+                        panel_squad_uuids.append(squad['uuid'])
+                    elif isinstance(squad, str):
+                        panel_squad_uuids.append(squad)
+
+            if panel_squad_uuids and set(panel_squad_uuids) != set(subscription.connected_squads or []):
+                subscription.connected_squads = panel_squad_uuids
+                logger.info(
+                    'Обновлены connected_squads из панели',
+                    user_telegram_id=getattr(user, 'telegram_id', '?'),
+                    new_squads=panel_squad_uuids,
+                )
 
             new_short_uuid = panel_user.get('shortUuid')
             if new_short_uuid and subscription.remnawave_short_uuid != new_short_uuid:
