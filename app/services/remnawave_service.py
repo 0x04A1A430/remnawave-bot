@@ -1881,6 +1881,19 @@ class RemnaWaveService:
 
                         _short_id = await generate_unique_short_id(db)
 
+                        # Attempt to match tariff by allowed_squads
+                        _matched_tariff_id = None
+                        if _squad_uuids:
+                            try:
+                                from app.database.crud.tariff import get_all_active_tariffs
+                                _all_tariffs = await get_all_active_tariffs(db)
+                                for _t in _all_tariffs:
+                                    if _t.allowed_squads and set(_squad_uuids).issubset(set(_t.allowed_squads)):
+                                        _matched_tariff_id = _t.id
+                                        break
+                            except Exception:
+                                pass
+
                         new_sub = Subscription(
                             user_id=_bot_user.id,
                             status=_sub_status.value,
@@ -1895,6 +1908,7 @@ class RemnaWaveService:
                             remnawave_short_uuid=panel_user.get('shortUuid'),
                             subscription_url=panel_user.get('subscriptionUrl', ''),
                             subscription_crypto_link=panel_user.get('subscriptionCryptoLink', ''),
+                            tariff_id=_matched_tariff_id,
                         )
                         db.add(new_sub)
                         subs_by_uuid[panel_uuid] = new_sub
