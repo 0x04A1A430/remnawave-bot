@@ -522,6 +522,20 @@ class MonitoringService:
                     if not user:
                         continue
 
+                    # Respect user notification preferences
+                    from app.utils.notification_prefs import (
+                        get_subscription_expiry_days,
+                        is_subscription_expiry_enabled,
+                    )
+
+                    if not is_subscription_expiry_enabled(user):
+                        continue
+
+                    # Check if user's preferred days threshold matches this check
+                    user_expiry_days = get_subscription_expiry_days(user)
+                    if days > user_expiry_days:
+                        continue
+
                     # Use user.id + subscription.id for key to support multiple subscriptions per user
                     sub_key = f'user_{user.id}_sub_{subscription.id}_today'
                     user_identifier = user.telegram_id or f'email:{user.id}'
