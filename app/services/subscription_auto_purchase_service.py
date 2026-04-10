@@ -583,6 +583,13 @@ async def _auto_extend_subscription(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(updated_subscription, 'id') and hasattr(updated_subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=updated_subscription.id,
+                user_id=updated_subscription.user_id,
+                action='update',
+            )
 
     await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
@@ -953,6 +960,13 @@ async def _auto_purchase_tariff(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                action='create',
+            )
 
     # Очищаем корзину (per-subscription if subscription_id is in cart)
     await _delete_cart_for_subscription(user.id, cart_data)
@@ -1303,6 +1317,13 @@ async def _auto_purchase_daily_tariff(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                action='create',
+            )
 
     # Очищаем корзину (per-subscription if subscription_id is in cart)
     await _delete_cart_for_subscription(user.id, cart_data)
@@ -1634,6 +1655,13 @@ async def _auto_add_devices(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                action='update',
+            )
 
     # Очищаем корзину (транзакция уже создана в subtract_user_balance)
     await _delete_cart_for_subscription(user.id, cart_data)
@@ -1982,6 +2010,13 @@ async def _auto_add_traffic(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                action='update',
+            )
 
     # Clear cart (transaction already created in subtract_user_balance)
     await _delete_cart_for_subscription(user.id, cart_data)
@@ -2333,6 +2368,13 @@ async def try_auto_extend_expired_after_topup(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(updated_subscription, 'id') and hasattr(updated_subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=updated_subscription.id,
+                user_id=updated_subscription.user_id,
+                action='update',
+            )
 
     texts = get_texts(getattr(user, 'language', 'ru'))
     period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
@@ -2713,6 +2755,13 @@ async def try_resume_disabled_daily_after_topup(
             format_user_id=_format_user_id(user),
             error=error,
         )
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+        if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                action='update',
+            )
 
     # Admin notification
     try:
