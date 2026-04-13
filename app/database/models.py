@@ -1264,7 +1264,7 @@ class User(Base):
     user_promo_groups = relationship('UserPromoGroup', back_populates='user', cascade='all, delete-orphan')
     poll_responses = relationship('PollResponse', back_populates='user')
     admin_roles_rel = relationship('UserRole', foreign_keys='[UserRole.user_id]', back_populates='user')
-    notification_settings = Column(JSON, nullable=True, default=dict)
+    notification_settings = Column(JSONB, nullable=True, default=dict)
     last_pinned_message_id = Column(Integer, nullable=True)
 
     # Ограничения пользователя
