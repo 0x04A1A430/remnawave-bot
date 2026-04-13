@@ -189,14 +189,16 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str) -> bool:
             if telegram_id != gift.recipient_telegram_id:
                 await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
                 return True
-        else:
+        elif intended_username:
+            # gift for named user not yet registered — check by username
             from_username = (message.from_user.username or '').lower()
-            if not intended_username or intended_username.lower() != from_username:
+            if intended_username.lower() != from_username:
                 await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'), parse_mode='HTML')
                 return True
             gift.recipient_telegram_id = telegram_id
             await session.commit()
             await session.refresh(gift)
+        # else: recipient_telegram_id == 0 and no intended_username → random mode, anyone can claim
 
         days = gift.days
         traffic_gb = gift.traffic_limit_gb
@@ -262,18 +264,20 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 )
                 return
         else:
-            # recipient_telegram_id == 0: проверяем по username из inline_message_id
+            # recipient_telegram_id == 0: either random mode or named user not yet registered
             raw_stored = gift.inline_message_id or ''
             intended_username = raw_stored[2:] if raw_stored.startswith('u:') else ''
-            from_username = (callback.from_user.username or '').lower()
-            if not intended_username or intended_username.lower() != from_username:
-                await callback.answer()
-                await callback.message.edit_text(
-                    texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
-                    parse_mode='HTML',
-                )
-                return
-            # Сохраняем telegram_id чтобы больше не проверять по username
+            if intended_username:
+                # named user — check by username
+                from_username = (callback.from_user.username or '').lower()
+                if intended_username.lower() != from_username:
+                    await callback.answer()
+                    await callback.message.edit_text(
+                        texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
+                        parse_mode='HTML',
+                    )
+                    return
+            # Bind telegram_id (named user first activation, or random first-comer)
             gift.recipient_telegram_id = telegram_id
             await db.commit()
             await db.refresh(gift)
@@ -284,7 +288,73 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATING', '⏳ Активируем подарок...'))
 
+        gift_type = getattr(gift, 'gift_type', 'subscription') or 'subscription'
+
         try:
+            # --- Discount gift ---
+            if gift_type == 'discount':
+                from app.database.crud.promocode import create_promocode
+                from app.database.models import PromoCodeType
+                import secrets as _secrets
+                pct = gift.discount_percent or 0
+                promo_code_str = _secrets.token_hex(4).upper()
+                await create_promocode(
+                    db,
+                    code=promo_code_str,
+                    type=PromoCodeType.DISCOUNT,
+                    balance_bonus_kopeks=pct,   # for DISCOUNT type, this field holds percent
+                    max_uses=1,
+                    created_by=gift.sender_user_id,
+                )
+                gift.is_activated = True
+                gift.activated_at = datetime.now(UTC)
+                gift.activated_by_user_id = user.id
+                inline_msg_id = gift.inline_message_id
+                await db.commit()
+
+                success_text = texts.t(
+                    'INLINE_GIFT_DISCOUNT_SUCCESS',
+                    '✅ <b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
+                ).format(pct=pct, code=promo_code_str)
+
+                back_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(
+                        text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                        callback_data='back_to_menu',
+                    )
+                ]])
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_keyboard)
+                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'))
+                return
+
+            # --- Balance gift ---
+            if gift_type == 'balance':
+                from app.database.crud.user import add_user_balance
+                kopeks = gift.balance_amount_kopeks or 0
+                rub = kopeks // 100
+                await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                gift.is_activated = True
+                gift.activated_at = datetime.now(UTC)
+                gift.activated_by_user_id = user.id
+                inline_msg_id = gift.inline_message_id
+                await db.commit()
+
+                success_text = texts.t(
+                    'INLINE_GIFT_BALANCE_SUCCESS',
+                    '✅ <b>Баланс пополнен!</b>\n\n<blockquote>+{rub} ₽ добавлено на ваш счёт</blockquote>',
+                ).format(rub=rub)
+
+                back_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(
+                        text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                        callback_data='back_to_menu',
+                    )
+                ]])
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_keyboard)
+                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'))
+                return
+
+            # --- Subscription gift (default) ---
             squads: list[str] = []
             from app.database.crud.server_squad import get_available_server_squads
 
@@ -484,7 +554,7 @@ async def show_pending_inline_gift(message: types.Message, gift_code: str) -> No
             await message.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED', 'Этот подарок уже был активирован.'))
             return
 
-        # Bind telegram_id to the gift if not yet bound
+        # Bind telegram_id to the gift if not yet bound (random mode or named unregistered user)
         if not gift.recipient_telegram_id or gift.recipient_telegram_id == 0:
             gift.recipient_telegram_id = telegram_id
             await session.commit()

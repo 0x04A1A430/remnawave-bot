@@ -234,12 +234,6 @@ async def _build_notification_preview_message(language: str, notification_type: 
                         callback_data='balance_topup',
                     )
                 ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'),
-                        callback_data='menu_support',
-                    )
-                ],
             ]
         )
     elif notification_type == 'expired_nd':
@@ -277,12 +271,6 @@ async def _build_notification_preview_message(language: str, notification_type: 
                     InlineKeyboardButton(
                         text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                         callback_data='balance_topup',
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'),
-                        callback_data='menu_support',
                     )
                 ],
             ]

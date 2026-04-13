@@ -3409,7 +3409,13 @@ class NewsTag(Base):
 
 
 class InlineGiftSubscription(Base):
-    """Gift subscription issued by admin via inline query."""
+    """Gift subscription issued by admin via inline query.
+
+    gift_type:
+      'subscription' — extend/create subscription (days/traffic/devices)
+      'discount'     — give discount percent via promocode (@user %15)
+      'balance'      — add balance kopeks (@user :1500)
+    """
 
     __tablename__ = 'inline_gift_subscriptions'
     __table_args__ = (
@@ -3421,13 +3427,20 @@ class InlineGiftSubscription(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     gift_code = Column(String(64), unique=True, nullable=False, index=True)
     # Telegram ID of the intended recipient (the user the admin chose)
+    # 0 = any first-come user (random gift mode)
     recipient_telegram_id = Column(BigInteger, nullable=False)
     # The user who sent the gift (admin)
     sender_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
-    # Subscription parameters
-    days = Column(Integer, nullable=False)
+    # Gift type: 'subscription', 'discount', 'balance'
+    gift_type = Column(String(20), nullable=False, default='subscription', server_default='subscription')
+    # Subscription parameters (gift_type == 'subscription')
+    days = Column(Integer, nullable=False, default=0, server_default='0')
     traffic_limit_gb = Column(Integer, nullable=False, default=0, server_default='0')
     device_limit = Column(Integer, nullable=False, default=1, server_default='1')
+    # Discount parameters (gift_type == 'discount')
+    discount_percent = Column(Integer, nullable=True)
+    # Balance parameters (gift_type == 'balance'), stored in kopeks
+    balance_amount_kopeks = Column(Integer, nullable=True)
     # Inline message tracking for button update
     inline_message_id = Column(String(255), nullable=True)
     inline_chat_id = Column(BigInteger, nullable=True)
@@ -3445,4 +3458,4 @@ class InlineGiftSubscription(Base):
     activated_by = relationship('User', foreign_keys=[activated_by_user_id], lazy='noload')
 
     def __repr__(self) -> str:
-        return f"<InlineGiftSubscription gift_code='{self.gift_code}' activated={self.is_activated}>"
+        return f"<InlineGiftSubscription gift_code='{self.gift_code}' gift_type='{self.gift_type}' activated={self.is_activated}>"

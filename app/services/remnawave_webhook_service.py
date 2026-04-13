@@ -1257,51 +1257,54 @@ class RemnaWaveWebhookService:
     }
 
     @classmethod
-    def _extract_device_name(cls, data: dict) -> str:
-        """Extract device name from webhook payload.
+    def _extract_device_info(cls, data: dict) -> tuple[str, str]:
+        """Extract device info from webhook payload.
 
+        Returns (platform_str, tag_str) where platform_str includes emoji.
         RemnaWave sends device info in data['hwidUserDevice'] nested object.
-        Builds a composite name with platform emoji: "🪟 Windows (8a2d6c1e)".
         """
         device_obj = data.get('hwidUserDevice')
         if not isinstance(device_obj, dict):
-            # Fallback: top-level fields
             raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
-            return html.escape(str(raw)) if raw else ''
+            return '', html.escape(str(raw)) if raw else ''
 
         tag = (device_obj.get('tag') or device_obj.get('deviceName') or device_obj.get('name') or '').strip()
         platform = (device_obj.get('platform') or '').strip()
         hwid = (device_obj.get('hwid') or '').strip()
 
         emoji = cls._PLATFORM_EMOJI.get(platform, '')
+        platform_display = f'{emoji} {html.escape(platform)}' if emoji else html.escape(platform)
 
-        if tag and platform:
-            text = f'{html.escape(tag)} ({html.escape(platform)})'
-        elif tag:
-            text = html.escape(tag)
-        elif platform and hwid:
+        if not tag and hwid:
             hwid_short = hwid[:8] if len(hwid) > 8 else hwid
-            text = f'{html.escape(platform)} ({html.escape(hwid_short)})'
-        elif platform:
-            text = html.escape(platform)
-        elif hwid:
-            hwid_short = hwid[:12] if len(hwid) > 12 else hwid
-            text = html.escape(hwid_short)
-        else:
-            return ''
+            tag = html.escape(hwid_short)
+        elif tag:
+            tag = html.escape(tag)
 
-        return f'{emoji} {text}' if emoji else text
+        return platform_display, tag
+
+    @classmethod
+    def _extract_device_name(cls, data: dict) -> str:
+        """Legacy helper — returns combined platform+tag string."""
+        platform_display, tag = cls._extract_device_info(data)
+        if platform_display and tag:
+            return f'{platform_display} ({tag})'
+        return platform_display or tag
 
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        device_name = self._extract_device_name(data)
+        platform_display, tag = self._extract_device_info(data)
+        device_name = f'{platform_display} ({tag})' if platform_display and tag else platform_display or tag
         logger.info('Webhook: device added for user', user_id=user.id, device_name=device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
             reply_markup=self._get_device_added_keyboard(user),
-            format_kwargs={'device': device_name or '—'},
+            format_kwargs={
+                'device': tag or '—',
+                'platform': platform_display or '—',
+            },
             subscription=subscription,
         )
 

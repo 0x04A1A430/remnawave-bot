@@ -738,13 +738,13 @@ def get_main_menu_keyboard(
         row = paired_buttons[i : i + 2]
         keyboard.append(row)
 
+    promo_ref_row.append(make_button(text=texts.t('MENU_INFO', 'Инфо'), callback_data='menu_info'))
     keyboard.append(promo_ref_row)
 
-    # Поддержка и Инфо — кнопки в самом низу
+    # Поддержка — кнопка в самом низу
     if support_enabled:
         support_url = settings.get_support_contact_url() or 'https://t.me/'
         keyboard.append([make_button(text=texts.MENU_SUPPORT, url=support_url)])
-    keyboard.append([make_button(text=texts.t('MENU_INFO', 'Инфо'), callback_data='menu_rules')])
 
     if settings.DEBUG:
         logger.debug('DEBUG KEYBOARD: админ кнопка', is_admin=is_admin)
