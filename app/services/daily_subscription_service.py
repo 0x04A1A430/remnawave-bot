@@ -264,6 +264,14 @@ class DailySubscriptionService:
                             logger.warning('Не удалось синхронизировать сквады после создания', error=patch_err)
             except Exception as e:
                 logger.warning('Не удалось обновить Remnawave', error=e)
+                from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+                if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+                    remnawave_retry_queue.enqueue(
+                        subscription_id=subscription.id,
+                        user_id=subscription.user_id,
+                        action='update' if _has_panel_user else 'create',
+                    )
 
             # Отправляем уведомление администраторам
             try:
@@ -539,6 +547,14 @@ class DailySubscriptionService:
             await subscription_service.update_remnawave_user(db, subscription)
         except Exception as e:
             logger.warning('Не удалось синхронизировать с RemnaWave после сброса трафика', error=e)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+                remnawave_retry_queue.enqueue(
+                    subscription_id=subscription.id,
+                    user_id=subscription.user_id,
+                    action='update',
+                )
 
         # Уведомляем пользователя
         if self._bot and subscription.user_id:
