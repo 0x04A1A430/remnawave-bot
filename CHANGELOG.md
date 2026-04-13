@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.46.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.46.0...v3.46.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* add checkfirst guards to cabinet_refresh_tokens migration ([8587f03](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/8587f03f67d7a451b07a4d9c450bc4524f4ac0e7))
+* add missing migration for cabinet_refresh_tokens table ([4707cdf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4707cdf60c9d163c1191719b3b1fc4a17ae993d2))
+* cabinet_refresh_tokens migration + notification_settings jsonb ([0274738](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/02747381dce2b96af7f97b5f41d6acff5d9d8fd3))
+* change notification_settings from json to jsonb for DISTINCT compatibility ([e74fda9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e74fda954ccc63e2ac7a30933d9f9ac26772b25d))
+
 ## [3.46.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.45.2...v3.46.0) (2026-04-13)
 
 
