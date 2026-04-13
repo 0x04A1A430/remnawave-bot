@@ -1058,6 +1058,10 @@ async def register_email_standalone(
         referred_by_id=referrer.id if referrer else None,
     )
 
+    # Сохранить campaign_slug для обработки при верификации email
+    if request.campaign_slug:
+        user.pending_campaign_slug = request.campaign_slug
+
     # Для тестового email или отключённой верификации - автоматически верифицировать
     if is_test_email or not settings.is_cabinet_email_verification_enabled():
         user.email_verified = True
@@ -1069,6 +1073,11 @@ async def register_email_standalone(
             await _sync_subscription_from_panel_by_email(db, user)
         except Exception:
             logger.warning('Failed to sync panel subscription after auto-verify', user_id=user.id, exc_info=True)
+        # Process campaign bonus immediately for auto-verified users
+        if request.campaign_slug:
+            await _process_campaign_bonus(db, user, request.campaign_slug)
+            user.pending_campaign_slug = None
+            await db.commit()
     else:
         # Сгенерировать токен верификации
         verification_token = generate_verification_token()
@@ -1179,8 +1188,12 @@ async def verify_email(
     response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token)
 
-    # Process campaign bonus
-    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
+    # Process campaign bonus (prefer request param, fallback to saved slug from registration)
+    effective_campaign_slug = request.campaign_slug or user.pending_campaign_slug
+    response.campaign_bonus = await _process_campaign_bonus(db, user, effective_campaign_slug)
+    if user.pending_campaign_slug:
+        user.pending_campaign_slug = None
+        await db.commit()
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
