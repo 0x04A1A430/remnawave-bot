@@ -1674,11 +1674,6 @@ class MonitoringService:
                             callback_data='balance_topup',
                         )
                     ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
-                        )
-                    ],
                 ]
             )
 
@@ -1774,11 +1769,6 @@ class MonitoringService:
                         build_miniapp_or_callback_button(
                             text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                             callback_data='balance_topup',
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('SUPPORT_BUTTON', '🆘 Поддержка'), callback_data='menu_support'
                         )
                     ],
                 ]
