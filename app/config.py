@@ -825,6 +825,10 @@ class Settings(BaseSettings):
     # Format: socks5://user:password@host:port or socks5://host:port
     PROXY_URL: str | None = None
 
+    # Custom Telegram Bot API server URL (for regions where api.telegram.org is blocked)
+    # Examples: Cloudflare Worker proxy, self-hosted telegram-bot-api (tdlib), nginx reverse proxy
+    TELEGRAM_API_URL: str | None = None
+
     @field_validator('PROXY_URL', 'NALOGO_PROXY_URL', mode='before')
     @classmethod
     def validate_proxy_url(cls, value: str | None) -> str | None:
@@ -971,6 +975,10 @@ class Settings(BaseSettings):
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
         return self.PROXY_URL if self.PROXY_URL else None
+
+    def get_telegram_api_url(self) -> str | None:
+        """Return custom Telegram Bot API server URL or None."""
+        return self.TELEGRAM_API_URL if self.TELEGRAM_API_URL else None
 
     def get_nalogo_proxy_url(self) -> str | None:
         """Return SOCKS proxy URL for nalogo or None.
