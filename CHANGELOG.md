@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.47.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.46.1...v3.47.0) (2026-04-15)
+
+
+### New Features
+
+* multi-tariff sync fix, daily discount fix, campaign links, TELEGRAM_API_URL ([4db9e85](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4db9e850629f25cbcb11bb5ba0e0de5c580ca115))
+
 ## [3.46.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.46.0...v3.46.1) (2026-04-13)
 
 
