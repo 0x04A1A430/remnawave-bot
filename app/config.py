@@ -436,6 +436,7 @@ class Settings(BaseSettings):
     MULENPAY_LANGUAGE: str = 'ru'
     MULENPAY_VAT_CODE: int = 0
 
+    DISPLAY_NAME_RESTRICTION_ENABLED: bool = True
     DISPLAY_NAME_BANNED_KEYWORDS: str = '\n'.join(DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS)
     MULENPAY_PAYMENT_SUBJECT: int = 4
     MULENPAY_PAYMENT_MODE: int = 4
@@ -825,6 +826,10 @@ class Settings(BaseSettings):
     # Format: socks5://user:password@host:port or socks5://host:port
     PROXY_URL: str | None = None
 
+    # Custom Telegram Bot API server URL (for regions where api.telegram.org is blocked)
+    # Examples: Cloudflare Worker proxy, self-hosted telegram-bot-api (tdlib), nginx reverse proxy
+    TELEGRAM_API_URL: str | None = None
+
     @field_validator('PROXY_URL', 'NALOGO_PROXY_URL', mode='before')
     @classmethod
     def validate_proxy_url(cls, value: str | None) -> str | None:
@@ -971,6 +976,10 @@ class Settings(BaseSettings):
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
         return self.PROXY_URL if self.PROXY_URL else None
+
+    def get_telegram_api_url(self) -> str | None:
+        """Return custom Telegram Bot API server URL or None."""
+        return self.TELEGRAM_API_URL if self.TELEGRAM_API_URL else None
 
     def get_nalogo_proxy_url(self) -> str | None:
         """Return SOCKS proxy URL for nalogo or None.

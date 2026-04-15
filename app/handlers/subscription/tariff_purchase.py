@@ -1057,20 +1057,20 @@ async def handle_custom_confirm(
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         try:
             subscription_service = SubscriptionService()
-            _panel_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(db_user, 'remnawave_uuid', None)
-            )
-            if _panel_uuid:
-                await subscription_service.update_remnawave_user(
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=True,
                     reset_reason='покупка тарифа',
                 )
             else:
-                await subscription_service.create_remnawave_user(
+                await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=True,
@@ -1588,20 +1588,23 @@ async def confirm_tariff_purchase(
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
-        _panel_uuid = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else getattr(db_user, 'remnawave_uuid', None)
-        )
-        if _panel_uuid:
-            await subscription_service.update_remnawave_user(
+        # In multi-tariff mode, each subscription has its own panel user.
+        # A new subscription has no remnawave_uuid yet, so always CREATE.
+        # In single-tariff mode, reuse the user-level UUID if available.
+        if settings.is_multi_tariff_enabled():
+            _should_create = not subscription.remnawave_uuid
+        else:
+            _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+        if _should_create:
+            await subscription_service.create_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
                 reset_reason='покупка тарифа',
             )
         else:
-            await subscription_service.create_remnawave_user(
+            await subscription_service.update_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
@@ -1868,20 +1871,20 @@ async def confirm_daily_tariff_purchase(
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
-        _panel_uuid = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else getattr(db_user, 'remnawave_uuid', None)
-        )
-        if _panel_uuid:
-            await subscription_service.update_remnawave_user(
+        if settings.is_multi_tariff_enabled():
+            _should_create = not subscription.remnawave_uuid
+        else:
+            _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+        if _should_create:
+            await subscription_service.create_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
                 reset_reason='покупка суточного тарифа',
             )
         else:
-            await subscription_service.create_remnawave_user(
+            await subscription_service.update_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
@@ -2340,20 +2343,20 @@ async def confirm_tariff_extend(
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
-            _panel_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(db_user, 'remnawave_uuid', None)
-            )
-            if _panel_uuid:
-                await subscription_service.update_remnawave_user(
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT or was_trial,
                     reset_reason='конвертация триала' if was_trial else 'продление тарифа',
                 )
             else:
-                await subscription_service.create_remnawave_user(
+                await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT or was_trial,
@@ -2973,20 +2976,20 @@ async def confirm_tariff_switch(
         # Обновляем пользователя в Remnawave
         try:
             subscription_service = SubscriptionService()
-            _panel_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(db_user, 'remnawave_uuid', None)
-            )
-            if _panel_uuid:
-                await subscription_service.update_remnawave_user(
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
                     reset_reason='переключение тарифа',
                 )
             else:
-                await subscription_service.create_remnawave_user(
+                await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
@@ -3221,20 +3224,20 @@ async def confirm_daily_tariff_switch(
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
-            _panel_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(db_user, 'remnawave_uuid', None)
-            )
-            if _panel_uuid:
-                await subscription_service.update_remnawave_user(
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
                     reset_reason='смена на суточный тариф',
                 )
             else:
-                await subscription_service.create_remnawave_user(
+                await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
@@ -3915,20 +3918,20 @@ async def confirm_instant_switch(
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)
         try:
             subscription_service = SubscriptionService()
-            _panel_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(db_user, 'remnawave_uuid', None)
-            )
-            if _panel_uuid:
-                await subscription_service.update_remnawave_user(
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,
                     reset_reason='мгновенное переключение тарифа',
                 )
             else:
-                await subscription_service.create_remnawave_user(
+                await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=settings.RESET_TRAFFIC_ON_TARIFF_SWITCH,

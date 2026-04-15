@@ -901,18 +901,24 @@ class MonitoringService:
                             )
 
                             try:
-                                panel_uuid_restore = (
-                                    subscription.remnawave_uuid
-                                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                                    else user.remnawave_uuid
-                                )
-                                if panel_uuid_restore:
-                                    await self.subscription_service.enable_remnawave_user(panel_uuid_restore)
+                                if settings.is_multi_tariff_enabled():
+                                    _should_create = not subscription.remnawave_uuid
                                 else:
+                                    _should_create = not getattr(user, 'remnawave_uuid', None)
+
+                                if _should_create:
                                     # create_remnawave_user calls db.commit() internally --
                                     # flush accumulated batch state first to preserve atomicity.
                                     await batch_db.commit()
                                     await self.subscription_service.create_remnawave_user(batch_db, subscription)
+                                else:
+                                    _enable_uuid = (
+                                        subscription.remnawave_uuid
+                                        if settings.is_multi_tariff_enabled()
+                                        else user.remnawave_uuid
+                                    )
+                                    if _enable_uuid:
+                                        await self.subscription_service.enable_remnawave_user(_enable_uuid)
                             except Exception as api_error:
                                 logger.error(
                                     'Failed to update RemnaWave user',
