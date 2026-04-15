@@ -326,7 +326,11 @@ async def purchase_traffic(
         else:
             await subscription_service.update_remnawave_user(db, subscription)
             if subscription.status == 'active':
-                _enable_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
+                _enable_uuid = (
+                    subscription.remnawave_uuid
+                    if settings.is_multi_tariff_enabled()
+                    else getattr(user, 'remnawave_uuid', None)
+                )
                 if _enable_uuid:
                     await subscription_service.enable_remnawave_user(_enable_uuid)
     except Exception as e:

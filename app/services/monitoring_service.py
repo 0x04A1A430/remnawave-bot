@@ -912,7 +912,11 @@ class MonitoringService:
                                     await batch_db.commit()
                                     await self.subscription_service.create_remnawave_user(batch_db, subscription)
                                 else:
-                                    _enable_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
+                                    _enable_uuid = (
+                                        subscription.remnawave_uuid
+                                        if settings.is_multi_tariff_enabled()
+                                        else user.remnawave_uuid
+                                    )
                                     if _enable_uuid:
                                         await self.subscription_service.enable_remnawave_user(_enable_uuid)
                             except Exception as api_error:
