@@ -2586,17 +2586,19 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         subscription_service = SubscriptionService()
         # При покупке подписки ВСЕГДА сбрасываем трафик в панели
-        _purchase_uuid = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else db_user.remnawave_uuid
-        )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
-            logger.warning(
-                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
-                subscription_id=getattr(subscription, 'id', None),
+        if settings.is_multi_tariff_enabled():
+            _should_create = not subscription.remnawave_uuid
+        else:
+            _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+        if _should_create:
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=True,
+                reset_reason='покупка подписки',
             )
-        if _purchase_uuid:
+        else:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
                 subscription,
@@ -2604,16 +2606,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 reset_reason='покупка подписки',
                 sync_squads=True,
             )
-        else:
-            remnawave_user = await subscription_service.create_remnawave_user(
-                db,
-                subscription,
-                reset_traffic=True,
-                reset_reason='покупка подписки',
-            )
 
         if not remnawave_user:
-            logger.error('Не удалось создать/обновить RemnaWave пользователя для', telegram_id=db_user.telegram_id)
+            logger.error('Не удалось создать/обновить RemnaWave пользователя', telegram_id=db_user.telegram_id)
             try:
                 remnawave_user = await subscription_service.create_remnawave_user(
                     db,
@@ -2622,7 +2617,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     reset_reason='покупка подписки (повторная попытка)',
                 )
             except Exception as retry_error:
-                logger.error('Повторная попытка создания RemnaWave пользователя также не удалась', error=retry_error)
+                logger.error('Повторная попытка создания RemnaWave пользователя не удалась', error=retry_error)
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
 
                 remnawave_retry_queue.enqueue(
