@@ -1588,20 +1588,23 @@ async def confirm_tariff_purchase(
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     try:
         subscription_service = SubscriptionService()
-        _panel_uuid = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else getattr(db_user, 'remnawave_uuid', None)
-        )
-        if _panel_uuid:
-            await subscription_service.update_remnawave_user(
+        # In multi-tariff mode, each subscription has its own panel user.
+        # A new subscription has no remnawave_uuid yet, so always CREATE.
+        # In single-tariff mode, reuse the user-level UUID if available.
+        if settings.is_multi_tariff_enabled():
+            _should_create = not subscription.remnawave_uuid
+        else:
+            _should_create = not getattr(db_user, 'remnawave_uuid', None)
+
+        if _should_create:
+            await subscription_service.create_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
                 reset_reason='покупка тарифа',
             )
         else:
-            await subscription_service.create_remnawave_user(
+            await subscription_service.update_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,

@@ -1166,25 +1166,28 @@ class MiniAppSubscriptionPurchaseService:
                 logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
 
         try:
-            _purch_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(user, 'remnawave_uuid', None)
-            )
-            if _purch_uuid:
+            # In multi-tariff mode, each subscription has its own panel user.
+            # A new subscription has no remnawave_uuid yet, so always CREATE.
+            # In single-tariff mode, reuse the user-level UUID if available.
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason='miniapp purchase',
+                )
+            else:
                 await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=True,
                     reset_reason='miniapp purchase',
                     sync_squads=True,
-                )
-            else:
-                await subscription_service.create_remnawave_user(
-                    db,
-                    subscription,
-                    reset_traffic=True,
-                    reset_reason='miniapp purchase',
                 )
         except Exception as remnawave_error:  # pragma: no cover - defensive logging
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
