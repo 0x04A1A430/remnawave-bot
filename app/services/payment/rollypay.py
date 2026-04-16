@@ -39,6 +39,7 @@ class RollyPayPaymentMixin:
         description: str = 'Пополнение баланса',
         email: str | None = None,
         language: str = 'ru',
+        payment_method_type: str | None = None,
         return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """
@@ -98,7 +99,7 @@ class RollyPayPaymentMixin:
                 amount_value=amount_value,
                 currency=currency,
                 order_id=order_id,
-                payment_method='sbp',
+                payment_method=payment_method_type,
                 description=description,
                 redirect_url=return_url or settings.ROLLYPAY_RETURN_URL,
                 customer_id=str(tg_id),
@@ -141,7 +142,7 @@ class RollyPayPaymentMixin:
                 currency=currency,
                 description=description,
                 payment_url=payment_url,
-                payment_method='sbp',
+                payment_method=payment_method_type or 'sbp',
                 rollypay_payment_id=rollypay_payment_id,
                 expires_at=expires_at,
                 metadata_json=metadata,

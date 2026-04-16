@@ -831,6 +831,7 @@ async def create_topup(
                 )
 
             payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
             result = await payment_service.create_rollypay_payment(
                 db=db,
                 user_id=user.id,
@@ -840,6 +841,7 @@ async def create_topup(
                 ),
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
                 return_url=cabinet_success_url,
             )
 

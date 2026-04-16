@@ -67,7 +67,7 @@ class RollyPayService:
         amount_value: str,
         currency: str = 'RUB',
         order_id: str,
-        payment_method: str = 'sbp',
+        payment_method: str | None = None,
         description: str = '',
         redirect_url: str | None = None,
         success_redirect_url: str | None = None,
@@ -83,8 +83,9 @@ class RollyPayService:
             'amount': amount_value,
             'payment_currency': currency,
             'order_id': order_id,
-            'payment_method': payment_method,
         }
+        if payment_method:
+            payload['payment_method'] = payment_method
 
         if description:
             payload['description'] = description
