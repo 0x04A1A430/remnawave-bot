@@ -12,6 +12,7 @@ from .heleket import HeleketPaymentMixin
 from .kassa_ai import KassaAiPaymentMixin
 from .mulenpay import MulenPayPaymentMixin
 from .pal24 import Pal24PaymentMixin
+from .paypear import PayPearPaymentMixin
 from .platega import PlategaPaymentMixin
 from .riopay import RioPayPaymentMixin
 from .severpay import SeverPayPaymentMixin
@@ -29,6 +30,7 @@ __all__ = [
     'KassaAiPaymentMixin',
     'MulenPayPaymentMixin',
     'Pal24PaymentMixin',
+    'PayPearPaymentMixin',
     'PaymentCommonMixin',
     'PlategaPaymentMixin',
     'RioPayPaymentMixin',

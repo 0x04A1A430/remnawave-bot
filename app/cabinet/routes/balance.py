@@ -794,6 +794,35 @@ async def create_topup(
                     detail='Failed to create SeverPay payment',
                 )
 
+        elif request.payment_method == 'paypear':
+            if not settings.is_paypear_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='PayPear payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_paypear_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create PayPear payment',
+                )
+
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(

@@ -146,6 +146,18 @@ def _get_method_defaults() -> dict:
             'default_max': settings.SEVERPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
         },
+        'paypear': {
+            'default_display_name': settings.get_paypear_display_name(),
+            'is_configured': settings.is_paypear_enabled(),
+            'default_min': settings.PAYPEAR_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.PAYPEAR_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'bank_card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'sberpay', 'name': 'SberPay'},
+                {'id': 'tpay', 'name': 'T-Pay'},
+            ],
+        },
     }
 
 
@@ -188,6 +200,7 @@ DEFAULT_METHOD_ORDER = [
     'kassa_ai',
     'riopay',
     'severpay',
+    'paypear',
 ]
 
 

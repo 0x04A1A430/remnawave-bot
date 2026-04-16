@@ -588,6 +588,18 @@ class Settings(BaseSettings):
     SEVERPAY_RETURN_URL: str | None = None
     SEVERPAY_LIFETIME: int = 1440  # minutes, 30-4320
 
+    # PayPear (paypear.ru)
+    PAYPEAR_ENABLED: bool = False
+    PAYPEAR_SHOP_ID: str | None = None
+    PAYPEAR_SECRET_KEY: str | None = None
+    PAYPEAR_DISPLAY_NAME: str = 'PayPear'
+    PAYPEAR_CURRENCY: str = 'RUB'
+    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PAYPEAR_WEBHOOK_PATH: str = '/paypear-webhook'
+    PAYPEAR_RETURN_URL: str | None = None
+    PAYPEAR_PAYMENT_METHOD: str = 'sbp'  # bank_card, sbp, sberpay, tpay
+
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
@@ -1972,6 +1984,16 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
+
+    def is_paypear_enabled(self) -> bool:
+        return self.PAYPEAR_ENABLED and self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
+
+    def get_paypear_display_name(self) -> str:
+        name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
+        return name if name else 'PayPear'
+
+    def get_paypear_display_name_html(self) -> str:
+        return html.escape(self.get_paypear_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()
