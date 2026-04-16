@@ -35,6 +35,7 @@ from app.services.payment.freekassa import FreekassaPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
+from app.services.payment.rollypay import RollyPayPaymentMixin
 from app.services.payment.severpay import SeverPayPaymentMixin
 from app.services.platega_service import PlategaService
 from app.services.wata_service import WataService
@@ -392,6 +393,7 @@ class PaymentService(
     RioPayPaymentMixin,
     SeverPayPaymentMixin,
     PayPearPaymentMixin,
+    RollyPayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 

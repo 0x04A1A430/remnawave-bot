@@ -158,6 +158,13 @@ def _get_method_defaults() -> dict:
                 {'id': 'tpay', 'name': 'T-Pay'},
             ],
         },
+        'rollypay': {
+            'default_display_name': settings.get_rollypay_display_name(),
+            'is_configured': settings.is_rollypay_enabled(),
+            'default_min': settings.ROLLYPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.ROLLYPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
     }
 
 
@@ -201,6 +208,7 @@ DEFAULT_METHOD_ORDER = [
     'riopay',
     'severpay',
     'paypear',
+    'rollypay',
 ]
 
 

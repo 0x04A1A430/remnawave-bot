@@ -600,6 +600,17 @@ class Settings(BaseSettings):
     PAYPEAR_RETURN_URL: str | None = None
     PAYPEAR_PAYMENT_METHOD: str = 'sbp'  # bank_card, sbp, sberpay, tpay
 
+    # RollyPay (rollypay.io)
+    ROLLYPAY_ENABLED: bool = False
+    ROLLYPAY_API_KEY: str | None = None  # X-API-Key header
+    ROLLYPAY_SIGNING_SECRET: str | None = None  # HMAC webhook verification
+    ROLLYPAY_DISPLAY_NAME: str = 'RollyPay'
+    ROLLYPAY_CURRENCY: str = 'RUB'
+    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
+    ROLLYPAY_RETURN_URL: str | None = None
+
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
@@ -1994,6 +2005,16 @@ class Settings(BaseSettings):
 
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
+
+    def is_rollypay_enabled(self) -> bool:
+        return self.ROLLYPAY_ENABLED and self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
+
+    def get_rollypay_display_name(self) -> str:
+        name = (self.ROLLYPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'RollyPay'
+
+    def get_rollypay_display_name_html(self) -> str:
+        return html.escape(self.get_rollypay_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()

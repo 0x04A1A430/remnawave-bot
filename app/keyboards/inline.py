@@ -1819,6 +1819,18 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_rollypay_enabled():
+        rollypay_name = settings.get_rollypay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ROLLYPAY', f'💳 СБП ({rollypay_name})'),
+                    callback_data=_build_callback('rollypay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

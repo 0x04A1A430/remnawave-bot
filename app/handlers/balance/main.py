@@ -156,6 +156,13 @@ async def route_payment_by_method(
             await process_paypear_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'rollypay':
+        from .rollypay import process_rollypay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_rollypay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'riopay':
         from .riopay import process_riopay_payment_amount
 
@@ -729,6 +736,10 @@ def register_balance_handlers(dp: Dispatcher):
     from .paypear import start_paypear_topup
 
     dp.callback_query.register(start_paypear_topup, F.data == 'topup_paypear')
+
+    from .rollypay import start_rollypay_topup
+
+    dp.callback_query.register(start_rollypay_topup, F.data == 'topup_rollypay')
 
     from .mulenpay import check_mulenpay_payment_status
 
