@@ -68,9 +68,9 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_PARTNERS_TOPIC_ID: int | None = None  # Партнёрки, выводы, админ-действия
 
     # Настройки очереди чеков NaloGO
-    NALOGO_QUEUE_CHECK_INTERVAL: int = 300  # Интервал проверки очереди (секунды)
+    NALOGO_QUEUE_CHECK_INTERVAL: int = 600  # Интервал проверки очереди (секунды, 10 мин)
     NALOGO_QUEUE_RECEIPT_DELAY: int = 3  # Задержка между отправкой чеков (секунды)
-    NALOGO_QUEUE_MAX_ATTEMPTS: int = 10  # Максимум попыток отправки чека
+    NALOGO_QUEUE_MAX_ATTEMPTS: int = 72  # Максимум попыток отправки чека (72 × 10мин = 12 часов)
 
     ADMIN_REPORTS_ENABLED: bool = False
     ADMIN_REPORTS_CHAT_ID: str | None = None
