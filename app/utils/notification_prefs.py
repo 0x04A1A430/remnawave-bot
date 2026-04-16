@@ -17,7 +17,7 @@ _DEFAULTS: dict[str, Any] = {
     'subscription_expiry_days': 3,
     'traffic_warning_enabled': True,
     'traffic_warning_percent': 80,
-    'balance_low_enabled': True,
+    'balance_low_enabled': False,
     'balance_low_threshold': 100,  # kopeks
     'news_enabled': True,
     'promo_offers_enabled': True,

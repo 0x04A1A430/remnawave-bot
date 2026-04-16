@@ -2075,23 +2075,43 @@ class MonitoringService:
             logger.error('Error checking traffic warnings', error=error)
 
     async def _check_low_balance_alerts(self, db: AsyncSession):
-        """Check users with autopay enabled who have low balance and notify them."""
+        """Check users with autopay enabled who have low balance and notify them.
+
+        Guards:
+        - Disabled by default; users opt-in via cabinet notification settings
+        - Only alerts when subscription expires within LOW_BALANCE_ALERT_EXPIRY_DAYS (default 3)
+        - Quiet hours: skips sending between 22:00 and 09:00 server time
+        - Rate-limited: max 1 alert per 24 hours per user
+        """
         if not self.bot:
             return
 
         try:
+            from datetime import UTC, datetime, timedelta
+
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
             from sqlalchemy import select
 
             from app.database.models import Subscription, User
             from app.utils.notification_prefs import get_balance_low_threshold, is_balance_low_enabled
 
-            # Only check users with active autopay subscriptions — low balance matters for them
+            # Quiet hours: don't disturb users at night (22:00-09:00 UTC)
+            current_hour = datetime.now(UTC).hour
+            if current_hour >= 22 or current_hour < 9:
+                return
+
+            # Only alert for subscriptions expiring soon (default 3 days)
+            expiry_days = getattr(settings, 'LOW_BALANCE_ALERT_EXPIRY_DAYS', 3)
+            expiry_threshold = datetime.now(UTC) + timedelta(days=expiry_days)
+
             result = await db.execute(
                 select(User)
                 .join(Subscription, Subscription.user_id == User.id)
                 .where(
                     Subscription.status.in_(['active', 'trial']),
                     Subscription.autopay_enabled.is_(True),
+                    Subscription.end_date.isnot(None),
+                    Subscription.end_date <= expiry_threshold,
                     User.telegram_id.isnot(None),
                 )
                 .distinct()
@@ -2134,10 +2154,28 @@ class MonitoringService:
                         balance=f'{balance_rub:.0f}',
                         threshold=f'{threshold_rub:.0f}',
                     )
+
+                    # Build inline keyboard with cabinet top-up button
+                    keyboard = None
+                    miniapp_url = settings.get_main_menu_miniapp_url()
+                    if miniapp_url:
+                        topup_label = texts.get('LOW_BALANCE_TOPUP_BUTTON', '💳 Пополнить баланс')
+                        keyboard = InlineKeyboardMarkup(
+                            inline_keyboard=[
+                                [
+                                    InlineKeyboardButton(
+                                        text=topup_label,
+                                        web_app=WebAppInfo(url=miniapp_url),
+                                    )
+                                ]
+                            ]
+                        )
+
                     await self.bot.send_message(
                         user.telegram_id,
                         message,
                         parse_mode='HTML',
+                        reply_markup=keyboard,
                     )
                     # Mark as sent for 24 hours
                     try:
