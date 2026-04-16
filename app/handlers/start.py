@@ -344,8 +344,9 @@ def _calculate_subscription_flags(subscription):
         return False, False
 
     actual_status = getattr(subscription, 'actual_status', None)
-    has_active_subscription = actual_status in {'active', 'trial'}
-    subscription_is_active = bool(getattr(subscription, 'is_active', False))
+    # 'limited' subscriptions are still active (traffic exhausted, but subscription not expired)
+    has_active_subscription = actual_status in {'active', 'trial', 'limited'}
+    subscription_is_active = bool(getattr(subscription, 'is_active', False)) or actual_status == 'limited'
 
     return has_active_subscription, subscription_is_active
 
