@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.48.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.47.0...v3.48.0) (2026-04-16)
+
+
+### New Features
+
+* integrate PayPear payment provider ([a18f6ca](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a18f6caa9bd9c08511c464e6141fb8aa614135b0))
+* integrate RollyPay payment provider (SBP via USDT) ([ccc2f4e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ccc2f4efecf0a3c1a943971c81a9a7d1985ae14a))
+
+
+### Bug Fixes
+
+* increase nalogo receipt queue retry window to 12 hours ([92eaf45](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/92eaf4531162e5625b938bafc43eb98abe2632e2))
+* low balance alerts disabled by default, add quiet hours, expiry filter, top-up button ([2d5afe5](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2d5afe5d75ff65f4d167a853e078943d518a881f))
+* show menu buttons for limited (traffic exhausted) subscriptions ([0c54549](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0c545490b61baec930f10adc86652a7e5cf5d378))
+* show menu buttons for limited subscriptions in back-to-menu paths ([61cf495](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/61cf495fc5919e699aba7231f49222722da044b4))
+* support payment_method selection for RollyPay (sbp/card/crypto) ([a598582](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a59858227f31bd53d0ac54d693288ad52e447687))
+
+
+### Documentation
+
+* add SEVERPAY, PAYPEAR, ROLLYPAY to .env.example ([25447ed](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/25447edc9eab7c3a76ed94be52c1b341917a40c2))
+
 ## [3.47.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.46.1...v3.47.0) (2026-04-15)
 
 
