@@ -2122,6 +2122,9 @@ async def show_tariff_extend(
             if t.is_daily:
                 continue
             keyboard.append([InlineKeyboardButton(text=f'📦 {t.name}', callback_data=f'tariff_select:{t.id}')])
+        if not keyboard:
+            await callback.answer('Нет доступных тарифов для продления', show_alert=True)
+            return
         keyboard.append([InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
 
         await callback.message.edit_text(
