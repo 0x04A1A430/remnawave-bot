@@ -370,6 +370,44 @@ async def link_paypear_payment_to_transaction(*args, **kwargs):
     return await paypear_crud.link_paypear_payment_to_transaction(*args, **kwargs)
 
 
+# --- RollyPay CRUD wrappers ---
+
+
+async def create_rollypay_payment(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.create_rollypay_payment(*args, **kwargs)
+
+
+async def get_rollypay_payment_by_order_id(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.get_rollypay_payment_by_order_id(*args, **kwargs)
+
+
+async def get_rollypay_payment_by_rollypay_id(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.get_rollypay_payment_by_rollypay_id(*args, **kwargs)
+
+
+async def get_rollypay_payment_by_id(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.get_rollypay_payment_by_id(*args, **kwargs)
+
+
+async def get_rollypay_payment_by_id_for_update(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.get_rollypay_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_rollypay_payment_status(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.update_rollypay_payment_status(*args, **kwargs)
+
+
+async def link_rollypay_payment_to_transaction(*args, **kwargs):
+    rollypay_crud = import_module('app.database.crud.rollypay')
+    return await rollypay_crud.link_rollypay_payment_to_transaction(*args, **kwargs)
+
+
 async def create_aurapay_payment(*args, **kwargs):
     aurapay_crud = import_module('app.database.crud.aurapay')
     return await aurapay_crud.create_aurapay_payment(*args, **kwargs)
@@ -869,6 +907,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('paypear_id') or result.get('order_id'),
                     'provider': 'paypear',
+                }
+            return None
+
+        # --- RollyPay ---------------------------------------------------------
+        if payment_method == 'rollypay':
+            if not settings.is_rollypay_enabled():
+                logger.warning('RollyPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_rollypay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'rollypay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('rollypay_payment_id') or result.get('order_id'),
+                    'provider': 'rollypay',
                 }
             return None
 
