@@ -2105,8 +2105,33 @@ async def show_tariff_extend(
                 subscription = None
     else:
         subscription = await get_subscription_by_user_id(db, db_user.id)
-    if not subscription or not subscription.tariff_id:
-        await callback.answer('Тариф не найден', show_alert=True)
+    if not subscription:
+        await callback.answer('Подписка не найдена', show_alert=True)
+        return
+
+    if not subscription.tariff_id:
+        # Legacy user without tariff — show tariff selection for upgrade
+        promo_group_id = getattr(db_user, 'promo_group_id', None)
+        tariffs = await get_tariffs_for_user(db, promo_group_id)
+        if not tariffs:
+            await callback.answer('Нет доступных тарифов', show_alert=True)
+            return
+
+        keyboard = []
+        for t in tariffs:
+            if t.is_daily:
+                continue
+            keyboard.append([InlineKeyboardButton(text=f'📦 {t.name}', callback_data=f'tariff_select:{t.id}')])
+        keyboard.append([InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
+
+        await callback.message.edit_text(
+            '🔄 <b>Выберите тариф для продления</b>\n\n'
+            'Для продления подписки необходимо выбрать тариф.\n'
+            'Подписка будет обновлена с параметрами выбранного тарифа.',
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='HTML',
+        )
+        await callback.answer()
         return
 
     tariff = await get_tariff_by_id(db, subscription.tariff_id)
