@@ -169,6 +169,16 @@ def _get_method_defaults() -> dict:
                 {'id': 'crypto', 'name': 'Криптовалюта'},
             ],
         },
+        'aurapay': {
+            'default_display_name': settings.get_aurapay_display_name(),
+            'is_configured': settings.is_aurapay_enabled(),
+            'default_min': settings.AURAPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.AURAPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
     }
 
 
@@ -213,6 +223,7 @@ DEFAULT_METHOD_ORDER = [
     'severpay',
     'paypear',
     'rollypay',
+    'aurapay',
 ]
 
 

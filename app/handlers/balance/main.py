@@ -163,6 +163,13 @@ async def route_payment_by_method(
             await process_rollypay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'aurapay':
+        from .aurapay import process_aurapay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_aurapay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'riopay':
         from .riopay import process_riopay_payment_amount
 
@@ -740,6 +747,10 @@ def register_balance_handlers(dp: Dispatcher):
     from .rollypay import start_rollypay_topup
 
     dp.callback_query.register(start_rollypay_topup, F.data == 'topup_rollypay')
+
+    from .aurapay import start_aurapay_topup
+
+    dp.callback_query.register(start_aurapay_topup, F.data == 'topup_aurapay')
 
     from .mulenpay import check_mulenpay_payment_status
 

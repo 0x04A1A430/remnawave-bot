@@ -1340,6 +1340,55 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # AuraPay webhook
+    if settings.is_aurapay_enabled():
+
+        @router.get(settings.AURAPAY_WEBHOOK_PATH)
+        async def aurapay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'aurapay_webhook',
+                    'enabled': settings.is_aurapay_enabled(),
+                }
+            )
+
+        @router.post(settings.AURAPAY_WEBHOOK_PATH)
+        async def aurapay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('AuraPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Подпись через заголовок X-SIGNATURE
+            received_signature = request.headers.get('X-SIGNATURE', '')
+
+            from app.services.aurapay_service import aurapay_service
+
+            if not aurapay_service.verify_webhook_signature(payload, received_signature):
+                logger.warning('AuraPay webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_403_FORBIDDEN)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_aurapay_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'AuraPay webhook processing failed',
+                        data=payload.get('id'),
+                    )
+            except Exception as e:
+                logger.exception('AuraPay webhook processing error', error=e)
+            # Always return 200 — AuraPay retries on non-200 (5 attempts)
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     if routes_registered:
 
         @router.get('/health/payment-webhooks')
@@ -1362,6 +1411,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'severpay_enabled': settings.is_severpay_enabled(),
                     'paypear_enabled': settings.is_paypear_enabled(),
                     'rollypay_enabled': settings.is_rollypay_enabled(),
+                    'aurapay_enabled': settings.is_aurapay_enabled(),
                 }
             )
 

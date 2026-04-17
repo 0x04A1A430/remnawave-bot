@@ -611,6 +611,19 @@ class Settings(BaseSettings):
     ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
     ROLLYPAY_RETURN_URL: str | None = None
 
+    # AuraPay (aurapay.tech)
+    AURAPAY_ENABLED: bool = False
+    AURAPAY_API_KEY: str | None = None  # X-ApiKey header
+    AURAPAY_SHOP_ID: str | None = None  # X-ShopId header (UUID)
+    AURAPAY_SECRET_KEY: str | None = None  # Secret key #2 for webhook HMAC
+    AURAPAY_DISPLAY_NAME: str = 'AuraPay'
+    AURAPAY_CURRENCY: str = 'RUB'
+    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
+    AURAPAY_RETURN_URL: str | None = None
+    AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
+
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
@@ -2015,6 +2028,21 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
+
+    def is_aurapay_enabled(self) -> bool:
+        return (
+            self.AURAPAY_ENABLED
+            and self.AURAPAY_API_KEY is not None
+            and self.AURAPAY_SHOP_ID is not None
+            and self.AURAPAY_SECRET_KEY is not None
+        )
+
+    def get_aurapay_display_name(self) -> str:
+        name = (self.AURAPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'AuraPay'
+
+    def get_aurapay_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()
