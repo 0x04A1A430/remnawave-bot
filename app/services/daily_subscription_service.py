@@ -146,9 +146,22 @@ class DailySubscriptionService:
             # Недостаточно средств - приостанавливаем подписку
             await suspend_daily_subscription_insufficient_balance(db, subscription)
 
-            # Уведомляем пользователя
+            # Уведомляем пользователя (rate-limit: 1 раз в 6 часов)
             if self._bot:
-                await self._notify_insufficient_balance(user, subscription, daily_price)
+                from app.utils.cache import cache
+
+                cache_key = f'daily_insuf_notify:{subscription.id}'
+                try:
+                    already_notified = await cache.get(cache_key)
+                except Exception:
+                    already_notified = None
+
+                if not already_notified:
+                    await self._notify_insufficient_balance(user, subscription, daily_price)
+                    try:
+                        await cache.set(cache_key, '1', expire=21600)  # 6 hours
+                    except Exception:
+                        pass
 
             logger.info(
                 'Подписка приостановлена: недостаточно средств (баланс: требуется: )',
