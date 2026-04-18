@@ -55,7 +55,7 @@ Bedolaga — полнофункциональная платформа для п
 
 ### 💳 Платежи
 
-- 🏦 **17 платёжных провайдеров** одновременно
+- 🏦 **18 платёжных провайдеров** одновременно
 - 💰 Единый баланс: пополнение любым способом → покупка с баланса
 - ⚡ Автопокупка подписки после пополнения
 - 💾 Рекуррентные платежи (сохранённые карты)
@@ -125,6 +125,7 @@ Bedolaga — полнофункциональная платформа для п
 | 💳 | **SeverPay** | СБП, карты | RUB |
 | 🤝 | **[PayPear](https://t.me/Paymen1_Manager)** 🔸 | Карты, СБП, SberPay, T-Pay | RUB |
 | 🤝 | **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто | RUB → USDT |
+| 🤝 | **[AuraPay](https://aurapay.tech/)** 🔸 | Карты, СБП | RUB |
 | 📲 | **Tribute** | Telegram-платежи | RUB |
 
 </div>
@@ -183,6 +184,19 @@ Bedolaga — официальный партнёр платёжного шлюз
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
 
 📩 Менеджер: [@rollypay_manager](https://t.me/rollypay_manager) | 🌐 [rollypay.io](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)
+
+</td>
+</tr>
+<tr>
+<td align="center">
+
+**🤝 Официальный партнёр AuraPay**
+
+Bedolaga — официальный партнёр платёжной системы **[AuraPay](https://aurapay.tech/)**.<br>
+Банковские карты и СБП через единый API с быстрой интеграцией.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@kickdownm](https://t.me/kickdownm) | 🌐 [aurapay.tech](https://aurapay.tech/)
 
 </td>
 </tr>
@@ -249,7 +263,7 @@ docker compose up -d
 | | Раздел | Описание |
 |:---:|:---|:---|
 | 🚀 | [Быстрый старт](https://docs.bedolagam.ru/getting-started/quickstart) | Развёртывание за 5 минут |
-| 💳 | [Настройка платежей](https://docs.bedolagam.ru/bot/payments) | 17 провайдеров, webhook, фискализация |
+| 💳 | [Настройка платежей](https://docs.bedolagam.ru/bot/payments) | 18 провайдеров, webhook, фискализация |
 | 📦 | [Подписки и тарифы](https://docs.bedolagam.ru/bot/subscriptions) | Конфигурация планов и трафика |
 | 👥 | [Реферальная программа](https://docs.bedolagam.ru/bot/referral-program) | Партнёрка и вывод средств |
 | 🖥 | [Cabinet](https://docs.bedolagam.ru/cabinet/overview) | Настройка веб-кабинета |
