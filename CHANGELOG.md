@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.49.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.48.0...v3.49.0) (2026-04-18)
+
+
+### New Features
+
+* integrate AuraPay payment provider ([9717936](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/97179360c0288940b1fa2f6c21a6e1431a27536f))
+
+
+### Bug Fixes
+
+* add missing RollyPay CRUD wrappers and guest payment flow ([0f814be](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0f814be1b7dfaec84dde9acc402b2c1790417611))
+* align campaign top registrations revenue with period comparison ([16bc1d4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/16bc1d41989d66e105724ed846fb40ccf03322fd))
+* handle edge case when all tariffs are daily in legacy renewal ([29877fc](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/29877fc93bc612ee199ccb2438c90e57a3c1e9e0))
+* rate-limit daily subscription insufficient balance notifications to 6 hours ([ecc4a61](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ecc4a6147dad0c8886acd48f38e567a6c7fc8916))
+* redirect legacy users without tariff to tariff selection on renewal ([5986c00](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5986c00fab8c5fe2060d296afca72d28038ff7bd))
+* register PayPear and RollyPay in admin panel settings ([2aa5927](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2aa59274331610eec3cd84f90ddb49ee59da22ef))
+
+
+### Documentation
+
+* add AuraPay to README with partner block ([25ea5c6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/25ea5c60fdaf3cac9294b6df74142c176b1d4d04))
+* add PayPear and RollyPay to README with partner blocks ([1c696c6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1c696c69e34e668ff90c915249b7c3dc37bfd89b))
+* add PayPear and RollyPay to README with partner blocks ([b531959](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b53195998231d34b6e1c7165193e87fee6e5c293))
+
 ## [3.48.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.47.0...v3.48.0) (2026-04-16)
 
 
