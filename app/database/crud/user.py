@@ -710,30 +710,52 @@ async def subtract_user_balance(
             await db.refresh(user)
 
         if consume_promo_offer and log_context:
-            try:
-                await log_promo_offer_action(
-                    db,
-                    user_id=user.id,
-                    offer_id=log_context.get('offer_id'),
-                    action='consumed',
-                    source=log_context.get('source'),
-                    percent=log_context.get('percent'),
-                    effect_type=log_context.get('effect_type'),
-                    details=log_context.get('details'),
-                    commit=commit,
-                )
-            except Exception as log_error:  # pragma: no cover - defensive logging
-                logger.warning(
-                    'Failed to record promo offer consumption log for user', user_id=user.id, log_error=log_error
-                )
-                if commit:
-                    try:
-                        await db.rollback()
-                    except Exception as rollback_error:  # pragma: no cover - defensive logging
-                        logger.warning(
-                            'Failed to rollback session after promo offer consumption log failure',
-                            rollback_error=rollback_error,
+            # Пишем лог в ОТДЕЛЬНОЙ сессии, чтобы его commit/rollback не касался
+            # основной сессии caller'а. Иначе rollback в случае фейла логирования
+            # экспайрит объекты сессии и следующее обращение к subscription/user
+            # attrs у caller'а падает с MissingGreenlet.
+            if commit:
+                try:
+                    from app.database.database import AsyncSessionLocal
+
+                    async with AsyncSessionLocal() as log_db:
+                        await log_promo_offer_action(
+                            log_db,
+                            user_id=user.id,
+                            offer_id=log_context.get('offer_id'),
+                            action='consumed',
+                            source=log_context.get('source'),
+                            percent=log_context.get('percent'),
+                            effect_type=log_context.get('effect_type'),
+                            details=log_context.get('details'),
+                            commit=True,
                         )
+                except Exception as log_error:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        'Failed to record promo offer consumption log for user',
+                        user_id=user.id,
+                        log_error=log_error,
+                    )
+            else:
+                # Caller управляет транзакцией — пишем в его сессию без commit.
+                try:
+                    await log_promo_offer_action(
+                        db,
+                        user_id=user.id,
+                        offer_id=log_context.get('offer_id'),
+                        action='consumed',
+                        source=log_context.get('source'),
+                        percent=log_context.get('percent'),
+                        effect_type=log_context.get('effect_type'),
+                        details=log_context.get('details'),
+                        commit=False,
+                    )
+                except Exception as log_error:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        'Failed to record promo offer consumption log for user',
+                        user_id=user.id,
+                        log_error=log_error,
+                    )
 
         logger.info('✅ Средства списаны: →', old_balance=old_balance, balance_kopeks=user.balance_kopeks)
         return True
