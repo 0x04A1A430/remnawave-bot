@@ -1202,13 +1202,39 @@ class MonitoringService:
             processed_count = 0
             failed_count = 0
 
-            for subscription in autopay_subscriptions:
+            # Захватываем (sub_id, user_id) ДО цикла, пока сессия ещё свежая.
+            # В цикле каждую итерацию делаем refetch subscription+user через
+            # async-запрос: это единственный безопасный способ избежать
+            # MissingGreenlet при sync-lazy-load, который SQLAlchemy 2.0 async
+            # session не поддерживает (напр. lock_user_for_pricing c
+            # populate_existing=True разгружает Subscription.user backref).
+            autopay_pairs: list[tuple[int, int]] = [(s.id, s.user_id) for s in autopay_subscriptions]
+
+            for sub_id_local, sub_user_id_local in autopay_pairs:
                 try:
+                    # Refetch subscription с eager load user/tariff —
+                    # никаких lazy access по ходу итерации.
+                    refetch_result = await db.execute(
+                        select(Subscription)
+                        .options(
+                            selectinload(Subscription.user).options(
+                                selectinload(User.promo_group),
+                                selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                            ),
+                            selectinload(Subscription.tariff),
+                        )
+                        .where(Subscription.id == sub_id_local)
+                    )
+                    subscription = refetch_result.scalar_one_or_none()
+                    if subscription is None:
+                        continue
+
                     from app.database.crud.subscription import is_recently_updated_by_webhook
 
                     if is_recently_updated_by_webhook(subscription):
                         logger.debug(
-                            'Пропуск автоплатежа подписки : обновлена вебхуком недавно', subscription_id=subscription.id
+                            'Пропуск автоплатежа подписки : обновлена вебхуком недавно',
+                            subscription_id=subscription.id,
                         )
                         continue
 
@@ -1417,15 +1443,17 @@ class MonitoringService:
                         )
                 except Exception as sub_error:
                     failed_count += 1
+                    # Используем локально захваченные id — subscription-объект
+                    # может быть expired после чужого rollback'а.
                     logger.error(
                         'Ошибка автопродления отдельной подписки',
-                        subscription_id=getattr(subscription, 'id', None),
-                        user_id=getattr(subscription, 'user_id', None),
+                        subscription_id=sub_id_local,
+                        user_id=sub_user_id_local,
                         error=sub_error,
                         exc_info=True,
                     )
-                    # Сессия могла «протухнуть» (MissingGreenlet, rollback после commit и т.п.) —
-                    # откатываемся, чтобы следующая итерация работала с чистой сессией.
+                    # Сессия могла остаться с aborted-транзакцией — откатываем,
+                    # чтобы следующая итерация начала refetch на чистой сессии.
                     try:
                         await db.rollback()
                     except Exception as rollback_error:
