@@ -3834,9 +3834,11 @@ async def activate_subscription_trial_endpoint(
                     trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
 
             if trial_tariff:
+                from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+
                 trial_traffic_limit = trial_tariff.traffic_limit_gb
                 trial_device_limit = trial_tariff.device_limit
-                trial_squads = trial_tariff.allowed_squads or []
+                trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                 tariff_id_for_trial = trial_tariff.id
                 tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                 if tariff_trial_days:

@@ -922,9 +922,11 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
 
                 if trial_tariff:
+                    from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
                     trial_device_limit = trial_tariff.device_limit
-                    trial_squads = trial_tariff.allowed_squads or []
+                    trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                     tariff_id_for_trial = trial_tariff.id
                     tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
@@ -937,7 +939,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             except Exception as e:
                 logger.error('Ошибка получения триального тарифа', error=e)
 
-        # BUG-12 fix: If no squads from tariff, fallback to trial-eligible servers
+        # No trial tariff configured, use the legacy random trial squad fallback.
         if not trial_squads:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
 
@@ -3307,9 +3309,11 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                     if trial_tariff_id > 0:
                         trial_tariff = await _get_tariff(db, trial_tariff_id)
                 if trial_tariff:
+                    from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
                     trial_device_limit = trial_tariff.device_limit
-                    trial_squads = trial_tariff.allowed_squads or []
+                    trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                     tariff_id_for_trial = trial_tariff.id
                     tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
@@ -3322,7 +3326,7 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
             except Exception as e:
                 logger.error('Ошибка получения триального тарифа для платного триала', error=e)
 
-        # BUG-12 fix: If no squads from tariff, fallback to trial-eligible servers
+        # No trial tariff configured, use the legacy random trial squad fallback.
         if not trial_squads:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
 
@@ -3673,9 +3677,11 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
                     if trial_tariff_id > 0:
                         trial_tariff = await _get_tariff(db, trial_tariff_id)
                 if trial_tariff:
+                    from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+
                     trial_traffic = trial_tariff.traffic_limit_gb
                     trial_devices = trial_tariff.device_limit
-                    trial_squads_list = trial_tariff.allowed_squads or []
+                    trial_squads_list = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                     tariff_id_for_trial = trial_tariff.id
                     tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
@@ -3688,7 +3694,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
             except Exception as e:
                 logger.error('Ошибка получения триального тарифа для платного триала', error=e)
 
-        # Если тариф не задал серверы, получаем случайный сквад
+        # Если триальный тариф не найден, используем legacy fallback со случайным сквадом.
         if not trial_squads_list:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
 
