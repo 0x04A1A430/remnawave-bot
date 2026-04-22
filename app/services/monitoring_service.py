@@ -1202,160 +1202,229 @@ class MonitoringService:
             processed_count = 0
             failed_count = 0
 
-            for subscription in autopay_subscriptions:
-                from app.database.crud.subscription import is_recently_updated_by_webhook
+            # Захватываем (sub_id, user_id) ДО цикла, пока сессия ещё свежая.
+            # В цикле каждую итерацию делаем refetch subscription+user через
+            # async-запрос: это единственный безопасный способ избежать
+            # MissingGreenlet при sync-lazy-load, который SQLAlchemy 2.0 async
+            # session не поддерживает (напр. lock_user_for_pricing c
+            # populate_existing=True разгружает Subscription.user backref).
+            autopay_pairs: list[tuple[int, int]] = [(s.id, s.user_id) for s in autopay_subscriptions]
 
-                if is_recently_updated_by_webhook(subscription):
-                    logger.debug(
-                        'Пропуск автоплатежа подписки : обновлена вебхуком недавно', subscription_id=subscription.id
-                    )
-                    continue
-
-                user = subscription.user
-                if not user:
-                    continue
-
-                user_identifier = user.telegram_id or f'email:{user.id}'
-
-                # Определяем период продления: из тарифа (минимальный) или 30 дней по умолчанию
-                tariff = getattr(subscription, 'tariff', None)
-                if tariff:
-                    autopay_period = tariff.get_shortest_period() or 30
-                else:
-                    autopay_period = 30
-
+            for sub_id_local, sub_user_id_local in autopay_pairs:
                 try:
-                    from app.database.crud.user import lock_user_for_pricing
-                    from app.services.pricing_engine import pricing_engine
-
-                    user = await lock_user_for_pricing(db, user.id)
-
-                    pricing = await pricing_engine.calculate_renewal_price(
-                        db,
-                        subscription,
-                        autopay_period,
-                        user=user,
+                    # Refetch subscription с eager load user/tariff —
+                    # никаких lazy access по ходу итерации.
+                    refetch_result = await db.execute(
+                        select(Subscription)
+                        .options(
+                            selectinload(Subscription.user).options(
+                                selectinload(User.promo_group),
+                                selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                            ),
+                            selectinload(Subscription.tariff),
+                        )
+                        .where(Subscription.id == sub_id_local)
                     )
-                    renewal_cost = pricing.final_total
-                except Exception as e:
-                    logger.error(
-                        'Ошибка расчёта стоимости автопродления, пропускаем',
-                        subscription_id=subscription.id,
-                        user_id=user.id,
-                        error=str(e),
-                    )
-                    failed_count += 1
-                    continue
+                    subscription = refetch_result.scalar_one_or_none()
+                    if subscription is None:
+                        continue
 
-                if renewal_cost <= 0:
-                    logger.warning(
-                        'Нулевая стоимость автопродления, пропускаем',
-                        subscription_id=subscription.id,
-                        user_id=user.id,
-                        renewal_cost=renewal_cost,
-                    )
-                    failed_count += 1
-                    continue
+                    from app.database.crud.subscription import is_recently_updated_by_webhook
 
-                # calculate_renewal_price уже включает promo_group + promo_offer скидки.
-                # Не применяем promo_offer повторно — только consume-им при успешной оплате.
-                charge_amount = renewal_cost
-                promo_discount_percent = get_user_active_promo_discount_percent(user)
+                    if is_recently_updated_by_webhook(subscription):
+                        logger.debug(
+                            'Пропуск автоплатежа подписки : обновлена вебхуком недавно',
+                            subscription_id=subscription.id,
+                        )
+                        continue
 
-                autopay_key = f'autopay_{user.id}_{subscription.id}'
-                if autopay_key in self._notified_users:
-                    continue
+                    user = subscription.user
+                    if not user:
+                        continue
 
-                if user.balance_kopeks >= charge_amount:
-                    success = await subtract_user_balance(
-                        db,
-                        user,
-                        charge_amount,
-                        'Автопродление подписки',
-                        consume_promo_offer=promo_discount_percent > 0,
-                        mark_as_paid_subscription=True,
-                    )
+                    user_identifier = user.telegram_id or f'email:{user.id}'
 
-                    if success:
-                        # extend_subscription сам обработает EXPIRED→ACTIVE переход
-                        # (проверяет status + end_date для определения was_expired)
-                        if subscription.status == SubscriptionStatus.EXPIRED.value:
-                            logger.info(
-                                '🔄 Autopay: продление EXPIRED подписки (восстановление)',
-                                subscription_id=subscription.id,
-                                user_id=user.id,
-                            )
-                        old_end_date = subscription.end_date
-                        await extend_subscription(db, subscription, autopay_period)
-                        await self.subscription_service.update_remnawave_user(
+                    # Определяем период продления: из тарифа (минимальный) или 30 дней по умолчанию
+                    tariff = getattr(subscription, 'tariff', None)
+                    if tariff:
+                        autopay_period = tariff.get_shortest_period() or 30
+                    else:
+                        autopay_period = 30
+
+                    try:
+                        from app.database.crud.user import lock_user_for_pricing
+                        from app.services.pricing_engine import pricing_engine
+
+                        user = await lock_user_for_pricing(db, user.id)
+
+                        pricing = await pricing_engine.calculate_renewal_price(
                             db,
                             subscription,
-                            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-                            reset_reason='автопродление подписки',
+                            autopay_period,
+                            user=user,
+                        )
+                        renewal_cost = pricing.final_total
+                    except Exception as e:
+                        logger.error(
+                            'Ошибка расчёта стоимости автопродления, пропускаем',
+                            subscription_id=subscription.id,
+                            user_id=user.id,
+                            error=str(e),
+                        )
+                        failed_count += 1
+                        continue
+
+                    if renewal_cost <= 0:
+                        logger.warning(
+                            'Нулевая стоимость автопродления, пропускаем',
+                            subscription_id=subscription.id,
+                            user_id=user.id,
+                            renewal_cost=renewal_cost,
+                        )
+                        failed_count += 1
+                        continue
+
+                    # calculate_renewal_price уже включает promo_group + promo_offer скидки.
+                    # Не применяем promo_offer повторно — только consume-им при успешной оплате.
+                    charge_amount = renewal_cost
+                    promo_discount_percent = get_user_active_promo_discount_percent(user)
+
+                    autopay_key = f'autopay_{user.id}_{subscription.id}'
+                    if autopay_key in self._notified_users:
+                        continue
+
+                    if user.balance_kopeks >= charge_amount:
+                        success = await subtract_user_balance(
+                            db,
+                            user,
+                            charge_amount,
+                            'Автопродление подписки',
+                            consume_promo_offer=promo_discount_percent > 0,
+                            mark_as_paid_subscription=True,
                         )
 
-                        # Создаём транзакцию, чтобы автопродление было видно в статистике и карточке пользователя
-                        try:
-                            from app.database.crud.transaction import create_transaction
-                            from app.database.models import PaymentMethod, TransactionType
-
-                            transaction = await create_transaction(
-                                db=db,
-                                user_id=user.id,
-                                type=TransactionType.SUBSCRIPTION_PAYMENT,
-                                amount_kopeks=charge_amount,
-                                description=f'Автопродление подписки на {autopay_period} дней',
-                                payment_method=PaymentMethod.BALANCE,
-                            )
-                        except Exception as exc:
-                            logger.warning('Не удалось создать транзакцию автопродления', user_id=user.id, exc=exc)
-                            transaction = None
-
-                        # Отправляем уведомление администраторам
-                        try:
-                            from app.services.subscription_renewal_service import with_admin_notification_service
-
-                            if transaction:
-                                await with_admin_notification_service(
-                                    lambda svc: svc.send_subscription_extension_notification(
-                                        db,
-                                        user,
-                                        subscription,
-                                        transaction,
-                                        autopay_period,
-                                        old_end_date,
-                                        new_end_date=subscription.end_date,
-                                        balance_after=user.balance_kopeks,
-                                    )
+                        if success:
+                            # subtract_user_balance мог оставить сессию в expired state
+                            # (напр. rollback внутри log_promo_offer_action при consume_promo_offer).
+                            # Перезагружаем subscription с eager-загрузкой user/tariff, чтобы
+                            # избежать MissingGreenlet на последующих обращениях к subscription.*
+                            refetch_result = await db.execute(
+                                select(Subscription)
+                                .options(
+                                    selectinload(Subscription.user),
+                                    selectinload(Subscription.tariff),
                                 )
-                        except Exception as exc:
+                                .where(Subscription.id == subscription.id)
+                            )
+                            refreshed_subscription = refetch_result.scalar_one_or_none()
+                            if refreshed_subscription is None:
+                                logger.warning(
+                                    'Подписка пропала после списания — пропускаем шаги продления',
+                                    subscription_id=subscription.id,
+                                    user_id=user.id,
+                                )
+                                processed_count += 1
+                                self._notified_users.add(autopay_key)
+                                continue
+                            subscription = refreshed_subscription
+
+                            # extend_subscription сам обработает EXPIRED→ACTIVE переход
+                            # (проверяет status + end_date для определения was_expired)
+                            if subscription.status == SubscriptionStatus.EXPIRED.value:
+                                logger.info(
+                                    '🔄 Autopay: продление EXPIRED подписки (восстановление)',
+                                    subscription_id=subscription.id,
+                                    user_id=user.id,
+                                )
+                            old_end_date = subscription.end_date
+                            await extend_subscription(db, subscription, autopay_period)
+                            await self.subscription_service.update_remnawave_user(
+                                db,
+                                subscription,
+                                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                                reset_reason='автопродление подписки',
+                            )
+
+                            # Создаём транзакцию, чтобы автопродление было видно в статистике и карточке пользователя
+                            try:
+                                from app.database.crud.transaction import create_transaction
+                                from app.database.models import PaymentMethod, TransactionType
+
+                                transaction = await create_transaction(
+                                    db=db,
+                                    user_id=user.id,
+                                    type=TransactionType.SUBSCRIPTION_PAYMENT,
+                                    amount_kopeks=charge_amount,
+                                    description=f'Автопродление подписки на {autopay_period} дней',
+                                    payment_method=PaymentMethod.BALANCE,
+                                )
+                            except Exception as exc:
+                                logger.warning('Не удалось создать транзакцию автопродления', user_id=user.id, exc=exc)
+                                transaction = None
+
+                            # Отправляем уведомление администраторам
+                            try:
+                                from app.services.subscription_renewal_service import with_admin_notification_service
+
+                                if transaction:
+                                    await with_admin_notification_service(
+                                        lambda svc: svc.send_subscription_extension_notification(
+                                            db,
+                                            user,
+                                            subscription,
+                                            transaction,
+                                            autopay_period,
+                                            old_end_date,
+                                            new_end_date=subscription.end_date,
+                                            balance_after=user.balance_kopeks,
+                                        )
+                                    )
+                            except Exception as exc:
+                                logger.warning(
+                                    'Не удалось отправить админ-уведомление об автопродлении', user_id=user.id, exc=exc
+                                )
+
+                            # Send notification via appropriate channel
+                            if user.telegram_id and self.bot:
+                                await self._send_autopay_success_notification(
+                                    user, charge_amount, autopay_period, subscription=subscription
+                                )
+                            elif not user.telegram_id:
+                                # Email-only user - use notification delivery service
+                                await notification_delivery_service.notify_autopay_success(
+                                    user=user,
+                                    amount_kopeks=charge_amount,
+                                    new_expires_at=subscription.end_date,
+                                )
+
+                            processed_count += 1
+                            self._notified_users.add(autopay_key)
+                            logger.info(
+                                '💳 Автопродление подписки пользователя успешно (списано , скидка %)',
+                                user_identifier=user_identifier,
+                                charge_amount=charge_amount,
+                                promo_discount_percent=promo_discount_percent,
+                            )
+                        else:
+                            failed_count += 1
+                            if await self._check_autopay_fail_cooldown(user.id, user_identifier):
+                                if user.telegram_id and self.bot:
+                                    await self._send_autopay_failed_notification(
+                                        user, user.balance_kopeks, charge_amount, subscription=subscription
+                                    )
+                                elif not user.telegram_id:
+                                    await notification_delivery_service.notify_autopay_failed(
+                                        user=user,
+                                        reason='Ошибка списания средств',
+                                    )
+                                await self._set_autopay_fail_cooldown(user.id, user_identifier)
                             logger.warning(
-                                'Не удалось отправить админ-уведомление об автопродлении', user_id=user.id, exc=exc
+                                '💳 Ошибка списания средств для автопродления пользователя',
+                                user_identifier=user_identifier,
                             )
-
-                        # Send notification via appropriate channel
-                        if user.telegram_id and self.bot:
-                            await self._send_autopay_success_notification(
-                                user, charge_amount, autopay_period, subscription=subscription
-                            )
-                        elif not user.telegram_id:
-                            # Email-only user - use notification delivery service
-                            await notification_delivery_service.notify_autopay_success(
-                                user=user,
-                                amount_kopeks=charge_amount,
-                                new_expires_at=subscription.end_date,
-                            )
-
-                        processed_count += 1
-                        self._notified_users.add(autopay_key)
-                        logger.info(
-                            '💳 Автопродление подписки пользователя успешно (списано , скидка %)',
-                            user_identifier=user_identifier,
-                            charge_amount=charge_amount,
-                            promo_discount_percent=promo_discount_percent,
-                        )
                     else:
                         failed_count += 1
+
                         if await self._check_autopay_fail_cooldown(user.id, user_identifier):
                             if user.telegram_id and self.bot:
                                 await self._send_autopay_failed_notification(
@@ -1364,30 +1433,35 @@ class MonitoringService:
                             elif not user.telegram_id:
                                 await notification_delivery_service.notify_autopay_failed(
                                     user=user,
-                                    reason='Ошибка списания средств',
+                                    reason='Недостаточно средств на балансе',
                                 )
                             await self._set_autopay_fail_cooldown(user.id, user_identifier)
+
                         logger.warning(
-                            '💳 Ошибка списания средств для автопродления пользователя', user_identifier=user_identifier
+                            '💳 Недостаточно средств для автопродления у пользователя',
+                            user_identifier=user_identifier,
                         )
-                else:
+                except Exception as sub_error:
                     failed_count += 1
-
-                    if await self._check_autopay_fail_cooldown(user.id, user_identifier):
-                        if user.telegram_id and self.bot:
-                            await self._send_autopay_failed_notification(
-                                user, user.balance_kopeks, charge_amount, subscription=subscription
-                            )
-                        elif not user.telegram_id:
-                            await notification_delivery_service.notify_autopay_failed(
-                                user=user,
-                                reason='Недостаточно средств на балансе',
-                            )
-                        await self._set_autopay_fail_cooldown(user.id, user_identifier)
-
-                    logger.warning(
-                        '💳 Недостаточно средств для автопродления у пользователя', user_identifier=user_identifier
+                    # Используем локально захваченные id — subscription-объект
+                    # может быть expired после чужого rollback'а.
+                    logger.error(
+                        'Ошибка автопродления отдельной подписки',
+                        subscription_id=sub_id_local,
+                        user_id=sub_user_id_local,
+                        error=sub_error,
+                        exc_info=True,
                     )
+                    # Сессия могла остаться с aborted-транзакцией — откатываем,
+                    # чтобы следующая итерация начала refetch на чистой сессии.
+                    try:
+                        await db.rollback()
+                    except Exception as rollback_error:
+                        logger.warning(
+                            'Не удалось сделать rollback сессии после ошибки автопродления',
+                            rollback_error=rollback_error,
+                        )
+                    continue
 
             if processed_count > 0 or failed_count > 0:
                 await self._log_monitoring_event(
@@ -1398,7 +1472,7 @@ class MonitoringService:
                 )
 
         except Exception as e:
-            logger.error('Ошибка обработки автоплатежей', error=e)
+            logger.error('Ошибка обработки автоплатежей', error=e, exc_info=True)
 
     async def _send_subscription_expired_notification(
         self, user: User, subscription: Subscription, *, tariff_name: str | None = None

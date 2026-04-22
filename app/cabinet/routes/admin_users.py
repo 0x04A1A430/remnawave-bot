@@ -1050,6 +1050,17 @@ async def update_user_subscription(
                 detail='User already has a subscription. Enable multi-tariff mode to add more.',
             )
 
+        # Проверка: нельзя создать вторую активную подписку с тем же тарифом
+        if is_multi_tariff and request.tariff_id:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='User already has an active subscription for this tariff. Extend it instead.',
+                )
+
         from app.database.crud.subscription import create_paid_subscription
 
         days = request.days or 30
@@ -1069,16 +1080,25 @@ async def update_user_subscription(
                 if tariff.allowed_squads:
                     connected_squads = tariff.allowed_squads
 
-        new_sub = await create_paid_subscription(
-            db=db,
-            user_id=user.id,
-            duration_days=days,
-            traffic_limit_gb=traffic_limit,
-            device_limit=device_limit,
-            is_trial=is_trial,
-            tariff_id=request.tariff_id,
-            connected_squads=connected_squads,
-        )
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            new_sub = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=days,
+                traffic_limit_gb=traffic_limit,
+                device_limit=device_limit,
+                is_trial=is_trial,
+                tariff_id=request.tariff_id,
+                connected_squads=connected_squads,
+            )
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='User already has an active subscription for this tariff. Extend it instead.',
+            )
 
         # Sync to Remnawave panel
         await _sync_subscription_to_panel(db, user, new_sub)
@@ -1190,6 +1210,18 @@ async def update_user_subscription(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Tariff not found',
             )
+
+        # Проверка: нельзя сменить тариф, если у пользователя уже есть
+        # другая активная подписка с целевым тарифом
+        if is_multi_tariff and request.tariff_id != subscription.tariff_id:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
+            if existing and existing.id != subscription.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='User already has an active subscription for the target tariff',
+                )
 
         # Preserve extra purchased devices above the old tariff's base limit
         from app.database.crud.subscription import calc_device_limit_on_tariff_switch
@@ -1322,6 +1354,18 @@ async def update_user_subscription(
         )
 
     if request.action == 'activate':
+        # Проверка: нельзя активировать, если у пользователя уже есть
+        # другая активная подписка с тем же тарифом
+        if is_multi_tariff and subscription.tariff_id:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, user.id, subscription.tariff_id)
+            if existing and existing.id != subscription.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='Cannot activate: user already has an active subscription for this tariff',
+                )
+
         subscription.status = SubscriptionStatus.ACTIVE.value
         if subscription.end_date and subscription.end_date <= datetime.now(UTC):
             # Extend by 30 days if expired
