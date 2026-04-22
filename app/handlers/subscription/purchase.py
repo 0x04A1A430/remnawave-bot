@@ -1582,10 +1582,14 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
     if settings.is_traffic_fixed():
         traffic_value = prepared_cart_data.get('traffic_gb')
         if traffic_value is None:
+            traffic_value = prepared_cart_data.get('traffic_limit_gb')
+        if traffic_value is None:
             traffic_value = settings.get_fixed_traffic_limit()
         traffic_display = 'Безлимитный' if traffic_value == 0 else f'{traffic_value} ГБ'
     else:
-        traffic_value = prepared_cart_data.get('traffic_gb', 0) or 0
+        traffic_value = prepared_cart_data.get('traffic_gb')
+        if traffic_value is None:
+            traffic_value = prepared_cart_data.get('traffic_limit_gb', 0)
         traffic_display = 'Безлимитный' if traffic_value == 0 else f'{traffic_value} ГБ'
 
     summary_lines = [
@@ -1598,6 +1602,8 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
 
     if settings.is_devices_selection_enabled():
         devices_value = prepared_cart_data.get('devices')
+        if devices_value is None:
+            devices_value = prepared_cart_data.get('device_limit')
         if devices_value is not None:
             summary_lines.append(f'📱 Устройства: {devices_value}')
 
@@ -1972,7 +1978,10 @@ async def confirm_extend_subscription(
             'description': f'Продление подписки на {days} дней',
             'consume_promo_offer': bool(promo_offer_discount > 0),
             'device_limit': device_limit,
+            'devices': device_limit,
             'traffic_limit_gb': renewal_traffic_gb,
+            'traffic_gb': renewal_traffic_gb,
+            'countries': list(subscription.connected_squads or []),
         }
 
         await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -2227,7 +2236,12 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
     devices_selection_enabled = settings.is_devices_selection_enabled()
     forced_disabled_limit: int | None = None
     if devices_selection_enabled:
-        devices_selected = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+        # Для extend-корзины ключ может быть 'device_limit' вместо 'devices'
+        devices_selected = data.get('devices')
+        if devices_selected is None:
+            devices_selected = data.get('device_limit')
+        if devices_selected is None:
+            devices_selected = settings.DEFAULT_DEVICE_LIMIT
     else:
         forced_disabled_limit = settings.get_disabled_mode_device_limit()
         if forced_disabled_limit is None:
@@ -4512,8 +4526,11 @@ async def _extend_existing_subscription(
             'return_to_cart': True,
             'description': f'Продление подписки на {period_days} дней',
             'device_limit': device_limit,
+            'devices': device_limit,
             'traffic_limit_gb': traffic_limit_gb,
+            'traffic_gb': traffic_limit_gb,
             'squad_uuid': squad_uuid,
+            'countries': [squad_uuid] if squad_uuid else [],
             'consume_promo_offer': consume_promo,
         }
 
