@@ -353,6 +353,9 @@ async def get_purchase_options(
                 'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
                 if settings.is_multi_tariff_enabled()
                 else False,
+                # Направления смены тарифа
+                'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
+                'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
             }
 
         # Classic mode - return periods

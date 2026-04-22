@@ -108,7 +108,24 @@ async def purchase_devices_legacy(
             detail='Докупка устройств недоступна',
         )
 
-    base_total_price = device_price * request.devices
+    # Устройства в пределах тарифного лимита — бесплатные
+    current_devices = subscription.device_limit or 1
+    if tariff:
+        tariff_included = tariff.device_limit or 0
+        if current_devices < tariff_included:
+            free_devices = tariff_included - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+    else:
+        free_baseline = settings.DEFAULT_DEVICE_LIMIT
+        if current_devices < free_baseline:
+            free_devices = free_baseline - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+
+    base_total_price = device_price * chargeable_devices
 
     # Lock user row to prevent TOCTOU on promo-offer state
     from app.database.crud.user import lock_user_for_pricing
@@ -366,10 +383,27 @@ async def purchase_devices(
         days_left = max(1, (end_date - now).days)
         total_days = 30  # Base period for device price calculation
 
+        # Устройства в пределах тарифного лимита — бесплатные
+        if tariff:
+            tariff_included = tariff.device_limit or 0
+            if current_devices < tariff_included:
+                free_devices = tariff_included - current_devices
+                chargeable_devices = max(0, request.devices - free_devices)
+            else:
+                chargeable_devices = request.devices
+        else:
+            free_baseline = settings.DEFAULT_DEVICE_LIMIT
+            if current_devices < free_baseline:
+                free_devices = free_baseline - current_devices
+                chargeable_devices = max(0, request.devices - free_devices)
+            else:
+                chargeable_devices = request.devices
+
         # Calculate base price before discount
-        base_price_per_month = device_price * request.devices
+        base_price_per_month = device_price * chargeable_devices
         base_price_prorated = int(base_price_per_month * days_left / total_days)
-        base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
+        if chargeable_devices > 0:
+            base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
 
         # Lock user BEFORE discount computation to prevent TOCTOU on promo group
         from app.database.crud.user import lock_user_for_pricing
@@ -627,8 +661,25 @@ async def save_devices_cart(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
-    base_total_price = int(device_price * request.devices * days_left / total_days)
-    base_total_price = max(100, base_total_price)  # Minimum 1 ruble
+    # Устройства в пределах тарифного лимита — бесплатные
+    if tariff:
+        tariff_included = tariff.device_limit or 0
+        if current_devices < tariff_included:
+            free_devices = tariff_included - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+    else:
+        free_baseline = settings.DEFAULT_DEVICE_LIMIT
+        if current_devices < free_baseline:
+            free_devices = free_baseline - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+
+    base_total_price = int(device_price * chargeable_devices * days_left / total_days)
+    if chargeable_devices > 0:
+        base_total_price = max(100, base_total_price)  # Minimum 1 ruble
 
     # Apply discount from promo group
     period_hint_days = days_left
@@ -724,9 +775,26 @@ async def get_device_price(
     days_left = max(1, (end_date - now).days)
     total_days = 30
 
+    # Устройства в пределах тарифного лимита — бесплатные
+    if tariff:
+        tariff_included = tariff.device_limit or 0
+        if current_devices < tariff_included:
+            free_devices = tariff_included - current_devices
+            chargeable_devices = max(0, devices - free_devices)
+        else:
+            chargeable_devices = devices
+    else:
+        free_baseline = settings.DEFAULT_DEVICE_LIMIT
+        if current_devices < free_baseline:
+            free_devices = free_baseline - current_devices
+            chargeable_devices = max(0, devices - free_devices)
+        else:
+            chargeable_devices = devices
+
     # Calculate base price before discount (total first, then floor)
-    base_total_price = int(device_price * devices * days_left / total_days)
-    base_total_price = max(100, base_total_price)
+    base_total_price = int(device_price * chargeable_devices * days_left / total_days)
+    if chargeable_devices > 0:
+        base_total_price = max(100, base_total_price)
 
     # Apply discount from promo group
     period_hint_days = days_left

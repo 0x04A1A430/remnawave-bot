@@ -2310,8 +2310,8 @@ def get_change_devices_keyboard(
     tariff_device_price = getattr(tariff, 'device_price_kopeks', None) if tariff else None
     if tariff and tariff_device_price:
         device_price_per_month = tariff_device_price
-        # Для тарифов все устройства платные (нет бесплатного лимита)
-        default_device_limit = 0
+        # Устройства в пределах тарифного лимита — бесплатные
+        default_device_limit = tariff.device_limit if tariff else 0
     else:
         device_price_per_month = settings.PRICE_PER_DEVICE
         default_device_limit = settings.DEFAULT_DEVICE_LIMIT
