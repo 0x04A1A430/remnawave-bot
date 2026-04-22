@@ -99,6 +99,11 @@ class LandingConfigResponse(BaseModel):
     meta_description: str | None = None
     discount: LandingDiscountInfo | None = None  # null if no active discount
     background_config: dict | None = None
+    sticky_pay_button: bool = False
+    analytics_view_enabled: bool = False
+    analytics_view_goal: str | None = None
+    analytics_click_enabled: bool = False
+    analytics_click_goal: str | None = None
 
 
 _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
@@ -535,6 +540,11 @@ async def get_landing_config(
         meta_description=resolve_locale_text(landing.meta_description, lang) or None,
         discount=discount,
         background_config=landing.background_config,
+        sticky_pay_button=landing.sticky_pay_button,
+        analytics_view_enabled=landing.analytics_view_enabled,
+        analytics_view_goal=landing.analytics_view_goal,
+        analytics_click_enabled=landing.analytics_click_enabled,
+        analytics_click_goal=landing.analytics_click_goal,
     )
 
 
