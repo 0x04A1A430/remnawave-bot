@@ -162,7 +162,8 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
     if raw_items:
         try:
             items = [TicketMediaItem(**it) for it in raw_items]
-        except Exception:
+        except (TypeError, KeyError, ValueError) as exc:
+            logger.warning('Failed to parse media_items', message_id=message.id, error=str(exc))
             items = None
     return TicketMessageResponse(
         id=message.id,
