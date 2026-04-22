@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.50.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.49.0...v3.50.0) (2026-04-22)
+
+
+### New Features
+
+* add WEBHOOK_IP to allow Telegram bypass DNS lookup for webhook ([#2894](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2894)) ([7093d36](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7093d368d3356c692bff3eddda68996579bfd036))
+* landing page analytics goals and sticky pay button ([3272b4b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3272b4bb053c76c3995cd3904b085a28f741e815))
+* tariff switch direction control, fix device pricing within tariff limit ([9ed4f08](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9ed4f086b0102c20d7861e03f4d212ff57e28245))
+* **tickets:** multi-media message gallery (media_items JSONB) ([36571c4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/36571c4275b76fa0bdb490ffccacc0a0e32e9bd6))
+* v3.50.0 release ([a491fe3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a491fe34bda6da86d72891fe4d05b6abd169cf2f))
+* Yandex Metrika offline conversions + S2S postbacks ([1068c13](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1068c1387a03bf7c94c7b29f9bb61acc3e3e782a))
+
+
+### Bug Fixes
+
+* classic mode renewal resets device_limit to 1 via cart key mismatch ([9ca3320](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9ca3320a0204346aac2c76601f221b0bc70226a7))
+* do not reset subscription_crypto_link when cryptoLink absent in webhook ([#2891](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2891)) ([b71e58c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/b71e58c8d25a5c94c94a401a59359cab4870e3c0))
+* do not update first_name/last_name from OIDC claims ([#2892](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2892)) ([1696e6f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1696e6f8843ceaa1a3e9a6d536e0d99968e579b1))
+* FSM state loss on balance topup, PayPear confirmation_url, hidden trial tariff in renewal ([7be404b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7be404b918640dcccdcda82802bb02a342b730d6))
+* grant all available squads for unrestricted trials ([#2897](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2897)) ([905cea6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/905cea68b48b596412d83c42de0d1dce77dcaee0))
+* menu layout schema icon limit, traffic_topup_enabled condition, shadowing imports ([66f8577](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/66f8577448712786d851b1802c4a183e7acc1779))
+* tariff switch pricing showing free for upgrades, admin duplicate subscription guard ([da855a7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/da855a7c8955dcbf3543dbbaedc00e16b9c35193))
+* ticket media_items review fixes ([dd17710](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dd177101f7314c5d25120a69e04c66d74f37b18f))
+* validate analytics goal is set when analytics is enabled on landing ([d316325](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d31632534b3e1b2268a8f8b2a441214f377f23eb))
+* устранить MissingGreenlet в автоплатежах и починить traceback в логах ([db79cc9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/db79cc9eb0d7dc7a4a1ae9190f7a23c6c9e6e317))
+* устранить root cause MissingGreenlet в автоплатежах через refetch по id ([3b03c25](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3b03c253cc1603fe54fddcbc8bc374ec2c71bdfc))
+
 ## [3.49.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.48.0...v3.49.0) (2026-04-18)
 
 
