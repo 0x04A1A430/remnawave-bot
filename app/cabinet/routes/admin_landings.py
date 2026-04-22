@@ -211,6 +211,14 @@ class LandingCreateRequest(BaseModel):
     analytics_click_enabled: bool = False
     analytics_click_goal: str | None = Field(default=None, max_length=64)
 
+    @model_validator(mode='after')
+    def validate_analytics_goals(self) -> 'LandingCreateRequest':
+        if self.analytics_view_enabled and not self.analytics_view_goal:
+            raise ValueError('analytics_view_goal is required when analytics_view_enabled is True')
+        if self.analytics_click_enabled and not self.analytics_click_goal:
+            raise ValueError('analytics_click_goal is required when analytics_click_enabled is True')
+        return self
+
     @field_validator('background_config')
     @classmethod
     def validate_background_config(cls, v: dict | None) -> dict | None:
