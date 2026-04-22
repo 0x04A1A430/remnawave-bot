@@ -2142,6 +2142,31 @@ async def show_tariff_extend(
         await callback.answer('Тариф не найден', show_alert=True)
         return
 
+    # Скрытый/неактивный тариф (например, триальный после промокода) —
+    # показываем список доступных тарифов вместо продления скрытого
+    if not tariff.is_active:
+        promo_group_id = getattr(db_user, 'promo_group_id', None)
+        tariffs = await get_tariffs_for_user(db, promo_group_id)
+        active_tariffs = [t for t in tariffs if not t.is_daily]
+        if not active_tariffs:
+            await callback.answer('Нет доступных тарифов для продления', show_alert=True)
+            return
+
+        keyboard = []
+        for t in active_tariffs:
+            keyboard.append([InlineKeyboardButton(text=f'📦 {t.name}', callback_data=f'tariff_select:{t.id}')])
+        keyboard.append([InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
+
+        await callback.message.edit_text(
+            '🔄 <b>Выберите тариф для продления</b>\n\n'
+            'Для продления подписки необходимо выбрать тариф.\n'
+            'Подписка будет обновлена с параметрами выбранного тарифа.',
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode='HTML',
+        )
+        await callback.answer()
+        return
+
     traffic = format_traffic(tariff.traffic_limit_gb)
 
     # Проверяем есть ли у пользователя скидки по периодам
