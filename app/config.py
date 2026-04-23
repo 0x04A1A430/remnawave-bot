@@ -1250,7 +1250,13 @@ class Settings(BaseSettings):
         if not sanitized_username:
             sanitized_username = _sanitize(f'user_{identifier}')
 
-        return sanitized_username[:36].strip('_-') or 'user'
+        result = sanitized_username[:36].strip('_-') or 'user'
+
+        # RemnaWave требует username минимум 3 символа
+        if len(result) < 3:
+            result = f'{result}_{identifier}'[:36].strip('_-')
+
+        return result or 'user'
 
     @staticmethod
     def parse_daily_time_list(raw_value: str | None) -> list[time]:
