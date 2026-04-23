@@ -127,3 +127,12 @@ def register_handlers(dp: Dispatcher):
         F.text.is_not(None),
         ~F.text.startswith('/'),
     )
+
+    # Ловим медиа-сообщения (фото, видео, документы, стикеры и т.д.)
+    # без активного состояния — чтобы пользователь знал, что бот не принял медиа
+    dp.message.register(
+        handle_unknown_message,
+        StateFilter(None),
+        F.successful_payment.is_(None),
+        F.text.is_(None),
+    )

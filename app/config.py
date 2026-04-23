@@ -629,6 +629,23 @@ class Settings(BaseSettings):
     ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
     ROLLYPAY_RETURN_URL: str | None = None
 
+    # Overpay (pay.overpay.io)
+    OVERPAY_ENABLED: bool = False
+    OVERPAY_API_URL: str = 'https://api.overpay.io'
+    OVERPAY_USERNAME: str | None = None
+    OVERPAY_PASSWORD: str | None = None
+    OVERPAY_PROJECT_ID: str | None = None
+    OVERPAY_P12_PATH: str | None = None
+    OVERPAY_P12_PASSPHRASE: str | None = None
+    OVERPAY_DISPLAY_NAME: str = 'Overpay'
+    OVERPAY_CURRENCY: str = 'RUB'
+    OVERPAY_MIN_AMOUNT_KOPEKS: int = 10000
+    OVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000
+    OVERPAY_WEBHOOK_PATH: str = '/overpay-webhook'
+    OVERPAY_RETURN_URL: str | None = None
+    OVERPAY_LIFETIME_MINUTES: int = 1440
+    OVERPAY_PAYMENT_METHODS: str = 'card,fps'
+
     # AuraPay (aurapay.tech)
     AURAPAY_ENABLED: bool = False
     AURAPAY_API_KEY: str | None = None  # X-ApiKey header
@@ -1250,7 +1267,13 @@ class Settings(BaseSettings):
         if not sanitized_username:
             sanitized_username = _sanitize(f'user_{identifier}')
 
-        return sanitized_username[:36].strip('_-') or 'user'
+        result = sanitized_username[:36].strip('_-') or 'user'
+
+        # RemnaWave требует username минимум 3 символа
+        if len(result) < 3:
+            result = f'{result}_{identifier}'[:36].strip('_-')
+
+        return result or 'user'
 
     @staticmethod
     def parse_daily_time_list(raw_value: str | None) -> list[time]:
@@ -2047,6 +2070,21 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
+
+    def is_overpay_enabled(self) -> bool:
+        return (
+            self.OVERPAY_ENABLED
+            and self.OVERPAY_USERNAME is not None
+            and self.OVERPAY_PASSWORD is not None
+            and self.OVERPAY_PROJECT_ID is not None
+        )
+
+    def get_overpay_display_name(self) -> str:
+        name = (self.OVERPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'Overpay'
+
+    def get_overpay_display_name_html(self) -> str:
+        return html.escape(self.get_overpay_display_name())
 
     def is_aurapay_enabled(self) -> bool:
         return (

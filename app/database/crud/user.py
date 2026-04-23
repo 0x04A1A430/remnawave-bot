@@ -1112,6 +1112,12 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> list[Us
 async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
     threshold_date = datetime.now(UTC) - timedelta(days=months * 30)
 
+    # Подзапрос: пользователи, у которых есть подписка с end_date >= threshold
+    # (активная или недавно истёкшая) — таких удалять нельзя
+    users_with_recent_subs = (
+        select(Subscription.user_id).where(Subscription.end_date >= threshold_date).distinct().scalar_subquery()
+    )
+
     result = await db.execute(
         select(User)
         .options(
@@ -1120,7 +1126,13 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> list[User]:
             selectinload(User.referrer),
             selectinload(User.promo_group),
         )
-        .where(and_(User.last_activity < threshold_date, User.status == UserStatus.ACTIVE.value))
+        .where(
+            and_(
+                User.last_activity < threshold_date,
+                User.status == UserStatus.ACTIVE.value,
+                User.id.not_in(users_with_recent_subs),
+            )
+        )
     )
     users = result.scalars().all()
 

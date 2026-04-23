@@ -21,6 +21,7 @@ from app.database.models import (
     HeleketPayment,
     KassaAiPayment,
     MulenPayPayment,
+    OverpayPayment,
     Pal24Payment,
     PaymentMethod,
     PlategaPayment,
@@ -649,6 +650,39 @@ async def _search_severpay(db: AsyncSession, params: SearchParams) -> list[Pendi
     return records
 
 
+async def _search_overpay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+    stmt = select(OverpayPayment).options(selectinload(OverpayPayment.user)).order_by(desc(OverpayPayment.created_at))
+    stmt = _apply_date_filter(stmt, OverpayPayment.created_at, params.cutoff, params.upper_bound)
+
+    if params.search:
+        kind = _detect_user_search_kind(params.search)
+        if kind == _UserSearchKind.INVOICE:
+            conditions = [
+                OverpayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
+                OverpayPayment.overpay_payment_id.ilike(f'%{_escape_like(params.search)}%'),
+            ]
+            stmt = stmt.where(or_(*conditions))
+        else:
+            stmt = _apply_user_join_filter(stmt, OverpayPayment, kind, params.search)
+
+    stmt = stmt.limit(MAX_RECORDS_PER_PROVIDER)
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        record = _build_record(
+            PaymentMethod.OVERPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _search_stars(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
     stmt = (
         select(Transaction)
@@ -702,6 +736,7 @@ _PROVIDER_SEARCH_MAP: dict[PaymentMethod, Any] = {
     PaymentMethod.KASSA_AI: _search_kassa_ai,
     PaymentMethod.RIOPAY: _search_riopay,
     PaymentMethod.SEVERPAY: _search_severpay,
+    PaymentMethod.OVERPAY: _search_overpay,
     PaymentMethod.TELEGRAM_STARS: _search_stars,
 }
 

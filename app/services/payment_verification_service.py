@@ -76,6 +76,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.KASSA_AI,
         PaymentMethod.RIOPAY,
         PaymentMethod.SEVERPAY,
+        PaymentMethod.OVERPAY,
     }
 )
 
@@ -96,6 +97,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.KASSA_AI,
         PaymentMethod.RIOPAY,
         PaymentMethod.SEVERPAY,
+        PaymentMethod.OVERPAY,
     }
 )
 
@@ -125,6 +127,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_riopay_display_name()
     if method == PaymentMethod.SEVERPAY:
         return settings.get_severpay_display_name()
+    if method == PaymentMethod.OVERPAY:
+        return settings.get_overpay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -155,6 +159,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_riopay_enabled()
     if method == PaymentMethod.SEVERPAY:
         return settings.is_severpay_enabled()
+    if method == PaymentMethod.OVERPAY:
+        return settings.is_overpay_enabled()
     return False
 
 

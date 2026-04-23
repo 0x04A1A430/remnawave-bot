@@ -34,6 +34,7 @@ from app.services.payment.aurapay import AuraPayPaymentMixin
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
 from app.services.payment.freekassa import FreekassaPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
+from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
 from app.services.payment.rollypay import RollyPayPaymentMixin
@@ -408,6 +409,44 @@ async def link_rollypay_payment_to_transaction(*args, **kwargs):
     return await rollypay_crud.link_rollypay_payment_to_transaction(*args, **kwargs)
 
 
+# --- Overpay CRUD wrappers ---
+
+
+async def create_overpay_payment(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.create_overpay_payment(*args, **kwargs)
+
+
+async def get_overpay_payment_by_order_id(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.get_overpay_payment_by_order_id(*args, **kwargs)
+
+
+async def get_overpay_payment_by_overpay_id(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.get_overpay_payment_by_overpay_id(*args, **kwargs)
+
+
+async def get_overpay_payment_by_id(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.get_overpay_payment_by_id(*args, **kwargs)
+
+
+async def get_overpay_payment_by_id_for_update(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.get_overpay_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_overpay_payment_status(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.update_overpay_payment_status(*args, **kwargs)
+
+
+async def link_overpay_payment_to_transaction(*args, **kwargs):
+    overpay_crud = import_module('app.database.crud.overpay')
+    return await overpay_crud.link_overpay_payment_to_transaction(*args, **kwargs)
+
+
 async def create_aurapay_payment(*args, **kwargs):
     aurapay_crud = import_module('app.database.crud.aurapay')
     return await aurapay_crud.create_aurapay_payment(*args, **kwargs)
@@ -468,6 +507,7 @@ class PaymentService(
     SeverPayPaymentMixin,
     PayPearPaymentMixin,
     RollyPayPaymentMixin,
+    OverpayPaymentMixin,
     AuraPayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
@@ -929,6 +969,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('rollypay_payment_id') or result.get('order_id'),
                     'provider': 'rollypay',
+                }
+            return None
+
+        # --- Overpay ----------------------------------------------------------
+        if payment_method == 'overpay':
+            if not settings.is_overpay_enabled():
+                logger.warning('Overpay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_overpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'overpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('overpay_payment_id') or result.get('order_id'),
+                    'provider': 'overpay',
                 }
             return None
 

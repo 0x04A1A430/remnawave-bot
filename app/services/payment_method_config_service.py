@@ -169,6 +169,16 @@ def _get_method_defaults() -> dict:
                 {'id': 'crypto', 'name': 'Криптовалюта'},
             ],
         },
+        'overpay': {
+            'default_display_name': settings.get_overpay_display_name(),
+            'is_configured': settings.is_overpay_enabled(),
+            'default_min': settings.OVERPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.OVERPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'fps', 'name': 'СБП'},
+            ],
+        },
         'aurapay': {
             'default_display_name': settings.get_aurapay_display_name(),
             'is_configured': settings.is_aurapay_enabled(),
@@ -223,6 +233,7 @@ DEFAULT_METHOD_ORDER = [
     'severpay',
     'paypear',
     'rollypay',
+    'overpay',
     'aurapay',
 ]
 
