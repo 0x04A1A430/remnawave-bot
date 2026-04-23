@@ -126,6 +126,7 @@ Bedolaga — полнофункциональная платформа для п
 | 🤝 | **[PayPear](https://t.me/Paymen1_Manager)** 🔸 | Карты, СБП, SberPay, T-Pay | RUB |
 | 🤝 | **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто | RUB → USDT |
 | 🤝 | **[AuraPay](https://aurapay.tech/)** 🔸 | Карты, СБП | RUB |
+| 🤝 | **[Overpay](https://overpay.pro/)** 🔸 | Карты, СБП | RUB |
 | 📲 | **Tribute** | Telegram-платежи | RUB |
 
 </div>
@@ -197,6 +198,17 @@ Bedolaga — официальный партнёр платёжной систе
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
 
 📩 Менеджер: [@kickdownm](https://t.me/kickdownm) | 🌐 [aurapay.tech](https://aurapay.tech/)
+
+</td>
+<td align="center">
+
+**🤝 Официальный партнёр Overpay**
+
+Bedolaga — официальный партнёр платёжного шлюза **[Overpay](https://overpay.pro/)**.<br>
+Банковские карты и СБП, mTLS-авторизация, HPP-интеграция.<br>
+Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
+
+📩 Менеджер: [@A_OverPay](https://t.me/A_OverPay) | 🌐 [overpay.pro](https://overpay.pro/)
 
 </td>
 </tr>
