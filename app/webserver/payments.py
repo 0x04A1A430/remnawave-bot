@@ -1340,6 +1340,81 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # Overpay webhook
+    if settings.is_overpay_enabled():
+
+        @router.get(settings.OVERPAY_WEBHOOK_PATH)
+        async def overpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'overpay_webhook',
+                    'enabled': settings.is_overpay_enabled(),
+                }
+            )
+
+        @router.post(settings.OVERPAY_WEBHOOK_PATH)
+        async def overpay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Overpay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Overpay uses mTLS for authentication — verify payment exists in DB
+            merchant_transaction_id = payload.get('merchantTransactionId')
+            if not merchant_transaction_id:
+                logger.warning('Overpay webhook: missing merchantTransactionId')
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Validate that the payment exists in our DB (basic anti-spoofing)
+            from app.database.crud.overpay import get_overpay_payment_by_order_id
+
+            db_generator = get_db()
+            try:
+                check_db = await db_generator.__anext__()
+            except StopAsyncIteration:
+                return JSONResponse({'status': False}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            try:
+                existing = await get_overpay_payment_by_order_id(check_db, merchant_transaction_id)
+                if not existing:
+                    overpay_id = payload.get('id')
+                    if overpay_id:
+                        from app.database.crud.overpay import get_overpay_payment_by_overpay_id
+
+                        existing = await get_overpay_payment_by_overpay_id(check_db, str(overpay_id))
+                    if not existing:
+                        logger.warning(
+                            'Overpay webhook: payment not found in DB',
+                            merchant_transaction_id=merchant_transaction_id,
+                        )
+                        return JSONResponse({'status': False}, status_code=status.HTTP_404_NOT_FOUND)
+            finally:
+                try:
+                    await db_generator.__anext__()
+                except StopAsyncIteration:
+                    pass
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_overpay_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'Overpay webhook processing failed',
+                        data=payload.get('id'),
+                    )
+            except Exception as e:
+                logger.exception('Overpay webhook processing error', error=e)
+            # Always return 200 — Overpay expects HTTP 200
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # AuraPay webhook
     if settings.is_aurapay_enabled():
 
@@ -1411,6 +1486,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'severpay_enabled': settings.is_severpay_enabled(),
                     'paypear_enabled': settings.is_paypear_enabled(),
                     'rollypay_enabled': settings.is_rollypay_enabled(),
+                    'overpay_enabled': settings.is_overpay_enabled(),
                     'aurapay_enabled': settings.is_aurapay_enabled(),
                 }
             )
