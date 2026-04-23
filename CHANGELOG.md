@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.51.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.50.0...v3.51.0) (2026-04-23)
+
+
+### New Features
+
+* integrate Overpay payment provider (pay.overpay.io) ([2c3ffc8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2c3ffc8c8a9e6591d2356320ed0a71ab5db6cbec))
+* respond to unknown media messages (photos, videos, documents) ([29ae708](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/29ae7089aa0a8a5c7ddd73622a492df6b5e67e03))
+
+
+### Bug Fixes
+
+* inactive user cleanup deletes users with paid subscriptions ([7005052](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/70050521566ab86b75fb4f64ed3b61bced5d1612))
+* pad short RemnaWave usernames to meet 3-char minimum ([6f87563](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6f875637899544d95daf8d87a30042b5347f6b41))
+
 ## [3.50.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.49.0...v3.50.0) (2026-04-22)
 
 
