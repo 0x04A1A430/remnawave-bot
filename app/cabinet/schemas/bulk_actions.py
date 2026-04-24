@@ -16,6 +16,7 @@ class BulkActionType(StrEnum):
     ASSIGN_PROMO_GROUP = 'assign_promo_group'
     GRANT_SUBSCRIPTION = 'grant_subscription'
     SET_DEVICES = 'set_devices'
+    DELETE_SUBSCRIPTION = 'delete_subscription'
 
 
 class BulkActionParams(BaseModel):

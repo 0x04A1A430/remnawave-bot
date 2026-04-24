@@ -24,6 +24,7 @@ from app.database.models import (
     PaymentMethod,
     PromoGroup,
     Subscription,
+    SubscriptionServer,
     SubscriptionStatus,
     Tariff,
     TrafficPurchase,
@@ -488,6 +489,53 @@ async def _do_set_devices(
     )
 
 
+async def _do_delete_subscription(
+    db: AsyncSession,
+    user: User,
+    params: BulkActionParams,
+    dry_run: bool,
+    sub_override: Subscription | None = None,
+) -> BulkUserResult:
+    sub = _resolve_subscription(user, sub_override)
+    if not sub:
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
+
+    tariff_name = sub.tariff.name if sub.tariff else f'#{sub.id}'
+
+    if dry_run:
+        return BulkUserResult(
+            user_id=user.id,
+            success=True,
+            message=f'Would delete subscription: {tariff_name}',
+            username=user.username,
+        )
+
+    # Deactivate in RemnaWave panel first
+    _sub_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
+    if _sub_uuid:
+        try:
+            from app.services.subscription_service import SubscriptionService
+
+            subscription_service = SubscriptionService()
+            await subscription_service.disable_remnawave_user(_sub_uuid)
+        except Exception as e:
+            logger.warning('Failed to disable user in RemnaWave during subscription delete', error=e)
+
+    # Delete related records then subscription
+    await db.execute(sa_delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
+    await db.execute(sa_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == sub.id))
+    await db.execute(sa_delete(Subscription).where(Subscription.id == sub.id))
+    await db.commit()
+
+    return BulkUserResult(
+        user_id=user.id,
+        success=True,
+        message=f'Subscription deleted: {tariff_name}',
+        username=user.username,
+        subscriptions=[],
+    )
+
+
 async def _do_grant_subscription(
     db: AsyncSession,
     user: User,
@@ -622,6 +670,7 @@ _ACTION_HANDLERS = {
     BulkActionType.ADD_BALANCE: _do_add_balance,
     BulkActionType.ASSIGN_PROMO_GROUP: _do_assign_promo_group,
     BulkActionType.SET_DEVICES: _do_set_devices,
+    BulkActionType.DELETE_SUBSCRIPTION: _do_delete_subscription,
 }
 
 
