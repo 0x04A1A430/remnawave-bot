@@ -1148,14 +1148,18 @@ async def _show_privacy_policy_after_rules(
         logger.info('🔒 Используется политика конфиденциальности из БД для языка', language=language)
 
     try:
-        await callback.message.edit_text(privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language))
+        await callback.message.edit_text(
+            privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language), parse_mode='HTML'
+        )
         await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
         logger.info('🔒 Политика конфиденциальности отправлена пользователю', from_user_id=callback.from_user.id)
         return True
     except Exception as e:
         logger.error('Ошибка при показе политики конфиденциальности', error=e, exc_info=True)
         try:
-            await callback.message.answer(privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language))
+            await callback.message.answer(
+                privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language), parse_mode='HTML'
+            )
             await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
             logger.info(
                 '🔒 Политика конфиденциальности отправлена новым сообщением пользователю',
@@ -1725,6 +1729,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             await callback.message.answer(
                 offer_text,
                 reply_markup=get_post_registration_keyboard(user.language),
+                parse_mode='HTML',
             )
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
@@ -2079,6 +2084,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             await message.answer(
                 offer_text,
                 reply_markup=keyboard,
+                parse_mode='HTML',
             )
             logger.info('✅ Приветственное сообщение отправлено пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
