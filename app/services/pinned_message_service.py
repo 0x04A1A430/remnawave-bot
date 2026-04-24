@@ -262,8 +262,10 @@ async def unpin_active_pinned_message(
         await asyncio.gather(*tasks)
         await asyncio.sleep(0.05)
 
-    # Деактивируем ПОСЛЕ успешного откреплений — при сбое можно повторить
-    await deactivate_active_pinned_message(db)
+    # Деактивируем ПОСЛЕ откреплений через fresh session —
+    # исходная сессия может протухнуть за время долгого цикла Telegram API
+    async with AsyncSessionLocal() as fresh_db:
+        await deactivate_active_pinned_message(fresh_db)
 
     return unpinned_count, failed_count, True
 
