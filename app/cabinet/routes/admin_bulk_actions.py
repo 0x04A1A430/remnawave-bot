@@ -542,6 +542,8 @@ async def _do_delete_user(
     params: BulkActionParams,
     dry_run: bool,
     sub_override: Subscription | None = None,
+    *,
+    admin_id: int = 0,
 ) -> BulkUserResult:
     username = user.username
     user_id = user.id
@@ -560,7 +562,7 @@ async def _do_delete_user(
 
         user_service = UserService()
         result = await user_service.delete_user_account(
-            db, user_id, admin_id=0, force_panel_delete=params.delete_from_panel,
+            db, user_id, admin_id=admin_id, force_panel_delete=params.delete_from_panel,
         )
 
         if result.bot_deleted:
@@ -577,16 +579,18 @@ async def _do_delete_user(
         return BulkUserResult(
             user_id=user_id,
             success=False,
-            message=f'Deletion failed: {result.panel_error or "unknown error"}',
+            message='Deletion failed',
             username=username,
+            subscriptions=[],
         )
     except Exception as e:
         logger.exception('Failed to delete user in bulk action', user_id=user_id, error=str(e))
         return BulkUserResult(
             user_id=user_id,
             success=False,
-            message=f'Delete failed: {e}',
+            message='Delete failed: internal error',
             username=username,
+            subscriptions=[],
         )
 
 
@@ -781,6 +785,7 @@ async def _execute_for_user(
     params: BulkActionParams,
     tariff: Tariff | None,
     dry_run: bool,
+    admin_id: int = 0,
 ) -> BulkUserResult:
     """Execute the bulk action for a single user.  Handles exceptions internally."""
     try:
@@ -792,6 +797,8 @@ async def _execute_for_user(
             result = await _do_change_tariff(db, user, params, tariff, dry_run)
         elif action == BulkActionType.GRANT_SUBSCRIPTION:
             result = await _do_grant_subscription(db, user, params, tariff, dry_run)
+        elif action == BulkActionType.DELETE_USER:
+            result = await _do_delete_user(db, user, params, dry_run, admin_id=admin_id)
         elif action in _ACTION_HANDLERS:
             handler = _ACTION_HANDLERS[action]
             result = await handler(db, user, params, dry_run)
@@ -977,7 +984,7 @@ async def bulk_execute(
     skipped_count = 0
 
     for uid in user_ids:
-        result = await _execute_for_user(db, uid, action, params, tariff, dry_run)
+        result = await _execute_for_user(db, uid, action, params, tariff, dry_run, admin_id=admin.id)
 
         results.append(result)
         if result.message == 'User not found':
@@ -1030,7 +1037,7 @@ async def _stream_bulk_execute(
     skipped_count = 0
 
     for i, uid in enumerate(user_ids):
-        result = await _execute_for_user(db, uid, action, params, tariff, dry_run)
+        result = await _execute_for_user(db, uid, action, params, tariff, dry_run, admin_id=admin.id)
 
         if result.message == 'User not found':
             skipped_count += 1
