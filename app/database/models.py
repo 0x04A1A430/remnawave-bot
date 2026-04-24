@@ -3709,6 +3709,7 @@ class InfoPage(Base):
     slug = Column(String(200), unique=True, nullable=False)
     title = Column(JSONB, nullable=False, server_default='{}')
     content = Column(JSONB, nullable=False, server_default='{}')
+    page_type = Column(String(20), nullable=False, default='page', server_default='page')
     is_active = Column(Boolean, nullable=False, default=True, server_default='true')
     sort_order = Column(Integer, nullable=False, default=0, server_default='0')
     icon = Column(String(50), nullable=True)

@@ -1,7 +1,7 @@
 """Admin routes for managing info pages in cabinet."""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,12 +32,13 @@ router = APIRouter(prefix='/admin/info-pages', tags=['Cabinet Admin Info Pages']
 
 @router.get('', response_model=list[InfoPageListItem])
 async def list_all_info_pages(
+    page_type: str | None = Query(None, pattern=r'^(page|faq)$'),
     admin: User = Depends(require_permission('settings:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> list[InfoPageListItem]:
     """Get all info pages (admin view, includes inactive)."""
     try:
-        pages = await get_all_info_pages(db, include_inactive=True)
+        pages = await get_all_info_pages(db, include_inactive=True, page_type=page_type)
         return [InfoPageListItem.model_validate(p) for p in pages]
     except HTTPException:
         raise
@@ -78,6 +79,7 @@ async def create_page(
             slug=request.slug,
             title=request.title,
             content=request.content,
+            page_type=request.page_type,
             is_active=request.is_active,
             sort_order=request.sort_order,
             icon=request.icon,

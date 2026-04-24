@@ -1,7 +1,7 @@
 """Public info page routes for cabinet."""
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.info_pages import get_all_info_pages, get_info_page_by_slug
@@ -17,11 +17,12 @@ router = APIRouter(prefix='/info-pages', tags=['Cabinet Info Pages'])
 
 @router.get('', response_model=list[InfoPageListItem])
 async def list_active_info_pages(
+    page_type: str | None = Query(None, pattern=r'^(page|faq)$'),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> list[InfoPageListItem]:
     """Get all active info pages (public, no auth required)."""
     try:
-        pages = await get_all_info_pages(db, include_inactive=False)
+        pages = await get_all_info_pages(db, include_inactive=False, page_type=page_type)
         return [InfoPageListItem.model_validate(p) for p in pages]
     except Exception:
         logger.exception('Failed to list active info pages')

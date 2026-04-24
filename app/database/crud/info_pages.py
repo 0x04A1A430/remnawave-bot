@@ -19,6 +19,7 @@ _ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
         'slug',
         'title',
         'content',
+        'page_type',
         'is_active',
         'sort_order',
         'icon',
@@ -39,6 +40,7 @@ async def create_info_page(
     slug: str,
     title: dict[str, str],
     content: dict[str, str],
+    page_type: str = 'page',
     is_active: bool = True,
     sort_order: int = 0,
     icon: str | None = None,
@@ -52,6 +54,7 @@ async def create_info_page(
         slug=slug,
         title=title,
         content=content,
+        page_type=page_type,
         is_active=is_active,
         sort_order=sort_order,
         icon=icon,
@@ -85,11 +88,14 @@ async def get_all_info_pages(
     db: AsyncSession,
     *,
     include_inactive: bool = False,
+    page_type: str | None = None,
 ) -> list[InfoPage]:
     """Get all info pages, ordered by sort_order ascending."""
     stmt = select(InfoPage)
     if not include_inactive:
         stmt = stmt.where(InfoPage.is_active.is_(True))
+    if page_type is not None:
+        stmt = stmt.where(InfoPage.page_type == page_type)
 
     stmt = stmt.order_by(InfoPage.sort_order.asc(), InfoPage.id.asc())
     result = await db.execute(stmt)
