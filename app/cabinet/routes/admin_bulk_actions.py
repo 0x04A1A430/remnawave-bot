@@ -818,7 +818,7 @@ async def _execute_for_user(
             await db.rollback()
         except Exception:
             pass
-        return BulkUserResult(user_id=uid, success=False, message=str(exc))
+        return BulkUserResult(user_id=uid, success=False, message='Action failed: internal error')
 
 
 # Actions that operate on the user, not on a specific subscription
@@ -875,7 +875,7 @@ async def _execute_for_subscription(
             await db.rollback()
         except Exception:
             pass
-        return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message=str(exc))
+        return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message='Action failed: internal error')
 
 
 # ---------------------------------------------------------------------------
