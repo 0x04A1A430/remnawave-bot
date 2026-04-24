@@ -464,6 +464,8 @@ async def list_users(
     subscription_status: str | None = Query(None, max_length=20),
     tariff_id: str | None = Query(None, max_length=255),
     promo_group_id: int | None = Query(None),
+    campaign_id: int | None = Query(None),
+    partner_id: int | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -508,6 +510,8 @@ async def list_users(
         subscription_status=subscription_status,
         tariff_ids=tariff_ids,
         promo_group_id=promo_group_id,
+        campaign_id=campaign_id,
+        partner_id=partner_id,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
@@ -523,6 +527,8 @@ async def list_users(
         subscription_status=subscription_status,
         tariff_ids=tariff_ids,
         promo_group_id=promo_group_id,
+        campaign_id=campaign_id,
+        partner_id=partner_id,
     )
 
     # Get spending stats for all users

@@ -536,6 +536,60 @@ async def _do_delete_subscription(
     )
 
 
+async def _do_delete_user(
+    db: AsyncSession,
+    user: User,
+    params: BulkActionParams,
+    dry_run: bool,
+    sub_override: Subscription | None = None,
+) -> BulkUserResult:
+    username = user.username
+    user_id = user.id
+
+    if dry_run:
+        return BulkUserResult(
+            user_id=user_id,
+            success=True,
+            message='Would permanently delete user',
+            username=username,
+            subscriptions=[],
+        )
+
+    try:
+        from app.services.user_service import UserService
+
+        user_service = UserService()
+        result = await user_service.delete_user_account(
+            db, user_id, admin_id=0, force_panel_delete=params.delete_from_panel,
+        )
+
+        if result.bot_deleted:
+            panel_note = ''
+            if params.delete_from_panel:
+                panel_note = ' + panel' if result.panel_deleted else ' (panel failed)'
+            return BulkUserResult(
+                user_id=user_id,
+                success=True,
+                message=f'User deleted{panel_note}',
+                username=username,
+                subscriptions=[],
+            )
+        return BulkUserResult(
+            user_id=user_id,
+            success=False,
+            message=f'Deletion failed: {result.panel_error or "unknown error"}',
+            username=username,
+        )
+    except Exception as e:
+        logger.exception('Failed to delete user in bulk action', user_id=user_id, error=str(e))
+        return BulkUserResult(
+            user_id=user_id,
+            success=False,
+            message=f'Delete failed: {e}',
+            username=username,
+        )
+
+
 async def _do_grant_subscription(
     db: AsyncSession,
     user: User,
@@ -671,6 +725,7 @@ _ACTION_HANDLERS = {
     BulkActionType.ASSIGN_PROMO_GROUP: _do_assign_promo_group,
     BulkActionType.SET_DEVICES: _do_set_devices,
     BulkActionType.DELETE_SUBSCRIPTION: _do_delete_subscription,
+    BulkActionType.DELETE_USER: _do_delete_user,
 }
 
 
@@ -764,6 +819,7 @@ _USER_LEVEL_ACTIONS: set[BulkActionType] = {
     BulkActionType.ADD_BALANCE,
     BulkActionType.ASSIGN_PROMO_GROUP,
     BulkActionType.GRANT_SUBSCRIPTION,
+    BulkActionType.DELETE_USER,
 }
 
 
@@ -836,6 +892,17 @@ async def bulk_execute(
     action = request.action
     params = request.params
     dry_run = request.dry_run
+
+    # Delete user requires elevated permission
+    if action == BulkActionType.DELETE_USER:
+        from app.services.permission_service import PermissionService
+
+        allowed, _ = await PermissionService.check_permission(db, admin, 'users:delete')
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='Permission users:delete is required for this action',
+            )
 
     # Determine target mode: subscription_ids or user_ids
     use_subscription_ids = request.subscription_ids is not None

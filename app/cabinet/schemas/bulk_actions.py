@@ -17,6 +17,7 @@ class BulkActionType(StrEnum):
     GRANT_SUBSCRIPTION = 'grant_subscription'
     SET_DEVICES = 'set_devices'
     DELETE_SUBSCRIPTION = 'delete_subscription'
+    DELETE_USER = 'delete_user'
 
 
 class BulkActionParams(BaseModel):
@@ -27,6 +28,7 @@ class BulkActionParams(BaseModel):
     balance_description: str = Field(default='Массовое начисление баланса', max_length=500)
     promo_group_id: int | None = None
     device_limit: int | None = Field(None, ge=1, le=50)
+    delete_from_panel: bool = Field(default=True)
 
 
 class BulkSubscriptionInfo(BaseModel):
