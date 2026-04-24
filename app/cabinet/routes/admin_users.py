@@ -161,6 +161,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
                     days_remaining=s_days,
                     traffic_used_gb=s.traffic_used_gb or 0.0,
                     traffic_limit_gb=s.traffic_limit_gb or 0,
+                    device_limit=s.device_limit or 0,
                 )
             )
 

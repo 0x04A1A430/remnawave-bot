@@ -93,6 +93,7 @@ class SubscriptionListItem(BaseModel):
     days_remaining: int = 0
     traffic_used_gb: float = 0
     traffic_limit_gb: int = 0
+    device_limit: int = 0
 
 
 class UserListItem(BaseModel):

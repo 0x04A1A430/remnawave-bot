@@ -90,6 +90,15 @@ def _require_amount_kopeks(params: BulkActionParams) -> int:
     return params.amount_kopeks
 
 
+def _require_device_limit(params: BulkActionParams) -> int:
+    if not params.device_limit or params.device_limit <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='params.device_limit must be a positive integer for set_devices action',
+        )
+    return params.device_limit
+
+
 # ---------------------------------------------------------------------------
 # Subscription resolver
 # ---------------------------------------------------------------------------
@@ -446,6 +455,39 @@ async def _do_assign_promo_group(
     return BulkUserResult(user_id=user.id, success=True, message=action_msg, username=user.username)
 
 
+async def _do_set_devices(
+    db: AsyncSession,
+    user: User,
+    params: BulkActionParams,
+    dry_run: bool,
+    sub_override: Subscription | None = None,
+) -> BulkUserResult:
+    device_limit = params.device_limit  # already validated
+    sub = _resolve_subscription(user, sub_override)
+    if not sub:
+        return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
+
+    if dry_run:
+        return BulkUserResult(
+            user_id=user.id,
+            success=True,
+            message=f'Would set devices to {device_limit}',
+            username=user.username,
+        )
+
+    sub.device_limit = device_limit
+    await db.commit()
+    await db.refresh(sub)
+    await _sync_subscription_to_panel(db, user, sub)
+
+    return BulkUserResult(
+        user_id=user.id,
+        success=True,
+        message=f'Set devices to {device_limit}',
+        username=user.username,
+    )
+
+
 async def _do_grant_subscription(
     db: AsyncSession,
     user: User,
@@ -561,6 +603,7 @@ def _build_subscription_info(subs: list[Subscription]) -> list[BulkSubscriptionI
                 days_remaining=days_remaining,
                 traffic_used_gb=sub.traffic_used_gb or 0,
                 traffic_limit_gb=sub.traffic_limit_gb or 0,
+                device_limit=sub.device_limit or 0,
             )
         )
     return result
@@ -578,6 +621,7 @@ _ACTION_HANDLERS = {
     BulkActionType.ADD_TRAFFIC: _do_add_traffic,
     BulkActionType.ADD_BALANCE: _do_add_balance,
     BulkActionType.ASSIGN_PROMO_GROUP: _do_assign_promo_group,
+    BulkActionType.SET_DEVICES: _do_set_devices,
 }
 
 
@@ -600,6 +644,8 @@ async def _validate_and_prepare(
         _require_traffic_gb(params)
     elif action == BulkActionType.ADD_BALANCE:
         _require_amount_kopeks(params)
+    elif action == BulkActionType.SET_DEVICES:
+        _require_device_limit(params)
     elif action == BulkActionType.GRANT_SUBSCRIPTION:
         _require_tariff_id(params)
         _require_days(params)
