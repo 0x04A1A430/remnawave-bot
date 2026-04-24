@@ -33,7 +33,15 @@ logger = structlog.get_logger(__name__)
 
 async def _get_default_promo_group_id(db: AsyncSession) -> int | None:
     result = await db.execute(select(PromoGroup.id).where(PromoGroup.is_default.is_(True)).limit(1))
-    return result.scalar_one_or_none()
+    default_id = result.scalar_one_or_none()
+    if default_id is not None:
+        return default_id
+
+    # На пустой БД дефолтной промогруппы нет — создаём автоматически
+    from app.database.crud.user import _get_or_create_default_promo_group
+
+    default_group = await _get_or_create_default_promo_group(db)
+    return default_group.id
 
 
 async def create_server_squad(
