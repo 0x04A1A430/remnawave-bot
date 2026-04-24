@@ -159,6 +159,23 @@ async def remove_page(
         )
 
 
+@router.post('/reorder', status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_pages(
+    request: ReorderRequest,
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> None:
+    """Bulk update sort_order for info pages."""
+    try:
+        await reorder_info_pages(db, request.items)
+    except Exception:
+        logger.exception('Failed to reorder info pages')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to reorder info pages',
+        )
+
+
 @router.post('/{page_id}/toggle-active', response_model=InfoPageResponse)
 async def toggle_active(
     page_id: int,
@@ -188,20 +205,3 @@ async def toggle_active(
             detail='Info page not found after toggle',
         )
     return InfoPageResponse.model_validate(page)
-
-
-@router.post('/reorder', status_code=status.HTTP_204_NO_CONTENT)
-async def reorder_pages(
-    request: ReorderRequest,
-    admin: User = Depends(require_permission('settings:edit')),
-    db: AsyncSession = Depends(get_cabinet_db),
-) -> None:
-    """Bulk update sort_order for info pages."""
-    try:
-        await reorder_info_pages(db, request.items)
-    except Exception:
-        logger.exception('Failed to reorder info pages')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reorder info pages',
-        )
