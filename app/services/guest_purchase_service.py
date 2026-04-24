@@ -444,22 +444,24 @@ async def fulfill_purchase(
         await db.commit()
         await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
 
-        # Create transaction so promo group auto-assignment and contest tracking work
+        # Create transaction so promo group auto-assignment and contest tracking work.
+        # Skip for gift recipients — they didn't pay, so their spending shouldn't be inflated.
         transaction = None
-        try:
-            payment_method_enum = _resolve_payment_method(purchase.payment_method)
-            transaction = await create_transaction(
-                db=db,
-                user_id=user.id,
-                type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=purchase.amount_kopeks,
-                description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
-                payment_method=payment_method_enum,
-                external_id=purchase.payment_id,
-                is_completed=True,
-            )
-        except Exception:
-            logger.exception('Failed to create transaction for guest purchase', purchase_id=purchase.id)
+        if not purchase.is_gift:
+            try:
+                payment_method_enum = _resolve_payment_method(purchase.payment_method)
+                transaction = await create_transaction(
+                    db=db,
+                    user_id=user.id,
+                    type=TransactionType.SUBSCRIPTION_PAYMENT,
+                    amount_kopeks=purchase.amount_kopeks,
+                    description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
+                    payment_method=payment_method_enum,
+                    external_id=purchase.payment_id,
+                    is_completed=True,
+                )
+            except Exception:
+                logger.exception('Failed to create transaction for guest purchase', purchase_id=purchase.id)
 
         try:
             await send_guest_notification(
@@ -1147,21 +1149,23 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
         await db.commit()
         await db.refresh(purchase, attribute_names=['landing', 'user', 'buyer'])
 
-        # Create transaction so promo group auto-assignment and contest tracking work
-        try:
-            payment_method_enum = _resolve_payment_method(purchase.payment_method)
-            await create_transaction(
-                db=db,
-                user_id=user.id,
-                type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=purchase.amount_kopeks,
-                description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
-                payment_method=payment_method_enum,
-                external_id=purchase.payment_id,
-                is_completed=True,
-            )
-        except Exception:
-            logger.exception('Failed to create transaction for activated purchase', purchase_id=purchase.id)
+        # Create transaction so promo group auto-assignment and contest tracking work.
+        # Skip for gift recipients — they didn't pay, so their spending shouldn't be inflated.
+        if not purchase.is_gift:
+            try:
+                payment_method_enum = _resolve_payment_method(purchase.payment_method)
+                await create_transaction(
+                    db=db,
+                    user_id=user.id,
+                    type=TransactionType.SUBSCRIPTION_PAYMENT,
+                    amount_kopeks=purchase.amount_kopeks,
+                    description=f'Покупка подписки через лендинг ({notification_tariff_name}, {purchase.period_days} дн.)',
+                    payment_method=payment_method_enum,
+                    external_id=purchase.payment_id,
+                    is_completed=True,
+                )
+            except Exception:
+                logger.exception('Failed to create transaction for activated purchase', purchase_id=purchase.id)
 
         if not skip_notification:
             try:
