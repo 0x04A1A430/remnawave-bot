@@ -462,7 +462,7 @@ async def list_users(
     email: str | None = Query(None, max_length=255),
     status: UserStatusEnum | None = Query(None),
     subscription_status: str | None = Query(None, max_length=20),
-    tariff_id: int | None = Query(None),
+    tariff_id: str | None = Query(None, max_length=255),
     promo_group_id: int | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
@@ -490,6 +490,14 @@ async def list_users(
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
 
+    # Parse comma-separated tariff_ids
+    tariff_ids: list[int] | None = None
+    if tariff_id:
+        try:
+            tariff_ids = [int(x.strip()) for x in tariff_id.split(',') if x.strip()]
+        except ValueError:
+            tariff_ids = None
+
     users = await get_users_list(
         db=db,
         offset=offset,
@@ -498,7 +506,7 @@ async def list_users(
         email=email,
         status=user_status,
         subscription_status=subscription_status,
-        tariff_id=tariff_id,
+        tariff_ids=tariff_ids,
         promo_group_id=promo_group_id,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
@@ -513,7 +521,7 @@ async def list_users(
         search=search,
         email=email,
         subscription_status=subscription_status,
-        tariff_id=tariff_id,
+        tariff_ids=tariff_ids,
         promo_group_id=promo_group_id,
     )
 
