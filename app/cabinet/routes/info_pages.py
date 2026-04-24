@@ -4,7 +4,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.info_pages import get_all_info_pages, get_info_page_by_slug
+from app.database.crud.info_pages import get_all_info_pages, get_info_page_by_slug, get_tab_replacements
 
 from ..dependencies import get_cabinet_db
 from ..schemas.info_pages import InfoPageListItem, InfoPageResponse
@@ -29,6 +29,25 @@ async def list_active_info_pages(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load info pages',
+        )
+
+
+@router.get('/tab-replacements')
+async def get_info_page_tab_replacements(
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, str | None]:
+    """Get tab replacement mapping (public, no auth required).
+
+    Returns a dict mapping each replaceable tab to the info page slug that replaces it,
+    or null if no replacement is set: ``{faq: slug_or_null, ...}``.
+    """
+    try:
+        return await get_tab_replacements(db)
+    except Exception:
+        logger.exception('Failed to get tab replacements')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to load tab replacements',
         )
 
 

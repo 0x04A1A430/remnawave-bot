@@ -23,6 +23,7 @@ _ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
         'is_active',
         'sort_order',
         'icon',
+        'replaces_tab',
     }
 )
 
@@ -30,6 +31,7 @@ _ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
 _NULLABLE_UPDATE_FIELDS: frozenset[str] = frozenset(
     {
         'icon',
+        'replaces_tab',
     }
 )
 
@@ -44,6 +46,7 @@ async def create_info_page(
     is_active: bool = True,
     sort_order: int = 0,
     icon: str | None = None,
+    replaces_tab: str | None = None,
 ) -> InfoPage:
     """Create a new info page.
 
@@ -58,6 +61,7 @@ async def create_info_page(
         is_active=is_active,
         sort_order=sort_order,
         icon=icon,
+        replaces_tab=replaces_tab,
     )
 
     db.add(page)
@@ -148,6 +152,48 @@ async def delete_info_page(db: AsyncSession, page_id: int) -> None:
     await db.commit()
 
     logger.info('Deleted info page', page_id=page_id)
+
+
+async def get_tab_replacements(db: AsyncSession) -> dict[str, str | None]:
+    """Return a mapping of tab name to info page slug for active pages with replaces_tab set.
+
+    Returns dict like ``{'faq': 'my-custom-faq', 'rules': None, 'privacy': None, 'offer': None}``.
+    """
+    result_map: dict[str, str | None] = {
+        'faq': None,
+        'rules': None,
+        'privacy': None,
+        'offer': None,
+    }
+
+    stmt = select(InfoPage).where(
+        InfoPage.is_active.is_(True),
+        InfoPage.replaces_tab.isnot(None),
+    )
+    result = await db.execute(stmt)
+    for page in result.scalars().all():
+        if page.replaces_tab in result_map:
+            result_map[page.replaces_tab] = page.slug
+
+    return result_map
+
+
+async def clear_replaces_tab(db: AsyncSession, tab: str, *, exclude_page_id: int | None = None) -> None:
+    """Clear replaces_tab for all pages that currently replace the given tab.
+
+    Optionally exclude a specific page (the one being saved).
+    """
+    stmt = (
+        update(InfoPage)
+        .where(
+            InfoPage.replaces_tab == tab,
+        )
+        .values(replaces_tab=None, updated_at=datetime.now(UTC))
+    )
+    if exclude_page_id is not None:
+        stmt = stmt.where(InfoPage.id != exclude_page_id)
+
+    await db.execute(stmt)
 
 
 async def reorder_info_pages(db: AsyncSession, items: list[dict]) -> None:

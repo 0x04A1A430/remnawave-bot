@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.info_pages import (
+    clear_replaces_tab,
     create_info_page,
     delete_info_page,
     get_all_info_pages,
@@ -74,6 +75,9 @@ async def create_page(
 ) -> InfoPageResponse:
     """Create a new info page."""
     try:
+        if request.replaces_tab:
+            await clear_replaces_tab(db, request.replaces_tab)
+
         page = await create_info_page(
             db,
             slug=request.slug,
@@ -83,6 +87,7 @@ async def create_page(
             is_active=request.is_active,
             sort_order=request.sort_order,
             icon=request.icon,
+            replaces_tab=request.replaces_tab,
         )
     except IntegrityError:
         raise HTTPException(
@@ -116,6 +121,11 @@ async def update_page(
 
     try:
         update_data = request.model_dump(exclude_unset=True)
+
+        replaces_tab = update_data.get('replaces_tab')
+        if replaces_tab is not None:
+            await clear_replaces_tab(db, replaces_tab, exclude_page_id=page_id)
+
         page = await update_info_page(db, page_id, **update_data)
     except IntegrityError:
         raise HTTPException(
