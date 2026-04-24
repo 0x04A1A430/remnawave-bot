@@ -562,7 +562,10 @@ async def _do_delete_user(
 
         user_service = UserService()
         result = await user_service.delete_user_account(
-            db, user_id, admin_id=admin_id, force_panel_delete=params.delete_from_panel,
+            db,
+            user_id,
+            admin_id=admin_id,
+            force_panel_delete=params.delete_from_panel,
         )
 
         if result.bot_deleted:
