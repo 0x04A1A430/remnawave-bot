@@ -143,9 +143,9 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
             delta = subscription.end_date - datetime.now(UTC)
             days_remaining = max(0, delta.days)
 
-    # Build per-subscription list for multi-tariff mode
+    # Build per-subscription list (always — bulk actions need it for any mode)
     sub_list: list[SubscriptionListItem] = []
-    if settings.is_multi_tariff_enabled():
+    if subs:
         for s in subs:
             s_days = 0
             if s.end_date:
