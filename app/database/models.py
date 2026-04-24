@@ -3699,3 +3699,20 @@ class YandexClientIdMap(Base):
     subid = Column(String(255), nullable=True)
     created_at = Column(AwareDateTime(), server_default=func.now())
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
+
+
+class InfoPage(Base):
+    """Static informational page with multilingual title/content (JSONB)."""
+
+    __tablename__ = 'info_pages'
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(200), unique=True, nullable=False)
+    title = Column(JSONB, nullable=False, server_default='{}')
+    content = Column(JSONB, nullable=False, server_default='{}')
+    page_type = Column(String(20), nullable=False, default='page', server_default='page')
+    is_active = Column(Boolean, nullable=False, default=True, server_default='true')
+    sort_order = Column(Integer, nullable=False, default=0, server_default='0')
+    icon = Column(String(50), nullable=True)
+    replaces_tab = Column(String(20), nullable=True)  # 'faq', 'rules', 'privacy', 'offer', or null
+    created_at = Column(AwareDateTime(), server_default=func.now())
+    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())

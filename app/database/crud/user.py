@@ -3,7 +3,7 @@ import string
 from datetime import UTC, datetime, timedelta
 
 import structlog
-from sqlalchemy import and_, case, func, nullslast, or_, select, text
+from sqlalchemy import and_, case, exists, func, nullslast, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +13,8 @@ from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.crud.promo_group import get_default_promo_group
 from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import (
+    AdvertisingCampaign,
+    AdvertisingCampaignRegistration,
     PaymentMethod,
     PromoGroup,
     Subscription,
@@ -861,6 +863,11 @@ async def get_users_list(
     search: str | None = None,
     email: str | None = None,
     status: UserStatus | None = None,
+    subscription_status: str | None = None,
+    tariff_ids: list[int] | None = None,
+    promo_group_id: int | None = None,
+    campaign_id: int | None = None,
+    partner_id: int | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
@@ -875,6 +882,41 @@ async def get_users_list(
 
     if status:
         query = query.where(User.status == status.value)
+
+    # Subscription-level filters via subquery
+    if subscription_status or tariff_ids:
+        sub_conditions = []
+        if subscription_status:
+            sub_conditions.append(Subscription.status == subscription_status)
+        if tariff_ids:
+            sub_conditions.append(Subscription.tariff_id.in_(tariff_ids))
+        sub_query = select(Subscription.user_id).where(and_(*sub_conditions)).distinct().scalar_subquery()
+        query = query.where(User.id.in_(sub_query))
+
+    if promo_group_id:
+        query = query.where(User.promo_group_id == promo_group_id)
+
+    if campaign_id:
+        query = query.where(
+            exists(
+                select(AdvertisingCampaignRegistration.id).where(
+                    AdvertisingCampaignRegistration.user_id == User.id,
+                    AdvertisingCampaignRegistration.campaign_id == campaign_id,
+                )
+            )
+        )
+
+    if partner_id:
+        query = query.where(
+            exists(
+                select(AdvertisingCampaignRegistration.id)
+                .join(AdvertisingCampaign, AdvertisingCampaign.id == AdvertisingCampaignRegistration.campaign_id)
+                .where(
+                    AdvertisingCampaignRegistration.user_id == User.id,
+                    AdvertisingCampaign.partner_user_id == partner_id,
+                )
+            )
+        )
 
     if search:
         search_term = f'%{search}%'
@@ -955,12 +997,54 @@ async def get_users_list(
 
 
 async def get_users_count(
-    db: AsyncSession, status: UserStatus | None = None, search: str | None = None, email: str | None = None
+    db: AsyncSession,
+    status: UserStatus | None = None,
+    search: str | None = None,
+    email: str | None = None,
+    subscription_status: str | None = None,
+    tariff_ids: list[int] | None = None,
+    promo_group_id: int | None = None,
+    campaign_id: int | None = None,
+    partner_id: int | None = None,
 ) -> int:
     query = select(func.count(User.id))
 
     if status:
         query = query.where(User.status == status.value)
+
+    if subscription_status or tariff_ids:
+        sub_conditions = []
+        if subscription_status:
+            sub_conditions.append(Subscription.status == subscription_status)
+        if tariff_ids:
+            sub_conditions.append(Subscription.tariff_id.in_(tariff_ids))
+        sub_query = select(Subscription.user_id).where(and_(*sub_conditions)).distinct().scalar_subquery()
+        query = query.where(User.id.in_(sub_query))
+
+    if promo_group_id:
+        query = query.where(User.promo_group_id == promo_group_id)
+
+    if campaign_id:
+        query = query.where(
+            exists(
+                select(AdvertisingCampaignRegistration.id).where(
+                    AdvertisingCampaignRegistration.user_id == User.id,
+                    AdvertisingCampaignRegistration.campaign_id == campaign_id,
+                )
+            )
+        )
+
+    if partner_id:
+        query = query.where(
+            exists(
+                select(AdvertisingCampaignRegistration.id)
+                .join(AdvertisingCampaign, AdvertisingCampaign.id == AdvertisingCampaignRegistration.campaign_id)
+                .where(
+                    AdvertisingCampaignRegistration.user_id == User.id,
+                    AdvertisingCampaign.partner_user_id == partner_id,
+                )
+            )
+        )
 
     if search:
         search_term = f'%{search}%'

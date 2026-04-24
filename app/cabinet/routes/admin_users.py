@@ -70,6 +70,7 @@ from ..schemas.users import (
     ResetTrialRequest,
     ResetTrialResponse,
     SortByEnum,
+    SubscriptionListItem,
     SyncFromPanelRequest,
     SyncFromPanelResponse,
     SyncToPanelRequest,
@@ -119,6 +120,12 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     subscription_is_trial = False
     subscription_end_date = None
     has_subscription = False
+    tariff_id = None
+    tariff_name = None
+    traffic_used_gb = 0.0
+    traffic_limit_gb = 0
+    device_limit = 0
+    days_remaining = 0
 
     subs = getattr(user, 'subscriptions', None) or []
     subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
@@ -127,6 +134,36 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
         subscription_status = subscription.status
         subscription_is_trial = subscription.is_trial
         subscription_end_date = subscription.end_date
+        tariff_id = subscription.tariff_id
+        tariff_name = subscription.tariff.name if subscription.tariff else None
+        traffic_used_gb = subscription.traffic_used_gb or 0.0
+        traffic_limit_gb = subscription.traffic_limit_gb or 0
+        device_limit = subscription.device_limit or 0
+        if subscription.end_date:
+            delta = subscription.end_date - datetime.now(UTC)
+            days_remaining = max(0, delta.days)
+
+    # Build per-subscription list (always — bulk actions need it for any mode)
+    sub_list: list[SubscriptionListItem] = []
+    if subs:
+        for s in subs:
+            s_days = 0
+            if s.end_date:
+                s_delta = s.end_date - datetime.now(UTC)
+                s_days = max(0, s_delta.days)
+            sub_list.append(
+                SubscriptionListItem(
+                    id=s.id,
+                    tariff_id=s.tariff_id,
+                    tariff_name=s.tariff.name if s.tariff else None,
+                    status=s.status,
+                    end_date=s.end_date,
+                    days_remaining=s_days,
+                    traffic_used_gb=s.traffic_used_gb or 0.0,
+                    traffic_limit_gb=s.traffic_limit_gb or 0,
+                    device_limit=s.device_limit or 0,
+                )
+            )
 
     return UserListItem(
         id=user.id,
@@ -144,6 +181,13 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
         subscription_status=subscription_status,
         subscription_is_trial=subscription_is_trial,
         subscription_end_date=subscription_end_date,
+        tariff_id=tariff_id,
+        tariff_name=tariff_name,
+        traffic_used_gb=traffic_used_gb,
+        traffic_limit_gb=traffic_limit_gb,
+        device_limit=device_limit,
+        days_remaining=days_remaining,
+        subscriptions=sub_list,
         promo_group_id=user.promo_group_id,
         promo_group_name=user.promo_group.name if user.promo_group else None,
         total_spent_kopeks=user_stats.get('total_spent', 0),
@@ -417,6 +461,11 @@ async def list_users(
     search: str | None = Query(None, max_length=255),
     email: str | None = Query(None, max_length=255),
     status: UserStatusEnum | None = Query(None),
+    subscription_status: str | None = Query(None, max_length=20),
+    tariff_id: str | None = Query(None, max_length=255),
+    promo_group_id: int | None = Query(None),
+    campaign_id: int | None = Query(None),
+    partner_id: int | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -443,6 +492,14 @@ async def list_users(
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
 
+    # Parse comma-separated tariff_ids
+    tariff_ids: list[int] | None = None
+    if tariff_id:
+        try:
+            tariff_ids = [int(x.strip()) for x in tariff_id.split(',') if x.strip()]
+        except ValueError:
+            tariff_ids = None
+
     users = await get_users_list(
         db=db,
         offset=offset,
@@ -450,6 +507,11 @@ async def list_users(
         search=search,
         email=email,
         status=user_status,
+        subscription_status=subscription_status,
+        tariff_ids=tariff_ids,
+        promo_group_id=promo_group_id,
+        campaign_id=campaign_id,
+        partner_id=partner_id,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
@@ -457,7 +519,17 @@ async def list_users(
         order_by_purchase_count=order_by_purchase_count,
     )
 
-    total = await get_users_count(db=db, status=user_status, search=search, email=email)
+    total = await get_users_count(
+        db=db,
+        status=user_status,
+        search=search,
+        email=email,
+        subscription_status=subscription_status,
+        tariff_ids=tariff_ids,
+        promo_group_id=promo_group_id,
+        campaign_id=campaign_id,
+        partner_id=partner_id,
+    )
 
     # Get spending stats for all users
     user_ids = [u.id for u in users]
