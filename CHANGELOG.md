@@ -1,5 +1,48 @@
 # Changelog
 
+## [3.52.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.51.0...v3.52.0) (2026-04-24)
+
+
+### New Features
+
+* admin bulk actions API — mass operations on users ([fb2773f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fb2773fee4f36fc517624d96243b731c94a3508d))
+* bulk actions — campaign/partner filters, delete_user action ([d77fd81](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d77fd81e161a65ba848133ba4798a6a335e35c1c))
+* bulk actions — SSE streaming progress, grant subscription, multi-tariff info ([c0e0756](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c0e0756b9ac15cd926708be3f2f9c93e571ad411))
+* bulk delete_subscription action — removes from bot DB + RemnaWave ([605f202](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/605f202191d0203fdc7f5ea3bb0695ece47c9cd6))
+* bulk set_devices action + device info in subscription list ([be787a8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/be787a85bfd981b70bd347c943f5cef8ec0610fc))
+* FAQ support in info pages — page_type field + migration ([d394565](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d394565fe940549d1211a1ddab37f4d002d43dd5))
+* info page tab replacement — replaces_tab field + API ([bdb8cab](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bdb8cab1c97328ff05218a9a68612418c69ccacf))
+* information pages — CRUD model, admin API, public API ([e4b4a54](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e4b4a54797875b697146f8b804b3bbdfff4eb78b))
+* multi-tariff bulk actions — subscription-level targeting ([e78177b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e78177b2fc34c895ab2b74705516af2a3fcbfb70))
+* support multiple tariff_ids in user list filter ([0d2b1df](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0d2b1dfdc97d2f3058ef793c89beaa8da5709a4a))
+
+
+### Bug Fixes
+
+* /reorder route unreachable — move before /{page_id} path param ([122d12d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/122d12db20537cf0ad55cea5328f03aa3464b540))
+* add subscription/tariff/promo_group filters to admin user list API ([daa4725](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/daa472570ccf6ef50441e0e173ddd1b87fe31e5e))
+* always return subscriptions list in user list API ([cfbcc30](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cfbcc3082fca3a6101604aea197e7844974ed15d))
+* bulk actions review — rollback on error, multi-tariff constraint checks ([5b45d43](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5b45d4354f6e58bd609e69a45ef100acfed3dbf4))
+* bulk change_tariff not clearing squads when new tariff has none ([db7b673](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/db7b6734fdcae52397a25eb94e1b24e908fcc41c))
+* bulk delete_user — pass real admin_id, sanitize error messages ([2e45a93](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2e45a93bd72c7e930fad60f7be2292596271c0dc))
+* gift purchases no longer inflate promo group level ([1522d35](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1522d35f2dec0e35153c452818380f9b41b35f1d))
+* info pages review — deduplicate slug index, type reorder items ([2071a68](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2071a680d3d569f67c447921370463f13c928c55))
+* integrate Yandex Metrika offline conv + S2S postback hooks ([7d512d2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7d512d214a1ca184ba6601bf1ee5a39727ed41e5))
+* MissingGreenlet in subscription-ids bulk actions ([2ad893b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2ad893badfec6f782ed89746b1cf2d3d7b07aa3a))
+* privacy policy and offer text display HTML links as plain text ([59c54c9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/59c54c9b39d9cb26ed518cc74c93e1da43ce2020))
+* restore HTTP Referer fallback for landing purchases ([24dc8d2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/24dc8d2a5e1be5239036acf5888acfe1e8e96444))
+* restore referrer field in admin landing purchases response ([2cde38c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2cde38c63b35e52a552bf58c003a8281525a0be7))
+* sanitize error messages in all bulk action catch-all handlers ([9217f41](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9217f4116f74d15133531a711cb2bc083f30dd49))
+* server squad sync fails on fresh DB without default promo group ([ae7feeb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ae7feeb726ab0a9b3074c9ed11fd45e2cc412ea0))
+* stop printing tracebacks for warning-level logs inside except blocks ([68d2350](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/68d2350dfdf2f1f6964dd744a447b558a1d06267))
+* suppress 'User already enabled' traceback in bulk add_traffic ([ff41ea9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ff41ea9abbdbeb6746e23cde48a5f962b289fc48))
+
+
+### Documentation
+
+* add Overpay to README with partner block ([bcf5519](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bcf5519880471d113833a5031cae54594e658a7b))
+* add Overpay to README with partner block ([70568f8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/70568f82c5c6c2c1041865c7109907fa9e2b8c6a))
+
 ## [3.51.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.50.0...v3.51.0) (2026-04-23)
 
 
