@@ -861,6 +861,9 @@ async def get_users_list(
     search: str | None = None,
     email: str | None = None,
     status: UserStatus | None = None,
+    subscription_status: str | None = None,
+    tariff_id: int | None = None,
+    promo_group_id: int | None = None,
     order_by_balance: bool = False,
     order_by_traffic: bool = False,
     order_by_last_activity: bool = False,
@@ -875,6 +878,19 @@ async def get_users_list(
 
     if status:
         query = query.where(User.status == status.value)
+
+    # Subscription-level filters via subquery
+    if subscription_status or tariff_id:
+        sub_conditions = []
+        if subscription_status:
+            sub_conditions.append(Subscription.status == subscription_status)
+        if tariff_id:
+            sub_conditions.append(Subscription.tariff_id == tariff_id)
+        sub_query = select(Subscription.user_id).where(and_(*sub_conditions)).distinct().scalar_subquery()
+        query = query.where(User.id.in_(sub_query))
+
+    if promo_group_id:
+        query = query.where(User.promo_group_id == promo_group_id)
 
     if search:
         search_term = f'%{search}%'
@@ -955,12 +971,30 @@ async def get_users_list(
 
 
 async def get_users_count(
-    db: AsyncSession, status: UserStatus | None = None, search: str | None = None, email: str | None = None
+    db: AsyncSession,
+    status: UserStatus | None = None,
+    search: str | None = None,
+    email: str | None = None,
+    subscription_status: str | None = None,
+    tariff_id: int | None = None,
+    promo_group_id: int | None = None,
 ) -> int:
     query = select(func.count(User.id))
 
     if status:
         query = query.where(User.status == status.value)
+
+    if subscription_status or tariff_id:
+        sub_conditions = []
+        if subscription_status:
+            sub_conditions.append(Subscription.status == subscription_status)
+        if tariff_id:
+            sub_conditions.append(Subscription.tariff_id == tariff_id)
+        sub_query = select(Subscription.user_id).where(and_(*sub_conditions)).distinct().scalar_subquery()
+        query = query.where(User.id.in_(sub_query))
+
+    if promo_group_id:
+        query = query.where(User.promo_group_id == promo_group_id)
 
     if search:
         search_term = f'%{search}%'

@@ -102,6 +102,12 @@ class UserListItem(BaseModel):
     subscription_status: str | None = None
     subscription_is_trial: bool = False
     subscription_end_date: datetime | None = None
+    tariff_id: int | None = None
+    tariff_name: str | None = None
+    traffic_used_gb: float = 0
+    traffic_limit_gb: int = 0
+    device_limit: int = 0
+    days_remaining: int = 0
 
     # Promo group
     promo_group_id: int | None = None
