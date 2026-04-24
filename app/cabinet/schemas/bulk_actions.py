@@ -14,6 +14,7 @@ class BulkActionType(StrEnum):
     ADD_TRAFFIC = 'add_traffic'
     ADD_BALANCE = 'add_balance'
     ASSIGN_PROMO_GROUP = 'assign_promo_group'
+    GRANT_SUBSCRIPTION = 'grant_subscription'
 
 
 class BulkActionParams(BaseModel):
@@ -23,6 +24,15 @@ class BulkActionParams(BaseModel):
     amount_kopeks: int | None = Field(None, ge=1, le=2_000_000_000)
     balance_description: str = Field(default='Массовое начисление баланса', max_length=500)
     promo_group_id: int | None = None
+
+
+class BulkSubscriptionInfo(BaseModel):
+    id: int
+    tariff_name: str | None = None
+    status: str
+    days_remaining: int
+    traffic_used_gb: float = 0
+    traffic_limit_gb: int = 0
 
 
 class BulkExecuteRequest(BaseModel):
@@ -37,6 +47,7 @@ class BulkUserResult(BaseModel):
     success: bool
     message: str
     username: str | None = None
+    subscriptions: list[BulkSubscriptionInfo] | None = None
 
 
 class BulkExecuteResponse(BaseModel):
