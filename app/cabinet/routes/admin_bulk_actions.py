@@ -264,8 +264,7 @@ async def _do_change_tariff(
         max_device_limit=tariff.max_device_limit,
     )
     # Set squads from tariff
-    if tariff.allowed_squads:
-        sub.connected_squads = tariff.allowed_squads
+    sub.connected_squads = tariff.allowed_squads or []
 
     # Convert trial subscription to paid when switching to a non-trial tariff
     if sub.is_trial and not tariff.is_trial_available:
