@@ -701,10 +701,10 @@ async def _execute_for_subscription(
 
         result.subscription_id = sub_id
 
-        # Attach subscription info to result when not already set
+        # Attach subscription info — use the targeted sub directly to avoid
+        # MissingGreenlet from lazy-loading user.subscriptions in async mode
         if result.subscriptions is None:
-            subs = getattr(user, 'subscriptions', None) or []
-            result.subscriptions = _build_subscription_info(subs)
+            result.subscriptions = _build_subscription_info([sub])
 
         return result
 
