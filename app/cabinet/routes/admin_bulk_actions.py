@@ -356,10 +356,13 @@ async def _do_add_traffic(
     # Explicitly enable user on panel (PATCH may not clear LIMITED status)
     _enable_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
     if _enable_uuid and sub.status == 'active':
-        from app.services.subscription_service import SubscriptionService
+        try:
+            from app.services.subscription_service import SubscriptionService
 
-        subscription_service = SubscriptionService()
-        await subscription_service.enable_remnawave_user(_enable_uuid)
+            subscription_service = SubscriptionService()
+            await subscription_service.enable_remnawave_user(_enable_uuid)
+        except Exception:
+            pass  # "User already enabled" is expected for active subscriptions
 
     return BulkUserResult(
         user_id=user.id,
