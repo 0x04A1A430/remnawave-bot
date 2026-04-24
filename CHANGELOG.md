@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.52.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.52.0...v3.52.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* broadcast preview count — add .correlate(User) to EXISTS subqueries ([63e1127](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/63e112735302cc5fc961b2da87fb1250f922fe3d))
+* ignore bot's own messages in unknown message handlers ([52bf2a9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/52bf2a9589e3e14abda78a62e45e86e022da4994))
+* unpin messages in Telegram BEFORE deactivating in DB ([ab4661b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ab4661b5c643d6dad787cc499c5cff128ec21be5))
+* use fresh DB session for deactivate after long unpin loop ([5ed9a0d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5ed9a0d4fbef5c92bfb4e7eb0daed493805c5e44))
+
 ## [3.52.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.51.0...v3.52.0) (2026-04-24)
 
 
