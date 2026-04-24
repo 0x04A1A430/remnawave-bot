@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class BulkActionType(StrEnum):
@@ -28,6 +28,7 @@ class BulkActionParams(BaseModel):
 
 class BulkSubscriptionInfo(BaseModel):
     id: int
+    tariff_id: int | None = None
     tariff_name: str | None = None
     status: str
     days_remaining: int
@@ -37,13 +38,23 @@ class BulkSubscriptionInfo(BaseModel):
 
 class BulkExecuteRequest(BaseModel):
     action: BulkActionType
-    user_ids: list[int] = Field(..., min_length=1, max_length=500)
+    user_ids: list[int] | None = Field(None, min_length=1, max_length=500)
+    subscription_ids: list[int] | None = Field(None, min_length=1, max_length=2000)
     params: BulkActionParams = Field(default_factory=BulkActionParams)
     dry_run: bool = Field(default=False, description='Preview only, no mutations')
+
+    @model_validator(mode='after')
+    def _exactly_one_target(self):
+        has_users = self.user_ids is not None
+        has_subs = self.subscription_ids is not None
+        if has_users == has_subs:
+            raise ValueError('Exactly one of user_ids or subscription_ids must be provided')
+        return self
 
 
 class BulkUserResult(BaseModel):
     user_id: int
+    subscription_id: int | None = None
     success: bool
     message: str
     username: str | None = None

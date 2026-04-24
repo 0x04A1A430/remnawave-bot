@@ -70,6 +70,7 @@ from ..schemas.users import (
     ResetTrialRequest,
     ResetTrialResponse,
     SortByEnum,
+    SubscriptionListItem,
     SyncFromPanelRequest,
     SyncFromPanelResponse,
     SyncToPanelRequest,
@@ -142,6 +143,27 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
             delta = subscription.end_date - datetime.now(UTC)
             days_remaining = max(0, delta.days)
 
+    # Build per-subscription list for multi-tariff mode
+    sub_list: list[SubscriptionListItem] = []
+    if settings.is_multi_tariff_enabled():
+        for s in subs:
+            s_days = 0
+            if s.end_date:
+                s_delta = s.end_date - datetime.now(UTC)
+                s_days = max(0, s_delta.days)
+            sub_list.append(
+                SubscriptionListItem(
+                    id=s.id,
+                    tariff_id=s.tariff_id,
+                    tariff_name=s.tariff.name if s.tariff else None,
+                    status=s.status,
+                    end_date=s.end_date,
+                    days_remaining=s_days,
+                    traffic_used_gb=s.traffic_used_gb or 0.0,
+                    traffic_limit_gb=s.traffic_limit_gb or 0,
+                )
+            )
+
     return UserListItem(
         id=user.id,
         telegram_id=user.telegram_id,
@@ -164,6 +186,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
         days_remaining=days_remaining,
+        subscriptions=sub_list,
         promo_group_id=user.promo_group_id,
         promo_group_name=user.promo_group.name if user.promo_group else None,
         total_spent_kopeks=user_stats.get('total_spent', 0),

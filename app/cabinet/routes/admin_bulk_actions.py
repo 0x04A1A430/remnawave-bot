@@ -14,6 +14,7 @@ from app.database.crud.subscription import (
     add_subscription_traffic,
     create_paid_subscription,
     extend_subscription,
+    get_subscription_by_id,
     reactivate_subscription,
 )
 from app.database.crud.tariff import get_tariff_by_id
@@ -94,8 +95,14 @@ def _require_amount_kopeks(params: BulkActionParams) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_subscription(user: User) -> Subscription | None:
-    """Return the first active subscription or most recent one (multi/single tariff)."""
+def _resolve_subscription(user: User, override: Subscription | None = None) -> Subscription | None:
+    """Return the first active subscription or most recent one (multi/single tariff).
+
+    If *override* is provided, return it directly (used when operating on a
+    specific subscription_id rather than auto-resolving).
+    """
+    if override is not None:
+        return override
     subs = getattr(user, 'subscriptions', None) or []
     return next((s for s in subs if s.is_active), subs[0] if subs else None)
 
@@ -110,9 +117,10 @@ async def _do_extend_subscription(
     user: User,
     params: BulkActionParams,
     dry_run: bool,
+    sub_override: Subscription | None = None,
 ) -> BulkUserResult:
     days = params.days  # already validated
-    sub = _resolve_subscription(user)
+    sub = _resolve_subscription(user, sub_override)
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
@@ -141,8 +149,9 @@ async def _do_cancel_subscription(
     user: User,
     params: BulkActionParams,
     dry_run: bool,
+    sub_override: Subscription | None = None,
 ) -> BulkUserResult:
-    sub = _resolve_subscription(user)
+    sub = _resolve_subscription(user, sub_override)
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
@@ -176,8 +185,9 @@ async def _do_activate_subscription(
     user: User,
     params: BulkActionParams,
     dry_run: bool,
+    sub_override: Subscription | None = None,
 ) -> BulkUserResult:
-    sub = _resolve_subscription(user)
+    sub = _resolve_subscription(user, sub_override)
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
@@ -224,8 +234,9 @@ async def _do_change_tariff(
     params: BulkActionParams,
     tariff: Tariff,
     dry_run: bool,
+    sub_override: Subscription | None = None,
 ) -> BulkUserResult:
-    sub = _resolve_subscription(user)
+    sub = _resolve_subscription(user, sub_override)
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
@@ -320,9 +331,10 @@ async def _do_add_traffic(
     user: User,
     params: BulkActionParams,
     dry_run: bool,
+    sub_override: Subscription | None = None,
 ) -> BulkUserResult:
     traffic_gb = params.traffic_gb  # already validated
-    sub = _resolve_subscription(user)
+    sub = _resolve_subscription(user, sub_override)
     if not sub:
         return BulkUserResult(user_id=user.id, success=False, message='No subscription found', username=user.username)
 
@@ -540,6 +552,7 @@ def _build_subscription_info(subs: list[Subscription]) -> list[BulkSubscriptionI
         result.append(
             BulkSubscriptionInfo(
                 id=sub.id,
+                tariff_id=sub.tariff_id,
                 tariff_name=tariff_name,
                 status=sub.status,
                 days_remaining=days_remaining,
@@ -648,6 +661,62 @@ async def _execute_for_user(
         return BulkUserResult(user_id=uid, success=False, message=str(exc))
 
 
+# Actions that operate on the user, not on a specific subscription
+_USER_LEVEL_ACTIONS: set[BulkActionType] = {
+    BulkActionType.ADD_BALANCE,
+    BulkActionType.ASSIGN_PROMO_GROUP,
+    BulkActionType.GRANT_SUBSCRIPTION,
+}
+
+
+async def _execute_for_subscription(
+    db: AsyncSession,
+    sub_id: int,
+    action: BulkActionType,
+    params: BulkActionParams,
+    tariff: Tariff | None,
+    dry_run: bool,
+) -> BulkUserResult:
+    """Execute the bulk action for a single subscription.  Handles exceptions internally."""
+    try:
+        sub = await get_subscription_by_id(db, sub_id)
+        if not sub:
+            return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message='Subscription not found')
+
+        user = sub.user
+        if not user:
+            return BulkUserResult(
+                user_id=0, subscription_id=sub_id, success=False, message='User not found for subscription'
+            )
+
+        if action == BulkActionType.CHANGE_TARIFF:
+            result = await _do_change_tariff(db, user, params, tariff, dry_run, sub_override=sub)
+        elif action in _ACTION_HANDLERS:
+            handler = _ACTION_HANDLERS[action]
+            result = await handler(db, user, params, dry_run, sub_override=sub)
+        else:
+            result = BulkUserResult(
+                user_id=user.id, subscription_id=sub_id, success=False, message=f'Unknown action: {action}'
+            )
+
+        result.subscription_id = sub_id
+
+        # Attach subscription info to result when not already set
+        if result.subscriptions is None:
+            subs = getattr(user, 'subscriptions', None) or []
+            result.subscriptions = _build_subscription_info(subs)
+
+        return result
+
+    except Exception as exc:
+        logger.error('Bulk action failed for subscription', subscription_id=sub_id, action=action, error=str(exc))
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return BulkUserResult(user_id=0, subscription_id=sub_id, success=False, message=str(exc))
+
+
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
@@ -660,18 +729,76 @@ async def bulk_execute(
     admin: User = Depends(require_permission('users:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Execute a bulk action on multiple users.
+    """Execute a bulk action on multiple users or subscriptions.
 
     When ``stream=true``, returns a ``text/event-stream`` response with
     per-user progress events followed by a final summary event.
     Otherwise returns a single JSON response (default, backwards-compatible).
     """
-    user_ids = list(dict.fromkeys(request.user_ids))
     action = request.action
     params = request.params
     dry_run = request.dry_run
 
+    # Determine target mode: subscription_ids or user_ids
+    use_subscription_ids = request.subscription_ids is not None
+
+    if use_subscription_ids and action in _USER_LEVEL_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Action {action} operates on users, not subscriptions. Use user_ids instead.',
+        )
+
     tariff = await _validate_and_prepare(db, action, params)
+
+    if use_subscription_ids:
+        sub_ids = list(dict.fromkeys(request.subscription_ids))
+
+        if stream:
+            return StreamingResponse(
+                _stream_bulk_execute_subscriptions(db, sub_ids, action, params, tariff, dry_run, admin),
+                media_type='text/event-stream',
+            )
+
+        # --- Non-streaming subscription path ---
+        results: list[BulkUserResult] = []
+        success_count = 0
+        error_count = 0
+        skipped_count = 0
+
+        for sid in sub_ids:
+            result = await _execute_for_subscription(db, sid, action, params, tariff, dry_run)
+
+            results.append(result)
+            if result.message in ('Subscription not found', 'User not found for subscription'):
+                skipped_count += 1
+            elif result.success:
+                success_count += 1
+            else:
+                error_count += 1
+
+        logger.info(
+            'Bulk action completed (subscription mode)',
+            admin_id=admin.id,
+            action=action,
+            total=len(sub_ids),
+            success_count=success_count,
+            error_count=error_count,
+            skipped_count=skipped_count,
+            dry_run=dry_run,
+        )
+
+        return BulkExecuteResponse(
+            action=action,
+            total=len(sub_ids),
+            success_count=success_count,
+            error_count=error_count,
+            skipped_count=skipped_count,
+            dry_run=dry_run,
+            results=results,
+        )
+
+    # --- user_ids mode (original) ---
+    user_ids = list(dict.fromkeys(request.user_ids))
 
     if stream:
         return StreamingResponse(
@@ -679,8 +806,7 @@ async def bulk_execute(
             media_type='text/event-stream',
         )
 
-    # --- Non-streaming (original) path ---
-    results: list[BulkUserResult] = []
+    results = []
     success_count = 0
     error_count = 0
     skipped_count = 0
@@ -753,6 +879,7 @@ async def _stream_bulk_execute(
             'current': i + 1,
             'total': total,
             'user_id': uid,
+            'subscription_id': result.subscription_id,
             'success': result.success,
             'message': result.message,
             'username': result.username,
@@ -762,6 +889,67 @@ async def _stream_bulk_execute(
 
     logger.info(
         'Bulk action completed (streamed)',
+        admin_id=admin.id,
+        action=action,
+        total=total,
+        success_count=success_count,
+        error_count=error_count,
+        skipped_count=skipped_count,
+        dry_run=dry_run,
+    )
+
+    summary = {
+        'type': 'complete',
+        'action': str(action),
+        'total': total,
+        'success_count': success_count,
+        'error_count': error_count,
+        'skipped_count': skipped_count,
+        'dry_run': dry_run,
+    }
+    yield f'data: {json.dumps(summary, ensure_ascii=False)}\n\n'
+
+
+async def _stream_bulk_execute_subscriptions(
+    db: AsyncSession,
+    sub_ids: list[int],
+    action: BulkActionType,
+    params: BulkActionParams,
+    tariff: Tariff | None,
+    dry_run: bool,
+    admin: User,
+):
+    """Yield SSE events for each processed subscription, then a final summary."""
+    total = len(sub_ids)
+    success_count = 0
+    error_count = 0
+    skipped_count = 0
+
+    for i, sid in enumerate(sub_ids):
+        result = await _execute_for_subscription(db, sid, action, params, tariff, dry_run)
+
+        if result.message in ('Subscription not found', 'User not found for subscription'):
+            skipped_count += 1
+        elif result.success:
+            success_count += 1
+        else:
+            error_count += 1
+
+        progress = {
+            'type': 'progress',
+            'current': i + 1,
+            'total': total,
+            'user_id': result.user_id,
+            'subscription_id': sid,
+            'success': result.success,
+            'message': result.message,
+            'username': result.username,
+            'subscriptions': [s.model_dump() for s in result.subscriptions] if result.subscriptions else None,
+        }
+        yield f'data: {json.dumps(progress, ensure_ascii=False)}\n\n'
+
+    logger.info(
+        'Bulk action completed (streamed, subscription mode)',
         admin_id=admin.id,
         action=action,
         total=total,

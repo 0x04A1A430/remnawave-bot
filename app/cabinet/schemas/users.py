@@ -82,6 +82,19 @@ class UserPromoGroupInfo(BaseModel):
 # === User List ===
 
 
+class SubscriptionListItem(BaseModel):
+    """Compact subscription info for user list (multi-tariff mode)."""
+
+    id: int
+    tariff_id: int | None = None
+    tariff_name: str | None = None
+    status: str
+    end_date: datetime | None = None
+    days_remaining: int = 0
+    traffic_used_gb: float = 0
+    traffic_limit_gb: int = 0
+
+
 class UserListItem(BaseModel):
     """User item in list."""
 
@@ -108,6 +121,9 @@ class UserListItem(BaseModel):
     traffic_limit_gb: int = 0
     device_limit: int = 0
     days_remaining: int = 0
+
+    # All subscriptions (multi-tariff)
+    subscriptions: list[SubscriptionListItem] = []
 
     # Promo group
     promo_group_id: int | None = None
