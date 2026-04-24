@@ -22,7 +22,7 @@ def upgrade() -> None:
         op.create_table(
             'info_pages',
             sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-            sa.Column('slug', sa.String(200), unique=True, nullable=False, index=True),
+            sa.Column('slug', sa.String(200), unique=True, nullable=False),
             sa.Column('title', sa.dialects.postgresql.JSONB(), nullable=False, server_default='{}'),
             sa.Column('content', sa.dialects.postgresql.JSONB(), nullable=False, server_default='{}'),
             sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
@@ -31,11 +31,9 @@ def upgrade() -> None:
             sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
             sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         )
-        op.create_index('ix_info_pages_slug', 'info_pages', ['slug'], unique=True)
 
 
 def downgrade() -> None:
-    op.drop_index('ix_info_pages_slug', table_name='info_pages')
     op.drop_table('info_pages')
 
 

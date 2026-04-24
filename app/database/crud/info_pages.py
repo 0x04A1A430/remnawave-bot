@@ -147,11 +147,11 @@ async def delete_info_page(db: AsyncSession, page_id: int) -> None:
 async def reorder_info_pages(db: AsyncSession, items: list[dict]) -> None:
     """Bulk update sort_order for info pages.
 
-    Each dict in *items* must have ``id`` and ``sort_order`` keys.
+    Each item must have ``id`` and ``sort_order`` attributes.
     """
     for item in items:
-        page_id = item.get('id')
-        sort_order = item.get('sort_order')
+        page_id = item.id if hasattr(item, 'id') else item.get('id')
+        sort_order = item.sort_order if hasattr(item, 'sort_order') else item.get('sort_order')
         if page_id is None or sort_order is None:
             continue
         await db.execute(

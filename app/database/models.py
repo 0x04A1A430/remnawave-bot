@@ -3705,10 +3705,8 @@ class InfoPage(Base):
     """Static informational page with multilingual title/content (JSONB)."""
 
     __tablename__ = 'info_pages'
-    __table_args__ = (Index('ix_info_pages_slug', 'slug', unique=True),)
-
     id = Column(Integer, primary_key=True, index=True)
-    slug = Column(String(200), unique=True, nullable=False, index=True)
+    slug = Column(String(200), unique=True, nullable=False)
     title = Column(JSONB, nullable=False, server_default='{}')
     content = Column(JSONB, nullable=False, server_default='{}')
     is_active = Column(Boolean, nullable=False, default=True, server_default='true')

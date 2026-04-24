@@ -57,7 +57,14 @@ class InfoPageUpdateRequest(BaseModel):
     icon: str | None = Field(None, max_length=50)
 
 
+class ReorderItem(BaseModel):
+    """Single item in a reorder request."""
+
+    id: int
+    sort_order: int = Field(ge=0)
+
+
 class ReorderRequest(BaseModel):
     """Request to bulk-reorder info pages."""
 
-    items: list[dict] = Field(..., min_length=1)
+    items: list[ReorderItem] = Field(..., min_length=1)
