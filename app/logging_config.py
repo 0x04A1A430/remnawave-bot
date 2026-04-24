@@ -80,10 +80,13 @@ def _auto_capture_exc_info(logger: Any, method_name: str, event_dict: dict[str, 
     if exc_info:
         return event_dict
 
-    current = sys.exc_info()
-    if current[1] is not None:
-        event_dict['exc_info'] = current
-        return event_dict
+    # Only auto-capture from sys.exc_info() for error/critical levels.
+    # For warning/info inside except blocks, callers must pass exc_info=True explicitly.
+    if method_name in ('error', 'critical', 'exception'):
+        current = sys.exc_info()
+        if current[1] is not None:
+            event_dict['exc_info'] = current
+            return event_dict
 
     for key in ('error', 'exc', 'exception', 'e', 'err'):
         candidate = event_dict.get(key)
