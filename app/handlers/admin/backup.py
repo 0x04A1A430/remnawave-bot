@@ -313,7 +313,7 @@ async def restore_backup_start(callback: types.CallbackQuery, db_user: User, db:
     else:
         text = """📥 <b>Восстановление из бекапа</b>
 
-📎 Отправьте файл бекапа (.json или .json.gz)
+📎 Отправьте файл бекапа (.json, .json.gz или .tar.gz)
 
 ⚠️ <b>ВАЖНО:</b>
 • Файл должен быть создан этой системой бекапов
@@ -393,7 +393,7 @@ async def handle_backup_file_upload(message: types.Message, db_user: User, db: A
     document = message.document
     allowed_extensions = ('.json', '.json.gz', '.tar.gz', '.tar')
 
-    if not any(document.file_name.endswith(ext) for ext in allowed_extensions):
+    if not document.file_name or not any(document.file_name.endswith(ext) for ext in allowed_extensions):
         await message.answer(
             '❌ Неподдерживаемый формат файла. Загрузите .json, .json.gz или .tar.gz файл',
             reply_markup=InlineKeyboardMarkup(
