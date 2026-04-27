@@ -939,6 +939,13 @@ async def handle_custom_confirm(
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
+    # Отвечаем на callback СРАЗУ — до тяжёлых операций (панель, транзакции),
+    # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     texts = get_texts(db_user.language)
 
     # Save promo offer state before deduction (for restore on failure)
@@ -1148,11 +1155,12 @@ async def handle_custom_confirm(
             ),
             parse_mode='HTML',
         )
-        await callback.answer('Подписка оформлена!', show_alert=True)
-
     except Exception as e:
         logger.error('Ошибка при покупке тарифа с кастомными параметрами', error=e, exc_info=True)
-        await callback.answer('Произошла ошибка при оформлении подписки', show_alert=True)
+        try:
+            await callback.message.edit_text('❌ Произошла ошибка при оформлении подписки')
+        except Exception:
+            pass
 
 
 @error_handler
@@ -2364,6 +2372,13 @@ async def confirm_tariff_extend(
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
+    # Отвечаем на callback СРАЗУ — до тяжёлых операций (панель, транзакции),
+    # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     texts = get_texts(db_user.language)
 
     try:
@@ -2487,11 +2502,12 @@ async def confirm_tariff_extend(
             ),
             parse_mode='HTML',
         )
-        await callback.answer('Подписка продлена!', show_alert=True)
-
     except Exception as e:
         logger.error('Ошибка при продлении тарифа', error=e, exc_info=True)
-        await callback.answer('Произошла ошибка при продлении подписки', show_alert=True)
+        try:
+            await callback.message.edit_text('❌ Произошла ошибка при продлении подписки')
+        except Exception:
+            pass
 
 
 # ==================== Переключение тарифов ====================
@@ -3031,6 +3047,13 @@ async def confirm_tariff_switch(
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
+    # Отвечаем на callback СРАЗУ — до тяжёлых операций (панель, транзакции),
+    # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     texts = get_texts(db_user.language)
 
     try:
@@ -3198,11 +3221,13 @@ async def confirm_tariff_switch(
             ),
             parse_mode='HTML',
         )
-        await callback.answer('Тариф изменён!', show_alert=True)
 
     except Exception as e:
         logger.error('Ошибка при переключении тарифа', error=e, exc_info=True)
-        await callback.answer('Произошла ошибка при переключении тарифа', show_alert=True)
+        try:
+            await callback.message.edit_text('❌ Произошла ошибка при переключении тарифа')
+        except Exception:
+            pass
 
 
 # ==================== Смена на суточный тариф ====================
@@ -3275,6 +3300,13 @@ async def confirm_daily_tariff_switch(
             if not is_up and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED:
                 await callback.answer('Понижение тарифа недоступно', show_alert=True)
                 return
+
+    # Отвечаем на callback СРАЗУ — до тяжёлых операций (панель, транзакции),
+    # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
+    try:
+        await callback.answer()
+    except Exception:
+        pass
 
     texts = get_texts(db_user.language)
 
@@ -3445,7 +3477,6 @@ async def confirm_daily_tariff_switch(
             ),
             parse_mode='HTML',
         )
-        await callback.answer('Тариф изменён!', show_alert=True)
 
     except Exception as e:
         logger.error('Ошибка при смене на суточный тариф', error=e, exc_info=True)
@@ -3478,7 +3509,10 @@ async def confirm_daily_tariff_switch(
                 price_kopeks=final_daily_price,
                 refund_error=refund_error,
             )
-        await callback.answer('Произошла ошибка при смене тарифа', show_alert=True)
+        try:
+            await callback.message.edit_text('❌ Произошла ошибка при смене тарифа')
+        except Exception:
+            pass
 
 
 # ==================== Мгновенное переключение тарифов (без выбора периода) ====================
@@ -3976,6 +4010,13 @@ async def confirm_instant_switch(
         await callback.answer('Недостаточно средств на балансе', show_alert=True)
         return
 
+    # Отвечаем на callback СРАЗУ — до тяжёлых операций (панель, транзакции),
+    # иначе Telegram инвалидирует query через 30 сек → TelegramBadRequest
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
     texts = get_texts(db_user.language)
 
     try:
@@ -4232,11 +4273,13 @@ async def confirm_instant_switch(
                 ),
                 parse_mode='HTML',
             )
-        await callback.answer('Тариф изменён!', show_alert=True)
 
     except Exception as e:
         logger.error('Ошибка при мгновенном переключении тарифа', error=e, exc_info=True)
-        await callback.answer('Произошла ошибка при переключении тарифа', show_alert=True)
+        try:
+            await callback.message.edit_text('❌ Произошла ошибка при переключении тарифа')
+        except Exception:
+            pass
 
 
 async def return_to_saved_tariff_cart(
