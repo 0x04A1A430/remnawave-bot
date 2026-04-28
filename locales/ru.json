@@ -1113,7 +1113,7 @@
   "MENU_BUY_SUBSCRIPTION": "<tg-emoji emoji-id='5974217466270716579'>💵</tg-emoji> Купить подписку",
   "MENU_EXTEND_SUBSCRIPTION": "<tg-emoji emoji-id='5897958754267174109'>💰</tg-emoji> Продлить подписку",
   "MENU_FAQ": "FAQ",
-  "MENU_INFO": "Инфо",
+  "MENU_INFO": "<tg-emoji emoji-id='5883997877172179131'>🖋</tg-emoji> Инфо",
   "MENU_INFO_HEADER": "<b>Инфо</b>",
   "MENU_INFO_PROMPT": "Выберите раздел:",
   "MENU_LANGUAGE": "Язык",
