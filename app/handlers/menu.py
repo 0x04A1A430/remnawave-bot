@@ -1202,7 +1202,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
 
         lines.append(f'{emoji} <b>{tariff_name}</b>{status_suffix}')
 
-    status_text = '\n<blockquote>' + '\n'.join(lines) + '</blockquote>'
+    status_text = '\n' + '\n'.join(lines)
     return status_text, ''
 
 
@@ -1220,8 +1220,10 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
+            if action_prompt_text and action_prompt_text in base_text:
+                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}')
+            elif tariff_info_block:
+                base_text = base_text + tariff_info_block
     else:
         # Single-tariff mode: legacy behavior
         tariff = None
@@ -1249,8 +1251,10 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
+            if action_prompt_text and action_prompt_text in base_text:
+                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}')
+            elif tariff_info_block:
+                base_text = base_text + tariff_info_block
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
 
