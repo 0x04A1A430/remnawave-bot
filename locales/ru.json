@@ -1224,7 +1224,7 @@
   "PAYMENT_METHOD_PLATEGA_DESCRIPTION": "через {platega_name} (карты + СБП)",
   "PAYMENT_METHOD_PLATEGA_NAME": "<b>Банковская карта ({platega_name})</b>",
   "PAYMENT_METHOD_STARS_DESCRIPTION": "быстро и удобно",
-  "PAYMENT_METHOD_STARS_NAME": "<b>Telegram Stars</b>",
+  "PAYMENT_METHOD_STARS_NAME": "<tg-emoji emoji-id='5958376256788502078'>⭐️</tg-emoji> <b>Telegram Stars</b>",
   "PAYMENT_METHOD_SUPPORT_DESCRIPTION": "другие способы",
   "PAYMENT_METHOD_SUPPORT_NAME": "️ <b>Через поддержку</b>",
   "PAYMENT_METHOD_TRIBUTE_DESCRIPTION": "через Tribute",
