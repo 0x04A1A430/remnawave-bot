@@ -35,6 +35,7 @@ from app.database.models import Subscription, SubscriptionServer, SubscriptionSt
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.notification_delivery_service import NotificationType, notification_delivery_service
+from app.utils.button_emoji import make_button
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 
@@ -527,12 +528,10 @@ class RemnaWaveWebhookService:
 
     def _get_device_added_keyboard(self, user: User) -> InlineKeyboardMarkup:
         texts = get_texts(user.language)
-        deactivate_text = texts.get('WEBHOOK_DEVICE_DEACTIVATE_BUTTON', 'Деактивировать')
-        home_text = texts.get('WEBHOOK_DEVICE_HOME_BUTTON', 'В главное меню')
+        manage_text = texts.get('MANAGE_DEVICES_BUTTON', 'Устройства')
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [build_miniapp_or_callback_button(text=deactivate_text, callback_data='subscription_reset_devices')],
-                [build_miniapp_or_callback_button(text=home_text, callback_data='back_to_menu')],
+                [make_button(text=manage_text, callback_data='subscription_manage_devices')],
             ]
         )
 
