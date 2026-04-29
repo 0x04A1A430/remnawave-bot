@@ -615,9 +615,9 @@ class PricingEngine:
         discounted_base = self.apply_discount(base_price, period_pct)
         discounted_devices = self.apply_discount(devices_price, devices_pct)
 
-        # Traffic uses addon discount (checks apply_discounts_to_addons flag)
+        # Traffic uses addon discount — but only if promo_group passed the tariff availability check
         discounted_traffic = traffic_price
-        if traffic_price > 0 and user:
+        if traffic_price > 0 and user and promo_group is not None:
             discounted_traffic, _, _ = self.calculate_traffic_discount(traffic_price, user)
 
         base_group_disc = base_price - discounted_base
