@@ -1,5 +1,6 @@
 """Admin routes for managing users in cabinet."""
 
+import math
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -3206,7 +3207,7 @@ async def sync_user_from_panel(
                     int(panel_user.traffic_limit_bytes / (1024**3)) if panel_user.traffic_limit_bytes else 100
                 )
                 panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
-                days_remaining = max(1, (panel_expire_utc - datetime.now(UTC)).days)
+                days_remaining = max(1, math.ceil((panel_expire_utc - datetime.now(UTC)).total_seconds() / 86400))
 
                 new_sub = await create_paid_subscription(
                     db=db,
