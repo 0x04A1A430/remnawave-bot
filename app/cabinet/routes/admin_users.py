@@ -1,5 +1,6 @@
 """Admin routes for managing users in cabinet."""
 
+import math
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -157,6 +158,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
                     tariff_id=s.tariff_id,
                     tariff_name=s.tariff.name if s.tariff else None,
                     status=s.status,
+                    is_trial=bool(s.is_trial),
                     end_date=s.end_date,
                     days_remaining=s_days,
                     traffic_used_gb=s.traffic_used_gb or 0.0,
@@ -391,7 +393,10 @@ async def _sync_subscription_to_panel(
                     changes['action'] = 'updated'
                     logger.info('Updated user in Remnawave panel', user_id=user.id)
                 except Exception as update_error:
-                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
+                    if (
+                        hasattr(update_error, 'status_code') and update_error.status_code == 404
+                    ) or error_code == 'A018':
                         panel_uuid = None  # Will create new
                     else:
                         raise
@@ -893,6 +898,50 @@ async def get_user_panel_info(
     except Exception as e:
         logger.error('Error getting panel info for user', user_id=user_id, error=e)
         return UserPanelInfoResponse(found=False)
+
+
+@router.get('/{user_id}/subscription-request-history')
+async def get_subscription_request_history(
+    user_id: int,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Get subscription request history from RemnaWave panel."""
+    from app.database.crud.user import get_user_by_id
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    panel_uuid = None
+    if settings.is_multi_tariff_enabled() and subscription_id:
+        from app.database.crud.subscription import get_subscription_by_id_for_user
+
+        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+        if sub:
+            panel_uuid = sub.remnawave_uuid
+    else:
+        panel_uuid = getattr(user, 'remnawave_uuid', None)
+
+    if not panel_uuid:
+        return {'total': 0, 'records': []}
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return {'total': 0, 'records': []}
+
+        async with service.get_api_client() as api:
+            result = await api.get_subscription_request_history(panel_uuid, offset=offset, limit=limit)
+            return result
+    except Exception as e:
+        logger.error('Error getting subscription request history', user_id=user_id, error=e)
+        return {'total': 0, 'records': []}
 
 
 @router.get('/{user_id}/node-usage', response_model=UserNodeUsageResponse)
@@ -1743,9 +1792,25 @@ async def block_user(
     admin: User = Depends(require_permission('users:block')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Block a user (shortcut for status update)."""
-    request = UpdateUserStatusRequest(status=UserStatusEnum.BLOCKED, reason=reason)
-    return await update_user_status(user_id, request, admin, db)
+    """Block a user — sets DB status AND disables panel user in RemnaWave."""
+    from app.services.user_service import UserService
+
+    user_service = UserService()
+    success = await user_service.block_user(
+        db,
+        user_id,
+        admin.id,
+        reason=reason or 'Заблокирован администратором',
+    )
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found or block failed')
+
+    return UpdateUserStatusResponse(
+        success=True,
+        old_status='active',
+        new_status='blocked',
+        message='User blocked',
+    )
 
 
 @router.post('/{user_id}/unblock', response_model=UpdateUserStatusResponse)
@@ -1754,9 +1819,20 @@ async def unblock_user(
     admin: User = Depends(require_permission('users:block')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Unblock a user (shortcut for status update)."""
-    request = UpdateUserStatusRequest(status=UserStatusEnum.ACTIVE)
-    return await update_user_status(user_id, request, admin, db)
+    """Unblock a user — sets DB status AND re-enables panel user in RemnaWave."""
+    from app.services.user_service import UserService
+
+    user_service = UserService()
+    success = await user_service.unblock_user(db, user_id, admin.id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found or unblock failed')
+
+    return UpdateUserStatusResponse(
+        success=True,
+        old_status='blocked',
+        new_status='active',
+        message='User unblocked',
+    )
 
 
 # === Restrictions Management ===
@@ -3159,7 +3235,7 @@ async def sync_user_from_panel(
                     int(panel_user.traffic_limit_bytes / (1024**3)) if panel_user.traffic_limit_bytes else 100
                 )
                 panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
-                days_remaining = max(1, (panel_expire_utc - datetime.now(UTC)).days)
+                days_remaining = max(1, math.ceil((panel_expire_utc - datetime.now(UTC)).total_seconds() / 86400))
 
                 new_sub = await create_paid_subscription(
                     db=db,
@@ -3362,7 +3438,10 @@ async def sync_user_to_panel(
                     await api.update_user(**update_kwargs)
                     action = 'updated'
                 except Exception as update_error:
-                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
+                    if (
+                        hasattr(update_error, 'status_code') and update_error.status_code == 404
+                    ) or error_code == 'A018':
                         # User not found in panel, create new
                         panel_uuid = None
                     else:

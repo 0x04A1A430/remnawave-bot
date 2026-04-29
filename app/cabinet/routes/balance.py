@@ -1206,15 +1206,20 @@ async def get_latest_payment_by_method(
     from sqlalchemy.orm import selectinload
 
     from app.database.models import (
+        AuraPayPayment,
         CloudPaymentsPayment,
         CryptoBotPayment,
         FreekassaPayment,
         HeleketPayment,
         KassaAiPayment,
         MulenPayPayment,
+        OverpayPayment,
         Pal24Payment,
+        PayPearPayment,
         PlategaPayment,
         RioPayPayment,
+        RollyPayPayment,
+        SeverPayPayment,
         WataPayment,
         YooKassaPayment,
     )
@@ -1231,6 +1236,11 @@ async def get_latest_payment_by_method(
         PaymentMethod.FREEKASSA: FreekassaPayment,
         PaymentMethod.KASSA_AI: KassaAiPayment,
         PaymentMethod.RIOPAY: RioPayPayment,
+        PaymentMethod.SEVERPAY: SeverPayPayment,
+        PaymentMethod.ROLLYPAY: RollyPayPayment,
+        PaymentMethod.PAYPEAR: PayPearPayment,
+        PaymentMethod.OVERPAY: OverpayPayment,
+        PaymentMethod.AURAPAY: AuraPayPayment,
     }
 
     model = model_map.get(payment_method)

@@ -1268,8 +1268,13 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             from app.services.paypear_service import paypear_service
 
-            if not paypear_service.verify_webhook_signature(raw_body, received_signature):
-                logger.warning('PayPear webhook: invalid signature')
+            client_ip = (
+                request.headers.get('x-real-ip')
+                or request.headers.get('x-forwarded-for', '').split(',')[0].strip()
+                or (request.client.host if request.client else None)
+            )
+            if not paypear_service.verify_webhook_signature(raw_body, received_signature, client_ip=client_ip):
+                logger.warning('PayPear webhook: invalid signature and IP', client_ip=client_ip)
                 return JSONResponse({'status': False}, status_code=status.HTTP_403_FORBIDDEN)
 
             try:

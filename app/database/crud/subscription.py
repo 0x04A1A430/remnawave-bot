@@ -1,3 +1,4 @@
+import math
 import secrets
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
@@ -1296,7 +1297,7 @@ async def add_subscription_servers(
 
     if paid_prices is None:
         now = datetime.now(UTC)
-        days_remaining = max(1, (subscription.end_date - now).days)
+        days_remaining = max(1, math.ceil((subscription.end_date - now).total_seconds() / 86400))
         paid_prices = []
 
         from app.database.models import ServerSquad

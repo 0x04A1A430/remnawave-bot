@@ -994,6 +994,16 @@ class RemnaWaveWebhookService:
     async def _handle_user_deleted(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
+        # Suppress webhook if this deletion was initiated by delete_user_account —
+        # prevents deadlock between the ongoing deletion transaction and this handler
+        if self._is_intentional_panel_deletion_event(data):
+            logger.info(
+                'Webhook user.deleted suppressed — intentional panel deletion in progress',
+                user_id=user.id,
+                uuid=data.get('uuid'),
+            )
+            return
+
         user_id = user.id
         sub_id = subscription.id if subscription else None
 
@@ -1075,8 +1085,8 @@ class RemnaWaveWebhookService:
             subscription.connected_squads = []
             subscription.updated_at = datetime.now(UTC)
 
-            if settings.is_multi_tariff_enabled():
-                subscription.remnawave_uuid = None
+            # Always clear stale UUID — panel user was deleted
+            subscription.remnawave_uuid = None
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
