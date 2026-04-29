@@ -1791,9 +1791,24 @@ async def block_user(
     admin: User = Depends(require_permission('users:block')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Block a user (shortcut for status update)."""
-    request = UpdateUserStatusRequest(status=UserStatusEnum.BLOCKED, reason=reason)
-    return await update_user_status(user_id, request, admin, db)
+    """Block a user — sets DB status AND disables panel user in RemnaWave."""
+    from app.database.crud.user import get_user_by_id
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    from app.services.user_service import UserService
+
+    user_service = UserService()
+    await user_service.block_user(db, user, reason=reason)
+
+    return UpdateUserStatusResponse(
+        success=True,
+        user_id=user_id,
+        status=UserStatusEnum.BLOCKED,
+        message='User blocked',
+    )
 
 
 @router.post('/{user_id}/unblock', response_model=UpdateUserStatusResponse)
