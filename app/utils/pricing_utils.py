@@ -20,7 +20,7 @@ def calculate_months_from_days(days: int) -> int:
     return max(1, round(days / 30))
 
 
-def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_days: int = 30) -> tuple[int, int]:
+def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_days: int = 1) -> tuple[int, int]:
     """Calculate prorated price based on remaining days.
 
     Returns:
