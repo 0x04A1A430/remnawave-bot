@@ -89,6 +89,7 @@ class SubscriptionListItem(BaseModel):
     tariff_id: int | None = None
     tariff_name: str | None = None
     status: str
+    is_trial: bool = False
     end_date: datetime | None = None
     days_remaining: int = 0
     traffic_used_gb: float = 0

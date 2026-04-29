@@ -158,6 +158,7 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
                     tariff_id=s.tariff_id,
                     tariff_name=s.tariff.name if s.tariff else None,
                     status=s.status,
+                    is_trial=bool(s.is_trial),
                     end_date=s.end_date,
                     days_remaining=s_days,
                     traffic_used_gb=s.traffic_used_gb or 0.0,
