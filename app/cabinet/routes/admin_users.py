@@ -895,6 +895,47 @@ async def get_user_panel_info(
         return UserPanelInfoResponse(found=False)
 
 
+@router.get('/{user_id}/subscription-request-history')
+async def get_subscription_request_history(
+    user_id: int,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Get subscription request history from RemnaWave panel."""
+    from app.database.crud.user import get_user_by_id
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    panel_uuid = None
+    if settings.is_multi_tariff_enabled() and subscription_id:
+        from sqlalchemy import select as sa_select
+
+        from app.database.models import Subscription
+
+        sub_result = await db.execute(sa_select(Subscription).where(Subscription.id == subscription_id))
+        sub = sub_result.scalar_one_or_none()
+        if sub:
+            panel_uuid = sub.remnawave_uuid
+    else:
+        panel_uuid = getattr(user, 'remnawave_uuid', None)
+
+    if not panel_uuid:
+        return {'total': 0, 'records': []}
+
+    try:
+        api = RemnaWaveService().api
+        result = await api.get_subscription_request_history(panel_uuid, offset=offset, limit=limit)
+        return result
+    except Exception as e:
+        logger.error('Error getting subscription request history', user_id=user_id, error=e)
+        return {'total': 0, 'records': []}
+
+
 @router.get('/{user_id}/node-usage', response_model=UserNodeUsageResponse)
 async def get_user_node_usage(
     user_id: int,
