@@ -2138,7 +2138,7 @@ async def try_auto_extend_expired_after_topup(
         from app.database.crud.subscription import get_all_subscriptions_by_user_id
 
         all_subs = await get_all_subscriptions_by_user_id(db, user.id)
-        expired_subs = [s for s in all_subs if s.status == SubscriptionStatus.EXPIRED.value and not s.is_trial]
+        expired_subs = [s for s in all_subs if s.status == SubscriptionStatus.EXPIRED.value and s.is_trial is False]
         if not expired_subs:
             subscription = None
         else:
@@ -2154,9 +2154,10 @@ async def try_auto_extend_expired_after_topup(
         return False
 
     # Only process expired subscriptions (not trial, not disabled)
+    # NULL-safe: is_trial can be None in legacy rows — treat as trial
     if subscription.status != SubscriptionStatus.EXPIRED.value:
         return False
-    if subscription.is_trial:
+    if subscription.is_trial is not False:
         return False
 
     # Only process subscriptions expired within the last 30 days
