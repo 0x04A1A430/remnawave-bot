@@ -373,7 +373,22 @@ class MonitoringService:
 
                 user = await get_user_by_id(db, subscription.user_id)
                 if user and self.bot:
-                    await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
+                    # Skip notification if user has another ACTIVE subscription (multi-tariff)
+                    skip_notify = False
+                    if settings.is_multi_tariff_enabled():
+                        other_active = await db.execute(
+                            select(Subscription.id)
+                            .where(
+                                Subscription.user_id == user.id,
+                                Subscription.id != subscription.id,
+                                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                                Subscription.end_date > datetime.now(UTC),
+                            )
+                            .limit(1)
+                        )
+                        skip_notify = other_active.scalar_one_or_none() is not None
+                    if not skip_notify:
+                        await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
 
                 logger.info(
                     "🔴 Подписка пользователя истекла и статус изменен на 'expired'", user_id=subscription.user_id
@@ -965,8 +980,12 @@ class MonitoringService:
         try:
             now = datetime.now(UTC)
 
+            # Lookback window — don't re-check subscriptions expired more than 30 days ago
+            lookback = now - timedelta(days=30)
+
             result = await db.execute(
                 select(Subscription)
+                .join(User, Subscription.user_id == User.id)
                 .options(
                     selectinload(Subscription.user),
                     selectinload(Subscription.tariff),
@@ -974,7 +993,10 @@ class MonitoringService:
                 .where(
                     and_(
                         Subscription.is_trial == False,
+                        Subscription.status == SubscriptionStatus.EXPIRED.value,
                         Subscription.end_date <= now,
+                        Subscription.end_date >= lookback,
+                        User.status == UserStatus.ACTIVE.value,
                     )
                 )
             )
@@ -997,6 +1019,21 @@ class MonitoringService:
 
                 if subscription.end_date is None:
                     continue
+
+                # Skip if user has another ACTIVE subscription — they still have service
+                if settings.is_multi_tariff_enabled():
+                    other_active = await db.execute(
+                        select(Subscription.id)
+                        .where(
+                            Subscription.user_id == user.id,
+                            Subscription.id != subscription.id,
+                            Subscription.status == SubscriptionStatus.ACTIVE.value,
+                            Subscription.end_date > now,
+                        )
+                        .limit(1)
+                    )
+                    if other_active.scalar_one_or_none() is not None:
+                        continue
 
                 time_since_end = now - subscription.end_date
                 if time_since_end.total_seconds() < 0:
@@ -1090,6 +1127,7 @@ class MonitoringService:
 
         result = await db.execute(
             select(Subscription)
+            .join(User, Subscription.user_id == User.id)
             .options(
                 selectinload(Subscription.user),
                 selectinload(Subscription.tariff),
@@ -1100,6 +1138,7 @@ class MonitoringService:
                     Subscription.is_trial == False,
                     Subscription.end_date > current_time,
                     Subscription.end_date <= threshold_date,
+                    User.status == UserStatus.ACTIVE.value,
                 )
             )
         )
