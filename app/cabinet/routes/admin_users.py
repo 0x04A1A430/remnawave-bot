@@ -913,12 +913,9 @@ async def get_subscription_request_history(
 
     panel_uuid = None
     if settings.is_multi_tariff_enabled() and subscription_id:
-        from sqlalchemy import select as sa_select
+        from app.database.crud.subscription import get_subscription_by_id_for_user
 
-        from app.database.models import Subscription
-
-        sub_result = await db.execute(sa_select(Subscription).where(Subscription.id == subscription_id))
-        sub = sub_result.scalar_one_or_none()
+        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
         if sub:
             panel_uuid = sub.remnawave_uuid
     else:
@@ -928,9 +925,15 @@ async def get_subscription_request_history(
         return {'total': 0, 'records': []}
 
     try:
-        api = RemnaWaveService().api
-        result = await api.get_subscription_request_history(panel_uuid, offset=offset, limit=limit)
-        return result
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return {'total': 0, 'records': []}
+
+        async with service.get_api_client() as api:
+            result = await api.get_subscription_request_history(panel_uuid, offset=offset, limit=limit)
+            return result
     except Exception as e:
         logger.error('Error getting subscription request history', user_id=user_id, error=e)
         return {'total': 0, 'records': []}
