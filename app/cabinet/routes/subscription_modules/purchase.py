@@ -895,8 +895,14 @@ async def purchase_tariff(
             except Exception as trial_err:
                 logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
         try:
-            if subscription.remnawave_uuid:
-                # Existing subscription with Remnawave user — update it
+            # Mirror the bot handler logic: in single-tariff mode, check user.remnawave_uuid
+            # (webhook clears it on panel deletion), not subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(user, 'remnawave_uuid', None)
+
+            if not _should_create:
                 await service.update_remnawave_user(
                     db,
                     subscription,
@@ -905,7 +911,6 @@ async def purchase_tariff(
                     sync_squads=True,
                 )
             else:
-                # New subscription — create new Remnawave user
                 await service.create_remnawave_user(
                     db,
                     subscription,

@@ -1075,8 +1075,8 @@ class RemnaWaveWebhookService:
             subscription.connected_squads = []
             subscription.updated_at = datetime.now(UTC)
 
-            if settings.is_multi_tariff_enabled():
-                subscription.remnawave_uuid = None
+            # Always clear stale UUID — panel user was deleted
+            subscription.remnawave_uuid = None
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
