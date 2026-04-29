@@ -13,6 +13,7 @@ POST /subscription/devices/save-cart
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -380,7 +381,7 @@ async def purchase_devices(
         if end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=UTC)
 
-        days_left = max(1, (end_date - now).days)
+        days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
         total_days = 30  # Base period for device price calculation
 
         # Устройства в пределах тарифного лимита — бесплатные
@@ -658,7 +659,7 @@ async def save_devices_cart(
     if end_date.tzinfo is None:
         end_date = end_date.replace(tzinfo=UTC)
 
-    days_left = max(1, (end_date - now).days)
+    days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
 
     # Устройства в пределах тарифного лимита — бесплатные
@@ -772,7 +773,7 @@ async def get_device_price(
     if end_date.tzinfo is None:
         end_date = end_date.replace(tzinfo=UTC)
 
-    days_left = max(1, (end_date - now).days)
+    days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
 
     # Устройства в пределах тарифного лимита — бесплатные

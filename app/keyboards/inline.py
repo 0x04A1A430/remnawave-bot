@@ -1,3 +1,4 @@
+import math
 from datetime import UTC, datetime
 
 import structlog
@@ -2169,7 +2170,7 @@ def get_add_traffic_keyboard(
     # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
         now = datetime.now(UTC)
-        days_left = max(1, (subscription_end_date - now).days)
+        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
         period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
     else:
@@ -2311,7 +2312,7 @@ def get_change_devices_keyboard(
     # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
         now = datetime.now(UTC)
-        days_left = max(1, (subscription_end_date - now).days)
+        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
         period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
     else:
@@ -2473,7 +2474,7 @@ def get_manage_countries_keyboard(
     # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
         now = datetime.now(UTC)
-        days_left = max(1, (subscription_end_date - now).days)
+        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
         logger.info(
             '🔍 Расчет для управления странами: осталось дней до',
