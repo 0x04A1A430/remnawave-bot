@@ -924,7 +924,7 @@ async def purchase_tariff(
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=user.id,
-                action='create' if not subscription.remnawave_uuid else 'update',
+                action='create' if _should_create else 'update',
             )
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
