@@ -890,7 +890,7 @@ async def _execute_for_subscription(
 async def bulk_execute(
     request: BulkExecuteRequest,
     stream: bool = Query(default=False, description='Stream progress via SSE'),
-    admin: User = Depends(require_permission('users:edit')),
+    admin: User = Depends(require_permission('bulk_actions:execute')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Execute a bulk action on multiple users or subscriptions.
