@@ -391,7 +391,10 @@ async def _sync_subscription_to_panel(
                     changes['action'] = 'updated'
                     logger.info('Updated user in Remnawave panel', user_id=user.id)
                 except Exception as update_error:
-                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
+                    if (
+                        hasattr(update_error, 'status_code') and update_error.status_code == 404
+                    ) or error_code == 'A018':
                         panel_uuid = None  # Will create new
                     else:
                         raise
@@ -3406,7 +3409,10 @@ async def sync_user_to_panel(
                     await api.update_user(**update_kwargs)
                     action = 'updated'
                 except Exception as update_error:
-                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
+                    if (
+                        hasattr(update_error, 'status_code') and update_error.status_code == 404
+                    ) or error_code == 'A018':
                         # User not found in panel, create new
                         panel_uuid = None
                     else:
