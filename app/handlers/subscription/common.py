@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import html as html_mod
+import math
 import re
 import time
 from datetime import UTC, datetime
@@ -545,7 +546,7 @@ def get_traffic_switch_keyboard(
     # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
         now = datetime.now(UTC)
-        days_left = max(1, (subscription_end_date - now).days)
+        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
         period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
     else:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -1533,7 +1534,7 @@ async def _auto_add_devices(
 
     # Recompute price fresh under lock (pricing config may have changed since cart was saved)
     devices_price_per_month = devices_to_add * tariff_device_price
-    days_left = max(1, (subscription.end_date - datetime.now(UTC)).days)
+    days_left = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
     devices_discount_percent = PricingEngine.get_addon_discount_percent(
         user,
         'devices',
