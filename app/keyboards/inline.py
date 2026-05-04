@@ -2060,6 +2060,46 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_lava_card_enabled():
+        lava_card_name = settings.get_lava_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_LAVA_CARD', f'💳 {lava_card_name}'),
+                    callback_data=_build_callback('lava_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_lava_sbp_enabled():
+        lava_sbp_name = settings.get_lava_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_LAVA_SBP', f'📱 {lava_sbp_name}'),
+                    callback_data=_build_callback('lava_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_lava_enabled()
+        and not settings.is_lava_card_enabled()
+        and not settings.is_lava_sbp_enabled()
+    ):
+        lava_name = settings.get_lava_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_LAVA', f'🌋 {lava_name}'),
+                    callback_data=_build_callback('lava'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

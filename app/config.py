@@ -753,6 +753,25 @@ class Settings(BaseSettings):
     DONUT_SBP_QR_ENABLED: bool = False
     DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
 
+    # Lava (Lava Business API, gate.lava.ru)
+    LAVA_ENABLED: bool = False
+    LAVA_BASE_URL: str = 'https://gate.lava.ru'
+    LAVA_SHOP_ID: str | None = None  # UUID проекта
+    LAVA_SECRET_KEY: str | None = None  # secret_key — для подписи запросов
+    LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
+    LAVA_DISPLAY_NAME: str = 'Lava'
+    LAVA_CURRENCY: str = 'RUB'
+    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    LAVA_WEBHOOK_PATH: str = '/lava-webhook'
+    LAVA_RETURN_URL: str | None = None
+    LAVA_PAYMENT_LIFETIME_MINUTES: int = 60  # макс 7200 минут (5 дней)
+    # Sub-методы Lava (фильтр через includeService/excludeService на стороне Lava)
+    LAVA_CARD_ENABLED: bool = False
+    LAVA_CARD_DISPLAY_NAME: str = 'Карта (Lava)'
+    LAVA_SBP_ENABLED: bool = False
+    LAVA_SBP_DISPLAY_NAME: str = 'СБП (Lava)'
+
     # Etoplatezhi (paymentpage.etoplatezhi.ru)
     ETOPLATEZHI_ENABLED: bool = False
     ETOPLATEZHI_PROJECT_ID: int | None = None
@@ -2342,6 +2361,41 @@ class Settings(BaseSettings):
 
     def get_donut_sbp_qr_display_name_html(self) -> str:
         return html.escape(self.get_donut_sbp_qr_display_name())
+
+    def is_lava_enabled(self) -> bool:
+        return (
+            self.LAVA_ENABLED
+            and self.LAVA_SHOP_ID is not None
+            and self.LAVA_SECRET_KEY is not None
+            and self.LAVA_WEBHOOK_SECRET is not None
+        )
+
+    def get_lava_display_name(self) -> str:
+        name = (self.LAVA_DISPLAY_NAME or '').strip()
+        return name if name else 'Lava'
+
+    def get_lava_display_name_html(self) -> str:
+        return html.escape(self.get_lava_display_name())
+
+    def is_lava_card_enabled(self) -> bool:
+        return self.LAVA_CARD_ENABLED and self.is_lava_enabled()
+
+    def get_lava_card_display_name(self) -> str:
+        name = (self.LAVA_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Lava)'
+
+    def get_lava_card_display_name_html(self) -> str:
+        return html.escape(self.get_lava_card_display_name())
+
+    def is_lava_sbp_enabled(self) -> bool:
+        return self.LAVA_SBP_ENABLED and self.is_lava_enabled()
+
+    def get_lava_sbp_display_name(self) -> str:
+        name = (self.LAVA_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Lava)'
+
+    def get_lava_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_lava_sbp_display_name())
 
     def is_etoplatezhi_enabled(self) -> bool:
         return (

@@ -1610,6 +1610,54 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # Lava webhook (Lava Business)
+    if settings.is_lava_enabled():
+
+        @router.get(settings.LAVA_WEBHOOK_PATH)
+        async def lava_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'lava_webhook',
+                    'enabled': settings.is_lava_enabled(),
+                }
+            )
+
+        @router.post(settings.LAVA_WEBHOOK_PATH)
+        async def lava_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Lava webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.lava_service import lava_service
+
+            received_signature = (request.headers.get('Authorization') or '').strip()
+            if not lava_service.verify_webhook_signature(raw_body, received_signature):
+                logger.warning('Lava webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_lava_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Lava webhook processing failed',
+                        order_id=payload.get('order_id'),
+                        invoice_id=payload.get('invoice_id'),
+                    )
+            except Exception as e:
+                logger.exception('Lava webhook processing error', error=e)
+            # Lava ожидает HTTP 200 как подтверждение приёма; иначе будет повтор до 5 раз раз в 150с
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # Donut webhook (Donut P2P)
     if settings.is_donut_enabled():
 
@@ -1684,6 +1732,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'antilopay_enabled': settings.is_antilopay_enabled(),
                     'jupiter_enabled': settings.is_jupiter_enabled(),
                     'donut_enabled': settings.is_donut_enabled(),
+                    'lava_enabled': settings.is_lava_enabled(),
                 }
             )
 

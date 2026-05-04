@@ -38,6 +38,7 @@ from app.services.payment.etoplatezhi import EtoplatezhiPaymentMixin
 from app.services.payment.freekassa import FreekassaPaymentMixin
 from app.services.payment.jupiter import JupiterPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
+from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
@@ -626,6 +627,41 @@ async def link_donut_payment_to_transaction(*args, **kwargs):
     return await donut_crud.link_donut_payment_to_transaction(*args, **kwargs)
 
 
+async def create_lava_payment(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.create_lava_payment(*args, **kwargs)
+
+
+async def get_lava_payment_by_order_id(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.get_lava_payment_by_order_id(*args, **kwargs)
+
+
+async def get_lava_payment_by_invoice_id(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.get_lava_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_lava_payment_by_id(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.get_lava_payment_by_id(*args, **kwargs)
+
+
+async def get_lava_payment_by_id_for_update(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.get_lava_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_lava_payment_status(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.update_lava_payment_status(*args, **kwargs)
+
+
+async def link_lava_payment_to_transaction(*args, **kwargs):
+    lava_crud = import_module('app.database.crud.lava')
+    return await lava_crud.link_lava_payment_to_transaction(*args, **kwargs)
+
+
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
@@ -657,6 +693,7 @@ class PaymentService(
     AntilopayPaymentMixin,
     JupiterPaymentMixin,
     DonutPaymentMixin,
+    LavaPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1249,6 +1286,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('order_id'),
                     'provider': 'donut',
+                }
+            return None
+
+        # --- Lava -------------------------------------------------------------
+        if payment_method == 'lava':
+            if not settings.is_lava_enabled():
+                logger.warning('Lava is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_lava_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'lava')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'lava',
                 }
             return None
 

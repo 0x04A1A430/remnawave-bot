@@ -230,6 +230,16 @@ def _get_method_defaults() -> dict:
                 {'id': 'sbp_qr', 'name': 'СБП QR'},
             ],
         },
+        'lava': {
+            'default_display_name': settings.get_lava_display_name(),
+            'is_configured': settings.is_lava_enabled(),
+            'default_min': settings.LAVA_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.LAVA_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': [
+                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': 'СБП'},
+            ],
+        },
     }
 
 
@@ -280,6 +290,7 @@ DEFAULT_METHOD_ORDER = [
     'antilopay',
     'jupiter',
     'donut',
+    'lava',
 ]
 
 
