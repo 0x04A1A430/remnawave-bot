@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.54.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.53.0...v3.54.0) (2026-05-04)
+
+
+### New Features
+
+* add subscription reissue with 15-min cooldown ([1ab1ff9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1ab1ff90bf6fc243da45a53b2d549464e47c2f31))
+* Apple IAP integration with security hardening ([ecde2fb](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ecde2fb8f05620889f45fea4410e9069b99340a5))
+* integrate Antilopay payment provider (API v2) ([7196642](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/719664208e94fe1e528ff0f85f500e5b96555dc9))
+* integrate Etoplatezhi payment provider ([6524f66](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6524f66da2717001aba99831f8dec93ad8f6e6f8))
+* integrate Jupiter (FPGate P2P) and Donut payment providers ([f321ded](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f321ded9c0033ff3848a92aef44cbfef7f8d3883))
+* integrate Lava Business payment provider ([afea054](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/afea054c8f8898d076d667c2d17248052578cbce))
+
+
+### Bug Fixes
+
+* add pycryptodome dependency for Antilopay RSA signing ([3fce648](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/3fce64858cc4e536ab32acc4c68213c208b6081c))
+* apple refund handler — lock apple_transactions row to prevent double deduction ([e85c40f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e85c40f8cdca1e3392da06f6539f0043f923b731))
+* AuraPay webhook signature + add SBP/Card payment method selection ([17ac3da](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/17ac3da3c4da0f36015e338451a22a1a7a433524))
+* expired_1d notification — use PricingEngine instead of hardcoded PRICE_30_DAYS ([2478ff7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2478ff7c3d0c426c5f64dec71d17df13de60702a))
+* guide mode buttons — support external type alias, extract urlScheme from blocks ([2385814](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2385814d77c6b847fb0df248b5aaaa2ff27fd20e))
+* persist campaign across bot→webapp registration handoff via Redis ([99648a9](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/99648a956e20cb99d406455db2f26db469ba7235))
+* register all providers in payment search and verification services ([cd8be32](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cd8be326716e2c3253d9b2935da1a7927725c9af))
+* **tests:** clean up pre-existing ruff lint warnings in apple_iap tests ([0d06467](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0d0646770d2a1cdccec14ea3b78dc12412f95d0a))
+
 ## [3.53.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.52.1...v3.53.0) (2026-04-29)
 
 
