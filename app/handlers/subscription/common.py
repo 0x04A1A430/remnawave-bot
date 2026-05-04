@@ -406,11 +406,37 @@ async def get_apps_for_platform_async(device_type: str, language: str = 'ru') ->
 
 def normalize_app(app: dict[str, Any]) -> dict[str, Any]:
     """Normalize Remnawave app dict to a unified format with blocks."""
+
+    # Extract urlScheme from blocks if not present at root level
+    url_scheme = app.get('urlScheme', '')
+
+    if not url_scheme:
+        # Try to extract from subscriptionLink button in blocks
+        blocks = app.get('blocks', [])
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            buttons = block.get('buttons', [])
+            for btn in buttons:
+                if not isinstance(btn, dict):
+                    continue
+                if btn.get('type') == 'subscriptionLink':
+                    link = btn.get('link', '') or btn.get('url', '')
+                    if '{{SUBSCRIPTION_LINK}}' in link:
+                        url_scheme = link.split('{{SUBSCRIPTION_LINK}}')[0]
+                        break
+            if url_scheme:
+                break
+
+    # Validate extracted scheme contains ://
+    if url_scheme and '://' not in url_scheme:
+        url_scheme = ''
+
     return {
         'id': app.get('id', app.get('name', 'unknown')),
         'name': app.get('name', ''),
         'isFeatured': app.get('featured', app.get('isFeatured', False)),
-        'urlScheme': app.get('urlScheme', ''),
+        'urlScheme': url_scheme,
         'isNeedBase64Encoding': app.get('isNeedBase64Encoding', False),
         'blocks': app.get('blocks', []),
         '_raw': app,
