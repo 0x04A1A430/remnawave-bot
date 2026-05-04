@@ -26,6 +26,7 @@ dependencies = [
     'rich>=14.0',
     'aiohttp-socks>=0.10.1',
     'httpx[socks]>=0.27.0',
+    'pycryptodome>=3.21.0',
 ]
 
 [dependency-groups]
