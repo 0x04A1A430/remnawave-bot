@@ -681,6 +681,10 @@ class Settings(BaseSettings):
     AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
     AURAPAY_RETURN_URL: str | None = None
     AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
+    AURAPAY_SBP_ENABLED: bool = False
+    AURAPAY_SBP_DISPLAY_NAME: str = 'СБП (AuraPay)'
+    AURAPAY_CARD_ENABLED: bool = False
+    AURAPAY_CARD_DISPLAY_NAME: str = 'Карта (AuraPay)'
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
@@ -2117,6 +2121,26 @@ class Settings(BaseSettings):
 
     def get_aurapay_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_display_name())
+
+    def is_aurapay_sbp_enabled(self) -> bool:
+        return self.AURAPAY_SBP_ENABLED and self.is_aurapay_enabled()
+
+    def get_aurapay_sbp_display_name(self) -> str:
+        name = (self.AURAPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (AuraPay)'
+
+    def get_aurapay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_sbp_display_name())
+
+    def is_aurapay_card_enabled(self) -> bool:
+        return self.AURAPAY_CARD_ENABLED and self.is_aurapay_enabled()
+
+    def get_aurapay_card_display_name(self) -> str:
+        name = (self.AURAPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (AuraPay)'
+
+    def get_aurapay_card_display_name_html(self) -> str:
+        return html.escape(self.get_aurapay_card_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()

@@ -232,7 +232,35 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
-    if settings.is_aurapay_enabled():
+    if settings.is_aurapay_sbp_enabled():
+        sbp_name = settings.get_aurapay_sbp_display_name()
+        methods.append(
+            {
+                'id': 'aurapay_sbp',
+                'name': sbp_name,
+                'icon': '📱',
+                'description': f'через {sbp_name}',
+                'callback': 'topup_aurapay_sbp',
+            }
+        )
+
+    if settings.is_aurapay_card_enabled():
+        card_name = settings.get_aurapay_card_display_name()
+        methods.append(
+            {
+                'id': 'aurapay_card',
+                'name': card_name,
+                'icon': '💳',
+                'description': f'через {card_name}',
+                'callback': 'topup_aurapay_card',
+            }
+        )
+
+    if (
+        settings.is_aurapay_enabled()
+        and not settings.is_aurapay_sbp_enabled()
+        and not settings.is_aurapay_card_enabled()
+    ):
         aurapay_name = settings.get_aurapay_display_name()
         methods.append(
             {
@@ -381,6 +409,10 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_overpay_enabled()
     if method_id == 'aurapay':
         return settings.is_aurapay_enabled()
+    if method_id == 'aurapay_sbp':
+        return settings.is_aurapay_sbp_enabled()
+    if method_id == 'aurapay_card':
+        return settings.is_aurapay_card_enabled()
     if method_id == 'support':
         return settings.is_support_topup_enabled()
     return False
@@ -409,6 +441,8 @@ def get_payment_method_status() -> dict[str, bool]:
         'rollypay': settings.is_rollypay_enabled(),
         'overpay': settings.is_overpay_enabled(),
         'aurapay': settings.is_aurapay_enabled(),
+        'aurapay_sbp': settings.is_aurapay_sbp_enabled(),
+        'aurapay_card': settings.is_aurapay_card_enabled(),
         'support': settings.is_support_topup_enabled(),
     }
 
