@@ -6,9 +6,10 @@ import base64
 import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -133,7 +134,7 @@ class TestAppleIAPEnabled:
     def test_enabled_with_key_path_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _enable_apple_iap(monkeypatch)
         monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY', None, raising=False)
-        monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', '/tmp/test.p8', raising=False)
+        monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', '/tmp/test.p8', raising=False)  # noqa: S108
         assert settings.is_apple_iap_enabled() is True
 
 
@@ -474,7 +475,7 @@ class TestApplePurchaseRequestSchema:
     def test_rejects_empty_transaction_id(self) -> None:
         from app.cabinet.schemas.apple_iap import ApplePurchaseRequest
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ApplePurchaseRequest(
                 product_id='com.bitnet.vpnclient.topup.100',
                 transaction_id='',
@@ -483,7 +484,7 @@ class TestApplePurchaseRequestSchema:
     def test_rejects_too_long_transaction_id(self) -> None:
         from app.cabinet.schemas.apple_iap import ApplePurchaseRequest
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ApplePurchaseRequest(
                 product_id='com.bitnet.vpnclient.topup.100',
                 transaction_id='1' * 65,
