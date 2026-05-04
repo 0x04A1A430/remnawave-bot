@@ -601,7 +601,6 @@ class WebhookServer:
             product_id = txn_info.get('productId', '')
 
             from app.database.crud.apple_iap import (
-                get_apple_transaction_by_transaction_id,
                 mark_apple_transaction_refunded,
             )
             from app.database.crud.user import lock_user_for_pricing
@@ -611,10 +610,12 @@ class WebhookServer:
             lookup_id = original_txn_id or apple_txn_id
 
             async with AsyncSessionLocal() as db:
-                apple_txn = await get_apple_transaction_by_transaction_id(db, lookup_id)
+                from app.database.crud.apple_iap import get_apple_transaction_by_transaction_id_for_update
+
+                apple_txn = await get_apple_transaction_by_transaction_id_for_update(db, lookup_id)
                 if not apple_txn:
                     # Try the other ID
-                    apple_txn = await get_apple_transaction_by_transaction_id(db, apple_txn_id)
+                    apple_txn = await get_apple_transaction_by_transaction_id_for_update(db, apple_txn_id)
 
                 if not apple_txn:
                     logger.warning(
