@@ -686,6 +686,28 @@ class Settings(BaseSettings):
     AURAPAY_CARD_ENABLED: bool = False
     AURAPAY_CARD_DISPLAY_NAME: str = 'Карта (AuraPay)'
 
+    # Antilopay (lk.antilopay.com)
+    ANTILOPAY_ENABLED: bool = False
+    ANTILOPAY_SECRET_ID: str | None = None
+    ANTILOPAY_PRIVATE_KEY: str | None = None
+    ANTILOPAY_PUBLIC_KEY: str | None = None
+    ANTILOPAY_PROJECT_ID: str | None = None
+    ANTILOPAY_DISPLAY_NAME: str = 'Antilopay'
+    ANTILOPAY_PRODUCT_NAME: str = 'VPN подписка'
+    ANTILOPAY_PRODUCT_TYPE: str = 'services'
+    ANTILOPAY_CURRENCY: str = 'RUB'
+    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ANTILOPAY_WEBHOOK_PATH: str = '/antilopay-webhook'
+    ANTILOPAY_RETURN_URL: str | None = None
+    ANTILOPAY_PAYMENT_LIFETIME_MINUTES: int = 60
+    ANTILOPAY_SBP_ENABLED: bool = False
+    ANTILOPAY_SBP_DISPLAY_NAME: str = 'СБП (Antilopay)'
+    ANTILOPAY_CARD_ENABLED: bool = False
+    ANTILOPAY_CARD_DISPLAY_NAME: str = 'Карта (Antilopay)'
+    ANTILOPAY_SBERPAY_ENABLED: bool = False
+    ANTILOPAY_SBERPAY_DISPLAY_NAME: str = 'SberPay (Antilopay)'
+
     # Etoplatezhi (paymentpage.etoplatezhi.ru)
     ETOPLATEZHI_ENABLED: bool = False
     ETOPLATEZHI_PROJECT_ID: int | None = None
@@ -2157,6 +2179,52 @@ class Settings(BaseSettings):
 
     def get_aurapay_card_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_card_display_name())
+
+    def is_antilopay_enabled(self) -> bool:
+        return (
+            self.ANTILOPAY_ENABLED
+            and self.ANTILOPAY_SECRET_ID is not None
+            and self.ANTILOPAY_PRIVATE_KEY is not None
+            and self.ANTILOPAY_PUBLIC_KEY is not None
+            and self.ANTILOPAY_PROJECT_ID is not None
+        )
+
+    def get_antilopay_display_name(self) -> str:
+        name = (self.ANTILOPAY_DISPLAY_NAME or '').strip()
+        return name if name else 'Antilopay'
+
+    def get_antilopay_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_display_name())
+
+    def is_antilopay_sbp_enabled(self) -> bool:
+        return self.ANTILOPAY_SBP_ENABLED and self.is_antilopay_enabled()
+
+    def get_antilopay_sbp_display_name(self) -> str:
+        name = (self.ANTILOPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Antilopay)'
+
+    def get_antilopay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_sbp_display_name())
+
+    def is_antilopay_card_enabled(self) -> bool:
+        return self.ANTILOPAY_CARD_ENABLED and self.is_antilopay_enabled()
+
+    def get_antilopay_card_display_name(self) -> str:
+        name = (self.ANTILOPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Antilopay)'
+
+    def get_antilopay_card_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_card_display_name())
+
+    def is_antilopay_sberpay_enabled(self) -> bool:
+        return self.ANTILOPAY_SBERPAY_ENABLED and self.is_antilopay_enabled()
+
+    def get_antilopay_sberpay_display_name(self) -> str:
+        name = (self.ANTILOPAY_SBERPAY_DISPLAY_NAME or '').strip()
+        return name or 'SberPay (Antilopay)'
+
+    def get_antilopay_sberpay_display_name_html(self) -> str:
+        return html.escape(self.get_antilopay_sberpay_display_name())
 
     def is_etoplatezhi_enabled(self) -> bool:
         return (

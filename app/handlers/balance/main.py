@@ -184,6 +184,13 @@ async def route_payment_by_method(
             await process_etoplatezhi_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method in ('antilopay', 'antilopay_sbp', 'antilopay_card', 'antilopay_sberpay'):
+        from .antilopay import process_antilopay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_antilopay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'riopay':
         from .riopay import process_riopay_payment_amount
 
@@ -786,6 +793,18 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_etoplatezhi_topup, F.data == 'topup_etoplatezhi')
     dp.callback_query.register(start_etoplatezhi_sbp_topup, F.data == 'topup_etoplatezhi_sbp')
     dp.callback_query.register(start_etoplatezhi_card_topup, F.data == 'topup_etoplatezhi_card')
+
+    from .antilopay import (
+        start_antilopay_card_topup,
+        start_antilopay_sberpay_topup,
+        start_antilopay_sbp_topup,
+        start_antilopay_topup,
+    )
+
+    dp.callback_query.register(start_antilopay_topup, F.data == 'topup_antilopay')
+    dp.callback_query.register(start_antilopay_sbp_topup, F.data == 'topup_antilopay_sbp')
+    dp.callback_query.register(start_antilopay_card_topup, F.data == 'topup_antilopay_card')
+    dp.callback_query.register(start_antilopay_sberpay_topup, F.data == 'topup_antilopay_sberpay')
 
     from .mulenpay import check_mulenpay_payment_status
 

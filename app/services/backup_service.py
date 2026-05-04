@@ -1518,6 +1518,7 @@ class BackupService:
             'overpay_payments',
             'aurapay_payments',
             'etoplatezhi_payments',
+            'antilopay_payments',
             'apple_transactions',
             'saved_payment_methods',
             # --- Content/config ---

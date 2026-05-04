@@ -1930,6 +1930,59 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_antilopay_sbp_enabled():
+        sbp_name = settings.get_antilopay_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY_SBP', f'📱 {sbp_name}'),
+                    callback_data=_build_callback('antilopay_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_antilopay_card_enabled():
+        card_name = settings.get_antilopay_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY_CARD', f'💳 {card_name}'),
+                    callback_data=_build_callback('antilopay_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_antilopay_sberpay_enabled():
+        sberpay_name = settings.get_antilopay_sberpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY_SBERPAY', f'💳 {sberpay_name}'),
+                    callback_data=_build_callback('antilopay_sberpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_antilopay_enabled()
+        and not settings.is_antilopay_sbp_enabled()
+        and not settings.is_antilopay_card_enabled()
+        and not settings.is_antilopay_sberpay_enabled()
+    ):
+        antilopay_name = settings.get_antilopay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ANTILOPAY', f'💳 {antilopay_name}'),
+                    callback_data=_build_callback('antilopay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

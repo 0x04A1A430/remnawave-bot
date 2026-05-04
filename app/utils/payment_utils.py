@@ -312,6 +312,59 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    if settings.is_antilopay_sbp_enabled():
+        sbp_name = settings.get_antilopay_sbp_display_name()
+        methods.append(
+            {
+                'id': 'antilopay_sbp',
+                'name': sbp_name,
+                'icon': '📱',
+                'description': f'через {sbp_name}',
+                'callback': 'topup_antilopay_sbp',
+            }
+        )
+
+    if settings.is_antilopay_card_enabled():
+        card_name = settings.get_antilopay_card_display_name()
+        methods.append(
+            {
+                'id': 'antilopay_card',
+                'name': card_name,
+                'icon': '💳',
+                'description': f'через {card_name}',
+                'callback': 'topup_antilopay_card',
+            }
+        )
+
+    if settings.is_antilopay_sberpay_enabled():
+        sberpay_name = settings.get_antilopay_sberpay_display_name()
+        methods.append(
+            {
+                'id': 'antilopay_sberpay',
+                'name': sberpay_name,
+                'icon': '💳',
+                'description': f'через {sberpay_name}',
+                'callback': 'topup_antilopay_sberpay',
+            }
+        )
+
+    if (
+        settings.is_antilopay_enabled()
+        and not settings.is_antilopay_sbp_enabled()
+        and not settings.is_antilopay_card_enabled()
+        and not settings.is_antilopay_sberpay_enabled()
+    ):
+        antilopay_name = settings.get_antilopay_display_name()
+        methods.append(
+            {
+                'id': 'antilopay',
+                'name': antilopay_name,
+                'icon': '💳',
+                'description': f'через {antilopay_name}',
+                'callback': 'topup_antilopay',
+            }
+        )
+
     if settings.is_support_topup_enabled():
         methods.append(
             {
@@ -459,6 +512,14 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_etoplatezhi_sbp_enabled()
     if method_id == 'etoplatezhi_card':
         return settings.is_etoplatezhi_card_enabled()
+    if method_id == 'antilopay':
+        return settings.is_antilopay_enabled()
+    if method_id == 'antilopay_sbp':
+        return settings.is_antilopay_sbp_enabled()
+    if method_id == 'antilopay_card':
+        return settings.is_antilopay_card_enabled()
+    if method_id == 'antilopay_sberpay':
+        return settings.is_antilopay_sberpay_enabled()
     if method_id == 'support':
         return settings.is_support_topup_enabled()
     return False
@@ -492,6 +553,10 @@ def get_payment_method_status() -> dict[str, bool]:
         'etoplatezhi': settings.is_etoplatezhi_enabled(),
         'etoplatezhi_sbp': settings.is_etoplatezhi_sbp_enabled(),
         'etoplatezhi_card': settings.is_etoplatezhi_card_enabled(),
+        'antilopay': settings.is_antilopay_enabled(),
+        'antilopay_sbp': settings.is_antilopay_sbp_enabled(),
+        'antilopay_card': settings.is_antilopay_card_enabled(),
+        'antilopay_sberpay': settings.is_antilopay_sberpay_enabled(),
         'support': settings.is_support_topup_enabled(),
     }
 
@@ -538,5 +603,7 @@ def get_enabled_payment_methods_count() -> int:
     if settings.is_aurapay_enabled():
         count += 1
     if settings.is_etoplatezhi_enabled():
+        count += 1
+    if settings.is_antilopay_enabled():
         count += 1
     return count

@@ -1516,6 +1516,54 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # Antilopay webhook
+    if settings.is_antilopay_enabled():
+
+        @router.get(settings.ANTILOPAY_WEBHOOK_PATH)
+        async def antilopay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'antilopay_webhook',
+                    'enabled': settings.is_antilopay_enabled(),
+                }
+            )
+
+        @router.post(settings.ANTILOPAY_WEBHOOK_PATH)
+        async def antilopay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Antilopay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Подпись в заголовке X-Apay-Callback, верифицируется публичным ключом
+            from app.services.antilopay_service import antilopay_service
+
+            callback_signature = request.headers.get('X-Apay-Callback') or ''
+            if not antilopay_service.verify_callback_signature(raw_body, callback_signature):
+                logger.warning('Antilopay webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_antilopay_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Antilopay webhook processing failed',
+                        data=payload.get('payment_id'),
+                    )
+            except Exception as e:
+                logger.exception('Antilopay webhook processing error', error=e)
+            # Always return 200 — Antilopay retries every 3min for 1hr on non-200
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     if routes_registered:
 
         @router.get('/health/payment-webhooks')
@@ -1541,6 +1589,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'overpay_enabled': settings.is_overpay_enabled(),
                     'aurapay_enabled': settings.is_aurapay_enabled(),
                     'etoplatezhi_enabled': settings.is_etoplatezhi_enabled(),
+                    'antilopay_enabled': settings.is_antilopay_enabled(),
                 }
             )
 

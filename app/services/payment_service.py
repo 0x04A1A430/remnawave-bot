@@ -30,6 +30,7 @@ from app.services.payment import (
     WataPaymentMixin,
     YooKassaPaymentMixin,
 )
+from app.services.payment.antilopay import AntilopayPaymentMixin
 from app.services.payment.aurapay import AuraPayPaymentMixin
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
 from app.services.payment.etoplatezhi import EtoplatezhiPaymentMixin
@@ -518,6 +519,41 @@ async def link_etoplatezhi_payment_to_transaction(*args, **kwargs):
     return await etoplatezhi_crud.link_etoplatezhi_payment_to_transaction(*args, **kwargs)
 
 
+async def create_antilopay_payment(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.create_antilopay_payment(*args, **kwargs)
+
+
+async def get_antilopay_payment_by_order_id(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.get_antilopay_payment_by_order_id(*args, **kwargs)
+
+
+async def get_antilopay_payment_by_invoice_id(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.get_antilopay_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_antilopay_payment_by_id(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.get_antilopay_payment_by_id(*args, **kwargs)
+
+
+async def get_antilopay_payment_by_id_for_update(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.get_antilopay_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_antilopay_payment_status(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.update_antilopay_payment_status(*args, **kwargs)
+
+
+async def link_antilopay_payment_to_transaction(*args, **kwargs):
+    antilopay_crud = import_module('app.database.crud.antilopay')
+    return await antilopay_crud.link_antilopay_payment_to_transaction(*args, **kwargs)
+
+
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
@@ -546,6 +582,7 @@ class PaymentService(
     OverpayPaymentMixin,
     AuraPayPaymentMixin,
     EtoplatezhiPaymentMixin,
+    AntilopayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1072,6 +1109,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('order_id'),
                     'provider': 'etoplatezhi',
+                }
+            return None
+
+        # --- Antilopay --------------------------------------------------------
+        if payment_method == 'antilopay':
+            if not settings.is_antilopay_enabled():
+                logger.warning('Antilopay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_antilopay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'antilopay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'antilopay',
                 }
             return None
 
