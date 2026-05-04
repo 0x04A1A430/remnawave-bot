@@ -286,6 +286,10 @@ class Settings(BaseSettings):
 
     DISPOSABLE_EMAIL_CHECK_ENABLED: bool = True
 
+    # Настройки перевыпуска подписки (revoke + regenerate link)
+    SUBSCRIPTION_REVOKE_ENABLED: bool = True
+    SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS: int = 900  # 15 minutes
+
     # Настройки простой покупки
     SIMPLE_SUBSCRIPTION_ENABLED: bool = False
     SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
@@ -1802,6 +1806,10 @@ class Settings(BaseSettings):
 
     def get_disabled_mode_device_limit(self) -> int | None:
         return self.get_devices_selection_disabled_amount()
+
+    def is_subscription_revoke_enabled(self) -> bool:
+        """Проверяет, включен ли перевыпуск подписки."""
+        return self.SUBSCRIPTION_REVOKE_ENABLED
 
     def is_multi_tariff_enabled(self) -> bool:
         """Проверяет, включен ли мультитарифный режим."""

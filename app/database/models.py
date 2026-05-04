@@ -1808,6 +1808,7 @@ class Subscription(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     last_webhook_update_at = Column(AwareDateTime(), nullable=True)
+    last_revoke_at = Column(AwareDateTime(), nullable=True)
 
     remnawave_short_uuid = Column(String(255), nullable=True)
     remnawave_uuid = Column(String(255), nullable=True)

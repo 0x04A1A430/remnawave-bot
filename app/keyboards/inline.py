@@ -3119,6 +3119,16 @@ def get_updated_subscription_settings_keyboard(
         ]
     )
 
+    if settings.is_subscription_revoke_enabled():
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SUBSCRIPTION_REVOKE_BTN', '🔄 Перевыпустить подписку'),
+                    callback_data='subscription_revoke',
+                )
+            ]
+        )
+
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
