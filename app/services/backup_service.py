@@ -31,6 +31,7 @@ from app.database.models import (
     AdminRole,
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    AppleTransaction,
     AuraPayPayment,
     BroadcastHistory,
     ButtonClickLog,
@@ -204,6 +205,7 @@ class BackupService:
             RollyPayPayment,
             OverpayPayment,
             AuraPayPayment,
+            AppleTransaction,
             SavedPaymentMethod,
             # --- Settings/content ---
             PaymentMethodConfig,
@@ -1515,6 +1517,7 @@ class BackupService:
             'rollypay_payments',
             'overpay_payments',
             'aurapay_payments',
+            'apple_transactions',
             'saved_payment_methods',
             # --- Content/config ---
             'pinned_messages',
