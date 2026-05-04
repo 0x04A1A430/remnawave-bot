@@ -1983,6 +1983,83 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_jupiter_sbp_enabled():
+        jupiter_sbp_name = settings.get_jupiter_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_JUPITER_SBP', f'📱 {jupiter_sbp_name}'),
+                    callback_data=_build_callback('jupiter_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_jupiter_enabled() and not settings.is_jupiter_sbp_enabled():
+        jupiter_name = settings.get_jupiter_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_JUPITER', f'🪐 {jupiter_name}'),
+                    callback_data=_build_callback('jupiter'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_donut_card_enabled():
+        donut_card_name = settings.get_donut_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT_CARD', f'💳 {donut_card_name}'),
+                    callback_data=_build_callback('donut_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_donut_sbp_enabled():
+        donut_sbp_name = settings.get_donut_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT_SBP', f'📱 {donut_sbp_name}'),
+                    callback_data=_build_callback('donut_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_donut_sbp_qr_enabled():
+        donut_qr_name = settings.get_donut_sbp_qr_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT_SBP_QR', f'🏦 {donut_qr_name}'),
+                    callback_data=_build_callback('donut_sbp_qr'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_donut_enabled()
+        and not settings.is_donut_card_enabled()
+        and not settings.is_donut_sbp_enabled()
+        and not settings.is_donut_sbp_qr_enabled()
+    ):
+        donut_name = settings.get_donut_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_DONUT', f'🍩 {donut_name}'),
+                    callback_data=_build_callback('donut'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

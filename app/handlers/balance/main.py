@@ -191,6 +191,20 @@ async def route_payment_by_method(
             await process_antilopay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method in ('jupiter', 'jupiter_sbp'):
+        from .jupiter import process_jupiter_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_jupiter_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method in ('donut', 'donut_card', 'donut_sbp', 'donut_sbp_qr'):
+        from .donut import process_donut_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_donut_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'riopay':
         from .riopay import process_riopay_payment_amount
 
@@ -805,6 +819,23 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_antilopay_sbp_topup, F.data == 'topup_antilopay_sbp')
     dp.callback_query.register(start_antilopay_card_topup, F.data == 'topup_antilopay_card')
     dp.callback_query.register(start_antilopay_sberpay_topup, F.data == 'topup_antilopay_sberpay')
+
+    from .jupiter import start_jupiter_sbp_topup, start_jupiter_topup
+
+    dp.callback_query.register(start_jupiter_topup, F.data == 'topup_jupiter')
+    dp.callback_query.register(start_jupiter_sbp_topup, F.data == 'topup_jupiter_sbp')
+
+    from .donut import (
+        start_donut_card_topup,
+        start_donut_sbp_qr_topup,
+        start_donut_sbp_topup,
+        start_donut_topup,
+    )
+
+    dp.callback_query.register(start_donut_topup, F.data == 'topup_donut')
+    dp.callback_query.register(start_donut_card_topup, F.data == 'topup_donut_card')
+    dp.callback_query.register(start_donut_sbp_topup, F.data == 'topup_donut_sbp')
+    dp.callback_query.register(start_donut_sbp_qr_topup, F.data == 'topup_donut_sbp_qr')
 
     from .mulenpay import check_mulenpay_payment_status
 

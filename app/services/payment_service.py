@@ -33,8 +33,10 @@ from app.services.payment import (
 from app.services.payment.antilopay import AntilopayPaymentMixin
 from app.services.payment.aurapay import AuraPayPaymentMixin
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
+from app.services.payment.donut import DonutPaymentMixin
 from app.services.payment.etoplatezhi import EtoplatezhiPaymentMixin
 from app.services.payment.freekassa import FreekassaPaymentMixin
+from app.services.payment.jupiter import JupiterPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paypear import PayPearPaymentMixin
@@ -554,6 +556,76 @@ async def link_antilopay_payment_to_transaction(*args, **kwargs):
     return await antilopay_crud.link_antilopay_payment_to_transaction(*args, **kwargs)
 
 
+async def create_jupiter_payment(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.create_jupiter_payment(*args, **kwargs)
+
+
+async def get_jupiter_payment_by_order_id(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.get_jupiter_payment_by_order_id(*args, **kwargs)
+
+
+async def get_jupiter_payment_by_invoice_id(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.get_jupiter_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_jupiter_payment_by_id(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.get_jupiter_payment_by_id(*args, **kwargs)
+
+
+async def get_jupiter_payment_by_id_for_update(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.get_jupiter_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_jupiter_payment_status(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.update_jupiter_payment_status(*args, **kwargs)
+
+
+async def link_jupiter_payment_to_transaction(*args, **kwargs):
+    jupiter_crud = import_module('app.database.crud.jupiter')
+    return await jupiter_crud.link_jupiter_payment_to_transaction(*args, **kwargs)
+
+
+async def create_donut_payment(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.create_donut_payment(*args, **kwargs)
+
+
+async def get_donut_payment_by_order_id(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.get_donut_payment_by_order_id(*args, **kwargs)
+
+
+async def get_donut_payment_by_invoice_id(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.get_donut_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_donut_payment_by_id(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.get_donut_payment_by_id(*args, **kwargs)
+
+
+async def get_donut_payment_by_id_for_update(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.get_donut_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_donut_payment_status(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.update_donut_payment_status(*args, **kwargs)
+
+
+async def link_donut_payment_to_transaction(*args, **kwargs):
+    donut_crud = import_module('app.database.crud.donut')
+    return await donut_crud.link_donut_payment_to_transaction(*args, **kwargs)
+
+
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
@@ -583,6 +655,8 @@ class PaymentService(
     AuraPayPaymentMixin,
     EtoplatezhiPaymentMixin,
     AntilopayPaymentMixin,
+    JupiterPaymentMixin,
+    DonutPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1131,6 +1205,50 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('order_id'),
                     'provider': 'antilopay',
+                }
+            return None
+
+        # --- Jupiter ----------------------------------------------------------
+        if payment_method == 'jupiter':
+            if not settings.is_jupiter_enabled():
+                logger.warning('Jupiter is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_jupiter_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'jupiter')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'jupiter',
+                }
+            return None
+
+        # --- Donut ------------------------------------------------------------
+        if payment_method == 'donut':
+            if not settings.is_donut_enabled():
+                logger.warning('Donut is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_donut_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'donut')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'donut',
                 }
             return None
 

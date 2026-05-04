@@ -712,6 +712,47 @@ class Settings(BaseSettings):
     ANTILOPAY_SBERPAY_ENABLED: bool = False
     ANTILOPAY_SBERPAY_DISPLAY_NAME: str = 'SberPay (Antilopay)'
 
+    # Jupiter (FPGate P2P v2.1, app.juppiter.tech)
+    JUPITER_ENABLED: bool = False
+    JUPITER_TOKEN: str | None = None
+    JUPITER_SECRET: str | None = None
+    JUPITER_BASE_URL: str = 'https://app.juppiter.tech'
+    JUPITER_METHOD_ID: str | None = None
+    JUPITER_METHOD_DESCRIPTION: str = 'SBP'
+    JUPITER_DISPLAY_NAME: str = 'Jupiter'
+    JUPITER_CURRENCY: str = 'RUB'
+    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    JUPITER_WEBHOOK_PATH: str = '/jupiter-webhook'
+    JUPITER_RETURN_URL: str | None = None
+    JUPITER_PAYMENT_LIFETIME_MINUTES: int = 60
+    JUPITER_FALLBACK_EMAIL: str = 'user@vpn.bot'
+    JUPITER_FALLBACK_PHONE: str = '0000000000'
+    JUPITER_FALLBACK_NAME: str = 'User'
+    JUPITER_SBP_ENABLED: bool = False
+    JUPITER_SBP_DISPLAY_NAME: str = 'СБП (Jupiter)'
+
+    # Donut (Donut P2P, gw.donut.business)
+    DONUT_ENABLED: bool = False
+    DONUT_TOKEN: str | None = None
+    DONUT_SECRET: str | None = None
+    DONUT_BASE_URL: str = 'https://gw.donut.business'
+    DONUT_METHOD_ID: str | None = None
+    DONUT_DISPLAY_NAME: str = 'Donut'
+    DONUT_CURRENCY: str = 'RUB'
+    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    DONUT_WEBHOOK_PATH: str = '/donut-webhook'
+    DONUT_RETURN_URL: str | None = None
+    DONUT_PAYMENT_LIFETIME_MINUTES: int = 60
+    # Sub-методы Donut (description в PayIn запросе)
+    DONUT_CARD_ENABLED: bool = False
+    DONUT_CARD_DISPLAY_NAME: str = 'Карта (Donut)'
+    DONUT_SBP_ENABLED: bool = False
+    DONUT_SBP_DISPLAY_NAME: str = 'СБП (Donut)'
+    DONUT_SBP_QR_ENABLED: bool = False
+    DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
+
     # Etoplatezhi (paymentpage.etoplatezhi.ru)
     ETOPLATEZHI_ENABLED: bool = False
     ETOPLATEZHI_PROJECT_ID: int | None = None
@@ -2233,6 +2274,74 @@ class Settings(BaseSettings):
 
     def get_antilopay_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_sberpay_display_name())
+
+    def is_jupiter_enabled(self) -> bool:
+        return (
+            self.JUPITER_ENABLED
+            and self.JUPITER_TOKEN is not None
+            and self.JUPITER_SECRET is not None
+        )
+
+    def get_jupiter_display_name(self) -> str:
+        name = (self.JUPITER_DISPLAY_NAME or '').strip()
+        return name if name else 'Jupiter'
+
+    def get_jupiter_display_name_html(self) -> str:
+        return html.escape(self.get_jupiter_display_name())
+
+    def is_jupiter_sbp_enabled(self) -> bool:
+        return self.JUPITER_SBP_ENABLED and self.is_jupiter_enabled()
+
+    def get_jupiter_sbp_display_name(self) -> str:
+        name = (self.JUPITER_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Jupiter)'
+
+    def get_jupiter_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_jupiter_sbp_display_name())
+
+    def is_donut_enabled(self) -> bool:
+        return (
+            self.DONUT_ENABLED
+            and self.DONUT_TOKEN is not None
+            and self.DONUT_SECRET is not None
+        )
+
+    def get_donut_display_name(self) -> str:
+        name = (self.DONUT_DISPLAY_NAME or '').strip()
+        return name if name else 'Donut'
+
+    def get_donut_display_name_html(self) -> str:
+        return html.escape(self.get_donut_display_name())
+
+    def is_donut_card_enabled(self) -> bool:
+        return self.DONUT_CARD_ENABLED and self.is_donut_enabled()
+
+    def get_donut_card_display_name(self) -> str:
+        name = (self.DONUT_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Donut)'
+
+    def get_donut_card_display_name_html(self) -> str:
+        return html.escape(self.get_donut_card_display_name())
+
+    def is_donut_sbp_enabled(self) -> bool:
+        return self.DONUT_SBP_ENABLED and self.is_donut_enabled()
+
+    def get_donut_sbp_display_name(self) -> str:
+        name = (self.DONUT_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Donut)'
+
+    def get_donut_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_donut_sbp_display_name())
+
+    def is_donut_sbp_qr_enabled(self) -> bool:
+        return self.DONUT_SBP_QR_ENABLED and self.is_donut_enabled()
+
+    def get_donut_sbp_qr_display_name(self) -> str:
+        name = (self.DONUT_SBP_QR_DISPLAY_NAME or '').strip()
+        return name or 'СБП QR (Donut)'
+
+    def get_donut_sbp_qr_display_name_html(self) -> str:
+        return html.escape(self.get_donut_sbp_qr_display_name())
 
     def is_etoplatezhi_enabled(self) -> bool:
         return (

@@ -1564,6 +1564,98 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # Jupiter webhook (FPGate P2P v2.1)
+    if settings.is_jupiter_enabled():
+
+        @router.get(settings.JUPITER_WEBHOOK_PATH)
+        async def jupiter_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'jupiter_webhook',
+                    'enabled': settings.is_jupiter_enabled(),
+                }
+            )
+
+        @router.post(settings.JUPITER_WEBHOOK_PATH)
+        async def jupiter_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Jupiter webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.jupiter_service import jupiter_service
+
+            if not jupiter_service.verify_callback_signature(payload):
+                logger.warning('Jupiter webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_jupiter_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Jupiter webhook processing failed',
+                        transaction_id=payload.get('transaction_id'),
+                    )
+            except Exception as e:
+                logger.exception('Jupiter webhook processing error', error=e)
+            # FPGate ожидает HTTP 200 как подтверждение приёма callback
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Donut webhook (Donut P2P)
+    if settings.is_donut_enabled():
+
+        @router.get(settings.DONUT_WEBHOOK_PATH)
+        async def donut_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'donut_webhook',
+                    'enabled': settings.is_donut_enabled(),
+                }
+            )
+
+        @router.post(settings.DONUT_WEBHOOK_PATH)
+        async def donut_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Donut webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.donut_service import donut_service
+
+            if not donut_service.verify_callback_signature(payload):
+                logger.warning('Donut webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_donut_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Donut webhook processing failed',
+                        transaction_id=payload.get('transaction_id'),
+                    )
+            except Exception as e:
+                logger.exception('Donut webhook processing error', error=e)
+            # Donut ожидает HTTP 200 как подтверждение приёма callback
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     if routes_registered:
 
         @router.get('/health/payment-webhooks')
@@ -1590,6 +1682,8 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'aurapay_enabled': settings.is_aurapay_enabled(),
                     'etoplatezhi_enabled': settings.is_etoplatezhi_enabled(),
                     'antilopay_enabled': settings.is_antilopay_enabled(),
+                    'jupiter_enabled': settings.is_jupiter_enabled(),
+                    'donut_enabled': settings.is_donut_enabled(),
                 }
             )
 
