@@ -32,6 +32,7 @@ from app.services.payment import (
 )
 from app.services.payment.aurapay import AuraPayPaymentMixin
 from app.services.payment.cloudpayments import CloudPaymentsPaymentMixin
+from app.services.payment.etoplatezhi import EtoplatezhiPaymentMixin
 from app.services.payment.freekassa import FreekassaPaymentMixin
 from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
@@ -482,6 +483,41 @@ async def link_aurapay_payment_to_transaction(*args, **kwargs):
     return await aurapay_crud.link_aurapay_payment_to_transaction(*args, **kwargs)
 
 
+async def create_etoplatezhi_payment(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.create_etoplatezhi_payment(*args, **kwargs)
+
+
+async def get_etoplatezhi_payment_by_order_id(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.get_etoplatezhi_payment_by_order_id(*args, **kwargs)
+
+
+async def get_etoplatezhi_payment_by_invoice_id(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.get_etoplatezhi_payment_by_invoice_id(*args, **kwargs)
+
+
+async def get_etoplatezhi_payment_by_id(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.get_etoplatezhi_payment_by_id(*args, **kwargs)
+
+
+async def get_etoplatezhi_payment_by_id_for_update(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.get_etoplatezhi_payment_by_id_for_update(*args, **kwargs)
+
+
+async def update_etoplatezhi_payment_status(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.update_etoplatezhi_payment_status(*args, **kwargs)
+
+
+async def link_etoplatezhi_payment_to_transaction(*args, **kwargs):
+    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    return await etoplatezhi_crud.link_etoplatezhi_payment_to_transaction(*args, **kwargs)
+
+
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
@@ -509,6 +545,7 @@ class PaymentService(
     RollyPayPaymentMixin,
     OverpayPaymentMixin,
     AuraPayPaymentMixin,
+    EtoplatezhiPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1013,6 +1050,28 @@ class PaymentService(
                     'payment_url': result.get('payment_url'),
                     'payment_id': result.get('aurapay_invoice_id') or result.get('order_id'),
                     'provider': 'aurapay',
+                }
+            return None
+
+        # --- Etoplatezhi ------------------------------------------------------
+        if payment_method == 'etoplatezhi':
+            if not settings.is_etoplatezhi_enabled():
+                logger.warning('Etoplatezhi is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_etoplatezhi_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'etoplatezhi')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'etoplatezhi',
                 }
             return None
 

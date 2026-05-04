@@ -686,6 +686,22 @@ class Settings(BaseSettings):
     AURAPAY_CARD_ENABLED: bool = False
     AURAPAY_CARD_DISPLAY_NAME: str = 'Карта (AuraPay)'
 
+    # Etoplatezhi (paymentpage.etoplatezhi.ru)
+    ETOPLATEZHI_ENABLED: bool = False
+    ETOPLATEZHI_PROJECT_ID: int | None = None
+    ETOPLATEZHI_SECRET_KEY: str | None = None
+    ETOPLATEZHI_DISPLAY_NAME: str = 'Etoplatezhi'
+    ETOPLATEZHI_CURRENCY: str = 'RUB'
+    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ETOPLATEZHI_WEBHOOK_PATH: str = '/etoplatezhi-webhook'
+    ETOPLATEZHI_RETURN_URL: str | None = None
+    ETOPLATEZHI_PAYMENT_LIFETIME_MINUTES: int = 60
+    ETOPLATEZHI_SBP_ENABLED: bool = False
+    ETOPLATEZHI_SBP_DISPLAY_NAME: str = 'СБП (Etoplatezhi)'
+    ETOPLATEZHI_CARD_ENABLED: bool = False
+    ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'Карта (Etoplatezhi)'
+
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
@@ -2141,6 +2157,40 @@ class Settings(BaseSettings):
 
     def get_aurapay_card_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_card_display_name())
+
+    def is_etoplatezhi_enabled(self) -> bool:
+        return (
+            self.ETOPLATEZHI_ENABLED
+            and self.ETOPLATEZHI_PROJECT_ID is not None
+            and self.ETOPLATEZHI_SECRET_KEY is not None
+        )
+
+    def get_etoplatezhi_display_name(self) -> str:
+        name = (self.ETOPLATEZHI_DISPLAY_NAME or '').strip()
+        return name if name else 'Etoplatezhi'
+
+    def get_etoplatezhi_display_name_html(self) -> str:
+        return html.escape(self.get_etoplatezhi_display_name())
+
+    def is_etoplatezhi_sbp_enabled(self) -> bool:
+        return self.ETOPLATEZHI_SBP_ENABLED and self.is_etoplatezhi_enabled()
+
+    def get_etoplatezhi_sbp_display_name(self) -> str:
+        name = (self.ETOPLATEZHI_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (Etoplatezhi)'
+
+    def get_etoplatezhi_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_etoplatezhi_sbp_display_name())
+
+    def is_etoplatezhi_card_enabled(self) -> bool:
+        return self.ETOPLATEZHI_CARD_ENABLED and self.is_etoplatezhi_enabled()
+
+    def get_etoplatezhi_card_display_name(self) -> str:
+        name = (self.ETOPLATEZHI_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (Etoplatezhi)'
+
+    def get_etoplatezhi_card_display_name_html(self) -> str:
+        return html.escape(self.get_etoplatezhi_card_display_name())
 
     def is_kassa_ai_sbp_enabled(self) -> bool:
         return self.KASSA_AI_SBP_ENABLED and self.is_kassa_ai_enabled()

@@ -177,6 +177,13 @@ async def route_payment_by_method(
             await process_aurapay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method in ('etoplatezhi', 'etoplatezhi_sbp', 'etoplatezhi_card'):
+        from .etoplatezhi import process_etoplatezhi_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_etoplatezhi_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'riopay':
         from .riopay import process_riopay_payment_amount
 
@@ -773,6 +780,12 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_aurapay_topup, F.data == 'topup_aurapay')
     dp.callback_query.register(start_aurapay_sbp_topup, F.data == 'topup_aurapay_sbp')
     dp.callback_query.register(start_aurapay_card_topup, F.data == 'topup_aurapay_card')
+
+    from .etoplatezhi import start_etoplatezhi_card_topup, start_etoplatezhi_sbp_topup, start_etoplatezhi_topup
+
+    dp.callback_query.register(start_etoplatezhi_topup, F.data == 'topup_etoplatezhi')
+    dp.callback_query.register(start_etoplatezhi_sbp_topup, F.data == 'topup_etoplatezhi_sbp')
+    dp.callback_query.register(start_etoplatezhi_card_topup, F.data == 'topup_etoplatezhi_card')
 
     from .mulenpay import check_mulenpay_payment_status
 

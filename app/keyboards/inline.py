@@ -1890,6 +1890,46 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_etoplatezhi_sbp_enabled():
+        sbp_name = settings.get_etoplatezhi_sbp_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ETOPLATEZHI_SBP', f'📱 {sbp_name}'),
+                    callback_data=_build_callback('etoplatezhi_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_etoplatezhi_card_enabled():
+        card_name = settings.get_etoplatezhi_card_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ETOPLATEZHI_CARD', f'💳 {card_name}'),
+                    callback_data=_build_callback('etoplatezhi_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if (
+        settings.is_etoplatezhi_enabled()
+        and not settings.is_etoplatezhi_sbp_enabled()
+        and not settings.is_etoplatezhi_card_enabled()
+    ):
+        etoplatezhi_name = settings.get_etoplatezhi_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ETOPLATEZHI', f'💳 {etoplatezhi_name}'),
+                    callback_data=_build_callback('etoplatezhi'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

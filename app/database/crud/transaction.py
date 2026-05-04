@@ -31,6 +31,7 @@ REAL_PAYMENT_METHODS = [
     PaymentMethod.PAYPEAR.value,
     PaymentMethod.OVERPAY.value,
     PaymentMethod.AURAPAY.value,
+    PaymentMethod.ETOPLATEZHI.value,
 ]
 
 
