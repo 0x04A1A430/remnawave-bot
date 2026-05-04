@@ -54,9 +54,7 @@ async def get_jupiter_payment_by_order_id(db: AsyncSession, order_id: str) -> Ju
     return result.scalar_one_or_none()
 
 
-async def get_jupiter_payment_by_invoice_id(
-    db: AsyncSession, jupiter_transaction_id: str
-) -> JupiterPayment | None:
+async def get_jupiter_payment_by_invoice_id(db: AsyncSession, jupiter_transaction_id: str) -> JupiterPayment | None:
     """Получает платёж по transaction_id, выданному Jupiter."""
     result = await db.execute(
         select(JupiterPayment).where(JupiterPayment.jupiter_transaction_id == jupiter_transaction_id)

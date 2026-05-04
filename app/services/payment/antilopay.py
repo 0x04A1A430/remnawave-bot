@@ -398,9 +398,7 @@ class AntilopayPaymentMixin:
             )
             created_transaction = True
 
-        await antilopay_crud.link_antilopay_payment_to_transaction(
-            db, payment=payment, transaction_id=transaction.id
-        )
+        await antilopay_crud.link_antilopay_payment_to_transaction(db, payment=payment, transaction_id=transaction.id)
 
         should_credit_balance = created_transaction or not balance_already_credited
 

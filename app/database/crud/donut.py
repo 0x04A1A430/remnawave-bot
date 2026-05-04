@@ -54,13 +54,9 @@ async def get_donut_payment_by_order_id(db: AsyncSession, order_id: str) -> Donu
     return result.scalar_one_or_none()
 
 
-async def get_donut_payment_by_invoice_id(
-    db: AsyncSession, donut_transaction_id: str
-) -> DonutPayment | None:
+async def get_donut_payment_by_invoice_id(db: AsyncSession, donut_transaction_id: str) -> DonutPayment | None:
     """Получает платёж по transaction_id, выданному Donut."""
-    result = await db.execute(
-        select(DonutPayment).where(DonutPayment.donut_transaction_id == donut_transaction_id)
-    )
+    result = await db.execute(select(DonutPayment).where(DonutPayment.donut_transaction_id == donut_transaction_id))
     return result.scalar_one_or_none()
 
 

@@ -1478,7 +1478,9 @@ class LavaPayment(Base):
         return self.status in ['failed', 'expired', 'cancel', 'cancelled', 'amount_mismatch', 'error']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<LavaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return (
+            f'<LavaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        )
 
 
 class PromoGroup(Base):

@@ -56,9 +56,7 @@ async def get_lava_payment_by_order_id(db: AsyncSession, order_id: str) -> LavaP
 
 async def get_lava_payment_by_invoice_id(db: AsyncSession, lava_invoice_id: str) -> LavaPayment | None:
     """Получает платёж по invoice_id, выданному Lava."""
-    result = await db.execute(
-        select(LavaPayment).where(LavaPayment.lava_invoice_id == lava_invoice_id)
-    )
+    result = await db.execute(select(LavaPayment).where(LavaPayment.lava_invoice_id == lava_invoice_id))
     return result.scalar_one_or_none()
 
 

@@ -2084,11 +2084,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
-    if (
-        settings.is_lava_enabled()
-        and not settings.is_lava_card_enabled()
-        and not settings.is_lava_sbp_enabled()
-    ):
+    if settings.is_lava_enabled() and not settings.is_lava_card_enabled() and not settings.is_lava_sbp_enabled():
         lava_name = settings.get_lava_display_name()
         keyboard.append(
             [

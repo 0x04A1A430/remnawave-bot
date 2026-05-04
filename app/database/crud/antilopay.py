@@ -54,9 +54,7 @@ async def get_antilopay_payment_by_order_id(db: AsyncSession, order_id: str) -> 
     return result.scalar_one_or_none()
 
 
-async def get_antilopay_payment_by_invoice_id(
-    db: AsyncSession, antilopay_payment_id: str
-) -> AntilopayPayment | None:
+async def get_antilopay_payment_by_invoice_id(db: AsyncSession, antilopay_payment_id: str) -> AntilopayPayment | None:
     """Получает платеж по ID от Antilopay."""
     result = await db.execute(
         select(AntilopayPayment).where(AntilopayPayment.antilopay_payment_id == antilopay_payment_id)

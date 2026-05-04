@@ -94,9 +94,7 @@ class JupiterPaymentMixin:
             callback_url = self._build_jupiter_callback_url()
             customer_id = str(tg_id) if tg_id != 'guest' else f'guest-{order_id[-6:]}'
             customer_name = (
-                getattr(user, 'first_name', None)
-                or getattr(user, 'username', None)
-                or settings.JUPITER_FALLBACK_NAME
+                getattr(user, 'first_name', None) or getattr(user, 'username', None) or settings.JUPITER_FALLBACK_NAME
             )
 
             api_result = await jupiter_service.create_payment(
@@ -366,9 +364,7 @@ class JupiterPaymentMixin:
             )
             created_transaction = True
 
-        await jupiter_crud.link_jupiter_payment_to_transaction(
-            db, payment=payment, transaction_id=transaction.id
-        )
+        await jupiter_crud.link_jupiter_payment_to_transaction(db, payment=payment, transaction_id=transaction.id)
 
         should_credit_balance = created_transaction or not balance_already_credited
 

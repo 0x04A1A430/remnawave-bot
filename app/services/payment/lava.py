@@ -146,9 +146,7 @@ class LavaPaymentMixin:
             )
 
             lifetime = settings.LAVA_PAYMENT_LIFETIME_MINUTES
-            expires_at = self._parse_lava_expired(expired_str) or (
-                datetime.now(UTC) + timedelta(minutes=lifetime)
-            )
+            expires_at = self._parse_lava_expired(expired_str) or (datetime.now(UTC) + timedelta(minutes=lifetime))
 
             lava_crud = import_module('app.database.crud.lava')
             local_payment = await lava_crud.create_lava_payment(
@@ -456,9 +454,7 @@ class LavaPaymentMixin:
             )
             created_transaction = True
 
-        await lava_crud.link_lava_payment_to_transaction(
-            db, payment=payment, transaction_id=transaction.id
-        )
+        await lava_crud.link_lava_payment_to_transaction(db, payment=payment, transaction_id=transaction.id)
 
         should_credit_balance = created_transaction or not balance_already_credited
 

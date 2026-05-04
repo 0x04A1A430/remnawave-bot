@@ -35,13 +35,15 @@ def _enable_apple_iap(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         settings,
         'APPLE_IAP_PRODUCTS',
-        json.dumps({
-            'com.bitnet.vpnclient.topup.100': 10_000,
-            'com.bitnet.vpnclient.topup.300': 30_000,
-            'com.bitnet.vpnclient.topup.500': 50_000,
-            'com.bitnet.vpnclient.topup.1000': 100_000,
-            'com.bitnet.vpnclient.topup.3000': 300_000,
-        }),
+        json.dumps(
+            {
+                'com.bitnet.vpnclient.topup.100': 10_000,
+                'com.bitnet.vpnclient.topup.300': 30_000,
+                'com.bitnet.vpnclient.topup.500': 50_000,
+                'com.bitnet.vpnclient.topup.1000': 100_000,
+                'com.bitnet.vpnclient.topup.3000': 300_000,
+            }
+        ),
         raising=False,
     )
 
@@ -297,9 +299,7 @@ class TestVerifyAndDecodeJWS:
 
     def test_rejects_empty_x5c(self) -> None:
         service = AppleIAPService()
-        header = (
-            base64.urlsafe_b64encode(json.dumps({'alg': 'ES256', 'x5c': []}).encode()).rstrip(b'=').decode()
-        )
+        header = base64.urlsafe_b64encode(json.dumps({'alg': 'ES256', 'x5c': []}).encode()).rstrip(b'=').decode()
         payload = base64.urlsafe_b64encode(b'{}').rstrip(b'=').decode()
         sig = base64.urlsafe_b64encode(b'sig').rstrip(b'=').decode()
         assert service._verify_and_decode_jws(f'{header}.{payload}.{sig}') is None

@@ -2295,11 +2295,7 @@ class Settings(BaseSettings):
         return html.escape(self.get_antilopay_sberpay_display_name())
 
     def is_jupiter_enabled(self) -> bool:
-        return (
-            self.JUPITER_ENABLED
-            and self.JUPITER_TOKEN is not None
-            and self.JUPITER_SECRET is not None
-        )
+        return self.JUPITER_ENABLED and self.JUPITER_TOKEN is not None and self.JUPITER_SECRET is not None
 
     def get_jupiter_display_name(self) -> str:
         name = (self.JUPITER_DISPLAY_NAME or '').strip()
@@ -2319,11 +2315,7 @@ class Settings(BaseSettings):
         return html.escape(self.get_jupiter_sbp_display_name())
 
     def is_donut_enabled(self) -> bool:
-        return (
-            self.DONUT_ENABLED
-            and self.DONUT_TOKEN is not None
-            and self.DONUT_SECRET is not None
-        )
+        return self.DONUT_ENABLED and self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
 
     def get_donut_display_name(self) -> str:
         name = (self.DONUT_DISPLAY_NAME or '').strip()

@@ -115,11 +115,7 @@ class DonutPaymentMixin:
 
             transaction_id = api_result.get('transaction_id')
             details = api_result.get('details') or {}
-            payment_url = (
-                api_result.get('redirect_url')
-                or details.get('qrcode_url')
-                or actual_return_url
-            )
+            payment_url = api_result.get('redirect_url') or details.get('qrcode_url') or actual_return_url
 
             logger.info(
                 'Donut: получен ответ API',
@@ -374,9 +370,7 @@ class DonutPaymentMixin:
             )
             created_transaction = True
 
-        await donut_crud.link_donut_payment_to_transaction(
-            db, payment=payment, transaction_id=transaction.id
-        )
+        await donut_crud.link_donut_payment_to_transaction(db, payment=payment, transaction_id=transaction.id)
 
         should_credit_balance = created_transaction or not balance_already_credited
 
