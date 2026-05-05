@@ -352,6 +352,8 @@ class MenuLayoutService:
             button['open_mode'] = updates['open_mode']
         if 'webapp_url' in updates:
             button['webapp_url'] = updates['webapp_url']
+        if 'icon_custom_emoji_id' in updates:
+            button['icon_custom_emoji_id'] = updates['icon_custom_emoji_id']
 
         buttons[actual_button_id] = button
         config['buttons'] = buttons
