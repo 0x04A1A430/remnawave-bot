@@ -269,6 +269,30 @@ class NotificationDeliveryService:
             # Get email template (check DB override first, then fall back to hardcoded)
             language = user.language or 'ru'
 
+            # Inject common context values used across all email templates
+            context = {
+                'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
+                **context,
+            }
+
+            # Backwards-compat aliases for DB templates that use shorter
+            # placeholder names than the corresponding notify_* method ships.
+            # E.g. {amount} vs amount_kopeks, {reason} vs comment, {balance}.
+            if 'amount' not in context:
+                if context.get('formatted_amount'):
+                    context['amount'] = context['formatted_amount']
+                elif 'amount_kopeks' in context:
+                    context['amount'] = settings.format_price(context['amount_kopeks'])
+                elif 'bonus_kopeks' in context:
+                    context['amount'] = settings.format_price(context['bonus_kopeks'])
+            if 'balance' not in context:
+                if context.get('formatted_balance'):
+                    context['balance'] = context['formatted_balance']
+                elif 'new_balance_kopeks' in context:
+                    context['balance'] = settings.format_price(context['new_balance_kopeks'])
+            if 'reason' not in context and context.get('comment'):
+                context['reason'] = context['comment']
+
             # Try DB override (get_rendered_override substitutes context vars and wraps in base template)
             template = None
             try:
