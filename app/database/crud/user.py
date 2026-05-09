@@ -518,6 +518,7 @@ async def add_user_balance(
                 amount_kopeks=amount_kopeks,
                 description=description,
                 payment_method=payment_method,
+                commit=commit,
             )
 
         if commit:

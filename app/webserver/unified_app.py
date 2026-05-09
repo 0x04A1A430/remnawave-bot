@@ -8,11 +8,10 @@ from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.cabinet.routes import router as cabinet_router
+from app.cabinet.apple_iap import apple_iap_only_router
 from app.config import settings
 from app.services.disposable_email_service import disposable_email_service
 from app.services.payment_service import PaymentService
-from app.webapi.app import create_web_api_app
 from app.webapi.docs import add_redoc_endpoint
 
 from . import payments, telegram
@@ -44,6 +43,8 @@ def _create_base_app() -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
 
     if settings.is_web_api_enabled():
+        from app.webapi.app import create_web_api_app
+
         app = create_web_api_app()
     else:
         app = FastAPI(
@@ -62,7 +63,7 @@ def _create_base_app() -> FastAPI:
         )
 
         # Add cabinet routes even when web API is disabled
-        if settings.is_cabinet_enabled():
+        if settings.is_cabinet_enabled() or settings.is_apple_iap_enabled():
             from fastapi.middleware.cors import CORSMiddleware
 
             cabinet_origins = settings.get_cabinet_allowed_origins()
@@ -83,7 +84,12 @@ def _create_base_app() -> FastAPI:
                     allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
                     allow_headers=['Authorization', 'Content-Type', 'X-CSRF-Token', 'X-Telegram-Init-Data'],
                 )
-            app.include_router(cabinet_router)
+            if settings.is_cabinet_enabled():
+                from app.cabinet.routes import router as cabinet_router
+
+                app.include_router(cabinet_router)
+            else:
+                app.include_router(apple_iap_only_router)
 
     _attach_docs_alias(app, app.docs_url)
     return app
@@ -150,6 +156,7 @@ def create_unified_app(
         'pal24': settings.is_pal24_enabled(),
         'wata': settings.is_wata_enabled(),
         'heleket': settings.is_heleket_enabled(),
+        'apple_iap': settings.is_apple_iap_enabled(),
         'freekassa': settings.is_freekassa_enabled(),
         'riopay': settings.is_riopay_enabled(),
     }
