@@ -109,7 +109,7 @@ def test_unified_app_apple_iap_only_mounts_only_apple_cabinet_routes(
     monkeypatch.setattr(settings, 'APPLE_IAP_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_KEY_ID', 'TEST_KEY_ID', raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_ISSUER_ID', 'test-issuer-id', raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_BUNDLE_ID', 'com.bitnet.vpnclient', raising=False)
+    monkeypatch.setattr(settings, 'APPLE_IAP_BUNDLE_ID', 'com.org.app', raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_APP_APPLE_ID', 123456789, raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Sandbox', raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY', '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----', raising=False)
