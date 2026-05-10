@@ -17,6 +17,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import app.config as config_module
 import app.services.apple_iap as apple_iap_module
 from app.cabinet.schemas.apple_iap import AppleAccountTokenResponse, ApplePurchaseRequest
 from app.config import settings
@@ -92,6 +93,20 @@ class TestSettings:
         monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY', '', raising=False)
         monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', '', raising=False)
         assert settings.is_apple_iap_enabled() is False
+
+    def test_private_key_file_read_error_is_logged(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        missing_key_path = tmp_path / 'missing-auth-key.p8'
+        error_log = MagicMock()
+        monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY', '', raising=False)
+        monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', str(missing_key_path), raising=False)
+        monkeypatch.setattr(config_module.logger, 'error', error_log)
+
+        assert settings.get_apple_iap_private_key() is None
+
+        error_log.assert_called_once()
+        assert error_log.call_args.args[0] == 'Failed to load Apple IAP private key file'
+        assert error_log.call_args.kwargs['path'] == str(missing_key_path)
+        assert error_log.call_args.kwargs['exc_info'] is True
 
     def test_product_mapping_normalizes_positive_ints(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
@@ -261,12 +276,13 @@ class TestCabinetAppleIAPRoutes:
                 raise AssertionError(f'incr should not be called for {key}')
 
         monkeypatch.setattr(settings, 'APPLE_IAP_PURCHASE_FAILURE_LIMIT_PER_HOUR', 3, raising=False)
-        monkeypatch.setattr(apple_iap_routes, '_get_redis_client', lambda: FakeRedis())
 
-        assert await apple_iap_routes._check_purchase_rate_limit(user_id=1, ip_address=None) is False
+        assert await apple_iap_routes._check_purchase_rate_limit(FakeRedis(), user_id=1, ip_address=None) is False
 
     @pytest.mark.anyio('asyncio')
-    async def test_purchase_rate_limit_allows_invalid_redis_counter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_purchase_rate_limit_blocks_invalid_redis_counter_by_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from app.cabinet import apple_iap as apple_iap_routes
 
         class FakeRedis:
@@ -277,9 +293,131 @@ class TestCabinetAppleIAPRoutes:
             async def incr(self, key: str) -> int:  # pragma: no cover - invalid failure counter fails open first
                 raise AssertionError(f'incr should not be called for {key}')
 
-        monkeypatch.setattr(apple_iap_routes, '_get_redis_client', lambda: FakeRedis())
+        monkeypatch.setattr(settings, 'APPLE_IAP_RATE_LIMIT_FAIL_OPEN', False, raising=False)
 
-        assert await apple_iap_routes._check_purchase_rate_limit(user_id=1, ip_address=None) is True
+        assert await apple_iap_routes._check_purchase_rate_limit(FakeRedis(), user_id=1, ip_address=None) is False
+
+    @pytest.mark.anyio('asyncio')
+    async def test_purchase_rate_limit_can_fail_open_by_setting(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.cabinet import apple_iap as apple_iap_routes
+
+        class FakeRedis:
+            async def get(self, key: str) -> bytes:
+                assert key == 'apple_iap:purchase_fail:user:1'
+                return b'not-an-int'
+
+        monkeypatch.setattr(settings, 'APPLE_IAP_RATE_LIMIT_FAIL_OPEN', True, raising=False)
+
+        assert await apple_iap_routes._check_purchase_rate_limit(FakeRedis(), user_id=1, ip_address=None) is True
+
+    @pytest.mark.anyio('asyncio')
+    async def test_purchase_rate_limit_sets_ttl_atomically_for_new_counter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.cabinet import apple_iap as apple_iap_routes
+
+        class FakeRedis:
+            def __init__(self):
+                self.commands: list[tuple] = []
+
+            async def get(self, key: str) -> None:
+                assert key == 'apple_iap:purchase_fail:user:1'
+
+            async def set(self, key: str, value: int, *, ex: int, nx: bool) -> bool:
+                self.commands.append(('set', key, value, ex, nx))
+                return True
+
+            async def incr(self, key: str) -> int:  # pragma: no cover - SET NX creates first counter
+                raise AssertionError(f'incr should not be called for new counter {key}')
+
+            async def expire(self, key: str, ttl: int) -> None:  # pragma: no cover - TTL must be set with SET
+                raise AssertionError(f'expire should not be called for {key} with ttl={ttl}')
+
+        client = FakeRedis()
+        monkeypatch.setattr(settings, 'APPLE_IAP_PURCHASE_RATE_LIMIT_PER_MINUTE', 10, raising=False)
+
+        assert await apple_iap_routes._check_purchase_rate_limit(client, user_id=1, ip_address=None) is True
+        assert client.commands == [('set', 'apple_iap:purchase:user:1', 1, 60, True)]
+
+    @pytest.mark.anyio('asyncio')
+    async def test_purchase_rate_limit_increments_existing_counter_without_expire(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.cabinet import apple_iap as apple_iap_routes
+
+        class FakeRedis:
+            def __init__(self):
+                self.commands: list[tuple] = []
+
+            async def get(self, key: str) -> None:
+                assert key == 'apple_iap:purchase_fail:user:1'
+
+            async def set(self, key: str, value: int, *, ex: int, nx: bool) -> bool:
+                self.commands.append(('set', key, value, ex, nx))
+                return False
+
+            async def incr(self, key: str) -> bytes:
+                self.commands.append(('incr', key))
+                return b'2'
+
+            async def expire(self, key: str, ttl: int) -> None:  # pragma: no cover - existing key already has TTL
+                raise AssertionError(f'expire should not be called for {key} with ttl={ttl}')
+
+        client = FakeRedis()
+        monkeypatch.setattr(settings, 'APPLE_IAP_PURCHASE_RATE_LIMIT_PER_MINUTE', 10, raising=False)
+
+        assert await apple_iap_routes._check_purchase_rate_limit(client, user_id=1, ip_address=None) is True
+        assert client.commands == [
+            ('set', 'apple_iap:purchase:user:1', 1, 60, True),
+            ('incr', 'apple_iap:purchase:user:1'),
+        ]
+
+    @pytest.mark.anyio('asyncio')
+    async def test_apple_iap_redis_client_uses_lifespan_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from fastapi import FastAPI
+
+        from app.cabinet import apple_iap as apple_iap_routes
+
+        class FakeRedis:
+            def __init__(self):
+                self.closed = False
+
+            async def aclose(self) -> None:
+                self.closed = True
+
+        clients: list[FakeRedis] = []
+
+        def from_url(url: str) -> FakeRedis:
+            assert url == settings.REDIS_URL
+            client = FakeRedis()
+            clients.append(client)
+            return client
+
+        app = FastAPI()
+        monkeypatch.setattr(apple_iap_routes.redis, 'from_url', from_url)
+
+        async with apple_iap_routes.apple_iap_lifespan(app):
+            assert len(clients) == 1
+            assert getattr(app.state, apple_iap_routes.APPLE_IAP_REDIS_STATE_KEY) is clients[0]
+
+        assert clients[0].closed is True
+        assert getattr(app.state, apple_iap_routes.APPLE_IAP_REDIS_STATE_KEY) is None
+
+    @pytest.mark.anyio('asyncio')
+    async def test_apple_iap_router_lifespan_initializes_app_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from fastapi import FastAPI
+
+        from app.cabinet import apple_iap as apple_iap_routes
+
+        class FakeRedis:
+            async def aclose(self) -> None:
+                return None
+
+        client = FakeRedis()
+        app = FastAPI()
+        app.include_router(apple_iap_routes.router)
+        monkeypatch.setattr(apple_iap_routes.redis, 'from_url', lambda _url: client)
+
+        async with app.router.lifespan_context(app):
+            assert getattr(app.state, apple_iap_routes.APPLE_IAP_REDIS_STATE_KEY) is client
 
     @pytest.mark.anyio('asyncio')
     async def test_account_token_requires_full_apple_iap_configuration(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -397,6 +535,171 @@ class TestFulfillmentService:
             allow_environment_fallback=False,
         )
 
+    @pytest.mark.anyio('asyncio')
+    async def test_web_order_line_item_replay_is_already_processed(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _enable_apple_iap(monkeypatch, tmp_path)
+        existing = SimpleNamespace(
+            user_id=1,
+            status='credited',
+            transaction_id='2000000123456789',
+            web_order_line_item_id='2000000099999999',
+        )
+        create_transaction = AsyncMock()
+        monkeypatch.setattr(apple_iap_module, 'get_apple_transaction_by_transaction_id', AsyncMock(return_value=None))
+        monkeypatch.setattr(
+            apple_iap_module,
+            'get_apple_transaction_by_web_order_line_item_id',
+            AsyncMock(return_value=existing),
+        )
+        monkeypatch.setattr(apple_iap_module, 'create_transaction', create_transaction)
+        monkeypatch.setattr(apple_iap_module, 'lock_user_for_update', AsyncMock())
+
+        result = await AppleIAPFulfillmentService().fulfill_verified_transaction(
+            _FakeDB(),
+            user_id=1,
+            product_id='com.bitnet.vpnclient.topup.100',
+            expected_app_account_token='account-token',
+            txn_info={
+                'transactionId': '2000000123456790',
+                'originalTransactionId': '2000000123456789',
+                'webOrderLineItemId': '2000000099999999',
+                'bundleId': 'com.bitnet.vpnclient',
+                'productId': 'com.bitnet.vpnclient.topup.100',
+                'type': 'Consumable',
+                'appAccountToken': 'account-token',
+                'environment': 'Sandbox',
+            },
+        )
+
+        assert result.success is True
+        assert result.reason == 'already_processed'
+        assert result.apple_transaction is existing
+        create_transaction.assert_not_awaited()
+
+    @pytest.mark.anyio('asyncio')
+    async def test_successful_credit_locks_user_before_financial_rows(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _enable_apple_iap(monkeypatch, tmp_path)
+        db = _FakeDB()
+        order: list[str] = []
+        user = SimpleNamespace(
+            id=1,
+            balance_kopeks=1_000,
+            has_made_first_topup=False,
+            referred_by_id=None,
+            subscription=None,
+            get_primary_promo_group=lambda: None,
+        )
+        apple_txn = SimpleNamespace(
+            transaction_id='2000000123456789',
+            original_transaction_id=None,
+            transaction_id_fk=None,
+            status='verified',
+            credited_at=None,
+            updated_at=None,
+        )
+        transaction = SimpleNamespace(id=42)
+
+        async def lock_user(_db, _user_ref):
+            order.append('lock_user')
+            return user
+
+        async def create_apple_txn(**kwargs):
+            order.append('create_apple_transaction')
+            return apple_txn
+
+        async def create_financial_txn(**kwargs):
+            order.append('create_transaction')
+            return transaction
+
+        service = AppleIAPFulfillmentService()
+        service._emit_credit_side_effects = AsyncMock()  # type: ignore[method-assign]
+        monkeypatch.setattr(apple_iap_module, 'get_apple_transaction_by_transaction_id', AsyncMock(return_value=None))
+        monkeypatch.setattr(
+            apple_iap_module,
+            'get_apple_transaction_by_web_order_line_item_id',
+            AsyncMock(return_value=None),
+        )
+        monkeypatch.setattr(apple_iap_module, 'lock_user_for_update', lock_user)
+        monkeypatch.setattr(apple_iap_module, 'create_apple_transaction', create_apple_txn)
+        monkeypatch.setattr(apple_iap_module, 'create_transaction', create_financial_txn)
+
+        result = await service.fulfill_verified_transaction(
+            db,
+            user_id=1,
+            product_id='com.bitnet.vpnclient.topup.100',
+            expected_app_account_token='account-token',
+            txn_info={
+                'transactionId': '2000000123456789',
+                'bundleId': 'com.bitnet.vpnclient',
+                'productId': 'com.bitnet.vpnclient.topup.100',
+                'type': 'Consumable',
+                'appAccountToken': 'account-token',
+                'environment': 'Sandbox',
+            },
+        )
+
+        assert result.success is True
+        assert result.reason == 'credited'
+        assert order == ['lock_user', 'create_apple_transaction', 'create_transaction']
+        assert user.balance_kopeks == 11_000
+        db.commit.assert_awaited_once()
+
+    @pytest.mark.anyio('asyncio')
+    async def test_credit_side_effects_use_injected_bot(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        bot = SimpleNamespace(session=SimpleNamespace(close=AsyncMock()))
+        user = SimpleNamespace(id=1, has_made_first_topup=True, referred_by_id=None)
+        transaction = SimpleNamespace(id=42)
+        db = SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock())
+        admin_notifications: list[object] = []
+        cart_notifications: list[object] = []
+
+        class StubAdminNotificationService:
+            def __init__(self, service_bot):
+                admin_notifications.append(service_bot)
+
+            async def send_balance_topup_notification(self, *args, **kwargs):
+                return None
+
+        async def send_cart_notification_after_topup(_user, _amount_kopeks, _db, cart_bot):
+            cart_notifications.append(cart_bot)
+
+        monkeypatch.setattr(apple_iap_module, 'emit_transaction_side_effects', AsyncMock())
+        monkeypatch.setattr('app.services.referral_service.process_referral_topup', AsyncMock())
+        monkeypatch.setattr(
+            'app.services.admin_notification_service.AdminNotificationService',
+            StubAdminNotificationService,
+        )
+        monkeypatch.setattr(
+            'app.services.payment.common.send_cart_notification_after_topup',
+            send_cart_notification_after_topup,
+        )
+
+        await AppleIAPFulfillmentService(bot=bot)._emit_credit_side_effects(
+            db,
+            user,
+            transaction,
+            amount_kopeks=10_000,
+            external_id='2000000123456789',
+            old_balance=1_000,
+            topup_status='Пополнение',
+            referrer_info='Нет',
+            subscription=None,
+            promo_group=None,
+            was_first_topup=False,
+        )
+
+        assert admin_notifications == [bot]
+        assert cart_notifications == [bot]
+        bot.session.close.assert_not_awaited()
+
 
 class TestAdapterFallback:
     @pytest.mark.anyio('asyncio')
@@ -448,6 +751,7 @@ class TestNotificationService:
 
         monkeypatch.setattr(apple_iap_module, 'AsyncSessionLocal', lambda: _AsyncContext(db))
         monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_uuid', AsyncMock(return_value=None))
+        monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_payload_hash', AsyncMock(return_value=None))
         monkeypatch.setattr(apple_iap_module, 'create_apple_notification', AsyncMock(return_value=notification_row))
         mark_processed = AsyncMock()
         monkeypatch.setattr(apple_iap_module, 'mark_apple_notification_processed', mark_processed)
@@ -462,6 +766,69 @@ class TestNotificationService:
         mark_processed.assert_awaited_once()
         assert mark_processed.await_args.kwargs['status'] == 'failed'
         db.commit.assert_awaited_once()
+
+    @pytest.mark.anyio('asyncio')
+    async def test_refund_uses_outer_notification_environment_for_owner_check(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        db = _FakeDB()
+        notification_row = SimpleNamespace(status='received', notification_uuid='notification-uuid')
+        apple_txn = SimpleNamespace(
+            transaction_id='2000000123456789',
+            original_transaction_id='2000000123456789',
+            status='verified',
+            environment='Sandbox',
+            user_id=1,
+            amount_kopeks=10_000,
+            product_id='com.bitnet.vpnclient.topup.100',
+            bundle_id='com.bitnet.vpnclient',
+            app_account_token='account-token',
+        )
+
+        class FakeAppleService:
+            def verify_notification(self, signed_payload: str):
+                return {
+                    'notificationUUID': 'notification-uuid',
+                    'notificationType': 'REFUND',
+                    'data': {'environment': 'Production', 'signedTransactionInfo': 'signed.txn'},
+                }
+
+            def verify_signed_transaction_info(self, signed_transaction_info: str, environment: str):
+                return {
+                    'transactionId': '2000000123456789',
+                    'originalTransactionId': '2000000123456789',
+                    'appAccountToken': 'account-token',
+                    'bundleId': 'com.bitnet.vpnclient',
+                    'productId': 'com.bitnet.vpnclient.topup.100',
+                }
+
+        create_abuse_event = AsyncMock()
+        lock_user = AsyncMock()
+        monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Production', raising=False)
+        monkeypatch.setattr(settings, 'APPLE_IAP_ALLOW_SANDBOX_ON_PRODUCTION', False, raising=False)
+        monkeypatch.setattr(apple_iap_module, 'AsyncSessionLocal', lambda: _AsyncContext(db))
+        monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_uuid', AsyncMock(return_value=None))
+        monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_payload_hash', AsyncMock(return_value=None))
+        monkeypatch.setattr(apple_iap_module, 'create_apple_notification', AsyncMock(return_value=notification_row))
+        monkeypatch.setattr(apple_iap_module, 'mark_apple_notification_processed', AsyncMock())
+        monkeypatch.setattr(
+            apple_iap_module,
+            'get_apple_transaction_by_transaction_id_for_update',
+            AsyncMock(return_value=apple_txn),
+        )
+        monkeypatch.setattr(apple_iap_module, 'create_apple_abuse_event', create_abuse_event)
+        monkeypatch.setattr(apple_iap_module, 'lock_user_for_pricing', lock_user)
+
+        ok, reason = await AppleIAPNotificationService(FakeAppleService()).process_signed_payload(
+            'signed.payload',
+            b'{"signedPayload":"signed.payload"}',
+        )
+
+        assert ok is True
+        assert reason == 'refund_environment_mismatch'
+        create_abuse_event.assert_awaited_once()
+        lock_user.assert_not_awaited()
 
     @pytest.mark.anyio('asyncio')
     async def test_duplicate_notification_insert_race_is_treated_as_duplicate(
@@ -481,6 +848,7 @@ class TestNotificationService:
         create_notification = AsyncMock(side_effect=IntegrityError('insert', {}, Exception('duplicate')))
         monkeypatch.setattr(apple_iap_module, 'AsyncSessionLocal', lambda: _AsyncContext(db))
         monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_uuid', get_by_uuid)
+        monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_payload_hash', AsyncMock(return_value=None))
         monkeypatch.setattr(apple_iap_module, 'create_apple_notification', create_notification)
 
         ok, reason = await AppleIAPNotificationService(FakeAppleService()).process_signed_payload(
@@ -490,6 +858,123 @@ class TestNotificationService:
 
         assert ok is True
         assert reason == 'duplicate'
+
+    @pytest.mark.anyio('asyncio')
+    async def test_notification_payload_hash_replay_is_ignored(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _enable_apple_iap(monkeypatch, tmp_path)
+        db = _FakeDB()
+        existing_payload = SimpleNamespace(
+            status='processed',
+            notification_uuid='existing-notification-uuid',
+            payload_hash='payload-hash',
+        )
+        create_notification = AsyncMock()
+
+        class FakeAppleService:
+            def verify_notification(self, signed_payload: str):
+                return {
+                    'notificationUUID': 'new-notification-uuid',
+                    'notificationType': 'TEST',
+                    'data': {'environment': 'Sandbox'},
+                }
+
+        monkeypatch.setattr(apple_iap_module, 'AsyncSessionLocal', lambda: _AsyncContext(db))
+        monkeypatch.setattr(apple_iap_module, 'get_apple_notification_by_uuid', AsyncMock(return_value=None))
+        monkeypatch.setattr(
+            apple_iap_module,
+            'get_apple_notification_by_payload_hash',
+            AsyncMock(return_value=existing_payload),
+        )
+        monkeypatch.setattr(apple_iap_module, 'create_apple_notification', create_notification)
+
+        ok, reason = await AppleIAPNotificationService(FakeAppleService()).process_signed_payload(
+            'signed.payload',
+            b'{"signedPayload":"signed.payload"}',
+        )
+
+        assert ok is True
+        assert reason == 'payload_replay'
+        create_notification.assert_not_awaited()
+
+    @pytest.mark.anyio('asyncio')
+    async def test_refund_rejects_app_account_token_mismatch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        apple_txn = SimpleNamespace(
+            transaction_id='2000000123456789',
+            original_transaction_id='2000000123456789',
+            status='verified',
+            environment='Sandbox',
+            user_id=1,
+            amount_kopeks=10_000,
+            product_id='com.bitnet.vpnclient.topup.100',
+            bundle_id='com.bitnet.vpnclient',
+            app_account_token='victim-token',
+        )
+        get_transaction = AsyncMock(return_value=apple_txn)
+        create_abuse_event = AsyncMock()
+        lock_user = AsyncMock()
+        monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Sandbox', raising=False)
+        monkeypatch.setattr(apple_iap_module, 'get_apple_transaction_by_transaction_id_for_update', get_transaction)
+        monkeypatch.setattr(apple_iap_module, 'create_apple_abuse_event', create_abuse_event)
+        monkeypatch.setattr(apple_iap_module, 'lock_user_for_pricing', lock_user)
+
+        reason = await AppleIAPNotificationService()._handle_refund(
+            _FakeDB(),
+            {
+                'transactionId': '2000000123456789',
+                'originalTransactionId': '2000000123456789',
+                'appAccountToken': 'attacker-token',
+                'environment': 'Sandbox',
+                'bundleId': 'com.bitnet.vpnclient',
+                'productId': 'com.bitnet.vpnclient.topup.100',
+            },
+        )
+
+        assert reason == 'refund_account_token_mismatch'
+        create_abuse_event.assert_awaited_once()
+        assert create_abuse_event.await_args.args[1] == 'notification_app_account_token_mismatch'
+        lock_user.assert_not_awaited()
+
+    @pytest.mark.anyio('asyncio')
+    async def test_refund_rejects_environment_mismatch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        apple_txn = SimpleNamespace(
+            transaction_id='2000000123456789',
+            original_transaction_id='2000000123456789',
+            status='verified',
+            environment='Production',
+            user_id=1,
+            amount_kopeks=10_000,
+            product_id='com.bitnet.vpnclient.topup.100',
+            bundle_id='com.bitnet.vpnclient',
+            app_account_token='account-token',
+        )
+        get_transaction = AsyncMock(return_value=apple_txn)
+        create_abuse_event = AsyncMock()
+        lock_user = AsyncMock()
+        monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Production', raising=False)
+        monkeypatch.setattr(apple_iap_module, 'get_apple_transaction_by_transaction_id_for_update', get_transaction)
+        monkeypatch.setattr(apple_iap_module, 'create_apple_abuse_event', create_abuse_event)
+        monkeypatch.setattr(apple_iap_module, 'lock_user_for_pricing', lock_user)
+
+        reason = await AppleIAPNotificationService()._handle_refund(
+            _FakeDB(),
+            {
+                'transactionId': '2000000123456789',
+                'originalTransactionId': '2000000123456789',
+                'appAccountToken': 'account-token',
+                'environment': 'Sandbox',
+                'bundleId': 'com.bitnet.vpnclient',
+                'productId': 'com.bitnet.vpnclient.topup.100',
+            },
+        )
+
+        assert reason == 'refund_environment_mismatch'
+        create_abuse_event.assert_awaited_once()
+        assert create_abuse_event.await_args.args[1] == 'notification_environment_mismatch'
+        lock_user.assert_not_awaited()
 
     @pytest.mark.anyio('asyncio')
     async def test_refund_reversed_credits_with_outer_transaction(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -502,6 +987,8 @@ class TestNotificationService:
             user_id=1,
             amount_kopeks=10_000,
             product_id='com.bitnet.vpnclient.topup.100',
+            bundle_id='com.bitnet.vpnclient',
+            app_account_token='account-token',
             refunded_at=object(),
             refund_reversed_at=None,
         )
@@ -516,7 +1003,14 @@ class TestNotificationService:
 
         reason = await AppleIAPNotificationService()._handle_refund_reversed(
             _FakeDB(),
-            {'transactionId': '2000000123456789'},
+            {
+                'transactionId': '2000000123456789',
+                'originalTransactionId': '2000000123456789',
+                'appAccountToken': 'account-token',
+                'environment': 'Sandbox',
+                'bundleId': 'com.bitnet.vpnclient',
+                'productId': 'com.bitnet.vpnclient.topup.100',
+            },
         )
 
         assert reason == 'refund_reversed'
@@ -529,6 +1023,22 @@ class TestNotificationService:
 
 
 class TestAppleIAPRouting:
+    @pytest.mark.anyio('asyncio')
+    async def test_legacy_aiohttp_webhook_server_does_not_mount_apple_iap(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        _enable_apple_iap(monkeypatch, tmp_path)
+        monkeypatch.setattr(settings, 'APPLE_IAP_WEBHOOK_PATH', '/apple-iap-webhook', raising=False)
+
+        from app.external.webhook_server import WebhookServer
+
+        app = await WebhookServer(MagicMock()).create_app()
+        paths = {route.resource.canonical for route in app.router.routes()}
+
+        assert settings.APPLE_IAP_WEBHOOK_PATH not in paths
+
     def test_apple_iap_only_router_exposes_only_apple_iap_paths(self) -> None:
         from app.cabinet.apple_iap import apple_iap_only_router
 

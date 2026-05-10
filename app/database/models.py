@@ -348,7 +348,7 @@ class AppleTransaction(Base):
     amount_kopeks = Column(Integer, nullable=False)
     environment = Column(String(16), nullable=False)
     app_account_token = Column(String(36), nullable=True, index=True)
-    web_order_line_item_id = Column(String(64), nullable=True, index=True)
+    web_order_line_item_id = Column(String(64), unique=True, nullable=True, index=True)
     storefront = Column(String(16), nullable=True)
     currency = Column(String(3), nullable=True)
     price_micros = Column(BigInteger, nullable=True)
@@ -364,7 +364,7 @@ class AppleTransaction(Base):
     refund_reversed_at = Column(AwareDateTime(), nullable=True)
 
     transaction_id_fk = Column(Integer, ForeignKey('transactions.id'), nullable=True)
-    signed_transaction_hash = Column(String(64), nullable=True)
+    signed_transaction_hash = Column(String(64), nullable=True, index=True)
     metadata_json = Column(JSON, nullable=True)
 
     created_at = Column(AwareDateTime(), default=func.now())
@@ -413,7 +413,7 @@ class AppleNotification(Base):
     original_transaction_id = Column(String(64), nullable=True, index=True)
     status = Column(String(32), nullable=False, default='received')
     error = Column(Text, nullable=True)
-    payload_hash = Column(String(64), nullable=False)
+    payload_hash = Column(String(64), unique=True, nullable=False, index=True)
     metadata_json = Column(JSON, nullable=True)
     received_at = Column(AwareDateTime(), default=func.now())
     processed_at = Column(AwareDateTime(), nullable=True)

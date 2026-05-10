@@ -3,20 +3,30 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.services.apple_iap import apple_iap_notification_service
+from app.services.apple_iap import (
+    AppleIAPFulfillmentService,
+    AppleIAPNotificationService,
+    apple_iap_fulfillment_service,
+)
 
 
 logger = structlog.get_logger(__name__)
 
 
-def create_apple_iap_router() -> APIRouter:
+def create_apple_iap_router(bot: Any = None) -> APIRouter:
     router = APIRouter()
+    fulfillment_service = AppleIAPFulfillmentService(apple_iap_fulfillment_service.apple_service, bot=bot)
+    notification_service = AppleIAPNotificationService(
+        apple_service=apple_iap_fulfillment_service.apple_service,
+        fulfillment_service=fulfillment_service,
+    )
 
     @router.options(settings.APPLE_IAP_WEBHOOK_PATH)
     async def apple_iap_options() -> Response:
@@ -43,7 +53,7 @@ def create_apple_iap_router() -> APIRouter:
         if not signed_payload:
             return JSONResponse({'status': 'error', 'reason': 'missing_signed_payload'}, status_code=400)
 
-        ok, reason = await apple_iap_notification_service.process_signed_payload(signed_payload, raw_body)
+        ok, reason = await notification_service.process_signed_payload(signed_payload, raw_body)
         if not ok and reason == 'invalid_signature':
             return JSONResponse({'status': 'error', 'reason': reason}, status_code=403)
         if not ok and reason == 'configuration_error':

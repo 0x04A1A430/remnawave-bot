@@ -17,9 +17,11 @@ from app.database.crud.apple_iap import (
     create_apple_notification,
     create_apple_transaction,
     get_apple_iap_account_by_token,
+    get_apple_notification_by_payload_hash,
     get_apple_notification_by_uuid,
     get_apple_transaction_by_transaction_id,
     get_apple_transaction_by_transaction_id_for_update,
+    get_apple_transaction_by_web_order_line_item_id,
     get_or_create_apple_iap_account,
     mark_apple_notification_processed,
     mark_apple_transaction_refunded,
@@ -109,8 +111,9 @@ def _transaction_fields(txn_info: dict[str, Any]) -> dict[str, Any]:
 
 
 class AppleIAPFulfillmentService:
-    def __init__(self, apple_service: AppleIAPService | None = None):
+    def __init__(self, apple_service: AppleIAPService | None = None, bot: Any = None):
         self.apple_service = apple_service or AppleIAPService()
+        self.bot = bot
 
     async def get_account_token(self, db: AsyncSession, user_id: int) -> str:
         account = await get_or_create_apple_iap_account(db, user_id)
@@ -262,6 +265,32 @@ class AppleIAPFulfillmentService:
             return AppleFulfillmentResult(False, 'owner_mismatch')
 
         fields = _transaction_fields(txn_info)
+        web_order_line_item_id = fields.get('web_order_line_item_id')
+        if web_order_line_item_id:
+            existing = await get_apple_transaction_by_web_order_line_item_id(db, web_order_line_item_id)
+            if existing:
+                if existing.user_id == user_id and existing.status in {'verified', 'credited', 'sandbox_recorded', 'refunded'}:
+                    return AppleFulfillmentResult(True, 'already_processed', existing)
+                await create_apple_abuse_event(
+                    db,
+                    'web_order_line_item_owner_mismatch',
+                    user_id=user_id,
+                    severity='critical',
+                    transaction_id=transaction_id,
+                    product_id=product_id,
+                    ip_address=ip_address,
+                    details_json={
+                        'existing_user_id': existing.user_id,
+                        'web_order_line_item_id': web_order_line_item_id,
+                    },
+                )
+                await db.commit()
+                return AppleFulfillmentResult(False, 'owner_mismatch')
+
+        user = await lock_user_for_update(db, User(id=user_id))
+        old_balance = user.balance_kopeks
+        was_first_topup = not user.has_made_first_topup
+
         apple_txn = None
         try:
             async with db.begin_nested():
@@ -276,8 +305,44 @@ class AppleIAPFulfillmentService:
                 )
         except IntegrityError:
             existing = await get_apple_transaction_by_transaction_id(db, transaction_id)
-            if existing and existing.user_id == user_id:
-                return AppleFulfillmentResult(True, 'already_processed', existing)
+            if existing:
+                if existing.user_id == user_id:
+                    await db.commit()
+                    return AppleFulfillmentResult(True, 'already_processed', existing)
+                await create_apple_abuse_event(
+                    db,
+                    'transaction_owner_mismatch',
+                    user_id=user_id,
+                    severity='critical',
+                    transaction_id=transaction_id,
+                    product_id=product_id,
+                    ip_address=ip_address,
+                    details_json={'existing_user_id': existing.user_id},
+                )
+                await db.commit()
+                return AppleFulfillmentResult(False, 'owner_mismatch')
+            if web_order_line_item_id:
+                existing = await get_apple_transaction_by_web_order_line_item_id(db, web_order_line_item_id)
+                if existing:
+                    if existing.user_id == user_id:
+                        await db.commit()
+                        return AppleFulfillmentResult(True, 'already_processed', existing)
+                    await create_apple_abuse_event(
+                        db,
+                        'web_order_line_item_owner_mismatch',
+                        user_id=user_id,
+                        severity='critical',
+                        transaction_id=transaction_id,
+                        product_id=product_id,
+                        ip_address=ip_address,
+                        details_json={
+                            'existing_user_id': existing.user_id,
+                            'web_order_line_item_id': web_order_line_item_id,
+                        },
+                    )
+                    await db.commit()
+                    return AppleFulfillmentResult(False, 'owner_mismatch')
+            await db.commit()
             return AppleFulfillmentResult(False, 'duplicate_conflict')
 
         transaction = await create_transaction(
@@ -298,9 +363,6 @@ class AppleIAPFulfillmentService:
             apple_txn.credited_at = datetime.now(UTC)
             apple_txn.updated_at = datetime.now(UTC)
 
-        user = await lock_user_for_update(db, User(id=user_id))
-        old_balance = user.balance_kopeks
-        was_first_topup = not user.has_made_first_topup
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.now(UTC)
 
@@ -382,14 +444,14 @@ class AppleIAPFulfillmentService:
                 external_id=external_id,
             )
         except Exception as error:
-            logger.error('Ошибка emit_transaction_side_effects Apple IAP', error=error)
+            logger.error('Ошибка emit_transaction_side_effects Apple IAP', error=error, exc_info=True)
 
         try:
             from app.services.referral_service import process_referral_topup
 
-            await process_referral_topup(db, user.id, amount_kopeks, bot=None)
+            await process_referral_topup(db, user.id, amount_kopeks, bot=self.bot)
         except Exception as error:
-            logger.error('Ошибка обработки реферального пополнения Apple IAP', error=error)
+            logger.error('Ошибка обработки реферального пополнения Apple IAP', error=error, exc_info=True)
 
         if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
             user.has_made_first_topup = True
@@ -397,37 +459,33 @@ class AppleIAPFulfillmentService:
 
         await db.refresh(user)
 
+        if self.bot is None:
+            logger.debug('Apple IAP bot is not configured; skipping bot-dependent notifications', user_id=user.id)
+            return
+
         try:
-            from app.bot_factory import create_bot
+            from app.services.admin_notification_service import AdminNotificationService
 
-            bot = create_bot()
-            try:
-                from app.services.admin_notification_service import AdminNotificationService
-
-                notification_service = AdminNotificationService(bot)
-                await notification_service.send_balance_topup_notification(
-                    user,
-                    transaction,
-                    old_balance,
-                    topup_status=topup_status,
-                    referrer_info=referrer_info,
-                    subscription=subscription,
-                    promo_group=promo_group,
-                    db=db,
-                )
-            except Exception as error:
-                logger.error('Ошибка отправки админ уведомления Apple IAP', error=error)
-
-            try:
-                from app.services.payment.common import send_cart_notification_after_topup
-
-                await send_cart_notification_after_topup(user, amount_kopeks, db, bot)
-            except Exception as error:
-                logger.error('Ошибка при работе с сохраненной корзиной Apple IAP', user_id=user.id, error=error)
-            finally:
-                await bot.session.close()
+            notification_service = AdminNotificationService(self.bot)
+            await notification_service.send_balance_topup_notification(
+                user,
+                transaction,
+                old_balance,
+                topup_status=topup_status,
+                referrer_info=referrer_info,
+                subscription=subscription,
+                promo_group=promo_group,
+                db=db,
+            )
         except Exception as error:
-            logger.error('Ошибка создания бота для уведомлений Apple IAP', error=error)
+            logger.error('Ошибка отправки админ уведомления Apple IAP', error=error, exc_info=True)
+
+        try:
+            from app.services.payment.common import send_cart_notification_after_topup
+
+            await send_cart_notification_after_topup(user, amount_kopeks, db, self.bot)
+        except Exception as error:
+            logger.error('Ошибка при работе с сохраненной корзиной Apple IAP', user_id=user.id, error=error, exc_info=True)
 
 
 class AppleIAPNotificationService:
@@ -435,15 +493,16 @@ class AppleIAPNotificationService:
         self,
         apple_service: AppleIAPService | None = None,
         fulfillment_service: AppleIAPFulfillmentService | None = None,
+        bot: Any = None,
     ):
         self.apple_service = apple_service or AppleIAPService()
-        self.fulfillment_service = fulfillment_service or AppleIAPFulfillmentService(self.apple_service)
+        self.fulfillment_service = fulfillment_service or AppleIAPFulfillmentService(self.apple_service, bot=bot)
 
     async def process_signed_payload(self, signed_payload: str, raw_body: bytes) -> tuple[bool, str]:
         try:
             notification = self.apple_service.verify_notification(signed_payload)
         except AppleIAPConfigurationError as error:
-            logger.error('Apple IAP notification configuration error', error=str(error))
+            logger.error('Apple IAP notification configuration error', error=str(error), exc_info=True)
             return False, 'configuration_error'
 
         if not notification:
@@ -464,8 +523,11 @@ class AppleIAPNotificationService:
         signed_txn = data.get('signedTransactionInfo')
         txn_info = self.apple_service.verify_signed_transaction_info(signed_txn, environment) if signed_txn else None
         if signed_txn and txn_info:
+            if environment:
+                txn_info.setdefault('environment', environment)
             txn_info['signedTransactionInfoHash'] = _payload_hash(signed_txn)
 
+        payload_hash = _payload_hash(raw_body)
         async with AsyncSessionLocal() as db:
             existing = await get_apple_notification_by_uuid(db, notification_uuid)
             if existing and existing.status == 'processed':
@@ -473,6 +535,14 @@ class AppleIAPNotificationService:
 
             apple_notification = existing
             if apple_notification is None:
+                existing_payload = await get_apple_notification_by_payload_hash(db, payload_hash)
+                if existing_payload:
+                    logger.warning(
+                        'Apple notification replay detected by payload hash',
+                        notification_uuid=notification_uuid,
+                        existing_notification_uuid=existing_payload.notification_uuid,
+                    )
+                    return True, 'payload_replay'
                 try:
                     async with db.begin_nested():
                         apple_notification = await create_apple_notification(
@@ -483,7 +553,7 @@ class AppleIAPNotificationService:
                             environment=environment or None,
                             transaction_id=str((txn_info or {}).get('transactionId') or '') or None,
                             original_transaction_id=str((txn_info or {}).get('originalTransactionId') or '') or None,
-                            payload_hash=_payload_hash(raw_body),
+                            payload_hash=payload_hash,
                             metadata_json={
                                 'notificationType': notification_type,
                                 'subtype': subtype,
@@ -494,6 +564,14 @@ class AppleIAPNotificationService:
                     apple_notification = await get_apple_notification_by_uuid(db, notification_uuid)
                     if apple_notification and apple_notification.status == 'processed':
                         return True, 'duplicate'
+                    existing_payload = await get_apple_notification_by_payload_hash(db, payload_hash)
+                    if existing_payload:
+                        logger.warning(
+                            'Apple notification replay detected by payload hash after insert race',
+                            notification_uuid=notification_uuid,
+                            existing_notification_uuid=existing_payload.notification_uuid,
+                        )
+                        return True, 'payload_replay'
                     if apple_notification is None:
                         raise
 
@@ -551,6 +629,104 @@ class AppleIAPNotificationService:
         logger.info('Unhandled Apple notification type', notification_type=notification_type, notification_uuid=apple_notification.notification_uuid)
         return 'ignored'
 
+    async def _validate_stored_transaction_matches_notification(
+        self,
+        db: AsyncSession,
+        *,
+        apple_txn: AppleTransaction,
+        txn_info: dict[str, Any],
+        notification_type: str,
+    ) -> str | None:
+        signed_transaction_id = str(txn_info.get('transactionId') or '')
+        signed_original_transaction_id = str(txn_info.get('originalTransactionId') or '')
+        stored_transaction_ids = {value for value in (apple_txn.transaction_id, apple_txn.original_transaction_id) if value}
+        signed_transaction_ids = {value for value in (signed_transaction_id, signed_original_transaction_id) if value}
+        if not stored_transaction_ids.intersection(signed_transaction_ids):
+            await create_apple_abuse_event(
+                db,
+                'notification_transaction_id_mismatch',
+                user_id=apple_txn.user_id,
+                severity='critical',
+                transaction_id=signed_transaction_id or None,
+                product_id=str(txn_info.get('productId') or '') or None,
+                details_json={
+                    'notification': notification_type,
+                    'stored_transaction_id': apple_txn.transaction_id,
+                    'signed_original_transaction_id': signed_original_transaction_id or None,
+                },
+            )
+            return 'transaction_id_mismatch'
+
+        signed_app_account_token = str(txn_info.get('appAccountToken') or '')
+        if not apple_txn.app_account_token or signed_app_account_token != apple_txn.app_account_token:
+            await create_apple_abuse_event(
+                db,
+                'notification_app_account_token_mismatch',
+                user_id=apple_txn.user_id,
+                severity='critical',
+                transaction_id=apple_txn.transaction_id,
+                product_id=apple_txn.product_id,
+                details_json={
+                    'notification': notification_type,
+                    'has_signed_token': bool(signed_app_account_token),
+                    'has_stored_token': bool(apple_txn.app_account_token),
+                },
+            )
+            return 'account_token_mismatch'
+
+        signed_environment = str(txn_info.get('environment') or '')
+        if signed_environment and signed_environment != apple_txn.environment:
+            await create_apple_abuse_event(
+                db,
+                'notification_environment_mismatch',
+                user_id=apple_txn.user_id,
+                severity='critical',
+                transaction_id=apple_txn.transaction_id,
+                product_id=apple_txn.product_id,
+                details_json={
+                    'notification': notification_type,
+                    'stored_environment': apple_txn.environment,
+                    'signed_environment': signed_environment,
+                },
+            )
+            return 'environment_mismatch'
+
+        signed_bundle_id = str(txn_info.get('bundleId') or '')
+        if signed_bundle_id and signed_bundle_id != apple_txn.bundle_id:
+            await create_apple_abuse_event(
+                db,
+                'notification_bundle_id_mismatch',
+                user_id=apple_txn.user_id,
+                severity='critical',
+                transaction_id=apple_txn.transaction_id,
+                product_id=apple_txn.product_id,
+                details_json={
+                    'notification': notification_type,
+                    'stored_bundle_id': apple_txn.bundle_id,
+                    'signed_bundle_id': signed_bundle_id,
+                },
+            )
+            return 'bundle_id_mismatch'
+
+        signed_product_id = str(txn_info.get('productId') or '')
+        if signed_product_id and signed_product_id != apple_txn.product_id:
+            await create_apple_abuse_event(
+                db,
+                'notification_product_id_mismatch',
+                user_id=apple_txn.user_id,
+                severity='critical',
+                transaction_id=apple_txn.transaction_id,
+                product_id=signed_product_id,
+                details_json={
+                    'notification': notification_type,
+                    'stored_product_id': apple_txn.product_id,
+                    'signed_product_id': signed_product_id,
+                },
+            )
+            return 'product_id_mismatch'
+
+        return None
+
     async def _handle_one_time_charge(self, db: AsyncSession, txn_info: dict[str, Any] | None) -> str:
         if not txn_info:
             return 'missing_transaction'
@@ -588,6 +764,14 @@ class AppleIAPNotificationService:
             apple_txn = await get_apple_transaction_by_transaction_id_for_update(db, transaction_id)
         if not apple_txn:
             return 'transaction_not_found'
+        validation_error = await self._validate_stored_transaction_matches_notification(
+            db,
+            apple_txn=apple_txn,
+            txn_info=txn_info,
+            notification_type='REFUND',
+        )
+        if validation_error:
+            return f'refund_{validation_error}'
         if apple_txn.status == 'refunded':
             return 'already_refunded'
         if apple_txn.environment == 'Sandbox' and settings.get_apple_iap_environment() == 'Production':
@@ -640,6 +824,14 @@ class AppleIAPNotificationService:
             apple_txn = await get_apple_transaction_by_transaction_id_for_update(db, transaction_id)
         if not apple_txn:
             return 'transaction_not_found'
+        validation_error = await self._validate_stored_transaction_matches_notification(
+            db,
+            apple_txn=apple_txn,
+            txn_info=txn_info,
+            notification_type='REFUND_REVERSED',
+        )
+        if validation_error:
+            return f'refund_reversed_{validation_error}'
         if apple_txn.status != 'refunded':
             return 'not_refunded'
         if apple_txn.environment == 'Sandbox' and settings.get_apple_iap_environment() == 'Production':

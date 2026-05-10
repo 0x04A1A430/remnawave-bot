@@ -57,9 +57,6 @@ class WebhookServer:
 
         self.app.router.add_get('/health', self._health_check)
 
-        if settings.is_apple_iap_enabled():
-            self.app.router.add_post(settings.APPLE_IAP_WEBHOOK_PATH, self._apple_iap_webhook_handler)
-
         self.app.router.add_options(settings.TRIBUTE_WEBHOOK_PATH, self._options_handler)
         if settings.is_mulenpay_enabled():
             self.app.router.add_options(settings.MULENPAY_WEBHOOK_PATH, self._options_handler)
@@ -67,8 +64,6 @@ class WebhookServer:
             self.app.router.add_options(settings.CRYPTOBOT_WEBHOOK_PATH, self._options_handler)
         if settings.is_freekassa_enabled():
             self.app.router.add_options(settings.FREEKASSA_WEBHOOK_PATH, self._options_handler)
-        if settings.is_apple_iap_enabled():
-            self.app.router.add_options(settings.APPLE_IAP_WEBHOOK_PATH, self._options_handler)
 
         logger.info('Webhook сервер настроен:')
         logger.info('Tribute webhook: POST', TRIBUTE_WEBHOOK_PATH=settings.TRIBUTE_WEBHOOK_PATH)
@@ -81,8 +76,6 @@ class WebhookServer:
             logger.info('CryptoBot webhook: POST', CRYPTOBOT_WEBHOOK_PATH=settings.CRYPTOBOT_WEBHOOK_PATH)
         if settings.is_freekassa_enabled():
             logger.info('Freekassa webhook: POST', FREEKASSA_WEBHOOK_PATH=settings.FREEKASSA_WEBHOOK_PATH)
-        if settings.is_apple_iap_enabled():
-            logger.info('Apple IAP webhook: POST', APPLE_IAP_WEBHOOK_PATH=settings.APPLE_IAP_WEBHOOK_PATH)
         logger.info('  - Health check: GET /health')
 
         return self.app
@@ -499,38 +492,3 @@ class WebhookServer:
             logger.error('Критическая ошибка обработки Freekassa webhook', error=e, exc_info=True)
             return web.Response(text='NO', status=500)
 
-    async def _apple_iap_webhook_handler(self, request: web.Request) -> web.Response:
-        """Handle Apple App Store Server Notifications V2."""
-        try:
-            logger.info('Получен Apple IAP webhook', method=request.method, path=request.path)
-
-            raw_body = await request.read()
-            if not raw_body:
-                logger.warning('Пустой Apple IAP webhook')
-                return web.Response(status=400)
-
-            try:
-                body = json.loads(raw_body.decode('utf-8'))
-            except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                logger.error('Ошибка парсинга Apple IAP webhook', error=e)
-                return web.Response(status=400)
-
-            signed_payload = body.get('signedPayload')
-            if not signed_payload:
-                logger.warning('No signedPayload in Apple webhook')
-                return web.Response(status=400)
-
-            from app.services.apple_iap import apple_iap_notification_service
-
-            ok, reason = await apple_iap_notification_service.process_signed_payload(signed_payload, raw_body)
-            if not ok and reason == 'invalid_signature':
-                return web.Response(status=403)
-            if not ok and reason == 'configuration_error':
-                return web.Response(status=503)
-            if not ok:
-                return web.Response(status=500)
-            return web.json_response({'status': 'ok', 'reason': reason}, status=200)
-
-        except Exception as e:
-            logger.error('Критическая ошибка обработки Apple IAP webhook', error=e, exc_info=True)
-            return web.Response(status=500)

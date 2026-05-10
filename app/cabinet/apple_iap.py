@@ -1,7 +1,10 @@
 """Apple In-App Purchase cabinet routes."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from redis import asyncio as redis
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,19 +20,43 @@ from .schemas.apple_iap import AppleAccountTokenResponse, ApplePurchaseRequest, 
 
 
 logger = structlog.get_logger(__name__)
-router = APIRouter(tags=['Cabinet Apple IAP'])
-_redis_client: redis.Redis | None = None
+APPLE_IAP_REDIS_STATE_KEY = 'apple_iap_redis_client'
 
 
-def get_apple_iap_fulfillment_service() -> AppleIAPFulfillmentService:
-    return apple_iap_fulfillment_service
+async def _close_redis_client(client: redis.Redis) -> None:
+    close = getattr(client, 'aclose', None)
+    if close is not None:
+        await close()
+        return
+    await client.close()
 
 
-def _get_redis_client() -> redis.Redis:
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = redis.from_url(settings.REDIS_URL)
-    return _redis_client
+@asynccontextmanager
+async def apple_iap_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    client = redis.from_url(settings.REDIS_URL)
+    setattr(app.state, APPLE_IAP_REDIS_STATE_KEY, client)
+    try:
+        yield
+    finally:
+        setattr(app.state, APPLE_IAP_REDIS_STATE_KEY, None)
+        try:
+            await _close_redis_client(client)
+        except RedisError as error:  # pragma: no cover - defensive shutdown logging
+            logger.warning('Apple IAP Redis client close failed', error=error)
+
+
+router = APIRouter(tags=['Cabinet Apple IAP'], lifespan=apple_iap_lifespan)
+
+
+def get_apple_iap_fulfillment_service(request: Request) -> AppleIAPFulfillmentService:
+    bot = getattr(request.app.state, 'bot', None)
+    if bot is None:
+        return apple_iap_fulfillment_service
+    return AppleIAPFulfillmentService(apple_iap_fulfillment_service.apple_service, bot=bot)
+
+
+def get_apple_iap_redis_client(request: Request) -> redis.Redis | None:
+    return getattr(request.app.state, APPLE_IAP_REDIS_STATE_KEY, None)
 
 
 def _parse_redis_counter(value: object) -> int:
@@ -40,14 +67,29 @@ def _parse_redis_counter(value: object) -> int:
     return int(value)
 
 
-async def _check_purchase_rate_limit(user_id: int, ip_address: str | None) -> bool:
+async def _increment_redis_counter(client: redis.Redis, key: str, ttl_seconds: int) -> int:
+    created = await client.set(key, 1, ex=ttl_seconds, nx=True)
+    if created:
+        return 1
+    return _parse_redis_counter(await client.incr(key))
+
+
+def _rate_limit_error_allows_request() -> bool:
+    return settings.APPLE_IAP_RATE_LIMIT_FAIL_OPEN
+
+
+async def _check_purchase_rate_limit(client: redis.Redis | None, user_id: int, ip_address: str | None) -> bool:
+    if client is None:
+        allow_request = _rate_limit_error_allows_request()
+        logger.error('Apple IAP Redis client is not initialized', fail_open=allow_request)
+        return allow_request
+
     limit = max(1, settings.APPLE_IAP_PURCHASE_RATE_LIMIT_PER_MINUTE)
     failure_limit = max(1, settings.APPLE_IAP_PURCHASE_FAILURE_LIMIT_PER_HOUR)
     keys = [f'apple_iap:purchase:user:{user_id}']
     if ip_address:
         keys.append(f'apple_iap:purchase:ip:{ip_address}')
 
-    client = _get_redis_client()
     try:
         failure_count = await client.get(f'apple_iap:purchase_fail:user:{user_id}')
         if failure_count is not None and _parse_redis_counter(failure_count) >= failure_limit:
@@ -55,28 +97,29 @@ async def _check_purchase_rate_limit(user_id: int, ip_address: str | None) -> bo
             return False
 
         for key in keys:
-            count = _parse_redis_counter(await client.incr(key))
-            if count == 1:
-                await client.expire(key, 60)
+            count = await _increment_redis_counter(client, key, 60)
             if count > limit:
                 logger.warning('Apple IAP purchase rate limit exceeded', key=key, user_id=user_id)
                 return False
     except RedisError as error:
-        logger.warning('Apple IAP rate limiter unavailable; allowing request', error=error)
-        return True
+        allow_request = _rate_limit_error_allows_request()
+        logger.error('Apple IAP rate limiter unavailable', error=error, fail_open=allow_request)
+        return allow_request
     except (TypeError, ValueError, UnicodeDecodeError) as error:
-        logger.warning('Apple IAP rate limiter returned invalid counter; allowing request', error=error)
-        return True
+        allow_request = _rate_limit_error_allows_request()
+        logger.error('Apple IAP rate limiter returned invalid counter', error=error, fail_open=allow_request)
+        return allow_request
     return True
 
 
-async def _record_purchase_failure(user_id: int) -> None:
-    client = _get_redis_client()
+async def _record_purchase_failure(client: redis.Redis | None, user_id: int) -> None:
+    if client is None:
+        logger.warning('Apple IAP Redis client is not initialized; skipping failure limiter')
+        return
+
     try:
         key = f'apple_iap:purchase_fail:user:{user_id}'
-        count = _parse_redis_counter(await client.incr(key))
-        if count == 1:
-            await client.expire(key, 3600)
+        await _increment_redis_counter(client, key, 3600)
     except RedisError as error:
         logger.warning('Apple IAP failure limiter unavailable', error=error)
     except (TypeError, ValueError, UnicodeDecodeError) as error:
@@ -106,6 +149,7 @@ async def apple_purchase(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
     fulfillment_service: AppleIAPFulfillmentService = Depends(get_apple_iap_fulfillment_service),
+    redis_client: redis.Redis | None = Depends(get_apple_iap_redis_client),
 ):
     """Verify an Apple consumable transaction and credit the user's internal balance."""
     if not settings.is_apple_iap_enabled():
@@ -115,7 +159,7 @@ async def apple_purchase(
         )
 
     ip_address = get_client_ip(http_request)
-    if not await _check_purchase_rate_limit(user.id, ip_address):
+    if not await _check_purchase_rate_limit(redis_client, user.id, ip_address):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail='Too many Apple purchase verification attempts',
@@ -129,7 +173,7 @@ async def apple_purchase(
         ip_address=ip_address,
     )
     if not result.success:
-        await _record_purchase_failure(user.id)
+        await _record_purchase_failure(redis_client, user.id)
     return ApplePurchaseResponse(success=result.success)
 
 
@@ -175,5 +219,9 @@ async def reconcile_apple_iap_transactions(
     }
 
 
-apple_iap_only_router = APIRouter(prefix='/cabinet', tags=['Cabinet Apple IAP'], redirect_slashes=False)
+apple_iap_only_router = APIRouter(
+    prefix='/cabinet',
+    tags=['Cabinet Apple IAP'],
+    redirect_slashes=False,
+)
 apple_iap_only_router.include_router(router)

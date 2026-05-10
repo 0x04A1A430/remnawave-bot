@@ -118,6 +118,15 @@ async def get_apple_transaction_by_transaction_id(db: AsyncSession, transaction_
     return result.scalar_one_or_none()
 
 
+async def get_apple_transaction_by_web_order_line_item_id(
+    db: AsyncSession, web_order_line_item_id: str
+) -> AppleTransaction | None:
+    result = await db.execute(
+        select(AppleTransaction).where(AppleTransaction.web_order_line_item_id == web_order_line_item_id)
+    )
+    return result.scalar_one_or_none()
+
+
 async def find_apple_transactions_for_support(db: AsyncSession, query: str, limit: int = 20) -> list[AppleTransaction]:
     filters = [
         AppleTransaction.transaction_id == query,
@@ -210,6 +219,13 @@ async def create_apple_notification(
 async def get_apple_notification_by_uuid(db: AsyncSession, notification_uuid: str) -> AppleNotification | None:
     result = await db.execute(
         select(AppleNotification).where(AppleNotification.notification_uuid == notification_uuid).with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_apple_notification_by_payload_hash(db: AsyncSession, payload_hash: str) -> AppleNotification | None:
+    result = await db.execute(
+        select(AppleNotification).where(AppleNotification.payload_hash == payload_hash).with_for_update()
     )
     return result.scalar_one_or_none()
 
