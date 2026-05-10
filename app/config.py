@@ -1014,6 +1014,8 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str = 'VPN Service'
     SMTP_USE_TLS: bool = True
+    # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
+    SMTP_USE_SSL: bool = False
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
