@@ -329,8 +329,16 @@ class AdminNotificationService:
                 occurred_at=datetime.now(UTC),
                 extra={
                     'charged_amount_kopeks': charged_amount_kopeks,
-                    'trial_duration_days': settings.TRIAL_DURATION_DAYS,
-                    'traffic_limit_gb': settings.TRIAL_TRAFFIC_LIMIT_GB,
+                    'trial_duration_days': (
+                        max(1, round((subscription.end_date - subscription.start_date).total_seconds() / 86400))
+                        if subscription.end_date and subscription.start_date
+                        else settings.TRIAL_DURATION_DAYS
+                    ),
+                    'traffic_limit_gb': (
+                        subscription.traffic_limit_gb
+                        if subscription.traffic_limit_gb is not None
+                        else settings.TRIAL_TRAFFIC_LIMIT_GB
+                    ),
                     'device_limit': subscription.device_limit,
                 },
             )
@@ -382,11 +390,23 @@ class AdminNotificationService:
 
             message_lines.append('')
 
+            trial_duration_days = settings.TRIAL_DURATION_DAYS
+            if subscription.end_date and subscription.start_date:
+                trial_duration_days = max(
+                    1, round((subscription.end_date - subscription.start_date).total_seconds() / 86400)
+                )
+
+            trial_traffic_gb = (
+                subscription.traffic_limit_gb
+                if subscription.traffic_limit_gb is not None
+                else settings.TRIAL_TRAFFIC_LIMIT_GB
+            )
+
             message_lines.extend(
                 [
                     '⏰ <b>Параметры триала:</b>',
-                    f'📅 Период: {settings.TRIAL_DURATION_DAYS} дней',
-                    f'📊 Трафик: {self._format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB)}',
+                    f'📅 Период: {trial_duration_days} дней',
+                    f'📊 Трафик: {self._format_traffic(trial_traffic_gb)}',
                     f'📱 Устройства: {trial_device_limit}',
                     f'🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else "По умолчанию"}',
                 ]
