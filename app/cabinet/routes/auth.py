@@ -1558,6 +1558,33 @@ async def auto_login(
             detail='Account is deactivated',
         )
 
+    # SECURITY: auto-login токены создаются по результатам guest purchase, где
+    # User.telegram_id выставляется из bot.get_chat('@username') без proof of
+    # ownership — то есть атакер может сделать guest-purchase с username админа
+    # и получить токен, ведущий к этому user. Запрещаем такой path для админов
+    # из ADMIN_IDS / ADMIN_EMAILS — пусть проходят полную Telegram WebApp /
+    # password аутентификацию.
+    admin_telegram_ids = set(settings.get_admin_ids() or [])
+    admin_emails = {email.strip().lower() for email in (settings.get_admin_emails() or []) if email}
+    is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_telegram_ids
+    is_email_admin = (
+        getattr(user, 'email', None) is not None
+        and bool(user.email)
+        and getattr(user, 'email_verified', False)
+        and user.email.strip().lower() in admin_emails
+    )
+    if is_telegram_admin or is_email_admin:
+        logger.warning(
+            'Auto-login blocked for admin account — must use full auth flow',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            client_ip=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Administrator accounts cannot use auto-login. Please sign in via Telegram.',
+        )
+
     response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token)
     user.cabinet_last_login = datetime.now(UTC)
