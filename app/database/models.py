@@ -2268,10 +2268,18 @@ class TrafficPurchase(Base):
     """Докупка трафика с индивидуальной датой истечения."""
 
     __tablename__ = 'traffic_purchases'
-    __table_args__ = (Index('ix_traffic_purchases_created_at', 'created_at'),)
+    __table_args__ = (
+        Index('ix_traffic_purchases_created_at', 'created_at'),
+        # Composite index ускоряет housekeeping-запросы вида
+        # `WHERE subscription_id = :id AND expires_at <op> :now` (DELETE/SELECT
+        # в _housekeep_expired_purchases / _apply_base_limit_preserving_active_purchases).
+        Index('ix_traffic_purchases_sub_expires', 'subscription_id', 'expires_at'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
+    # subscription_id: индекс не нужен — leftmost prefix покрывается композитным
+    # ix_traffic_purchases_sub_expires(subscription_id, expires_at).
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
 
     traffic_gb = Column(Integer, nullable=False)  # Количество ГБ в покупке
     expires_at = Column(AwareDateTime(), nullable=False, index=True)  # Дата истечения (покупка + 30 дней)
