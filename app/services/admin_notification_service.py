@@ -6,6 +6,7 @@ from typing import Any
 import structlog
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from app.database.crud.transaction import get_transaction_by_id
 from app.database.crud.user import get_user_by_id
 from app.database.models import (
     AdvertisingCampaign,
+    AdvertisingCampaignRegistration,
     GuestPurchase,
     PromoCodeType,
     PromoGroup,
@@ -1095,7 +1097,27 @@ class AdminNotificationService:
         campaign: AdvertisingCampaign,
         user: User | None = None,
     ) -> bool:
+        # Дедуп: если юзер уже зарегистрирован в этой кампании
+        # (AdvertisingCampaignRegistration.UniqueConstraint(campaign_id, user_id))
+        # — повторный /start не должен слать новое уведомление в админ-чат, иначе
+        # кол-во сообщений в чате превышает реальное число регистраций в БД и
+        # вводит админа в заблуждение. Для новых юзеров (user is None) уведомление
+        # уходит как раньше — это первичный переход.
         if user:
+            existing_registration = await db.execute(
+                select(AdvertisingCampaignRegistration.id).where(
+                    AdvertisingCampaignRegistration.campaign_id == campaign.id,
+                    AdvertisingCampaignRegistration.user_id == user.id,
+                )
+            )
+            if existing_registration.scalar_one_or_none() is not None:
+                logger.debug(
+                    'Skip campaign visit notification: user already registered in campaign',
+                    user_id=user.id,
+                    campaign_id=campaign.id,
+                )
+                return False
+
             try:
                 await self._record_subscription_event(
                     db,
