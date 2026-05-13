@@ -760,9 +760,9 @@ class Settings(BaseSettings):
     DONUT_SBP_QR_ENABLED: bool = False
     DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
 
-    # Lava (Lava Business API, gate.lava.ru)
+    # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
-    LAVA_BASE_URL: str = 'https://gate.lava.ru'
+    LAVA_BASE_URL: str = 'https://api.lava.ru'
     LAVA_SHOP_ID: str | None = None  # UUID проекта
     LAVA_SECRET_KEY: str | None = None  # secret_key — для подписи запросов
     LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
