@@ -1876,6 +1876,12 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=True, index=True)
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verified_at = Column(AwareDateTime(), nullable=True)
+    # Источник верификации email — используется как trust signal для admin escalation.
+    # 'cabinet'/'oauth_google'/'oauth_discord' доверяем (real ownership proof);
+    # 'oauth_vk'/'oauth_yandex' — email используется, но НЕ trusted для ADMIN_EMAILS match.
+    # NULL для legacy строк до миграции 0079 (трактуется так же, как 'cabinet' для
+    # bootstrap-compat — см. is_user_admin_by_env).
+    email_verification_source = Column(String(32), nullable=True)
     password_hash = Column(String(255), nullable=True)
     email_verification_token = Column(String(255), nullable=True)
     email_verification_expires = Column(AwareDateTime(), nullable=True)

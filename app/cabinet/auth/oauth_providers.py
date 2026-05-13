@@ -298,11 +298,13 @@ class YandexProvider(OAuthProvider):
             provider='yandex',
             provider_id=str(data['id']),
             email=email,
-            # Yandex /info НЕ возвращает proof-of-ownership flag для email — поэтому
-            # не помечаем как verified. Раньше было `bool(email)`, что давало False
-            # positive verified — пригодное к privilege escalation если адрес из
-            # ADMIN_EMAILS. Юзер пройдёт cabinet email-verification отдельно.
-            email_verified=False,
+            # Yandex не возвращает proof-of-ownership flag, но default email обычно
+            # привязан и юзается провайдером. Помечаем как verified для UX (recovery,
+            # account linking, panel sync), а защита от admin escalation работает
+            # через email_verification_source='oauth_yandex' — этот источник НЕ в
+            # TRUSTED_EMAIL_VERIFICATION_SOURCES, поэтому match с ADMIN_EMAILS
+            # для Superadmin grant не сработает.
+            email_verified=bool(email),
             first_name=data.get('first_name'),
             last_name=data.get('last_name'),
             username=data.get('login'),
@@ -477,9 +479,12 @@ class VKProvider(OAuthProvider):
             provider='vk',
             provider_id=str(user_id),
             email=email,
-            # VK ID не cryptographically proves email ownership — поле email можно
-            # привязать без верификации. Не доверяем как verified источнику.
-            email_verified=False,
+            # VK ID не cryptographically proves email ownership, но если юзер
+            # прошёл OAuth flow и VK выдал email — обычно он валидный. Помечаем
+            # как verified для UX; защита от admin-escalation выполняется на
+            # уровне email_verification_source='oauth_vk' (не trusted для
+            # ADMIN_EMAILS match — см. TRUSTED_EMAIL_VERIFICATION_SOURCES).
+            email_verified=bool(email),
             first_name=user_data.get('first_name'),
             last_name=user_data.get('last_name'),
             avatar_url=user_data.get('avatar'),

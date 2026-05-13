@@ -1237,9 +1237,11 @@ async def verify_email(
             detail='Verification token has expired',
         )
 
-    # Mark email as verified
+    # Mark email as verified through cabinet OTP — trusted source for admin
+    # escalation (юзер реально получил code на email и ввёл его).
     user.email_verified = True
     user.email_verified_at = datetime.now(UTC)
+    user.email_verification_source = 'cabinet'
     user.email_verification_token = None
     user.email_verification_expires = None
     user.cabinet_last_login = datetime.now(UTC)

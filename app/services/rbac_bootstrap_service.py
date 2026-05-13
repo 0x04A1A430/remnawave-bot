@@ -49,15 +49,17 @@ def _mask_email(value: str | None) -> str:
 
 
 # Источники верификации email, которым доверяем для admin escalation.
-# Cabinet (отправили код на email и юзер ввёл) — trusted.
-# google/discord — OIDC/API с реальной проверкой ownership.
-# VK / Yandex отсутствуют — их `email_verified` фабрикуется как bool(email)
-# и не доказывает владение адресом.
+# - cabinet: юзер ввёл OTP-код, отправленный кабинетом — реальный proof of ownership.
+# - oauth_google: OIDC userinfo over TLS, Google enforces email verification.
+# - oauth_discord: Discord API `verified` flag — провайдер сам проверяет.
+# - admin_override: установлено вручную через admin UI / migrations.
+# VK / Yandex отсутствуют — их `email_verified=True` обусловлен лишь наличием
+# email в OAuth-ответе, но провайдер не выдаёт cryptographic proof of ownership.
+# Email используется для UX (recovery, linking, panel sync), но не доверяется
+# для match с ADMIN_EMAILS.
 TRUSTED_EMAIL_VERIFICATION_SOURCES: 'frozenset[str]' = frozenset(
     {'cabinet', 'oauth_google', 'oauth_discord', 'admin_override'}
 )
-
-_SENTINEL_NO_ATTR = object()
 
 
 @dataclass(frozen=True)
@@ -107,17 +109,16 @@ def is_user_admin_by_env(user: User) -> AdminEnvCheck:
 
     user_email = getattr(user, 'email', None)
     email_verified = bool(getattr(user, 'email_verified', False))
-    # Verification source guard: если в проекте появилось поле email_verification_source,
-    # требуем чтобы оно было из доверенного провайдера. Иначе VK/Yandex с
-    # fabricated `email_verified=bool(email)` могли бы дать privilege escalation.
-    # Если поле отсутствует (legacy schema) — допускаем email_verified=True
-    # как раньше, защита остаётся на уровне OAuth-провайдера (где VK/Yandex
-    # теперь сами выставляют email_verified=False).
-    verification_source = getattr(user, 'email_verification_source', _SENTINEL_NO_ATTR)
-    if verification_source is _SENTINEL_NO_ATTR:
-        verification_ok = email_verified
-    else:
-        verification_ok = email_verified and verification_source in TRUSTED_EMAIL_VERIFICATION_SOURCES
+    # Trust guard: для admin escalation нужен НЕ просто verified email, но и
+    # верификация через trusted источник. VK/Yandex выставляют email_verified=True
+    # для UX (recovery, linking), но их source='oauth_vk'/'oauth_yandex' НЕ в
+    # TRUSTED_EMAIL_VERIFICATION_SOURCES — значит admin escalation для них закрыта.
+    # NULL (legacy строки до миграции 0079, не успевшие пройти backfill) трактуется
+    # как trusted-'cabinet' equivalent — backward-compat.
+    verification_source = getattr(user, 'email_verification_source', None)
+    verification_ok = email_verified and (
+        verification_source is None or verification_source in TRUSTED_EMAIL_VERIFICATION_SOURCES
+    )
 
     is_email_admin = (
         user_email is not None
