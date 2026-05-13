@@ -339,6 +339,58 @@ async def _ensure_role_by_telegram_id(
     return await _assign_if_missing(db, user_id=user.id, role_id=role_id, identifier=str(telegram_id))
 
 
+async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
+    """Idempotent Superadmin re-assign for ADMIN_IDS / ADMIN_EMAILS users at login time.
+
+    Возвращает True если роль была назначена/реактивирована, False если у юзера
+    уже есть активная Superadmin-роль или его telegram_id/email не в env-списке.
+
+    Вызывается из cabinet login flow чтобы покрыть случай:
+      - юзер был удалён через кабинет
+      - пересоздан через /start с новым user.id
+      - bot не рестартовал → RBAC bootstrap не отработал → новый user.id без роли
+      - юзер логинится → access_token выдаётся с пустыми permissions
+      - /cabinet/auth/me/is-admin отдаёт false → нет кнопки «Админка»
+
+    Эта функция гарантирует что админ из ADMIN_IDS получит Superadmin на первом
+    же успешном login, не дожидаясь рестарта бота.
+    """
+    admin_ids: set[int] = set()
+    admin_emails: set[str] = set()
+    try:
+        admin_ids = {int(x) for x in (settings.ADMIN_IDS or []) if x}
+    except (TypeError, ValueError) as parse_error:
+        logger.warning('Failed to parse ADMIN_IDS', error=str(parse_error))
+
+    try:
+        admin_emails = {str(x).strip().lower() for x in (settings.ADMIN_EMAILS or []) if x}
+    except (TypeError, ValueError) as parse_error:
+        logger.warning('Failed to parse ADMIN_EMAILS', error=str(parse_error))
+
+    is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_ids
+    is_email_admin = (
+        getattr(user, 'email', None) is not None
+        and bool(user.email)
+        and getattr(user, 'email_verified', False)
+        and user.email.strip().lower() in admin_emails
+    )
+
+    if not is_telegram_admin and not is_email_admin:
+        return False
+
+    role_result = await db.execute(select(AdminRole).where(AdminRole.name == SUPERADMIN_ROLE_NAME))
+    role = role_result.scalar_one_or_none()
+    if role is None:
+        logger.warning(
+            'Superadmin role not found at login bootstrap — RBAC tables not seeded?',
+            user_id=user.id,
+        )
+        return False
+
+    identifier = str(user.telegram_id) if is_telegram_admin else (user.email or str(user.id))
+    return await _assign_if_missing(db, user_id=user.id, role_id=role.id, identifier=identifier)
+
+
 async def _ensure_role_by_email(
     db: AsyncSession,
     *,

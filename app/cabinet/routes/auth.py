@@ -117,6 +117,24 @@ def _user_to_response(user: User) -> UserResponse:
 
 async def _create_auth_response(user: User, db: AsyncSession) -> AuthResponse:
     """Create full auth response with tokens and RBAC permissions."""
+    # Idempotent Superadmin re-assignment for users in ADMIN_IDS / ADMIN_EMAILS.
+    # Покрывает кейс: юзер был удалён через кабинет → пересоздан через /start
+    # → у нового user.id нет роли, потому что RBAC bootstrap отрабатывает только
+    # на старте бота. Без этой проверки админ из ADMIN_IDS получает access_token
+    # с пустыми permissions до следующего рестарта и видит 401 на /me/is-admin.
+    try:
+        from app.services.rbac_bootstrap_service import ensure_superadmin_role_on_login
+
+        await ensure_superadmin_role_on_login(db, user)
+    except Exception as bootstrap_error:
+        logger.error(
+            'Failed to ensure Superadmin role on login',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            error=str(bootstrap_error),
+            exc_info=True,
+        )
+
     user_permissions, user_role_names, user_role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
 
     access_token = create_access_token(
