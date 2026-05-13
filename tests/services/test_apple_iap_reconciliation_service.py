@@ -83,7 +83,9 @@ async def test_reconcile_recent_transactions_flags_drift_and_counts_backlog(monk
         'get_recent_apple_transactions',
         AsyncMock(return_value=[sandbox_txn, fetch_failed_txn, drift_txn]),
     )
-    monkeypatch.setattr(reconciliation_module, 'get_unprocessed_apple_notifications', AsyncMock(return_value=notifications))
+    monkeypatch.setattr(
+        reconciliation_module, 'get_unprocessed_apple_notifications', AsyncMock(return_value=notifications)
+    )
     monkeypatch.setattr(reconciliation_module, 'create_apple_abuse_event', abuse_event)
 
     result = await AppleIAPReconciliationService(apple_service).reconcile_recent_transactions(db, limit=10)

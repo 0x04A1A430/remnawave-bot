@@ -370,9 +370,7 @@ class TelegramStarsMixin:
                         error_type=type(error).__name__,
                     )
                 else:
-                    logger.error(
-                        'Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True
-                    )
+                    logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
 
         if getattr(self, 'bot', None):
             try:

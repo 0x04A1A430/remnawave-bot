@@ -485,11 +485,7 @@ async def _lock_subscription_row(db: AsyncSession, subscription: Subscription) -
     Идемпотентно: повторный lock в той же транзакции — noop (Postgres держит
     лок до конца транзакции).
     """
-    await db.execute(
-        select(Subscription.id)
-        .where(Subscription.id == subscription.id)
-        .with_for_update()
-    )
+    await db.execute(select(Subscription.id).where(Subscription.id == subscription.id).with_for_update())
     # Подтягиваем поля, которые могут быть обновлены конкурентным add_subscription_traffic
     await db.refresh(subscription, ['traffic_limit_gb', 'purchased_traffic_gb', 'traffic_reset_at'])
 

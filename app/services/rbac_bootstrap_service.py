@@ -399,9 +399,7 @@ async def _revoke_stale_superadmins(
         # email_verified is required — symmetric with _ensure_role_by_email.
         in_env_by_id = user.telegram_id is not None and user.telegram_id in admin_ids_set
         in_env_by_email = (
-            user.email is not None
-            and user.email_verified
-            and normalize_admin_email(user.email) in admin_emails_set
+            user.email is not None and user.email_verified and normalize_admin_email(user.email) in admin_emails_set
         )
 
         if not in_env_by_id and not in_env_by_email:

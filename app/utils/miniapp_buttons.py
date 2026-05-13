@@ -25,11 +25,7 @@ _EMOJI_CHAR_CLASS = (
     r']'
 )
 _LEADING_EMOJI_RE = re.compile(
-    r'^' + _EMOJI_CHAR_CLASS
-    + r'(?:[️‍\U0001F3FB-\U0001F3FF]|'
-    + _EMOJI_CHAR_CLASS
-    + r')*'
-    + r'\s*'
+    r'^' + _EMOJI_CHAR_CLASS + r'(?:[️‍\U0001F3FB-\U0001F3FF]|' + _EMOJI_CHAR_CLASS + r')*' + r'\s*'
 )
 
 

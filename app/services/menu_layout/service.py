@@ -1048,7 +1048,9 @@ class MenuLayoutService:
             return InlineKeyboardButton(text=text, url=action, icon_custom_emoji_id=custom_emoji_id)
         if button_type == 'mini_app':
             return InlineKeyboardButton(
-                text=text, web_app=types.WebAppInfo(url=action), icon_custom_emoji_id=custom_emoji_id,
+                text=text,
+                web_app=types.WebAppInfo(url=action),
+                icon_custom_emoji_id=custom_emoji_id,
             )
         if button_type == 'callback':
             # Кастомная кнопка с callback_data
@@ -1079,7 +1081,9 @@ class MenuLayoutService:
             if url and (url.startswith('http://') or url.startswith('https://')):
                 logger.info('🔗 Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
                 return InlineKeyboardButton(
-                    text=text, web_app=types.WebAppInfo(url=url), icon_custom_emoji_id=custom_emoji_id,
+                    text=text,
+                    web_app=types.WebAppInfo(url=url),
+                    icon_custom_emoji_id=custom_emoji_id,
                 )
             logger.warning(
                 '🔗 Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',

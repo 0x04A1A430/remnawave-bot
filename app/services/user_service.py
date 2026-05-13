@@ -1188,9 +1188,7 @@ class UserService:
             for model in extra_payment_models:
                 try:
                     async with db.begin_nested():
-                        await db.execute(
-                            update(model).where(model.user_id == user_id).values(transaction_id=None)
-                        )
+                        await db.execute(update(model).where(model.user_id == user_id).values(transaction_id=None))
                         await db.flush()
                         await db.execute(delete(model).where(model.user_id == user_id))
                         await db.flush()

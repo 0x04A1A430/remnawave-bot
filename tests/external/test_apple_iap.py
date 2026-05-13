@@ -39,7 +39,12 @@ def _enable_apple_iap(monkeypatch: pytest.MonkeyPatch, tmp_path: Path | None = N
     monkeypatch.setattr(settings, 'APPLE_IAP_BUNDLE_ID', 'com.bitnet.vpnclient', raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_APP_APPLE_ID', 123456789, raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Sandbox', raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY', '-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----', raising=False)
+    monkeypatch.setattr(
+        settings,
+        'APPLE_IAP_PRIVATE_KEY',
+        '-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----',
+        raising=False,
+    )
     monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', None, raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_ROOT_CERTS_PATHS', str(cert_path), raising=False)
     monkeypatch.setattr(
@@ -193,7 +198,9 @@ class TestAdapter:
         assert result['transactionId'] == '2000000123456789'
         assert result['signedTransactionInfoHash']
 
-    def test_verify_notification_uses_signed_data_verifier(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_verify_notification_uses_signed_data_verifier(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         _enable_apple_iap(monkeypatch, tmp_path)
         service = AppleIAPService()
 
@@ -311,7 +318,9 @@ class TestCabinetAppleIAPRoutes:
         assert await apple_iap_routes._check_purchase_rate_limit(FakeRedis(), user_id=1, ip_address=None) is True
 
     @pytest.mark.anyio('asyncio')
-    async def test_purchase_rate_limit_sets_ttl_atomically_for_new_counter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_purchase_rate_limit_sets_ttl_atomically_for_new_counter(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from app.cabinet import apple_iap as apple_iap_routes
 
         class FakeRedis:
@@ -842,7 +851,11 @@ class TestNotificationService:
 
         class FakeAppleService:
             def verify_notification(self, signed_payload: str):
-                return {'notificationUUID': 'notification-uuid', 'notificationType': 'TEST', 'data': {'environment': 'Sandbox'}}
+                return {
+                    'notificationUUID': 'notification-uuid',
+                    'notificationType': 'TEST',
+                    'data': {'environment': 'Sandbox'},
+                }
 
         get_by_uuid = AsyncMock(side_effect=[None, processed_row])
         create_notification = AsyncMock(side_effect=IntegrityError('insert', {}, Exception('duplicate')))

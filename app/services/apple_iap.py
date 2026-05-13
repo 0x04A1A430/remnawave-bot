@@ -249,7 +249,12 @@ class AppleIAPFulfillmentService:
 
         existing = await get_apple_transaction_by_transaction_id(db, transaction_id)
         if existing:
-            if existing.user_id == user_id and existing.status in {'verified', 'credited', 'sandbox_recorded', 'refunded'}:
+            if existing.user_id == user_id and existing.status in {
+                'verified',
+                'credited',
+                'sandbox_recorded',
+                'refunded',
+            }:
                 return AppleFulfillmentResult(True, 'already_processed', existing)
             await create_apple_abuse_event(
                 db,
@@ -269,7 +274,12 @@ class AppleIAPFulfillmentService:
         if web_order_line_item_id:
             existing = await get_apple_transaction_by_web_order_line_item_id(db, web_order_line_item_id)
             if existing:
-                if existing.user_id == user_id and existing.status in {'verified', 'credited', 'sandbox_recorded', 'refunded'}:
+                if existing.user_id == user_id and existing.status in {
+                    'verified',
+                    'credited',
+                    'sandbox_recorded',
+                    'refunded',
+                }:
                     return AppleFulfillmentResult(True, 'already_processed', existing)
                 await create_apple_abuse_event(
                     db,
@@ -387,7 +397,9 @@ class AppleIAPFulfillmentService:
             was_first_topup=was_first_topup,
         )
 
-        logger.info('Apple IAP purchase credited', transaction_id=transaction_id, user_id=user_id, amount_kopeks=amount_kopeks)
+        logger.info(
+            'Apple IAP purchase credited', transaction_id=transaction_id, user_id=user_id, amount_kopeks=amount_kopeks
+        )
         return AppleFulfillmentResult(True, 'credited', apple_txn, transaction)
 
     async def _record_sandbox_on_production(
@@ -485,7 +497,9 @@ class AppleIAPFulfillmentService:
 
             await send_cart_notification_after_topup(user, amount_kopeks, db, self.bot)
         except Exception as error:
-            logger.error('Ошибка при работе с сохраненной корзиной Apple IAP', user_id=user.id, error=error, exc_info=True)
+            logger.error(
+                'Ошибка при работе с сохраненной корзиной Apple IAP', user_id=user.id, error=error, exc_info=True
+            )
 
 
 class AppleIAPNotificationService:
@@ -605,7 +619,11 @@ class AppleIAPNotificationService:
     def _environment_allowed(self, environment: str) -> bool:
         configured = settings.get_apple_iap_environment()
         if configured == 'Production':
-            return environment in {'', 'Production', 'Sandbox'} if settings.APPLE_IAP_ALLOW_SANDBOX_ON_PRODUCTION else environment in {'', 'Production'}
+            return (
+                environment in {'', 'Production', 'Sandbox'}
+                if settings.APPLE_IAP_ALLOW_SANDBOX_ON_PRODUCTION
+                else environment in {'', 'Production'}
+            )
         return environment in {'', 'Sandbox'}
 
     async def _dispatch(
@@ -626,7 +644,11 @@ class AppleIAPNotificationService:
         if notification_type == 'CONSUMPTION_REQUEST':
             return await self._handle_consumption_request(txn_info)
 
-        logger.info('Unhandled Apple notification type', notification_type=notification_type, notification_uuid=apple_notification.notification_uuid)
+        logger.info(
+            'Unhandled Apple notification type',
+            notification_type=notification_type,
+            notification_uuid=apple_notification.notification_uuid,
+        )
         return 'ignored'
 
     async def _validate_stored_transaction_matches_notification(
@@ -639,7 +661,9 @@ class AppleIAPNotificationService:
     ) -> str | None:
         signed_transaction_id = str(txn_info.get('transactionId') or '')
         signed_original_transaction_id = str(txn_info.get('originalTransactionId') or '')
-        stored_transaction_ids = {value for value in (apple_txn.transaction_id, apple_txn.original_transaction_id) if value}
+        stored_transaction_ids = {
+            value for value in (apple_txn.transaction_id, apple_txn.original_transaction_id) if value
+        }
         signed_transaction_ids = {value for value in (signed_transaction_id, signed_original_transaction_id) if value}
         if not stored_transaction_ids.intersection(signed_transaction_ids):
             await create_apple_abuse_event(

@@ -491,4 +491,3 @@ class WebhookServer:
         except Exception as e:
             logger.error('Критическая ошибка обработки Freekassa webhook', error=e, exc_info=True)
             return web.Response(text='NO', status=500)
-

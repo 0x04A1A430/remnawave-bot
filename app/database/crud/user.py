@@ -901,9 +901,7 @@ async def get_users_list(
         query = query.where(
             or_(
                 User.promo_group_id == promo_group_id,
-                User.id.in_(
-                    select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)
-                ),
+                User.id.in_(select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)),
             )
         )
 
@@ -1039,9 +1037,7 @@ async def get_users_count(
         query = query.where(
             or_(
                 User.promo_group_id == promo_group_id,
-                User.id.in_(
-                    select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)
-                ),
+                User.id.in_(select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)),
             )
         )
 

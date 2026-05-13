@@ -75,9 +75,7 @@ def _model_to_dict(model: Any) -> dict[str, Any]:
     if attrs.has(model.__class__):
         return {field.name: _primitive(getattr(model, field.name, None)) for field in attrs.fields(model.__class__)}
     return {
-        key: _primitive(value)
-        for key, value in vars(model).items()
-        if not key.startswith('_') and value is not None
+        key: _primitive(value) for key, value in vars(model).items() if not key.startswith('_') and value is not None
     }
 
 
@@ -196,7 +194,9 @@ class AppleIAPService:
 
             signed_transaction_info = getattr(response, 'signedTransactionInfo', None)
             if not signed_transaction_info:
-                logger.warning('Apple transaction response missing signedTransactionInfo', transaction_id=transaction_id)
+                logger.warning(
+                    'Apple transaction response missing signedTransactionInfo', transaction_id=transaction_id
+                )
                 return None
 
             decoded = self.verify_signed_transaction_info(signed_transaction_info, _environment_name(attempt_env))

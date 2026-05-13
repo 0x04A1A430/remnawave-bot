@@ -421,7 +421,9 @@ class AppleNotification(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
     def __repr__(self):
-        return f'<AppleNotification(uuid={self.notification_uuid}, type={self.notification_type}, status={self.status})>'
+        return (
+            f'<AppleNotification(uuid={self.notification_uuid}, type={self.notification_type}, status={self.status})>'
+        )
 
 
 class AppleIAPAbuseEvent(Base):

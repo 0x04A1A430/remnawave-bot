@@ -828,9 +828,7 @@ async def get_device_price(
         response['discount_percent'] = devices_discount_percent
         response['discount_kopeks'] = discount_value
         response['base_total_price_kopeks'] = base_total_price
-        response['original_price_per_device_kopeks'] = (
-            base_total_price // devices if devices > 0 else 0
-        )
+        response['original_price_per_device_kopeks'] = base_total_price // devices if devices > 0 else 0
 
     return response
 

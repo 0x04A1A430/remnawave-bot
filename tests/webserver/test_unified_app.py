@@ -112,7 +112,9 @@ def test_unified_app_apple_iap_only_mounts_only_apple_cabinet_routes(
     monkeypatch.setattr(settings, 'APPLE_IAP_BUNDLE_ID', 'com.org.app', raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_APP_APPLE_ID', 123456789, raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_ENVIRONMENT', 'Sandbox', raising=False)
-    monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY', '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----', raising=False)
+    monkeypatch.setattr(
+        settings, 'APPLE_IAP_PRIVATE_KEY', '-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----', raising=False
+    )
     monkeypatch.setattr(settings, 'APPLE_IAP_PRIVATE_KEY_PATH', None, raising=False)
     monkeypatch.setattr(settings, 'APPLE_IAP_ROOT_CERTS_PATHS', str(cert_path), raising=False)
 
