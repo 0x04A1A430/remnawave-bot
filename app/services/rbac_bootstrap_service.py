@@ -9,6 +9,7 @@ from typing import Final
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -340,32 +341,27 @@ async def _ensure_role_by_telegram_id(
 
 
 async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
-    """Idempotent Superadmin re-assign for ADMIN_IDS / ADMIN_EMAILS users at login time.
+    """Idempotent Superadmin assign for ADMIN_IDS / ADMIN_EMAILS users at login time.
 
-    Возвращает True если роль была назначена/реактивирована, False если у юзера
-    уже есть активная Superadmin-роль или его telegram_id/email не в env-списке.
+    Возвращает True если роль была назначена прямо сейчас (новая запись), False во всех
+    остальных случаях — включая случай, когда у юзера уже есть UserRole-запись
+    (active или deactivated).
 
-    Вызывается из cabinet login flow чтобы покрыть случай:
-      - юзер был удалён через кабинет
-      - пересоздан через /start с новым user.id
-      - bot не рестартовал → RBAC bootstrap не отработал → новый user.id без роли
-      - юзер логинится → access_token выдаётся с пустыми permissions
-      - /cabinet/auth/me/is-admin отдаёт false → нет кнопки «Админка»
+    Назначение: покрыть кейс «удалён через кабинет → пересоздан через /start с новым
+    user.id → бот не рестартовал → RBAC bootstrap не отработал». В этом сценарии у
+    нового user.id вообще НЕТ записи в user_roles, и эта функция создаёт её.
 
-    Эта функция гарантирует что админ из ADMIN_IDS получит Superadmin на первом
-    же успешном login, не дожидаясь рестарта бота.
+    ВАЖНО — в отличие от bootstrap-времени `_assign_if_missing`, здесь НЕ реактивируем
+    deactivated роль. Если senior admin отозвал Superadmin через UI (поставил
+    is_active=False), при следующем login юзера мы это уважаем. Реактивация env-grants
+    происходит только при старте бота (через `_revoke_stale_superadmins` + текущий
+    bootstrap), чтобы не превратить login в способ обхода manual revoke.
     """
-    admin_ids: set[int] = set()
-    admin_emails: set[str] = set()
-    try:
-        admin_ids = {int(x) for x in (settings.ADMIN_IDS or []) if x}
-    except (TypeError, ValueError) as parse_error:
-        logger.warning('Failed to parse ADMIN_IDS', error=str(parse_error))
-
-    try:
-        admin_emails = {str(x).strip().lower() for x in (settings.ADMIN_EMAILS or []) if x}
-    except (TypeError, ValueError) as parse_error:
-        logger.warning('Failed to parse ADMIN_EMAILS', error=str(parse_error))
+    # Используем готовые getters из config — settings.ADMIN_IDS/ADMIN_EMAILS это
+    # comma-separated строки, прямая итерация выдаст символы и list comprehension
+    # тихо положит пустой set.
+    admin_ids: set[int] = set(settings.get_admin_ids() or [])
+    admin_emails: set[str] = {email.strip().lower() for email in (settings.get_admin_emails() or []) if email}
 
     is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_ids
     is_email_admin = (
@@ -387,8 +383,43 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
         )
         return False
 
+    # Проверяем существующую запись напрямую, без reactivation-логики из
+    # `_assign_if_missing`: если manual revoke сделан через UI — мы его уважаем.
+    existing = await db.execute(
+        select(UserRole).where(
+            UserRole.user_id == user.id,
+            UserRole.role_id == role.id,
+        )
+    )
+    existing_assignment = existing.scalar_one_or_none()
+    if existing_assignment is not None:
+        # Запись уже есть — ничего не трогаем. Active останется active, revoked
+        # останется revoked. Решение о реактивации принимается только в bootstrap
+        # при рестарте бота.
+        return False
+
     identifier = str(user.telegram_id) if is_telegram_admin else (user.email or str(user.id))
-    return await _assign_if_missing(db, user_id=user.id, role_id=role.id, identifier=identifier)
+    new_assignment = UserRole(
+        user_id=user.id,
+        role_id=role.id,
+        is_active=True,
+    )
+    db.add(new_assignment)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # Race: параллельный login или bootstrap уже создали запись. Откатываем
+        # savepoint и возвращаем False (запись существует, мы её не создали).
+        await db.rollback()
+        return False
+
+    logger.info(
+        'Superadmin role assigned at login',
+        user_id=user.id,
+        role_id=role.id,
+        identifier=identifier,
+    )
+    return True
 
 
 async def _ensure_role_by_email(

@@ -134,6 +134,13 @@ async def _create_auth_response(user: User, db: AsyncSession) -> AuthResponse:
             error=str(bootstrap_error),
             exc_info=True,
         )
+        # Session may be in a poisoned state after a flush failure — rollback
+        # so subsequent statements (get_user_permissions) don't trip
+        # PendingRollbackError.
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
     user_permissions, user_role_names, user_role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
 
