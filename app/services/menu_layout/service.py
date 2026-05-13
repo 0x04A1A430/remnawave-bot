@@ -1033,9 +1033,10 @@ class MenuLayoutService:
         if not text:
             return None
 
-        # Добавляем иконку если есть и текст не начинается с неё
-        # (unicode emoji в тексте; custom emoji идёт через отдельное поле)
-        if icon and not text.startswith(icon):
+        # Добавляем юникод-иконку если есть и текст не начинается с неё.
+        # Если параллельно задан icon_custom_emoji_id — Telegram сам рендерит кастом emoji
+        # слева, и юникод-icon вызвал бы дубль (две иконки), поэтому пропускаем.
+        if icon and not custom_emoji_id and not text.startswith(icon):
             text = f'{icon} {text}'
 
         # Форматируем динамический текст
