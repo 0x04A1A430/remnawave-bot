@@ -10,6 +10,10 @@ Housekeeping-запросы в `_housekeep_expired_purchases` и
 
 CREATE INDEX CONCURRENTLY чтобы не лочить таблицу на проде.
 
+Сплит на 2 ревизии — дроп редундантного single-column `ix_traffic_purchases_subscription_id`
+вынесен в 0081, чтобы при сбое DROP не блокировался прогресс alembic_version
+после успешного CREATE.
+
 Revision ID: 0080
 Revises: 0079
 Create Date: 2026-05-13
@@ -38,9 +42,6 @@ def upgrade() -> None:
                 'CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_traffic_purchases_sub_expires '
                 'ON traffic_purchases (subscription_id, expires_at)'
             )
-            # Redundant: leftmost prefix покрывается композитным индексом выше.
-            # Дроп уменьшает write amplification на INSERT/UPDATE/DELETE.
-            op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_traffic_purchases_subscription_id')
     else:
         op.create_index(
             'ix_traffic_purchases_sub_expires',
@@ -48,11 +49,6 @@ def upgrade() -> None:
             ['subscription_id', 'expires_at'],
             unique=False,
         )
-        try:
-            op.drop_index('ix_traffic_purchases_subscription_id', table_name='traffic_purchases')
-        except Exception:  # noqa: BLE001
-            # SQLite/dev DB может не иметь этого индекса — норм
-            pass
 
 
 def downgrade() -> None:
@@ -61,17 +57,6 @@ def downgrade() -> None:
 
     if dialect_name == 'postgresql':
         with op.get_context().autocommit_block():
-            # Восстанавливаем single-column index перед удалением composite
-            op.execute(
-                'CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_traffic_purchases_subscription_id '
-                'ON traffic_purchases (subscription_id)'
-            )
             op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_traffic_purchases_sub_expires')
     else:
-        op.create_index(
-            'ix_traffic_purchases_subscription_id',
-            'traffic_purchases',
-            ['subscription_id'],
-            unique=False,
-        )
         op.drop_index('ix_traffic_purchases_sub_expires', table_name='traffic_purchases')
