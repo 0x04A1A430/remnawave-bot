@@ -178,6 +178,12 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
     router = APIRouter()
     routes_registered = False
 
+    if settings.is_apple_iap_enabled():
+        from app.webserver.apple_iap import create_apple_iap_router
+
+        router.include_router(create_apple_iap_router(bot))
+        routes_registered = True
+
     if settings.TRIBUTE_ENABLED:
         tribute_service = TributeService(bot)
         tribute_api = TributeAPI()
@@ -1711,6 +1717,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             return JSONResponse(
                 {
                     'status': 'ok',
+                    'apple_iap_enabled': settings.is_apple_iap_enabled(),
                     'tribute_enabled': settings.TRIBUTE_ENABLED,
                     'mulenpay_enabled': settings.is_mulenpay_enabled(),
                     'cryptobot_enabled': settings.is_cryptobot_enabled(),
