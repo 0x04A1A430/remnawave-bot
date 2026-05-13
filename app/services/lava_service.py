@@ -81,9 +81,24 @@ class LavaService:
         """Сериализация JSON c алфавитной сортировкой ключей (эквивалент php ksort + json_encode).
 
         Поле ``signature`` исключается из канонизации — оно само является продуктом подписи.
+
+        Совместимо c php ``json_encode`` без флагов:
+        * non-ASCII экранируется как ``\\uXXXX`` (PHP по умолчанию escape'ит unicode).
+        * ``float n.0`` приводится к ``int n`` — php ``json_encode(2.0)`` возвращает ``"2"``,
+          тогда как Python ``json.dumps(2.0)`` дал бы ``"2.0"`` и подпись разошлась бы.
         """
-        without_sig = {key: value for key, value in payload.items() if key != 'signature'}
-        return json.dumps(without_sig, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+
+        def normalize(value: Any) -> Any:
+            if isinstance(value, float) and value.is_integer():
+                return int(value)
+            if isinstance(value, dict):
+                return {key: normalize(item) for key, item in value.items() if key != 'signature'}
+            if isinstance(value, list):
+                return [normalize(item) for item in value]
+            return value
+
+        without_sig = {key: normalize(value) for key, value in payload.items() if key != 'signature'}
+        return json.dumps(without_sig, sort_keys=True, separators=(',', ':'))
 
     def _hmac_hex(self, message: str | bytes, key: str | None = None) -> str:
         secret = (key if key is not None else self.secret_key) or ''
