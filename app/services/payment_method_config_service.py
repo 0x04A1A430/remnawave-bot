@@ -422,6 +422,7 @@ async def update_config(
         'user_type_filter',
         'first_topup_filter',
         'promo_group_filter_mode',
+        'open_url_direct',
     )
     for key in updatable_fields:
         if key in data:
