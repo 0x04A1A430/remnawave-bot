@@ -625,10 +625,17 @@ class Settings(BaseSettings):
     APPLE_IAP_KEY_ID: str | None = None
     APPLE_IAP_ISSUER_ID: str | None = None
     APPLE_IAP_BUNDLE_ID: str = 'com.app.client'
+    APPLE_IAP_APP_APPLE_ID: int | None = None
     APPLE_IAP_PRIVATE_KEY: str | None = None  # .p8 key contents (PEM)
     APPLE_IAP_PRIVATE_KEY_PATH: str | None = None  # Alternative: path to .p8 file
     APPLE_IAP_ENVIRONMENT: str = 'Production'  # 'Sandbox' or 'Production'
     APPLE_IAP_WEBHOOK_PATH: str = '/apple-iap-webhook'
+    APPLE_IAP_ROOT_CERTS_PATHS: str = ''  # Comma-separated Apple root certificate files for SignedDataVerifier
+    APPLE_IAP_ENABLE_ONLINE_CERT_CHECKS: bool = True
+    APPLE_IAP_ALLOW_SANDBOX_ON_PRODUCTION: bool = False
+    APPLE_IAP_PURCHASE_RATE_LIMIT_PER_MINUTE: int = 10
+    APPLE_IAP_PURCHASE_FAILURE_LIMIT_PER_HOUR: int = 20
+    APPLE_IAP_RATE_LIMIT_FAIL_OPEN: bool = False
     APPLE_IAP_PRODUCTS: str = (
         '{"com.app.client.topup.100":10000,"com.app.client.topup.300":30000,"com.app.client.topup.500":50000}'
     )
@@ -753,9 +760,9 @@ class Settings(BaseSettings):
     DONUT_SBP_QR_ENABLED: bool = False
     DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
 
-    # Lava (Lava Business API, gate.lava.ru)
+    # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
-    LAVA_BASE_URL: str = 'https://gate.lava.ru'
+    LAVA_BASE_URL: str = 'https://api.lava.ru'
     LAVA_SHOP_ID: str | None = None  # UUID проекта
     LAVA_SECRET_KEY: str | None = None  # secret_key — для подписи запросов
     LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
@@ -1014,6 +1021,8 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str = 'VPN Service'
     SMTP_USE_TLS: bool = True
+    # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
+    SMTP_USE_SSL: bool = False
 
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
@@ -2151,20 +2160,46 @@ class Settings(BaseSettings):
         return html.escape(self.get_severpay_display_name())
 
     def is_apple_iap_enabled(self) -> bool:
+        environment = self.get_apple_iap_environment()
         return (
             self.APPLE_IAP_ENABLED
-            and self.APPLE_IAP_KEY_ID is not None
-            and self.APPLE_IAP_ISSUER_ID is not None
-            and (self.APPLE_IAP_PRIVATE_KEY is not None or self.APPLE_IAP_PRIVATE_KEY_PATH is not None)
+            and bool((self.APPLE_IAP_KEY_ID or '').strip())
+            and bool((self.APPLE_IAP_ISSUER_ID or '').strip())
+            and bool((self.APPLE_IAP_BUNDLE_ID or '').strip())
+            and environment in {'Sandbox', 'Production'}
+            and (environment != 'Production' or self.APPLE_IAP_APP_APPLE_ID is not None)
+            and bool(self.get_apple_iap_root_cert_paths())
+            and bool(self.get_apple_iap_private_key())
         )
+
+    def get_apple_iap_environment(self) -> Literal['Sandbox', 'Production']:
+        environment = (self.APPLE_IAP_ENVIRONMENT or '').strip()
+        if environment == 'Sandbox':
+            return 'Sandbox'
+        return 'Production'
+
+    def get_apple_iap_root_cert_paths(self) -> list[Path]:
+        return [Path(path.strip()) for path in (self.APPLE_IAP_ROOT_CERTS_PATHS or '').split(',') if path.strip()]
 
     def get_apple_iap_products(self) -> dict[str, int]:
         """Return mapping of Apple product ID -> kopeks amount."""
         import json as _json
 
         try:
-            return _json.loads(self.APPLE_IAP_PRODUCTS)
-        except Exception:
+            products = _json.loads(self.APPLE_IAP_PRODUCTS)
+            if not isinstance(products, dict):
+                return {}
+            normalized: dict[str, int] = {}
+            for product_id, amount_kopeks in products.items():
+                try:
+                    amount = int(amount_kopeks)
+                except (TypeError, ValueError):
+                    continue
+                product = str(product_id).strip()
+                if product and amount > 0:
+                    normalized[product] = amount
+            return normalized
+        except (TypeError, _json.JSONDecodeError):
             return {}
 
     def get_apple_iap_private_key(self) -> str | None:
@@ -2172,9 +2207,16 @@ class Settings(BaseSettings):
         if self.APPLE_IAP_PRIVATE_KEY:
             return self.APPLE_IAP_PRIVATE_KEY
         if self.APPLE_IAP_PRIVATE_KEY_PATH:
+            key_path = Path(self.APPLE_IAP_PRIVATE_KEY_PATH)
             try:
-                return Path(self.APPLE_IAP_PRIVATE_KEY_PATH).read_text().strip()
-            except Exception:
+                return key_path.read_text().strip()
+            except (OSError, UnicodeDecodeError) as error:
+                logger.error(
+                    'Failed to load Apple IAP private key file',
+                    path=str(key_path),
+                    error=str(error),
+                    exc_info=True,
+                )
                 return None
         return None
 

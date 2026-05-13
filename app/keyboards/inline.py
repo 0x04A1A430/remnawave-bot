@@ -414,8 +414,14 @@ def _build_cabinet_main_menu_keyboard(
                 resolved = global_style or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_fallback))
             resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
 
+            # При наличии custom emoji стрипаем ведущий юникод-emoji из текста —
+            # иначе Telegram нарисует обе иконки.
+            from app.utils.miniapp_buttons import strip_leading_emoji
+
+            final_text = strip_leading_emoji(text) if resolved_emoji else text
+
             return InlineKeyboardButton(
-                text=text,
+                text=final_text,
                 web_app=types.WebAppInfo(url=url),
                 style=resolved,
                 icon_custom_emoji_id=resolved_emoji or None,
@@ -449,6 +455,10 @@ def _build_cabinet_main_menu_keyboard(
                 )
                 resolved_style = _resolve_style(custom_cfg.get('style'))
                 resolved_emoji = custom_cfg.get('icon_custom_emoji_id') or None
+                if resolved_emoji:
+                    from app.utils.miniapp_buttons import strip_leading_emoji
+
+                    custom_text = strip_leading_emoji(custom_text)
                 open_in = custom_cfg.get('open_in', 'external')
                 link_kwarg = (
                     {'web_app': types.WebAppInfo(url=custom_cfg['url'])}
@@ -523,10 +533,16 @@ def _build_cabinet_main_menu_keyboard(
                         continue
                     lang_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_LANGUAGE
                     resolved_lang_emoji = section_cfg.get('icon_custom_emoji_id') or None
+                    resolved_lang_style = _resolve_style(section_cfg.get('style'))
+                    if resolved_lang_emoji:
+                        from app.utils.miniapp_buttons import strip_leading_emoji
+
+                        lang_text = strip_leading_emoji(lang_text)
                     row_buttons.append(
                         InlineKeyboardButton(
                             text=lang_text,
                             callback_data='menu_language',
+                            style=resolved_lang_style,
                             icon_custom_emoji_id=resolved_lang_emoji,
                         )
                     )
@@ -534,7 +550,12 @@ def _build_cabinet_main_menu_keyboard(
                 case 'admin':
                     if not is_admin:
                         continue
-                    admin_row = [InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data='admin_panel')]
+                    admin_callback_style = _resolve_style(section_cfg.get('style'))
+                    admin_row = [
+                        InlineKeyboardButton(
+                            text=texts.MENU_ADMIN, callback_data='admin_panel', style=admin_callback_style
+                        )
+                    ]
                     if section_cfg.get('enabled', True):
                         admin_web_text = section_cfg.get('labels', {}).get(language, '') or '🖥 Веб-Админка'
                         admin_row.append(_cabinet_button(admin_web_text, '/admin', 'admin_panel'))

@@ -222,11 +222,16 @@ async def oauth_callback(
             )
 
     # 8. Create new user
+    # Сохраняем email вне зависимости от verified-флага — иначе VK/Yandex юзеры
+    # (для которых email_verified теперь принудительно False) останутся без
+    # email вообще, что ломает password recovery и cross-provider linking.
+    # Защита от admin escalation остаётся на уровне email_verified=False:
+    # ensure_superadmin_role_on_login проверяет именно его, а не наличие email.
     user = await create_user_by_oauth(
         db=db,
         provider=provider,
         provider_id=user_info.provider_id,
-        email=user_info.email if user_info.email_verified else None,
+        email=user_info.email,
         email_verified=user_info.email_verified,
         first_name=user_info.first_name,
         last_name=user_info.last_name,

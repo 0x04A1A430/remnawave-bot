@@ -5,7 +5,8 @@ from typing import Any
 
 import structlog
 from aiogram import Bot, types
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from app.database.crud.transaction import get_transaction_by_id
 from app.database.crud.user import get_user_by_id
 from app.database.models import (
     AdvertisingCampaign,
+    AdvertisingCampaignRegistration,
     GuestPurchase,
     PromoCodeType,
     PromoGroup,
@@ -329,8 +331,16 @@ class AdminNotificationService:
                 occurred_at=datetime.now(UTC),
                 extra={
                     'charged_amount_kopeks': charged_amount_kopeks,
-                    'trial_duration_days': settings.TRIAL_DURATION_DAYS,
-                    'traffic_limit_gb': settings.TRIAL_TRAFFIC_LIMIT_GB,
+                    'trial_duration_days': (
+                        max(1, round((subscription.end_date - subscription.start_date).total_seconds() / 86400))
+                        if subscription.end_date and subscription.start_date
+                        else settings.TRIAL_DURATION_DAYS
+                    ),
+                    'traffic_limit_gb': (
+                        subscription.traffic_limit_gb
+                        if subscription.traffic_limit_gb is not None
+                        else settings.TRIAL_TRAFFIC_LIMIT_GB
+                    ),
                     'device_limit': subscription.device_limit,
                 },
             )
@@ -382,11 +392,23 @@ class AdminNotificationService:
 
             message_lines.append('')
 
+            trial_duration_days = settings.TRIAL_DURATION_DAYS
+            if subscription.end_date and subscription.start_date:
+                trial_duration_days = max(
+                    1, round((subscription.end_date - subscription.start_date).total_seconds() / 86400)
+                )
+
+            trial_traffic_gb = (
+                subscription.traffic_limit_gb
+                if subscription.traffic_limit_gb is not None
+                else settings.TRIAL_TRAFFIC_LIMIT_GB
+            )
+
             message_lines.extend(
                 [
                     '⏰ <b>Параметры триала:</b>',
-                    f'📅 Период: {settings.TRIAL_DURATION_DAYS} дней',
-                    f'📊 Трафик: {self._format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB)}',
+                    f'📅 Период: {trial_duration_days} дней',
+                    f'📊 Трафик: {self._format_traffic(trial_traffic_gb)}',
                     f'📱 Устройства: {trial_device_limit}',
                     f'🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else "По умолчанию"}',
                 ]
@@ -1075,7 +1097,27 @@ class AdminNotificationService:
         campaign: AdvertisingCampaign,
         user: User | None = None,
     ) -> bool:
+        # Дедуп: если юзер уже зарегистрирован в этой кампании
+        # (AdvertisingCampaignRegistration.UniqueConstraint(campaign_id, user_id))
+        # — повторный /start не должен слать новое уведомление в админ-чат, иначе
+        # кол-во сообщений в чате превышает реальное число регистраций в БД и
+        # вводит админа в заблуждение. Для новых юзеров (user is None) уведомление
+        # уходит как раньше — это первичный переход.
         if user:
+            existing_registration = await db.execute(
+                select(AdvertisingCampaignRegistration.id).where(
+                    AdvertisingCampaignRegistration.campaign_id == campaign.id,
+                    AdvertisingCampaignRegistration.user_id == user.id,
+                )
+            )
+            if existing_registration.scalar_one_or_none() is not None:
+                logger.debug(
+                    'Skip campaign visit notification: user already registered in campaign',
+                    user_id=user.id,
+                    campaign_id=campaign.id,
+                )
+                return False
+
             try:
                 await self._record_subscription_event(
                     db,
@@ -1155,6 +1197,95 @@ class AdminNotificationService:
 
         except Exception as e:
             logger.error('Ошибка отправки уведомления о переходе по кампании', error=e)
+            return False
+
+    async def send_campaign_registration_notification(
+        self,
+        db: AsyncSession,
+        telegram_user_id: int,
+        telegram_user_name: str,
+        telegram_username: str | None,
+        campaign: AdvertisingCampaign,
+        user: User,
+        *,
+        bonus_type: str,
+        balance_kopeks: int = 0,
+        subscription_days: int | None = None,
+        subscription_traffic_gb: int | None = None,
+        subscription_device_limit: int | None = None,
+        tariff_name: str | None = None,
+    ) -> bool:
+        """Уведомление о СОВЕРШЁННОЙ регистрации по рекламной кампании.
+
+        Шлётся ровно один раз на каждую новую запись в advertising_campaign_registrations
+        (caller передаёт is_new_registration=True). Это даёт паритет: число сообщений
+        в админ-чате равно числу регистраций в кабинете.
+        """
+        if not self._is_enabled():
+            return False
+
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type='campaign_registration',
+                user=user,
+                subscription=None,
+                transaction=None,
+                amount_kopeks=balance_kopeks or None,
+                message='Campaign registration completed',
+                occurred_at=datetime.now(UTC),
+                extra={
+                    'campaign_id': campaign.id,
+                    'campaign_name': campaign.name,
+                    'start_parameter': campaign.start_parameter,
+                    'bonus_type': bonus_type,
+                },
+            )
+        except Exception:
+            logger.error(
+                'Не удалось сохранить событие регистрации по кампании',
+                user_id=user.id,
+                campaign_id=campaign.id,
+                exc_info=True,
+            )
+
+        try:
+            message_lines = [
+                '✅ <b>РЕГИСТРАЦИЯ ПО РК</b>',
+                '',
+                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
+                '',
+                f'👤 {html.escape(telegram_user_name)} (<code>{telegram_user_id}</code>)',
+            ]
+            if telegram_username:
+                message_lines.append(f'📱 @{html.escape(telegram_username)}')
+
+            promo_group = await self._get_user_promo_group(db, user)
+            if promo_group:
+                message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
+
+            message_lines.append('')
+
+            bonus_lines = self._format_campaign_bonus(campaign, tariff_name=tariff_name)
+            message_lines.extend(bonus_lines)
+
+            message_lines.extend(
+                [
+                    '',
+                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
+
+            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PROMO)
+
+        except Exception as e:
+            logger.error(
+                'Ошибка отправки уведомления о регистрации по кампании',
+                error=str(e),
+                user_id=user.id,
+                campaign_id=campaign.id,
+                exc_info=True,
+            )
             return False
 
     async def send_user_promo_group_change_notification(
@@ -1300,6 +1431,17 @@ class AdminNotificationService:
             return False
         except TelegramBadRequest as e:
             logger.error('Ошибка отправки уведомления', error=e)
+            return False
+        except (TelegramNetworkError, TelegramServerError) as e:
+            # Транзиентные сетевые/5xx — warning, не error. Иначе при каждой
+            # сетевой проблеме TelegramNotifierProcessor пытается отправить error
+            # в тот же админ-чат, который недоступен → петля или спам.
+            logger.warning(
+                'Транзиентная сетевая ошибка отправки в админ-чат',
+                chat_id=self.chat_id,
+                error=str(e)[:200],
+                error_type=type(e).__name__,
+            )
             return False
         except Exception as e:
             logger.error('Неожиданная ошибка при отправке уведомления', error=e)

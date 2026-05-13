@@ -31,6 +31,9 @@ from app.database.models import (
     AdminRole,
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    AppleIAPAbuseEvent,
+    AppleIAPAccount,
+    AppleNotification,
     AppleTransaction,
     AuraPayPayment,
     BroadcastHistory,
@@ -205,7 +208,10 @@ class BackupService:
             RollyPayPayment,
             OverpayPayment,
             AuraPayPayment,
+            AppleIAPAccount,
             AppleTransaction,
+            AppleNotification,
+            AppleIAPAbuseEvent,
             SavedPaymentMethod,
             # --- Settings/content ---
             PaymentMethodConfig,
@@ -282,15 +288,53 @@ class BackupService:
         }
 
     def _load_settings(self) -> BackupSettings:
+        """Загружает настройки бекапов из `settings` (а не напрямую из env).
+
+        `SystemSettingsService.set_value` (вызывается при сохранении из кабинета)
+        делает `setattr(settings, key, value)`, поэтому чтение через `settings.*`
+        автоматически подхватывает изменения из БД. Чтение через `os.getenv`
+        работало бы только до первого изменения через UI.
+        """
         return BackupSettings(
-            auto_backup_enabled=os.getenv('BACKUP_AUTO_ENABLED', 'true').lower() == 'true',
-            backup_interval_hours=int(os.getenv('BACKUP_INTERVAL_HOURS', '24')),
-            backup_time=os.getenv('BACKUP_TIME', '03:00'),
-            max_backups_keep=int(os.getenv('BACKUP_MAX_KEEP', '7')),
-            compression_enabled=os.getenv('BACKUP_COMPRESSION', 'true').lower() == 'true',
-            include_logs=os.getenv('BACKUP_INCLUDE_LOGS', 'false').lower() == 'true',
-            backup_location=os.getenv('BACKUP_LOCATION', '/app/data/backups'),
+            auto_backup_enabled=bool(settings.BACKUP_AUTO_ENABLED),
+            backup_interval_hours=int(settings.BACKUP_INTERVAL_HOURS or 24),
+            backup_time=str(settings.BACKUP_TIME or '03:00'),
+            max_backups_keep=int(settings.BACKUP_MAX_KEEP or 7),
+            compression_enabled=bool(settings.BACKUP_COMPRESSION),
+            include_logs=bool(settings.BACKUP_INCLUDE_LOGS),
+            backup_location=str(settings.BACKUP_LOCATION or '/app/data/backups'),
         )
+
+    def reload_settings_from_db(self) -> BackupSettings:
+        """Перечитывает настройки из `settings` (которые синхронизируются с БД).
+
+        Используется в `_auto_backup_loop` перед расчётом next_run, чтобы изменения
+        BACKUP_TIME/BACKUP_INTERVAL_HOURS из кабинета вступали в силу без рестарта
+        бота. Также может быть вызван из SystemSettingsService для немедленного
+        применения изменений (перезапуск scheduler-таски).
+
+        Обновляет вычисляемые поля, которые зависят от настроек:
+        - `backup_dir` — берётся из `BACKUP_LOCATION`
+        - `backup_models_ordered` — включает MonitoringLog только при `include_logs`
+        """
+        new_settings = self._load_settings()
+        old_location = self._settings.backup_location
+        old_include_logs = self._settings.include_logs
+        self._settings = new_settings
+
+        # BACKUP_LOCATION мог измениться — обновляем backup_dir / data_dir
+        if new_settings.backup_location != old_location:
+            self.backup_dir = Path(new_settings.backup_location).expanduser().resolve()
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            self.data_dir = self.backup_dir.parent
+
+        # BACKUP_INCLUDE_LOGS мог измениться — пересобираем список моделей
+        if new_settings.include_logs != old_include_logs:
+            self.backup_models_ordered = self._base_backup_models.copy()
+            if new_settings.include_logs:
+                self.backup_models_ordered.append(MonitoringLog)
+
+        return self._settings
 
     def _parse_backup_time(self) -> tuple[int, int]:
         time_str = (self._settings.backup_time or '').strip()
@@ -1793,8 +1837,14 @@ class BackupService:
             return False
 
     async def start_auto_backup(self):
+        # Дожидаемся отмены старой таски, чтобы не было двух циклов параллельно
+        # во время рестарта scheduler'а после изменения BACKUP_TIME из кабинета.
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
+            import contextlib
+
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._auto_backup_task
 
         if self._settings.auto_backup_enabled:
             next_run = self._calculate_next_backup_datetime()
@@ -1809,11 +1859,17 @@ class BackupService:
     async def stop_auto_backup(self):
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
+            import contextlib
+
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._auto_backup_task
             logger.info('ℹ️ Автобекапы остановлены')
 
     async def _auto_backup_loop(self, next_run: datetime | None = None):
+        # Перечитываем настройки в начале цикла — на случай если admin изменил
+        # BACKUP_TIME до того, как scheduler первый раз сюда зашёл.
+        self.reload_settings_from_db()
         next_run = next_run or self._calculate_next_backup_datetime()
-        interval = self._get_backup_interval()
 
         while True:
             try:
@@ -1841,12 +1897,23 @@ class BackupService:
                 else:
                     logger.error('❌ Ошибка автобекапа', message=message)
 
+                # Перед расчётом следующего запуска перечитываем настройки —
+                # admin мог изменить BACKUP_TIME / BACKUP_INTERVAL_HOURS из кабинета,
+                # пока scheduler спал. Без этого изменения вступали в силу только
+                # после рестарта бота.
+                self.reload_settings_from_db()
+                if not self._settings.auto_backup_enabled:
+                    logger.info('ℹ️ Автобекапы отключены через настройки, останавливаем цикл')
+                    break
+                interval = self._get_backup_interval()
                 next_run = next_run + interval
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error('Ошибка в цикле автобекапов', error=e)
+                self.reload_settings_from_db()
+                interval = self._get_backup_interval()
                 next_run = datetime.now(UTC) + interval
 
     async def _send_backup_notification(self, event_type: str, message: str, file_path: str = None):

@@ -31,6 +31,10 @@ from app.database.crud.user import (
 from app.database.models import CabinetRefreshToken, User, UserStatus
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
+from app.services.rbac_bootstrap_service import (
+    ensure_superadmin_role_on_login,
+    is_user_admin_by_env,
+)
 from app.services.referral_service import process_referral_registration
 from app.services.web_auth_service import (
     WEB_AUTH_TOKEN_TTL,
@@ -117,6 +121,26 @@ def _user_to_response(user: User) -> UserResponse:
 
 async def _create_auth_response(user: User, db: AsyncSession) -> AuthResponse:
     """Create full auth response with tokens and RBAC permissions."""
+    # Idempotent Superadmin re-assignment for users in ADMIN_IDS / ADMIN_EMAILS.
+    # Покрывает кейс: юзер был удалён через кабинет → пересоздан через /start
+    # → у нового user.id нет роли, потому что RBAC bootstrap отрабатывает только
+    # на старте бота. Без этой проверки админ из ADMIN_IDS получает access_token
+    # с пустыми permissions до следующего рестарта и видит 401 на /me/is-admin.
+    try:
+        await ensure_superadmin_role_on_login(db, user)
+    except Exception as bootstrap_error:
+        # IntegrityError изолирован savepoint'ом внутри ensure_superadmin_role_on_login,
+        # сюда долетают только программистские/инфраструктурные сбои (DB down, attribute
+        # errors). Login сам не валится — get_user_permissions ниже выдаст актуальное
+        # состояние ролей, какое бы оно ни было.
+        logger.error(
+            'Failed to ensure Superadmin role on login',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            error=str(bootstrap_error),
+            exc_info=True,
+        )
+
     user_permissions, user_role_names, user_role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
 
     access_token = create_access_token(
@@ -1213,9 +1237,11 @@ async def verify_email(
             detail='Verification token has expired',
         )
 
-    # Mark email as verified
+    # Mark email as verified through cabinet OTP — trusted source for admin
+    # escalation (юзер реально получил code на email и ввёл его).
     user.email_verified = True
     user.email_verified_at = datetime.now(UTC)
+    user.email_verification_source = 'cabinet'
     user.email_verification_token = None
     user.email_verification_expires = None
     user.cabinet_last_login = datetime.now(UTC)
@@ -1531,6 +1557,24 @@ async def auto_login(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Account is deactivated',
+        )
+
+    # SECURITY: auto-login токены создаются по результатам guest purchase, где
+    # User.telegram_id выставляется из bot.get_chat('@username') без proof of
+    # ownership — то есть атакер может сделать guest-purchase с username админа
+    # и получить токен, ведущий к этому user. Запрещаем такой path для админов
+    # из ADMIN_IDS / ADMIN_EMAILS — пусть проходят полную Telegram WebApp /
+    # password аутентификацию.
+    if is_user_admin_by_env(user).is_admin:
+        logger.warning(
+            'Auto-login blocked for admin account — must use full auth flow',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            client_ip=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Administrator accounts cannot use auto-login. Please sign in via Telegram.',
         )
 
     response = await _create_auth_response(user, db)
