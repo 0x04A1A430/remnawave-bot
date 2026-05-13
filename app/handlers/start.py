@@ -410,8 +410,6 @@ async def _apply_campaign_bonus_if_needed(
     # и количество сообщений в чате == количеству регистраций в кабинете.
     if result.is_new_registration and bot is not None and getattr(user, 'telegram_id', None):
         try:
-            from app.services.admin_notification_service import AdminNotificationService
-
             notification_service = AdminNotificationService(bot)
             await notification_service.send_campaign_registration_notification(
                 db,

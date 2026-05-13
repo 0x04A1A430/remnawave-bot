@@ -95,6 +95,30 @@ class AdvertisingCampaignService:
             logger.info('ℹ️ Кампания не имеет бонуса на баланс', campaign_id=campaign.id)
             return CampaignBonusResult(success=False)
 
+        # Регистрируем ДО начисления баланса, чтобы при повторном /start (created=False)
+        # не накрутить бонус второй раз. UNIQUE constraint в record_campaign_registration
+        # + savepoint защищают и от concurrent race conditions.
+        _, created = await record_campaign_registration(
+            db,
+            campaign_id=campaign.id,
+            user_id=user.id,
+            bonus_type='balance',
+            balance_bonus_kopeks=amount,
+        )
+
+        if not created:
+            logger.info(
+                'ℹ️ Балансный бонус уже был начислен по этой кампании ранее, пропускаем',
+                format_user_log=_format_user_log(user),
+                campaign_id=campaign.id,
+            )
+            return CampaignBonusResult(
+                success=True,
+                bonus_type='balance',
+                balance_kopeks=amount,
+                is_new_registration=False,
+            )
+
         description = f"Бонус за регистрацию по кампании '{campaign.name}'"
         success = await add_user_balance(
             db,
@@ -104,15 +128,15 @@ class AdvertisingCampaignService:
         )
 
         if not success:
+            # Маркер регистрации остался — баланс не начислился. Это лучше, чем
+            # начислить деньги без записи в БД (откатить запись теперь нельзя).
+            logger.error(
+                '❌ Регистрация записана, но баланс не начислился',
+                format_user_log=_format_user_log(user),
+                campaign_id=campaign.id,
+                amount_kopeks=amount,
+            )
             return CampaignBonusResult(success=False)
-
-        _, created = await record_campaign_registration(
-            db,
-            campaign_id=campaign.id,
-            user_id=user.id,
-            bonus_type='balance',
-            balance_bonus_kopeks=amount,
-        )
 
         logger.info(
             '💰 Пользователю начислен бонус ₽ по кампании',

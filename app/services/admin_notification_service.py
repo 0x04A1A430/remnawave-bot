@@ -1281,9 +1281,10 @@ class AdminNotificationService:
         except Exception as e:
             logger.error(
                 'Ошибка отправки уведомления о регистрации по кампании',
-                error=e,
+                error=str(e),
                 user_id=user.id,
                 campaign_id=campaign.id,
+                exc_info=True,
             )
             return False
 
