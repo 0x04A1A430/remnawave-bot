@@ -40,6 +40,10 @@ class CampaignBonusResult:
     tariff_id: int | None = None
     tariff_name: str | None = None
     tariff_duration_days: int | None = None
+    # True если запись в advertising_campaign_registrations была создана этим вызовом
+    # (а не вернулась как existing). Используется caller'ом, чтобы понять, нужно ли
+    # слать админу уведомление о регистрации (один раз на первую успешную).
+    is_new_registration: bool = False
 
 
 class AdvertisingCampaignService:
@@ -102,7 +106,7 @@ class AdvertisingCampaignService:
         if not success:
             return CampaignBonusResult(success=False)
 
-        await record_campaign_registration(
+        _, created = await record_campaign_registration(
             db,
             campaign_id=campaign.id,
             user_id=user.id,
@@ -121,6 +125,7 @@ class AdvertisingCampaignService:
             success=True,
             bonus_type='balance',
             balance_kopeks=amount,
+            is_new_registration=created,
         )
 
     async def _apply_subscription_bonus(
@@ -210,7 +215,7 @@ class AdvertisingCampaignService:
                 duration_days=duration_days,
             )
 
-        await record_campaign_registration(
+        _, created = await record_campaign_registration(
             db,
             campaign_id=campaign.id,
             user_id=user.id,
@@ -225,6 +230,7 @@ class AdvertisingCampaignService:
             subscription_traffic_gb=traffic_limit or 0,
             subscription_device_limit=device_limit,
             subscription_squads=squads,
+            is_new_registration=created,
         )
 
     async def _apply_none_bonus(
@@ -234,7 +240,7 @@ class AdvertisingCampaignService:
         campaign: AdvertisingCampaign,
     ) -> CampaignBonusResult:
         """Обычная ссылка без награды - только регистрация для отслеживания."""
-        await record_campaign_registration(
+        _, created = await record_campaign_registration(
             db,
             campaign_id=campaign.id,
             user_id=user.id,
@@ -250,6 +256,7 @@ class AdvertisingCampaignService:
         return CampaignBonusResult(
             success=True,
             bonus_type='none',
+            is_new_registration=created,
         )
 
     async def _apply_tariff_bonus(
@@ -360,7 +367,7 @@ class AdvertisingCampaignService:
                 duration_days=duration_days,
             )
 
-        await record_campaign_registration(
+        _, created = await record_campaign_registration(
             db,
             campaign_id=campaign.id,
             user_id=user.id,
@@ -378,4 +385,5 @@ class AdvertisingCampaignService:
             subscription_traffic_gb=traffic_limit or 0,
             subscription_device_limit=device_limit,
             subscription_squads=squads,
+            is_new_registration=created,
         )

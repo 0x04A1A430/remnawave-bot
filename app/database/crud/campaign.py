@@ -209,7 +209,14 @@ async def record_campaign_registration(
     subscription_duration_days: int | None = None,
     tariff_id: int | None = None,
     tariff_duration_days: int | None = None,
-) -> AdvertisingCampaignRegistration:
+) -> tuple[AdvertisingCampaignRegistration, bool]:
+    """Создаёт или возвращает запись регистрации в рекламной кампании.
+
+    Returns:
+        (registration, created): второе поле True если запись была создана прямо сейчас,
+        False — если уже существовала. Caller использует флаг чтобы понять, нужно ли
+        отправить уведомление в админ-чат (один раз на первую успешную регистрацию).
+    """
     existing = await db.execute(
         select(AdvertisingCampaignRegistration).where(
             and_(
@@ -220,7 +227,7 @@ async def record_campaign_registration(
     )
     registration = existing.scalar_one_or_none()
     if registration:
-        return registration
+        return registration, False
 
     registration = AdvertisingCampaignRegistration(
         campaign_id=campaign_id,
@@ -236,7 +243,7 @@ async def record_campaign_registration(
     await db.refresh(registration)
 
     logger.info('📈 Регистрируем пользователя в кампании', user_id=user_id, campaign_id=campaign_id)
-    return registration
+    return registration, True
 
 
 async def get_campaign_statistics(

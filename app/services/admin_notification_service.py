@@ -1199,6 +1199,94 @@ class AdminNotificationService:
             logger.error('Ошибка отправки уведомления о переходе по кампании', error=e)
             return False
 
+    async def send_campaign_registration_notification(
+        self,
+        db: AsyncSession,
+        telegram_user_id: int,
+        telegram_user_name: str,
+        telegram_username: str | None,
+        campaign: AdvertisingCampaign,
+        user: User,
+        *,
+        bonus_type: str,
+        balance_kopeks: int = 0,
+        subscription_days: int | None = None,
+        subscription_traffic_gb: int | None = None,
+        subscription_device_limit: int | None = None,
+        tariff_name: str | None = None,
+    ) -> bool:
+        """Уведомление о СОВЕРШЁННОЙ регистрации по рекламной кампании.
+
+        Шлётся ровно один раз на каждую новую запись в advertising_campaign_registrations
+        (caller передаёт is_new_registration=True). Это даёт паритет: число сообщений
+        в админ-чате равно числу регистраций в кабинете.
+        """
+        if not self._is_enabled():
+            return False
+
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type='campaign_registration',
+                user=user,
+                subscription=None,
+                transaction=None,
+                amount_kopeks=balance_kopeks or None,
+                message='Campaign registration completed',
+                occurred_at=datetime.now(UTC),
+                extra={
+                    'campaign_id': campaign.id,
+                    'campaign_name': campaign.name,
+                    'start_parameter': campaign.start_parameter,
+                    'bonus_type': bonus_type,
+                },
+            )
+        except Exception:
+            logger.error(
+                'Не удалось сохранить событие регистрации по кампании',
+                user_id=user.id,
+                campaign_id=campaign.id,
+                exc_info=True,
+            )
+
+        try:
+            message_lines = [
+                '✅ <b>РЕГИСТРАЦИЯ ПО РК</b>',
+                '',
+                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
+                '',
+                f'👤 {html.escape(telegram_user_name)} (<code>{telegram_user_id}</code>)',
+            ]
+            if telegram_username:
+                message_lines.append(f'📱 @{html.escape(telegram_username)}')
+
+            promo_group = await self._get_user_promo_group(db, user)
+            if promo_group:
+                message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
+
+            message_lines.append('')
+
+            bonus_lines = self._format_campaign_bonus(campaign, tariff_name=tariff_name)
+            message_lines.extend(bonus_lines)
+
+            message_lines.extend(
+                [
+                    '',
+                    f'<i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                ]
+            )
+
+            return await self._send_message('\n'.join(message_lines), category=NotificationCategory.PROMO)
+
+        except Exception as e:
+            logger.error(
+                'Ошибка отправки уведомления о регистрации по кампании',
+                error=e,
+                user_id=user.id,
+                campaign_id=campaign.id,
+            )
+            return False
+
     async def send_user_promo_group_change_notification(
         self,
         db: AsyncSession,

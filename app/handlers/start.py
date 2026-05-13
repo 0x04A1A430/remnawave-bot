@@ -376,6 +376,8 @@ async def _apply_campaign_bonus_if_needed(
     user,
     state_data: dict,
     texts,
+    *,
+    bot=None,
 ):
     campaign_id = state_data.get('campaign_id') if state_data else None
     if not campaign_id:
@@ -400,6 +402,41 @@ async def _apply_campaign_bonus_if_needed(
             await clear_pending_campaign(user.telegram_id)
     except Exception:
         pass
+
+    # Отправить админу уведомление о РЕГИСТРАЦИИ ровно один раз — когда запись в
+    # advertising_campaign_registrations реально создана (is_new_registration=True).
+    # При повторном вызове record_campaign_registration возвращает существующую
+    # запись с is_new_registration=False — тогда повторное уведомление не идёт,
+    # и количество сообщений в чате == количеству регистраций в кабинете.
+    if result.is_new_registration and bot is not None and getattr(user, 'telegram_id', None):
+        try:
+            from app.services.admin_notification_service import AdminNotificationService
+
+            notification_service = AdminNotificationService(bot)
+            await notification_service.send_campaign_registration_notification(
+                db,
+                telegram_user_id=user.telegram_id,
+                telegram_user_name=getattr(user, 'full_name', None)
+                or getattr(user, 'username', None)
+                or str(user.telegram_id),
+                telegram_username=getattr(user, 'username', None),
+                campaign=campaign,
+                user=user,
+                bonus_type=result.bonus_type or 'none',
+                balance_kopeks=result.balance_kopeks or 0,
+                subscription_days=result.subscription_days,
+                subscription_traffic_gb=result.subscription_traffic_gb,
+                subscription_device_limit=result.subscription_device_limit,
+                tariff_name=result.tariff_name,
+            )
+        except Exception as notify_error:
+            logger.error(
+                'Ошибка отправки админ уведомления о регистрации по кампании',
+                campaign_id=campaign.id,
+                user_id=getattr(user, 'id', None),
+                error=str(notify_error),
+                exc_info=True,
+            )
 
     if result.bonus_type == 'balance':
         amount_text = texts.format_price(result.balance_kopeks)
@@ -788,7 +825,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
 
-    if campaign and not campaign_notification_sent:
+    # Visit notification шлётся только для НОВОГО юзера (user is None) — это первый
+    # touch top-of-funnel. Для существующих юзеров (которые ещё не зарегистрированы
+    # в кампании) уведомление о ПЕРЕХОДЕ больше не идёт: вместо него админу прилетит
+    # отдельное «РЕГИСТРАЦИЯ ПО РК» позже, в _apply_campaign_bonus_if_needed, ровно
+    # при создании записи в advertising_campaign_registrations. Это даёт паритет
+    # между числом сообщений в чате и числом регистраций в кабинете.
+    if campaign and not campaign_notification_sent and user is None:
         try:
             notification_service = AdminNotificationService(message.bot)
             await notification_service.send_campaign_link_visit_notification(
@@ -1711,7 +1754,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         except Exception as e:
             logger.error('Ошибка при обработке реферальной регистрации', error=e)
 
-    campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts)
+    campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts, bot=callback.bot)
 
     try:
         await db.refresh(user)
@@ -2059,7 +2102,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         except Exception as e:
             logger.error('❌ Ошибка при активации промокода', promocode_to_activate=promocode_to_activate, error=e)
 
-    campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts)
+    campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts, bot=message.bot)
 
     try:
         await db.refresh(user)
@@ -2675,7 +2718,7 @@ async def required_sub_channel_check(
                             logger.error('Ошибка при обработке реферальной регистрации', error=e)
 
                     # Применяем бонус рекламной кампании (record_campaign_registration)
-                    campaign_message = await _apply_campaign_bonus_if_needed(db, user, state_data, texts)
+                    campaign_message = await _apply_campaign_bonus_if_needed(db, user, state_data, texts, bot=bot)
                     try:
                         await db.refresh(user)
                     except Exception as refresh_error:
