@@ -3764,6 +3764,15 @@ class PaymentMethodConfig(Base):
         lazy='selectin',
     )
 
+    # Если True — кабинет, получив payment_url от провайдера, сразу делает
+    # window.location.href вместо показа панели "Нажмите чтобы открыть ссылку
+    # оплаты". Внутри Telegram MiniApp это даёт seamless flow — провайдер
+    # открывается в том же WebView, после оплаты return_url возвращает на
+    # /balance/top-up/result. Для t.me/ URL (Telegram Stars, CryptoBot) флаг
+    # игнорируется — такие ссылки всегда идут через нативный handler.
+    # По умолчанию False (классическое поведение со ссылкой) — backwards-compat.
+    open_url_direct = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(AwareDateTime(), default=func.now())
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 

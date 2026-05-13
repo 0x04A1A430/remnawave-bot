@@ -564,6 +564,9 @@ async def get_enabled_methods_for_user(
                 'max_amount_kopeks': max_amount,
                 'options': options,
                 'sort_order': config.sort_order,
+                # Если True — кабинет, получив payment_url, делает
+                # window.location.href сразу вместо показа панели с ссылкой.
+                'open_url_direct': bool(getattr(config, 'open_url_direct', False)),
             }
         )
 
