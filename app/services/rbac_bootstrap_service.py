@@ -48,6 +48,18 @@ def _mask_email(value: str | None) -> str:
     return f'{local_mask}@{domain_mask}.{tld}' if tld else f'{local_mask}@{domain_mask}'
 
 
+# Источники верификации email, которым доверяем для admin escalation.
+# Cabinet (отправили код на email и юзер ввёл) — trusted.
+# google/discord — OIDC/API с реальной проверкой ownership.
+# VK / Yandex отсутствуют — их `email_verified` фабрикуется как bool(email)
+# и не доказывает владение адресом.
+TRUSTED_EMAIL_VERIFICATION_SOURCES: 'frozenset[str]' = frozenset(
+    {'cabinet', 'oauth_google', 'oauth_discord', 'admin_override'}
+)
+
+_SENTINEL_NO_ATTR = object()
+
+
 @dataclass(frozen=True)
 class AdminEnvCheck:
     """Результат проверки 'этот юзер админ по ENV-конфигу?'
@@ -115,18 +127,6 @@ def is_user_admin_by_env(user: User) -> AdminEnvCheck:
     )
 
     return AdminEnvCheck(is_telegram_admin=is_telegram_admin, is_email_admin=is_email_admin)
-
-
-# Источники верификации email, которым доверяем для admin escalation.
-# Cabinet (отправили код на email и юзер ввёл) — trusted.
-# google/discord — OIDC/API с реальной проверкой ownership.
-# VK / Yandex отсутствуют — их `email_verified` фабрикуется как bool(email)
-# и не доказывает владение адресом.
-TRUSTED_EMAIL_VERIFICATION_SOURCES: Final[frozenset[str]] = frozenset(
-    {'cabinet', 'oauth_google', 'oauth_discord', 'admin_override'}
-)
-
-_SENTINEL_NO_ATTR: Final = object()
 
 
 logger = structlog.get_logger(__name__)
@@ -404,6 +404,14 @@ async def _revoke_stale_superadmins(
         )
 
         if not in_env_by_id and not in_env_by_email:
+            # Защита от race / повторного запуска bootstrap: если запись уже
+            # неактивна И revocation_source='ui' — НЕ перезаписываем причину.
+            # Иначе senior-админ revoke через UI был бы переименован в env-revoke
+            # на ближайшем рестарте, теряя forensic trail и нарушая семантику
+            # 'ui' branch в _assign_if_missing.
+            if not assignment.is_active and assignment.revocation_source == 'ui':
+                continue
+
             assignment.is_active = False
             assignment.revocation_source = 'env'
             await db.flush()
