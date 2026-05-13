@@ -5,6 +5,7 @@ Auto-assigns the Superadmin role to users listed in ADMIN_IDS / ADMIN_EMAILS
 config on bot startup. Runs once during the startup sequence.
 """
 
+import unicodedata
 from typing import Final
 
 import structlog
@@ -15,7 +16,25 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.crud.rbac import SUPERADMIN_LEVEL, UserRoleCRUD
-from app.database.models import AdminRole, User, UserRole
+from app.database.models import AdminAuditLog, AdminRole, User, UserRole
+
+
+def _normalize_email(value: str) -> str:
+    """Сравнение email'ов: NFKC unicode + lower + strip. Защищает от homoglyph-атак
+    на admin email matching (кириллическая `а` U+0430 vs латинская `a` U+0061 теперь
+    нормализуются одинаково где это уместно по NFKC)."""
+    return unicodedata.normalize('NFKC', value).strip().lower()
+
+
+def _mask_email(value: str | None) -> str:
+    """Маскинг email для логов: `admin@example.com` → `a***@e***.com`."""
+    if not value or '@' not in value:
+        return '***'
+    local, _, domain = value.partition('@')
+    domain_name, _, tld = domain.rpartition('.')
+    local_mask = (local[:1] + '***') if local else '***'
+    domain_mask = (domain_name[:1] + '***') if domain_name else '***'
+    return f'{local_mask}@{domain_mask}.{tld}' if tld else f'{local_mask}@{domain_mask}'
 
 
 logger = structlog.get_logger(__name__)
@@ -361,14 +380,15 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     # comma-separated строки, прямая итерация выдаст символы и list comprehension
     # тихо положит пустой set.
     admin_ids: set[int] = set(settings.get_admin_ids() or [])
-    admin_emails: set[str] = {email.strip().lower() for email in (settings.get_admin_emails() or []) if email}
+    admin_emails: set[str] = {_normalize_email(email) for email in (settings.get_admin_emails() or []) if email}
 
     is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_ids
+    user_email = getattr(user, 'email', None)
     is_email_admin = (
-        getattr(user, 'email', None) is not None
-        and bool(user.email)
+        user_email is not None
+        and bool(user_email)
         and getattr(user, 'email_verified', False)
-        and user.email.strip().lower() in admin_emails
+        and _normalize_email(user_email) in admin_emails
     )
 
     if not is_telegram_admin and not is_email_admin:
@@ -398,26 +418,68 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
         # при рестарте бота.
         return False
 
-    identifier = str(user.telegram_id) if is_telegram_admin else (user.email or str(user.id))
-    new_assignment = UserRole(
-        user_id=user.id,
-        role_id=role.id,
-        is_active=True,
+    # Лог-идентификатор: telegram_id (публичный) или masked email (без PII).
+    log_identifier = (
+        str(user.telegram_id) if is_telegram_admin else _mask_email(user_email) if user_email else str(user.id)
     )
-    db.add(new_assignment)
+    # В AdminAuditLog кладём реальный identifier для forensics (БД защищена admin-only
+    # доступом, в отличие от структlog'ов, которые уезжают в external aggregators).
+    audit_identifier = str(user.telegram_id) if is_telegram_admin else (user_email or f'user_id={user.id}')
+
+    # Savepoint: на IntegrityError откатывается ТОЛЬКО блок INSERT'а — outer
+    # транзакция caller'а сохраняется. Раньше `await db.rollback()` сбрасывал
+    # всю сессию, что было корректно только потому что в текущих callsite'ах
+    # перед `ensure_superadmin_role_on_login` нет pending writes — но это
+    # fragile инвариант, любой будущий рефактор мог его сломать.
     try:
-        await db.flush()
+        async with db.begin_nested():
+            new_assignment = UserRole(
+                user_id=user.id,
+                role_id=role.id,
+                is_active=True,
+            )
+            db.add(new_assignment)
+            await db.flush()
     except IntegrityError:
-        # Race: параллельный login или bootstrap уже создали запись. Откатываем
-        # savepoint и возвращаем False (запись существует, мы её не создали).
-        await db.rollback()
+        # Race: параллельный login или bootstrap уже создали запись.
+        # Savepoint rolled back автоматически контекст-менеджером.
         return False
+
+    # Audit log: env-driven Superadmin assignment должен быть видим в админ-UI,
+    # не только в structlog. Пишем тоже в savepoint, чтобы fail аудита не сорвал
+    # уже созданный grant.
+    try:
+        async with db.begin_nested():
+            audit_entry = AdminAuditLog(
+                user_id=user.id,
+                action='rbac.superadmin.auto_grant_on_login',
+                resource_type='user_role',
+                resource_id=str(new_assignment.id),
+                details={
+                    'role_id': role.id,
+                    'role_name': role.name,
+                    'source': 'env',
+                    'identifier': audit_identifier,
+                    'matched_via': 'telegram_id' if is_telegram_admin else 'email',
+                },
+                status='success',
+            )
+            db.add(audit_entry)
+            await db.flush()
+    except Exception as audit_error:
+        logger.warning(
+            'Failed to write AdminAuditLog for Superadmin auto-grant',
+            user_id=user.id,
+            role_id=role.id,
+            error=str(audit_error),
+        )
 
     logger.info(
         'Superadmin role assigned at login',
         user_id=user.id,
         role_id=role.id,
-        identifier=identifier,
+        identifier=log_identifier,
+        matched_via='telegram_id' if is_telegram_admin else 'email',
     )
     return True
 

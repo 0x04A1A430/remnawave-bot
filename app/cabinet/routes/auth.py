@@ -1564,14 +1564,16 @@ async def auto_login(
     # и получить токен, ведущий к этому user. Запрещаем такой path для админов
     # из ADMIN_IDS / ADMIN_EMAILS — пусть проходят полную Telegram WebApp /
     # password аутентификацию.
+    from app.services.rbac_bootstrap_service import _normalize_email
+
     admin_telegram_ids = set(settings.get_admin_ids() or [])
-    admin_emails = {email.strip().lower() for email in (settings.get_admin_emails() or []) if email}
+    admin_emails = {_normalize_email(email) for email in (settings.get_admin_emails() or []) if email}
     is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_telegram_ids
     is_email_admin = (
         getattr(user, 'email', None) is not None
         and bool(user.email)
         and getattr(user, 'email_verified', False)
-        and user.email.strip().lower() in admin_emails
+        and _normalize_email(user.email) in admin_emails
     )
     if is_telegram_admin or is_email_admin:
         logger.warning(
