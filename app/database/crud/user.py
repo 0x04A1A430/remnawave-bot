@@ -895,7 +895,17 @@ async def get_users_list(
         query = query.where(User.id.in_(sub_query))
 
     if promo_group_id:
-        query = query.where(User.promo_group_id == promo_group_id)
+        # Юзер считается членом группы если она в legacy `user.promo_group_id` ИЛИ
+        # в M2M `user_promo_groups`. Без OR-условия админский фильтр пропускал юзеров
+        # с группой только в M2M (см. analogue issue #422 для payment methods).
+        query = query.where(
+            or_(
+                User.promo_group_id == promo_group_id,
+                User.id.in_(
+                    select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)
+                ),
+            )
+        )
 
     if campaign_id:
         query = query.where(
@@ -1023,7 +1033,17 @@ async def get_users_count(
         query = query.where(User.id.in_(sub_query))
 
     if promo_group_id:
-        query = query.where(User.promo_group_id == promo_group_id)
+        # Юзер считается членом группы если она в legacy `user.promo_group_id` ИЛИ
+        # в M2M `user_promo_groups`. Без OR-условия админский фильтр пропускал юзеров
+        # с группой только в M2M (см. analogue issue #422 для payment methods).
+        query = query.where(
+            or_(
+                User.promo_group_id == promo_group_id,
+                User.id.in_(
+                    select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == promo_group_id)
+                ),
+            )
+        )
 
     if campaign_id:
         query = query.where(

@@ -514,11 +514,18 @@ async def get_enabled_methods_for_user(
         if config.promo_group_filter_mode == 'selected' and user:
             allowed_group_ids = {pg.id for pg in config.allowed_promo_groups}
             if allowed_group_ids:
-                # Get user's promo groups
+                # Собираем ВСЕ промогруппы юзера — из M2M `user_promo_groups` (новая
+                # система) И из legacy `user.promo_group_id` (одна группа на юзера,
+                # для бэк-совместимости со старыми записями). Без учёта legacy юзеры,
+                # созданные до миграции на M2M, "теряют" фильтрованные методы оплаты —
+                # их фактическая промогруппа невидима фильтру (issue #422).
                 user_groups_result = await db.execute(
                     select(UserPromoGroup.promo_group_id).where(UserPromoGroup.user_id == user.id)
                 )
                 user_group_ids = set(user_groups_result.scalars().all())
+                legacy_group_id = getattr(user, 'promo_group_id', None)
+                if legacy_group_id is not None:
+                    user_group_ids.add(legacy_group_id)
 
                 # Check if user has at least one allowed group
                 if not user_group_ids.intersection(allowed_group_ids):
