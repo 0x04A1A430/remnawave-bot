@@ -358,7 +358,21 @@ class TelegramStarsMixin:
                     '✅ Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
+                from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+
+                # Подписка уже активирована, уведомление — best-effort.
+                # Транзиентные сетевые ошибки не должны попадать в админ-чат.
+                if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
+                    logger.warning(
+                        'Не доставлено Stars-уведомление о подписке (транзиент)',
+                        telegram_id=user.telegram_id,
+                        error=str(error)[:200],
+                        error_type=type(error).__name__,
+                    )
+                else:
+                    logger.error(
+                        'Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True
+                    )
 
         if getattr(self, 'bot', None):
             try:

@@ -5,7 +5,7 @@ from typing import Any
 
 import structlog
 from aiogram import Bot, types
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramServerError
 from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1431,6 +1431,17 @@ class AdminNotificationService:
             return False
         except TelegramBadRequest as e:
             logger.error('Ошибка отправки уведомления', error=e)
+            return False
+        except (TelegramNetworkError, TelegramServerError) as e:
+            # Транзиентные сетевые/5xx — warning, не error. Иначе при каждой
+            # сетевой проблеме TelegramNotifierProcessor пытается отправить error
+            # в тот же админ-чат, который недоступен → петля или спам.
+            logger.warning(
+                'Транзиентная сетевая ошибка отправки в админ-чат',
+                chat_id=self.chat_id,
+                error=str(e)[:200],
+                error_type=type(e).__name__,
+            )
             return False
         except Exception as e:
             logger.error('Неожиданная ошибка при отправке уведомления', error=e)

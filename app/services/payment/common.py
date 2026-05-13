@@ -213,7 +213,19 @@ class PaymentCommonMixin:
                 reply_markup=keyboard,
             )
         except Exception as error:
-            logger.error('Ошибка отправки уведомления пользователю', telegram_id=telegram_id, error=error)
+            from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+
+            # Транзиентные сетевые / forbidden — warning. Платёж уже зачислен,
+            # уведомление пользователя — best-effort, не должно спамить админ-чат.
+            if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
+                logger.warning(
+                    'Не доставлено уведомление об оплате (транзиент)',
+                    telegram_id=telegram_id,
+                    error=str(error)[:200],
+                    error_type=type(error).__name__,
+                )
+            else:
+                logger.error('Ошибка отправки уведомления пользователю', telegram_id=telegram_id, error=error)
 
     async def _ensure_user_snapshot(
         self,
