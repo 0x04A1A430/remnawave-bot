@@ -3844,6 +3844,10 @@ class UserRole(Base):
     assigned_at = Column(AwareDateTime(), server_default=func.now())
     expires_at = Column(AwareDateTime(), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    # Источник revoke: 'env' (bootstrap снял по ADMIN_IDS/ADMIN_EMAILS),
+    # 'ui' (senior-админ вручную отозвал через кабинет), NULL (legacy строки
+    # до миграции 0078 или активная запись). Bootstrap reactivates только env/NULL.
+    revocation_source = Column(String(20), nullable=True)
 
     __table_args__ = (UniqueConstraint('user_id', 'role_id', name='uq_user_role'),)
 

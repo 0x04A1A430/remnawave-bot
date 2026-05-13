@@ -6,6 +6,7 @@ config on bot startup. Runs once during the startup sequence.
 """
 
 import unicodedata
+from dataclasses import dataclass
 from typing import Final
 
 import structlog
@@ -45,6 +46,87 @@ def _mask_email(value: str | None) -> str:
     local_mask = (local[:1] + '***') if local else '***'
     domain_mask = (domain_name[:1] + '***') if domain_name else '***'
     return f'{local_mask}@{domain_mask}.{tld}' if tld else f'{local_mask}@{domain_mask}'
+
+
+@dataclass(frozen=True)
+class AdminEnvCheck:
+    """Результат проверки 'этот юзер админ по ENV-конфигу?'
+
+    Используется как login-time, так и bootstrap-time, и в auto_login guard.
+    Single source of truth — раньше эта же логика была размазана inline по 4 местам
+    и уже один раз дрейфила (NFKC vs lower).
+    """
+
+    is_telegram_admin: bool
+    is_email_admin: bool
+
+    @property
+    def is_admin(self) -> bool:
+        return self.is_telegram_admin or self.is_email_admin
+
+    @property
+    def matched_via(self) -> str | None:
+        if self.is_telegram_admin:
+            return 'telegram_id'
+        if self.is_email_admin:
+            return 'email'
+        return None
+
+
+def is_user_admin_by_env(user: User) -> AdminEnvCheck:
+    """Проверяет, является ли юзер админом по ENV-конфигу (ADMIN_IDS/ADMIN_EMAILS).
+
+    Включает:
+    - фильтр положительных telegram_id (id=0 в ADMIN_IDS не повышает sentinel-юзера),
+    - NFKC-нормализацию email с обеих сторон,
+    - проверку email_verified (для email-пути),
+    - проверку email_verification_source против trusted-провайдеров (если поле есть).
+
+    Не делает SQL-запросов — чистая функция от User-row + settings.
+    """
+    admin_ids: set[int] = {tg_id for tg_id in (settings.get_admin_ids() or []) if tg_id > 0}
+    admin_emails: set[str] = {normalize_admin_email(email) for email in (settings.get_admin_emails() or []) if email}
+
+    try:
+        telegram_id_int = int(user.telegram_id) if user.telegram_id is not None else None
+    except (TypeError, ValueError):
+        telegram_id_int = None
+    is_telegram_admin = telegram_id_int is not None and telegram_id_int > 0 and telegram_id_int in admin_ids
+
+    user_email = getattr(user, 'email', None)
+    email_verified = bool(getattr(user, 'email_verified', False))
+    # Verification source guard: если в проекте появилось поле email_verification_source,
+    # требуем чтобы оно было из доверенного провайдера. Иначе VK/Yandex с
+    # fabricated `email_verified=bool(email)` могли бы дать privilege escalation.
+    # Если поле отсутствует (legacy schema) — допускаем email_verified=True
+    # как раньше, защита остаётся на уровне OAuth-провайдера (где VK/Yandex
+    # теперь сами выставляют email_verified=False).
+    verification_source = getattr(user, 'email_verification_source', _SENTINEL_NO_ATTR)
+    if verification_source is _SENTINEL_NO_ATTR:
+        verification_ok = email_verified
+    else:
+        verification_ok = email_verified and verification_source in TRUSTED_EMAIL_VERIFICATION_SOURCES
+
+    is_email_admin = (
+        user_email is not None
+        and bool(user_email)
+        and verification_ok
+        and normalize_admin_email(user_email) in admin_emails
+    )
+
+    return AdminEnvCheck(is_telegram_admin=is_telegram_admin, is_email_admin=is_email_admin)
+
+
+# Источники верификации email, которым доверяем для admin escalation.
+# Cabinet (отправили код на email и юзер ввёл) — trusted.
+# google/discord — OIDC/API с реальной проверкой ownership.
+# VK / Yandex отсутствуют — их `email_verified` фабрикуется как bool(email)
+# и не доказывает владение адресом.
+TRUSTED_EMAIL_VERIFICATION_SOURCES: Final[frozenset[str]] = frozenset(
+    {'cabinet', 'oauth_google', 'oauth_discord', 'admin_override'}
+)
+
+_SENTINEL_NO_ATTR: Final = object()
 
 
 logger = structlog.get_logger(__name__)
@@ -323,14 +405,16 @@ async def _revoke_stale_superadmins(
 
         if not in_env_by_id and not in_env_by_email:
             assignment.is_active = False
+            assignment.revocation_source = 'env'
             await db.flush()
             revoked += 1
             logger.warning(
                 'Revoked Superadmin role: user removed from env config',
                 user_id=user.id,
                 telegram_id=user.telegram_id,
-                email=user.email,
+                email=_mask_email(user.email),
                 user_role_id=assignment.id,
+                revocation_source='env',
             )
 
     return revoked
@@ -393,28 +477,11 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     происходит только при старте бота (через `_revoke_stale_superadmins` + текущий
     bootstrap), чтобы не превратить login в способ обхода manual revoke.
     """
-    # Используем готовые getters из config — settings.ADMIN_IDS/ADMIN_EMAILS это
-    # comma-separated строки, прямая итерация выдаст символы и list comprehension
-    # тихо положит пустой set. Положительные telegram_id отфильтрованы (id=0 в
-    # ADMIN_IDS не должен случайно повысить sentinel-юзера).
-    admin_ids: set[int] = {tg_id for tg_id in (settings.get_admin_ids() or []) if tg_id > 0}
-    admin_emails: set[str] = {normalize_admin_email(email) for email in (settings.get_admin_emails() or []) if email}
-
-    try:
-        telegram_id_int = int(user.telegram_id) if user.telegram_id is not None else None
-    except (TypeError, ValueError):
-        telegram_id_int = None
-    is_telegram_admin = telegram_id_int is not None and telegram_id_int > 0 and telegram_id_int in admin_ids
-    user_email = getattr(user, 'email', None)
-    is_email_admin = (
-        user_email is not None
-        and bool(user_email)
-        and getattr(user, 'email_verified', False)
-        and normalize_admin_email(user_email) in admin_emails
-    )
-
-    if not is_telegram_admin and not is_email_admin:
+    env_check = is_user_admin_by_env(user)
+    if not env_check.is_admin:
         return False
+    is_telegram_admin = env_check.is_telegram_admin
+    user_email = getattr(user, 'email', None)
 
     # Lookup Superadmin role: предпочитаем поиск по (is_system=True, level=SUPERADMIN_LEVEL)
     # как в _ensure_preset_roles — это работает даже если кто-то переименовал «Superadmin»
@@ -563,10 +630,21 @@ async def _assign_if_missing(
     """Create or reactivate a UserRole row for this user/role pair.
 
     Env config (ADMIN_IDS / ADMIN_EMAILS) is the source of truth for
-    Superadmin assignments.  If a previously revoked assignment exists,
-    it is reactivated — the env config always wins.
+    Superadmin assignments — за двумя исключениями:
 
-    Returns True if a new assignment was created or an inactive one was reactivated.
+    * Если предыдущий revoke был выполнен через UI (revocation_source='ui'),
+      bootstrap НЕ реактивирует роль. Senior-админ сделал manual decision
+      и его override должен оставаться в силе даже если юзер всё ещё в
+      env config. Чтобы вернуть таких юзеров надо: либо
+      переназначить роль вручную через cabinet UI (это обнуляет
+      revocation_source), либо явно удалить строку из user_roles.
+
+    * Для revocation_source IN (NULL, 'env') — реактивируем как раньше.
+      NULL покрывает legacy строки до миграции 0078 (backward-compat).
+
+    Returns True если запись была создана прямо сейчас (новая или
+    реактивированная), False — если запись уже активна или manual UI revoke
+    блокирует реактивацию.
     """
     result = await db.execute(
         select(UserRole).where(
@@ -585,14 +663,26 @@ async def _assign_if_missing(
             )
             return False
 
-        # Reactivate: env config is the source of truth
+        if existing.revocation_source == 'ui':
+            logger.warning(
+                'Skipping bootstrap reactivation: role was revoked via UI; env config will not override manual revoke',
+                user_id=user_id,
+                identifier=identifier,
+                user_role_id=existing.id,
+            )
+            return False
+
+        # Reactivate: env config is the source of truth (NULL=legacy treated as env-style).
+        previous_revocation_source = existing.revocation_source
         existing.is_active = True
+        existing.revocation_source = None
         await db.flush()
         logger.info(
             'Reactivated Superadmin role (user is in env config)',
             user_id=user_id,
             identifier=identifier,
             user_role_id=existing.id,
+            previous_revocation_source=previous_revocation_source,
         )
         return True
 

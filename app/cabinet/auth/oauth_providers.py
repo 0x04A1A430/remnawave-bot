@@ -298,7 +298,11 @@ class YandexProvider(OAuthProvider):
             provider='yandex',
             provider_id=str(data['id']),
             email=email,
-            email_verified=bool(email),
+            # Yandex /info НЕ возвращает proof-of-ownership flag для email — поэтому
+            # не помечаем как verified. Раньше было `bool(email)`, что давало False
+            # positive verified — пригодное к privilege escalation если адрес из
+            # ADMIN_EMAILS. Юзер пройдёт cabinet email-verification отдельно.
+            email_verified=False,
             first_name=data.get('first_name'),
             last_name=data.get('last_name'),
             username=data.get('login'),
@@ -473,7 +477,9 @@ class VKProvider(OAuthProvider):
             provider='vk',
             provider_id=str(user_id),
             email=email,
-            email_verified=bool(email),
+            # VK ID не cryptographically proves email ownership — поле email можно
+            # привязать без верификации. Не доверяем как verified источнику.
+            email_verified=False,
             first_name=user_data.get('first_name'),
             last_name=user_data.get('last_name'),
             avatar_url=user_data.get('avatar'),
