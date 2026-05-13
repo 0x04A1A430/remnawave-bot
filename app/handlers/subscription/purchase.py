@@ -1962,8 +1962,8 @@ async def confirm_extend_subscription(
             ),
         ).format(
             required=required_text,
-            balance=texts.format_price(db_user.balance_kopeks),
-            missing=texts.format_price(missing_kopeks),
+            balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+            missing=texts.format_price(missing_kopeks, round_kopeks=False),
         )
 
         # Подготовим данные для сохранения в корзину
@@ -2376,9 +2376,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 'Выберите способ пополнения. Сумма подставится автоматически.'
             ),
         ).format(
-            required=texts.format_price(final_price),
-            balance=texts.format_price(db_user.balance_kopeks),
-            missing=texts.format_price(missing_kopeks),
+            required=texts.format_price(final_price, round_kopeks=False),
+            balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+            missing=texts.format_price(missing_kopeks, round_kopeks=False),
         )
 
         # Сохраняем данные корзины в Redis перед переходом к пополнению
@@ -2429,9 +2429,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     'Выберите способ пополнения. Сумма подставится автоматически.'
                 ),
             ).format(
-                required=texts.format_price(final_price),
-                balance=texts.format_price(db_user.balance_kopeks),
-                missing=texts.format_price(missing_kopeks),
+                required=texts.format_price(final_price, round_kopeks=False),
+                balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+                missing=texts.format_price(missing_kopeks, round_kopeks=False),
             )
 
             await callback.message.edit_text(
@@ -4519,9 +4519,9 @@ async def _extend_existing_subscription(
                 'Выберите способ пополнения. Сумма подставится автоматически.'
             ),
         ).format(
-            required=texts.format_price(price_kopeks),
-            balance=texts.format_price(db_user.balance_kopeks),
-            missing=texts.format_price(missing_kopeks),
+            required=texts.format_price(price_kopeks, round_kopeks=False),
+            balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+            missing=texts.format_price(missing_kopeks, round_kopeks=False),
         )
 
         # Подготовим данные для сохранения в корзину
