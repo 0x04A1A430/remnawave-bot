@@ -1,5 +1,6 @@
 """JWT token handling for cabinet authentication."""
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -10,6 +11,19 @@ from app.config import settings
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _token_fingerprint(token: str | None) -> str:
+    """Стабильный короткий хэш токена для корреляции в логах без раскрытия содержимого.
+
+    Раньше логировался `token[:20]` — JWT header (`eyJhbGciOiJIUzI1NiIs...`) одинаков
+    для всех токенов с одним алгоритмом и не несёт информации, а первые 5-6 символов
+    payload-сегмента могут утечь идентифицирующую информацию при сопоставлении с
+    тайминговыми атаками. SHA-256 hex prefix даёт ту же useful-корреляцию без leak'а.
+    """
+    if not token:
+        return ''
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
 
 
 JWT_ALGORITHM = 'HS256'
@@ -103,10 +117,10 @@ def decode_token(token: str) -> dict[str, Any] | None:
         # Логирование причины помогает дебажить 401 на стороне юзера
         # (раньше тихо возвращали None — было невозможно понять, истёк токен
         # или подпись не сходится).
-        logger.debug('JWT decode: token expired', token_prefix=token[:20] if token else '')
+        logger.debug('JWT decode: token expired', token_fp=_token_fingerprint(token))
         return None
     except jwt.InvalidTokenError as err:
-        logger.debug('JWT decode: invalid token', token_prefix=token[:20] if token else '', error=str(err))
+        logger.debug('JWT decode: invalid token', token_fp=_token_fingerprint(token), error=str(err))
         return None
 
 

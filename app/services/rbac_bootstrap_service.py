@@ -19,11 +19,21 @@ from app.database.crud.rbac import SUPERADMIN_LEVEL, UserRoleCRUD
 from app.database.models import AdminAuditLog, AdminRole, User, UserRole
 
 
-def _normalize_email(value: str) -> str:
-    """Сравнение email'ов: NFKC unicode + lower + strip. Защищает от homoglyph-атак
-    на admin email matching (кириллическая `а` U+0430 vs латинская `a` U+0061 теперь
-    нормализуются одинаково где это уместно по NFKC)."""
+def normalize_admin_email(value: str) -> str:
+    """Канонизация email для сравнения с ADMIN_EMAILS: NFKC + lower + strip.
+
+    Защищает от fullwidth-character bypass (`ＡＤＭＩＮ＠example.com` → `admin@example.com`).
+    Cyrillic-vs-Latin homographs остаются разными — NFKC их не объединяет, защита от
+    confusables-атак вне scope (требует confusables-detect библиотеки).
+
+    Используется и в bootstrap, и в login-time, и в auto_login guard — единая точка
+    нормализации, чтобы drift между путями был невозможен.
+    """
     return unicodedata.normalize('NFKC', value).strip().lower()
+
+
+# Backward-compat alias на случай если что-то импортировало private имя.
+_normalize_email = normalize_admin_email
 
 
 def _mask_email(value: str | None) -> str:
@@ -291,7 +301,10 @@ async def _revoke_stale_superadmins(
     active_assignments = result.scalars().all()
 
     admin_ids_set = set(admin_ids)
-    admin_emails_set = {e.lower() for e in admin_emails}
+    # NFKC-нормализуем env-emails и сравниваем нормализованную форму user.email с этим
+    # set — иначе fullwidth-character мог бы попасть в одну сторону и не совпасть с
+    # другой. Согласовано с ensure_superadmin_role_on_login.
+    admin_emails_set = {normalize_admin_email(e) for e in admin_emails}
 
     revoked = 0
     for assignment in active_assignments:
@@ -302,7 +315,11 @@ async def _revoke_stale_superadmins(
         # Check if user is still in env config.
         # email_verified is required — symmetric with _ensure_role_by_email.
         in_env_by_id = user.telegram_id is not None and user.telegram_id in admin_ids_set
-        in_env_by_email = user.email is not None and user.email_verified and user.email.lower() in admin_emails_set
+        in_env_by_email = (
+            user.email is not None
+            and user.email_verified
+            and normalize_admin_email(user.email) in admin_emails_set
+        )
 
         if not in_env_by_id and not in_env_by_email:
             assignment.is_active = False
@@ -378,24 +395,40 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     """
     # Используем готовые getters из config — settings.ADMIN_IDS/ADMIN_EMAILS это
     # comma-separated строки, прямая итерация выдаст символы и list comprehension
-    # тихо положит пустой set.
-    admin_ids: set[int] = set(settings.get_admin_ids() or [])
-    admin_emails: set[str] = {_normalize_email(email) for email in (settings.get_admin_emails() or []) if email}
+    # тихо положит пустой set. Положительные telegram_id отфильтрованы (id=0 в
+    # ADMIN_IDS не должен случайно повысить sentinel-юзера).
+    admin_ids: set[int] = {tg_id for tg_id in (settings.get_admin_ids() or []) if tg_id > 0}
+    admin_emails: set[str] = {normalize_admin_email(email) for email in (settings.get_admin_emails() or []) if email}
 
-    is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_ids
+    try:
+        telegram_id_int = int(user.telegram_id) if user.telegram_id is not None else None
+    except (TypeError, ValueError):
+        telegram_id_int = None
+    is_telegram_admin = telegram_id_int is not None and telegram_id_int > 0 and telegram_id_int in admin_ids
     user_email = getattr(user, 'email', None)
     is_email_admin = (
         user_email is not None
         and bool(user_email)
         and getattr(user, 'email_verified', False)
-        and _normalize_email(user_email) in admin_emails
+        and normalize_admin_email(user_email) in admin_emails
     )
 
     if not is_telegram_admin and not is_email_admin:
         return False
 
-    role_result = await db.execute(select(AdminRole).where(AdminRole.name == SUPERADMIN_ROLE_NAME))
+    # Lookup Superadmin role: предпочитаем поиск по (is_system=True, level=SUPERADMIN_LEVEL)
+    # как в _ensure_preset_roles — это работает даже если кто-то переименовал «Superadmin»
+    # через UI. Fallback на name='Superadmin' для совместимости со старыми seed-данными.
+    role_result = await db.execute(
+        select(AdminRole).where(
+            AdminRole.is_system.is_(True),
+            AdminRole.level == SUPERADMIN_LEVEL,
+        )
+    )
     role = role_result.scalar_one_or_none()
+    if role is None:
+        role_result = await db.execute(select(AdminRole).where(AdminRole.name == SUPERADMIN_ROLE_NAME))
+        role = role_result.scalar_one_or_none()
     if role is None:
         logger.warning(
             'Superadmin role not found at login bootstrap — RBAC tables not seeded?',
@@ -472,6 +505,7 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
             user_id=user.id,
             role_id=role.id,
             error=str(audit_error),
+            exc_info=True,
         )
 
     logger.info(
@@ -490,14 +524,24 @@ async def _ensure_role_by_email(
     email: str,
     role_id: int,
 ) -> bool:
-    """Assign Superadmin role to user found by verified email (case-insensitive). Returns True if assigned."""
+    """Assign Superadmin role to user found by verified email (NFKC + case-insensitive).
+
+    SQL lookup делает `lower()` — поэтому ищем максимально широко, а NFKC-проверку
+    делаем на Python-стороне после fetch'а. Так покрываются юзеры, в чьих email
+    в БД присутствуют compatibility-символы (fullwidth и т.п.).
+    """
+    target = normalize_admin_email(email)
     result = await db.execute(
         select(User).where(
             func.lower(User.email) == email.lower(),
             User.email_verified.is_(True),
         )
     )
-    user = result.scalar_one_or_none()
+    candidates = result.scalars().all()
+    user = next(
+        (u for u in candidates if u.email is not None and normalize_admin_email(u.email) == target),
+        None,
+    )
 
     if user is None:
         logger.debug(

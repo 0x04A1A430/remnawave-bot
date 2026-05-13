@@ -31,6 +31,7 @@ from app.database.crud.user import (
 from app.database.models import CabinetRefreshToken, User, UserStatus
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
+from app.services.rbac_bootstrap_service import ensure_superadmin_role_on_login, normalize_admin_email
 from app.services.referral_service import process_referral_registration
 from app.services.web_auth_service import (
     WEB_AUTH_TOKEN_TTL,
@@ -123,10 +124,12 @@ async def _create_auth_response(user: User, db: AsyncSession) -> AuthResponse:
     # на старте бота. Без этой проверки админ из ADMIN_IDS получает access_token
     # с пустыми permissions до следующего рестарта и видит 401 на /me/is-admin.
     try:
-        from app.services.rbac_bootstrap_service import ensure_superadmin_role_on_login
-
         await ensure_superadmin_role_on_login(db, user)
     except Exception as bootstrap_error:
+        # IntegrityError изолирован savepoint'ом внутри ensure_superadmin_role_on_login,
+        # сюда долетают только программистские/инфраструктурные сбои (DB down, attribute
+        # errors). Login сам не валится — get_user_permissions ниже выдаст актуальное
+        # состояние ролей, какое бы оно ни было.
         logger.error(
             'Failed to ensure Superadmin role on login',
             user_id=user.id,
@@ -134,13 +137,6 @@ async def _create_auth_response(user: User, db: AsyncSession) -> AuthResponse:
             error=str(bootstrap_error),
             exc_info=True,
         )
-        # Session may be in a poisoned state after a flush failure — rollback
-        # so subsequent statements (get_user_permissions) don't trip
-        # PendingRollbackError.
-        try:
-            await db.rollback()
-        except Exception:
-            pass
 
     user_permissions, user_role_names, user_role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
 
@@ -1564,16 +1560,20 @@ async def auto_login(
     # и получить токен, ведущий к этому user. Запрещаем такой path для админов
     # из ADMIN_IDS / ADMIN_EMAILS — пусть проходят полную Telegram WebApp /
     # password аутентификацию.
-    from app.services.rbac_bootstrap_service import _normalize_email
-
-    admin_telegram_ids = set(settings.get_admin_ids() or [])
-    admin_emails = {_normalize_email(email) for email in (settings.get_admin_emails() or []) if email}
-    is_telegram_admin = user.telegram_id is not None and int(user.telegram_id) in admin_telegram_ids
+    admin_telegram_ids = {tg_id for tg_id in (settings.get_admin_ids() or []) if tg_id > 0}
+    admin_emails = {normalize_admin_email(email) for email in (settings.get_admin_emails() or []) if email}
+    try:
+        telegram_id_int = int(user.telegram_id) if user.telegram_id is not None else None
+    except (TypeError, ValueError):
+        telegram_id_int = None
+    is_telegram_admin = (
+        telegram_id_int is not None and telegram_id_int > 0 and telegram_id_int in admin_telegram_ids
+    )
     is_email_admin = (
         getattr(user, 'email', None) is not None
         and bool(user.email)
         and getattr(user, 'email_verified', False)
-        and _normalize_email(user.email) in admin_emails
+        and normalize_admin_email(user.email) in admin_emails
     )
     if is_telegram_admin or is_email_admin:
         logger.warning(
