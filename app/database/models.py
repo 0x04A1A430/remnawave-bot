@@ -4172,3 +4172,31 @@ class InfoPage(Base):
     replaces_tab = Column(String(20), nullable=True)  # 'faq', 'rules', 'privacy', 'offer', or null
     created_at = Column(AwareDateTime(), server_default=func.now())
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
+
+
+class UserDeviceAlias(Base):
+    """Local nickname for a RemnaWave HWID device.
+
+    RemnaWave stores devices by HWID + platform + deviceModel. None of these
+    are user-friendly («Android-SM-S908U», «iOS-iPhone15,2»…), so we let the
+    end user assign a short alias («Жены iPhone», «Рабочий ноут»). The
+    alias lives ONLY in our DB — it is never pushed back to the panel and
+    only affects display in the bot / cabinet.
+
+    Scope is per-(user, hwid): the same physical device shares the alias
+    across all of a user's subscriptions in multi-tariff mode. ON DELETE
+    CASCADE on user_id so aliases follow the account through deletion.
+    """
+
+    __tablename__ = 'user_device_aliases'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'hwid', name='uq_user_device_aliases_user_hwid'),
+        Index('ix_user_device_aliases_user_id', 'user_id'),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    hwid = Column(String(255), nullable=False)
+    alias = Column(String(64), nullable=False)
+    created_at = Column(AwareDateTime(), server_default=func.now(), nullable=False)
+    updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False)

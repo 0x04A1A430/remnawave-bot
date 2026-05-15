@@ -19,6 +19,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
+from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -867,6 +868,12 @@ async def get_devices(
             response = await api.get_user_devices_all(_puuid)
 
             devices_list = response.get('devices', [])
+            # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
+            # чем N+1 при сборке списка устройств.
+            from app.database.crud.user_device_alias import get_aliases_for_user
+
+            aliases = await get_aliases_for_user(db, user.id)
+
             formatted_devices = []
             for device in devices_list:
                 hwid = device.get('hwid') or device.get('deviceId') or device.get('id')
@@ -880,6 +887,9 @@ async def get_devices(
                         'platform': platform,
                         'device_model': model,
                         'created_at': created_at,
+                        # Локальное имя, заданное юзером. None — алиаса нет,
+                        # фронт фоллбэчит на platform/device_model.
+                        'local_name': aliases.get(hwid) or None,
                     }
                 )
 
@@ -896,6 +906,67 @@ async def get_devices(
             'total': 0,
             'device_limit': subscription.device_limit or 0,
         }
+
+
+class DeviceRenameRequest(BaseModel):
+    """Payload for `PATCH /subscription/devices/{hwid}/name`.
+
+    `name` accepts either a non-empty string (set/update) or null/empty
+    string (clear the alias and fall back to the default platform/model
+    label). Length is capped at ALIAS_MAX_LENGTH on the backend.
+    """
+
+    name: str | None = None
+
+
+@router.patch('/devices/{hwid}/name')
+async def rename_device(
+    hwid: str,
+    request: DeviceRenameRequest,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, Any]:
+    """Set/clear a local alias for the user's HWID device.
+
+    Scope is per-(user, hwid), so the alias is visible across ALL of the
+    user's subscriptions in multi-tariff mode — same physical device, same
+    nickname.
+
+    Empty/null `name` clears the alias and returns `{local_name: null}`.
+    """
+    from app.database.crud.user_device_alias import (
+        ALIAS_MAX_LENGTH,
+        delete_alias,
+        normalize_alias,
+        upsert_alias,
+    )
+
+    # Subscription resolution здесь только для access-проверки: убеждаемся,
+    # что юзер действительно владеет устройством через какую-то из своих
+    # подписок. Сам alias всё равно глобальный per (user, hwid).
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
+    hwid = (hwid or '').strip()
+    if not hwid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
+
+    normalized = normalize_alias(request.name)
+    if normalized:
+        if len(normalized) > ALIAS_MAX_LENGTH:
+            # normalize_alias уже обрезает — но даём явный 400 если кто-то
+            # очень настойчиво послал гигантскую строку (post-truncate проверка).
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Имя устройства не может быть длиннее {ALIAS_MAX_LENGTH} символов',
+            )
+        saved = await upsert_alias(db, user.id, hwid, normalized)
+        return {'hwid': hwid, 'local_name': saved}
+
+    await delete_alias(db, user.id, hwid)
+    return {'hwid': hwid, 'local_name': None}
 
 
 @router.delete('/devices/{hwid}')

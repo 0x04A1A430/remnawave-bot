@@ -65,6 +65,8 @@ from ..schemas.users import (
     PeriodPriceInfo,
     RemoveReferralResponse,
     RemoveReferrerResponse,
+    RenameDeviceRequest,
+    RenameDeviceResponse,
     ResetDevicesResponse,
     ResetSubscriptionRequest,
     ResetSubscriptionResponse,
@@ -2258,6 +2260,11 @@ async def get_user_devices(
         async with service.get_api_client() as api:
             response = await api.get_user_devices_all(_dev_uuid)
 
+            # Aliases per-(user, hwid) — единый дикт на весь список устройств.
+            from app.database.crud.user_device_alias import get_aliases_for_user
+
+            aliases = await get_aliases_for_user(db, user_id)
+
             devices = []
             for d in response.get('devices', []):
                 hwid = d.get('hwid') or d.get('deviceId') or d.get('id')
@@ -2269,6 +2276,7 @@ async def get_user_devices(
                         platform=d.get('platform') or d.get('platformType') or '',
                         device_model=d.get('deviceModel') or d.get('model') or d.get('name') or '',
                         created_at=d.get('updatedAt') or d.get('lastSeen') or d.get('createdAt'),
+                        local_name=aliases.get(hwid) or None,
                     )
                 )
 
@@ -2330,6 +2338,57 @@ async def delete_user_device(
     except Exception as e:
         logger.error('Error deleting device for user', hwid=hwid, user_id=user_id, error=e)
         return DeleteDeviceResponse(success=False, message='Ошибка удаления устройства')
+
+
+@router.patch('/{user_id}/devices/{hwid}/name', response_model=RenameDeviceResponse)
+async def rename_user_device(
+    user_id: int,
+    hwid: str,
+    request: RenameDeviceRequest,
+    admin: User = Depends(require_permission('users:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> RenameDeviceResponse:
+    """Set/clear a local alias for a user's HWID device (admin override).
+
+    Alias scope: per-(user, hwid). Admin acts on behalf of the user; the
+    same value would appear in the user's own bot/cabinet view. Empty or
+    null `name` clears the alias.
+    """
+    from app.database.crud.user_device_alias import (
+        ALIAS_MAX_LENGTH,
+        delete_alias,
+        normalize_alias,
+        upsert_alias,
+    )
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    hwid = (hwid or '').strip()
+    if not hwid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
+
+    normalized = normalize_alias(request.name)
+    if normalized:
+        if len(normalized) > ALIAS_MAX_LENGTH:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Имя устройства не может быть длиннее {ALIAS_MAX_LENGTH} символов',
+            )
+        saved = await upsert_alias(db, user_id, hwid, normalized)
+        logger.info(
+            'Admin renamed device for user',
+            admin_id=admin.id,
+            user_id=user_id,
+            hwid_prefix=hwid[:8],
+            alias_length=len(saved),
+        )
+        return RenameDeviceResponse(hwid=hwid, local_name=saved)
+
+    await delete_alias(db, user_id, hwid)
+    logger.info('Admin cleared device alias for user', admin_id=admin.id, user_id=user_id, hwid_prefix=hwid[:8])
+    return RenameDeviceResponse(hwid=hwid, local_name=None)
 
 
 @router.delete('/{user_id}/devices', response_model=ResetDevicesResponse)

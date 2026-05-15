@@ -3130,15 +3130,29 @@ def get_devices_management_keyboard(
     keyboard = []
 
     for i, device in enumerate(devices):
-        platform = device.get('platform', 'Unknown')
-        device_model = device.get('deviceModel', 'Unknown')
-        device_info = f'{platform} - {device_model}'
+        # Локальный alias (если юзер задал) приоритетнее платформенной строки.
+        # `local_name` проставляется в attach_aliases_to_devices() ДО рендера.
+        local_name = (device.get('local_name') or '').strip()
+        if local_name:
+            device_info = local_name
+        else:
+            platform = device.get('platform', 'Unknown')
+            device_model = device.get('deviceModel', 'Unknown')
+            device_info = f'{platform} - {device_model}'
 
-        if len(device_info) > 25:
-            device_info = device_info[:22] + '...'
+        if len(device_info) > 22:
+            device_info = device_info[:19] + '...'
 
+        # Ряд: pencil-кнопка переименования (компактная иконка) + сброс
+        # устройства с его лейблом (исторический callback).
         keyboard.append(
-            [InlineKeyboardButton(text=f'🔄 {device_info}', callback_data=f'reset_device_{i}_{pagination.page}')]
+            [
+                InlineKeyboardButton(
+                    text=texts.t('DEVICE_RENAME_BUTTON', '✏️'),
+                    callback_data=f'device_rename_{i}_{pagination.page}',
+                ),
+                InlineKeyboardButton(text=f'🔄 {device_info}', callback_data=f'reset_device_{i}_{pagination.page}'),
+            ]
         )
 
     if pagination.total_pages > 1:
