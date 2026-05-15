@@ -142,11 +142,22 @@ def create_unified_app(
     # Mount RemnaWave incoming webhook router
     remnawave_webhook_enabled = settings.is_remnawave_webhook_enabled()
     if remnawave_webhook_enabled:
+        from app.services.remnawave_webhook_service import RemnaWaveWebhookService
         from app.webserver.remnawave_webhook import create_remnawave_webhook_router
 
-        remnawave_router = create_remnawave_webhook_router(bot)
+        remnawave_webhook_service = RemnaWaveWebhookService(bot)
+        remnawave_router = create_remnawave_webhook_router(bot, remnawave_webhook_service)
         app.include_router(remnawave_router)
+        app.state.remnawave_webhook_service = remnawave_webhook_service
         logger.info('RemnaWave webhook router mounted at', REMNAWAVE_WEBHOOK_PATH=settings.REMNAWAVE_WEBHOOK_PATH)
+
+        # Регистрируем shutdown ДО stop_telegram_webhook_processor / stop_disposable_email_service:
+        # drain делает реальный bot.send_message, поэтому aiogram session должна быть ещё жива.
+        @app.on_event('shutdown')
+        async def stop_remnawave_webhook_service() -> None:  # pragma: no cover - event hook
+            # Flush the in-flight node-event coalescing buffer so SIGTERM
+            # doesn't lose up to 10 seconds of node.connection_* alerts.
+            await remnawave_webhook_service.stop()
 
     payment_providers_state = {
         'tribute': settings.TRIBUTE_ENABLED,

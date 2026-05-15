@@ -277,3 +277,74 @@ async def test_coalesced_summary_dedupes_by_name_and_address(
     bullet_lines = [line for line in sent_text['value'].split('\n') if line.startswith('•')]
     assert len(bullet_lines) == 1
     assert 'spammy' in sent_text['value']
+
+
+# ---------------------------------------------------------------------------
+# Pending task tracking + graceful shutdown
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_enqueue_tracks_flush_task_in_pending_set(
+    webhook_service: RemnaWaveWebhookService,
+) -> None:
+    """Active flush task is held in the strong-ref set; auto-removed after completion."""
+    await webhook_service._enqueue_node_event(
+        'node.connection_lost', {'name': 'n1', 'address': '10.0.0.1'}
+    )
+
+    task = webhook_service._node_event_flush_task
+    assert task is not None
+    assert task in webhook_service._node_event_pending_tasks
+
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):
+        pass
+    # Allow the done-callback to fire on the next event-loop iteration.
+    await asyncio.sleep(0)
+
+    assert task not in webhook_service._node_event_pending_tasks
+
+
+@pytest.mark.asyncio
+async def test_stop_drains_buffered_events(
+    webhook_service: RemnaWaveWebhookService,
+) -> None:
+    """Pending events in the coalesce window get flushed on stop()."""
+    sent_messages: list[str] = []
+
+    async def capture_send(text: str) -> bool:
+        sent_messages.append(text)
+        return True
+
+    webhook_service._admin_service.send_webhook_notification = AsyncMock(side_effect=capture_send)
+
+    for i in range(3):
+        await webhook_service._enqueue_node_event(
+            'node.connection_lost', {'name': f'node-{i}', 'address': f'10.0.0.{i}'}
+        )
+
+    # Task is still sleeping in the coalesce window; stop() should cancel
+    # it and send one summary anyway.
+    await webhook_service.stop()
+
+    assert len(sent_messages) == 1
+    assert '× 3' in sent_messages[0]
+    assert 'node-0' in sent_messages[0]
+    assert webhook_service._node_event_buffer == {}
+    assert webhook_service._node_event_flush_task is None
+
+
+@pytest.mark.asyncio
+async def test_stop_is_idempotent_when_buffer_empty(
+    webhook_service: RemnaWaveWebhookService,
+) -> None:
+    """Calling stop() with no pending events sends nothing and doesn't crash."""
+    webhook_service._admin_service.send_webhook_notification = AsyncMock(return_value=True)
+
+    await webhook_service.stop()
+
+    webhook_service._admin_service.send_webhook_notification.assert_not_called()
+    assert webhook_service._node_event_flush_task is None
