@@ -5010,12 +5010,23 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
 
                         remnawave_user = await api.update_user(**update_kwargs)
                 else:
-                    username = settings.format_remnawave_username(
+                    # При multi-tariff подписке username должен включать
+                    # `_<remnawave_short_id>` (как и в трёх других create-path'ах:
+                    # subscription_service, cabinet admin sync, bulk sync) — иначе
+                    # подписки, созданные через админский extend, имеют другой
+                    # формат username'а и не уникальны per-subscription.
+                    username_suffix = (
+                        f'_{subscription.remnawave_short_id}'
+                        if (settings.is_multi_tariff_enabled() and getattr(subscription, 'remnawave_short_id', None))
+                        else ''
+                    )
+                    username = settings.build_remnawave_subscription_username(
                         full_name=target_user.full_name,
                         username=target_user.username,
                         telegram_id=target_user.telegram_id,
                         email=target_user.email,
                         user_id=target_user.id,
+                        suffix=username_suffix,
                     )
                     async with remnawave_service.get_api_client() as api:
                         create_kwargs = dict(
