@@ -722,6 +722,14 @@ class Settings(BaseSettings):
     ANTILOPAY_SBP_DISPLAY_NAME: str = 'СБП (Antilopay)'
     ANTILOPAY_CARD_ENABLED: bool = False
     ANTILOPAY_CARD_DISPLAY_NAME: str = 'Карта (Antilopay)'
+    # Antilopay требует подтвердить владение сайтом одним из двух способов:
+    #   (1) META-тегом `<meta name="apay-tag" content="...">` в <head> главной страницы;
+    #   (2) файлом `apay-meta-file.txt` в корне сайта.
+    # Кабинет автоматически отрендерит meta-тег и отдаст текстовый файл, если
+    # сюда положить выданное Antilopay значение (см. lk.antilopay.com → Проект →
+    # Верификация). Пустая строка/None — фича отключена.
+    ANTILOPAY_APAY_VERIFICATION_TAG: str | None = None
+
     ANTILOPAY_SBERPAY_ENABLED: bool = False
     ANTILOPAY_SBERPAY_DISPLAY_NAME: str = 'SberPay (Antilopay)'
 

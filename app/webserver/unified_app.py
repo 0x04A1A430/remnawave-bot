@@ -231,6 +231,18 @@ def create_unified_app(
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)
 
+    # Root-level Antilopay site-verification file. Antilopay crawler ходит
+    # точно по `/<host>/apay-meta-file.txt`, поэтому не можем спрятать роут
+    # под /cabinet prefix. Отдаём пустую 404, если значение не настроено.
+    @app.get('/apay-meta-file.txt', include_in_schema=False)
+    async def apay_meta_file() -> JSONResponse:  # pragma: no cover - thin static endpoint
+        from fastapi.responses import PlainTextResponse, Response
+
+        token = (settings.ANTILOPAY_APAY_VERIFICATION_TAG or '').strip()
+        if not token:
+            return Response(status_code=status.HTTP_404_NOT_FOUND)
+        return PlainTextResponse(content=token, media_type='text/plain; charset=utf-8')
+
     unified_health_path = '/health/unified' if settings.is_web_api_enabled() else '/health'
 
     @app.get(unified_health_path)
