@@ -294,13 +294,15 @@ async def validate_telegram_oidc_token(id_token: str, client_id: str) -> dict[st
             return None
 
         public_key, key_alg = public_keys[kid]
-        # Если JWK не объявил alg — разрешаем все известные нам алгоритмы для
-        # этого ключа (pyjwt всё равно сверит с header'ом токена).
-        allowed_algorithms = [key_alg] if key_alg else ['RS256', 'ES256', 'EdDSA', 'ES256K']
+        # `_build_public_keys` гарантирует non-empty `alg` для каждого
+        # принятого ключа (либо JWK.alg, либо _KTY_DEFAULT_ALG[kty]) — поэтому
+        # передаём строго один алгоритм. Это уже-узкое окно для алгоритмов
+        # выбрано лучше, чем безусловный fallback на все 4: pyjwt сверит
+        # header.alg токена с этим списком и отвергнет любой mismatch.
         claims = pyjwt.decode(
             id_token,
             key=public_key,
-            algorithms=allowed_algorithms,
+            algorithms=[key_alg],
             audience=client_id,
             issuer=_OIDC_ISSUER,
             options={'require': ['exp', 'iat', 'iss', 'aud', 'sub']},

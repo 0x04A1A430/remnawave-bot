@@ -119,8 +119,13 @@ def test_build_public_keys_skips_jwk_without_kid() -> None:
 
 
 def test_build_public_keys_returns_tuple_compatible_with_pyjwt_decode() -> None:
-    """Возврат должен быть (public_key, alg) — иначе validate_telegram_oidc_token упадёт."""
+    """Возврат должен быть (public_key, alg) — иначе validate_telegram_oidc_token упадёт.
+
+    Также инвариант: alg ВСЕГДА non-empty для принятого ключа. На этом полагается
+    validate_telegram_oidc_token (передаёт `algorithms=[key_alg]` без fallback'а).
+    """
     result = _build_public_keys(_TELEGRAM_JWKS_SNAPSHOT)
+    assert result, 'expected at least one parsed key from the production snapshot'
 
     for kid, value in result.items():
         assert isinstance(value, tuple), f'kid {kid}: expected tuple, got {type(value)}'
@@ -132,3 +137,32 @@ def test_build_public_keys_returns_tuple_compatible_with_pyjwt_decode() -> None:
         # the matching algorithm class. Sanity-check that we didn't accidentally
         # store the raw JWK dict.
         assert not isinstance(key, dict), f'kid {kid}: got raw JWK dict instead of parsed key'
+
+
+def test_build_public_keys_defaults_alg_when_jwk_omits_it() -> None:
+    """JWK без поля `alg` → берём _KTY_DEFAULT_ALG[kty]; alg всё равно не пустой."""
+    # Snapshot реального RSA-ключа Telegram'а, но без `alg`.
+    jwks = {
+        'keys': [
+            {
+                'e': 'AQAB',
+                'ext': True,
+                'key_ops': ['verify'],
+                'kty': 'RSA',
+                'n': (
+                    '5RneLtsKvVcxdv6gu6gxEQu30Cru5NiMQnY6SNr9ZyZFZ4ya-pfHNuaZXJ6QPG0JSFwoxeOk'
+                    'EO2-eZN_REVPm448PvjjsR1eQdZ5QpEkNxnItFcmxkHH91v5cgf52_EI9BGO-MT6f1vaBSg3'
+                    'uWHFlDxI7J2AYxNvd1_Nf3TkgrrR7gyJFTmEIai5RefGnA0KGNYDlRIGUzrz2F05n6gTaHFT'
+                    '_iHL5UHatTZA4GCiUSjIOuwqu5pE5uZge20TFv3cxXMQaFw_xv1pgQt_Rq8eoCN7TS0RQ0zj'
+                    'WKiad-W286BcFectXsUm03p5Nq_kY4mf_7rqwX_B8yy_bBreyKn7RQ'
+                ),
+                'kid': 'rsa-no-alg',
+            },
+        ],
+    }
+
+    result = _build_public_keys(jwks)
+
+    assert 'rsa-no-alg' in result
+    _, alg = result['rsa-no-alg']
+    assert alg == 'RS256', f'RSA fallback alg должен быть RS256, получил {alg!r}'
