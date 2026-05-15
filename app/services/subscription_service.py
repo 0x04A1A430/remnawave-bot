@@ -292,16 +292,34 @@ class SubscriptionService:
                     remnawave_uuid=subscription.remnawave_uuid,
                 )
 
-        # New subscription — create a NEW Remnawave user
+        # New subscription — create a NEW Remnawave user.
+        # short_id (6 hex chars) приклеивается ниже, поэтому резервируем под него
+        # место в базовом username'е заранее. Без этого пара «email-prefix дважды
+        # из шаблона + длинный suffix» легко вылезает за 36-char лимит API
+        # RemnaWave (Validation failed: Username must be less than 36 chars).
+        suffix = f'_{subscription.remnawave_short_id}'
         base_username = settings.format_remnawave_username(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
             email=user.email,
             user_id=user.id,
+            reserve_suffix_chars=len(suffix),
         )
-        # Use permanent short_id from subscription (generated at creation time)
-        username = f'{base_username}_{subscription.remnawave_short_id}'
+        username = f'{base_username}{suffix}'
+
+        # Belt-and-suspenders: если по какой-то причине total всё-таки выехал
+        # (например, новый шаблон с более длинным suffix'ом), обрезаем до limit'а.
+        if len(username) > settings.REMNAWAVE_USERNAME_MAX_LENGTH:
+            logger.warning(
+                'RemnaWave username exceeded API limit, truncating defensively',
+                limit=settings.REMNAWAVE_USERNAME_MAX_LENGTH,
+                full_length=len(username),
+                full_username=username,
+            )
+            # Suffix критичен (уникальный per-subscription) — режем basу.
+            keep_for_base = settings.REMNAWAVE_USERNAME_MAX_LENGTH - len(suffix)
+            username = f'{base_username[:keep_for_base].rstrip("_-")}{suffix}'
 
         updated_user = await api.create_user(username=username, **common_kwargs)
         if reset_traffic:

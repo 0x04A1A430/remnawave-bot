@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from datetime import time
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import quote as _url_quote, urlparse
 from zoneinfo import ZoneInfo
 
@@ -1354,6 +1354,11 @@ class Settings(BaseSettings):
         description = re.sub(r'\s+', ' ', description).strip()
         return description
 
+    # RemnaWave API enforces `username` length: 3..36 chars inclusive.
+    # ClassVar — это константы кода, а не env-tunable поля Settings.
+    REMNAWAVE_USERNAME_MAX_LENGTH: ClassVar[int] = 36
+    REMNAWAVE_USERNAME_MIN_LENGTH: ClassVar[int] = 3
+
     def format_remnawave_username(
         self,
         *,
@@ -1362,11 +1367,17 @@ class Settings(BaseSettings):
         telegram_id: int | None,
         email: str | None = None,
         user_id: int | None = None,
+        reserve_suffix_chars: int = 0,
     ) -> str:
         """
         Форматирует username для RemnaWave.
 
         Для email-пользователей (telegram_id=None) использует email prefix + user_id.
+
+        ``reserve_suffix_chars`` резервирует место для суффикса, который caller
+        собирается приклеить (например, `_<remnawave_short_id>`). Truncate
+        происходит ДО конкатенации, чтобы итоговая строка точно влезала в
+        REMNAWAVE_USERNAME_MAX_LENGTH. Дефолт 0 — обратная совместимость.
         """
         template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or 'user_{telegram_id}'
 
@@ -1389,6 +1400,12 @@ class Settings(BaseSettings):
         else:
             identifier = 'unknown'
 
+        # NB: для email-only users слот {telegram_id} заполняется identifier'ом
+        # (legacy fallback для шаблонов, не использующих {identifier}). Это
+        # может приводить к дублированию email-префикса, если шаблон ссылается
+        # одновременно на {email} И {telegram_id} — финальный length cap ниже
+        # обрезает строку, но семантическая дупликация остаётся. Рекомендуемый
+        # шаблон для смешанных деплоев: `{username_clean}_{identifier}`.
         values = defaultdict(
             str,
             {
@@ -1408,11 +1425,13 @@ class Settings(BaseSettings):
         if not sanitized_username:
             sanitized_username = _sanitize(f'user_{identifier}')
 
-        result = sanitized_username[:36].strip('_-') or 'user'
+        # Резервируем место под caller-suffix, не опускаясь ниже минимальной длины.
+        max_len = max(self.REMNAWAVE_USERNAME_MIN_LENGTH, self.REMNAWAVE_USERNAME_MAX_LENGTH - max(0, reserve_suffix_chars))
+        result = sanitized_username[:max_len].strip('_-') or 'user'
 
         # RemnaWave требует username минимум 3 символа
-        if len(result) < 3:
-            result = f'{result}_{identifier}'[:36].strip('_-')
+        if len(result) < self.REMNAWAVE_USERNAME_MIN_LENGTH:
+            result = f'{result}_{identifier}'[:max_len].strip('_-')
 
         return result or 'user'
 
