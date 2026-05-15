@@ -7,8 +7,8 @@ from typing import Any
 
 import structlog
 from aiogram import Bot, Dispatcher
-from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, Response, status
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.cabinet.apple_iap import apple_iap_only_router
@@ -233,15 +233,20 @@ def create_unified_app(
 
     # Root-level Antilopay site-verification file. Antilopay crawler ходит
     # точно по `/<host>/apay-meta-file.txt`, поэтому не можем спрятать роут
-    # под /cabinet prefix. Отдаём пустую 404, если значение не настроено.
+    # под /cabinet prefix. Отдаём 404, если значение не настроено, чтобы
+    # не светить статус «фича выключена» отдельным сигналом.
+    # `no-store`: если оператор ротирует токен, верификация Antilopay не должна
+    # упираться в кэш промежуточных CDN/прокси.
     @app.get('/apay-meta-file.txt', include_in_schema=False)
-    async def apay_meta_file() -> JSONResponse:  # pragma: no cover - thin static endpoint
-        from fastapi.responses import PlainTextResponse, Response
-
+    async def apay_meta_file() -> Response:  # pragma: no cover - thin static endpoint
         token = (settings.ANTILOPAY_APAY_VERIFICATION_TAG or '').strip()
         if not token:
             return Response(status_code=status.HTTP_404_NOT_FOUND)
-        return PlainTextResponse(content=token, media_type='text/plain; charset=utf-8')
+        return PlainTextResponse(
+            content=token,
+            media_type='text/plain; charset=utf-8',
+            headers={'Cache-Control': 'no-store'},
+        )
 
     unified_health_path = '/health/unified' if settings.is_web_api_enabled() else '/health'
 

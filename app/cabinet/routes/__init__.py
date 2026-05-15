@@ -76,8 +76,8 @@ from .withdrawal import router as withdrawal_router
 router = APIRouter(prefix='/cabinet', tags=['Cabinet'], redirect_slashes=False)
 
 # Public (unauthenticated) endpoints used by payment-provider crawlers.
-# Mounted before auth_router so the prefix nesting stays clean: the final
-# path is `/cabinet/public/site-verification`.
+# Final path becomes `/cabinet/public/site-verification`. Has its own
+# `/public` prefix so it's clearly separated from authenticated routes.
 router.include_router(site_verification_router)
 
 # Include all sub-routers
