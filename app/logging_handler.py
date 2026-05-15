@@ -48,6 +48,11 @@ IGNORED_LOGGER_PREFIXES: Final[tuple[str, ...]] = (
     'uvicorn.protocols',
     'websockets',
     'asyncio',
+    # Сам сервис админ-уведомлений: если он логирует error при ошибке отправки
+    # в админ-чат, нельзя пересылать эту ошибку обратно в тот же чат — иначе
+    # на каждом флуд-контроле получаем петлю усиления. Сервис уже использует
+    # logger.warning для транзиентных ошибок, этот фильтр — belt-and-suspenders.
+    'app.services.admin_notification_service',
     # Payment modules — isolated to payments.log, must not leak to Telegram
     'app.payments',
     'app.services.payment',

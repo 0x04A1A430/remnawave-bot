@@ -8,6 +8,7 @@ Admin events (node, service, crm) send alerts to the admin notification chat.
 
 from __future__ import annotations
 
+import asyncio
 import html
 import re
 from datetime import UTC, datetime
@@ -136,9 +137,19 @@ class RemnaWaveWebhookService:
     _INTENTIONAL_PANEL_DELETION_GUARD_SECONDS: int = 300
     _MAX_INTENTIONAL_ENTRIES: int = 10_000
 
+    # Buffers bursts of node.connection_* webhooks (RemnaWave фаерит один
+    # webhook на ноду при цикле websocket'а панели — раз в 3-4 часа это даёт
+    # пик из 7-15 событий за пару секунд и трип flood control в Telegram).
+    _NODE_EVENT_COALESCE_WINDOW_SECONDS: float = 10.0
+
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self._admin_service = AdminNotificationService(bot)
+
+        # Per-instance coalescing state for node.connection_* events.
+        self._node_event_buffer: dict[str, list[dict]] = {}
+        self._node_event_flush_task: asyncio.Task[None] | None = None
+        self._node_event_lock = asyncio.Lock()
 
         # User-scoped handlers: require user resolution
         self._user_handlers: dict[str, Any] = {
@@ -352,6 +363,11 @@ class RemnaWaveWebhookService:
             logger.debug('Admin notifications disabled, skipping event', event_name=event_name)
             return True
 
+        # Coalesce bursts of node.connection_lost / node.connection_restored:
+        # ставим в буфер, через окно вылетает одно сводное сообщение.
+        if event_name in _ADMIN_NODE_CONNECTION_EVENTS:
+            return await self._enqueue_node_event(event_name, data)
+
         title = self._admin_handlers.get(event_name, event_name)
 
         # Build message from event data (escape all untrusted values to prevent HTML injection)
@@ -450,6 +466,73 @@ class RemnaWaveWebhookService:
         except Exception:
             logger.exception('Failed to send admin notification for event', event_name=event_name)
             return False
+
+    # ------------------------------------------------------------------
+    # Node connection event coalescing
+    # ------------------------------------------------------------------
+
+    async def _enqueue_node_event(self, event_name: str, data: dict) -> bool:
+        """Buffer a node connection event for coalesced delivery."""
+        async with self._node_event_lock:
+            self._node_event_buffer.setdefault(event_name, []).append(data)
+            if self._node_event_flush_task is None or self._node_event_flush_task.done():
+                self._node_event_flush_task = asyncio.create_task(self._flush_node_events_after_delay())
+        return True
+
+    async def _flush_node_events_after_delay(self) -> None:
+        """Sleep for the coalesce window, then flush every buffered event_name as one summary."""
+        try:
+            await asyncio.sleep(self._NODE_EVENT_COALESCE_WINDOW_SECONDS)
+        except asyncio.CancelledError:
+            return
+
+        async with self._node_event_lock:
+            buffer = self._node_event_buffer
+            self._node_event_buffer = {}
+            self._node_event_flush_task = None
+
+        for event_name, payloads in buffer.items():
+            try:
+                await self._send_coalesced_node_notification(event_name, payloads)
+            except Exception:
+                logger.exception(
+                    'Failed to send coalesced node notification',
+                    event_name=event_name,
+                    count=len(payloads),
+                )
+
+    async def _send_coalesced_node_notification(self, event_name: str, payloads: list[dict]) -> None:
+        """Build a single summary message for N node events of the same type."""
+        title = self._admin_handlers.get(event_name, event_name)
+
+        # Dedupe by (name, address) — RemnaWave иногда ретраит один и тот же
+        # webhook, плюс это даёт компактный список даже если ноды действительно
+        # упали все разом.
+        seen: set[tuple[str, str]] = set()
+        node_lines: list[str] = []
+        for data in payloads:
+            name = (data.get('name') or data.get('nodeName') or '').strip()
+            address = (data.get('address') or data.get('ip') or '').strip()
+            key = (name, address)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            descr = f'<code>{html.escape(name)}</code>' if name else '<i>без имени</i>'
+            if address:
+                descr += f' (<code>{html.escape(address)}</code>)'
+            node_lines.append(f'• {descr}')
+
+        if not node_lines:
+            return
+
+        header = f'<b>{title}</b>' if len(node_lines) == 1 else f'<b>{title} × {len(node_lines)}</b>'
+        text = header + '\n' + '\n'.join(node_lines)
+
+        # send_webhook_notification возвращает bool и сама ловит исключения —
+        # отдельный try/except здесь только дублирует логи; внешний
+        # _flush_node_events_after_delay уже ловит любые сюрпризы.
+        await self._admin_service.send_webhook_notification(text)
 
     # ------------------------------------------------------------------
     # User resolution
