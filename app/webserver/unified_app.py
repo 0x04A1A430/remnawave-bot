@@ -145,14 +145,18 @@ def create_unified_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):  # pragma: no cover - ASGI lifespan
+        # Startup — fail-fast: если критичный сервис не поднялся, лучше
+        # crash loop в orchestrator'е, чем «бот запустился» в /health, но
+        # не принимает updates. Совпадает с прежней семантикой @app.on_event,
+        # где raise в startup-хэндлере отменял ASGI lifespan.
         for handler in startup_handlers:
-            try:
-                await handler()
-            except Exception:
-                logger.exception('Lifespan startup handler failed', handler=getattr(handler, '__qualname__', repr(handler)))
+            await handler()
         try:
             yield
         finally:
+            # Shutdown — best-effort: ошибка в одном drain'е не должна блокировать
+            # остальные. Особенно важно для drain'а RemnaWave webhook'а, который
+            # шлёт реальные Telegram-сообщения и может упасть на flood control.
             for handler in shutdown_handlers:
                 try:
                     await handler()
