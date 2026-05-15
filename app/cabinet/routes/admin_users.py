@@ -303,12 +303,21 @@ async def _sync_subscription_to_panel(
         if expire_at and expire_at <= datetime.now(UTC):
             expire_at = datetime.now(UTC) + timedelta(minutes=1)
 
-        username = settings.format_remnawave_username(
+        # При multi-tariff create-path ниже приклеивается `_<remnawave_short_id>`.
+        # build_remnawave_subscription_username гарантирует, что итоговая строка
+        # ≤ REMNAWAVE_USERNAME_MAX_LENGTH (исторический баг 38-chars username).
+        username_suffix = (
+            f'_{subscription.remnawave_short_id}'
+            if (settings.is_multi_tariff_enabled() and subscription.remnawave_short_id)
+            else ''
+        )
+        username = settings.build_remnawave_subscription_username(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
             email=user.email,
             user_id=user.id,
+            suffix=username_suffix,
         )
 
         description = settings.format_remnawave_user_description(
@@ -419,9 +428,8 @@ async def _sync_subscription_to_panel(
                 if ext_squad_uuid is not None:
                     create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
-                # Multi-tariff: use subscription-specific username
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_short_id:
-                    create_kwargs['username'] = f'{username}_{subscription.remnawave_short_id}'
+                # multi-tariff suffix уже встроен в `username` через
+                # build_remnawave_subscription_username — больше ничего не клеим.
 
                 new_panel_user = await api.create_user(**create_kwargs)
                 subscription.remnawave_uuid = new_panel_user.uuid
@@ -3349,12 +3357,20 @@ async def sync_user_to_panel(
         if expire_at and expire_at <= datetime.now(UTC):
             expire_at = datetime.now(UTC) + timedelta(minutes=1)
 
-        username = settings.format_remnawave_username(
+        # Same precaution as the per-user sync above: multi-tariff create-path
+        # appends `_<remnawave_short_id>`. Helper resрвирует место.
+        username_suffix = (
+            f'_{sub.remnawave_short_id}'
+            if (settings.is_multi_tariff_enabled() and getattr(sub, 'remnawave_short_id', None))
+            else ''
+        )
+        username = settings.build_remnawave_subscription_username(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
             email=user.email,
             user_id=user.id,
+            suffix=username_suffix,
         )
 
         description = settings.format_remnawave_user_description(
@@ -3466,9 +3482,8 @@ async def sync_user_to_panel(
                 if ext_squad_uuid is not None:
                     create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
-                # Multi-tariff: subscription-specific username
-                if settings.is_multi_tariff_enabled() and getattr(sub, 'remnawave_short_id', None):
-                    create_kwargs['username'] = f'{username}_{sub.remnawave_short_id}'
+                # multi-tariff suffix уже встроен в `username` через
+                # build_remnawave_subscription_username — больше ничего не клеим.
 
                 new_panel_user = await api.create_user(**create_kwargs)
                 panel_uuid = new_panel_user.uuid

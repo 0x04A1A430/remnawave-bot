@@ -115,3 +115,71 @@ def test_format_remnawave_username_repro_38_char_bug(monkeypatch: pytest.MonkeyP
 
     # Before the fix: len(final) == 38 → RemnaWave 400.
     assert len(final) <= 36, f'username still too long: {final!r} ({len(final)} chars)'
+
+
+# ---------------------------------------------------------------------------
+# build_remnawave_subscription_username — high-level helper used by all 3
+# multi-tariff create-paths (subscription_service, cabinet admin sync, bulk).
+# ---------------------------------------------------------------------------
+
+
+def test_build_subscription_username_production_repro(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production repro through the high-level helper used by all 3 callers."""
+    monkeypatch.setattr(
+        settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False
+    )
+
+    final = settings.build_remnawave_subscription_username(
+        full_name='Марина Дидык',
+        username=None,
+        telegram_id=None,
+        email='didykmarin@yandex.ru',
+        user_id=703,
+        suffix='_49883b',
+    )
+
+    assert len(final) <= settings.REMNAWAVE_USERNAME_MAX_LENGTH
+    assert final.endswith('_49883b')
+
+
+def test_build_subscription_username_empty_suffix_is_legacy_format() -> None:
+    """suffix='' → equivalent to plain format_remnawave_username (single-tariff path)."""
+    plain = settings.format_remnawave_username(
+        full_name='X',
+        username='x',
+        telegram_id=12345,
+        email=None,
+        user_id=1,
+    )
+    helper = settings.build_remnawave_subscription_username(
+        full_name='X',
+        username='x',
+        telegram_id=12345,
+        email=None,
+        user_id=1,
+        suffix='',
+    )
+
+    assert helper == plain
+    assert len(helper) <= settings.REMNAWAVE_USERNAME_MAX_LENGTH
+
+
+def test_build_subscription_username_handles_pathological_long_suffix() -> None:
+    """Suffix longer than MAX_LENGTH: helper must still produce a string ≤ MAX_LENGTH.
+
+    Regression cover for an edge case in the defensive-truncation branch where
+    `keep_for_base = MAX - len(suffix)` could go negative; without `max(0, …)`
+    the base-slice silently kept the tail.
+    """
+    huge_suffix = '_' + 'x' * 80  # 81 chars, way over MAX
+
+    final = settings.build_remnawave_subscription_username(
+        full_name='X',
+        username='x',
+        telegram_id=12345,
+        email=None,
+        user_id=1,
+        suffix=huge_suffix,
+    )
+
+    assert len(final) <= settings.REMNAWAVE_USERNAME_MAX_LENGTH

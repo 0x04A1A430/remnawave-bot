@@ -1435,6 +1435,42 @@ class Settings(BaseSettings):
 
         return result or 'user'
 
+    def build_remnawave_subscription_username(
+        self,
+        *,
+        full_name: str,
+        username: str | None,
+        telegram_id: int | None,
+        email: str | None,
+        user_id: int | None,
+        suffix: str,
+    ) -> str:
+        """Build a RemnaWave username with a known suffix, guaranteed within the API limit.
+
+        `suffix` is expected pre-formatted with its separator (e.g. '_49883b').
+        Резервируем место под suffix в base, делаем belt-and-suspenders финальное
+        ограничение длины. Используется в multi-tariff create-paths, где к base
+        приклеивается `_<remnawave_short_id>`.
+        """
+        base = self.format_remnawave_username(
+            full_name=full_name,
+            username=username,
+            telegram_id=telegram_id,
+            email=email,
+            user_id=user_id,
+            reserve_suffix_chars=len(suffix),
+        )
+        result = f'{base}{suffix}'
+        if len(result) > self.REMNAWAVE_USERNAME_MAX_LENGTH:
+            # Suffix критичен (уникален per-subscription) — режем base.
+            # max(0, ...) защищает от ситуации, когда suffix сам длиннее лимита:
+            # без флора base[:-N] молча возвращал бы хвост строки.
+            keep_for_base = max(0, self.REMNAWAVE_USERNAME_MAX_LENGTH - len(suffix))
+            result = f'{base[:keep_for_base].rstrip("_-")}{suffix}'
+            # Final clamp на случай, когда suffix всё-таки превышает лимит.
+            result = result[: self.REMNAWAVE_USERNAME_MAX_LENGTH]
+        return result
+
     @staticmethod
     def parse_daily_time_list(raw_value: str | None) -> list[time]:
         if not raw_value:
