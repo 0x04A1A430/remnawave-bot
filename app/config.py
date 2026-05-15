@@ -129,6 +129,12 @@ class Settings(BaseSettings):
     REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
     REMNAWAVE_WEBHOOK_SECRET: str | None = None  # HMAC-SHA256 shared secret (min 32 chars)
     REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS: bool = True
+    # Coalescing knobs для burst'ов node.connection_lost / node.connection_restored.
+    # Окно — сколько секунд буферим события одного типа перед отправкой одной
+    # сводки. Cap — жёсткий лимит размера буфера на event_name (защита от
+    # mem-DoS при компрометации webhook-секрета). См. RemnaWaveWebhookService.
+    REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS: float = 10.0
+    REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX: int = 500
 
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
     WEBHOOK_NOTIFY_USER_ENABLED: bool = True

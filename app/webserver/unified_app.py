@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import structlog
 from aiogram import Bot, Dispatcher
@@ -39,13 +42,13 @@ def _attach_docs_alias(app: FastAPI, docs_url: str | None) -> None:
         return RedirectResponse(url=target_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
-def _create_base_app() -> FastAPI:
+def _create_base_app(lifespan: Any = None) -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
 
     if settings.is_web_api_enabled():
         from app.webapi.app import create_web_api_app
 
-        app = create_web_api_app()
+        app = create_web_api_app(lifespan=lifespan)
     else:
         app = FastAPI(
             title='Bedolaga Unified Server',
@@ -53,6 +56,7 @@ def _create_base_app() -> FastAPI:
             docs_url=docs_config.get('docs_url'),
             redoc_url=None,
             openapi_url=docs_config.get('openapi_url'),
+            lifespan=lifespan,
         )
 
         add_redoc_endpoint(
@@ -129,7 +133,36 @@ def create_unified_app(
     *,
     enable_telegram_webhook: bool,
 ) -> FastAPI:
-    app = _create_base_app()
+    # Single ASGI lifespan, заменяет 5 deprecated @app.on_event() хуков.
+    # Хэндлеры регистрируются ниже после того, как соответствующие сервисы
+    # инстанцируются. Замыкаемся на списки — FastAPI(lifespan=...) фиксирует
+    # объект функции, но функция читает списки по ссылке в момент срабатывания.
+    startup_handlers: list[Callable[[], Awaitable[None]]] = []
+    # Shutdown идёт в порядке append'а (НЕ reverse), чтобы критичные drain'ы
+    # (например RemnaWave webhook drain — он шлёт через aiogram) выполнились
+    # ПЕРЕД остановкой нижележащих процессоров. См. порядок ниже.
+    shutdown_handlers: list[Callable[[], Awaitable[None]]] = []
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):  # pragma: no cover - ASGI lifespan
+        for handler in startup_handlers:
+            try:
+                await handler()
+            except Exception:
+                logger.exception('Lifespan startup handler failed', handler=getattr(handler, '__qualname__', repr(handler)))
+        try:
+            yield
+        finally:
+            for handler in shutdown_handlers:
+                try:
+                    await handler()
+                except Exception:
+                    logger.exception(
+                        'Lifespan shutdown handler failed',
+                        handler=getattr(handler, '__qualname__', repr(handler)),
+                    )
+
+    app = _create_base_app(lifespan=lifespan)
 
     app.state.bot = bot
     app.state.dispatcher = dispatcher
@@ -151,13 +184,11 @@ def create_unified_app(
         app.state.remnawave_webhook_service = remnawave_webhook_service
         logger.info('RemnaWave webhook router mounted at', REMNAWAVE_WEBHOOK_PATH=settings.REMNAWAVE_WEBHOOK_PATH)
 
-        # Регистрируем shutdown ДО stop_telegram_webhook_processor / stop_disposable_email_service:
-        # drain делает реальный bot.send_message, поэтому aiogram session должна быть ещё жива.
-        @app.on_event('shutdown')
-        async def stop_remnawave_webhook_service() -> None:  # pragma: no cover - event hook
-            # Flush the in-flight node-event coalescing buffer so SIGTERM
-            # doesn't lose up to 10 seconds of node.connection_* alerts.
-            await remnawave_webhook_service.stop()
+        # ВАЖНО: drain должен выполниться ПЕРЕД остановкой telegram-процессора
+        # и disposable-email сервиса (последние могут закрыть aiogram session,
+        # без которой drain не сможет послать уведомление). Поэтому добавляем
+        # ПЕРВЫМ в shutdown_handlers — итерация без reverse.
+        shutdown_handlers.append(remnawave_webhook_service.stop)
 
     payment_providers_state = {
         'tribute': settings.TRIBUTE_ENABLED,
@@ -183,25 +214,15 @@ def create_unified_app(
         )
         app.state.telegram_webhook_processor = telegram_processor
 
-        @app.on_event('startup')
-        async def start_telegram_webhook_processor() -> None:  # pragma: no cover - event hook
-            await telegram_processor.start()
-
-        @app.on_event('shutdown')
-        async def stop_telegram_webhook_processor() -> None:  # pragma: no cover - event hook
-            await telegram_processor.stop()
+        startup_handlers.append(telegram_processor.start)
+        shutdown_handlers.append(telegram_processor.stop)
 
         app.include_router(telegram.create_telegram_router(bot, dispatcher, processor=telegram_processor))
     else:
         telegram_processor = None
 
-    @app.on_event('startup')
-    async def start_disposable_email_service() -> None:  # pragma: no cover - event hook
-        await disposable_email_service.start()
-
-    @app.on_event('shutdown')
-    async def stop_disposable_email_service() -> None:  # pragma: no cover - event hook
-        await disposable_email_service.stop()
+    startup_handlers.append(disposable_email_service.start)
+    shutdown_handlers.append(disposable_email_service.stop)
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)

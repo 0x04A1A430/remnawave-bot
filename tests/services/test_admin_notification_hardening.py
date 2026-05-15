@@ -348,3 +348,102 @@ async def test_stop_is_idempotent_when_buffer_empty(
 
     webhook_service._admin_service.send_webhook_notification.assert_not_called()
     assert webhook_service._node_event_flush_task is None
+
+
+@pytest.mark.asyncio
+async def test_enqueue_blocked_after_stop(
+    webhook_service: RemnaWaveWebhookService,
+) -> None:
+    """After stop() the service refuses new enqueues — no orphaned flush tasks."""
+    webhook_service._admin_service.send_webhook_notification = AsyncMock(return_value=True)
+    await webhook_service.stop()
+    assert webhook_service._stopped is True
+
+    accepted = await webhook_service._enqueue_node_event(
+        'node.connection_lost', {'name': 'late', 'address': '10.0.0.99'}
+    )
+
+    assert accepted is False
+    assert webhook_service._node_event_buffer == {}
+    assert webhook_service._node_event_flush_task is None
+
+
+@pytest.mark.asyncio
+async def test_send_message_logs_clamped_retry_after(
+    admin_service: AdminNotificationService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """retry_after=120 → log includes both clamped value (30) and original (120)."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr('app.services.admin_notification_service.asyncio.sleep', fake_sleep)
+
+    captured: list[dict] = []
+
+    structlog_mod = __import__('app.services.admin_notification_service', fromlist=['logger'])
+    original_warning = structlog_mod.logger.warning
+
+    def capturing_warning(msg, **kwargs):
+        captured.append({'msg': msg, **kwargs})
+        return original_warning(msg, **kwargs)
+
+    monkeypatch.setattr(structlog_mod.logger, 'warning', capturing_warning)
+
+    flood = TelegramRetryAfter(method=SimpleNamespace(), message='flood', retry_after=120)
+    admin_service.bot.send_message = AsyncMock(side_effect=[flood, None])
+
+    await admin_service._send_message('hi', category=NotificationCategory.INFRASTRUCTURE)
+
+    flood_logs = [c for c in captured if 'flood control' in c['msg']]
+    assert len(flood_logs) >= 1
+    log = flood_logs[0]
+    assert log['retry_after'] == 30
+    assert log.get('clamped') is True
+    assert log.get('retry_after_requested') == 120
+
+
+# ---------------------------------------------------------------------------
+# Token redaction inside TelegramNotifierProcessor (defense-in-depth)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_telegram_notifier_processor_redacts_token_in_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If a future aiogram leaks the bot token in exc str / traceback, it gets redacted."""
+    from app.logging_handler import TelegramNotifierProcessor
+
+    captured: dict[str, Any] = {}
+
+    async def fake_send_error_to_admin_chat(_bot, error, context, *, tb_override=None):
+        captured['error_str'] = str(error)
+        captured['context'] = context
+        captured['tb_override'] = tb_override
+
+    import app.middlewares.global_error as ge
+
+    monkeypatch.setattr(ge, 'send_error_to_admin_chat', fake_send_error_to_admin_chat)
+
+    bot = MagicMock()
+    leaked = (
+        'failed to POST https://api.telegram.org/bot8123456789:'
+        'AAH-Sample_TokenString_With-Chars-aiogram01/sendMessage'
+    )
+    event_dict = {
+        'event': leaked,
+        'logger': 'app.services.notification_delivery_service',
+        'level': 'error',
+        'exc_info': None,
+    }
+
+    await TelegramNotifierProcessor._send(bot, event_dict)
+
+    assert '8123456789:AAH' not in captured.get('error_str', '')
+    assert 'bot[REDACTED]' in captured.get('error_str', '')
+    if captured.get('context'):
+        assert '8123456789:AAH' not in captured['context']
+    if captured.get('tb_override'):
+        assert '8123456789:AAH' not in captured['tb_override']

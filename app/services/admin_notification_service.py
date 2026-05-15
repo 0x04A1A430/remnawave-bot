@@ -41,8 +41,13 @@ from app.utils.timezone import format_local_datetime
 # Может появиться в str(e) от aiogram при сетевых ошибках, если транспорт
 # (httpx/aiohttp) сериализует URL `https://api.telegram.org/bot<TOKEN>/...`.
 # Не светим токен в логи (структурированные логи могут уехать в Sentry / ELK).
-# Трейлинг — negative lookahead, а не `\b`: иначе токены, оканчивающиеся
+# Trailing — negative lookahead, а не `\b`: иначе токены, оканчивающиеся
 # на `-` или `_`, теряли последний символ при редакции (1-char leak).
+# Leading `(?<![\w-])` — намеренно НЕ матчит, если перед токеном стоит word/digit
+# (например `foo123456789:AAH...`). Это trade-off против false-positive'ов
+# на timestamp/UUID-подобных последовательностях. Aiogram и httpx всегда
+# префиксят токен либо `bot`, либо URL-границей (`/`, пробел, кавычка),
+# так что реальный corpus ошибок не страдает.
 _BOT_TOKEN_RE: re.Pattern[str] = re.compile(
     r'(?<![\w-])(?:bot)?\d{6,}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])',
 )
@@ -1470,13 +1475,19 @@ class AdminNotificationService:
                 # Flood control: ждём столько, сколько сказал Telegram (cap 30s),
                 # потом ретраим. До фикса исключение проваливалось в bare
                 # except → logger.error → петля через TelegramNotifierProcessor.
-                retry_after = min(max(1, int(getattr(e, 'retry_after', 1))), 30)
-                logger.warning(
-                    'Telegram flood control при отправке в админ-чат',
-                    chat_id=self.chat_id,
-                    retry_after=retry_after,
-                    attempt=attempt,
-                )
+                requested_retry_after = max(1, int(getattr(e, 'retry_after', 1)))
+                retry_after = min(requested_retry_after, 30)
+                log_kwargs: dict[str, Any] = {
+                    'chat_id': self.chat_id,
+                    'retry_after': retry_after,
+                    'attempt': attempt,
+                }
+                if requested_retry_after > retry_after:
+                    # Telegram реально просит дольше cap'а — видимый сигнал,
+                    # что бот аккаунт перегружен сильнее обычного flood-control'а.
+                    log_kwargs['retry_after_requested'] = requested_retry_after
+                    log_kwargs['clamped'] = True
+                logger.warning('Telegram flood control при отправке в админ-чат', **log_kwargs)
                 if attempt < max_attempts:
                     await asyncio.sleep(retry_after)
                     continue

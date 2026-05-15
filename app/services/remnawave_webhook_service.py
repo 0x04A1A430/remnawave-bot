@@ -140,10 +140,15 @@ class RemnaWaveWebhookService:
     # Buffers bursts of node.connection_* webhooks (RemnaWave фаерит один
     # webhook на ноду при цикле websocket'а панели — раз в 3-4 часа это даёт
     # пик из 7-15 событий за пару секунд и трип flood control в Telegram).
+    # Class-level defaults — fallback на случай если settings ещё не загружены;
+    # __init__ перечитывает их из env REMNAWAVE_WEBHOOK_NODE_* и оверрайдит
+    # на инстансе.
     _NODE_EVENT_COALESCE_WINDOW_SECONDS: float = 10.0
     # Жёсткий cap буфера на event_name. Защита от mem-DoS, если кто-то с
     # валидным REMNAWAVE_WEBHOOK_SECRET начнёт фаерить миллионы уникальных
     # событий за окно. Дедуп по (name, address) случается только при flush'е.
+    # NB: cap PER event_name, не глобальный. С 2 event_name'ами (lost/restored)
+    # worst-case в памяти ≈ 2× значение × ~3KB payload ≈ ~3MB суммарно.
     _NODE_EVENT_BUFFER_MAX: int = 500
     # Cap количества строк в сводном сообщении — у Telegram лимит 4096 символов
     # на сообщение, длинные списки нод выбивают TelegramBadRequest и теряются.
@@ -152,6 +157,15 @@ class RemnaWaveWebhookService:
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self._admin_service = AdminNotificationService(bot)
+
+        # Перечитываем coalescing-knob'ы из настроек (env-tunable, без
+        # перезапуска кода). Class-level defaults остаются как safety net.
+        self._NODE_EVENT_COALESCE_WINDOW_SECONDS = float(
+            getattr(settings, 'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS', self._NODE_EVENT_COALESCE_WINDOW_SECONDS)
+        )
+        self._NODE_EVENT_BUFFER_MAX = int(
+            getattr(settings, 'REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX', self._NODE_EVENT_BUFFER_MAX)
+        )
 
         # Per-instance coalescing state for node.connection_* events.
         # `_node_event_flush_task` — текущая «спящая» в окне coalescing задача.
@@ -165,6 +179,10 @@ class RemnaWaveWebhookService:
         self._node_event_flush_task: asyncio.Task[None] | None = None
         self._node_event_pending_tasks: set[asyncio.Task[None]] = set()
         self._node_event_lock = asyncio.Lock()
+        # Set by stop(); blocks further enqueues so events arriving after the
+        # graceful-shutdown drain don't create orphaned 10s-sleeping flush
+        # tasks that the event loop will cancel mid-flight anyway.
+        self._stopped: bool = False
 
         # User-scoped handlers: require user resolution
         self._user_handlers: dict[str, Any] = {
@@ -489,6 +507,11 @@ class RemnaWaveWebhookService:
     async def _enqueue_node_event(self, event_name: str, data: dict) -> bool:
         """Buffer a node connection event for coalesced delivery."""
         async with self._node_event_lock:
+            if self._stopped:
+                # Бот завершает работу — drain уже прошёл, не плодим новые
+                # фоновые таски, которые event loop всё равно отменит.
+                logger.debug('Ignoring node event after stop()', event_name=event_name)
+                return False
             bucket = self._node_event_buffer.setdefault(event_name, [])
             if len(bucket) >= self._NODE_EVENT_BUFFER_MAX:
                 # Buffer overflow: считаем выкинутые события, попадёт в сводку.
@@ -605,7 +628,15 @@ class RemnaWaveWebhookService:
 
         Дрейн ограничен таймаутом, чтобы медленный Telegram не выбил процесс
         за terminationGracePeriodSeconds.
+
+        После выхода из stop() новые enqueue'ы дропаются (см. `_stopped`),
+        чтобы не плодить orphaned flush-таски, которые event loop отменит.
         """
+        # Помечаем сервис остановленным под локом, чтобы любой in-flight
+        # enqueue либо успел до нас (и попадёт в drain), либо увидит флаг.
+        async with self._node_event_lock:
+            self._stopped = True
+
         task = self._node_event_flush_task
         if task is not None and not task.done():
             task.cancel()
