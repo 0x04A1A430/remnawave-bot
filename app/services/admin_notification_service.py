@@ -1,5 +1,6 @@
 import asyncio
 import html
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -13,6 +14,18 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
+
+
+# Стандартный формат Telegram bot token: `<numeric_id>:<random_35chars>`.
+# Может появиться в str(e) от aiogram при сетевых ошибках, если транспорт
+# (httpx/aiohttp) сериализует URL `https://api.telegram.org/bot<TOKEN>/...`.
+# Не светим токен в логи (структурированные логи могут уехать в Sentry / ELK).
+_BOT_TOKEN_RE: re.Pattern[str] = re.compile(r'\b(?:bot)?\d{6,}:[A-Za-z0-9_-]{30,}\b')
+
+
+def _redact_telegram_secrets(text: str) -> str:
+    """Replace Telegram bot tokens in an arbitrary string with a placeholder."""
+    return _BOT_TOKEN_RE.sub('bot[REDACTED]', text)
 from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1443,7 +1456,10 @@ class AdminNotificationService:
                 return False
 
             except TelegramBadRequest as e:
-                logger.warning('Ошибка отправки уведомления в админ-чат', error=str(e)[:200])
+                logger.warning(
+                    'Ошибка отправки уведомления в админ-чат',
+                    error=_redact_telegram_secrets(str(e))[:200],
+                )
                 return False
 
             except TelegramRetryAfter as e:
@@ -1467,7 +1483,7 @@ class AdminNotificationService:
                 logger.warning(
                     'Транзиентная сетевая ошибка отправки в админ-чат',
                     chat_id=self.chat_id,
-                    error=str(e)[:200],
+                    error=_redact_telegram_secrets(str(e))[:200],
                     error_type=type(e).__name__,
                     attempt=attempt,
                 )
@@ -1480,7 +1496,7 @@ class AdminNotificationService:
                 logger.warning(
                     'Неожиданная ошибка при отправке в админ-чат',
                     chat_id=self.chat_id,
-                    error=str(e)[:200],
+                    error=_redact_telegram_secrets(str(e))[:200],
                     error_type=type(e).__name__,
                 )
                 return False

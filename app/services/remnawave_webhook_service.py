@@ -141,6 +141,13 @@ class RemnaWaveWebhookService:
     # webhook на ноду при цикле websocket'а панели — раз в 3-4 часа это даёт
     # пик из 7-15 событий за пару секунд и трип flood control в Telegram).
     _NODE_EVENT_COALESCE_WINDOW_SECONDS: float = 10.0
+    # Жёсткий cap буфера на event_name. Защита от mem-DoS, если кто-то с
+    # валидным REMNAWAVE_WEBHOOK_SECRET начнёт фаерить миллионы уникальных
+    # событий за окно. Дедуп по (name, address) случается только при flush'е.
+    _NODE_EVENT_BUFFER_MAX: int = 500
+    # Cap количества строк в сводном сообщении — у Telegram лимит 4096 символов
+    # на сообщение, длинные списки нод выбивают TelegramBadRequest и теряются.
+    _NODE_EVENT_SUMMARY_MAX_LINES: int = 40
 
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
@@ -148,6 +155,7 @@ class RemnaWaveWebhookService:
 
         # Per-instance coalescing state for node.connection_* events.
         self._node_event_buffer: dict[str, list[dict]] = {}
+        self._node_event_overflow: dict[str, int] = {}
         self._node_event_flush_task: asyncio.Task[None] | None = None
         self._node_event_lock = asyncio.Lock()
 
@@ -474,7 +482,12 @@ class RemnaWaveWebhookService:
     async def _enqueue_node_event(self, event_name: str, data: dict) -> bool:
         """Buffer a node connection event for coalesced delivery."""
         async with self._node_event_lock:
-            self._node_event_buffer.setdefault(event_name, []).append(data)
+            bucket = self._node_event_buffer.setdefault(event_name, [])
+            if len(bucket) >= self._NODE_EVENT_BUFFER_MAX:
+                # Buffer overflow: считаем выкинутые события, попадёт в сводку.
+                self._node_event_overflow[event_name] = self._node_event_overflow.get(event_name, 0) + 1
+            else:
+                bucket.append(data)
             if self._node_event_flush_task is None or self._node_event_flush_task.done():
                 self._node_event_flush_task = asyncio.create_task(self._flush_node_events_after_delay())
         return True
@@ -488,12 +501,16 @@ class RemnaWaveWebhookService:
 
         async with self._node_event_lock:
             buffer = self._node_event_buffer
+            overflow = self._node_event_overflow
             self._node_event_buffer = {}
+            self._node_event_overflow = {}
             self._node_event_flush_task = None
 
         for event_name, payloads in buffer.items():
             try:
-                await self._send_coalesced_node_notification(event_name, payloads)
+                await self._send_coalesced_node_notification(
+                    event_name, payloads, overflow_count=overflow.get(event_name, 0)
+                )
             except Exception:
                 logger.exception(
                     'Failed to send coalesced node notification',
@@ -501,9 +518,16 @@ class RemnaWaveWebhookService:
                     count=len(payloads),
                 )
 
-    async def _send_coalesced_node_notification(self, event_name: str, payloads: list[dict]) -> None:
+    async def _send_coalesced_node_notification(
+        self,
+        event_name: str,
+        payloads: list[dict],
+        *,
+        overflow_count: int = 0,
+    ) -> None:
         """Build a single summary message for N node events of the same type."""
         title = self._admin_handlers.get(event_name, event_name)
+        max_lines = self._NODE_EVENT_SUMMARY_MAX_LINES
 
         # Dedupe by (name, address) — RemnaWave иногда ретраит один и тот же
         # webhook, плюс это даёт компактный список даже если ноды действительно
@@ -518,15 +542,28 @@ class RemnaWaveWebhookService:
                 continue
             seen.add(key)
 
+            if len(node_lines) >= max_lines:
+                # Считаем уникальных дальше, но в текст не добавляем —
+                # лимит 4096 символов у Telegram, длинные списки уйдут в /dev/null.
+                continue
+
             descr = f'<code>{html.escape(name)}</code>' if name else '<i>без имени</i>'
             if address:
                 descr += f' (<code>{html.escape(address)}</code>)'
             node_lines.append(f'• {descr}')
 
-        if not node_lines:
+        if not node_lines and not overflow_count:
             return
 
-        header = f'<b>{title}</b>' if len(node_lines) == 1 else f'<b>{title} × {len(node_lines)}</b>'
+        unique_count = len(seen)
+        truncated = unique_count - len(node_lines)
+        if truncated > 0:
+            node_lines.append(f'• <i>… ещё {truncated} нод(ы) (truncated)</i>')
+        if overflow_count > 0:
+            node_lines.append(f'• <i>… ещё {overflow_count} событий отброшено (buffer overflow)</i>')
+
+        total = unique_count + overflow_count
+        header = f'<b>{title}</b>' if total <= 1 else f'<b>{title} × {total}</b>'
         text = header + '\n' + '\n'.join(node_lines)
 
         # send_webhook_notification возвращает bool и сама ловит исключения —
