@@ -14,18 +14,6 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
     TelegramServerError,
 )
-
-
-# Стандартный формат Telegram bot token: `<numeric_id>:<random_35chars>`.
-# Может появиться в str(e) от aiogram при сетевых ошибках, если транспорт
-# (httpx/aiohttp) сериализует URL `https://api.telegram.org/bot<TOKEN>/...`.
-# Не светим токен в логи (структурированные логи могут уехать в Sentry / ELK).
-_BOT_TOKEN_RE: re.Pattern[str] = re.compile(r'\b(?:bot)?\d{6,}:[A-Za-z0-9_-]{30,}\b')
-
-
-def _redact_telegram_secrets(text: str) -> str:
-    """Replace Telegram bot tokens in an arbitrary string with a placeholder."""
-    return _BOT_TOKEN_RE.sub('bot[REDACTED]', text)
 from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +35,22 @@ from app.database.models import (
 )
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.timezone import format_local_datetime
+
+
+# Стандартный формат Telegram bot token: `<numeric_id>:<random_35chars>`.
+# Может появиться в str(e) от aiogram при сетевых ошибках, если транспорт
+# (httpx/aiohttp) сериализует URL `https://api.telegram.org/bot<TOKEN>/...`.
+# Не светим токен в логи (структурированные логи могут уехать в Sentry / ELK).
+# Трейлинг — negative lookahead, а не `\b`: иначе токены, оканчивающиеся
+# на `-` или `_`, теряли последний символ при редакции (1-char leak).
+_BOT_TOKEN_RE: re.Pattern[str] = re.compile(
+    r'(?<![\w-])(?:bot)?\d{6,}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])',
+)
+
+
+def _redact_telegram_secrets(text: str) -> str:
+    """Replace Telegram bot tokens in an arbitrary string with a placeholder."""
+    return _BOT_TOKEN_RE.sub('bot[REDACTED]', text)
 
 
 class NotificationCategory(StrEnum):
