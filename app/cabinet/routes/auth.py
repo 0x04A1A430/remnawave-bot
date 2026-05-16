@@ -658,13 +658,22 @@ async def auth_telegram(
     # idempotently no-ops when referred_by_id is already set, and
     # otherwise reads Redis pending_referral + attaches + fires the
     # registration event exactly once.
+    #
+    # SECURITY: do NOT pass `request.referral_code` here. The cabinet
+    # request body is fully client-controlled, and accepting it for
+    # the retroactive branch would let any user POST an arbitrary
+    # referrer code and self-attach it to their orphan (no-referrer)
+    # account — monetizing the multi-account self-referral attack.
+    # The Redis pending_referral key is provably written by the bot
+    # itself (only after validating the ref-link click maps to THIS
+    # telegram_id), so it's the only trusted retroactive source.
     if not is_new_user:
         from app.services.referral_service import attach_referrer_if_missing
 
         await attach_referrer_if_missing(
             db,
             user,
-            referral_code=request.referral_code,
+            referral_code=None,
             source='cabinet_telegram_retroactive',
         )
 
@@ -800,17 +809,17 @@ async def auth_telegram_widget(
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
 
     # Race-resilience: existing users whose miniapp opened before the
-    # bot's /start finished may still be missing the referrer. Try the
-    # eager attach helper as a second pass — it idempotently no-ops
-    # when referred_by_id is already set, otherwise reads Redis
-    # pending_referral and attaches.
+    # bot's /start finished may still be missing the referrer. The
+    # Redis pending_referral is the only TRUSTED source for retroactive
+    # attach (request.referral_code is client-controlled — see security
+    # comment in /telegram above).
     if not is_new_user:
         from app.services.referral_service import attach_referrer_if_missing
 
         await attach_referrer_if_missing(
             db,
             user,
-            referral_code=request.referral_code,
+            referral_code=None,
             source='cabinet_widget_retroactive',
         )
 
@@ -982,15 +991,16 @@ async def auth_telegram_oidc(
 
     # Race-resilience: an existing user whose miniapp opened before the
     # bot's /start finished may still have referred_by_id=None. The
-    # eager attach helper idempotently no-ops when it's already set,
-    # otherwise reads Redis pending_referral and attaches.
+    # Redis pending_referral is the only TRUSTED source for retroactive
+    # attach (request.referral_code is client-controlled — see security
+    # comment in /telegram above).
     if not is_new_user:
         from app.services.referral_service import attach_referrer_if_missing
 
         await attach_referrer_if_missing(
             db,
             user,
-            referral_code=request.referral_code,
+            referral_code=None,
             source='cabinet_oidc_retroactive',
         )
 

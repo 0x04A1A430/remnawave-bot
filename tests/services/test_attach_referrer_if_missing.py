@@ -474,6 +474,126 @@ async def test_helper_lazy_creates_bot_when_caller_omits_it(db: AsyncMock) -> No
     )
 
 
+# ---------------------------------------------------------------------------
+# Security pin: cabinet retroactive call sites MUST NOT pass the
+# client-controlled `request.referral_code`. Doing so would let an
+# attacker POST any referrer code via the cabinet auth endpoint and
+# self-attach it to their orphan (no-referrer) account — monetizing
+# the multi-account self-referral attack post-registration.
+# ---------------------------------------------------------------------------
+
+
+def test_cabinet_retroactive_calls_pass_none_for_referral_code() -> None:
+    """Source-level pin: the three retroactive attach call sites in
+    `app/cabinet/routes/auth.py` must NOT forward `request.referral_code`.
+
+    The Redis pending_referral key is the only trusted retroactive
+    source — it's provably written by the bot's /start handler only
+    for the telegram_id who actually clicked the link. Honouring the
+    request body's referral_code on the retroactive path lets any
+    attacker rewrite their own account's referrer at will.
+    """
+    from pathlib import Path
+
+    auth_path = Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'auth.py'
+    source = auth_path.read_text(encoding='utf-8')
+
+    forbidden = ['cabinet_telegram_retroactive', 'cabinet_widget_retroactive', 'cabinet_oidc_retroactive']
+    for src_tag in forbidden:
+        idx = source.find(src_tag)
+        assert idx >= 0, f'expected to find a retroactive call site tagged {src_tag!r}'
+        # Inspect a window around the call to confirm it passes
+        # `referral_code=None`, not `referral_code=request.referral_code`.
+        window_start = source.rfind('attach_referrer_if_missing', 0, idx)
+        window = source[window_start : idx + len(src_tag) + 50]
+        assert 'referral_code=None' in window, (
+            f'cabinet retroactive call site {src_tag!r} must pass referral_code=None — '
+            f'forwarding request.referral_code is a security bug (client-controlled referrer override)'
+        )
+        assert 'referral_code=request.referral_code' not in window, (
+            f'cabinet retroactive call site {src_tag!r} MUST NOT forward request.referral_code'
+        )
+
+
+# ---------------------------------------------------------------------------
+# Concurrent-attach race: the helper uses a conditional UPDATE
+# (WHERE referred_by_id IS NULL) so cross-session races can't flip an
+# already-attached referrer.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_concurrent_attach_uses_conditional_update_not_unconditional_write(db: AsyncMock) -> None:
+    """REGRESSION: the helper must use ``UPDATE ... WHERE referred_by_id IS NULL``
+    so a concurrent session can't displace an already-attached referrer.
+
+    Pre-fix: ``user.referred_by_id = X; await commit()`` was a
+    last-write-wins flip. Attacker with two concurrent sessions
+    (different codes) could clobber legitimate attribution.
+    """
+    user = _user()
+    referrer = _referrer(user_id=200)
+
+    captured_stmts: list[object] = []
+
+    async def _capture_execute(stmt, *args, **kwargs):
+        captured_stmts.append(stmt)
+        result = AsyncMock()
+        result.rowcount = 1  # pretend we won the race
+        return result
+
+    db.execute = _capture_execute
+
+    with (
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
+        patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
+        patch('app.services.referral_service.process_referral_registration', AsyncMock()),
+    ):
+        await attach_referrer_if_missing(db, user, referral_code='X', source='unit_test')
+
+    # The captured statement should be a conditional UPDATE — the
+    # compiled SQL must reference the IS NULL guard.
+    assert captured_stmts, 'helper must execute at least one statement to perform the conditional UPDATE'
+    update_stmt = captured_stmts[0]
+    compiled = str(update_stmt.compile(compile_kwargs={'literal_binds': True}))
+    assert 'UPDATE' in compiled.upper()
+    assert 'referred_by_id IS NULL' in compiled, (
+        'attach UPDATE must include `WHERE referred_by_id IS NULL` so a concurrent winner '
+        'cannot be displaced. Compiled SQL was: ' + compiled
+    )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_attach_loser_does_not_fire_event(db: AsyncMock) -> None:
+    """When ``rowcount == 0`` (another session already attached), the
+    helper must return None and NOT fire the registration event.
+
+    Without this guard, the loser would emit a phantom registration
+    notification to the wrong audience and create a duplicate audit
+    row (caught only by the partial UNIQUE index at the DB layer).
+    """
+    user = _user()
+    referrer = _referrer(user_id=200)
+
+    async def _execute_zero_rowcount(*_a, **_kw):
+        result = AsyncMock()
+        result.rowcount = 0  # someone else won
+        return result
+
+    db.execute = _execute_zero_rowcount
+
+    with (
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
+        patch('app.services.referral_service.clear_pending_referral', AsyncMock()) as clear,
+        patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
+    ):
+        result = await attach_referrer_if_missing(db, user, referral_code='X', source='unit_test')
+
+    assert result is None, 'lost race must report None, not the attempted referrer_id'
+    fire.assert_not_called(), 'event must NOT fire when we lost the race (winner fired it already)'
+    clear.assert_not_called(), 'do not clear pending — winner may still need it for their own clear'
+
+
 @pytest.mark.asyncio
 async def test_helper_uses_caller_supplied_bot_when_provided(db: AsyncMock) -> None:
     """When the bot caller already has a bot (start.py passes message.bot),

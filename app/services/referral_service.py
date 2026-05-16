@@ -189,15 +189,25 @@ async def attach_referrer_if_missing(
         return None
 
     # ------------------------------------------------------------------
-    # Atomic attach. We do NOT pin the row with FOR UPDATE here — the
-    # idempotency check above (referred_by_id is None) is the actual
-    # concurrency guard, and the next setter will see referred_by_id
-    # populated and bail out via the idempotency early-return.
+    # Atomic compare-and-set. The in-memory ``referred_by_id is None``
+    # check above is per-session, so two concurrent callers (e.g. bot
+    # /start AND cabinet /telegram on a delayed initData call, each
+    # with its own AsyncSessionLocal) could both pass it and race to
+    # write. A naive ``user.referred_by_id = x; await commit()`` would
+    # last-write-win and silently flip an already-attached referrer.
+    #
+    # Use a conditional UPDATE so the DB itself enforces "attach only
+    # when still NULL". ``rowcount == 1`` means we won the race; 0
+    # means another session attached first — treat as no-op.
     # ------------------------------------------------------------------
-    user.referred_by_id = referrer.id
+    from sqlalchemy import update as _sa_update
+
     try:
+        update_stmt = (
+            _sa_update(User).where(User.id == user.id, User.referred_by_id.is_(None)).values(referred_by_id=referrer.id)
+        )
+        result = await db.execute(update_stmt)
         await db.commit()
-        await db.refresh(user)
     except Exception as exc:
         logger.error(
             'attach_referrer_if_missing: commit failed',
@@ -211,6 +221,36 @@ async def attach_referrer_if_missing(
         except Exception:
             pass
         return None
+
+    # rowcount == 0 means another session beat us to the attach —
+    # don't fire the registration event (the winning session already
+    # did) and don't pretend we attached.
+    if (result.rowcount or 0) == 0:
+        logger.info(
+            'attach_referrer_if_missing: lost the attach race, another session won',
+            user_id=user.id,
+            attempted_referrer_id=referrer.id,
+            source=source,
+        )
+        # Refresh the in-memory object so the caller sees the winning referrer.
+        try:
+            await db.refresh(user)
+        except Exception:
+            pass
+        return None
+
+    # We won. Mirror the write onto the in-memory ORM attribute so the
+    # caller sees the same value as the DB (the conditional UPDATE
+    # bypasses ORM attribute machinery). Then refresh as a belt-and-
+    # suspenders to surface any server-side defaults (updated_at, etc.).
+    user.referred_by_id = referrer.id
+    try:
+        await db.refresh(user)
+    except Exception:
+        # Refresh failures are non-fatal — the write committed. Worst
+        # case the caller's ORM-attached user shows a stale value
+        # until next refetch.
+        pass
 
     logger.info(
         'Referrer attached',
@@ -401,21 +441,25 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             logger.error('Пользователь не привязан к рефереру', new_user_id=new_user_id, referrer_id=referrer_id)
             return False
 
-        # Cross-session de-dup: bot and cabinet run on separate
-        # `AsyncSessionLocal` instances. The idempotency guard in
-        # ``attach_referrer_if_missing`` (``user.referred_by_id is None``)
-        # is per-session — two concurrent attaches can both pass it,
-        # both flip ``referred_by_id`` to the same value (no
-        # IntegrityError because there's no UNIQUE on the column),
-        # and both reach this function. Without this SELECT both
-        # would insert a ``referral_registration_pending`` row,
-        # creating a duplicate audit entry. Check-then-insert is
-        # NOT race-proof on its own, but the window is sub-millisecond
-        # and the consequence (one extra zero-kopek audit row) is
-        # cosmetic — actual bonus payouts use a different `reason`
-        # ('referral_first_topup_bonus', etc.) and are protected at
-        # their own call sites.
+        # Cross-session de-dup. Bot and cabinet run on separate
+        # ``AsyncSessionLocal`` instances; the per-session idempotency
+        # guard in ``attach_referrer_if_missing`` is not enough on its
+        # own. Two layers protect the audit row:
+        #
+        #   1. Fast-path SELECT below — handles the common case
+        #      cheaply, no exception machinery.
+        #   2. Partial UNIQUE index ``uq_referral_earnings_registration_pending``
+        #      (Alembic 0085) — catches the sub-millisecond window
+        #      where both sessions pass the SELECT before either
+        #      INSERT commits. On collision the second INSERT raises
+        #      ``IntegrityError``, which we swallow as a duplicate.
+        #
+        # Only the ``referral_registration_pending`` reason is deduped.
+        # Bonus rows (``referral_first_topup_bonus``,
+        # ``referral_commission_topup``, etc.) are intentionally
+        # allowed to repeat and are protected at their own call sites.
         from sqlalchemy import select as _select
+        from sqlalchemy.exc import IntegrityError as _IntegrityError
 
         existing = await db.execute(
             _select(ReferralEarning.id)
@@ -435,14 +479,27 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
             return True
 
         campaign_id = await get_user_campaign_id(db, new_user_id)
-        await create_referral_earning(
-            db=db,
-            user_id=referrer_id,
-            referral_id=new_user_id,
-            amount_kopeks=0,
-            reason='referral_registration_pending',
-            campaign_id=campaign_id,
-        )
+        try:
+            await create_referral_earning(
+                db=db,
+                user_id=referrer_id,
+                referral_id=new_user_id,
+                amount_kopeks=0,
+                reason='referral_registration_pending',
+                campaign_id=campaign_id,
+            )
+        except _IntegrityError:
+            # Lost the race against a concurrent session AFTER our
+            # SELECT but BEFORE our commit — the unique index caught it.
+            # Roll back so the session is usable for the notification
+            # block below.
+            await db.rollback()
+            logger.info(
+                'Referral registration race caught by unique index, treating as duplicate',
+                new_user_id=new_user_id,
+                referrer_id=referrer_id,
+            )
+            return True
 
         try:
             from app.services.referral_contest_service import referral_contest_service
