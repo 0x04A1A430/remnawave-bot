@@ -10,6 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import lock_user_for_pricing, subtract_user_balance
+from app.database.crud.user_device_alias import (
+    ALIAS_MAX_LENGTH,
+    attach_aliases_to_devices,
+    delete_alias,
+    get_alias,
+    get_aliases_for_user,
+    normalize_alias,
+    upsert_alias,
+)
 from app.database.models import Subscription, TransactionType, User
 from app.keyboards.inline import (
     get_app_selection_keyboard,
@@ -859,7 +868,6 @@ async def _enrich_devices_with_aliases(devices_list: list[dict], user_id: int) -
     dedicated helper lets all show-page callers stay tiny.
     """
     try:
-        from app.database.crud.user_device_alias import attach_aliases_to_devices, get_aliases_for_user
         from app.database.database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as db:
@@ -1035,8 +1043,6 @@ async def start_device_rename(
         return
 
     # Загружаем текущий alias чтобы юзер видел что меняет
-    from app.database.crud.user_device_alias import ALIAS_MAX_LENGTH, get_alias
-
     current = await get_alias(db, db_user.id, hwid)
 
     if state is not None:
@@ -1065,8 +1071,6 @@ async def process_device_rename(message: types.Message, db_user: User, db: Async
 
     State carries hwid + the listing page so we can re-render after save.
     """
-    from app.database.crud.user_device_alias import ALIAS_MAX_LENGTH, delete_alias, normalize_alias, upsert_alias
-
     texts = get_texts(db_user.language)
     data = await state.get_data() if state else {}
     hwid = data.get('rename_hwid')
@@ -1138,7 +1142,6 @@ async def process_device_rename(message: types.Message, db_user: User, db: Async
         devices_list = await _enrich_devices_with_aliases(devices_list, db_user.id)
         pagination = paginate_list(devices_list, page=page, per_page=5)
         back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
-        from app.keyboards.inline import get_devices_management_keyboard
 
         await message.answer(
             texts.t('DEVICE_RENAME_OPEN_LIST', '📱 Откройте список устройств, чтобы продолжить'),

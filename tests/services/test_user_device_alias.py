@@ -1,12 +1,18 @@
 """Unit coverage for `user_device_aliases` CRUD helpers.
 
 Covers the normalization rules, alias merge into RemnaWave device dicts,
-and length-cap behaviour expected by both the bot UI and the cabinet API.
-The DB-touching upsert/get/delete functions are exercised in integration
-tests; this file pins the pure helpers so regressions surface fast.
+length-cap behaviour, and the `set_alias` / `upsert_alias` contract
+(empty input on `set_alias` raises; legacy `upsert_alias` redirects to
+delete). A full DB round-trip is intentionally out of scope here: the
+CRUD uses Postgres-specific `pg_insert.on_conflict_do_update`, and the
+project does not yet have a testcontainer fixture. The query string
+shape is asserted via `db.execute` mocking below, which catches the
+`updated_at = func.now()` regression that the code-review flagged.
 """
 
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -14,6 +20,8 @@ from app.database.crud.user_device_alias import (
     ALIAS_MAX_LENGTH,
     attach_aliases_to_devices,
     normalize_alias,
+    set_alias,
+    upsert_alias,
 )
 
 
@@ -110,3 +118,84 @@ def test_attach_aliases_empty_alias_string_falls_back_to_none() -> None:
 
     # Empty alias → None (caller can do `device.local_name or device.device_model`).
     assert result[0]['local_name'] is None
+
+
+# ---------------------------------------------------------------------------
+# set_alias / upsert_alias semantic contract
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_set_alias_rejects_empty_input() -> None:
+    """set_alias is the explicit setter — empty input must raise, not silently delete.
+
+    Regression cover for the original `upsert_alias("")`-as-delete footgun
+    flagged in code review.
+    """
+    db = MagicMock()
+
+    with pytest.raises(ValueError, match='non-empty alias'):
+        await set_alias(db, user_id=1, hwid='HWID', alias='')
+
+    db.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_alias_executes_on_conflict_update_touching_updated_at() -> None:
+    """The compiled statement must update both `alias` AND `updated_at`.
+
+    Regression cover for the SQLAlchemy `onupdate=func.now()` not firing on
+    Core `pg_insert.on_conflict_do_update` issue. Without explicitly touching
+    `updated_at` in the `set_` dict, audit/sort-by-recent would lie.
+    """
+    db = AsyncMock()
+
+    await set_alias(db, user_id=42, hwid='HWID', alias='Жены iPhone')
+
+    assert db.execute.await_count == 1
+    stmt = db.execute.await_args.args[0]
+    compiled = str(stmt.compile(compile_kwargs={'literal_binds': False}))
+    # PostgreSQL ON CONFLICT clause must update both columns.
+    assert 'ON CONFLICT' in compiled
+    assert 'alias' in compiled
+    assert 'updated_at' in compiled
+
+
+@pytest.mark.asyncio
+async def test_set_alias_with_commit_false_does_not_commit() -> None:
+    """commit=False defers commit to caller (cabinet route session middleware)."""
+    db = AsyncMock()
+
+    await set_alias(db, user_id=1, hwid='HWID', alias='Test', commit=False)
+
+    db.execute.assert_awaited_once()
+    db.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_alias_with_commit_true_does_commit() -> None:
+    """commit=True (default) commits — used by bot FSM handler that has no session middleware."""
+    db = AsyncMock()
+
+    await set_alias(db, user_id=1, hwid='HWID', alias='Test')
+
+    db.execute.assert_awaited_once()
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_upsert_alias_with_empty_input_calls_delete() -> None:
+    """Legacy upsert wrapper: empty/whitespace input → delete_alias path."""
+    db = AsyncMock()
+    # `delete_alias` does `await db.execute(...)` then `.scalar_one_or_none()`
+    # on the AWAITED result. Use a sync MagicMock for the result so the
+    # `.scalar_one_or_none()` call returns synchronously.
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    result = await upsert_alias(db, user_id=1, hwid='HWID', alias='   ')
+
+    assert result == ''
+    db.execute.assert_awaited_once()
+    # `delete_alias` only commits when something was actually deleted —
+    # nothing here, so no commit issued.
+    db.commit.assert_not_called()

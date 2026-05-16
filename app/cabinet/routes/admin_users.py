@@ -27,6 +27,7 @@ from app.database.crud.user import (
     get_users_statistics,
     subtract_user_balance,
 )
+from app.database.crud.user_device_alias import get_aliases_for_user
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
     GuestPurchase,
@@ -2263,8 +2264,6 @@ async def get_user_devices(
             # Aliases per-(user, hwid) — единый дикт на весь список устройств.
             # Best-effort: при сбое чтения возвращаем девайсы без локальных имён,
             # чтобы alias-таблица не превращалась в SPOF для админ-листинга.
-            from app.database.crud.user_device_alias import get_aliases_for_user
-
             try:
                 aliases = await get_aliases_for_user(db, user_id)
             except Exception as alias_error:
@@ -2364,12 +2363,7 @@ async def rename_user_device(
     same value would appear in the user's own bot/cabinet view. Empty or
     null `name` clears the alias.
     """
-    from app.database.crud.user_device_alias import (
-        ALIAS_MAX_LENGTH,
-        delete_alias,
-        normalize_alias,
-        upsert_alias,
-    )
+    from app.database.crud.user_device_alias import delete_alias, normalize_alias, set_alias
 
     user = await get_user_by_id(db, user_id)
     if not user:
@@ -2379,14 +2373,43 @@ async def rename_user_device(
     if not hwid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
 
+    # Best-effort hwid validation against the user's RemnaWave devices —
+    # prevents the admin from creating orphan alias rows by typo.
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        panel_uuid = user.remnawave_uuid
+        if not panel_uuid:
+            subs = getattr(user, 'subscriptions', None) or []
+            for sub in subs:
+                if getattr(sub, 'remnawave_uuid', None):
+                    panel_uuid = sub.remnawave_uuid
+                    break
+        if panel_uuid:
+            service = RemnaWaveService()
+            async with service.get_api_client() as api:
+                resp = await api.get_user_devices_all(panel_uuid)
+            owned = {(d.get('hwid') or d.get('deviceId') or d.get('id')) for d in resp.get('devices', [])}
+            if hwid not in owned:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail='Device not found on user account',
+                )
+    except HTTPException:
+        raise
+    except Exception as panel_error:
+        # RemnaWave unreachable — degrade open so admin overrides remain
+        # operational during partial outages.
+        logger.warning(
+            'RemnaWave unreachable during admin hwid validation, allowing rename',
+            admin_id=admin.id,
+            user_id=user_id,
+            error=str(panel_error)[:200],
+        )
+
     normalized = normalize_alias(request.name)
     if normalized:
-        if len(normalized) > ALIAS_MAX_LENGTH:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Имя устройства не может быть длиннее {ALIAS_MAX_LENGTH} символов',
-            )
-        saved = await upsert_alias(db, user_id, hwid, normalized)
+        saved = await set_alias(db, user_id, hwid, normalized)
         logger.info(
             'Admin renamed device for user',
             admin_id=admin.id,

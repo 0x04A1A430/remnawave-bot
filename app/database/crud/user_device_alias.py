@@ -8,7 +8,7 @@ across all of a user's subscriptions in multi-tariff mode.
 from __future__ import annotations
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,24 +51,37 @@ async def get_alias(db: AsyncSession, user_id: int, hwid: str) -> str | None:
     return result.scalar_one_or_none()
 
 
-async def upsert_alias(db: AsyncSession, user_id: int, hwid: str, alias: str) -> str:
-    """Set/update alias. Empty string is treated as 'delete' to keep the row
-    set minimal — callers that want to clear an alias just pass ''.
+async def set_alias(
+    db: AsyncSession,
+    user_id: int,
+    hwid: str,
+    alias: str,
+    *,
+    commit: bool = True,
+) -> str:
+    """Insert or update an alias.
 
-    Returns the normalized alias actually stored (or '' when cleared).
+    Requires a NON-EMPTY `alias` — caller decides explicitly between
+    set and delete (use `delete_alias` to clear). This split avoids the
+    older `upsert_alias("")` footgun where empty input silently deleted
+    the row, which surprised reviewers.
+
+    `commit=True` commits the session (default — bot handlers expect this).
+    `commit=False` defers the commit to the caller, useful when the call
+    is part of a larger unit of work (e.g. FastAPI route session
+    middleware that controls atomicity).
+
+    Returns the alias string actually persisted (post-normalization).
     """
     normalized = normalize_alias(alias)
     if not normalized:
-        await delete_alias(db, user_id, hwid)
-        return ''
-
+        raise ValueError('set_alias requires a non-empty alias — use delete_alias() to clear')
     if not hwid:
         raise ValueError('hwid is required')
 
-    # NB: column-level `onupdate=func.now()` not fired on ON CONFLICT DO UPDATE
-    # (SQLAlchemy applies it only to ORM Update statements, not to Core
-    # pg_insert.on_conflict_do_update's set_). Touch updated_at explicitly
-    # so audit/sort-by-recent queries get a fresh timestamp on every change.
+    # NB: column-level `onupdate=func.now()` is ORM-only and does NOT fire on
+    # Core pg_insert.on_conflict_do_update's set_={}. Touch updated_at
+    # explicitly so audit/sort-by-recent queries see a fresh timestamp.
     stmt = (
         pg_insert(UserDeviceAlias)
         .values(user_id=user_id, hwid=hwid, alias=normalized)
@@ -78,37 +91,74 @@ async def upsert_alias(db: AsyncSession, user_id: int, hwid: str, alias: str) ->
         )
     )
     await db.execute(stmt)
-    await db.commit()
+    if commit:
+        await db.commit()
     logger.info(
         'Device alias upserted', user_id=user_id, hwid_prefix=hwid[:8], alias_length=len(normalized)
     )
     return normalized
 
 
-async def delete_alias(db: AsyncSession, user_id: int, hwid: str) -> bool:
-    """Remove the alias for a (user, hwid) pair. Returns True if something was deleted."""
-    result = await db.execute(
-        select(UserDeviceAlias).where(
-            UserDeviceAlias.user_id == user_id,
-            UserDeviceAlias.hwid == hwid,
-        )
+# Backwards-compat alias used by the FSM bot handler. New code should call
+# either `set_alias()` (explicit set) or `delete_alias()` (explicit clear).
+async def upsert_alias(
+    db: AsyncSession,
+    user_id: int,
+    hwid: str,
+    alias: str,
+    *,
+    commit: bool = True,
+) -> str:
+    """Deprecated convenience wrapper: empty `alias` deletes the row.
+
+    Kept for the bot's text-handler convenience (one entry-point that takes
+    raw user input). API/admin code should prefer `set_alias` / `delete_alias`
+    for clearer intent.
+    """
+    normalized = normalize_alias(alias)
+    if not normalized:
+        await delete_alias(db, user_id, hwid, commit=commit)
+        return ''
+    return await set_alias(db, user_id, hwid, normalized, commit=commit)
+
+
+async def delete_alias(
+    db: AsyncSession,
+    user_id: int,
+    hwid: str,
+    *,
+    commit: bool = True,
+) -> bool:
+    """Remove the alias for a (user, hwid) pair.
+
+    Single-statement DELETE with `RETURNING` so we avoid the older
+    SELECT-then-DELETE round-trip. Returns True if a row was removed.
+    """
+    stmt = (
+        sa_delete(UserDeviceAlias)
+        .where(UserDeviceAlias.user_id == user_id, UserDeviceAlias.hwid == hwid)
+        .returning(UserDeviceAlias.id)
     )
-    row = result.scalar_one_or_none()
-    if row is None:
-        return False
-    await db.delete(row)
-    await db.commit()
-    return True
+    result = await db.execute(stmt)
+    deleted = result.scalar_one_or_none() is not None
+    if commit and deleted:
+        await db.commit()
+    return deleted
 
 
 def attach_aliases_to_devices(devices: list[dict], aliases: dict[str, str]) -> list[dict]:
-    """Mutate-and-return: enrich each device dict with `local_name` field.
+    """Mutate-and-return: enrich each device dict with a `local_name` field.
 
-    `local_name` is `None` when the user hasn't set an alias — clients
+    Contract: mutates the input list in place AND returns it. Callers can
+    chain (`result = attach_aliases_to_devices(...)`) or rely on the
+    in-place behaviour — both are intentionally supported because the
+    function is called from both styles already (bot handler chains;
+    cabinet endpoint mutates the response payload before serialization).
+
+    `local_name` is `None` when the user hasn't set an alias — callers
     should fall back to a sensible default (platform / deviceModel).
-
-    Designed to be called right after the RemnaWave panel response so the
-    rest of the bot/cabinet code sees a uniform field.
+    Empty-string aliases are also normalised to None so the frontend
+    never renders a blank label.
     """
     for device in devices:
         hwid = device.get('hwid') or ''

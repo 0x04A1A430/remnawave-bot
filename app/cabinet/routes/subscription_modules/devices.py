@@ -25,6 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
+from app.database.crud.user_device_alias import (
+    delete_alias,
+    get_aliases_for_user,
+    normalize_alias,
+    set_alias,
+)
 from app.database.models import Subscription, TransactionType, User
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
@@ -871,8 +877,6 @@ async def get_devices(
             # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
             # чем N+1 при сборке списка устройств. Aliases декоративны: при
             # сбое чтения возвращаем список без них, а не 500.
-            from app.database.crud.user_device_alias import get_aliases_for_user
-
             try:
                 aliases = await get_aliases_for_user(db, user.id)
             except Exception as alias_error:
@@ -928,6 +932,47 @@ class DeviceRenameRequest(BaseModel):
     name: str | None = None
 
 
+async def _verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
+    """Confirm the hwid currently exists on the user's panel account.
+
+    Without this guard, the rename endpoint would accept any hwid string
+    and create orphan rows in `user_device_aliases` that survive forever.
+    Best-effort: if RemnaWave is unreachable we deliberately ALLOW the
+    write (returning True) — service degradation should not block users
+    from renaming devices they actually own.
+    """
+    from app.services.remnawave_service import RemnaWaveService
+
+    panel_uuid = getattr(user, 'remnawave_uuid', None)
+    if not panel_uuid:
+        # Fallback: try the user's active subscriptions in multi-tariff mode.
+        subs = getattr(user, 'subscriptions', None) or []
+        for sub in subs:
+            uuid = getattr(sub, 'remnawave_uuid', None)
+            if uuid:
+                panel_uuid = uuid
+                break
+    if not panel_uuid:
+        return False
+
+    try:
+        service = RemnaWaveService()
+        async with service.get_api_client() as api:
+            response = await api.get_user_devices_all(panel_uuid)
+    except Exception as remnawave_error:
+        logger.warning(
+            'RemnaWave unreachable during hwid validation, allowing rename',
+            user_id=user.id,
+            error=str(remnawave_error)[:200],
+        )
+        return True
+
+    return any(
+        (d.get('hwid') or d.get('deviceId') or d.get('id')) == hwid
+        for d in response.get('devices', [])
+    )
+
+
 @router.patch('/devices/{hwid}/name')
 async def rename_device(
     hwid: str,
@@ -944,13 +989,6 @@ async def rename_device(
 
     Empty/null `name` clears the alias and returns `{local_name: null}`.
     """
-    from app.database.crud.user_device_alias import (
-        ALIAS_MAX_LENGTH,
-        delete_alias,
-        normalize_alias,
-        upsert_alias,
-    )
-
     # Subscription resolution здесь только для access-проверки: убеждаемся,
     # что юзер действительно владеет устройством через какую-то из своих
     # подписок. Сам alias всё равно глобальный per (user, hwid).
@@ -962,16 +1000,17 @@ async def rename_device(
     if not hwid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
 
+    # Guard against orphan rows: only accept rename requests for devices
+    # the user actually owns in RemnaWave panel right now.
+    if not await _verify_hwid_belongs_to_user(user, hwid):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Device not found on your account',
+        )
+
     normalized = normalize_alias(request.name)
     if normalized:
-        if len(normalized) > ALIAS_MAX_LENGTH:
-            # normalize_alias уже обрезает — но даём явный 400 если кто-то
-            # очень настойчиво послал гигантскую строку (post-truncate проверка).
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Имя устройства не может быть длиннее {ALIAS_MAX_LENGTH} символов',
-            )
-        saved = await upsert_alias(db, user.id, hwid, normalized)
+        saved = await set_alias(db, user.id, hwid, normalized)
         return {'hwid': hwid, 'local_name': saved}
 
     await delete_alias(db, user.id, hwid)
