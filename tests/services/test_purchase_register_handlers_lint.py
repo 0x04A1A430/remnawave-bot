@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+
 PURCHASE_PATH = Path(__file__).resolve().parents[2] / 'app' / 'handlers' / 'subscription' / 'purchase.py'
 
 

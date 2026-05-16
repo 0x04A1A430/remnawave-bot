@@ -348,7 +348,12 @@ class Settings(BaseSettings):
 
     MONITORING_INTERVAL: int = 60
     LOW_BALANCE_ALERT_EXPIRY_DAYS: int = 3  # Only alert when subscription expires within N days
-    INACTIVE_USER_DELETE_MONTHS: int = 3
+    # Months of inactivity before a user row is soft-deleted (status=DELETED).
+    # 12 months is conservative — VPN users are highly seasonal (vacations,
+    # business trips, geo-blocking events). Aggressive defaults were
+    # mass-deleting returning users; cabinet auto-revival makes the cost of
+    # raising this low. See `app/services/user_revival_service.py`.
+    INACTIVE_USER_DELETE_MONTHS: int = 12
 
     MAINTENANCE_MODE: bool = False
     MAINTENANCE_CHECK_INTERVAL: int = 30

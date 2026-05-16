@@ -620,10 +620,22 @@ async def auth_telegram(
             logger.info('User profile updated from initData', user_id=user.id)
 
     if user.status != UserStatus.ACTIVE.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
-        )
+        # DELETED users authenticating via initData (cryptographically
+        # signed by Telegram) get auto-revived inline — the signature on
+        # initData is the moral equivalent of a fresh /start. BLOCKED
+        # users still get the hard 403.
+        # revive_deleted_user does NOT commit — the endpoint's commit
+        # at the end of the function persists this together with
+        # cabinet_last_login in one round-trip.
+        if user.status == UserStatus.DELETED.value:
+            from app.services.user_revival_service import revive_deleted_user
+
+            await revive_deleted_user(db, user, source='cabinet_telegram_login')
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='User account is not active',
+            )
 
     # Update last login
     user.cabinet_last_login = datetime.now(UTC)
@@ -1397,17 +1409,29 @@ async def login_email(
             detail='Invalid email or password',
         )
 
+    # Status check BEFORE email-verification gate:
+    # 1. Security: emitting `account_deleted` here after correct
+    #    password would be an enumeration oracle. A successful login
+    #    that returns 403 `account_deleted` confirms BOTH email-exists
+    #    AND password-correct AND row-is-deleted — strictly worse than
+    #    the standard 401. Return generic invalid-credentials instead.
+    # 2. Correctness: a DELETED user whose email_verified=False would
+    #    otherwise hit the "Please verify your email first" branch and
+    #    never see the deletion message. The non-disclosing 401 below
+    #    sidesteps that ordering issue entirely.
+    # BLOCKED users also fall here — same generic 401 keeps admin
+    # actions opaque to attackers.
+    if user.status != UserStatus.ACTIVE.value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid email or password',
+        )
+
     # Test email and disabled verification bypass the check
     if not user.email_verified and not is_test_email and settings.is_cabinet_email_verification_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Please verify your email first',
-        )
-
-    if user.status != UserStatus.ACTIVE.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
         )
 
     user.cabinet_last_login = datetime.now(UTC)

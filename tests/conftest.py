@@ -25,7 +25,8 @@ os.environ.setdefault('BOT_TOKEN', 'test-token')
 # Дефолт `/app/data/backups` — это путь docker-контейнера, недоступный на dev.
 # Подменяем на temp-директорию ещё до первого импорта приложения, чтобы тест-
 # коллекция не падала с `OSError: Read-only file system: '/app'`.
-import tempfile as _tempfile  # noqa: E402
+import tempfile as _tempfile
+
 
 os.environ.setdefault('BACKUP_LOCATION', _tempfile.mkdtemp(prefix='bedolaga_test_backups_'))
 
