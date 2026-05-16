@@ -8,7 +8,7 @@ across all of a user's subscriptions in multi-tariff mode.
 from __future__ import annotations
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,12 +65,16 @@ async def upsert_alias(db: AsyncSession, user_id: int, hwid: str, alias: str) ->
     if not hwid:
         raise ValueError('hwid is required')
 
+    # NB: column-level `onupdate=func.now()` not fired on ON CONFLICT DO UPDATE
+    # (SQLAlchemy applies it only to ORM Update statements, not to Core
+    # pg_insert.on_conflict_do_update's set_). Touch updated_at explicitly
+    # so audit/sort-by-recent queries get a fresh timestamp on every change.
     stmt = (
         pg_insert(UserDeviceAlias)
         .values(user_id=user_id, hwid=hwid, alias=normalized)
         .on_conflict_do_update(
             index_elements=['user_id', 'hwid'],
-            set_={'alias': normalized},
+            set_={'alias': normalized, 'updated_at': func.now()},
         )
     )
     await db.execute(stmt)

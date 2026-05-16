@@ -4301,7 +4301,9 @@ def register_handlers(dp: Dispatcher):
     from app.states import SubscriptionStates
 
     dp.callback_query.register(start_device_rename, F.data.regexp(r'^device_rename_\d+_\d+$'))
-    dp.message.register(process_device_rename, SubscriptionStates.renaming_device)
+    # F.text — игнорируем стикеры/фото/voice пока юзер в FSM, иначе
+    # message.text==None трактуется как пустая строка и очищает alias.
+    dp.message.register(process_device_rename, SubscriptionStates.renaming_device, F.text)
 
     dp.callback_query.register(handle_all_devices_reset_from_management, F.data == 'reset_all_devices')
 

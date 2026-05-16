@@ -869,10 +869,19 @@ async def get_devices(
 
             devices_list = response.get('devices', [])
             # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
-            # чем N+1 при сборке списка устройств.
+            # чем N+1 при сборке списка устройств. Aliases декоративны: при
+            # сбое чтения возвращаем список без них, а не 500.
             from app.database.crud.user_device_alias import get_aliases_for_user
 
-            aliases = await get_aliases_for_user(db, user.id)
+            try:
+                aliases = await get_aliases_for_user(db, user.id)
+            except Exception as alias_error:
+                logger.warning(
+                    'Failed to load device aliases, falling back to defaults',
+                    user_id=user.id,
+                    error=str(alias_error)[:200],
+                )
+                aliases = {}
 
             formatted_devices = []
             for device in devices_list:

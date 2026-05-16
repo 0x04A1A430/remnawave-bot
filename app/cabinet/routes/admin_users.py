@@ -2261,9 +2261,19 @@ async def get_user_devices(
             response = await api.get_user_devices_all(_dev_uuid)
 
             # Aliases per-(user, hwid) — единый дикт на весь список устройств.
+            # Best-effort: при сбое чтения возвращаем девайсы без локальных имён,
+            # чтобы alias-таблица не превращалась в SPOF для админ-листинга.
             from app.database.crud.user_device_alias import get_aliases_for_user
 
-            aliases = await get_aliases_for_user(db, user_id)
+            try:
+                aliases = await get_aliases_for_user(db, user_id)
+            except Exception as alias_error:
+                logger.warning(
+                    'Failed to load device aliases, falling back to defaults',
+                    user_id=user_id,
+                    error=str(alias_error)[:200],
+                )
+                aliases = {}
 
             devices = []
             for d in response.get('devices', []):
