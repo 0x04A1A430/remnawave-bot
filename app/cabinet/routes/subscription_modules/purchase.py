@@ -25,6 +25,7 @@ from app.database.crud.subscription import (
     create_trial_subscription,
     decrement_subscription_server_counts,
     extend_subscription,
+    get_subscription_by_id_for_user,
     get_subscription_by_user_id,
 )
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
@@ -648,11 +649,39 @@ async def purchase_tariff(
             custom_traffic_gb = request.traffic_gb
             traffic_limit_gb = request.traffic_gb
 
-        # Determine device_limit for renewal pricing
+        # Determine device_limit for renewal pricing.
+        #
+        # When the frontend passes an explicit ``subscription_id`` (the
+        # user clicked "Renew this subscription" rather than a fresh
+        # catalog buy), use it via the ownership-checked lookup. This
+        # is race-resistant: even if a concurrent panel webhook briefly
+        # flips the target sub's status between request arrival and
+        # this query, the ID-based lookup still finds the right row.
+        # Without this pin, the bot was hitting the partial UNIQUE
+        # ``uq_subscriptions_user_tariff_active`` on confirm and
+        # logging "Тариф уже активен" — the exact production scenario
+        # the bot-side fix already closed (commit 5cd53e4c).
+        existing_subscription = None
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+            if request.subscription_id is not None:
+                existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
+                # If the pinned sub points to a different tariff than
+                # the request carries (admin swap, stale client state),
+                # ignore it and fall back to tariff-level lookup so the
+                # purchase doesn't extend a sub of the wrong tariff.
+                if existing_subscription and existing_subscription.tariff_id != tariff.id:
+                    logger.warning(
+                        'Cabinet purchase: explicit subscription_id has divergent tariff_id; falling back',
+                        request_subscription_id=request.subscription_id,
+                        pinned_tariff_id=existing_subscription.tariff_id,
+                        request_tariff_id=tariff.id,
+                        user_id=user.id,
+                    )
+                    existing_subscription = None
+            if existing_subscription is None:
+                from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
-            existing_subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
+                existing_subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
         else:
             existing_subscription = await get_subscription_by_user_id(db, user.id)
         device_limit = None

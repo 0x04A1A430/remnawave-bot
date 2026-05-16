@@ -4463,6 +4463,22 @@ async def return_to_saved_tariff_cart(
     # Баланс достаточен - показываем подтверждение
     discount_percent = cart_data.get('discount_percent', 0)
 
+    # Pin FSM keys read by confirm_tariff_purchase before showing the
+    # confirm keyboard. Without this, the cart-restore-after-topup path
+    # bypasses select_tariff_period (the normal preview) and confirm
+    # falls back to the race-vulnerable (user_id, tariff_id) lookup —
+    # which is exactly the scenario that produced the user-reported
+    # "Тариф уже активен" bug in the cart-restore flow.
+    if cart_mode in ('tariff_purchase', 'extend'):
+        _period_for_pin = cart_data.get('period_days', 30)
+        await state.update_data(
+            selected_tariff_id=tariff_id,
+            selected_period=_period_for_pin,
+            final_price=total_price,
+            tariff_discount_percent=discount_percent,
+            target_subscription_id=cart_data.get('subscription_id'),
+        )
+
     if cart_mode == 'daily_tariff_purchase':
         daily_price = cart_data.get('daily_price_kopeks', total_price)
 
