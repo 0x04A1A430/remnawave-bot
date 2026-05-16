@@ -3,7 +3,7 @@
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "️ <b>Недостаточно средств</b>\n\nСтоимость услуги: {required}\nНа балансе: {balance}\nНе хватает: {missing}\n\nВыберите способ пополнения. Сумма подставится автоматически.",
   "ADD_COUNTRIES_BUTTON": "Добавить страны",
   "ADD_TRAFFIC_PROMPT": "<b>Добавить трафик к подписке</b>\n\nТекущий лимит: {current_traffic}\nВыберите дополнительный трафик:",
-  "BUY_TRAFFIC_BUTTON": "Докупить трафик",
+  "BUY_TRAFFIC_BUTTON": "<tg-emoji emoji-id='6008118472066732010'>🔥</tg-emoji> Докупить трафик",
   "ADMIN_BACK_TO_ADMIN": "← Назад в админку",
   "ADMIN_BACK_TO_LIST": "← К списку",
   "ADMIN_BACK_TO_MAIN": "В главное меню",
