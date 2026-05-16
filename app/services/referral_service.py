@@ -230,8 +230,19 @@ async def attach_referrer_if_missing(
     # notification or the audit row is a softer failure than losing
     # the referrer link, and the audit row can be reconstructed
     # offline from ``users.referred_by_id``.
+    #
+    # When the caller didn't pass a bot (cabinet/FastAPI routes don't
+    # have one in scope), lazy-create one via ``create_bot()`` so the
+    # referrer still receives the Telegram notification. Same pattern
+    # as ``_process_referral_code`` in app/cabinet/routes/auth.py.
     try:
-        await process_referral_registration(db, user.id, referrer.id, bot=bot)
+        if bot is None:
+            from app.bot_factory import create_bot
+
+            async with create_bot() as event_bot:
+                await process_referral_registration(db, user.id, referrer.id, bot=event_bot)
+        else:
+            await process_referral_registration(db, user.id, referrer.id, bot=bot)
     except Exception as exc:
         logger.error(
             'attach_referrer_if_missing: process_referral_registration failed (referrer still attached)',
@@ -389,6 +400,39 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
         if new_user.referred_by_id != referrer_id:
             logger.error('Пользователь не привязан к рефереру', new_user_id=new_user_id, referrer_id=referrer_id)
             return False
+
+        # Cross-session de-dup: bot and cabinet run on separate
+        # `AsyncSessionLocal` instances. The idempotency guard in
+        # ``attach_referrer_if_missing`` (``user.referred_by_id is None``)
+        # is per-session — two concurrent attaches can both pass it,
+        # both flip ``referred_by_id`` to the same value (no
+        # IntegrityError because there's no UNIQUE on the column),
+        # and both reach this function. Without this SELECT both
+        # would insert a ``referral_registration_pending`` row,
+        # creating a duplicate audit entry. Check-then-insert is
+        # NOT race-proof on its own, but the window is sub-millisecond
+        # and the consequence (one extra zero-kopek audit row) is
+        # cosmetic — actual bonus payouts use a different `reason`
+        # ('referral_first_topup_bonus', etc.) and are protected at
+        # their own call sites.
+        from sqlalchemy import select as _select
+
+        existing = await db.execute(
+            _select(ReferralEarning.id)
+            .where(
+                ReferralEarning.user_id == referrer_id,
+                ReferralEarning.referral_id == new_user_id,
+                ReferralEarning.reason == 'referral_registration_pending',
+            )
+            .limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            logger.info(
+                'Referral registration already recorded, skipping duplicate',
+                new_user_id=new_user_id,
+                referrer_id=referrer_id,
+            )
+            return True
 
         campaign_id = await get_user_campaign_id(db, new_user_id)
         await create_referral_earning(

@@ -70,6 +70,40 @@ def db() -> AsyncMock:
     return session
 
 
+class _BotCtxMgr:
+    """Async context manager stand-in for `app.bot_factory.create_bot()`.
+
+    The helper lazy-creates a bot via `create_bot()` when the caller
+    omits one (cabinet routes don't have a bot in scope). Without
+    mocking it, tests crash inside aiogram's real Bot init ("Token is
+    invalid!"). Yielding a plain AsyncMock keeps the downstream
+    `process_referral_registration` call working under the existing
+    mocks.
+    """
+
+    def __init__(self, bot: AsyncMock | None = None) -> None:
+        self._bot = bot or AsyncMock(name='lazy_bot')
+
+    async def __aenter__(self) -> AsyncMock:
+        return self._bot
+
+    async def __aexit__(self, *_a: object) -> None:
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _mock_lazy_bot(monkeypatch: pytest.MonkeyPatch):
+    """Replace `app.bot_factory.create_bot` with a no-op context manager
+    so the helper's lazy-bot branch doesn't try to instantiate a real
+    aiogram Bot. Tests that need to inspect the lazy creation override
+    this with their own patch (see `test_helper_lazy_creates_bot_when_caller_omits_it`).
+    """
+    import app.bot_factory
+
+    monkeypatch.setattr(app.bot_factory, 'create_bot', lambda: _BotCtxMgr(), raising=False)
+    yield
+
+
 # ---------------------------------------------------------------------------
 # Idempotency — never double-attach, never double-fire the registration event.
 # ---------------------------------------------------------------------------
@@ -321,3 +355,143 @@ async def test_invalid_pending_referrer_id_type_is_handled(db: AsyncMock) -> Non
 
     assert result is None
     gubi.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Cross-session TOCTOU: cabinet and bot use different AsyncSessionLocal
+# instances. If they both fire concurrently, both pass the
+# ``referred_by_id is None`` guard. The duplicate-protection lives in
+# `process_referral_registration` itself (SELECT before INSERT). These
+# tests pin that contract — without them, a regression that drops the
+# SELECT could silently start creating duplicate `referral_earning`
+# audit rows in production.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_referral_registration_skips_duplicate_pending_row() -> None:
+    """REGRESSION: a second call for the same (referrer, referral) must NOT
+    insert another `referral_registration_pending` row.
+
+    This is the cross-session race guard. Two concurrent attaches both
+    pass the in-memory idempotency check but only one can win at the
+    audit-row layer.
+    """
+    from app.services.referral_service import process_referral_registration
+
+    db = AsyncMock()
+
+    new_user = SimpleNamespace(id=10, telegram_id=1, referred_by_id=20, language='ru', first_name='', email=None)
+    referrer = SimpleNamespace(id=20, telegram_id=2, language='ru', first_name='Inviter', email=None)
+
+    # SELECT existing pending row → returns a row (it already exists).
+    existing_row = AsyncMock()
+    existing_row.scalar_one_or_none = lambda: 999  # pretend earning #999 exists
+    db.execute = AsyncMock(return_value=existing_row)
+
+    with (
+        patch('app.services.referral_service.get_user_by_id', AsyncMock(side_effect=[new_user, referrer])),
+        patch('app.services.referral_service.create_referral_earning', AsyncMock()) as create_earning,
+    ):
+        result = await process_referral_registration(db, new_user_id=10, referrer_id=20, bot=None)
+
+    assert result is True, 'second call must report success (idempotent), not failure'
+    create_earning.assert_not_called(), 'must NOT insert a second pending row when one already exists'
+
+
+@pytest.mark.asyncio
+async def test_process_referral_registration_inserts_first_pending_row() -> None:
+    """Negative-control: when no existing pending row, INSERT proceeds normally."""
+    from app.services.referral_service import process_referral_registration
+
+    db = AsyncMock()
+
+    new_user = SimpleNamespace(id=10, telegram_id=1, referred_by_id=20, language='ru', first_name='', email=None)
+    referrer = SimpleNamespace(id=20, telegram_id=None, language='ru', first_name='Inviter', email=None)
+    # No telegram_id on referrer → notification path short-circuits and
+    # doesn't try to call bot.send_message; keeps the test simple.
+
+    empty_row = AsyncMock()
+    empty_row.scalar_one_or_none = lambda: None
+    db.execute = AsyncMock(return_value=empty_row)
+
+    # `referral_contest_service` is imported INSIDE the function body
+    # (not at module scope), so we must patch the source module, not
+    # `app.services.referral_service.referral_contest_service`.
+    with (
+        patch('app.services.referral_service.get_user_by_id', AsyncMock(side_effect=[new_user, referrer])),
+        patch('app.services.referral_service.get_user_campaign_id', AsyncMock(return_value=None)),
+        patch('app.services.referral_service.create_referral_earning', AsyncMock()) as create_earning,
+        patch(
+            'app.services.referral_contest_service.referral_contest_service.on_referral_registration',
+            AsyncMock(),
+        ),
+    ):
+        await process_referral_registration(db, new_user_id=10, referrer_id=20, bot=None)
+
+    # The function returns implicitly after the insert branch; the
+    # load-bearing assertion is the INSERT call itself.
+    create_earning.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Cabinet uses bot=None — verify the helper lazy-creates one via
+# `create_bot()` so referrer Telegram notifications still fire.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_helper_lazy_creates_bot_when_caller_omits_it(db: AsyncMock) -> None:
+    """Cabinet endpoints don't have a bot in scope; the helper must
+    spin one up via `create_bot()` so the referrer still gets the
+    Telegram notification. Pre-fix the cabinet path silently passed
+    bot=None all the way through, suppressing all notifications."""
+    user = _user()
+    referrer = _referrer(user_id=200)
+
+    fake_bot = AsyncMock(name='fake_bot')
+
+    class _CtxMgr:
+        async def __aenter__(self) -> AsyncMock:
+            return fake_bot
+
+        async def __aexit__(self, *_a: object) -> None:
+            return None
+
+    with (
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
+        patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
+        patch('app.bot_factory.create_bot', return_value=_CtxMgr()),
+        patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
+    ):
+        result = await attach_referrer_if_missing(db, user, referral_code='X', source='cabinet_unit_test')
+
+    assert result == 200
+    fire.assert_awaited_once()
+    _args, kwargs = fire.call_args
+    assert kwargs.get('bot') is fake_bot, (
+        'cabinet path must lazy-create a bot via create_bot() so the referrer Telegram notification fires'
+    )
+
+
+@pytest.mark.asyncio
+async def test_helper_uses_caller_supplied_bot_when_provided(db: AsyncMock) -> None:
+    """When the bot caller already has a bot (start.py passes message.bot),
+    the helper must use it directly — no need to spin up a second bot."""
+    user = _user()
+    referrer = _referrer(user_id=200)
+    caller_bot = AsyncMock(name='caller_bot')
+
+    with (
+        patch('app.database.crud.user.get_user_by_referral_code', AsyncMock(return_value=referrer)),
+        patch('app.services.referral_service.clear_pending_referral', AsyncMock()),
+        patch('app.bot_factory.create_bot') as factory,
+        patch('app.services.referral_service.process_referral_registration', AsyncMock()) as fire,
+    ):
+        result = await attach_referrer_if_missing(db, user, referral_code='X', bot=caller_bot, source='bot_unit_test')
+
+    assert result == 200
+    factory.assert_not_called(), 'must reuse the caller-supplied bot, never lazy-create when given'
+    fire.assert_awaited_once()
+    _args, kwargs = fire.call_args
+    assert kwargs.get('bot') is caller_bot
