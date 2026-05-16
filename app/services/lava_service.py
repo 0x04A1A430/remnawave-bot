@@ -1,16 +1,22 @@
 """Сервис для работы с API Lava Business (api.lava.ru).
 
-Канонический контракт — официальный PHP SDK https://github.com/LavaDevelop/lava-sdk:
+Контракт (актуальные доки https://dev.lava.ru/business-objects-invoice):
 
 * Базовый URL: ``https://api.lava.ru``.
 * Эндпоинты — ``/business/invoice/create``, ``/business/invoice/status``,
   ``/business/invoice/get-available-tariffs``.
-* Подпись исходящих запросов:
-  ``HMAC-SHA256(json.dumps(ksort(payload)), shop_secret_key)`` → hex
-  и кладётся **внутрь** JSON body в поле ``signature`` (НЕ в HTTP header).
-* Webhook от Lava: ``HMAC-SHA256(json.dumps(ksort(payload)), additional_key)`` → hex,
-  присылается в заголовке ``Authorization``. Перед сверкой нужно re-сериализовать
-  payload с алфавитной сортировкой ключей (raw body **не** совпадает).
+* Подпись исходящих запросов: ``HMAC-SHA256(raw_body_bytes, shop_secret_key)`` → hex,
+  передаётся в HTTP-заголовке ``Signature``. Подписываем те же самые байты, что
+  уходят в запрос — никаких пересортировок, иначе подпись разойдётся.
+* Webhook от Lava: HMAC-SHA256 (тот же ключ — ``additional_key``) в заголовке
+  ``Authorization``. Lava на разных шопах подписывает то raw body, то
+  пере-сериализованный JSON со sorted-keys, поэтому верификация толерантна:
+  принимаем подпись, если совпала хотя бы с одной из двух канонизаций.
+
+История: до коммита 2026-05-16 подпись клалась в body-поле ``signature``
+(под старый PHP SDK). Новые роуты `/business/*` это **не** принимают — Lava
+отвечает 401 с `Invalid signature`. Если вернёшься к body-signature —
+сломаешь интеграцию: см. тест ``tests/services/test_lava_service.py``.
 """
 
 import hashlib
@@ -78,14 +84,14 @@ class LavaService:
 
     @staticmethod
     def _canonical_json(payload: dict[str, Any]) -> str:
-        """Сериализация JSON c алфавитной сортировкой ключей (эквивалент php ksort + json_encode).
+        """JSON со sort_keys=True (эквивалент php ``ksort + json_encode``).
 
-        Поле ``signature`` исключается из канонизации — оно само является продуктом подписи.
+        Используется только в webhook-верификации как fallback на случай, если
+        конкретный shop Lava подписывает не raw body, а пере-сериализованный JSON.
+        Исходящие запросы канонизацию НЕ используют — подписывается raw body.
 
-        Совместимо c php ``json_encode`` без флагов:
-        * non-ASCII экранируется как ``\\uXXXX`` (PHP по умолчанию escape'ит unicode).
-        * ``float n.0`` приводится к ``int n`` — php ``json_encode(2.0)`` возвращает ``"2"``,
-          тогда как Python ``json.dumps(2.0)`` дал бы ``"2.0"`` и подпись разошлась бы.
+        Поле ``signature`` исключается из канонизации, ``float n.0`` приводится
+        к ``int`` (php-совместимо).
         """
 
         def normalize(value: Any) -> Any:
@@ -109,24 +115,24 @@ class LavaService:
             digestmod=hashlib.sha256,
         ).hexdigest()
 
-    def _sign_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Дополняет payload полем ``signature`` по канону Lava (ksort + HMAC-SHA256)."""
-        canonical = self._canonical_json(payload)
-        signed = dict(payload)
-        signed['signature'] = self._hmac_hex(canonical)
-        return signed
-
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST в Lava с подписью в HTTP-заголовке ``Signature``.
+
+        Подписывается БАЙТ-В-БАЙТ то тело, которое уходит в запрос —
+        никаких пересортировок, порядок ключей сохраняется как в payload.
+        """
         url = f'{self.base_url}/{path.lstrip("/")}'
-        signed_payload = self._sign_payload(payload)
-        body = json.dumps(signed_payload, separators=(',', ':'), ensure_ascii=False)
+        body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
+        body_bytes = body.encode('utf-8')
+        signature = self._hmac_hex(body_bytes)
         headers = {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
+            'Signature': signature,
         }
         try:
             session = await self._get_session()
-            async with session.post(url, data=body, headers=headers) as response:
+            async with session.post(url, data=body_bytes, headers=headers) as response:
                 try:
                     data = await response.json(content_type=None)
                 except Exception:
@@ -168,12 +174,11 @@ class LavaService:
         include_service: list[str] | None = None,
         exclude_service: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Создаёт инвойс через POST /api/v2/invoice/create.
+        """Создаёт инвойс через POST /business/invoice/create.
 
         Сумма передаётся в рублях с двумя знаками после запятой.
         ``orderId`` — наш уникальный идентификатор платежа.
         """
-        # Порядок полей важен (этим же порядком сериализуется и подписывается)
         payload: dict[str, Any] = {
             'sum': round(float(amount_rubles), 2),
             'orderId': str(order_id),
@@ -212,7 +217,7 @@ class LavaService:
         order_id: str | None = None,
         invoice_id: str | None = None,
     ) -> dict[str, Any]:
-        """POST /api/v2/invoice/status — статус инвойса по orderId или invoiceId."""
+        """POST /business/invoice/status — статус инвойса по orderId или invoiceId."""
         if not order_id and not invoice_id:
             raise ValueError('Lava status: order_id or invoice_id required')
 
@@ -231,44 +236,55 @@ class LavaService:
         return await self._post('/business/invoice/get-available-tariffs', payload)
 
     def verify_webhook_signature(self, raw_body: bytes, received_signature: str) -> bool:
-        """Верификация подписи webhook (заголовок ``Authorization``).
+        """Верификация подписи webhook'а.
 
-        Lava Business подписывает payload по тому же канону что исходящие запросы:
-        HMAC-SHA256(json_with_sorted_keys, additional_key). Поэтому **нельзя** считать
-        HMAC от raw bytes — нужно распарсить JSON и пере-сериализовать с ``sort_keys=True``
-        (эквивалент PHP ``ksort + json_encode``). Иначе подпись расходится байт-в-байт.
-        Ключ — ``LAVA_WEBHOOK_SECRET`` (shop_webhook_additional_key из ЛК Lava).
+        Lava на разных shop'ах подписывает webhook'и по-разному:
+          1. HMAC от raw body (актуальный контракт api.lava.ru).
+          2. HMAC от пере-сериализованного JSON с sorted-keys (legacy PHP SDK).
+        Пробуем оба варианта, принимаем при совпадении хотя бы одного.
+        Поле подписи приходит в HTTP-заголовке ``Authorization`` (webserver его
+        парсит и передаёт сюда уже строкой).
         """
         try:
             if not received_signature:
-                logger.warning('Lava webhook: отсутствует Authorization header')
+                logger.warning('Lava webhook: отсутствует заголовок подписи')
                 return False
             if not self.webhook_secret:
                 logger.error('Lava webhook: LAVA_WEBHOOK_SECRET не настроен')
                 return False
 
-            try:
-                payload = json.loads(raw_body)
-            except (ValueError, TypeError) as parse_error:
-                logger.warning('Lava webhook: невалидный JSON для проверки подписи', error=str(parse_error))
-                return False
-
-            if not isinstance(payload, dict):
-                logger.warning('Lava webhook: payload не объект', payload_type=type(payload).__name__)
-                return False
-
-            canonical = self._canonical_json(payload)
-            expected = self._hmac_hex(canonical, key=self.webhook_secret)
             received = received_signature.strip()
 
-            if not hmac.compare_digest(expected.lower(), received.lower()):
+            # Вариант 1: HMAC от raw body — основной контракт.
+            expected_raw = self._hmac_hex(raw_body, key=self.webhook_secret)
+            if hmac.compare_digest(expected_raw.lower(), received.lower()):
+                return True
+
+            # Вариант 2: HMAC от canonical JSON (sort_keys) — legacy PHP SDK shops.
+            expected_canonical: str | None = None
+            try:
+                payload = json.loads(raw_body)
+                if isinstance(payload, dict):
+                    canonical = self._canonical_json(payload)
+                    expected_canonical = self._hmac_hex(canonical, key=self.webhook_secret)
+                    if hmac.compare_digest(expected_canonical.lower(), received.lower()):
+                        return True
+            except (ValueError, TypeError) as parse_error:
                 logger.warning(
-                    'Lava webhook: invalid signature',
+                    'Lava webhook: невалидный JSON для альтернативной проверки',
+                    error=str(parse_error),
                     received_prefix=received[:8],
-                    expected_prefix=expected[:8],
+                    expected_raw_prefix=expected_raw[:8],
                 )
                 return False
-            return True
+
+            logger.warning(
+                'Lava webhook: invalid signature',
+                received_prefix=received[:8],
+                expected_raw_prefix=expected_raw[:8],
+                expected_canonical_prefix=expected_canonical[:8] if expected_canonical else None,
+            )
+            return False
         except Exception as error:
             logger.error('Lava webhook verify error', error=str(error), exc_info=True)
             return False
