@@ -986,9 +986,8 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.FREEKASSA_WEBHOOK_PATH)
         async def freekassa_webhook(request: Request) -> Response:
-            client_ip = (
-                request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-                or (request.client.host if request.client else '127.0.0.1')
+            client_ip = request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or (
+                request.client.host if request.client else '127.0.0.1'
             )
 
             # Получаем данные формы

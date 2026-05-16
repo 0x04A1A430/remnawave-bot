@@ -161,7 +161,9 @@ class RemnaWaveWebhookService:
         # Перечитываем coalescing-knob'ы из настроек (env-tunable, без
         # перезапуска кода). Class-level defaults остаются как safety net.
         self._NODE_EVENT_COALESCE_WINDOW_SECONDS = float(
-            getattr(settings, 'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS', self._NODE_EVENT_COALESCE_WINDOW_SECONDS)
+            getattr(
+                settings, 'REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS', self._NODE_EVENT_COALESCE_WINDOW_SECONDS
+            )
         )
         self._NODE_EVENT_BUFFER_MAX = int(
             getattr(settings, 'REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX', self._NODE_EVENT_BUFFER_MAX)

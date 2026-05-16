@@ -47,9 +47,7 @@ def _write_valid_archive(path: Path, metadata: dict) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_backup_list_skips_empty_tar_gz(
-    service: BackupService, backup_dir: Path
-) -> None:
+async def test_get_backup_list_skips_empty_tar_gz(service: BackupService, backup_dir: Path) -> None:
     """Empty .tar.gz must not raise — it's marked corrupted and listing continues."""
     empty = backup_dir / 'backup_20260515_071955.tar.gz'
     empty.write_bytes(b'')  # 0 bytes — exactly the bug scenario
@@ -65,9 +63,7 @@ async def test_get_backup_list_skips_empty_tar_gz(
 
 
 @pytest.mark.asyncio
-async def test_get_backup_list_recovers_other_files_when_one_is_empty(
-    service: BackupService, backup_dir: Path
-) -> None:
+async def test_get_backup_list_recovers_other_files_when_one_is_empty(service: BackupService, backup_dir: Path) -> None:
     """One bad file doesn't poison the rest of the listing."""
     empty = backup_dir / 'backup_20260101_000000.tar.gz'
     empty.write_bytes(b'')
@@ -100,9 +96,7 @@ async def test_get_backup_list_recovers_other_files_when_one_is_empty(
 
 
 @pytest.mark.asyncio
-async def test_get_backup_list_handles_truncated_gzip(
-    service: BackupService, backup_dir: Path
-) -> None:
+async def test_get_backup_list_handles_truncated_gzip(service: BackupService, backup_dir: Path) -> None:
     """Truncated/corrupted gzip → caught as known-corruption, not as bare Exception."""
     bad = backup_dir / 'backup_truncated.tar.gz'
     bad.write_bytes(b'\x1f\x8b\x08\x00')  # gzip magic but no real payload
@@ -116,9 +110,7 @@ async def test_get_backup_list_handles_truncated_gzip(
 
 
 @pytest.mark.asyncio
-async def test_get_backup_list_handles_garbage_json(
-    service: BackupService, backup_dir: Path
-) -> None:
+async def test_get_backup_list_handles_garbage_json(service: BackupService, backup_dir: Path) -> None:
     """Non-archive JSON backup with garbage content → corrupted entry, not crash."""
     bad = backup_dir / 'backup_legacy.json'
     bad.write_text('{not valid json,,,', encoding='utf-8')

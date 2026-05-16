@@ -93,9 +93,7 @@ async def set_alias(
     await db.execute(stmt)
     if commit:
         await db.commit()
-    logger.info(
-        'Device alias upserted', user_id=user_id, hwid_prefix=hwid[:8], alias_length=len(normalized)
-    )
+    logger.info('Device alias upserted', user_id=user_id, hwid_prefix=hwid[:8], alias_length=len(normalized))
     return normalized
 
 

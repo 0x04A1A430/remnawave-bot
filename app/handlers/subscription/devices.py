@@ -974,9 +974,7 @@ async def handle_devices_page(callback: types.CallbackQuery, db_user: User, db: 
         )
 
 
-async def start_device_rename(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
-):
+async def start_device_rename(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
     """Callback `device_rename_<idx>_<page>` — prompts user for the new alias.
 
     Stores hwid/page/sub_id in FSM state so the text-handler can finalize and

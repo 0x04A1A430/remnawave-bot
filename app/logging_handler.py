@@ -278,9 +278,7 @@ class TelegramNotifierProcessor:
 
             # Также redact в самом сообщении ошибки (event string).
             if error.args:
-                error.args = tuple(
-                    _redact_telegram_secrets(arg) if isinstance(arg, str) else arg for arg in error.args
-                )
+                error.args = tuple(_redact_telegram_secrets(arg) if isinstance(arg, str) else arg for arg in error.args)
 
             await send_error_to_admin_chat(bot, error, context, tb_override=tb_override)
 

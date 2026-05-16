@@ -1697,9 +1697,7 @@ class BackupService:
         return 0
 
     @staticmethod
-    def _build_corrupted_backup_entry(
-        backup_file: Path, file_stats: os.stat_result, *, reason: str
-    ) -> dict[str, Any]:
+    def _build_corrupted_backup_entry(backup_file: Path, file_stats: os.stat_result, *, reason: str) -> dict[str, Any]:
         """Build a list-entry placeholder for a backup file we can't read."""
         return {
             'filename': backup_file.name,
@@ -1735,9 +1733,7 @@ class BackupService:
                 if file_stats.st_size == 0:
                     logger.warning('Skipping empty backup file', backup_file=str(backup_file))
                     backups.append(
-                        self._build_corrupted_backup_entry(
-                            backup_file, file_stats, reason='Файл пуст (0 байт)'
-                        )
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason='Файл пуст (0 байт)')
                     )
                     continue
 
@@ -1814,9 +1810,7 @@ class BackupService:
                     # Реально неожиданное — оставляем error для расследования.
                     logger.error('Ошибка чтения метаданных', backup_file=str(backup_file), error=e)
                     backups.append(
-                        self._build_corrupted_backup_entry(
-                            backup_file, file_stats, reason=f'Ошибка чтения: {e!s}'
-                        )
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason=f'Ошибка чтения: {e!s}')
                     )
 
         except Exception as e:

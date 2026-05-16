@@ -33,9 +33,7 @@ def _verify_signature(raw_body: bytes, received_signature: str, secret: str) -> 
     return hmac.compare_digest(expected, received_signature)
 
 
-def create_remnawave_webhook_router(
-    bot: Bot, webhook_service: RemnaWaveWebhookService | None = None
-) -> APIRouter:
+def create_remnawave_webhook_router(bot: Bot, webhook_service: RemnaWaveWebhookService | None = None) -> APIRouter:
     """Build the FastAPI router for RemnaWave webhooks.
 
     Service is injectable so the caller (`unified_app.create_unified_app`) can

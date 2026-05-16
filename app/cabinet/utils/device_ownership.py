@@ -69,8 +69,7 @@ async def verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
             for panel_uuid in panel_uuids:
                 response = await api.get_user_devices_all(panel_uuid)
                 hwids_on_panel = {
-                    (d.get('hwid') or d.get('deviceId') or d.get('id'))
-                    for d in (response or {}).get('devices', [])
+                    (d.get('hwid') or d.get('deviceId') or d.get('id')) for d in (response or {}).get('devices', [])
                 }
                 if hwid in hwids_on_panel:
                     return True

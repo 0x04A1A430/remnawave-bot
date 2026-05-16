@@ -45,9 +45,7 @@ def test_format_remnawave_username_reserves_room_for_caller_suffix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """reserve_suffix_chars=N → base fits in MAX-N so caller can append safely."""
-    monkeypatch.setattr(
-        settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False)
 
     suffix = '_49883b'  # 7 chars
     base = settings.format_remnawave_username(
@@ -98,9 +96,7 @@ def test_format_remnawave_username_does_not_go_below_min_with_huge_reserve() -> 
 def test_format_remnawave_username_repro_38_char_bug(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exact production payload from log.rw/ARVm79dH must come out ≤ 36 chars."""
     # Production .env override exposes the duplication path:
-    monkeypatch.setattr(
-        settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False)
 
     suffix = '_49883b'
     base = settings.format_remnawave_username(
@@ -125,9 +121,7 @@ def test_format_remnawave_username_repro_38_char_bug(monkeypatch: pytest.MonkeyP
 
 def test_build_subscription_username_production_repro(monkeypatch: pytest.MonkeyPatch) -> None:
     """Production repro through the high-level helper used by all 3 callers."""
-    monkeypatch.setattr(
-        settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', '{email}_{telegram_id}', raising=False)
 
     final = settings.build_remnawave_subscription_username(
         full_name='Марина Дидык',

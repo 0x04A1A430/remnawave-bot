@@ -75,9 +75,7 @@ def test_collect_panel_uuids_returns_empty_when_no_panel_attached() -> None:
 def _patched_remnawave(devices_by_uuid: dict[str, list[dict]]) -> MagicMock:
     """Stub the RemnaWaveService API client so we can simulate panel responses."""
     api_mock = MagicMock()
-    api_mock.get_user_devices_all = AsyncMock(
-        side_effect=lambda uuid: {'devices': devices_by_uuid.get(uuid, [])}
-    )
+    api_mock.get_user_devices_all = AsyncMock(side_effect=lambda uuid: {'devices': devices_by_uuid.get(uuid, [])})
 
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=api_mock)

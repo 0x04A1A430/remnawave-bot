@@ -222,9 +222,7 @@ async def test_coalesced_summary_truncates_and_reports_overflow(
 
     webhook_service._admin_service.send_webhook_notification = AsyncMock(side_effect=capture_send)
 
-    await webhook_service._send_coalesced_node_notification(
-        'node.connection_lost', payloads, overflow_count=7
-    )
+    await webhook_service._send_coalesced_node_notification('node.connection_lost', payloads, overflow_count=7)
 
     text = sent_text['value']
     bullet_lines = [line for line in text.split('\n') if line.startswith('•')]
@@ -289,9 +287,7 @@ async def test_enqueue_tracks_flush_task_in_pending_set(
     webhook_service: RemnaWaveWebhookService,
 ) -> None:
     """Active flush task is held in the strong-ref set; auto-removed after completion."""
-    await webhook_service._enqueue_node_event(
-        'node.connection_lost', {'name': 'n1', 'address': '10.0.0.1'}
-    )
+    await webhook_service._enqueue_node_event('node.connection_lost', {'name': 'n1', 'address': '10.0.0.1'})
 
     task = webhook_service._node_event_flush_task
     assert task is not None
@@ -429,8 +425,7 @@ async def test_telegram_notifier_processor_redacts_token_in_traceback(
 
     bot = MagicMock()
     leaked = (
-        'failed to POST https://api.telegram.org/bot8123456789:'
-        'AAH-Sample_TokenString_With-Chars-aiogram01/sendMessage'
+        'failed to POST https://api.telegram.org/bot8123456789:AAH-Sample_TokenString_With-Chars-aiogram01/sendMessage'
     )
     event_dict = {
         'event': leaked,

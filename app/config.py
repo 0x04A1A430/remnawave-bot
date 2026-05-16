@@ -1434,7 +1434,9 @@ class Settings(BaseSettings):
             sanitized_username = _sanitize(f'user_{identifier}')
 
         # Резервируем место под caller-suffix, не опускаясь ниже минимальной длины.
-        max_len = max(self.REMNAWAVE_USERNAME_MIN_LENGTH, self.REMNAWAVE_USERNAME_MAX_LENGTH - max(0, reserve_suffix_chars))
+        max_len = max(
+            self.REMNAWAVE_USERNAME_MIN_LENGTH, self.REMNAWAVE_USERNAME_MAX_LENGTH - max(0, reserve_suffix_chars)
+        )
         result = sanitized_username[:max_len].strip('_-') or 'user'
 
         # RemnaWave требует username минимум 3 символа
