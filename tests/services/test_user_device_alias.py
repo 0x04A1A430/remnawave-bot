@@ -147,6 +147,10 @@ async def test_set_alias_executes_on_conflict_update_touching_updated_at() -> No
     Regression cover for the SQLAlchemy `onupdate=func.now()` not firing on
     Core `pg_insert.on_conflict_do_update` issue. Without explicitly touching
     `updated_at` in the `set_` dict, audit/sort-by-recent would lie.
+
+    Sharper than a plain `'updated_at' in compiled` check — that would
+    also match a RETURNING clause or column list and silently miss the
+    regression. We scope the search to the `DO UPDATE SET …` window.
     """
     db = AsyncMock()
 
@@ -154,11 +158,15 @@ async def test_set_alias_executes_on_conflict_update_touching_updated_at() -> No
 
     assert db.execute.await_count == 1
     stmt = db.execute.await_args.args[0]
-    compiled = str(stmt.compile(compile_kwargs={'literal_binds': False}))
-    # PostgreSQL ON CONFLICT clause must update both columns.
-    assert 'ON CONFLICT' in compiled
-    assert 'alias' in compiled
-    assert 'updated_at' in compiled
+    compiled = str(stmt.compile(compile_kwargs={'literal_binds': False})).lower()
+    # PostgreSQL ON CONFLICT clause must update both columns. Isolate the
+    # SET window so the assertion catches a regression where `updated_at`
+    # only appears in (say) the INSERT column list, not the UPDATE branch.
+    assert 'on conflict' in compiled
+    do_update_idx = compiled.index('do update set')
+    set_clause = compiled[do_update_idx : do_update_idx + 200]
+    assert 'alias' in set_clause
+    assert 'updated_at' in set_clause
 
 
 @pytest.mark.asyncio
@@ -196,6 +204,7 @@ async def test_upsert_alias_with_empty_input_calls_delete() -> None:
 
     assert result == ''
     db.execute.assert_awaited_once()
-    # `delete_alias` only commits when something was actually deleted —
-    # nothing here, so no commit issued.
-    db.commit.assert_not_called()
+    # `delete_alias` commits unconditionally on `commit=True` (default) — an
+    # empty no-op commit is cheaper than leaving an implicit txn open under
+    # pgbouncer transaction-mode.
+    db.commit.assert_awaited_once()

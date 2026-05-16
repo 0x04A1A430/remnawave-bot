@@ -133,6 +133,12 @@ async def delete_alias(
 
     Single-statement DELETE with `RETURNING` so we avoid the older
     SELECT-then-DELETE round-trip. Returns True if a row was removed.
+
+    Commits unconditionally when `commit=True` (default) — even when no
+    row matched. Otherwise an implicit empty transaction stays open
+    until the session closes, which can pin a server connection under
+    pgbouncer transaction-mode. Empty-commit is a cheap no-op on
+    Postgres directly.
     """
     stmt = (
         sa_delete(UserDeviceAlias)
@@ -141,7 +147,7 @@ async def delete_alias(
     )
     result = await db.execute(stmt)
     deleted = result.scalar_one_or_none() is not None
-    if commit and deleted:
+    if commit:
         await db.commit()
     return deleted
 

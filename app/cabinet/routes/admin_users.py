@@ -9,6 +9,7 @@ from sqlalchemy import Integer, and_, delete as sa_delete, func, literal, or_, s
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.cabinet.utils.device_ownership import verify_hwid_belongs_to_user
 from app.config import settings
 from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
@@ -27,7 +28,12 @@ from app.database.crud.user import (
     get_users_statistics,
     subtract_user_balance,
 )
-from app.database.crud.user_device_alias import get_aliases_for_user
+from app.database.crud.user_device_alias import (
+    delete_alias,
+    get_aliases_for_user,
+    normalize_alias,
+    set_alias,
+)
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
     GuestPurchase,
@@ -2363,8 +2369,6 @@ async def rename_user_device(
     same value would appear in the user's own bot/cabinet view. Empty or
     null `name` clears the alias.
     """
-    from app.database.crud.user_device_alias import delete_alias, normalize_alias, set_alias
-
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
@@ -2373,38 +2377,12 @@ async def rename_user_device(
     if not hwid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
 
-    # Best-effort hwid validation against the user's RemnaWave devices —
-    # prevents the admin from creating orphan alias rows by typo.
-    try:
-        from app.services.remnawave_service import RemnaWaveService
-
-        panel_uuid = user.remnawave_uuid
-        if not panel_uuid:
-            subs = getattr(user, 'subscriptions', None) or []
-            for sub in subs:
-                if getattr(sub, 'remnawave_uuid', None):
-                    panel_uuid = sub.remnawave_uuid
-                    break
-        if panel_uuid:
-            service = RemnaWaveService()
-            async with service.get_api_client() as api:
-                resp = await api.get_user_devices_all(panel_uuid)
-            owned = {(d.get('hwid') or d.get('deviceId') or d.get('id')) for d in resp.get('devices', [])}
-            if hwid not in owned:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail='Device not found on user account',
-                )
-    except HTTPException:
-        raise
-    except Exception as panel_error:
-        # RemnaWave unreachable — degrade open so admin overrides remain
-        # operational during partial outages.
-        logger.warning(
-            'RemnaWave unreachable during admin hwid validation, allowing rename',
-            admin_id=admin.id,
-            user_id=user_id,
-            error=str(panel_error)[:200],
+    # Best-effort hwid validation across ALL the user's panel UUIDs (multi-tariff
+    # aware). Shared with the user-facing endpoint via cabinet.utils.device_ownership.
+    if not await verify_hwid_belongs_to_user(user, hwid):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Device not found on user account',
         )
 
     normalized = normalize_alias(request.name)

@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.utils.device_ownership import verify_hwid_belongs_to_user
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user_device_alias import (
@@ -932,45 +933,10 @@ class DeviceRenameRequest(BaseModel):
     name: str | None = None
 
 
-async def _verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
-    """Confirm the hwid currently exists on the user's panel account.
-
-    Without this guard, the rename endpoint would accept any hwid string
-    and create orphan rows in `user_device_aliases` that survive forever.
-    Best-effort: if RemnaWave is unreachable we deliberately ALLOW the
-    write (returning True) — service degradation should not block users
-    from renaming devices they actually own.
-    """
-    from app.services.remnawave_service import RemnaWaveService
-
-    panel_uuid = getattr(user, 'remnawave_uuid', None)
-    if not panel_uuid:
-        # Fallback: try the user's active subscriptions in multi-tariff mode.
-        subs = getattr(user, 'subscriptions', None) or []
-        for sub in subs:
-            uuid = getattr(sub, 'remnawave_uuid', None)
-            if uuid:
-                panel_uuid = uuid
-                break
-    if not panel_uuid:
-        return False
-
-    try:
-        service = RemnaWaveService()
-        async with service.get_api_client() as api:
-            response = await api.get_user_devices_all(panel_uuid)
-    except Exception as remnawave_error:
-        logger.warning(
-            'RemnaWave unreachable during hwid validation, allowing rename',
-            user_id=user.id,
-            error=str(remnawave_error)[:200],
-        )
-        return True
-
-    return any(
-        (d.get('hwid') or d.get('deviceId') or d.get('id')) == hwid
-        for d in response.get('devices', [])
-    )
+# Hwid ownership validation lives in app.cabinet.utils.device_ownership —
+# shared between the user-facing rename endpoint below and the admin
+# override in app/cabinet/routes/admin_users.py. Keeps both call sites
+# from drifting on multi-tariff semantics again.
 
 
 @router.patch('/devices/{hwid}/name')
@@ -1001,8 +967,9 @@ async def rename_device(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
 
     # Guard against orphan rows: only accept rename requests for devices
-    # the user actually owns in RemnaWave panel right now.
-    if not await _verify_hwid_belongs_to_user(user, hwid):
+    # the user actually owns in RemnaWave panel right now. Multi-tariff
+    # aware (unions devices across all panel UUIDs the user holds).
+    if not await verify_hwid_belongs_to_user(user, hwid):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail='Device not found on your account',
