@@ -99,6 +99,151 @@ async def clear_pending_referral(telegram_id: int) -> None:
         pass
 
 
+async def attach_referrer_if_missing(
+    db: AsyncSession,
+    user: User,
+    *,
+    referral_code: str | None = None,
+    bot: Bot | None = None,
+    source: str,
+) -> int | None:
+    """Eagerly attach a referrer to ``user`` when one isn't already set.
+
+    Resolution order:
+      1. Explicit ``referral_code`` argument (from URL state / FSM /
+         API request body).
+      2. Redis ``pending_referral`` keyed on ``user.telegram_id`` (the
+         /start fallback for the race where the miniapp opens BEFORE
+         the bot's /start handler has finished processing).
+
+    Idempotent: if ``user.referred_by_id`` is already set, returns
+    ``None`` immediately without firing anything. This is the key
+    contract — it lets us call the helper from every entry point
+    (bot /start, cabinet /telegram, widget, OIDC) without worrying
+    about double-firing ``process_referral_registration`` (which would
+    duplicate the ``referral_earning`` audit row).
+
+    Self-referral is blocked at both ID and email level (the email
+    check mirrors the pre-existing logic in
+    ``_process_referral_code``).
+
+    Side effects when the attachment succeeds:
+      * Sets ``user.referred_by_id``, commits, refreshes.
+      * Fires ``process_referral_registration`` (admin notification +
+        ``referral_earning`` row with reason
+        ``referral_registration_pending``).
+      * Clears any matching Redis ``pending_referral`` entry.
+
+    Args:
+        source: short tag for audit logs (``bot_start``,
+            ``cabinet_telegram``, ``cabinet_widget``, ``cabinet_oidc``,
+            etc.). Keep stable so log queries stay useful.
+
+    Returns:
+        The attached ``referrer_id`` on success, ``None`` when nothing
+        was attached (either user already had one, or no valid
+        candidate was found).
+    """
+    if user.referred_by_id is not None:
+        return None
+
+    # ------------------------------------------------------------------
+    # Candidate resolution.
+    # ------------------------------------------------------------------
+    from app.database.crud.user import get_user_by_referral_code as _resolve_by_code
+
+    referrer: User | None = None
+
+    if referral_code:
+        try:
+            referrer = await _resolve_by_code(db, referral_code)
+        except Exception as exc:
+            logger.warning(
+                'attach_referrer_if_missing: failed to resolve referral_code',
+                referral_code=referral_code,
+                source=source,
+                error=str(exc),
+            )
+
+    if referrer is None and user.telegram_id is not None:
+        pending = await get_pending_referral(user.telegram_id)
+        if pending and pending.get('referrer_id'):
+            try:
+                pending_referrer_id = int(pending['referrer_id'])
+            except (TypeError, ValueError):
+                pending_referrer_id = None
+            if pending_referrer_id is not None:
+                referrer = await get_user_by_id(db, pending_referrer_id)
+
+    if referrer is None:
+        return None
+
+    # ------------------------------------------------------------------
+    # Self-referral guards.
+    # ------------------------------------------------------------------
+    if referrer.id == user.id:
+        return None
+    if referrer.telegram_id is not None and user.telegram_id is not None and referrer.telegram_id == user.telegram_id:
+        return None
+    if referrer.email and user.email and referrer.email.lower() == user.email.lower():
+        return None
+
+    # ------------------------------------------------------------------
+    # Atomic attach. We do NOT pin the row with FOR UPDATE here — the
+    # idempotency check above (referred_by_id is None) is the actual
+    # concurrency guard, and the next setter will see referred_by_id
+    # populated and bail out via the idempotency early-return.
+    # ------------------------------------------------------------------
+    user.referred_by_id = referrer.id
+    try:
+        await db.commit()
+        await db.refresh(user)
+    except Exception as exc:
+        logger.error(
+            'attach_referrer_if_missing: commit failed',
+            user_id=user.id,
+            referrer_id=referrer.id,
+            source=source,
+            error=str(exc),
+        )
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return None
+
+    logger.info(
+        'Referrer attached',
+        user_id=user.id,
+        referrer_id=referrer.id,
+        source=source,
+        had_explicit_code=referral_code is not None,
+    )
+
+    # Best-effort: clear the Redis pending row so a stale entry can't
+    # double-attach via another entry point later.
+    if user.telegram_id is not None:
+        await clear_pending_referral(user.telegram_id)
+
+    # Fire the registration event. We swallow exceptions because the
+    # attachment itself is the load-bearing part — losing the
+    # notification or the audit row is a softer failure than losing
+    # the referrer link, and the audit row can be reconstructed
+    # offline from ``users.referred_by_id``.
+    try:
+        await process_referral_registration(db, user.id, referrer.id, bot=bot)
+    except Exception as exc:
+        logger.error(
+            'attach_referrer_if_missing: process_referral_registration failed (referrer still attached)',
+            user_id=user.id,
+            referrer_id=referrer.id,
+            source=source,
+            error=str(exc),
+        )
+
+    return referrer.id
+
+
 # ---------------------------------------------------------------------------
 # Pending campaign helpers (Redis)
 #

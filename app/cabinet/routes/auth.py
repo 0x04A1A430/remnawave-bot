@@ -649,6 +649,25 @@ async def auth_telegram(
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
 
+    # Race-resilience: an existing user whose miniapp opened BEFORE
+    # the bot's /start handler finished processing may still have
+    # referred_by_id=None despite the user clicking the referral link.
+    # The pending_referral Redis key the cabinet checked above was
+    # not yet written at that moment. Now that /start has had a chance
+    # to run, the key may exist — try the eager attach helper. It
+    # idempotently no-ops when referred_by_id is already set, and
+    # otherwise reads Redis pending_referral + attaches + fires the
+    # registration event exactly once.
+    if not is_new_user:
+        from app.services.referral_service import attach_referrer_if_missing
+
+        await attach_referrer_if_missing(
+            db,
+            user,
+            referral_code=request.referral_code,
+            source='cabinet_telegram_retroactive',
+        )
+
     # Clear Redis pending referral after successful user creation with referral
     if referrer_id:
         try:
@@ -701,23 +720,44 @@ async def auth_telegram_widget(
 
     user = await get_user_by_telegram_id(db, request.id)
 
-    # Resolve referral code to referrer ID for new users
+    # Resolve referral code to referrer ID for new users.
+    # Order: explicit request.referral_code, then Redis pending_referral
+    # written by /start ref_XYZ. The Redis fallback used to be missing
+    # from this widget endpoint (initData endpoint had it, widget didn't),
+    # so users who hit /start ref_XYZ then logged in via Telegram Login
+    # Widget were silently losing attribution.
     referrer_id = None
-    if request.referral_code and not user:
-        try:
-            referrer = await get_user_by_referral_code(db, request.referral_code)
-            if referrer:
-                # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
-                if referrer.telegram_id and referrer.telegram_id == request.id:
-                    logger.warning(
-                        'Self-referral attempt blocked via telegram_id',
+    if not user:
+        if request.referral_code:
+            try:
+                referrer = await get_user_by_referral_code(db, request.referral_code)
+                if referrer:
+                    # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
+                    if referrer.telegram_id and referrer.telegram_id == request.id:
+                        logger.warning(
+                            'Self-referral attempt blocked via telegram_id',
+                            telegram_id=request.id,
+                            referral_code=request.referral_code,
+                        )
+                    else:
+                        referrer_id = referrer.id
+            except Exception as e:
+                logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+
+        if not referrer_id and request.id:
+            try:
+                from app.services.referral_service import get_pending_referral
+
+                pending = await get_pending_referral(request.id)
+                if pending and pending.get('referrer_id'):
+                    referrer_id = pending['referrer_id']
+                    logger.info(
+                        'Resolved referral from Redis pending_referral (widget)',
                         telegram_id=request.id,
-                        referral_code=request.referral_code,
+                        referrer_id=referrer_id,
                     )
-                else:
-                    referrer_id = referrer.id
-        except Exception as e:
-            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+            except Exception as e:
+                logger.warning('Failed to check pending referral (widget)', error=e)
 
     is_new_user = not user
     if not user:
@@ -758,6 +798,21 @@ async def auth_telegram_widget(
 
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
+
+    # Race-resilience: existing users whose miniapp opened before the
+    # bot's /start finished may still be missing the referrer. Try the
+    # eager attach helper as a second pass — it idempotently no-ops
+    # when referred_by_id is already set, otherwise reads Redis
+    # pending_referral and attaches.
+    if not is_new_user:
+        from app.services.referral_service import attach_referrer_if_missing
+
+        await attach_referrer_if_missing(
+            db,
+            user,
+            referral_code=request.referral_code,
+            source='cabinet_widget_retroactive',
+        )
 
     # Clear Redis pending referral after successful registration
     if referrer_id and request.id:
@@ -851,23 +906,43 @@ async def auth_telegram_oidc(
 
     user = await get_user_by_telegram_id(db, telegram_id)
 
-    # Resolve referral code for new users
+    # Resolve referral code for new users.
+    # Order: explicit request.referral_code, then Redis pending_referral
+    # written by /start ref_XYZ. The Redis fallback was previously
+    # missing from this OIDC endpoint — users who hit /start ref_XYZ
+    # then logged in via the cabinet's OIDC flow lost attribution.
     referrer_id = None
-    if request.referral_code and not user:
-        try:
-            referrer = await get_user_by_referral_code(db, request.referral_code)
-            if referrer:
-                # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
-                if referrer.telegram_id and referrer.telegram_id == telegram_id:
-                    logger.warning(
-                        'Self-referral attempt blocked via telegram_id',
+    if not user:
+        if request.referral_code:
+            try:
+                referrer = await get_user_by_referral_code(db, request.referral_code)
+                if referrer:
+                    # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
+                    if referrer.telegram_id and referrer.telegram_id == telegram_id:
+                        logger.warning(
+                            'Self-referral attempt blocked via telegram_id',
+                            telegram_id=telegram_id,
+                            referral_code=request.referral_code,
+                        )
+                    else:
+                        referrer_id = referrer.id
+            except Exception as e:
+                logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+
+        if not referrer_id and telegram_id:
+            try:
+                from app.services.referral_service import get_pending_referral
+
+                pending = await get_pending_referral(telegram_id)
+                if pending and pending.get('referrer_id'):
+                    referrer_id = pending['referrer_id']
+                    logger.info(
+                        'Resolved referral from Redis pending_referral (oidc)',
                         telegram_id=telegram_id,
-                        referral_code=request.referral_code,
+                        referrer_id=referrer_id,
                     )
-                else:
-                    referrer_id = referrer.id
-        except Exception as e:
-            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+            except Exception as e:
+                logger.warning('Failed to check pending referral (oidc)', error=e)
 
     is_new_user = not user
     if not user:
@@ -904,6 +979,20 @@ async def auth_telegram_oidc(
 
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
+
+    # Race-resilience: an existing user whose miniapp opened before the
+    # bot's /start finished may still have referred_by_id=None. The
+    # eager attach helper idempotently no-ops when it's already set,
+    # otherwise reads Redis pending_referral and attaches.
+    if not is_new_user:
+        from app.services.referral_service import attach_referrer_if_missing
+
+        await attach_referrer_if_missing(
+            db,
+            user,
+            referral_code=request.referral_code,
+            source='cabinet_oidc_retroactive',
+        )
 
     # Clear Redis pending referral after successful registration
     if referrer_id and telegram_id:
