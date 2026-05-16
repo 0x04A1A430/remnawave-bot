@@ -1,11 +1,19 @@
+import asyncio
 import html
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
 import structlog
 from aiogram import Bot, types
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNetworkError,
+    TelegramRetryAfter,
+    TelegramServerError,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +35,27 @@ from app.database.models import (
 )
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.timezone import format_local_datetime
+
+
+# Стандартный формат Telegram bot token: `<numeric_id>:<random_35chars>`.
+# Может появиться в str(e) от aiogram при сетевых ошибках, если транспорт
+# (httpx/aiohttp) сериализует URL `https://api.telegram.org/bot<TOKEN>/...`.
+# Не светим токен в логи (структурированные логи могут уехать в Sentry / ELK).
+# Trailing — negative lookahead, а не `\b`: иначе токены, оканчивающиеся
+# на `-` или `_`, теряли последний символ при редакции (1-char leak).
+# Leading `(?<![\w-])` — намеренно НЕ матчит, если перед токеном стоит word/digit
+# (например `foo123456789:AAH...`). Это trade-off против false-positive'ов
+# на timestamp/UUID-подобных последовательностях. Aiogram и httpx всегда
+# префиксят токен либо `bot`, либо URL-границей (`/`, пробел, кавычка),
+# так что реальный corpus ошибок не страдает.
+_BOT_TOKEN_RE: re.Pattern[str] = re.compile(
+    r'(?<![\w-])(?:bot)?\d{6,}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])',
+)
+
+
+def _redact_telegram_secrets(text: str) -> str:
+    """Replace Telegram bot tokens in an arbitrary string with a placeholder."""
+    return _BOT_TOKEN_RE.sub('bot[REDACTED]', text)
 
 
 class NotificationCategory(StrEnum):
@@ -1408,44 +1437,86 @@ class AdminNotificationService:
             logger.debug('Уведомление подавлено (категория отключена)', category=category.value)
             return False
 
-        try:
-            message_kwargs = {
-                'chat_id': self.chat_id,
-                'text': text,
-                'parse_mode': 'HTML',
-                'disable_web_page_preview': True,
-            }
+        message_kwargs: dict[str, Any] = {
+            'chat_id': self.chat_id,
+            'text': text,
+            'parse_mode': 'HTML',
+            'disable_web_page_preview': True,
+        }
+        thread_id = self._resolve_topic_id(category)
+        if thread_id:
+            message_kwargs['message_thread_id'] = thread_id
+        if reply_markup is not None:
+            message_kwargs['reply_markup'] = reply_markup
 
-            thread_id = self._resolve_topic_id(category)
-            if thread_id:
-                message_kwargs['message_thread_id'] = thread_id
-            if reply_markup is not None:
-                message_kwargs['reply_markup'] = reply_markup
+        # ВАЖНО: вся ветка ошибок ниже логируется через logger.warning, а не
+        # logger.error. Иначе TelegramNotifierProcessor попытается переслать
+        # ошибку в этот же админ-чат, упрётся в тот же flood control — петля
+        # усиления (баг с node.connection_lost/restored, 7-8 webhook'ов подряд).
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                await self.bot.send_message(**message_kwargs)
+                logger.info('Уведомление отправлено в чат', chat_id=self.chat_id, category=category)
+                return True
 
-            await self.bot.send_message(**message_kwargs)
-            logger.info('Уведомление отправлено в чат', chat_id=self.chat_id, category=category)
-            return True
+            except TelegramForbiddenError:
+                logger.warning('Бот не имеет прав для отправки в чат', chat_id=self.chat_id)
+                return False
 
-        except TelegramForbiddenError:
-            logger.error('Бот не имеет прав для отправки в чат', chat_id=self.chat_id)
-            return False
-        except TelegramBadRequest as e:
-            logger.error('Ошибка отправки уведомления', error=e)
-            return False
-        except (TelegramNetworkError, TelegramServerError) as e:
-            # Транзиентные сетевые/5xx — warning, не error. Иначе при каждой
-            # сетевой проблеме TelegramNotifierProcessor пытается отправить error
-            # в тот же админ-чат, который недоступен → петля или спам.
-            logger.warning(
-                'Транзиентная сетевая ошибка отправки в админ-чат',
-                chat_id=self.chat_id,
-                error=str(e)[:200],
-                error_type=type(e).__name__,
-            )
-            return False
-        except Exception as e:
-            logger.error('Неожиданная ошибка при отправке уведомления', error=e)
-            return False
+            except TelegramBadRequest as e:
+                logger.warning(
+                    'Ошибка отправки уведомления в админ-чат',
+                    error=_redact_telegram_secrets(str(e))[:200],
+                )
+                return False
+
+            except TelegramRetryAfter as e:
+                # Flood control: ждём столько, сколько сказал Telegram (cap 30s),
+                # потом ретраим. До фикса исключение проваливалось в bare
+                # except → logger.error → петля через TelegramNotifierProcessor.
+                requested_retry_after = max(1, int(getattr(e, 'retry_after', 1)))
+                retry_after = min(requested_retry_after, 30)
+                log_kwargs: dict[str, Any] = {
+                    'chat_id': self.chat_id,
+                    'retry_after': retry_after,
+                    'attempt': attempt,
+                }
+                if requested_retry_after > retry_after:
+                    # Telegram реально просит дольше cap'а — видимый сигнал,
+                    # что бот аккаунт перегружен сильнее обычного flood-control'а.
+                    log_kwargs['retry_after_requested'] = requested_retry_after
+                    log_kwargs['clamped'] = True
+                logger.warning('Telegram flood control при отправке в админ-чат', **log_kwargs)
+                if attempt < max_attempts:
+                    await asyncio.sleep(retry_after)
+                    continue
+                return False
+
+            except (TelegramNetworkError, TelegramServerError) as e:
+                # Транзиентные сетевые/5xx — warning, не error.
+                logger.warning(
+                    'Транзиентная сетевая ошибка отправки в админ-чат',
+                    chat_id=self.chat_id,
+                    error=_redact_telegram_secrets(str(e))[:200],
+                    error_type=type(e).__name__,
+                    attempt=attempt,
+                )
+                if attempt < max_attempts:
+                    await asyncio.sleep(min(2 ** (attempt - 1), 4))
+                    continue
+                return False
+
+            except Exception as e:
+                logger.warning(
+                    'Неожиданная ошибка при отправке в админ-чат',
+                    chat_id=self.chat_id,
+                    error=_redact_telegram_secrets(str(e))[:200],
+                    error_type=type(e).__name__,
+                )
+                return False
+
+        return False
 
     def _is_enabled(self) -> bool:
         return self.enabled and bool(self.chat_id)

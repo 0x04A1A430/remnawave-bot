@@ -811,15 +811,48 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     if referral_code:
         await state.update_data(referral_code=referral_code)
-        # Persist referral to Redis immediately so it survives if user opens miniapp/cabinet
-        # Only for new users — existing users don't need pending referral
-        if not db_user:
-            try:
-                referrer = await get_user_by_referral_code(db, referral_code)
-                if referrer and referrer.telegram_id != message.from_user.id:
+        try:
+            referrer = await get_user_by_referral_code(db, referral_code)
+        except Exception as exc:
+            logger.warning('Failed to resolve referral code at /start', referral_code=referral_code, error=exc)
+            referrer = None
+
+        if referrer and referrer.telegram_id != message.from_user.id:
+            if not db_user:
+                # New user — save to Redis so the cabinet/miniapp
+                # auth route can pick it up if the user opens the
+                # WebApp before completing the bot FSM.
+                try:
                     await save_pending_referral(message.from_user.id, referral_code, referrer.id)
-            except Exception as exc:
-                logger.warning('Failed to persist pending referral', referral_code=referral_code, error=exc)
+                except Exception as exc:
+                    logger.warning('Failed to persist pending referral', referral_code=referral_code, error=exc)
+            elif db_user.referred_by_id is None:
+                # RACE FIX: the miniapp may have created the user row
+                # between the /start link click and this handler firing
+                # (e.g. user tapped the WebApp menu button immediately
+                # after pressing the bot's Start button, and the
+                # cabinet's auth endpoint ran first). The Redis fallback
+                # the cabinet checks was not populated yet, so the user
+                # was created without a referrer. Attach it now —
+                # idempotent and self-referral-safe (see
+                # `attach_referrer_if_missing`).
+                from app.services.referral_service import attach_referrer_if_missing
+
+                try:
+                    await attach_referrer_if_missing(
+                        db,
+                        db_user,
+                        referral_code=referral_code,
+                        bot=message.bot,
+                        source='bot_start_retroactive',
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        'Failed to retroactively attach referrer at /start',
+                        referral_code=referral_code,
+                        user_id=db_user.id,
+                        error=exc,
+                    )
 
     user = db_user or await get_user_by_telegram_id(db, message.from_user.id)
 

@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 from datetime import time
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 from urllib.parse import quote as _url_quote, urlparse
 from zoneinfo import ZoneInfo
 
@@ -129,6 +129,12 @@ class Settings(BaseSettings):
     REMNAWAVE_WEBHOOK_PATH: str = '/remnawave-webhook'
     REMNAWAVE_WEBHOOK_SECRET: str | None = None  # HMAC-SHA256 shared secret (min 32 chars)
     REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS: bool = True
+    # Coalescing knobs для burst'ов node.connection_lost / node.connection_restored.
+    # Окно — сколько секунд буферим события одного типа перед отправкой одной
+    # сводки. Cap — жёсткий лимит размера буфера на event_name (защита от
+    # mem-DoS при компрометации webhook-секрета). См. RemnaWaveWebhookService.
+    REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS: float = 10.0
+    REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX: int = 500
 
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
     WEBHOOK_NOTIFY_USER_ENABLED: bool = True
@@ -342,7 +348,12 @@ class Settings(BaseSettings):
 
     MONITORING_INTERVAL: int = 60
     LOW_BALANCE_ALERT_EXPIRY_DAYS: int = 3  # Only alert when subscription expires within N days
-    INACTIVE_USER_DELETE_MONTHS: int = 3
+    # Months of inactivity before a user row is soft-deleted (status=DELETED).
+    # 12 months is conservative — VPN users are highly seasonal (vacations,
+    # business trips, geo-blocking events). Aggressive defaults were
+    # mass-deleting returning users; cabinet auto-revival makes the cost of
+    # raising this low. See `app/services/user_revival_service.py`.
+    INACTIVE_USER_DELETE_MONTHS: int = 12
 
     MAINTENANCE_MODE: bool = False
     MAINTENANCE_CHECK_INTERVAL: int = 30
@@ -352,7 +363,13 @@ class Settings(BaseSettings):
     MAINTENANCE_MESSAGE: str = '🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
 
     TELEGRAM_STARS_ENABLED: bool = True
-    TELEGRAM_STARS_RATE_RUB: float = 1.3
+    # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/⭐ as of
+    # 2026-05) so an integer-ruble top-up round-trips losslessly:
+    # rubles_to_stars(150) → 150 ⭐ → stars_to_rubles(150) → 150 ₽.
+    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 ⭐
+    # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
+    # rounding loss visible on every payment).
+    TELEGRAM_STARS_RATE_RUB: float = 1.0
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
 
     # Telegram Login Widget (cabinet auth page)
@@ -716,6 +733,14 @@ class Settings(BaseSettings):
     ANTILOPAY_SBP_DISPLAY_NAME: str = 'СБП (Antilopay)'
     ANTILOPAY_CARD_ENABLED: bool = False
     ANTILOPAY_CARD_DISPLAY_NAME: str = 'Карта (Antilopay)'
+    # Antilopay требует подтвердить владение сайтом одним из двух способов:
+    #   (1) META-тегом `<meta name="apay-tag" content="...">` в <head> главной страницы;
+    #   (2) файлом `apay-meta-file.txt` в корне сайта.
+    # Кабинет автоматически отрендерит meta-тег и отдаст текстовый файл, если
+    # сюда положить выданное Antilopay значение (см. lk.antilopay.com → Проект →
+    # Верификация). Пустая строка/None — фича отключена.
+    ANTILOPAY_APAY_VERIFICATION_TAG: str | None = None
+
     ANTILOPAY_SBERPAY_ENABLED: bool = False
     ANTILOPAY_SBERPAY_DISPLAY_NAME: str = 'SberPay (Antilopay)'
 
@@ -1348,6 +1373,11 @@ class Settings(BaseSettings):
         description = re.sub(r'\s+', ' ', description).strip()
         return description
 
+    # RemnaWave API enforces `username` length: 3..36 chars inclusive.
+    # ClassVar — это константы кода, а не env-tunable поля Settings.
+    REMNAWAVE_USERNAME_MAX_LENGTH: ClassVar[int] = 36
+    REMNAWAVE_USERNAME_MIN_LENGTH: ClassVar[int] = 3
+
     def format_remnawave_username(
         self,
         *,
@@ -1356,11 +1386,17 @@ class Settings(BaseSettings):
         telegram_id: int | None,
         email: str | None = None,
         user_id: int | None = None,
+        reserve_suffix_chars: int = 0,
     ) -> str:
         """
         Форматирует username для RemnaWave.
 
         Для email-пользователей (telegram_id=None) использует email prefix + user_id.
+
+        ``reserve_suffix_chars`` резервирует место для суффикса, который caller
+        собирается приклеить (например, `_<remnawave_short_id>`). Truncate
+        происходит ДО конкатенации, чтобы итоговая строка точно влезала в
+        REMNAWAVE_USERNAME_MAX_LENGTH. Дефолт 0 — обратная совместимость.
         """
         template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or 'user_{telegram_id}'
 
@@ -1383,6 +1419,12 @@ class Settings(BaseSettings):
         else:
             identifier = 'unknown'
 
+        # NB: для email-only users слот {telegram_id} заполняется identifier'ом
+        # (legacy fallback для шаблонов, не использующих {identifier}). Это
+        # может приводить к дублированию email-префикса, если шаблон ссылается
+        # одновременно на {email} И {telegram_id} — финальный length cap ниже
+        # обрезает строку, но семантическая дупликация остаётся. Рекомендуемый
+        # шаблон для смешанных деплоев: `{username_clean}_{identifier}`.
         values = defaultdict(
             str,
             {
@@ -1402,13 +1444,53 @@ class Settings(BaseSettings):
         if not sanitized_username:
             sanitized_username = _sanitize(f'user_{identifier}')
 
-        result = sanitized_username[:36].strip('_-') or 'user'
+        # Резервируем место под caller-suffix, не опускаясь ниже минимальной длины.
+        max_len = max(
+            self.REMNAWAVE_USERNAME_MIN_LENGTH, self.REMNAWAVE_USERNAME_MAX_LENGTH - max(0, reserve_suffix_chars)
+        )
+        result = sanitized_username[:max_len].strip('_-') or 'user'
 
         # RemnaWave требует username минимум 3 символа
-        if len(result) < 3:
-            result = f'{result}_{identifier}'[:36].strip('_-')
+        if len(result) < self.REMNAWAVE_USERNAME_MIN_LENGTH:
+            result = f'{result}_{identifier}'[:max_len].strip('_-')
 
         return result or 'user'
+
+    def build_remnawave_subscription_username(
+        self,
+        *,
+        full_name: str,
+        username: str | None,
+        telegram_id: int | None,
+        email: str | None,
+        user_id: int | None,
+        suffix: str,
+    ) -> str:
+        """Build a RemnaWave username with a known suffix, guaranteed within the API limit.
+
+        `suffix` is expected pre-formatted with its separator (e.g. '_49883b').
+        Резервируем место под suffix в base, делаем belt-and-suspenders финальное
+        ограничение длины. Используется в multi-tariff create-paths, где к base
+        приклеивается `_<remnawave_short_id>`.
+        """
+        base = self.format_remnawave_username(
+            full_name=full_name,
+            username=username,
+            telegram_id=telegram_id,
+            email=email,
+            user_id=user_id,
+            reserve_suffix_chars=len(suffix),
+        )
+        result = f'{base}{suffix}'
+        if len(result) > self.REMNAWAVE_USERNAME_MAX_LENGTH:
+            # Suffix критичен (уникален per-subscription) — режем base.
+            # max(0, ...) защищает от ситуации, когда suffix сам длиннее лимита:
+            # без флора base[:-N] молча возвращал бы хвост строки.
+            keep_for_base = max(0, self.REMNAWAVE_USERNAME_MAX_LENGTH - len(suffix))
+            result = f'{base[:keep_for_base].rstrip("_-")}{suffix}'
+            # Final clamp на случай, когда suffix всё-таки превышает лимит.
+            result = result[: self.REMNAWAVE_USERNAME_MAX_LENGTH]
+        return result
 
     @staticmethod
     def parse_daily_time_list(raw_value: str | None) -> list[time]:

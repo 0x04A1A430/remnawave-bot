@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -170,7 +172,7 @@ OPENAPI_TAGS = [
 ]
 
 
-def create_web_api_app() -> FastAPI:
+def create_web_api_app(lifespan: Any = None) -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
 
     # Убираем openapi_tags для предотвращения ошибок при генерации openapi.json
@@ -182,6 +184,7 @@ def create_web_api_app() -> FastAPI:
         openapi_url=docs_config.get('openapi_url'),
         swagger_ui_parameters={'persistAuthorization': True},
         redirect_slashes=False,
+        lifespan=lifespan,
     )
 
     add_redoc_endpoint(

@@ -15,7 +15,8 @@ from app.database.crud.user import (
     get_user_by_referral_code,
     set_user_oauth_provider_id,
 )
-from app.database.models import User
+from app.database.models import User, UserStatus
+from app.services.user_revival_service import revive_deleted_user
 
 from ..auth.oauth_providers import (
     OAuthUserInfo,
@@ -185,15 +186,64 @@ async def oauth_callback(
     # 5. Find user by provider ID
     user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
     if user:
-        logger.info('OAuth login for existing user', provider=provider, user_id=user.id)
+        # If the previously-linked account was soft-deleted for
+        # inactivity, the OAuth provider's signed JWT/userinfo is enough
+        # identity proof to revive: same provider_id == same human.
+        # Without revival we'd let DELETED-status linger and the cabinet
+        # dependencies guard would 403 right after login.
+        was_deleted = user.status == UserStatus.DELETED.value
+        if was_deleted:
+            await revive_deleted_user(db, user, source=f'oauth_{provider}_provider_id')
+        logger.info('OAuth login for existing user', provider=provider, user_id=user.id, revived=was_deleted)
         return await _finalize_oauth_login(db, user, provider, request.campaign_slug, request.referral_code)
 
-    # 6. Find user by email (if verified) and link provider
+    # 6. Find user by email — link provider only when BOTH the IdP and
+    # the local row attest the email is verified. Without the local
+    # `user.email_verified` guard, an attacker who controls the email
+    # at the IdP could take over a never-confirmed local account (one
+    # registered via password-flow but never opened the verification
+    # mail) — the IdP's verification covers IdP-side ownership, not the
+    # local row's history. Both must agree.
     if user_info.email and user_info.email_verified:
         user = await get_user_by_email(db, user_info.email)
-        if user:
+        if user and not user.email_verified:
+            # Same email exists locally but verification was never
+            # completed. Falling through to step 8 would attempt to
+            # INSERT a duplicate email and hit the `User.email UNIQUE`
+            # constraint → opaque 500. Refuse with a friendly 409
+            # explaining the user needs to finish verification (or use
+            # the bot) before linking an OAuth provider with that
+            # address. Security audit follow-up.
+            logger.info(
+                'OAuth email-merge blocked: local row email is not verified yet',
+                provider=provider,
+                local_user_id=user.id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    'code': 'email_unverified_local',
+                    'message': (
+                        'An account with this email exists but its email has not been verified yet. '
+                        'Finish email verification (or use the Telegram bot) before linking a social login.'
+                    ),
+                },
+            )
+        if user and user.email_verified:
+            # A DELETED row found by verified-email match is the SAME
+            # human returning via a fresh OAuth provider; reactivate
+            # rather than letting the OAuth flow fall through and
+            # silently create a duplicate account.
+            was_deleted = user.status == UserStatus.DELETED.value
+            if was_deleted:
+                await revive_deleted_user(db, user, source=f'oauth_{provider}_email_merge')
             await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
-            logger.info('OAuth provider linked to existing email user', provider=provider, user_id=user.id)
+            logger.info(
+                'OAuth provider linked to existing email user',
+                provider=provider,
+                user_id=user.id,
+                revived=was_deleted,
+            )
             return await _finalize_oauth_login(db, user, provider, request.campaign_slug, request.referral_code)
 
     # 7. Resolve referral code for new user

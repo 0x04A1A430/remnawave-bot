@@ -1696,6 +1696,25 @@ class BackupService:
     async def _restore_file_snapshots(self, file_snapshots: dict[str, dict[str, Any]]) -> int:
         return 0
 
+    @staticmethod
+    def _build_corrupted_backup_entry(backup_file: Path, file_stats: os.stat_result, *, reason: str) -> dict[str, Any]:
+        """Build a list-entry placeholder for a backup file we can't read."""
+        return {
+            'filename': backup_file.name,
+            'filepath': str(backup_file),
+            'timestamp': datetime.fromtimestamp(file_stats.st_mtime, tz=UTC).isoformat(),
+            'tables_count': '?',
+            'total_records': '?',
+            'compressed': backup_file.suffix == '.gz',
+            'file_size_bytes': file_stats.st_size,
+            'file_size_mb': round(file_stats.st_size / 1024 / 1024, 2),
+            'created_by': None,
+            'database_type': 'unknown',
+            'version': 'unknown',
+            'error': reason,
+            'corrupted': True,
+        }
+
     async def get_backup_list(self) -> list[dict[str, Any]]:
         backups = []
 
@@ -1706,8 +1725,20 @@ class BackupService:
                 if not await asyncio.to_thread(backup_file.is_file):
                     continue
 
+                file_stats = await asyncio.to_thread(backup_file.stat)
+
+                # Empty file (0 bytes) — прерванный бэкап / гонка записи. Не пытаемся
+                # его открыть, иначе tarfile/gzip/json валятся с ReadError и логируют
+                # ERROR (а через TelegramNotifierProcessor — заливают админ-чат).
+                if file_stats.st_size == 0:
+                    logger.warning('Skipping empty backup file', backup_file=str(backup_file))
+                    backups.append(
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason='Файл пуст (0 байт)')
+                    )
+                    continue
+
                 try:
-                    metadata = {}
+                    metadata: dict[str, Any] = {}
 
                     if self._is_archive_backup(backup_file):
                         mode = 'r:gz' if backup_file.suffixes and backup_file.suffixes[-1] == '.gz' else 'r'
@@ -1726,8 +1757,6 @@ class BackupService:
                             with open(backup_file, encoding='utf-8') as f:
                                 backup_structure = json_lib.load(f)
                         metadata = backup_structure.get('metadata', {})
-
-                    file_stats = await asyncio.to_thread(backup_file.stat)
 
                     backup_info = {
                         'filename': backup_file.name,
@@ -1753,24 +1782,35 @@ class BackupService:
 
                     backups.append(backup_info)
 
-                except Exception as e:
-                    logger.error('Ошибка чтения метаданных', backup_file=backup_file, error=e)
-                    file_stats = await asyncio.to_thread(backup_file.stat)
+                except (
+                    tarfile.ReadError,
+                    tarfile.CompressionError,
+                    gzip.BadGzipFile,
+                    json_lib.JSONDecodeError,
+                    EOFError,
+                    UnicodeDecodeError,
+                ) as corruption_error:
+                    # Известные классы повреждения — это не «упало», это плохой
+                    # архив. Логируем как warning, чтобы не уезжало через
+                    # TelegramNotifierProcessor в админ-чат на каждом list-вызове.
+                    logger.warning(
+                        'Backup file appears corrupted',
+                        backup_file=str(backup_file),
+                        error=str(corruption_error)[:200],
+                        error_type=type(corruption_error).__name__,
+                    )
                     backups.append(
-                        {
-                            'filename': backup_file.name,
-                            'filepath': str(backup_file),
-                            'timestamp': datetime.fromtimestamp(file_stats.st_mtime, tz=UTC).isoformat(),
-                            'tables_count': '?',
-                            'total_records': '?',
-                            'compressed': backup_file.suffix == '.gz',
-                            'file_size_bytes': file_stats.st_size,
-                            'file_size_mb': round(file_stats.st_size / 1024 / 1024, 2),
-                            'created_by': None,
-                            'database_type': 'unknown',
-                            'version': 'unknown',
-                            'error': f'Ошибка чтения: {e!s}',
-                        }
+                        self._build_corrupted_backup_entry(
+                            backup_file,
+                            file_stats,
+                            reason=f'{type(corruption_error).__name__}: {corruption_error!s}'[:200],
+                        )
+                    )
+                except Exception as e:
+                    # Реально неожиданное — оставляем error для расследования.
+                    logger.error('Ошибка чтения метаданных', backup_file=str(backup_file), error=e)
+                    backups.append(
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason=f'Ошибка чтения: {e!s}')
                     )
 
         except Exception as e:

@@ -986,10 +986,9 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.FREEKASSA_WEBHOOK_PATH)
         async def freekassa_webhook(request: Request) -> Response:
-            # Use transport-layer IP as primary source; only trust proxy headers
-            # when the direct connection comes from a known proxy.
-            # This prevents X-Forwarded-For spoofing by external attackers.
-            client_ip = request.client.host if request.client else '127.0.0.1'
+            client_ip = request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or (
+                request.client.host if request.client else '127.0.0.1'
+            )
 
             # Получаем данные формы
             try:
