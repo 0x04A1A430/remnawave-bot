@@ -4297,8 +4297,10 @@ def register_handlers(dp: Dispatcher):
 
     # Локальное переименование устройства (alias). Callback пускает FSM-prompt,
     # текстовый handler ловит ответ юзера (см. process_device_rename ниже).
+    # NB: `SubscriptionStates` уже импортирован на уровне модуля (строка 107) —
+    # повторный локальный `from app.states import …` превратил бы имя в local
+    # и сломал бы строку 4197 с UnboundLocalError на старте.
     from app.handlers.subscription.devices import process_device_rename, start_device_rename
-    from app.states import SubscriptionStates
 
     dp.callback_query.register(start_device_rename, F.data.regexp(r'^device_rename_\d+_\d+$'))
     # F.text — игнорируем стикеры/фото/voice пока юзер в FSM, иначе
