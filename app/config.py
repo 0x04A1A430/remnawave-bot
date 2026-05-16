@@ -363,7 +363,13 @@ class Settings(BaseSettings):
     MAINTENANCE_MESSAGE: str = '🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
 
     TELEGRAM_STARS_ENABLED: bool = True
-    TELEGRAM_STARS_RATE_RUB: float = 1.3
+    # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/⭐ as of
+    # 2026-05) so an integer-ruble top-up round-trips losslessly:
+    # rubles_to_stars(150) → 150 ⭐ → stars_to_rubles(150) → 150 ₽.
+    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 ⭐
+    # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
+    # rounding loss visible on every payment).
+    TELEGRAM_STARS_RATE_RUB: float = 1.0
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
 
     # Telegram Login Widget (cabinet auth page)
