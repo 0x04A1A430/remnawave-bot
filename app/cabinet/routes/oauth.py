@@ -206,6 +206,29 @@ async def oauth_callback(
     # local row's history. Both must agree.
     if user_info.email and user_info.email_verified:
         user = await get_user_by_email(db, user_info.email)
+        if user and not user.email_verified:
+            # Same email exists locally but verification was never
+            # completed. Falling through to step 8 would attempt to
+            # INSERT a duplicate email and hit the `User.email UNIQUE`
+            # constraint → opaque 500. Refuse with a friendly 409
+            # explaining the user needs to finish verification (or use
+            # the bot) before linking an OAuth provider with that
+            # address. Security audit follow-up.
+            logger.info(
+                'OAuth email-merge blocked: local row email is not verified yet',
+                provider=provider,
+                local_user_id=user.id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    'code': 'email_unverified_local',
+                    'message': (
+                        'An account with this email exists but its email has not been verified yet. '
+                        'Finish email verification (or use the Telegram bot) before linking a social login.'
+                    ),
+                },
+            )
         if user and user.email_verified:
             # A DELETED row found by verified-email match is the SAME
             # human returning via a fresh OAuth provider; reactivate

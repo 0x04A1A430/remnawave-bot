@@ -277,12 +277,21 @@ async def test_dependencies_preserves_blocked_status_with_generic_message(db: As
 
 @pytest.mark.asyncio
 async def test_dependencies_active_user_still_passes_through(db: AsyncMock) -> None:
-    """Negative-control: ACTIVE user is unaffected by all the new branches."""
+    """Negative-control: ACTIVE user is unaffected by all the new branches.
+
+    Blacklist mock added explicitly: post-fix the check now runs BEFORE
+    the status branch, so the previous "no mock = MagicMock truthy"
+    false positive is a real risk if we don't pin it.
+    """
     user = _make_user(status_value=UserStatus.ACTIVE.value)
 
     with (
         patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
         patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
+        patch(
+            'app.cabinet.dependencies.blacklist_service.is_user_blacklisted',
+            AsyncMock(return_value=(False, None)),
+        ),
         patch('app.cabinet.dependencies.maintenance_service.is_maintenance_active', return_value=False),
         patch('app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB', False, create=True),
     ):
@@ -294,3 +303,114 @@ async def test_dependencies_active_user_still_passes_through(db: AsyncMock) -> N
 
     assert result is user
     assert user.status == UserStatus.ACTIVE.value
+
+
+@pytest.mark.asyncio
+async def test_dependencies_auto_revive_persists_via_db_commit(db: AsyncMock) -> None:
+    """Pin the caller-owns-commit contract at the dependency boundary.
+
+    `revive_deleted_user` no longer commits — the caller (the dependency
+    here) must. If a refactor accidentally drops the commit, the in-
+    memory status flip is lost on process restart and we silently
+    return to the bug we set out to fix.
+    """
+    user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
+
+    with (
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
+        patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
+        patch(
+            'app.cabinet.dependencies.validate_telegram_init_data',
+            return_value={'id': 555, 'username': 'returning_user'},
+        ),
+        patch(
+            'app.cabinet.dependencies.blacklist_service.is_user_blacklisted',
+            AsyncMock(return_value=(False, None)),
+        ),
+        patch('app.cabinet.dependencies.maintenance_service.is_maintenance_active', return_value=False),
+        patch('app.cabinet.dependencies.settings.CHANNEL_IS_REQUIRED_SUB', False, create=True),
+    ):
+        await get_current_cabinet_user(
+            request=_make_request(init_data='valid-signed-init-data'),
+            credentials=_credentials(),
+            db=db,
+        )
+
+    db.commit.assert_awaited()
+    db.refresh.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dependencies_rejects_deleted_user_with_invalid_init_data(
+    db: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """initData header present but signature INVALID → falls back to no-proof path.
+
+    `validate_telegram_init_data` returns None on signature/age failure.
+    `init_data_matches_user` stays False, so revival is skipped and we
+    fall through to the friendly account_deleted 403. This is the
+    branch distinct from "no header at all" (#11) — the validator-
+    failure case can drift independently and deserves its own pin.
+    """
+    user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=555)
+    from app.cabinet.dependencies import settings as deps_settings
+
+    monkeypatch.setattr(deps_settings, 'BOT_USERNAME', 'mybot', raising=False)
+
+    with (
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
+        patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
+        # Validator says "nope" — tampered or expired initData.
+        patch('app.cabinet.dependencies.validate_telegram_init_data', return_value=None),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await get_current_cabinet_user(
+                request=_make_request(init_data='tampered-or-expired'),
+                credentials=_credentials(),
+                db=db,
+            )
+
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
+    assert isinstance(exc.value.detail, dict)
+    assert exc.value.detail['code'] == 'account_deleted'
+    assert user.status == UserStatus.DELETED.value
+
+
+@pytest.mark.asyncio
+async def test_dependencies_deleted_email_only_user_without_telegram_id(
+    db: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Email-only DELETED user (telegram_id=None) → 403 account_deleted, no AttributeError.
+
+    Verifies the response builder doesn't fall over when telegram_id is
+    None: deep_link still constructs (it doesn't depend on the user's
+    telegram_id, just on the configured BOT_USERNAME), and the blacklist
+    short-circuit (which is keyed on telegram_id) is skipped cleanly.
+    """
+    user = _make_user(status_value=UserStatus.DELETED.value, telegram_id=None)
+    from app.cabinet.dependencies import settings as deps_settings
+
+    monkeypatch.setattr(deps_settings, 'BOT_USERNAME', 'mybot', raising=False)
+
+    with (
+        patch('app.cabinet.dependencies.get_token_payload', return_value={'sub': '100', 'type': 'access'}),
+        patch('app.cabinet.dependencies.get_user_by_id', AsyncMock(return_value=user)),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await get_current_cabinet_user(
+                request=_make_request(init_data=None),
+                credentials=_credentials(),
+                db=db,
+            )
+
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
+    detail = exc.value.detail
+    assert isinstance(detail, dict)
+    assert detail['code'] == 'account_deleted'
+    # The deep-link is still emitted — it points to the bot itself, not
+    # to any specific user. An email-only user CAN go open the bot via
+    # /start with their referral chain to bootstrap.
+    assert detail['telegram_deep_link'] == 'https://t.me/mybot?start=revive'
+    assert user.status == UserStatus.DELETED.value
