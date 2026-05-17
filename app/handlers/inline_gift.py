@@ -1,11 +1,11 @@
-"""Handler for inline gift subscription deep-links and activation.
+"""Handler for inline gift deep-links and activation.
 
 Flow:
-1. Admin sends inline message via inline query.
-2. Recipient clicks "Активировать" → lands in the bot with /start <gift_code>
-3. Bot verifies recipient, shows what will change.
-4. On activation: extends existing subscription OR creates new one.
-   Updates inline message button to ✓ Активировано (callback → popup).
+1. Admin sends gift via inline query.
+2. Recipient clicks "Активировать" → /start bs_<gift_code>
+3. Bot shows preview of what changes.
+4. On confirm: applies gift, decrements counter, updates button text.
+   When activated_count >= max_activations → mark is_activated=True, button → ✓.
 """
 
 from datetime import UTC, datetime
@@ -31,8 +31,8 @@ from app.services.subscription_service import SubscriptionService
 
 logger = structlog.get_logger(__name__)
 
-# Must match the sentinel in admin/inline_gift.py
 _FOREVER_DAYS = (2099 - 2025) * 365
+_EXTRA_SQUAD_UUID = '050365af-1377-469c-b625-4e88d3e0e3ae'
 
 
 def _days_label(days: int, texts) -> str:
@@ -46,43 +46,29 @@ def _days_label(days: int, texts) -> str:
 
 
 def _fmt_traffic(gb: int, texts) -> str:
-    if gb == 0 or gb == -1:
+    if gb <= 0 or gb == -1:
         return texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит')
     return texts.t('INLINE_GIFT_TRAFFIC_GB', '{gb} ГБ').format(gb=gb)
 
 
-def _build_info_text(
-    gift_days: int,
-    gift_traffic_gb: int,
-    gift_devices: int,
-    texts,
-    existing_sub=None,
-) -> str:
-    """Build blockquote info. Only shows params that actually change (non-zero gift values).
-    gift_days/traffic/devices == 0 means "no change for this param".
-    Special: gift_traffic_gb == -1 means "set to unlimited".
-    """
+def _build_info_text(gift_days, gift_traffic_gb, gift_devices, texts, existing_sub=None) -> str:
     lines = []
 
     if existing_sub is None:
-        # New user — show gift params that are non-zero
         if gift_days:
             lines.append(
                 f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
-                f'<b>{_days_label(gift_days, texts)}</b>'
+                f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(gift_days, texts)}</b>'
             )
         if gift_traffic_gb:
             lines.append(
                 f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
-                f'<b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
+                f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
             )
         if gift_devices:
             lines.append(
                 f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
-                f'<b>{gift_devices}</b>'
+                f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{gift_devices}</b>'
             )
     else:
         cur_days = max(0, existing_sub.days_left) if hasattr(existing_sub, 'days_left') else 0
@@ -95,59 +81,44 @@ def _build_info_text(
             if forever:
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
-                    f'<b>{_days_label(cur_days, texts)}</b> → '
+                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(cur_days, texts)}</b> → '
                     f'<b>{texts.t("INLINE_GIFT_LABEL_FOREVER", "Навсегда")}</b>'
                 )
             else:
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: '
-                    f'<b>{_days_label(cur_days, texts)}</b> +{gift_days}'
-                    f'{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → '
-                    f'<b>{_days_label(new_days, texts)}</b>'
+                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(cur_days, texts)}</b> '
+                    f'+{gift_days}{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → <b>{_days_label(new_days, texts)}</b>'
                 )
 
         if gift_traffic_gb:
             if gift_traffic_gb == -1:
-                # -1 means "set to unlimited"
-                if cur_traffic == 0:
-                    # already unlimited, no meaningful change
-                    pass
-                else:
+                if cur_traffic != 0:
                     lines.append(
                         f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
-                        f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
-                        f'<b>{_fmt_traffic(cur_traffic, texts)}</b> → '
+                        f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(cur_traffic, texts)}</b> → '
                         f'<b>{texts.t("INLINE_GIFT_TRAFFIC_UNLIMITED", "Безлимит")}</b>'
                     )
-            elif cur_traffic == 0:
-                # currently unlimited, no meaningful change to show
-                pass
-            else:
-                t_delta = gift_traffic_gb - cur_traffic
-                sign = '+' if t_delta >= 0 else ''
+            elif cur_traffic != 0:
+                delta = gift_traffic_gb - cur_traffic
+                sign = '+' if delta >= 0 else ''
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: '
-                    f'<b>{_fmt_traffic(cur_traffic, texts)}</b> {sign}{t_delta} → '
-                    f'<b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
+                    f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(cur_traffic, texts)}</b> '
+                    f'{sign}{delta} → <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
                 )
 
         if gift_devices:
-            new_devices = max(cur_devices, gift_devices)
-            if new_devices != cur_devices:
-                d_delta = new_devices - cur_devices
+            new_dev = max(cur_devices, gift_devices)
+            if new_dev != cur_devices:
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
-                    f'<b>{cur_devices}</b> +{d_delta} → <b>{new_devices}</b>'
+                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{cur_devices}</b> +{new_dev - cur_devices} → <b>{new_dev}</b>'
                 )
             else:
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: '
-                    f'<b>{cur_devices}</b>'
+                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{cur_devices}</b>'
                 )
 
     body = '\n'.join(lines) if lines else '—'
@@ -159,15 +130,38 @@ def _build_info_text(
     )
 
 
+def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
+    """Return True if this user is allowed to activate the gift."""
+    max_act = getattr(gift, 'max_activations', 1) or 1
+    activated = getattr(gift, 'activated_count', 0) or 0
+
+    # Multi-activation (anyone until exhausted)
+    if gift.recipient_telegram_id == 0:
+        raw = gift.inline_message_id or ''
+        # If no intended target sentinel — open to all
+        if not raw.startswith('u:') and not raw.startswith('tid:'):
+            return True
+        if raw.startswith('tid:'):
+            try:
+                intended_id = int(raw[4:])
+                return telegram_id == intended_id
+            except ValueError:
+                return False
+        if raw.startswith('u:'):
+            intended_uname = raw[2:].lower()
+            return username.lower() == intended_uname
+        return True
+
+    return telegram_id == gift.recipient_telegram_id
+
+
 async def handle_gift_deeplink(message: types.Message, gift_code: str) -> bool:
-    """Called from start.py with the bare gift code. Returns True if consumed."""
     telegram_id = message.from_user.id
+    username = (message.from_user.username or '').lower()
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(InlineGiftSubscription).where(
-                InlineGiftSubscription.gift_code == gift_code
-            )
+            select(InlineGiftSubscription).where(InlineGiftSubscription.gift_code == gift_code)
         )
         gift = result.scalars().first()
 
@@ -178,48 +172,37 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str) -> bool:
         language = user.language if user else DEFAULT_LANGUAGE
         texts = get_texts(language)
 
-        if gift.is_activated:
+        max_act = getattr(gift, 'max_activations', 1) or 1
+        activated = getattr(gift, 'activated_count', 0) or 0
+
+        if gift.is_activated or activated >= max_act:
             await message.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED', 'Этот подарок уже был активирован.'))
             return True
 
-        raw_stored = gift.inline_message_id or ''
-        intended_username = raw_stored[2:] if raw_stored.startswith('u:') else ''
+        if not _check_recipient(gift, telegram_id, username):
+            await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
+            return True
 
-        if gift.recipient_telegram_id and gift.recipient_telegram_id != 0:
-            if telegram_id != gift.recipient_telegram_id:
-                await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
-                return True
-        elif intended_username:
-            # gift for named user not yet registered — check by username
-            from_username = (message.from_user.username or '').lower()
-            if intended_username.lower() != from_username:
-                await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'), parse_mode='HTML')
-                return True
+        # Bind recipient for unregistered named target
+        if gift.recipient_telegram_id == 0:
             gift.recipient_telegram_id = telegram_id
             await session.commit()
             await session.refresh(gift)
-        # else: recipient_telegram_id == 0 and no intended_username → random mode, anyone can claim
-
-        days = gift.days
-        traffic_gb = gift.traffic_limit_gb
-        devices = gift.device_limit
 
         existing_sub = await get_subscription_by_user_id(session, user.id) if user else None
 
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[
-            types.InlineKeyboardButton(
-                text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
-                callback_data=f'igift_activate:{gift_code}',
-            ),
-            types.InlineKeyboardButton(
-                text=texts.t('INLINE_GIFT_CANCEL_BUTTON', 'Отменить'),
-                callback_data=f'igift_cancel:{gift_code}',
-            ),
-        ]]
-    )
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
+        types.InlineKeyboardButton(
+            text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
+            callback_data=f'igift_activate:{gift_code}',
+        ),
+        types.InlineKeyboardButton(
+            text=texts.t('INLINE_GIFT_CANCEL_BUTTON', 'Отменить'),
+            callback_data=f'igift_cancel:{gift_code}',
+        ),
+    ]])
 
-    text_out = _build_info_text(days, traffic_gb, devices, texts, existing_sub)
+    text_out = _build_info_text(gift.days, gift.traffic_limit_gb, gift.device_limit, texts, existing_sub)
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
     return True
 
@@ -232,14 +215,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
     gift_code = callback.data.split(':', 1)[1]
     telegram_id = callback.from_user.id
+    username = (callback.from_user.username or '').lower()
 
     await callback.answer()
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(InlineGiftSubscription).where(
-                InlineGiftSubscription.gift_code == gift_code
-            )
+            select(InlineGiftSubscription).where(InlineGiftSubscription.gift_code == gift_code)
         )
         gift = result.scalars().first()
 
@@ -251,47 +233,30 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_text(texts.t('INLINE_GIFT_NOT_FOUND', 'Подарок не найден.'))
             return
 
-        if gift.is_activated:
+        max_act = getattr(gift, 'max_activations', 1) or 1
+        activated = getattr(gift, 'activated_count', 0) or 0
+
+        if gift.is_activated or activated >= max_act:
             await callback.message.edit_text(texts.t('INLINE_GIFT_ALREADY_ACTIVATED', 'Этот подарок уже был активирован.'))
             return
 
-        if gift.recipient_telegram_id and gift.recipient_telegram_id != 0:
-            if telegram_id != gift.recipient_telegram_id:
-                await callback.answer()
-                await callback.message.edit_text(
-                    texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
-                    parse_mode='HTML',
-                )
-                return
-        else:
-            # recipient_telegram_id == 0: either random mode or named user not yet registered
-            raw_stored = gift.inline_message_id or ''
-            intended_username = raw_stored[2:] if raw_stored.startswith('u:') else ''
-            if intended_username:
-                # named user — check by username
-                from_username = (callback.from_user.username or '').lower()
-                if intended_username.lower() != from_username:
-                    await callback.answer()
-                    await callback.message.edit_text(
-                        texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
-                        parse_mode='HTML',
-                    )
-                    return
-            # Bind telegram_id (named user first activation, or random first-comer)
-            gift.recipient_telegram_id = telegram_id
-            await db.commit()
-            await db.refresh(gift)
+        if not _check_recipient(gift, telegram_id, username):
+            await callback.message.edit_text(
+                texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
+                parse_mode='HTML',
+            )
+            return
 
         if not user:
-            await callback.message.edit_text(texts.t('INLINE_GIFT_NOT_REGISTERED', 'Вы не зарегистрированы в боте. Напишите /start для регистрации.'))
+            await callback.message.edit_text(texts.t('INLINE_GIFT_NOT_REGISTERED', 'Вы не зарегистрированы. Напишите /start.'))
             return
 
         await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATING', '⏳ Активируем подарок...'))
 
         gift_type = getattr(gift, 'gift_type', 'subscription') or 'subscription'
+        add_extra_squad = getattr(gift, 'add_extra_squad', False) or False
 
         try:
-            # --- Discount gift ---
             if gift_type == 'discount':
                 from app.database.crud.promocode import create_promocode
                 from app.database.models import PromoCodeType
@@ -302,10 +267,11 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     db,
                     code=promo_code_str,
                     type=PromoCodeType.DISCOUNT,
-                    balance_bonus_kopeks=pct,   # for DISCOUNT type, this field holds percent
+                    balance_bonus_kopeks=pct,
                     max_uses=1,
                     created_by=gift.sender_user_id,
                 )
+                gift.activated_count = (getattr(gift, 'activated_count', 0) or 0) + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
                 gift.activated_by_user_id = user.id
@@ -316,23 +282,19 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     'INLINE_GIFT_DISCOUNT_SUCCESS',
                     '✅ <b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
                 ).format(pct=pct, code=promo_code_str)
-
-                back_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(
-                        text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
-                        callback_data='back_to_menu',
-                    )
+                back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
                 ]])
-                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_keyboard)
-                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'))
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
+                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'), 0, 1)
                 return
 
-            # --- Balance gift ---
             if gift_type == 'balance':
                 from app.database.crud.user import add_user_balance
                 kopeks = gift.balance_amount_kopeks or 0
                 rub = kopeks // 100
                 await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                gift.activated_count = (getattr(gift, 'activated_count', 0) or 0) + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
                 gift.activated_by_user_id = user.id
@@ -343,48 +305,41 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     'INLINE_GIFT_BALANCE_SUCCESS',
                     '✅ <b>Баланс пополнен!</b>\n\n<blockquote>+{rub} ₽ добавлено на ваш счёт</blockquote>',
                 ).format(rub=rub)
-
-                back_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(
-                        text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
-                        callback_data='back_to_menu',
-                    )
+                back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+                    types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
                 ]])
-                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_keyboard)
-                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'))
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
+                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'), 0, 1)
                 return
 
-            # --- Subscription gift (default) ---
-            squads: list[str] = []
+            # Subscription
             from app.database.crud.server_squad import get_available_server_squads
-
             available = await get_available_server_squads(db)
-            if available:
-                squads = [available[0].squad_uuid]
+            squads: list[str] = [available[0].squad_uuid] if available else []
+
+            if add_extra_squad and _EXTRA_SQUAD_UUID not in squads:
+                squads.append(_EXTRA_SQUAD_UUID)
 
             existing_sub = await get_subscription_by_user_id(db, user.id)
             subscription_service = SubscriptionService()
 
             if existing_sub:
-                # traffic_limit_gb: -1 = set to unlimited (0 in DB), 0 = no change, N = set to N
                 gift_traffic = gift.traffic_limit_gb
                 if gift_traffic == -1:
-                    new_traffic = 0  # set to unlimited
+                    new_traffic = 0
                 elif gift_traffic and gift_traffic != existing_sub.traffic_limit_gb:
                     new_traffic = gift_traffic
                 else:
-                    new_traffic = None  # no change
+                    new_traffic = None
 
                 new_devices_val = gift.device_limit or 0
                 cur_devices = existing_sub.device_limit or 1
                 new_devices = max(cur_devices, new_devices_val) if new_devices_val else None
                 if new_devices == cur_devices:
-                    new_devices = None  # no change needed
+                    new_devices = None
 
-                # days == _FOREVER_DAYS means "set end_date to year 2099" instead of adding days
                 if gift.days >= _FOREVER_DAYS:
-                    now = datetime.now(UTC)
-                    existing_sub.end_date = now.replace(year=2099)
+                    existing_sub.end_date = datetime.now(UTC).replace(year=2099)
                     subscription = await extend_subscription(
                         db=db,
                         subscription=existing_sub,
@@ -406,18 +361,16 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     )
                 await subscription_service.update_remnawave_user(db, subscription)
             else:
-                forever_end_date = None
                 duration_days = gift.days or 0
+                forever_end_date = None
                 if duration_days >= _FOREVER_DAYS:
-                    now = datetime.now(UTC)
-                    forever_end_date = now.replace(year=2099)
-                    duration_days = 1  # create_paid_subscription needs at least 1 day; we'll override end_date after
+                    forever_end_date = datetime.now(UTC).replace(year=2099)
+                    duration_days = 1
 
                 subscription = await create_paid_subscription(
                     db=db,
                     user_id=user.id,
                     duration_days=duration_days,
-                    # -1 means unlimited (0 in DB); otherwise use gift value or default
                     traffic_limit_gb=0 if gift.traffic_limit_gb == -1 else (gift.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB),
                     device_limit=gift.device_limit or settings.DEFAULT_DEVICE_LIMIT,
                     connected_squads=squads,
@@ -429,7 +382,11 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
             await db.refresh(subscription)
 
-            gift.is_activated = True
+            new_activated = (getattr(gift, 'activated_count', 0) or 0) + 1
+            remaining = max_act - new_activated
+            gift.activated_count = new_activated
+            if new_activated >= max_act:
+                gift.is_activated = True
             gift.activated_at = datetime.now(UTC)
             gift.activated_by_user_id = user.id
             gift.subscription_id = subscription.id
@@ -438,23 +395,22 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         except Exception as exc:
             logger.exception('Failed to activate inline gift', gift_code=gift_code, error=str(exc))
-            await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATION_ERROR', 'Произошла ошибка при активации подарка. Попробуйте позже.'))
+            await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATION_ERROR', 'Произошла ошибка. Попробуйте позже.'))
             return
 
         days_str = _days_label(gift.days, texts) if gift.days else ''
-        traffic_str = _fmt_traffic(gift.traffic_limit_gb, texts) if (gift.traffic_limit_gb or gift.traffic_limit_gb == -1) else ''
+        traffic_str = _fmt_traffic(gift.traffic_limit_gb, texts) if gift.traffic_limit_gb else ''
         devices_val = gift.device_limit or 0
-
         parts = []
         if days_str:
-            parts.append(texts.t('INLINE_GIFT_SUCCESS_PART_DAYS', '+{days_str}').format(days_str=days_str))
+            parts.append(f'+{days_str}')
         if traffic_str:
-            parts.append(texts.t('INLINE_GIFT_SUCCESS_PART_TRAFFIC', '{traffic_str}').format(traffic_str=traffic_str))
+            parts.append(traffic_str)
         if devices_val:
-            parts.append(texts.t('INLINE_GIFT_SUCCESS_PART_DEVICES', '{n} уст.').format(n=devices_val))
+            parts.append(f'{devices_val} уст.')
 
-        if parts:
-            changes = ', '.join(parts)
+        changes = ', '.join(parts) if parts else ''
+        if changes:
             success_text = texts.t(
                 'INLINE_GIFT_SUCCESS_CHANGES',
                 '✅ <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
@@ -462,36 +418,44 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
         else:
             success_text = texts.t(
                 'INLINE_GIFT_SUCCESS',
-                '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена на вашем аккаунте.',
+                '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена.',
             )
 
-        back_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
-            types.InlineKeyboardButton(
-                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
-                callback_data='back_to_menu',
-            )
+        back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+            types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
         ]])
-        await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_keyboard)
+        await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
 
-        # Update the inline message: replace URL button with noop callback button
-        await _update_inline_button(
-            callback.bot, inline_msg_id,
-            texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'),
+        fully_used = new_activated >= max_act
+        button_text = (
+            texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано')
+            if fully_used
+            else texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(n=remaining)
         )
+        await _update_inline_button(callback.bot, inline_msg_id, button_text, remaining, max_act)
 
 
-async def _update_inline_button(bot: Bot, inline_msg_id: str | None, text: str) -> None:
-    """Replace the URL button in the shared inline message with a noop callback button."""
-    if not inline_msg_id or inline_msg_id.startswith('u:'):
+async def _update_inline_button(bot: Bot, inline_msg_id: str | None, text: str, remaining: int, max_act: int) -> None:
+    raw = inline_msg_id or ''
+    if not raw or raw.startswith('u:') or raw.startswith('tid:'):
         return
     try:
+        fully_used = remaining == 0
+        if fully_used:
+            kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text=text, callback_data='igift_noop')
+            ]])
+        else:
+            # Keep URL button updated with remaining count
+            # We can't know the original URL from here, so switch to noop if exhausted,
+            # but for partial we must edit to callback (no URL update possible without the URL).
+            # Workaround: use a noop button that shows remaining — user must re-click from start link.
+            kb = types.InlineKeyboardMarkup(inline_keyboard=[[
+                types.InlineKeyboardButton(text=text, callback_data='igift_noop')
+            ]])
         await bot.edit_message_reply_markup(
-            inline_message_id=inline_msg_id,
-            reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[
-                    types.InlineKeyboardButton(text=text, callback_data='igift_noop')
-                ]]
-            ),
+            inline_message_id=raw,
+            reply_markup=kb,
         )
     except Exception as e:
         logger.warning('Could not update inline message button', error=str(e))
@@ -515,12 +479,7 @@ async def handle_cancel_callback(callback: types.CallbackQuery) -> None:
             inline_msg_id = gift.inline_message_id
 
     await callback.message.edit_text(texts.t('INLINE_GIFT_CANCELLED', 'Активация отменена.'))
-    await _update_inline_button(
-        callback.bot, inline_msg_id,
-        texts.t('INLINE_GIFT_CANCELLED_BUTTON', '✗ Отменено'),
-    )
-    texts = get_texts(DEFAULT_LANGUAGE)
-    await callback.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED_ALERT', 'Подарок уже активирован.'), show_alert=True)
+    await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_CANCELLED_BUTTON', '✗ Отменено'), 0, 1)
 
 
 async def handle_noop_callback(callback: types.CallbackQuery) -> None:
@@ -529,17 +488,13 @@ async def handle_noop_callback(callback: types.CallbackQuery) -> None:
 
 
 async def show_pending_inline_gift(message: types.Message, gift_code: str) -> None:
-    """Called after a new user completes registration when they arrived via rbs_ link.
-
-    Shows the accept/cancel gift dialog immediately after the main menu is shown.
-    """
+    """Called after new user registration when they arrived via bs_ link."""
     telegram_id = message.from_user.id
+    username = (message.from_user.username or '').lower()
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(InlineGiftSubscription).where(
-                InlineGiftSubscription.gift_code == gift_code
-            )
+            select(InlineGiftSubscription).where(InlineGiftSubscription.gift_code == gift_code)
         )
         gift = result.scalars().first()
 
@@ -550,39 +505,36 @@ async def show_pending_inline_gift(message: types.Message, gift_code: str) -> No
         language = user.language if user else DEFAULT_LANGUAGE
         texts = get_texts(language)
 
-        if gift.is_activated:
+        max_act = getattr(gift, 'max_activations', 1) or 1
+        activated = getattr(gift, 'activated_count', 0) or 0
+
+        if gift.is_activated or activated >= max_act:
             await message.answer(texts.t('INLINE_GIFT_ALREADY_ACTIVATED', 'Этот подарок уже был активирован.'))
             return
 
-        # Bind telegram_id to the gift if not yet bound (random mode or named unregistered user)
-        if not gift.recipient_telegram_id or gift.recipient_telegram_id == 0:
-            gift.recipient_telegram_id = telegram_id
-            await session.commit()
-            await session.refresh(gift)
-        elif gift.recipient_telegram_id != telegram_id:
+        if not _check_recipient(gift, telegram_id, username):
             await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
             return
 
-        days = gift.days
-        traffic_gb = gift.traffic_limit_gb
-        devices = gift.device_limit
+        if gift.recipient_telegram_id == 0:
+            gift.recipient_telegram_id = telegram_id
+            await session.commit()
+            await session.refresh(gift)
 
         existing_sub = await get_subscription_by_user_id(session, user.id) if user else None
 
-    keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[
-            types.InlineKeyboardButton(
-                text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
-                callback_data=f'igift_activate:{gift_code}',
-            ),
-            types.InlineKeyboardButton(
-                text=texts.t('INLINE_GIFT_CANCEL_BUTTON', 'Отменить'),
-                callback_data=f'igift_cancel:{gift_code}',
-            ),
-        ]]
-    )
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
+        types.InlineKeyboardButton(
+            text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
+            callback_data=f'igift_activate:{gift_code}',
+        ),
+        types.InlineKeyboardButton(
+            text=texts.t('INLINE_GIFT_CANCEL_BUTTON', 'Отменить'),
+            callback_data=f'igift_cancel:{gift_code}',
+        ),
+    ]])
 
-    text_out = _build_info_text(days, traffic_gb, devices, texts, existing_sub)
+    text_out = _build_info_text(gift.days, gift.traffic_limit_gb, gift.device_limit, texts, existing_sub)
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
 
 

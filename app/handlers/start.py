@@ -660,12 +660,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             return
         start_parameter = None
 
-    # Handle inline gift deep links for unregistered users: /start rbs_<gift_code>
-    # User must complete registration first, then the gift dialog is shown automatically.
+    # Legacy: rbs_ links redirect to bs_ flow for backwards compat
     if start_parameter and start_parameter.startswith('rbs_'):
         gift_code = start_parameter[4:]
-        logger.info('Inline gift deep link for new user detected', gift_code_prefix=gift_code[:5], telegram_id=message.from_user.id)
-        await state.update_data(pending_inline_gift_code=gift_code)
+        from app.handlers.inline_gift import handle_gift_deeplink as _handle_igift
+        logger.info('Legacy rbs_ gift deep link', gift_code_prefix=gift_code[:5], telegram_id=message.from_user.id)
+        handled = await _handle_igift(message, gift_code)
+        if handled:
+            return
         start_parameter = None
 
     # Handle gift code deep links: /start GIFT_{token}

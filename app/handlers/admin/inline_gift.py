@@ -1,35 +1,36 @@
 """Admin inline query handler for gifting subscriptions, discounts and balance.
 
-Syntax reference (all commands unified):
+Syntax (flags replace old symbols):
 
-  Subscription gift:
-    @botname @user 30              — +30 days
-    @botname @user 30 500          — +30 days, 500 GB traffic
-    @botname @user 30 500 3        — +30 days, 500 GB, 3 devices
-    @botname @user 0 500           — set 500 GB only
-    @botname @user 0 0 3           — set 3 devices only
-    @botname @user -1              — forever (year 2099)
-    @botname @user 30 -1           — 30 days + unlimited traffic
+  Subscription gift (to specific user by @username or numeric TG ID):
+    @botname @user 30              — +30 days, defaults for traffic/devices
+    @botname 123456789 30          — same but by Telegram ID
+    @botname @user -p 30 500 3     — explicit flag: 30 days, 500 GB, 3 devices
+    @botname @user -p -1           — forever
 
-  Random first-come gift (no recipient):
-    @botname $1 30                 — gift +30 days to the first user who clicks
-    @botname $5 30                 — gift to 5 random first-comers (5 separate codes)
+  Multi-activation gift (first N users):
+    @botname -r 5 30               — 5 activations, 30 days each
+    @botname -r 5 30 500 3         — 5 activations, 30 days, 500 GB, 3 devices
 
   Discount:
-    @botname @user %15             — give 15% discount promocode
+    @botname @user -d 15           — 15% discount promocode
+    @botname 123456789 -d 15       — same by ID
 
   Balance top-up:
-    @botname @user :1500           — add 1500 ₽ to balance
+    @botname @user -b 1500         — add 1500 ₽
+    @botname 123456789 -b 1500     — same by ID
 
-Special -1 values:
-  -1 for days = forever (~year 2099)
-  -1 for traffic_gb = unlimited (0 in DB)
-  -1 for devices = 999
+  Extra squad (-bc adds recipient to squad 050365af-1377-469c-b625-4e88d3e0e3ae):
+    @botname @user 30 -bc
+    @botname @user -p 30 500 -bc
+
+Defaults when values omitted: days=7, traffic_gb=300, devices=2
+Special values: -1 for days = forever; -1 for traffic = unlimited; -1 for devices = 999
 """
 
 import html
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import structlog
@@ -48,11 +49,15 @@ from app.localization.texts import get_texts
 logger = structlog.get_logger(__name__)
 
 _GIFT_PREFIX = 'bs_'
-_GIFT_PREFIX_NEW_USER = 'rbs_'
+_EXTRA_SQUAD_UUID = '050365af-1377-469c-b625-4e88d3e0e3ae'
 
 _FOREVER_DAYS = (2099 - 2025) * 365
-_UNLIMITED_TRAFFIC = 0
 _MAX_DEVICES = 999
+
+# Defaults applied when a value is omitted
+_DEFAULT_DAYS = 7
+_DEFAULT_TRAFFIC = 300
+_DEFAULT_DEVICES = 2
 
 
 def _is_admin(telegram_id: int) -> bool:
@@ -61,98 +66,117 @@ def _is_admin(telegram_id: int) -> bool:
 
 @dataclass
 class ParsedQuery:
-    gift_type: Literal['subscription', 'discount', 'balance', 'random_subscription']
-    username: str          # '' for random mode
-    random_count: int      # >0 in random mode
+    gift_type: Literal['subscription', 'discount', 'balance', 'multi']
+    # Target: either username (str) or telegram_id (int) or 0 for multi
+    username: str
+    target_id: int          # >0 when user entered numeric ID directly
+    multi_count: int        # >0 for -r mode
     days: int
     traffic_gb: int
     devices: int
-    discount_percent: int  # 1-99
-    balance_rub: int       # rubles (converted to kopeks on save)
+    discount_percent: int
+    balance_rub: int
+    add_extra_squad: bool = field(default=False)
+
+
+def _int(s: str, allow_neg_one: bool = False) -> int:
+    try:
+        v = int(s)
+    except (ValueError, TypeError):
+        return 0
+    if v == -1 and allow_neg_one:
+        return -1
+    return max(0, v)
 
 
 def _parse_query(query_text: str) -> ParsedQuery:
-    """Parse the inline query text into a ParsedQuery.
+    """Parse inline query into ParsedQuery.
 
-    Supported patterns:
-      @user [days] [traffic] [devices]   → subscription
-      $N [days] [traffic] [devices]      → random_subscription (N winners)
-      @user %15                          → discount 15%
-      @user :1500                        → balance +1500 ₽
-      (empty / @user only)               → info-only (all zeros)
+    Token order:
+      [target] [-flag [args...]] [-bc]
+
+    target = @username | numeric_id (absent for -r)
+    flags  = -p | -d | -b | -r | -bc
     """
     text = query_text.strip()
-    parts = text.split()
+    tokens = text.split()
 
-    def _int(s: str, allow_neg_one: bool = False) -> int:
-        try:
-            v = int(s)
-        except (ValueError, TypeError):
-            return 0
-        if v == -1 and allow_neg_one:
-            return -1
-        return max(0, v)
+    add_bc = '-bc' in tokens
+    tokens = [t for t in tokens if t != '-bc']
 
-    # Random mode: $N ...
-    if parts and parts[0].startswith('$'):
-        count_str = parts[0][1:]
-        random_count = max(1, _int(count_str) or 1)
-        rest = parts[1:]
+    if not tokens:
+        return ParsedQuery('subscription', '', 0, 0, 0, 0, 0, 0, 0, add_bc)
 
-        days = _int(rest[0], allow_neg_one=True) if len(rest) > 0 else 0
-        traffic_gb = _int(rest[1], allow_neg_one=True) if len(rest) > 1 else 0
-        devices = _int(rest[2], allow_neg_one=True) if len(rest) > 2 else 0
+    # -r N [days [traffic [devices]]]  — multi-activation, no specific target
+    if tokens[0] == '-r':
+        rest = tokens[1:]
+        count = max(1, _int(rest[0]) or 1) if rest else 1
+        rest = rest[1:]
+        days = _resolve_days(_int(rest[0], True) if rest else 0)
+        traffic = _resolve_traffic(_int(rest[1], True) if len(rest) > 1 else 0)
+        devices = _resolve_devices(_int(rest[2], True) if len(rest) > 2 else 0)
+        return ParsedQuery('multi', '', 0, count, days, traffic, devices, 0, 0, add_bc)
 
-        if days == -1:
-            days = _FOREVER_DAYS
-        if devices == -1:
-            devices = _MAX_DEVICES
-
-        return ParsedQuery(
-            gift_type='random_subscription',
-            username='',
-            random_count=random_count,
-            days=days,
-            traffic_gb=traffic_gb,
-            devices=devices,
-            discount_percent=0,
-            balance_rub=0,
-        )
-
-    # All other modes require @username as first token
-    if not parts:
-        return ParsedQuery('subscription', '', 0, 0, 0, 0, 0, 0)
-
-    username = parts[0].lstrip('@')
-    rest = parts[1:]
+    # Extract target token
+    first = tokens[0]
+    if first.startswith('@'):
+        username = first.lstrip('@')
+        target_id = 0
+        rest = tokens[1:]
+    elif first.lstrip('-').isdigit() and not first.startswith('-'):
+        target_id = int(first)
+        username = ''
+        rest = tokens[1:]
+    else:
+        # No recognisable target yet — show info/hints
+        return ParsedQuery('subscription', '', 0, 0, 0, 0, 0, 0, 0, add_bc)
 
     if not rest:
-        return ParsedQuery('subscription', username, 0, 0, 0, 0, 0, 0)
+        return ParsedQuery('subscription', username, target_id, 0, 0, 0, 0, 0, 0, add_bc)
 
-    first = rest[0]
+    flag = rest[0]
+    args = rest[1:]
 
-    # Discount mode: %15
-    if first.startswith('%'):
-        pct = _int(first[1:])
-        pct = max(1, min(99, pct))
-        return ParsedQuery('discount', username, 0, 0, 0, 0, pct, 0)
+    # -d percent
+    if flag == '-d':
+        pct = max(1, min(99, _int(args[0]) if args else 0))
+        return ParsedQuery('discount', username, target_id, 0, 0, 0, 0, pct, 0, add_bc)
 
-    # Balance mode: :1500
-    if first.startswith(':'):
-        rub = _int(first[1:])
-        return ParsedQuery('balance', username, 0, 0, 0, 0, 0, rub)
+    # -b rubles
+    if flag == '-b':
+        rub = _int(args[0]) if args else 0
+        return ParsedQuery('balance', username, target_id, 0, 0, 0, 0, 0, rub, add_bc)
 
-    # Subscription mode
-    days = _int(rest[0], allow_neg_one=True) if len(rest) > 0 else 0
-    traffic_gb = _int(rest[1], allow_neg_one=True) if len(rest) > 1 else 0
-    devices = _int(rest[2], allow_neg_one=True) if len(rest) > 2 else 0
+    # -p [days [traffic [devices]]]  — explicit subscription flag
+    if flag == '-p':
+        days = _resolve_days(_int(args[0], True) if args else 0)
+        traffic = _resolve_traffic(_int(args[1], True) if len(args) > 1 else 0)
+        devices = _resolve_devices(_int(args[2], True) if len(args) > 2 else 0)
+        return ParsedQuery('subscription', username, target_id, 0, days, traffic, devices, 0, 0, add_bc)
 
-    if days == -1:
-        days = _FOREVER_DAYS
-    if devices == -1:
-        devices = _MAX_DEVICES
+    # No flag: plain numbers after target = subscription
+    days = _resolve_days(_int(rest[0], True) if rest else 0)
+    traffic = _resolve_traffic(_int(rest[1], True) if len(rest) > 1 else 0)
+    devices = _resolve_devices(_int(rest[2], True) if len(rest) > 2 else 0)
+    return ParsedQuery('subscription', username, target_id, 0, days, traffic, devices, 0, 0, add_bc)
 
-    return ParsedQuery('subscription', username, 0, days, traffic_gb, devices, 0, 0)
+
+def _resolve_days(v: int) -> int:
+    if v == -1:
+        return _FOREVER_DAYS
+    return v if v else _DEFAULT_DAYS
+
+
+def _resolve_traffic(v: int) -> int:
+    if v == -1:
+        return -1  # sentinel: unlimited
+    return v if v else _DEFAULT_TRAFFIC
+
+
+def _resolve_devices(v: int) -> int:
+    if v == -1:
+        return _MAX_DEVICES
+    return v if v else _DEFAULT_DEVICES
 
 
 def _days_label_short(days: int, texts) -> str:
@@ -168,117 +192,95 @@ def _days_label_short(days: int, texts) -> str:
 
 
 def _fmt_traffic(gb: int, texts) -> str:
-    if gb == 0 or gb == -1:
+    if gb <= 0 or gb == -1:
         return texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит')
     return f'{gb} {texts.t("INLINE_GIFT_GB_SUFFIX", "ГБ")}'
 
 
-def _build_subscription_caption(username: str, days: int, traffic_gb: int, devices: int, texts, random_count: int = 0) -> str:
-    safe_name = html.escape(username) if username else ''
-    lines = []
-    if days:
-        lines.append(f'+{_days_label_short(days, texts)}')
-    if traffic_gb:
-        if traffic_gb == -1:
-            lines.append(texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит'))
-        else:
-            lines.append(_fmt_traffic(traffic_gb, texts))
-    if devices:
-        lines.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
+def _gift_summary(days: int, traffic_gb: int, devices: int, texts) -> str:
+    parts = []
+    parts.append(_days_label_short(days, texts))
+    parts.append(_fmt_traffic(traffic_gb, texts))
+    parts.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
+    return ', '.join(parts)
 
-    body = '\n'.join(lines) if lines else '—'
 
-    if random_count > 0:
-        header = texts.t('INLINE_GIFT_CAPTION_HEADER_RANDOM', 'Подарочная подписка — первым {n}').format(n=random_count)
-        hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
-        return (
-            f'<b>{header}</b>\n\n'
-            f'<blockquote>{body}</blockquote>\n\n'
-            f'<code>{hint}</code>'
-        )
+def _build_subscription_caption(display: str, days: int, traffic_gb: int, devices: int, texts, multi_count: int = 0, bc: bool = False) -> str:
+    safe = html.escape(display) if display else ''
+    lines = [
+        _days_label_short(days, texts),
+        _fmt_traffic(traffic_gb, texts),
+        f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}',
+    ]
+    if bc:
+        lines.append('+ доп. сервер')
+    body = '\n'.join(lines)
+    hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
+
+    if multi_count > 0:
+        header = texts.t('INLINE_GIFT_CAPTION_HEADER_RANDOM', 'Подарочная подписка — первым {n}').format(n=multi_count)
+        return f'<b>{header}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
     header = texts.t('INLINE_GIFT_CAPTION_HEADER', 'Подарочная подписка для')
-    hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
-    return (
-        f'<b>{header} <code>{safe_name}</code></b>\n\n'
-        f'<blockquote>{body}</blockquote>\n\n'
-        f'<code>{hint}</code>'
-    )
+    return f'<b>{header} <code>{safe}</code></b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
 
-def _build_discount_caption(username: str, pct: int, texts) -> str:
-    safe_name = html.escape(username)
+def _build_discount_caption(display: str, pct: int, texts) -> str:
+    safe = html.escape(display)
     header = texts.t('INLINE_GIFT_DISCOUNT_HEADER', 'Скидка для')
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
     body = texts.t('INLINE_GIFT_DISCOUNT_BODY', 'Скидка {pct}% на следующую покупку').format(pct=pct)
-    return (
-        f'<b>{header} <code>{safe_name}</code></b>\n\n'
-        f'<blockquote>{body}</blockquote>\n\n'
-        f'<code>{hint}</code>'
-    )
+    return f'<b>{header} <code>{safe}</code></b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
 
-def _build_balance_caption(username: str, rub: int, texts) -> str:
-    safe_name = html.escape(username)
+def _build_balance_caption(display: str, rub: int, texts) -> str:
+    safe = html.escape(display)
     header = texts.t('INLINE_GIFT_BALANCE_HEADER', 'Пополнение баланса для')
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
     body = texts.t('INLINE_GIFT_BALANCE_BODY', '+{rub} ₽ на баланс').format(rub=rub)
-    return (
-        f'<b>{header} <code>{safe_name}</code></b>\n\n'
-        f'<blockquote>{body}</blockquote>\n\n'
-        f'<code>{hint}</code>'
-    )
+    return f'<b>{header} <code>{safe}</code></b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
 
 
 def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
-    """Return hint results shown when query is empty."""
-    thumbnail_url = texts.t(
+    thumb = texts.t(
         'INLINE_GIFT_THUMBNAIL_URL',
         'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
     )
     hints = [
-        (
-            'hint_sub',
-            '@user дни [гб [устройств]]',
-            'Подписка: @user 30 / @user 30 500 3 / @user -1 (навсегда)',
-            '@user 30',
-        ),
-        (
-            'hint_random',
-            '$N дни [гб [устройств]]',
-            'Первым N пользователям: $1 30 / $5 30 500',
-            '$1 30',
-        ),
-        (
-            'hint_discount',
-            '@user %процент',
-            'Скидка: @user %15 (скидка 15% на покупку)',
-            '@user %15',
-        ),
-        (
-            'hint_balance',
-            '@user :сумма',
-            'Баланс: @user :1500 (добавить 1500 ₽)',
-            '@user :1500',
-        ),
+        ('hint_sub',    '@user [дни]',       'Подписка: @user 30  /  123456789 30  /  @user -p 30 500 3', '@user 30'),
+        ('hint_multi',  '-r N [дни]',        'Первым N: -r 5 30  /  -r 5 30 500 3', '-r 5 30'),
+        ('hint_disc',   '@user -d процент',  'Скидка: @user -d 15', '@user -d 15'),
+        ('hint_bal',    '@user -b сумма',    'Баланс: @user -b 1500', '@user -b 1500'),
+        ('hint_bc',     '... -bc',           'Добавить в доп. сквад: @user 30 -bc', '@user 30 -bc'),
     ]
     results = []
-    for result_id, title, description, _ in hints:
-        results.append(
-            types.InlineQueryResultArticle(
-                id=result_id,
-                title=title,
-                description=description,
-                input_message_content=types.InputTextMessageContent(
-                    message_text=title,
-                    parse_mode='HTML',
-                ),
-                thumbnail_url=thumbnail_url,
-                thumbnail_width=512,
-                thumbnail_height=512,
-            )
-        )
+    for rid, title, desc, _ in hints:
+        results.append(types.InlineQueryResultArticle(
+            id=rid,
+            title=title,
+            description=desc,
+            input_message_content=types.InputTextMessageContent(message_text=title, parse_mode='HTML'),
+            thumbnail_url=thumb,
+            thumbnail_width=512,
+            thumbnail_height=512,
+        ))
     return results
+
+
+def _flag_hint(query_text: str, texts) -> str | None:
+    """Return switch_pm_text hint relevant to what admin is currently typing."""
+    t = query_text.strip()
+    if '-r' in t:
+        return '-r N дни [гб [уст.]]  — первым N'
+    if '-d' in t:
+        return '-d процент  — скидка %'
+    if '-b' in t:
+        return '-b сумма  — пополнить баланс'
+    if '-bc' in t:
+        return '-bc  — добавить в доп. сервер'
+    if '-p' in t:
+        return '-p дни [гб [уст.]]  — подписка'
+    return texts.t('INLINE_GIFT_QUERY_HINT', '@user дни | -r N дни | @user -d % | @user -b ₽')
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
@@ -290,87 +292,61 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     query_text = (inline_query.query or '').strip()
     parsed = _parse_query(query_text)
 
-    thumbnail_url = texts.t(
+    thumb = texts.t(
         'INLINE_GIFT_THUMBNAIL_URL',
         'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
     )
 
-    # Empty query — show syntax hints
+    hint_text = _flag_hint(query_text, texts)
+    hint_kwargs = dict(
+        cache_time=1,
+        switch_pm_text=hint_text,
+        switch_pm_parameter='help',
+    )
+
     if not query_text:
-        hint_results = _build_syntax_hint(texts)
-        await inline_query.answer(
-            hint_results,
-            cache_time=1,
-            switch_pm_text=texts.t('INLINE_GIFT_QUERY_HINT', '@user дни | $N дни | @user %скидка | @user :баланс'),
-            switch_pm_parameter='help',
-        )
+        await inline_query.answer(_build_syntax_hint(texts), **hint_kwargs)
         return
 
-    # Random-mode: no lookup, just show gift template
-    if parsed.gift_type == 'random_subscription':
-        has_params = parsed.days or parsed.traffic_gb or parsed.devices
-        if not has_params:
-            await inline_query.answer(
-                [],
-                cache_time=1,
-                switch_pm_text=texts.t('INLINE_GIFT_QUERY_HINT', '@user дни | $N дни | @user %скидка | @user :баланс'),
-                switch_pm_parameter='help',
-            )
-            return
-
-        parts_summary = []
-        if parsed.days:
-            parts_summary.append(_days_label_short(parsed.days, texts))
-        if parsed.traffic_gb:
-            parts_summary.append(_fmt_traffic(parsed.traffic_gb, texts))
-        if parsed.devices:
-            parts_summary.append(f'{parsed.devices} уст.')
-        gift_summary = ', '.join(parts_summary)
-
+    # Multi-activation mode (-r N ...)
+    if parsed.gift_type == 'multi':
+        summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts)
         gift_code = secrets.token_urlsafe(32)
         bot_username = settings.BOT_USERNAME or ''
-        deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX_NEW_USER}{gift_code}'
-        caption = _build_subscription_caption('', parsed.days, parsed.traffic_gb, parsed.devices, texts, random_count=parsed.random_count)
+        deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX}{gift_code}'
+        caption = _build_subscription_caption('', parsed.days, parsed.traffic_gb, parsed.devices, texts, multi_count=parsed.multi_count, bc=parsed.add_extra_squad)
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(
-                text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
+                text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(n=parsed.multi_count),
                 url=deep_link,
             )
         ]])
-        results = [
-            types.InlineQueryResultArticle(
-                id=gift_code,
-                title=texts.t('INLINE_GIFT_RANDOM_TITLE', 'Первым {n} — {gift}').format(n=parsed.random_count, gift=gift_summary),
-                description=gift_summary,
-                thumbnail_url=thumbnail_url,
-                thumbnail_width=512,
-                thumbnail_height=512,
-                input_message_content=types.InputTextMessageContent(
-                    message_text=caption,
-                    parse_mode='HTML',
-                    link_preview_options=types.LinkPreviewOptions(
-                        show_above_text=True,
-                        url=thumbnail_url,
-                    ),
-                ),
-                reply_markup=keyboard,
-            )
-        ]
+        results = [types.InlineQueryResultArticle(
+            id=gift_code,
+            title=texts.t('INLINE_GIFT_RANDOM_TITLE', 'Первым {n} — {gift}').format(n=parsed.multi_count, gift=summary),
+            description=summary,
+            thumbnail_url=thumb,
+            thumbnail_width=512,
+            thumbnail_height=512,
+            input_message_content=types.InputTextMessageContent(
+                message_text=caption,
+                parse_mode='HTML',
+                link_preview_options=types.LinkPreviewOptions(show_above_text=True, url=thumb),
+            ),
+            reply_markup=keyboard,
+        )]
         await inline_query.answer(results, cache_time=0, is_personal=True)
         return
 
-    # Named-user modes — look up recipient
+    # Named target: lookup by username or telegram_id
     username = parsed.username
-    if not username:
-        await inline_query.answer(
-            [],
-            cache_time=1,
-            switch_pm_text=texts.t('INLINE_GIFT_QUERY_HINT', '@user дни | $N дни | @user %скидка | @user :баланс'),
-            switch_pm_parameter='help',
-        )
+    target_id = parsed.target_id
+
+    if not username and not target_id:
+        await inline_query.answer([], **hint_kwargs)
         return
 
-    recipient_display = f'@{username}'
+    recipient_display = f'@{username}' if username else str(target_id)
     sub_info_lines: list[str] = []
     db_user_found = False
     sub = None
@@ -378,15 +354,24 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     async with AsyncSessionLocal() as db:
         from sqlalchemy import func as sql_func
-        result = await db.execute(
-            select(User).where(sql_func.lower(User.username) == username.lower())
-        )
+
+        if target_id:
+            result = await db.execute(select(User).where(User.telegram_id == target_id))
+        else:
+            result = await db.execute(
+                select(User).where(sql_func.lower(User.username) == username.lower())
+            )
         db_user = result.scalars().first()
+
         if db_user:
             db_user_found = True
-            full_name = ' '.join(p for p in [db_user.first_name or '', db_user.last_name or ''] if p).strip()
-            if full_name:
-                recipient_display = f'{full_name} (@{username})'
+            if db_user.username:
+                full = ' '.join(p for p in [db_user.first_name or '', db_user.last_name or ''] if p).strip()
+                recipient_display = f'{full} (@{db_user.username})' if full else f'@{db_user.username}'
+            else:
+                full = ' '.join(p for p in [db_user.first_name or '', db_user.last_name or ''] if p).strip()
+                recipient_display = f'{full} (id:{db_user.telegram_id})' if full else f'id:{db_user.telegram_id}'
+
             sub = await get_subscription_by_user_id(db, db_user.id)
             if sub:
                 cur_days = max(0, sub.days_left) if hasattr(sub, 'days_left') else 0
@@ -394,44 +379,40 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
                 cur_devices = sub.device_limit or 1
                 gb = sub.traffic_limit_gb
                 traffic_str = texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит') if gb == 0 else f'{gb} ГБ'
-                sub_info_lines.append(f'{sub.days_left} дн.')
-                sub_info_lines.append(traffic_str)
-                sub_info_lines.append(f'{sub.device_limit} уст.')
+                sub_info_lines = [f'{sub.days_left} дн.', traffic_str, f'{sub.device_limit} уст.']
             else:
-                sub_info_lines.append(texts.t('INLINE_GIFT_NO_SUB', 'нет подписки'))
+                sub_info_lines = [texts.t('INLINE_GIFT_NO_SUB', 'нет подписки')]
 
-    # Info-only: user entered @user without any params
+    # Info-only: user typed target but no params / no flag yet
     is_info_only = (
         parsed.gift_type == 'subscription'
         and parsed.days == 0
         and parsed.traffic_gb == 0
         and parsed.devices == 0
+        and not parsed.discount_percent
+        and not parsed.balance_rub
     )
     if is_info_only:
         current_info = ' | '.join(sub_info_lines) if sub_info_lines else '—'
-        results = [
-            types.InlineQueryResultArticle(
-                id='info_only',
-                title=recipient_display,
-                description=current_info,
-                input_message_content=types.InputTextMessageContent(
-                    message_text=f'@{html.escape(username)}',
-                    parse_mode='HTML',
-                ),
-                thumbnail_url=thumbnail_url,
-                thumbnail_width=512,
-                thumbnail_height=512,
-            )
-        ]
+        safe_target = html.escape(username) if username else str(target_id)
+        results = [types.InlineQueryResultArticle(
+            id='info_only',
+            title=recipient_display,
+            description=current_info,
+            input_message_content=types.InputTextMessageContent(
+                message_text=f'<code>{safe_target}</code>',
+                parse_mode='HTML',
+            ),
+            thumbnail_url=thumb,
+            thumbnail_width=512,
+            thumbnail_height=512,
+        )]
         await inline_query.answer(results, cache_time=0, is_personal=True)
         return
 
-    # Build gift result depending on type
     gift_code = secrets.token_urlsafe(32)
     bot_username = settings.BOT_USERNAME or ''
-    prefix = _GIFT_PREFIX if db_user_found else _GIFT_PREFIX_NEW_USER
-    deep_link = f'https://t.me/{bot_username}?start={prefix}{gift_code}'
-
+    deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX}{gift_code}'
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
         types.InlineKeyboardButton(
             text=texts.t('INLINE_GIFT_ACTIVATE_BUTTON', 'Активировать'),
@@ -441,71 +422,58 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     if parsed.gift_type == 'discount':
         pct = parsed.discount_percent
-        caption = _build_discount_caption(username, pct, texts)
+        caption = _build_discount_caption(recipient_display, pct, texts)
         description = texts.t('INLINE_GIFT_DISCOUNT_DESC', 'Скидка {pct}%').format(pct=pct)
         title = f'{recipient_display} — скидка {pct}%'
+
     elif parsed.gift_type == 'balance':
         rub = parsed.balance_rub
-        caption = _build_balance_caption(username, rub, texts)
+        caption = _build_balance_caption(recipient_display, rub, texts)
         description = texts.t('INLINE_GIFT_BALANCE_DESC', '+{rub} ₽ на баланс').format(rub=rub)
         title = f'{recipient_display} — +{rub} ₽'
-    else:
-        # subscription
-        parts_summary = []
-        if parsed.days:
-            parts_summary.append(_days_label_short(parsed.days, texts))
-        if parsed.traffic_gb:
-            parts_summary.append(_fmt_traffic(parsed.traffic_gb, texts))
-        if parsed.devices:
-            parts_summary.append(f'{parsed.devices} уст.')
-        gift_summary = ', '.join(parts_summary)
 
-        result_parts = []
-        if parsed.days:
-            result_days = cur_days + parsed.days
-            result_parts.append(_days_label_short(result_days, texts))
-        if parsed.traffic_gb:
-            result_parts.append(_fmt_traffic(parsed.traffic_gb, texts))
-        if parsed.devices:
-            result_parts.append(f'{max(cur_devices, parsed.devices)} уст.')
+    else:
+        summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts)
+        if parsed.add_extra_squad:
+            summary += ' +сервер'
 
         if sub_info_lines and sub:
-            description = f'{" | ".join(sub_info_lines)} → {", ".join(result_parts)}' if result_parts else f'{" | ".join(sub_info_lines)} → {gift_summary}'
+            result_days = cur_days + parsed.days
+            result_parts = [
+                _days_label_short(result_days, texts),
+                _fmt_traffic(parsed.traffic_gb, texts),
+                f'{max(cur_devices, parsed.devices)} уст.',
+            ]
+            description = f'{" | ".join(sub_info_lines)} → {", ".join(result_parts)}'
         else:
-            description = gift_summary
+            description = summary
 
-        caption = _build_subscription_caption(username, parsed.days, parsed.traffic_gb, parsed.devices, texts)
-        title = f'{recipient_display} — {gift_summary}'
+        caption = _build_subscription_caption(recipient_display, parsed.days, parsed.traffic_gb, parsed.devices, texts, bc=parsed.add_extra_squad)
+        title = f'{recipient_display} — {summary}'
 
-    results = [
-        types.InlineQueryResultArticle(
-            id=gift_code,
-            title=title,
-            description=description,
-            thumbnail_url=thumbnail_url,
-            thumbnail_width=512,
-            thumbnail_height=512,
-            input_message_content=types.InputTextMessageContent(
-                message_text=caption,
-                parse_mode='HTML',
-                link_preview_options=types.LinkPreviewOptions(
-                    show_above_text=True,
-                    url=thumbnail_url,
-                ),
-            ),
-            reply_markup=keyboard,
-        )
-    ]
+    results = [types.InlineQueryResultArticle(
+        id=gift_code,
+        title=title,
+        description=description,
+        thumbnail_url=thumb,
+        thumbnail_width=512,
+        thumbnail_height=512,
+        input_message_content=types.InputTextMessageContent(
+            message_text=caption,
+            parse_mode='HTML',
+            link_preview_options=types.LinkPreviewOptions(show_above_text=True, url=thumb),
+        ),
+        reply_markup=keyboard,
+    )]
     await inline_query.answer(results, cache_time=0, is_personal=True)
 
 
 async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
-    """Create the gift DB record on selection."""
     if not _is_admin(chosen.from_user.id):
         return
 
     gift_code = chosen.result_id
-    if gift_code in ('info_only', 'hint_sub', 'hint_random', 'hint_discount', 'hint_balance'):
+    if gift_code in ('info_only', 'hint_sub', 'hint_multi', 'hint_disc', 'hint_bal', 'hint_bc'):
         return
 
     inline_message_id = chosen.inline_message_id
@@ -514,46 +482,48 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
 
     async with AsyncSessionLocal() as db:
         admin_user = await get_user_by_telegram_id(db, chosen.from_user.id)
-
-        if parsed.gift_type == 'random_subscription':
-            # Create N gift records with recipient_telegram_id = 0 (first-come)
-            has_params = parsed.days or parsed.traffic_gb or parsed.devices
-            if not has_params:
-                return
-            count = max(1, parsed.random_count)
-            # First gift gets the actual inline_message_id; rest get None (no button to update)
-            for i in range(count):
-                code = gift_code if i == 0 else secrets.token_urlsafe(32)
-                gift = InlineGiftSubscription(
-                    gift_code=code,
-                    recipient_telegram_id=0,
-                    sender_user_id=admin_user.id if admin_user else None,
-                    gift_type='subscription',
-                    days=parsed.days,
-                    traffic_limit_gb=parsed.traffic_gb,
-                    device_limit=parsed.devices or 1,
-                    inline_message_id=inline_message_id if i == 0 else None,
-                )
-                db.add(gift)
-            await db.commit()
-            logger.info(
-                'Random inline gifts created',
-                gift_code=gift_code,
-                count=count,
-                days=parsed.days,
-            )
-            return
-
-        username = parsed.username
-        if not username:
-            return
-
         from sqlalchemy import func as sql_func
-        result = await db.execute(
-            select(User).where(sql_func.lower(User.username) == username.lower())
-        )
+
+        if parsed.gift_type == 'multi':
+            gift = InlineGiftSubscription(
+                gift_code=gift_code,
+                recipient_telegram_id=0,
+                sender_user_id=admin_user.id if admin_user else None,
+                gift_type='subscription',
+                days=parsed.days,
+                traffic_limit_gb=parsed.traffic_gb,
+                device_limit=parsed.devices or _DEFAULT_DEVICES,
+                max_activations=parsed.multi_count,
+                activated_count=0,
+                add_extra_squad=parsed.add_extra_squad,
+                inline_message_id=inline_message_id,
+            )
+            db.add(gift)
+            await db.commit()
+            logger.info('Multi-activation gift created', gift_code=gift_code, count=parsed.multi_count)
+            return
+
+        # Resolve recipient
+        if parsed.target_id:
+            result = await db.execute(select(User).where(User.telegram_id == parsed.target_id))
+        elif parsed.username:
+            result = await db.execute(
+                select(User).where(sql_func.lower(User.username) == parsed.username.lower())
+            )
+        else:
+            return
+
         db_user = result.scalars().first()
-        recipient_telegram_id = db_user.telegram_id if db_user else 0
+        recipient_telegram_id = db_user.telegram_id if db_user else (parsed.target_id or 0)
+
+        # intended_target stored for unknown users (checked at activation)
+        if not db_user:
+            if parsed.target_id:
+                intended_sentinel = f'tid:{parsed.target_id}'
+            else:
+                intended_sentinel = f'u:{parsed.username}'
+        else:
+            intended_sentinel = None
 
         if parsed.gift_type == 'discount':
             if not parsed.discount_percent:
@@ -567,7 +537,8 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 discount_percent=parsed.discount_percent,
-                inline_message_id=inline_message_id or f'u:{username}',
+                add_extra_squad=False,
+                inline_message_id=inline_message_id or intended_sentinel,
             )
         elif parsed.gift_type == 'balance':
             if not parsed.balance_rub:
@@ -581,14 +552,10 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 balance_amount_kopeks=parsed.balance_rub * 100,
-                inline_message_id=inline_message_id or f'u:{username}',
+                add_extra_squad=False,
+                inline_message_id=inline_message_id or intended_sentinel,
             )
         else:
-            # subscription
-            has_params = parsed.days or parsed.traffic_gb or parsed.devices
-            if not has_params:
-                logger.warning('chosen_inline_result with empty params', gift_code=gift_code, query=query_text)
-                return
             gift = InlineGiftSubscription(
                 gift_code=gift_code,
                 recipient_telegram_id=recipient_telegram_id,
@@ -596,8 +563,9 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 gift_type='subscription',
                 days=parsed.days,
                 traffic_limit_gb=parsed.traffic_gb,
-                device_limit=parsed.devices or 1,
-                inline_message_id=inline_message_id or f'u:{username}',
+                device_limit=parsed.devices or _DEFAULT_DEVICES,
+                add_extra_squad=parsed.add_extra_squad,
+                inline_message_id=inline_message_id or intended_sentinel,
             )
 
         db.add(gift)
@@ -605,7 +573,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         logger.info(
             'Inline gift created',
             gift_code=gift_code,
-            username=username,
+            recipient_telegram_id=recipient_telegram_id,
             gift_type=parsed.gift_type,
         )
 

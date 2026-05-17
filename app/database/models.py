@@ -3441,11 +3441,16 @@ class InlineGiftSubscription(Base):
     discount_percent = Column(Integer, nullable=True)
     # Balance parameters (gift_type == 'balance'), stored in kopeks
     balance_amount_kopeks = Column(Integer, nullable=True)
+    # Multi-activation support (for "-r N" gifts: N separate activations, one shared code)
+    max_activations = Column(Integer, nullable=False, default=1, server_default='1')
+    activated_count = Column(Integer, nullable=False, default=0, server_default='0')
+    # Extra squad flag: add recipient to squad 050365af-1377-469c-b625-4e88d3e0e3ae
+    add_extra_squad = Column(Boolean, nullable=False, default=False, server_default='false')
     # Inline message tracking for button update
     inline_message_id = Column(String(255), nullable=True)
     inline_chat_id = Column(BigInteger, nullable=True)
     inline_msg_id = Column(BigInteger, nullable=True)
-    # Status
+    # is_activated = True when fully exhausted (activated_count >= max_activations)
     is_activated = Column(Boolean, nullable=False, default=False, server_default='false')
     activated_at = Column(AwareDateTime(), nullable=True)
     activated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
