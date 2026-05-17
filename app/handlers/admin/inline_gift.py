@@ -1,31 +1,32 @@
 """Admin inline query handler for gifting subscriptions, discounts and balance.
 
-Syntax (flags replace old symbols):
+Syntax:
 
-  Subscription gift (to specific user by @username or numeric TG ID):
-    @botname @user 30              — +30 days, defaults for traffic/devices
-    @botname 123456789 30          — same but by Telegram ID
-    @botname @user -p 30 500 3     — explicit flag: 30 days, 500 GB, 3 devices
-    @botname @user -p -1           — forever
+  Subscription (to specific user by @username or numeric TG ID):
+    @botname @user 30              — +30 days only, traffic/devices не меняются
+    @botname 123456789 30          — то же по ID
+    @botname @user 30 500 3        — 30 дней, 500 ГБ, 3 устройства
+    @botname @user 30 - 3          — 30 дней, трафик не меняем, 3 устройства
+    @botname @user - - 3           — только устройства
+    @botname @user -p 30 500 3     — то же с явным флагом -p
+    @botname @user -p -1           — навсегда
 
-  Multi-activation gift (first N users):
-    @botname -r 5 30               — 5 activations, 30 days each
-    @botname -r 5 30 500 3         — 5 activations, 30 days, 500 GB, 3 devices
+  Multi-activation (первым N):
+    @botname -r 5 30               — 5 активаций, 30 дней
+    @botname -r 5 30 500 3         — 5 активаций, 30 дней, 500 ГБ, 3 уст.
+    @botname -r 5 30 - 3 -bc       — 5 активаций, 30 дней, уст. 3, доп. сервер
 
   Discount:
-    @botname @user -d 15           — 15% discount promocode
-    @botname 123456789 -d 15       — same by ID
+    @botname @user -d 15           — скидка 15%
 
-  Balance top-up:
-    @botname @user -b 1500         — add 1500 ₽
-    @botname 123456789 -b 1500     — same by ID
+  Balance:
+    @botname @user -b 1500         — +1500 ₽
 
-  Extra squad (-bc adds recipient to squad 050365af-1377-469c-b625-4e88d3e0e3ae):
-    @botname @user 30 -bc
-    @botname @user -p 30 500 -bc
+  Extra squad:
+    -bc  добавляет сквад 050365af-1377-469c-b625-4e88d3e0e3ae
 
-Defaults when values omitted: days=7, traffic_gb=300, devices=2
 Special values: -1 for days = forever; -1 for traffic = unlimited; -1 for devices = 999
+Placeholder: - (dash) = пропустить позицию, не менять значение
 """
 
 import html
@@ -54,11 +55,6 @@ _EXTRA_SQUAD_UUID = '050365af-1377-469c-b625-4e88d3e0e3ae'
 _FOREVER_DAYS = (2099 - 2025) * 365
 _MAX_DEVICES = 999
 
-# Defaults applied when a value is omitted
-_DEFAULT_DAYS = 7
-_DEFAULT_TRAFFIC = 300
-_DEFAULT_DEVICES = 2
-
 
 def _is_admin(telegram_id: int) -> bool:
     return settings.is_admin(telegram_id)
@@ -67,37 +63,63 @@ def _is_admin(telegram_id: int) -> bool:
 @dataclass
 class ParsedQuery:
     gift_type: Literal['subscription', 'discount', 'balance', 'multi']
-    # Target: either username (str) or telegram_id (int) or 0 for multi
     username: str
-    target_id: int          # >0 when user entered numeric ID directly
+    target_id: int          # >0 when user entered numeric ID
     multi_count: int        # >0 for -r mode
-    days: int
-    traffic_gb: int
-    devices: int
+    days: int | None        # None = no change
+    traffic_gb: int | None  # None = no change; -1 = unlimited; 0 = unlimited in DB
+    devices: int | None     # None = no change
     discount_percent: int
     balance_rub: int
     add_extra_squad: bool = field(default=False)
 
 
-def _int(s: str, allow_neg_one: bool = False) -> int:
+def _parse_val(s: str, allow_neg_one: bool = False) -> int | None:
+    """Parse a token: '-' → None (skip), '-1' → -1 (special), else int ≥ 0."""
+    if s == '-':
+        return None
     try:
         v = int(s)
     except (ValueError, TypeError):
-        return 0
+        return None
     if v == -1 and allow_neg_one:
         return -1
     return max(0, v)
 
 
+def _resolve_days(v: int | None) -> int | None:
+    if v is None:
+        return None
+    if v == -1:
+        return _FOREVER_DAYS
+    return v if v > 0 else None
+
+
+def _resolve_traffic(v: int | None) -> int | None:
+    if v is None:
+        return None
+    if v == -1:
+        return -1  # sentinel: unlimited
+    return v if v > 0 else None
+
+
+def _resolve_devices(v: int | None) -> int | None:
+    if v is None:
+        return None
+    if v == -1:
+        return _MAX_DEVICES
+    return v if v > 0 else None
+
+
+def _parse_sub_args(args: list[str]) -> tuple[int | None, int | None, int | None]:
+    """Parse [days [traffic [devices]]] with '-' as skip."""
+    days = _resolve_days(_parse_val(args[0], True) if len(args) > 0 else None)
+    traffic = _resolve_traffic(_parse_val(args[1], True) if len(args) > 1 else None)
+    devices = _resolve_devices(_parse_val(args[2], True) if len(args) > 2 else None)
+    return days, traffic, devices
+
+
 def _parse_query(query_text: str) -> ParsedQuery:
-    """Parse inline query into ParsedQuery.
-
-    Token order:
-      [target] [-flag [args...]] [-bc]
-
-    target = @username | numeric_id (absent for -r)
-    flags  = -p | -d | -b | -r | -bc
-    """
     text = query_text.strip()
     tokens = text.split()
 
@@ -105,19 +127,17 @@ def _parse_query(query_text: str) -> ParsedQuery:
     tokens = [t for t in tokens if t != '-bc']
 
     if not tokens:
-        return ParsedQuery('subscription', '', 0, 0, 0, 0, 0, 0, 0, add_bc)
+        return ParsedQuery('subscription', '', 0, 0, None, None, None, 0, 0, add_bc)
 
-    # -r N [days [traffic [devices]]]  — multi-activation, no specific target
+    # -r N [days [traffic [devices]]]
     if tokens[0] == '-r':
         rest = tokens[1:]
-        count = max(1, _int(rest[0]) or 1) if rest else 1
+        count = max(1, int(rest[0]) if rest and rest[0].isdigit() else 1)
         rest = rest[1:]
-        days = _resolve_days(_int(rest[0], True) if rest else 0)
-        traffic = _resolve_traffic(_int(rest[1], True) if len(rest) > 1 else 0)
-        devices = _resolve_devices(_int(rest[2], True) if len(rest) > 2 else 0)
+        days, traffic, devices = _parse_sub_args(rest)
         return ParsedQuery('multi', '', 0, count, days, traffic, devices, 0, 0, add_bc)
 
-    # Extract target token
+    # Extract target
     first = tokens[0]
     if first.startswith('@'):
         username = first.lstrip('@')
@@ -128,55 +148,29 @@ def _parse_query(query_text: str) -> ParsedQuery:
         username = ''
         rest = tokens[1:]
     else:
-        # No recognisable target yet — show info/hints
-        return ParsedQuery('subscription', '', 0, 0, 0, 0, 0, 0, 0, add_bc)
+        return ParsedQuery('subscription', '', 0, 0, None, None, None, 0, 0, add_bc)
 
     if not rest:
-        return ParsedQuery('subscription', username, target_id, 0, 0, 0, 0, 0, 0, add_bc)
+        return ParsedQuery('subscription', username, target_id, 0, None, None, None, 0, 0, add_bc)
 
     flag = rest[0]
     args = rest[1:]
 
-    # -d percent
     if flag == '-d':
-        pct = max(1, min(99, _int(args[0]) if args else 0))
-        return ParsedQuery('discount', username, target_id, 0, 0, 0, 0, pct, 0, add_bc)
+        pct = max(1, min(99, int(args[0]) if args and args[0].isdigit() else 0))
+        return ParsedQuery('discount', username, target_id, 0, None, None, None, pct, 0, add_bc)
 
-    # -b rubles
     if flag == '-b':
-        rub = _int(args[0]) if args else 0
-        return ParsedQuery('balance', username, target_id, 0, 0, 0, 0, 0, rub, add_bc)
+        rub = int(args[0]) if args and args[0].isdigit() else 0
+        return ParsedQuery('balance', username, target_id, 0, None, None, None, 0, rub, add_bc)
 
-    # -p [days [traffic [devices]]]  — explicit subscription flag
     if flag == '-p':
-        days = _resolve_days(_int(args[0], True) if args else 0)
-        traffic = _resolve_traffic(_int(args[1], True) if len(args) > 1 else 0)
-        devices = _resolve_devices(_int(args[2], True) if len(args) > 2 else 0)
+        days, traffic, devices = _parse_sub_args(args)
         return ParsedQuery('subscription', username, target_id, 0, days, traffic, devices, 0, 0, add_bc)
 
-    # No flag: plain numbers after target = subscription
-    days = _resolve_days(_int(rest[0], True) if rest else 0)
-    traffic = _resolve_traffic(_int(rest[1], True) if len(rest) > 1 else 0)
-    devices = _resolve_devices(_int(rest[2], True) if len(rest) > 2 else 0)
+    # No flag: plain values after target
+    days, traffic, devices = _parse_sub_args(rest)
     return ParsedQuery('subscription', username, target_id, 0, days, traffic, devices, 0, 0, add_bc)
-
-
-def _resolve_days(v: int) -> int:
-    if v == -1:
-        return _FOREVER_DAYS
-    return v if v else _DEFAULT_DAYS
-
-
-def _resolve_traffic(v: int) -> int:
-    if v == -1:
-        return -1  # sentinel: unlimited
-    return v if v else _DEFAULT_TRAFFIC
-
-
-def _resolve_devices(v: int) -> int:
-    if v == -1:
-        return _MAX_DEVICES
-    return v if v else _DEFAULT_DEVICES
 
 
 def _days_label_short(days: int, texts) -> str:
@@ -197,24 +191,32 @@ def _fmt_traffic(gb: int, texts) -> str:
     return f'{gb} {texts.t("INLINE_GIFT_GB_SUFFIX", "ГБ")}'
 
 
-def _gift_summary(days: int, traffic_gb: int, devices: int, texts) -> str:
+def _gift_summary(days: int | None, traffic_gb: int | None, devices: int | None, texts, bc: bool = False) -> str:
+    """Build short summary showing only specified values."""
     parts = []
-    parts.append(_days_label_short(days, texts))
-    parts.append(_fmt_traffic(traffic_gb, texts))
-    parts.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
-    return ', '.join(parts)
+    if days is not None:
+        parts.append(_days_label_short(days, texts))
+    if traffic_gb is not None:
+        parts.append(_fmt_traffic(traffic_gb, texts))
+    if devices is not None:
+        parts.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
+    if bc:
+        parts.append('+ доп. сервер')
+    return ', '.join(parts) if parts else '—'
 
 
-def _build_subscription_caption(display: str, days: int, traffic_gb: int, devices: int, texts, multi_count: int = 0, bc: bool = False) -> str:
+def _build_subscription_caption(display: str, days: int | None, traffic_gb: int | None, devices: int | None, texts, multi_count: int = 0, bc: bool = False) -> str:
     safe = html.escape(display) if display else ''
-    lines = [
-        _days_label_short(days, texts),
-        _fmt_traffic(traffic_gb, texts),
-        f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}',
-    ]
+    lines = []
+    if days is not None:
+        lines.append(_days_label_short(days, texts))
+    if traffic_gb is not None:
+        lines.append(_fmt_traffic(traffic_gb, texts))
+    if devices is not None:
+        lines.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
     if bc:
         lines.append('+ доп. сервер')
-    body = '\n'.join(lines)
+    body = '\n'.join(lines) if lines else '—'
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
 
     if multi_count > 0:
@@ -247,11 +249,11 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
     )
     hints = [
-        ('hint_sub',    '@user [дни]',       'Подписка: @user 30  /  123456789 30  /  @user -p 30 500 3', '@user 30'),
-        ('hint_multi',  '-r N [дни]',        'Первым N: -r 5 30  /  -r 5 30 500 3', '-r 5 30'),
-        ('hint_disc',   '@user -d процент',  'Скидка: @user -d 15', '@user -d 15'),
-        ('hint_bal',    '@user -b сумма',    'Баланс: @user -b 1500', '@user -b 1500'),
-        ('hint_bc',     '... -bc',           'Добавить в доп. сквад: @user 30 -bc', '@user 30 -bc'),
+        ('hint_sub',   '@user дни [гб [уст.]]',   'Подписка: @user 30  /  @user 30 500 3  /  @user 30 - 3', '@user 30'),
+        ('hint_multi', '-r N дни [гб [уст.]]',    'Первым N: -r 5 30  /  -r 5 30 500 3', '-r 5 30'),
+        ('hint_disc',  '@user -d процент',         'Скидка: @user -d 15', '@user -d 15'),
+        ('hint_bal',   '@user -b сумма',           'Баланс: @user -b 1500', '@user -b 1500'),
+        ('hint_bc',    '... -bc',                  'Доп. сервер: @user 30 -bc  /  -r 5 30 -bc', '@user 30 -bc'),
     ]
     results = []
     for rid, title, desc, _ in hints:
@@ -267,20 +269,19 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
     return results
 
 
-def _flag_hint(query_text: str, texts) -> str | None:
-    """Return switch_pm_text hint relevant to what admin is currently typing."""
+def _flag_hint(query_text: str, texts) -> str:
     t = query_text.strip()
     if '-r' in t:
-        return '-r N дни [гб [уст.]]  — первым N'
+        return '-r N дни [гб [уст.]]  — первым N  |  - для пропуска'
     if '-d' in t:
-        return '-d процент  — скидка %'
+        return '-d процент  — скидка'
     if '-b' in t:
         return '-b сумма  — пополнить баланс'
+    if '-p' in t:
+        return '-p дни [гб [уст.]]  |  - для пропуска позиции'
     if '-bc' in t:
         return '-bc  — добавить в доп. сервер'
-    if '-p' in t:
-        return '-p дни [гб [уст.]]  — подписка'
-    return texts.t('INLINE_GIFT_QUERY_HINT', '@user дни | -r N дни | @user -d % | @user -b ₽')
+    return '@user дни [гб [уст.]] | -r N | -d % | -b ₽  |  - пропуск'
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
@@ -298,11 +299,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     )
 
     hint_text = _flag_hint(query_text, texts)
-    hint_kwargs = dict(
-        cache_time=1,
-        switch_pm_text=hint_text,
-        switch_pm_parameter='help',
-    )
+    hint_kwargs = dict(cache_time=1, switch_pm_text=hint_text, switch_pm_parameter='help')
 
     if not query_text:
         await inline_query.answer(_build_syntax_hint(texts), **hint_kwargs)
@@ -310,7 +307,12 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     # Multi-activation mode (-r N ...)
     if parsed.gift_type == 'multi':
-        summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts)
+        has_params = parsed.days is not None or parsed.traffic_gb is not None or parsed.devices is not None
+        if not has_params:
+            await inline_query.answer([], **hint_kwargs)
+            return
+
+        summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts, bc=parsed.add_extra_squad)
         gift_code = secrets.token_urlsafe(32)
         bot_username = settings.BOT_USERNAME or ''
         deep_link = f'https://t.me/{bot_username}?start={_GIFT_PREFIX}{gift_code}'
@@ -335,10 +337,10 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             ),
             reply_markup=keyboard,
         )]
-        await inline_query.answer(results, cache_time=0, is_personal=True)
+        await inline_query.answer(results, cache_time=0, is_personal=True, switch_pm_text=hint_text, switch_pm_parameter='help')
         return
 
-    # Named target: lookup by username or telegram_id
+    # Named target
     username = parsed.username
     target_id = parsed.target_id
 
@@ -383,12 +385,12 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             else:
                 sub_info_lines = [texts.t('INLINE_GIFT_NO_SUB', 'нет подписки')]
 
-    # Info-only: user typed target but no params / no flag yet
+    # Info-only
     is_info_only = (
         parsed.gift_type == 'subscription'
-        and parsed.days == 0
-        and parsed.traffic_gb == 0
-        and parsed.devices == 0
+        and parsed.days is None
+        and parsed.traffic_gb is None
+        and parsed.devices is None
         and not parsed.discount_percent
         and not parsed.balance_rub
     )
@@ -433,18 +435,18 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         title = f'{recipient_display} — +{rub} ₽'
 
     else:
-        summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts)
-        if parsed.add_extra_squad:
-            summary += ' +сервер'
+        summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts, bc=parsed.add_extra_squad)
 
         if sub_info_lines and sub:
-            result_days = cur_days + parsed.days
-            result_parts = [
-                _days_label_short(result_days, texts),
-                _fmt_traffic(parsed.traffic_gb, texts),
-                f'{max(cur_devices, parsed.devices)} уст.',
-            ]
-            description = f'{" | ".join(sub_info_lines)} → {", ".join(result_parts)}'
+            result_parts = []
+            if parsed.days is not None:
+                result_days = cur_days + parsed.days
+                result_parts.append(_days_label_short(result_days, texts))
+            if parsed.traffic_gb is not None:
+                result_parts.append(_fmt_traffic(parsed.traffic_gb, texts))
+            if parsed.devices is not None:
+                result_parts.append(f'{max(cur_devices, parsed.devices)} уст.')
+            description = f'{" | ".join(sub_info_lines)} → {", ".join(result_parts)}' if result_parts else ' | '.join(sub_info_lines)
         else:
             description = summary
 
@@ -485,6 +487,9 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         from sqlalchemy import func as sql_func
 
         if parsed.gift_type == 'multi':
+            has_params = parsed.days is not None or parsed.traffic_gb is not None or parsed.devices is not None
+            if not has_params:
+                return
             gift = InlineGiftSubscription(
                 gift_code=gift_code,
                 recipient_telegram_id=0,
@@ -492,7 +497,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 gift_type='subscription',
                 days=parsed.days,
                 traffic_limit_gb=parsed.traffic_gb,
-                device_limit=parsed.devices or _DEFAULT_DEVICES,
+                device_limit=parsed.devices,
                 max_activations=parsed.multi_count,
                 activated_count=0,
                 add_extra_squad=parsed.add_extra_squad,
@@ -516,14 +521,12 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         db_user = result.scalars().first()
         recipient_telegram_id = db_user.telegram_id if db_user else (parsed.target_id or 0)
 
-        # intended_target stored for unknown users (checked at activation)
+        intended_sentinel = None
         if not db_user:
             if parsed.target_id:
                 intended_sentinel = f'tid:{parsed.target_id}'
             else:
                 intended_sentinel = f'u:{parsed.username}'
-        else:
-            intended_sentinel = None
 
         if parsed.gift_type == 'discount':
             if not parsed.discount_percent:
@@ -556,6 +559,9 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 inline_message_id=inline_message_id or intended_sentinel,
             )
         else:
+            has_params = parsed.days is not None or parsed.traffic_gb is not None or parsed.devices is not None
+            if not has_params:
+                return
             gift = InlineGiftSubscription(
                 gift_code=gift_code,
                 recipient_telegram_id=recipient_telegram_id,
@@ -563,7 +569,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 gift_type='subscription',
                 days=parsed.days,
                 traffic_limit_gb=parsed.traffic_gb,
-                device_limit=parsed.devices or _DEFAULT_DEVICES,
+                device_limit=parsed.devices,
                 add_extra_squad=parsed.add_extra_squad,
                 inline_message_id=inline_message_id or intended_sentinel,
             )

@@ -6,6 +6,15 @@ Flow:
 3. Bot shows preview of what changes.
 4. On confirm: applies gift, decrements counter, updates button text.
    When activated_count >= max_activations → mark is_activated=True, button → ✓.
+
+DB encoding for subscription params:
+  days=NULL          → no change
+  days=N             → add N days
+  traffic_limit_gb=NULL  → no change
+  traffic_limit_gb=-1    → set unlimited (0 in remnawave)
+  traffic_limit_gb=N     → set to N GB
+  device_limit=NULL  → no change
+  device_limit=N     → set to N devices
 """
 
 from datetime import UTC, datetime
@@ -52,20 +61,21 @@ def _fmt_traffic(gb: int, texts) -> str:
 
 
 def _build_info_text(gift_days, gift_traffic_gb, gift_devices, texts, existing_sub=None) -> str:
+    """Build activation preview. NULL values = no change, not shown."""
     lines = []
 
     if existing_sub is None:
-        if gift_days:
+        if gift_days is not None:
             lines.append(
                 f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id=\'5967412305338568701\'>📅</tg-emoji>")} '
                 f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(gift_days, texts)}</b>'
             )
-        if gift_traffic_gb:
+        if gift_traffic_gb is not None:
             lines.append(
                 f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id=\'5931472654660800739\'>📊</tg-emoji>")} '
                 f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
             )
-        if gift_devices:
+        if gift_devices is not None:
             lines.append(
                 f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id=\'5877318502947229960\'>💻</tg-emoji>")} '
                 f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{gift_devices}</b>'
@@ -75,7 +85,7 @@ def _build_info_text(gift_days, gift_traffic_gb, gift_devices, texts, existing_s
         cur_traffic = existing_sub.traffic_limit_gb or 0
         cur_devices = existing_sub.device_limit or 1
 
-        if gift_days:
+        if gift_days is not None:
             new_days = cur_days + gift_days
             forever = gift_days >= _FOREVER_DAYS or new_days >= _FOREVER_DAYS
             if forever:
@@ -91,7 +101,7 @@ def _build_info_text(gift_days, gift_traffic_gb, gift_devices, texts, existing_s
                     f'+{gift_days}{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → <b>{_days_label(new_days, texts)}</b>'
                 )
 
-        if gift_traffic_gb:
+        if gift_traffic_gb is not None:
             if gift_traffic_gb == -1:
                 if cur_traffic != 0:
                     lines.append(
@@ -108,7 +118,7 @@ def _build_info_text(gift_days, gift_traffic_gb, gift_devices, texts, existing_s
                     f'{sign}{delta} → <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
                 )
 
-        if gift_devices:
+        if gift_devices is not None:
             new_dev = max(cur_devices, gift_devices)
             if new_dev != cur_devices:
                 lines.append(
@@ -131,31 +141,22 @@ def _build_info_text(gift_days, gift_traffic_gb, gift_devices, texts, existing_s
 
 
 def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
-    """Return True if this user is allowed to activate the gift."""
-    max_act = getattr(gift, 'max_activations', 1) or 1
-    activated = getattr(gift, 'activated_count', 0) or 0
-
-    # Multi-activation (anyone until exhausted)
     if gift.recipient_telegram_id == 0:
         raw = gift.inline_message_id or ''
-        # If no intended target sentinel — open to all
         if not raw.startswith('u:') and not raw.startswith('tid:'):
             return True
         if raw.startswith('tid:'):
             try:
-                intended_id = int(raw[4:])
-                return telegram_id == intended_id
+                return telegram_id == int(raw[4:])
             except ValueError:
                 return False
         if raw.startswith('u:'):
-            intended_uname = raw[2:].lower()
-            return username.lower() == intended_uname
+            return username.lower() == raw[2:].lower()
         return True
-
     return telegram_id == gift.recipient_telegram_id
 
 
-async def handle_gift_deeplink(message: types.Message, gift_code: str) -> bool:
+async def handle_gift_deeplink(message: types.Message, gift_code: str, state=None) -> bool:
     telegram_id = message.from_user.id
     username = (message.from_user.username or '').lower()
 
@@ -183,13 +184,18 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str) -> bool:
             await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
             return True
 
-        # Bind recipient for unregistered named target
-        if gift.recipient_telegram_id == 0:
+        # Unregistered user — save gift code and let start.py run registration
+        if not user:
+            if state:
+                await state.update_data(pending_inline_gift_code=gift_code)
+            return False
+
+        if gift.recipient_telegram_id == 0 and max_act == 1:
             gift.recipient_telegram_id = telegram_id
             await session.commit()
             await session.refresh(gift)
 
-        existing_sub = await get_subscription_by_user_id(session, user.id) if user else None
+        existing_sub = await get_subscription_by_user_id(session, user.id)
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[[
         types.InlineKeyboardButton(
@@ -264,14 +270,10 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 pct = gift.discount_percent or 0
                 promo_code_str = _secrets.token_hex(4).upper()
                 await create_promocode(
-                    db,
-                    code=promo_code_str,
-                    type=PromoCodeType.DISCOUNT,
-                    balance_bonus_kopeks=pct,
-                    max_uses=1,
-                    created_by=gift.sender_user_id,
+                    db, code=promo_code_str, type=PromoCodeType.DISCOUNT,
+                    balance_bonus_kopeks=pct, max_uses=1, created_by=gift.sender_user_id,
                 )
-                gift.activated_count = (getattr(gift, 'activated_count', 0) or 0) + 1
+                gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
                 gift.activated_by_user_id = user.id
@@ -294,7 +296,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 kopeks = gift.balance_amount_kopeks or 0
                 rub = kopeks // 100
                 await add_user_balance(db, user, kopeks, description='Подарок от администратора')
-                gift.activated_count = (getattr(gift, 'activated_count', 0) or 0) + 1
+                gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
                 gift.activated_by_user_id = user.id
@@ -316,65 +318,69 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             from app.database.crud.server_squad import get_available_server_squads
             available = await get_available_server_squads(db)
             squads: list[str] = [available[0].squad_uuid] if available else []
-
             if add_extra_squad and _EXTRA_SQUAD_UUID not in squads:
                 squads.append(_EXTRA_SQUAD_UUID)
 
             existing_sub = await get_subscription_by_user_id(db, user.id)
             subscription_service = SubscriptionService()
 
+            gift_days = gift.days          # None = no change
+            gift_traffic = gift.traffic_limit_gb  # None = no change, -1 = unlimited, N = set N
+            gift_devices = gift.device_limit      # None = no change
+
             if existing_sub:
-                gift_traffic = gift.traffic_limit_gb
-                if gift_traffic == -1:
+                # traffic
+                if gift_traffic is None:
+                    new_traffic = None
+                elif gift_traffic == -1:
                     new_traffic = 0
-                elif gift_traffic and gift_traffic != existing_sub.traffic_limit_gb:
+                elif gift_traffic != existing_sub.traffic_limit_gb:
                     new_traffic = gift_traffic
                 else:
                     new_traffic = None
 
-                new_devices_val = gift.device_limit or 0
-                cur_devices = existing_sub.device_limit or 1
-                new_devices = max(cur_devices, new_devices_val) if new_devices_val else None
-                if new_devices == cur_devices:
+                # devices
+                if gift_devices is None:
                     new_devices = None
+                else:
+                    cur_dev = existing_sub.device_limit or 1
+                    new_devices = max(cur_dev, gift_devices)
+                    if new_devices == cur_dev:
+                        new_devices = None
 
-                if gift.days >= _FOREVER_DAYS:
+                # days
+                if gift_days is not None and gift_days >= _FOREVER_DAYS:
                     existing_sub.end_date = datetime.now(UTC).replace(year=2099)
                     subscription = await extend_subscription(
-                        db=db,
-                        subscription=existing_sub,
-                        days=0,
-                        traffic_limit_gb=new_traffic,
-                        device_limit=new_devices,
-                        connected_squads=squads if squads else None,
-                        commit=False,
+                        db=db, subscription=existing_sub, days=0,
+                        traffic_limit_gb=new_traffic, device_limit=new_devices,
+                        connected_squads=squads if squads else None, commit=False,
                     )
                 else:
                     subscription = await extend_subscription(
-                        db=db,
-                        subscription=existing_sub,
-                        days=gift.days,
-                        traffic_limit_gb=new_traffic,
-                        device_limit=new_devices,
-                        connected_squads=squads if squads else None,
-                        commit=False,
+                        db=db, subscription=existing_sub, days=gift_days or 0,
+                        traffic_limit_gb=new_traffic, device_limit=new_devices,
+                        connected_squads=squads if squads else None, commit=False,
                     )
                 await subscription_service.update_remnawave_user(db, subscription)
             else:
-                duration_days = gift.days or 0
+                duration_days = gift_days or 0
                 forever_end_date = None
                 if duration_days >= _FOREVER_DAYS:
                     forever_end_date = datetime.now(UTC).replace(year=2099)
                     duration_days = 1
 
+                traffic_for_new = (
+                    0 if gift_traffic == -1
+                    else settings.DEFAULT_TRAFFIC_LIMIT_GB if gift_traffic is None
+                    else gift_traffic
+                )
+                devices_for_new = gift_devices if gift_devices is not None else settings.DEFAULT_DEVICE_LIMIT
+
                 subscription = await create_paid_subscription(
-                    db=db,
-                    user_id=user.id,
-                    duration_days=duration_days,
-                    traffic_limit_gb=0 if gift.traffic_limit_gb == -1 else (gift.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB),
-                    device_limit=gift.device_limit or settings.DEFAULT_DEVICE_LIMIT,
-                    connected_squads=squads,
-                    update_server_counters=True,
+                    db=db, user_id=user.id, duration_days=duration_days,
+                    traffic_limit_gb=traffic_for_new, device_limit=devices_for_new,
+                    connected_squads=squads, update_server_counters=True,
                 )
                 if forever_end_date:
                     subscription.end_date = forever_end_date
@@ -382,7 +388,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
             await db.refresh(subscription)
 
-            new_activated = (getattr(gift, 'activated_count', 0) or 0) + 1
+            new_activated = activated + 1
             remaining = max_act - new_activated
             gift.activated_count = new_activated
             if new_activated >= max_act:
@@ -398,28 +404,22 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATION_ERROR', 'Произошла ошибка. Попробуйте позже.'))
             return
 
-        days_str = _days_label(gift.days, texts) if gift.days else ''
-        traffic_str = _fmt_traffic(gift.traffic_limit_gb, texts) if gift.traffic_limit_gb else ''
-        devices_val = gift.device_limit or 0
         parts = []
-        if days_str:
-            parts.append(f'+{days_str}')
-        if traffic_str:
-            parts.append(traffic_str)
-        if devices_val:
-            parts.append(f'{devices_val} уст.')
+        if gift_days is not None:
+            parts.append(f'+{_days_label(gift_days, texts)}')
+        if gift_traffic is not None:
+            parts.append(_fmt_traffic(gift_traffic, texts))
+        if gift_devices is not None:
+            parts.append(f'{gift_devices} уст.')
 
-        changes = ', '.join(parts) if parts else ''
+        changes = ', '.join(parts)
         if changes:
             success_text = texts.t(
                 'INLINE_GIFT_SUCCESS_CHANGES',
                 '✅ <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
             ).format(changes=changes)
         else:
-            success_text = texts.t(
-                'INLINE_GIFT_SUCCESS',
-                '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена.',
-            )
+            success_text = texts.t('INLINE_GIFT_SUCCESS', '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена.')
 
         back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
             types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
@@ -432,31 +432,25 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             if fully_used
             else texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(n=remaining)
         )
-        await _update_inline_button(callback.bot, inline_msg_id, button_text, remaining, max_act)
+        await _update_inline_button(callback.bot, inline_msg_id, button_text, remaining, max_act, gift_code=gift_code)
 
 
-async def _update_inline_button(bot: Bot, inline_msg_id: str | None, text: str, remaining: int, max_act: int) -> None:
+async def _update_inline_button(bot: Bot, inline_msg_id: str | None, text: str, remaining: int, max_act: int, gift_code: str = '') -> None:
     raw = inline_msg_id or ''
     if not raw or raw.startswith('u:') or raw.startswith('tid:'):
         return
     try:
-        fully_used = remaining == 0
-        if fully_used:
+        if remaining > 0 and gift_code:
+            bot_username = settings.BOT_USERNAME or ''
+            deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text=text, callback_data='igift_noop')
+                types.InlineKeyboardButton(text=text, url=deep_link)
             ]])
         else:
-            # Keep URL button updated with remaining count
-            # We can't know the original URL from here, so switch to noop if exhausted,
-            # but for partial we must edit to callback (no URL update possible without the URL).
-            # Workaround: use a noop button that shows remaining — user must re-click from start link.
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[
                 types.InlineKeyboardButton(text=text, callback_data='igift_noop')
             ]])
-        await bot.edit_message_reply_markup(
-            inline_message_id=raw,
-            reply_markup=kb,
-        )
+        await bot.edit_message_reply_markup(inline_message_id=raw, reply_markup=kb)
     except Exception as e:
         logger.warning('Could not update inline message button', error=str(e))
 
@@ -516,7 +510,7 @@ async def show_pending_inline_gift(message: types.Message, gift_code: str) -> No
             await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
             return
 
-        if gift.recipient_telegram_id == 0:
+        if gift.recipient_telegram_id == 0 and max_act == 1:
             gift.recipient_telegram_id = telegram_id
             await session.commit()
             await session.refresh(gift)

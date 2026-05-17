@@ -3434,9 +3434,10 @@ class InlineGiftSubscription(Base):
     # Gift type: 'subscription', 'discount', 'balance'
     gift_type = Column(String(20), nullable=False, default='subscription', server_default='subscription')
     # Subscription parameters (gift_type == 'subscription')
-    days = Column(Integer, nullable=False, default=0, server_default='0')
-    traffic_limit_gb = Column(Integer, nullable=False, default=0, server_default='0')
-    device_limit = Column(Integer, nullable=False, default=1, server_default='1')
+    # NULL = no change; days=0 means forever sentinel; traffic=-1 means set unlimited
+    days = Column(Integer, nullable=True)
+    traffic_limit_gb = Column(Integer, nullable=True)
+    device_limit = Column(Integer, nullable=True)
     # Discount parameters (gift_type == 'discount')
     discount_percent = Column(Integer, nullable=True)
     # Balance parameters (gift_type == 'balance'), stored in kopeks
