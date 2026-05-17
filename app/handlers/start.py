@@ -655,7 +655,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     if start_parameter and start_parameter.startswith('bs_'):
         from app.handlers.inline_gift import handle_gift_deeplink as _handle_igift
 
-        handled = await _handle_igift(message, start_parameter[3:])
+        handled = await _handle_igift(message, start_parameter[3:], state=state)
         if handled:
             return
         start_parameter = None
@@ -665,7 +665,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         gift_code = start_parameter[4:]
         from app.handlers.inline_gift import handle_gift_deeplink as _handle_igift
         logger.info('Legacy rbs_ gift deep link', gift_code_prefix=gift_code[:5], telegram_id=message.from_user.id)
-        handled = await _handle_igift(message, gift_code)
+        handled = await _handle_igift(message, gift_code, state=state)
         if handled:
             return
         start_parameter = None
