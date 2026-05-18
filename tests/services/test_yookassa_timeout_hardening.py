@@ -142,15 +142,54 @@ def test_dedicated_executor_exists_with_bounded_max_workers() -> None:
     """The bug-report's "обязательное" fix #2: dedicated executor with
     bounded ``max_workers`` so YK slowness can never starve the default
     pool that aiogram + DB + RemnaWave + everything else also uses.
+
+    Default is 4; tunable via ``YOOKASSA_MAX_CONCURRENT_REQUESTS``.
+    Both values are valid — we just pin that it's a small bounded
+    positive integer, not the unbounded default pool.
     """
     executor = yookassa_service._yookassa_executor
     assert executor is not None
     # ThreadPoolExecutor stores max_workers as _max_workers — private
     # but stable across Python versions.
-    assert getattr(executor, '_max_workers', None) == 4, (
-        'Dedicated YK executor must cap at 4 workers. Larger pool = same '
-        'starvation behaviour as the default pool under YK degradation.'
+    max_workers = getattr(executor, '_max_workers', None)
+    assert isinstance(max_workers, int) and max_workers >= 1, (
+        'Dedicated YK executor must have a positive max_workers cap'
     )
+    assert max_workers <= 32, (
+        f'YK executor max_workers={max_workers} is suspiciously large — '
+        f'starvation protection diminishes as the pool approaches the default pool size'
+    )
+
+
+def test_max_workers_resolver_respects_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """REGRESSION: ``YOOKASSA_MAX_CONCURRENT_REQUESTS`` env var must flow
+    through ``_resolve_max_workers()``. Without this, high-volume
+    operators can't tune burst capacity without a code patch.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 12, raising=False)
+    assert yookassa_service._resolve_max_workers() == 12
+
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 1, raising=False)
+    assert yookassa_service._resolve_max_workers() == 1
+
+
+def test_max_workers_resolver_floors_at_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A misconfigured ``YOOKASSA_MAX_CONCURRENT_REQUESTS=0`` must NOT
+    disable YK entirely — fall back to the default cap. Same defensive
+    pattern as the timeout values.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 0, raising=False)
+    assert yookassa_service._resolve_max_workers() == 4
+
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', -5, raising=False)
+    assert yookassa_service._resolve_max_workers() == 1
+
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 'garbage', raising=False)
+    assert yookassa_service._resolve_max_workers() == 4
 
 
 def test_dedicated_executor_thread_name_prefix() -> None:

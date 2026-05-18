@@ -112,8 +112,22 @@ def _patch_yookassa_timeout() -> None:
 # Dedicated executor for all synchronous YK SDK calls. Bounded so YK
 # slowness can never starve the rest of the bot. ``thread_name_prefix``
 # makes stack traces / py-spy output identifiable.
+#
+# Pool size is operator-tunable via ``settings.YOOKASSA_MAX_CONCURRENT_REQUESTS``
+# (default 4). Floored at 1 so a misconfigured ``0`` doesn't disable
+# YK entirely; the floor matches the same defensive pattern used for
+# the timeout values above.
+def _resolve_max_workers() -> int:
+    raw = getattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 4)
+    try:
+        value = int(raw or 4)
+    except (TypeError, ValueError):
+        value = 4
+    return max(1, value)
+
+
 _yookassa_executor: ThreadPoolExecutor = ThreadPoolExecutor(
-    max_workers=4,
+    max_workers=_resolve_max_workers(),
     thread_name_prefix='yookassa-sdk',
 )
 

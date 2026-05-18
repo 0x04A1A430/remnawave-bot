@@ -408,8 +408,24 @@ class Settings(BaseSettings):
     # hours later). app/services/yookassa_service.py monkey-patches
     # ApiClient.execute to pass these values to requests.Session, so
     # threads are guaranteed to unstick within ``read`` seconds.
+    #
+    # Read=10s catches P99.9 degradation while keeping pool-slot
+    # occupancy bounded — at 4 workers, a degradation event can pin
+    # the pool for at most 10s instead of 15s (33% faster recovery).
+    # YK normal latency is ~500ms, so 10s read is still ~20× headroom.
+    #
+    # Operators floor at 1s — setting either to ``0`` silently falls
+    # back to the default below to avoid disabling protection entirely.
     YOOKASSA_HTTP_CONNECT_TIMEOUT: int = 5
-    YOOKASSA_HTTP_READ_TIMEOUT: int = 15
+    YOOKASSA_HTTP_READ_TIMEOUT: int = 10
+
+    # Bounded thread pool for synchronous yookassa SDK calls. Default 4
+    # is a balance between burst capacity (~8 req/s normal, ~2 req/s
+    # under degradation per Little's law) and memory footprint (~32MB
+    # per worker stack). High-volume operators can raise this to 6-8
+    # without splitting into polling vs webhook lanes — that split is
+    # a separate refactor.
+    YOOKASSA_MAX_CONCURRENT_REQUESTS: int = 4
     YOOKASSA_SHOP_ID: str | None = None
     YOOKASSA_SECRET_KEY: str | None = None
     YOOKASSA_RETURN_URL: str | None = None
