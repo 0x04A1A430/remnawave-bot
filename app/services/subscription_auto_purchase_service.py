@@ -33,7 +33,7 @@ from app.services.subscription_purchase_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
-from app.utils.timezone import format_local_datetime
+from app.utils.timezone import format_email_datetime, format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -690,7 +690,7 @@ async def _auto_extend_subscription(
         await notify_user_subscription_renewed(
             user_id=user.id,
             subscription_id=subscription.id if subscription else None,
-            new_expires_at=new_end_date.isoformat() if new_end_date else '',
+            new_expires_at=format_email_datetime(new_end_date),
             amount_kopeks=prepared.price_kopeks,
         )
     except Exception as ws_error:
@@ -1059,7 +1059,7 @@ async def _auto_purchase_tariff(
             await notify_user_subscription_renewed(
                 user_id=user.id,
                 subscription_id=subscription.id if subscription else None,
-                new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                new_expires_at=format_email_datetime(subscription.end_date),
                 amount_kopeks=final_price,
             )
         else:
@@ -1067,7 +1067,7 @@ async def _auto_purchase_tariff(
             await notify_user_subscription_activated(
                 user_id=user.id,
                 subscription_id=subscription.id if subscription else None,
-                expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                expires_at=format_email_datetime(subscription.end_date),
                 tariff_name=tariff.name,
             )
     except Exception as ws_error:
@@ -1410,7 +1410,7 @@ async def _auto_purchase_daily_tariff(
             await notify_user_subscription_renewed(
                 user_id=user.id,
                 subscription_id=subscription.id if subscription else None,
-                new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                new_expires_at=format_email_datetime(subscription.end_date),
                 amount_kopeks=final_price,
             )
         else:
@@ -1418,7 +1418,7 @@ async def _auto_purchase_daily_tariff(
             await notify_user_subscription_activated(
                 user_id=user.id,
                 subscription_id=subscription.id if subscription else None,
-                expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+                expires_at=format_email_datetime(subscription.end_date),
                 tariff_name=tariff.name,
             )
     except Exception as ws_error:
@@ -2476,7 +2476,7 @@ async def try_auto_extend_expired_after_topup(
         await notify_user_subscription_renewed(
             user_id=user.id,
             subscription_id=subscription.id if subscription else None,
-            new_expires_at=new_end_date.isoformat() if new_end_date else '',
+            new_expires_at=format_email_datetime(new_end_date),
             amount_kopeks=renewal_cost,
         )
     except Exception as ws_error:
@@ -2854,7 +2854,7 @@ async def try_resume_disabled_daily_after_topup(
         await notify_user_subscription_renewed(
             user_id=user.id,
             subscription_id=subscription.id if subscription else None,
-            new_expires_at=subscription.end_date.isoformat() if subscription.end_date else '',
+            new_expires_at=format_email_datetime(subscription.end_date),
             amount_kopeks=daily_price,
         )
     except Exception as ws_error:
@@ -3244,7 +3244,7 @@ async def _process_legacy_generic_cart(
             await notify_user_subscription_activated(
                 user_id=user.id,
                 subscription_id=subscription.id if subscription else None,
-                expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
+                expires_at=format_email_datetime(subscription.end_date if subscription else None),
                 tariff_name='',
             )
         else:
@@ -3252,7 +3252,7 @@ async def _process_legacy_generic_cart(
             await notify_user_subscription_renewed(
                 user_id=user.id,
                 subscription_id=subscription.id if subscription else None,
-                new_expires_at=subscription.end_date.isoformat() if subscription and subscription.end_date else '',
+                new_expires_at=format_email_datetime(subscription.end_date if subscription else None),
                 amount_kopeks=pricing.final_total,
             )
     except Exception as ws_error:

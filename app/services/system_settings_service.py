@@ -350,6 +350,10 @@ class BotConfigurationService:
         'REMNAWAVE_AUTO_SYNC_ENABLED': 'REMNAWAVE',
         'REMNAWAVE_AUTO_SYNC_TIMES': 'REMNAWAVE',
         'CABINET_REMNA_SUB_CONFIG': 'MINIAPP',
+        # Date format applied to email-template variables
+        # (expires_at, new_expires_at). Lives in the TIMEZONE
+        # category so operators find it next to TIMEZONE itself.
+        'EMAIL_DATE_FORMAT': 'TIMEZONE',
     }
 
     CATEGORY_PREFIX_OVERRIDES: dict[str, str] = {
