@@ -144,30 +144,26 @@ def test_build_main_menu_button_immune_to_cabinet_mode(monkeypatch: pytest.Monke
 
 def test_topup_success_keyboard_main_menu_button_is_callback() -> None:
     """Source-level pin: ``app/services/payment/common.py`` must use
-    ``build_main_menu_button`` (or an inline ``InlineKeyboardButton``
-    with ``back_to_menu``) for the Main Menu row.
+    ``build_main_menu_button(texts.MAIN_MENU_BUTTON)`` for the Main
+    Menu row, NOT ``build_miniapp_or_callback_button``.
 
-    A future refactor that swaps to ``build_miniapp_or_callback_button``
-    here would silently re-introduce the bug — the mapping defence at
-    layer 1 catches it, but this pin is the loudest alarm.
+    Whitespace-robust positive assertion only — the previous version
+    had a literal-string negative match keyed to a specific 20-space
+    indent, which would silently pass after any reformat that changed
+    the indentation. We rely on the AST-based scan in
+    ``test_no_other_callsite_wraps_back_to_menu_in_miniapp_helper``
+    to catch the buggy pattern (it's resilient to formatting).
     """
     from pathlib import Path
 
     common_path = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'payment' / 'common.py'
     source = common_path.read_text(encoding='utf-8')
 
-    # The buggy pattern must NOT reappear.
-    assert 'build_miniapp_or_callback_button(\n                    text=texts.MAIN_MENU_BUTTON' not in source, (
-        'Top-up success keyboard regressed to build_miniapp_or_callback_button '
-        'for the Main Menu row — this is the exact bug the user reported on '
-        '2026-05-18. Use build_main_menu_button(texts.MAIN_MENU_BUTTON) instead.'
-    )
-
     # The corrected form must be present.
     assert 'build_main_menu_button(texts.MAIN_MENU_BUTTON)' in source, (
         'build_topup_success_keyboard must call build_main_menu_button() for '
         'the Главное меню row to guarantee bot-callback semantics regardless '
-        'of MAIN_MENU_MODE'
+        'of MAIN_MENU_MODE. AST scan below catches the buggy pattern.'
     )
 
 
@@ -178,44 +174,88 @@ def test_topup_success_keyboard_main_menu_button_is_callback() -> None:
 
 
 def test_no_other_callsite_wraps_back_to_menu_in_miniapp_helper() -> None:
-    """Scan the entire ``app/`` tree to confirm no other code path
-    invokes ``build_miniapp_or_callback_button(callback_data='back_to_menu')``.
+    """AST-based scan: no callsite anywhere in ``app/`` may invoke
+    ``build_miniapp_or_callback_button(..., callback_data='back_to_menu')``.
 
-    The explorer agent's audit found only ``payment/common.py`` had this
-    bug; all other ``back_to_menu`` usages already pass through raw
-    ``InlineKeyboardButton``. This test prevents a future regression
-    where someone copies the buggy pattern into another keyboard.
+    The previous regex-based scan had a nested-paren blind spot — a
+    contributor writing ``build_miniapp_or_callback_button(text=f'x {fn()} y',
+    callback_data='back_to_menu')`` would slip past because the
+    ``[^)]*?`` lookahead stopped at the first ``)``. AST walk handles
+    nested calls naturally.
     """
-    import re
+    import ast
     from pathlib import Path
 
     app_root = Path(__file__).resolve().parents[2] / 'app'
-    offenders: list[tuple[str, int, str]] = []
-
-    # Match call form across one or several lines: the function call
-    # name followed by anything (incl. newlines/whitespace) then a
-    # ``callback_data='back_to_menu'`` or ``callback_data="back_to_menu"``.
-    pattern = re.compile(
-        r'build_miniapp_or_callback_button\s*\([^)]*?callback_data\s*=\s*[\'"]back_to_menu[\'"]',
-        re.DOTALL,
-    )
+    offenders: list[tuple[str, int]] = []
 
     # Skip the helper module itself — its docstring legitimately
-    # mentions the anti-pattern as an example of what NOT to write.
+    # references the anti-pattern as an example of what NOT to write.
     skip_files = {'miniapp_buttons.py'}
+
+    class _BackToMenuMisuseFinder(ast.NodeVisitor):
+        def __init__(self, file_path: Path) -> None:
+            self.file_path = file_path
+
+        def visit_Call(self, node: ast.Call) -> None:
+            func_name: str | None = None
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+            elif isinstance(node.func, ast.Attribute):
+                func_name = node.func.attr
+
+            if func_name == 'build_miniapp_or_callback_button':
+                for kw in node.keywords:
+                    if (
+                        kw.arg == 'callback_data'
+                        and isinstance(kw.value, ast.Constant)
+                        and kw.value.value == 'back_to_menu'
+                    ):
+                        offenders.append((str(self.file_path), node.lineno))
+                        break
+            # Always recurse so nested calls are inspected.
+            self.generic_visit(node)
 
     for py_file in app_root.rglob('*.py'):
         if py_file.name in skip_files:
             continue
-        text = py_file.read_text(encoding='utf-8')
-        for match in pattern.finditer(text):
-            # Compute the line number of the match for human-friendly report.
-            line_no = text.count('\n', 0, match.start()) + 1
-            offenders.append((str(py_file), line_no, match.group(0)[:80]))
+        try:
+            tree = ast.parse(py_file.read_text(encoding='utf-8'))
+        except SyntaxError:
+            # If a file has bad syntax it's a separate failure mode;
+            # don't mask it with a vague test error here.
+            continue
+        _BackToMenuMisuseFinder(py_file).visit(tree)
 
     assert not offenders, (
-        'Found build_miniapp_or_callback_button(callback_data="back_to_menu") '
+        'AST scan found build_miniapp_or_callback_button(callback_data="back_to_menu") '
         f'at {offenders}. This wrapper turns the "Главное меню" button into a '
         'WebApp launcher in cabinet mode, trapping the user in the cabinet. '
         'Use build_main_menu_button(text) instead.'
+    )
+
+
+def test_home_button_key_is_not_in_cabinet_miniapp_button_keys() -> None:
+    """Foot-gun pin: ``BUTTON_KEY_TO_CABINET_PATH['home'] = '/'`` exists
+    for the admin-broadcast button vocabulary. It's currently inert
+    because ``CABINET_MINIAPP_BUTTON_KEYS`` does NOT include ``'home'``
+    — admin custom-button rendering at ``app/handlers/admin/messages.py``
+    falls through to raw ``InlineKeyboardButton(callback_data='back_to_menu')``.
+
+    If a future hand adds ``'home'`` to ``CABINET_MINIAPP_BUTTON_KEYS``,
+    the admin broadcast's "Home" button would silently flip to WebApp
+    in cabinet mode — same UX trap as the original incident. This pin
+    fails loudly if that change ever happens, forcing the contributor
+    to confirm intent.
+    """
+    from app.handlers.admin import messages as admin_messages
+
+    cabinet_keys = getattr(admin_messages, 'CABINET_MINIAPP_BUTTON_KEYS', None)
+    assert cabinet_keys is not None, 'CABINET_MINIAPP_BUTTON_KEYS expected in admin.messages'
+    assert 'home' not in cabinet_keys, (
+        "'home' key MUST NOT be added to CABINET_MINIAPP_BUTTON_KEYS — it routes "
+        "through BUTTON_KEY_TO_CABINET_PATH['home']='/' which would re-introduce "
+        'the cabinet-mode "Главное меню" trap for admin broadcast buttons. '
+        "If 'home' truly must open the cabinet root, name it explicitly "
+        "('cabinet_home' or similar) so reviewers see the intent."
     )
