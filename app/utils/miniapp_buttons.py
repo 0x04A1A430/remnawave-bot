@@ -93,7 +93,20 @@ CALLBACK_TO_CABINET_STYLE: dict[str, str] = {
     # not a cabinet-routed action, so styling here is dead config.
 }
 
-# Mapping from broadcast button keys to cabinet paths.
+# Mapping from broadcast button keys to cabinet paths. Used by the
+# admin-broadcast custom-button builder in app/handlers/admin/messages.py
+# to swap selected buttons for WebApp launchers in cabinet mode.
+#
+# ``'home'`` is intentionally NOT mapped here — same reason as
+# ``back_to_menu`` above. A broadcast button labelled "Home" must
+# always be a bot-menu callback regardless of MAIN_MENU_MODE; otherwise
+# users tapping it in cabinet mode get stuck in cabinet root with no
+# way back to the bot view. The set-membership gate
+# ``CABINET_MINIAPP_BUTTON_KEYS`` in admin/messages.py already excludes
+# ``'home'``, but removing the foot-gun entry here is the structural fix:
+# even if someone adds ``'home'`` to that set in a future commit, the
+# mapping lookup falls through to empty string and ``build_miniapp_or_callback_button``
+# returns a callback button.
 BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
     'balance': '/balance/top-up',
     'referrals': '/referral',
@@ -101,7 +114,6 @@ BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
     'connect': '/subscription',
     'subscription': '/subscription',
     'support': '/support',
-    'home': '/',
 }
 
 # Valid style values accepted by the Telegram Bot API.

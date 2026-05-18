@@ -27,11 +27,14 @@ These tests pin both layers.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from aiogram.types import InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.config import settings
 from app.utils.miniapp_buttons import (
+    BUTTON_KEY_TO_CABINET_PATH,
     CALLBACK_TO_CABINET_PATH,
     CALLBACK_TO_CABINET_STYLE,
     build_main_menu_button,
@@ -124,15 +127,63 @@ def test_build_main_menu_button_returns_callback_button() -> None:
     assert button.url is None
 
 
-def test_build_main_menu_button_immune_to_cabinet_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_main_menu_button_body_does_not_reference_cabinet_mode() -> None:
     """Pin the design contract: ``build_main_menu_button`` ignores
-    ``MAIN_MENU_MODE`` entirely. This is the WHOLE POINT — it exists
-    precisely so cabinet mode can't accidentally swap it."""
-    monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'cabinet', raising=False)
-    monkeypatch.setattr(settings, 'MINIAPP_CUSTOM_URL', 'https://cabinet.example.com', raising=False)
+    ``MAIN_MENU_MODE`` / ``MINIAPP_CUSTOM_URL`` / ``is_cabinet_mode``
+    entirely.
 
+    Source-level check rather than mock-based because pydantic
+    ``Settings`` forbids attribute mutation on instances — we can't
+    patch ``settings.is_cabinet_mode`` to a Mock to assert
+    ``not_called``. Inspecting the function source is the equivalent
+    static contract: if the body ever references the cabinet-mode
+    detector, this test fails. Strictly stronger than the previous
+    monkeypatch-based version (which was vacuous: the helper never
+    read the settings the test was patching).
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    src = textwrap.dedent(inspect.getsource(build_main_menu_button))
+    # Parse the function and walk its body sans-docstring — the design
+    # rationale in the docstring legitimately MENTIONS the forbidden
+    # tokens as 'what NOT to do', and we don't want to false-positive
+    # on documentation.
+    tree = ast.parse(src)
+    func = tree.body[0]
+    assert isinstance(func, ast.FunctionDef)
+    body_nodes = func.body
+    if (
+        body_nodes
+        and isinstance(body_nodes[0], ast.Expr)
+        and isinstance(body_nodes[0].value, ast.Constant)
+        and isinstance(body_nodes[0].value.value, str)
+    ):
+        # First node is the docstring — skip it.
+        body_nodes = body_nodes[1:]
+
+    body_src = '\n'.join(ast.unparse(node) for node in body_nodes)
+    forbidden_tokens = [
+        'is_cabinet_mode',
+        'MAIN_MENU_MODE',
+        'MINIAPP_CUSTOM_URL',
+        'CALLBACK_TO_CABINET_PATH',
+        'build_cabinet_url',
+        'WebAppInfo',
+        'web_app',
+    ]
+    for token in forbidden_tokens:
+        assert token not in body_src, (
+            f'build_main_menu_button body references {token!r}. The helper must '
+            'be pure: always return a callback button regardless of cabinet mode. '
+            'Adding mode-detection here re-introduces the bug class this helper '
+            'was created to prevent.'
+        )
+
+    # Behavioural sanity check: the helper still works.
     button = build_main_menu_button('🏠 Main menu')
-
+    assert isinstance(button, InlineKeyboardButton)
     assert button.callback_data == 'back_to_menu'
     assert button.web_app is None
 
@@ -235,27 +286,123 @@ def test_no_other_callsite_wraps_back_to_menu_in_miniapp_helper() -> None:
     )
 
 
-def test_home_button_key_is_not_in_cabinet_miniapp_button_keys() -> None:
-    """Foot-gun pin: ``BUTTON_KEY_TO_CABINET_PATH['home'] = '/'`` exists
-    for the admin-broadcast button vocabulary. It's currently inert
-    because ``CABINET_MINIAPP_BUTTON_KEYS`` does NOT include ``'home'``
-    — admin custom-button rendering at ``app/handlers/admin/messages.py``
-    falls through to raw ``InlineKeyboardButton(callback_data='back_to_menu')``.
+def test_home_button_key_is_not_in_broadcast_cabinet_path_mapping() -> None:
+    """Structural pin (per architect-review top priority): the foot-gun
+    ``BUTTON_KEY_TO_CABINET_PATH['home'] = '/'`` was REMOVED.
 
-    If a future hand adds ``'home'`` to ``CABINET_MINIAPP_BUTTON_KEYS``,
-    the admin broadcast's "Home" button would silently flip to WebApp
-    in cabinet mode — same UX trap as the original incident. This pin
-    fails loudly if that change ever happens, forcing the contributor
-    to confirm intent.
+    Previously, the entry was inert because ``CABINET_MINIAPP_BUTTON_KEYS``
+    in ``admin/messages.py`` gated which broadcast keys could reach the
+    cabinet-routing branch. But ``home`` not being in that set was an
+    implicit invariant — adding it back later would silently re-introduce
+    the cabinet-mode "Главное меню" trap for admin broadcast buttons.
+
+    Removing the mapping entry is the structural defence: even if a
+    future hand adds ``'home'`` to ``CABINET_MINIAPP_BUTTON_KEYS``,
+    ``BUTTON_KEY_TO_CABINET_PATH.get('home', '')`` returns empty string
+    and ``build_miniapp_or_callback_button`` falls through to a callback
+    button.
+    """
+    assert 'home' not in BUTTON_KEY_TO_CABINET_PATH, (
+        "'home' must NOT be in BUTTON_KEY_TO_CABINET_PATH — admin broadcasts "
+        'use ``home`` as the bot-menu vocabulary key, and routing it to cabinet '
+        "root would trap users in cabinet mode. If you need a 'open cabinet "
+        "home page' button, add a distinct key like 'cabinet_home' so the "
+        'intent is explicit at the broadcast-config layer.'
+    )
+
+
+def test_home_button_key_is_not_in_cabinet_miniapp_button_keys() -> None:
+    """Belt-and-suspenders set-membership pin.
+
+    Even though the mapping entry was removed
+    (test_home_button_key_is_not_in_broadcast_cabinet_path_mapping),
+    we ALSO pin that the admin gating set does not include 'home'.
+    Two layers: if a future contributor adds 'home' to either side,
+    one of these tests fails loudly.
     """
     from app.handlers.admin import messages as admin_messages
 
     cabinet_keys = getattr(admin_messages, 'CABINET_MINIAPP_BUTTON_KEYS', None)
     assert cabinet_keys is not None, 'CABINET_MINIAPP_BUTTON_KEYS expected in admin.messages'
     assert 'home' not in cabinet_keys, (
-        "'home' key MUST NOT be added to CABINET_MINIAPP_BUTTON_KEYS — it routes "
-        "through BUTTON_KEY_TO_CABINET_PATH['home']='/' which would re-introduce "
-        'the cabinet-mode "Главное меню" trap for admin broadcast buttons. '
-        "If 'home' truly must open the cabinet root, name it explicitly "
-        "('cabinet_home' or similar) so reviewers see the intent."
+        "'home' key MUST NOT be added to CABINET_MINIAPP_BUTTON_KEYS — see "
+        'test_home_button_key_is_not_in_broadcast_cabinet_path_mapping for the '
+        'structural-defence rationale.'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Behavioural integration test: invoke build_topup_success_keyboard and
+# inspect the resulting InlineKeyboardMarkup. Source-level pins above are
+# defence-in-depth, but this one exercises the actual production code path
+# the user clicks — closing the "test passes but bug exists" gap flagged
+# by the test-automator review.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_topup_success_keyboard_renders_callback_main_menu_button_in_cabinet_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """REGRESSION (behavioural): ``build_topup_success_keyboard``,
+    invoked in cabinet mode with cabinet URL configured, must produce
+    an ``InlineKeyboardMarkup`` whose LAST row contains a callback
+    button with ``callback_data='back_to_menu'`` and ``web_app is None``.
+
+    This is the keyboard the user actually receives in the
+    "💸 Пополнение успешно" notification. Source-level pins protect
+    against the literal anti-pattern; this test protects against any
+    refactor that breaks the user-visible outcome regardless of how
+    the keyboard is assembled internally.
+    """
+    monkeypatch.setattr(settings, 'MAIN_MENU_MODE', 'cabinet', raising=False)
+    monkeypatch.setattr(settings, 'MINIAPP_CUSTOM_URL', 'https://cabinet.example.com', raising=False)
+
+    from types import SimpleNamespace
+
+    from app.services.payment.common import PaymentCommonMixin
+
+    # Minimal user stub. No active subscription = simplest branch
+    # (no subscription-extend row), no saved cart, no checkout draft.
+    user = SimpleNamespace(
+        id=42,
+        language='ru',
+        subscription=None,
+    )
+
+    # Mock cart-helpers so the test does not hit Redis / DB. These are
+    # decorations on the keyboard, not the Main Menu row we care about.
+    mixin_instance = type('_TestMixin', (PaymentCommonMixin,), {})()
+
+    with (
+        patch(
+            'app.services.payment.common.user_cart_service.has_user_cart',
+            AsyncMock(return_value=False),
+        ),
+        patch(
+            'app.services.payment.common.has_subscription_checkout_draft',
+            AsyncMock(return_value=False),
+        ),
+    ):
+        keyboard = await mixin_instance.build_topup_success_keyboard(user)
+
+    assert isinstance(keyboard, InlineKeyboardMarkup)
+    assert keyboard.inline_keyboard, 'Keyboard must contain at least one row'
+
+    # The Main Menu button is the LAST row of the keyboard
+    # (after first_button, optional cart-restore row, and balance row).
+    last_row = keyboard.inline_keyboard[-1]
+    assert len(last_row) == 1, f'Main Menu row should contain exactly one button, got {last_row}'
+
+    main_menu_button = last_row[0]
+    assert main_menu_button.callback_data == 'back_to_menu', (
+        f'LAST button must have callback_data="back_to_menu", got '
+        f'callback_data={main_menu_button.callback_data!r}, web_app={main_menu_button.web_app!r}. '
+        'If web_app is set, the user is stuck in cabinet root — the exact bug '
+        'reported on 2026-05-18.'
+    )
+    assert main_menu_button.web_app is None, (
+        f'LAST button MUST NOT have a WebAppInfo attached, got web_app={main_menu_button.web_app!r}. '
+        'In MAIN_MENU_MODE=cabinet with MINIAPP_CUSTOM_URL configured, the previous '
+        'buggy code produced a WebApp launcher here — the user-visible regression.'
     )
