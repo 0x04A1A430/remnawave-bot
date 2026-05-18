@@ -402,6 +402,14 @@ class Settings(BaseSettings):
 
     YOOKASSA_ENABLED: bool = False
     YOOKASSA_DISPLAY_NAME: str = 'YooKassa'
+    # HTTP socket timeouts for yookassa SDK requests. The SDK itself
+    # ships with NO timeout, so a hanging YK endpoint will block a
+    # worker thread forever (until TCP keep-alive eventually kills it,
+    # hours later). app/services/yookassa_service.py monkey-patches
+    # ApiClient.execute to pass these values to requests.Session, so
+    # threads are guaranteed to unstick within ``read`` seconds.
+    YOOKASSA_HTTP_CONNECT_TIMEOUT: int = 5
+    YOOKASSA_HTTP_READ_TIMEOUT: int = 15
     YOOKASSA_SHOP_ID: str | None = None
     YOOKASSA_SECRET_KEY: str | None = None
     YOOKASSA_RETURN_URL: str | None = None
