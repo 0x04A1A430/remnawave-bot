@@ -26,7 +26,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.user_cart_service import user_cart_service
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+from app.utils.miniapp_buttons import build_main_menu_button, build_miniapp_or_callback_button
 from app.utils.payment_logger import payment_logger as logger
 
 
@@ -128,10 +128,11 @@ class PaymentCommonMixin:
                         ]
                     )
 
-        # Стандартные кнопки быстрого доступа к балансу и главному меню.
-        # Оба ряда строим через build_miniapp_or_callback_button, чтобы в
-        # MAIN_MENU_MODE=cabinet кнопки открывали миниапп, а не дропали юзера
-        # в полное меню бота.
+        # «Мой баланс» направляется в соответствующий раздел кабинета
+        # в MAIN_MENU_MODE=cabinet (через build_miniapp_or_callback_button),
+        # потому что баланс — это контентная страница, и юзер ожидает
+        # увидеть детали в том же режиме интерфейса, в котором он
+        # запустил пополнение.
         keyboard_rows.append(
             [
                 build_miniapp_or_callback_button(
@@ -140,14 +141,13 @@ class PaymentCommonMixin:
                 )
             ]
         )
-        keyboard_rows.append(
-            [
-                build_miniapp_or_callback_button(
-                    text=texts.MAIN_MENU_BUTTON,
-                    callback_data='back_to_menu',
-                )
-            ]
-        )
+        # «Главное меню» — ВСЕГДА callback на bot-handler back_to_menu,
+        # независимо от MAIN_MENU_MODE. Если эта кнопка будет открывать
+        # кабинет (через build_miniapp_or_callback_button), юзер окажется
+        # в бесконечном цикле «хочу в бот → попадаю в кабинет → тапаю
+        # главное меню → снова кабинет». build_main_menu_button фиксирует
+        # это инвариантом на уровне типа.
+        keyboard_rows.append([build_main_menu_button(texts.MAIN_MENU_BUTTON)])
 
         return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
