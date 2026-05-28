@@ -51,6 +51,7 @@ from ...schemas.subscription import (
     PurchasePreviewRequest,
     SubscriptionResponse,
     TariffPurchaseRequest,
+    TrialActivateRequest,
     TrialInfoResponse,
 )
 from .helpers import _subscription_to_response
@@ -1193,6 +1194,7 @@ async def get_trial_info(
 
 @router.post('/trial', response_model=SubscriptionResponse)
 async def activate_trial(
+    request: TrialActivateRequest | None = None,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1366,5 +1368,26 @@ async def activate_trial(
                 await bot.session.close()
     except Exception as e:
         logger.error('Failed to send trial activation notification', error=e)
+
+    # Yandex.Metrika offline conversion — sibling to #558449. Fire two events
+    # when applicable: the regular 'trial-add' for every trial activation,
+    # plus 'purchase' if TRIAL_PAYMENT_ENABLED and money was actually charged.
+    cabinet_cid = request.yandex_cid if request is not None else None
+    try:
+        from app.services import yandex_offline_conv_service as yandex_conv
+
+        await yandex_conv.store_cid_and_fire_trial(user.id, cabinet_cid)
+        if requires_payment and settings.TRIAL_ACTIVATION_PRICE > 0:
+            await yandex_conv.store_cid_and_fire_purchase(
+                user.id,
+                cabinet_cid,
+                settings.TRIAL_ACTIVATION_PRICE,
+            )
+    except Exception as yconv_err:
+        logger.debug(
+            'yandex_conv trial/purchase hook failed (non-fatal)',
+            user_id=user.id,
+            error=str(yconv_err),
+        )
 
     return _subscription_to_response(subscription, user=user)

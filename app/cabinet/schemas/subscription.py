@@ -140,6 +140,20 @@ class AutopayUpdateRequest(BaseModel):
     days_before: int | None = Field(None, ge=1, le=30, description='Days before expiration to charge')
 
 
+class TrialActivateRequest(BaseModel):
+    """Optional body for POST /trial — used to forward the Yandex CID for the
+    offline-conversion trial-add (and purchase, when TRIAL_PAYMENT_ENABLED)
+    events. The endpoint previously took no body so cabinet calls can still
+    POST without a payload — all fields are optional."""
+
+    # See PurchasePreviewRequest.yandex_cid (#558449).
+    yandex_cid: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+    )
+
+
 class TrialInfoResponse(BaseModel):
     """Trial subscription info."""
 

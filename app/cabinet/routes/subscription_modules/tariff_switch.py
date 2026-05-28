@@ -512,6 +512,26 @@ async def switch_tariff(
     await db.refresh(subscription)
     await db.refresh(user)
 
+    # Yandex.Metrika offline conversion. Tariff switch is a paid purchase event
+    # when upgrade_cost > 0 — without this call paid upgrades wouldn't appear in
+    # offline-conv reports even though the user paid. Skip on free downgrades.
+    # Sibling to #558449 (the broader yandex-conv fix missed this path).
+    if upgrade_cost > 0:
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            await yandex_conv.store_cid_and_fire_purchase(
+                user.id,
+                request.yandex_cid,
+                upgrade_cost,
+            )
+        except Exception as yconv_err:
+            logger.debug(
+                'yandex_conv purchase hook failed (non-fatal)',
+                user_id=user.id,
+                error=str(yconv_err),
+            )
+
     response: dict[str, Any] = {
         'success': True,
         'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'"
