@@ -518,6 +518,20 @@ async def submit_purchase(
         # Refresh expired objects after db.commit() in _record_subscription_event
         await db.refresh(subscription)
 
+        # Persist Yandex CID (if frontend cached it) and fire offline-conv
+        # purchase event — closes the race where the separate /yandex-cid POST
+        # hadn't completed yet. See #558449.
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            await yandex_conv.store_cid_and_fire_purchase(
+                user.id,
+                request.yandex_cid,
+                pricing.final_total,
+            )
+        except Exception as yconv_err:
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
+
         return {
             'success': True,
             'message': result['message'],
@@ -974,6 +988,18 @@ async def purchase_tariff(
 
         await db.refresh(user)
         await db.refresh(subscription)
+
+        # Yandex.Metrika offline conversion — see /purchase endpoint for context (#558449).
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            await yandex_conv.store_cid_and_fire_purchase(
+                user.id,
+                request.yandex_cid,
+                price_kopeks,
+            )
+        except Exception as yconv_err:
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         response: dict[str, Any] = {
             'success': True,

@@ -92,6 +92,12 @@ class RenewalRequest(BaseModel):
         default=None,
         description='ID of subscription to renew (required in multi-tariff mode)',
     )
+    # See PurchasePreviewRequest.yandex_cid (#558449).
+    yandex_cid: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+    )
 
 
 class TrafficPackageResponse(BaseModel):
@@ -107,12 +113,24 @@ class TrafficPurchaseRequest(BaseModel):
     """Request to purchase additional traffic."""
 
     gb: int = Field(..., ge=0, le=100_000, description='GB to purchase (0 = unlimited)')
+    # See PurchasePreviewRequest.yandex_cid (#558449).
+    yandex_cid: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+    )
 
 
 class DevicePurchaseRequest(BaseModel):
     """Request to purchase additional device slots."""
 
     devices: int = Field(..., ge=1, le=100, description='Number of additional devices')
+    # See PurchasePreviewRequest.yandex_cid (#558449).
+    yandex_cid: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+    )
 
 
 class AutopayUpdateRequest(BaseModel):
@@ -152,6 +170,17 @@ class PurchasePreviewRequest(BaseModel):
     """Request to preview purchase pricing."""
 
     selection: PurchaseSelectionRequest
+    # Cached Yandex.Metrika ClientID from the frontend (#558449). When the user
+    # opens cabinet for the first time and buys before the separate /yandex-cid
+    # POST completes, the purchase event would silently drop because the
+    # backend's CID lookup finds nothing. Passing the value directly here lets
+    # the backend persist it synchronously before firing the conversion event.
+    yandex_cid: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+        description='Cached Yandex.Metrika ClientID (optional).',
+    )
 
 
 # ============ Tariff Purchase Schemas ============
@@ -175,4 +204,11 @@ class TariffPurchaseRequest(BaseModel):
         None,
         ge=1,
         description='Existing subscription_id when renewing (multi-tariff). Resolves race with concurrent panel webhooks.',
+    )
+    # See PurchasePreviewRequest.yandex_cid (#558449).
+    yandex_cid: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+        description='Cached Yandex.Metrika ClientID (optional).',
     )
