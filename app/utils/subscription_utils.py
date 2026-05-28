@@ -104,6 +104,20 @@ def convert_subscription_link_to_happ_scheme(subscription_link: str | None) -> s
     return urlunparse(parsed_link._replace(scheme='happ'))
 
 
+def coerce_panel_device_limit(value: object, default: int = 1) -> int:
+    """Normalize ``hwidDeviceLimit`` from a RemnaWave panel response.
+
+    The panel returns ``0`` to signal HWID limit disabled (unlimited devices).
+    A naive ``value or default`` collapses that ``0`` into the fallback and
+    silently overwrites unlimited-device subscriptions on every sync.
+    """
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int) and value >= 0:
+        return value
+    return default
+
+
 def resolve_hwid_device_limit(subscription: Subscription | None) -> int | None:
     """Return a device limit value for RemnaWave payloads when selection is enabled."""
     import structlog

@@ -51,6 +51,7 @@ from app.database.models import (
     UserStatus,
 )
 from app.services.permission_service import PermissionService
+from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -3202,7 +3203,7 @@ async def sync_user_from_panel(
                 expire_at=panel_datetime_to_utc(panel_user.expire_at) if panel_user.expire_at else None,
                 traffic_limit_gb=panel_user.traffic_limit_bytes / (1024**3) if panel_user.traffic_limit_bytes else 0,
                 traffic_used_gb=panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0,
-                device_limit=panel_user.hwid_device_limit or 1,
+                device_limit=coerce_panel_device_limit(panel_user.hwid_device_limit),
                 subscription_url=panel_user.subscription_url,
                 active_squads=active_squads,
             )
@@ -3273,7 +3274,7 @@ async def sync_user_from_panel(
                     sub.traffic_limit_gb = panel_traffic_limit
 
                 # Update device limit
-                panel_device_limit = panel_user.hwid_device_limit or 1
+                panel_device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit)
                 if sub.device_limit != panel_device_limit:
                     changes['device_limit'] = {'old': sub.device_limit, 'new': panel_device_limit}
                     sub.device_limit = panel_device_limit
@@ -3320,7 +3321,7 @@ async def sync_user_from_panel(
                     user_id=user.id,
                     duration_days=days_remaining,
                     traffic_limit_gb=panel_traffic_limit,
-                    device_limit=panel_user.hwid_device_limit or 1,
+                    device_limit=coerce_panel_device_limit(panel_user.hwid_device_limit),
                     connected_squads=active_squads,
                 )
                 new_sub.remnawave_short_uuid = panel_user.short_uuid
