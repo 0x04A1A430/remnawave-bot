@@ -1,5 +1,44 @@
 # Changelog
 
+## [3.57.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.56.0...v3.57.0) (2026-05-28)
+
+
+### New Features
+
+* **autopay:** user-selectable renewal period for autopay charges ([4c8705d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4c8705d1901ae5953d16917c4898971cf5e06918))
+* **kassa_ai:** pass success/fail/notification URLs into /orders/create ([55e80e3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/55e80e3842b82e7fd33acb285d2db9ab86f22a31))
+* **referral:** tiered partner commission policy ([4b48d51](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4b48d519045b29126fd4996df465f1cf7d31dbd1))
+* **start:** parse subid from {campaign}_subid_{click_id} deeplink ([f8b730c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f8b730ce91bb4fee77d6956cb523172ba36518f5))
+* **yandex-conv:** cover remaining paid endpoints missed by [#558449](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/558449) ([85bfad2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/85bfad2bc414de6a8bbe9d2bc5da7a5a6fc8adfc))
+* **yandex-conv:** forward CID through purchase requests to close fire race ([9ad9ac2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/9ad9ac2bbb9f69898456310cfe94ac875fbba5dc))
+
+
+### Bug Fixes
+
+* **audit:** close 3 real issues from post-merge review of 3a81fbd0..4c8705d1 ([2b9643b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2b9643bc56cd99020405ccbf405428c4bd98d6bd))
+* **autopay:** skip inactive target tariffs and pluralize day count ([4dfde86](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/4dfde86055945429577856976583428d7181bbb1))
+* **cabinet-mode:** Главное меню кнопка теперь всегда возвращает в bot-меню ([0f5873a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0f5873a2a025709fe2dec4f2049fe80e4627ec97))
+* **channel-check:** close the gap in monitoring_service direct caller ([dca5cd8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/dca5cd8584db705e17a73da64a9e9bec59e38a32))
+* **channel-check:** tri-state membership result to stop disabling paid subs on transient errors ([91f9a2e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/91f9a2e04d8e44824137954857f9fdf44c85657a))
+* **devices:** cap addon prorate at one billing month ([373c138](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/373c138fc76b9638f8054aa7f6b1bd9c1a787cbe))
+* **email:** humanize datetime in template vars + admin-configurable format ([25f864b](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/25f864be76972e410e2741af10887d9e0f567cec))
+* **keyboards:** break keyboards.inline ↔ handlers.subscription import cycle ([7f34d8c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7f34d8c91270a01589f46e82faf49195db90e062))
+* **landing:** backfill referral_code in guest_purchase flow ([83994e3](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/83994e34acc4ee75813473dec2f48feec808bfe3))
+* **logging:** tolerate lowercase LOG_LEVEL — bot was crashing at startup ([0460ee4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/0460ee4011d1cd83e776d77bd98536c387d06752))
+* **logo:** auto-resize oversized vpn_logo.png via Pillow ([ec72a0a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ec72a0a920b51613f98f22c884d95f4d89a49161))
+* **logo:** validate vpn_logo.png at startup and fall back to text-only ([7bd4509](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/7bd4509b42b57871141d3271e5fdcb7ae608e46a))
+* **mulenpay:** verify webhook signature from body sign field per official SDK ([a83e622](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a83e622abd1d487f1f6df0a0de35c810f64622ee))
+* **multi-tariff:** autopay button on detail card + FSM sub_id resolution ([c75166e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c75166e4f3c3cd96db7e08ec9d16b68b97e8342a))
+* **referral-network:** let admin search find users not yet in the network ([486e3bf](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/486e3bf38087a58f164cc80f87f7e63e37aabdf6))
+* **remnawave:** email users get a unique username instead of constant 'user' ([e78e0b6](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e78e0b684d565e945fb459c2e2949fc8d513c067))
+* **sync:** preserve hwidDeviceLimit=0 (unlimited devices) from panel ([e5d0473](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/e5d04737a43ccb3c3b697fe8c3c2cdff86d28ef9))
+* **tariff_purchase:** close cart-restore and cabinet renew-race paths ([a527df2](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/a527df2348bcd482ff44248b12ef92286cd7d352))
+* **tariff_purchase:** pin target subscription_id at preview to kill renew-race ([5cd53e4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5cd53e4c4268f5420f6533d6be7b159f8356faa6))
+* **traffic:** align top-up expiry with panel reset to stop mid-cycle limit hits ([c2f5839](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c2f5839b596e3220c5b7a9c705cbb344173473dd))
+* **webapi:** subscription state sync with Remnawave + int32 overflow guard ([061bd26](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/061bd264bce371f8389a1d77d11a46444e95f5ab))
+* **yookassa:** close thread-pool leak that froze the bot during YK API degradation ([c923c78](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c923c7839c15b08cb610bcaf3ad41e01aeb36149))
+* **yookassa:** tune defaults + make pool size operator-configurable ([9913276](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/99132767fe9b13631449b82cd7471ae4f2748863))
+
 ## [3.56.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.55.0...v3.56.0) (2026-05-16)
 
 
