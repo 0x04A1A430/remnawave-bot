@@ -193,19 +193,24 @@ def test_autopay_period_unset_sentinel_is_module_private():
 
 
 async def test_set_autopay_period_default_suffix_clears_override(monkeypatch):
-    """Suffix `default` → clear the per-subscription override (passes period_days=None)."""
+    """Suffix `default` → clear the per-subscription override (passes period_days=None).
+    Also pins that `state` is forwarded to the menu redraw — without it, the post-action
+    redraw loses FSM `active_subscription_id` and multi-tariff users land on
+    'Выберите подписку'."""
     subscription = SimpleNamespace(id=1, autopay_enabled=True, tariff=_make_tariff([30, 90]))
     db = MagicMock()
     db.refresh = AsyncMock()
+    state = SimpleNamespace()  # sentinel state object — we only verify it propagates
 
     update_mock = AsyncMock()
+    menu_mock = AsyncMock()
     monkeypatch.setattr(subscription_crud, 'update_subscription_autopay', update_mock)
     monkeypatch.setattr(
         autopay_handler,
         '_resolve_subscription',
         AsyncMock(return_value=(subscription, subscription.id)),
     )
-    monkeypatch.setattr(autopay_handler, 'handle_autopay_menu', AsyncMock())
+    monkeypatch.setattr(autopay_handler, 'handle_autopay_menu', menu_mock)
 
     callback = SimpleNamespace(
         data='autopay_period_default',
@@ -213,28 +218,33 @@ async def test_set_autopay_period_default_suffix_clears_override(monkeypatch):
     )
     db_user = SimpleNamespace(language='ru')
 
-    await autopay_handler.set_autopay_period(callback, db_user, db)
+    await autopay_handler.set_autopay_period(callback, db_user, db, state)
 
     update_mock.assert_awaited_once()
     call_kwargs = update_mock.await_args.kwargs
-    # Either via kwarg or via positional — we must explicitly pass None to clear.
     assert call_kwargs.get('period_days') is None
+
+    # Pin the state-forwarding contract — `handle_autopay_menu(callback, db_user, db, state)`.
+    menu_mock.assert_awaited_once_with(callback, db_user, db, state)
 
 
 async def test_set_autopay_period_valid_int_writes_period(monkeypatch):
-    """Suffix matching a valid tariff period → write it to the subscription."""
+    """Suffix matching a valid tariff period → write it to the subscription.
+    Also pins state forwarding to the menu redraw (see default-suffix test docstring)."""
     subscription = SimpleNamespace(id=1, autopay_enabled=True, tariff=_make_tariff([30, 90, 180]))
     db = MagicMock()
     db.refresh = AsyncMock()
+    state = SimpleNamespace()
 
     update_mock = AsyncMock()
+    menu_mock = AsyncMock()
     monkeypatch.setattr(subscription_crud, 'update_subscription_autopay', update_mock)
     monkeypatch.setattr(
         autopay_handler,
         '_resolve_subscription',
         AsyncMock(return_value=(subscription, subscription.id)),
     )
-    monkeypatch.setattr(autopay_handler, 'handle_autopay_menu', AsyncMock())
+    monkeypatch.setattr(autopay_handler, 'handle_autopay_menu', menu_mock)
 
     callback = SimpleNamespace(
         data='autopay_period_90',
@@ -242,10 +252,11 @@ async def test_set_autopay_period_valid_int_writes_period(monkeypatch):
     )
     db_user = SimpleNamespace(language='ru')
 
-    await autopay_handler.set_autopay_period(callback, db_user, db)
+    await autopay_handler.set_autopay_period(callback, db_user, db, state)
 
     update_mock.assert_awaited_once()
     assert update_mock.await_args.kwargs.get('period_days') == 90
+    menu_mock.assert_awaited_once_with(callback, db_user, db, state)
 
 
 async def test_set_autopay_period_invalid_int_alerts_without_writing(monkeypatch):
