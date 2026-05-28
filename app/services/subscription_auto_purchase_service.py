@@ -32,6 +32,7 @@ from app.services.subscription_purchase_service import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
+from app.utils.formatters import format_days_declension
 from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_email_datetime, format_local_datetime
 
@@ -271,6 +272,14 @@ async def _prepare_auto_extend_context(
         from app.database.crud.tariff import get_tariff_by_id as _get_tariff
 
         _tariff = await _get_tariff(db, tariff_id)
+        # Operator-deactivated target tariff must not silently keep billing — #595885
+        if _tariff is not None and not _tariff.is_active:
+            logger.warning(
+                '🔁 Автопокупка: целевой тариф отключён администратором — пропускаем',
+                tariff_id=tariff_id,
+                format_user_id=_format_user_id(user),
+            )
+            return None
         if _tariff and _tariff.period_prices and not getattr(_tariff, 'is_daily', False):
             available_periods = [int(p) for p in _tariff.period_prices.keys()]
             if period_days not in available_periods:
@@ -331,9 +340,11 @@ async def _prepare_auto_extend_context(
 
         tariff = await get_tariff_by_id(db, tariff_id)
         tariff_name = tariff.name if tariff else 'тариф'
-        description = cart_data.get('description') or f'Продление тарифа {tariff_name} на {period_days} дней'
+        description = (
+            cart_data.get('description') or f'Продление тарифа {tariff_name} на {format_days_declension(period_days)}'
+        )
     else:
-        description = cart_data.get('description') or f'Продление подписки на {period_days} дней'
+        description = cart_data.get('description') or f'Продление подписки на {format_days_declension(period_days)}'
 
     device_limit = cart_data.get('device_limit')
     if device_limit is not None:
@@ -826,7 +837,7 @@ async def _auto_purchase_tariff(
 
     # Списываем баланс
     try:
-        description = f'Покупка тарифа {tariff.name} на {period_days} дней'
+        description = f'Покупка тарифа {tariff.name} на {format_days_declension(period_days)}'
         success = await subtract_user_balance(
             db,
             user,
@@ -2176,6 +2187,17 @@ async def try_auto_extend_expired_after_topup(
     tariff = getattr(subscription, 'tariff', None)
     # Capture name before any db.commit() can expire the ORM object
     tariff_name_for_label = tariff.name if tariff else None
+    # If the operator deactivated the target tariff, don't charge the user for
+    # an extension they can't usefully renew on — Telegram bug report #595885
+    # (multi-tariff trial on tariff marked `Неактивен` was still being billed).
+    if tariff is not None and not tariff.is_active:
+        logger.info(
+            '🔄 Автопродление expired: тариф отключён администратором — пропускаем',
+            format_user_id=_format_user_id(user),
+            tariff_id=getattr(tariff, 'id', None),
+            tariff_name=tariff_name_for_label,
+        )
+        return False
     if tariff:
         period_days = tariff.get_shortest_period() or 30
     else:
@@ -2260,7 +2282,7 @@ async def try_auto_extend_expired_after_topup(
     saved_promo_expires = getattr(user, 'promo_offer_discount_expires_at', None) if consume_promo_offer else None
 
     # Deduct balance
-    description = f'Автопродление истёкшей подписки на {period_days} дней'
+    description = f'Автопродление истёкшей подписки на {format_days_declension(period_days)}'
     try:
         deducted = await subtract_user_balance(
             db,
