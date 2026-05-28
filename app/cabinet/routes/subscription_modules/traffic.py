@@ -381,6 +381,18 @@ async def purchase_traffic(
     except Exception as e:
         logger.error('Failed to send admin notification for traffic purchase', error=e)
 
+    # Yandex.Metrika offline conversion (#558449).
+    try:
+        from app.services import yandex_offline_conv_service as yandex_conv
+
+        await yandex_conv.store_cid_and_fire_purchase(
+            user.id,
+            request.yandex_cid,
+            final_price,
+        )
+    except Exception as yconv_err:
+        logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
+
     response: dict[str, Any] = {
         'success': True,
         'message': 'Traffic purchased successfully',
@@ -640,6 +652,25 @@ async def switch_traffic_package(
 
     await db.refresh(user)
     await db.refresh(subscription)
+
+    # Yandex.Metrika offline conversion — only when actually charged (upgrade).
+    # Sibling to #558449 — the broader yandex-conv fix covered POST /traffic
+    # (new buy) but missed PUT /traffic (switch between packages).
+    if charged > 0:
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            await yandex_conv.store_cid_and_fire_purchase(
+                user.id,
+                request.yandex_cid,
+                charged,
+            )
+        except Exception as yconv_err:
+            logger.debug(
+                'yandex_conv purchase hook failed (non-fatal)',
+                user_id=user.id,
+                error=str(yconv_err),
+            )
 
     return {
         'success': True,

@@ -8,12 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
 from app.database.models import User
-from app.handlers.subscription.common import (
-    build_redirect_link,
-    create_deep_link,
-    get_localized_value,
-    resolve_button_url,
-)
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
@@ -2322,6 +2316,12 @@ def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE, sub_id: int | None = 
                     text=texts.t('AUTOPAY_SET_DAYS_BUTTON', '⚙️ Настроить дни'), callback_data='autopay_set_days'
                 )
             ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('AUTOPAY_SET_PERIOD_BUTTON', '📅 Период продления'),
+                    callback_data='autopay_set_period',
+                )
+            ],
             [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
         ]
     )
@@ -2397,6 +2397,31 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
         keyboard.append(
             [InlineKeyboardButton(text=f'{days} {_get_days_word(days)}', callback_data=f'autopay_days_{days}')]
         )
+
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_autopay_period_keyboard(
+    available_periods: list[int],
+    current_period: int | None,
+    language: str = DEFAULT_LANGUAGE,
+) -> InlineKeyboardMarkup:
+    """Period picker for autopay. `current_period=None` means "use default"."""
+    texts = get_texts(language)
+    keyboard = []
+
+    default_label = texts.t('AUTOPAY_PERIOD_DEFAULT_BUTTON', '⚙️ По умолчанию (самый дешёвый)')
+    if current_period is None:
+        default_label = f'✅ {default_label}'
+    keyboard.append([InlineKeyboardButton(text=default_label, callback_data='autopay_period_default')])
+
+    for days in sorted(available_periods):
+        label = f'{days} {_get_days_word(days)}'
+        if current_period == days:
+            label = f'✅ {label}'
+        keyboard.append([InlineKeyboardButton(text=label, callback_data=f'autopay_period_{days}')])
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')])
 
@@ -3595,3 +3620,19 @@ def get_admin_ticket_reply_cancel_keyboard(language: str = DEFAULT_LANGUAGE) -> 
             ]
         ]
     )
+
+
+# Late-bound imports — placed at the bottom to break the
+# `keyboards.inline` ↔ `handlers.subscription.__init__` ↔ `autopay.py`
+# circular import chain. `autopay.py` imports `_get_payment_method_display_name`
+# (and other helpers) from inline.py at its module top level; by deferring
+# this import until inline.py finishes loading, those symbols are guaranteed
+# to exist when subscription/__init__.py loads autopay.
+# Function bodies above reference these names; Python resolves module-level
+# globals at call time, not definition time, so the late binding works.
+from app.handlers.subscription.common import (
+    build_redirect_link,
+    create_deep_link,
+    get_localized_value,
+    resolve_button_url,
+)

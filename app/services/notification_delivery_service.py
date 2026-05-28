@@ -15,6 +15,7 @@ from aiogram import Bot
 
 from app.config import settings
 from app.database.models import User, UserStatus
+from app.utils.timezone import format_email_datetime
 
 
 logger = structlog.get_logger(__name__)
@@ -474,7 +475,10 @@ class NotificationDeliveryService:
         """Notify user about expiring subscription."""
         context = {
             'days_left': days_left,
-            'expires_at': str(expires_at),
+            # Localize + humanize: ``str(datetime)`` used to leak raw
+            # ISO with microseconds and tz offset into the rendered
+            # template body. See app/utils/timezone.py::format_email_datetime.
+            'expires_at': format_email_datetime(expires_at),
         }
 
         return await self.send_notification(
@@ -517,7 +521,8 @@ class NotificationDeliveryService:
             'amount_kopeks': amount_kopeks,
             'amount_rubles': amount_kopeks / 100,
             'formatted_amount': settings.format_price(amount_kopeks),
-            'new_expires_at': str(new_expires_at),
+            # Localize + humanize (see expiring branch above).
+            'new_expires_at': format_email_datetime(new_expires_at),
         }
 
         return await self.send_notification(

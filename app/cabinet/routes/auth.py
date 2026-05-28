@@ -43,6 +43,7 @@ from app.services.web_auth_service import (
     poll_web_auth_token,
 )
 from app.utils.cache import RateLimitCache, TokenReplayCache
+from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..auth import (
@@ -447,7 +448,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 connected_squads = [
                     s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')
                 ]
-                device_limit = panel_user.hwid_device_limit or 0
+                device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit, default=0)
 
                 # Determine status
                 current_time = datetime.now(UTC)

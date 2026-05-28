@@ -104,6 +104,16 @@ class Settings(BaseSettings):
 
     TIMEZONE: str = Field(default_factory=lambda: os.getenv('TZ', 'UTC'))
 
+    # strftime pattern used to render datetime values that flow into
+    # email templates (subscription_expiring, subscription_renewed,
+    # autopay_success, etc). Default is locale-independent so it
+    # renders identically on every system: '20.05.2026, 10:32'.
+    # Admins who run a Docker image with the matching locale package
+    # installed can switch to `'%d %B %Y, %H:%M'` for month names like
+    # '20 мая 2026, 10:32', or to `'%Y-%m-%d %H:%M'` for ISO-ish.
+    # See app/utils/timezone.py::format_email_datetime.
+    EMAIL_DATE_FORMAT: str = '%d.%m.%Y, %H:%M'
+
     DATABASE_MODE: str = 'auto'
 
     REDIS_URL: str = 'redis://localhost:6379/0'
@@ -256,6 +266,8 @@ class Settings(BaseSettings):
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000
     REFERRAL_INVITER_BONUS_KOPEKS: int = 10000
     REFERRAL_COMMISSION_PERCENT: int = 25
+    REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT: int | None = None
+    REFERRAL_RECURRING_COMMISSION_TIERS: str = ''  # Формат: "0:10,10:15,50:20,100:25"
     REFERRAL_MAX_COMMISSION_PAYMENTS: int = 0  # Макс. кол-во платежей реферала с комиссией (0 = без лимита)
 
     REFERRAL_PROGRAM_ENABLED: bool = True
@@ -343,6 +355,10 @@ class Settings(BaseSettings):
 
     DEFAULT_AUTOPAY_ENABLED: bool = False
     DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
+    # 0 → use the tariff's shortest (cheapest) period, as before.
+    # >0 → autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
+    # Per-subscription override lives in Subscription.autopay_period_days.
+    DEFAULT_AUTOPAY_PERIOD_DAYS: int = 0
     MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000
     SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
 
@@ -392,6 +408,30 @@ class Settings(BaseSettings):
 
     YOOKASSA_ENABLED: bool = False
     YOOKASSA_DISPLAY_NAME: str = 'YooKassa'
+    # HTTP socket timeouts for yookassa SDK requests. The SDK itself
+    # ships with NO timeout, so a hanging YK endpoint will block a
+    # worker thread forever (until TCP keep-alive eventually kills it,
+    # hours later). app/services/yookassa_service.py monkey-patches
+    # ApiClient.execute to pass these values to requests.Session, so
+    # threads are guaranteed to unstick within ``read`` seconds.
+    #
+    # Read=10s catches P99.9 degradation while keeping pool-slot
+    # occupancy bounded — at 4 workers, a degradation event can pin
+    # the pool for at most 10s instead of 15s (33% faster recovery).
+    # YK normal latency is ~500ms, so 10s read is still ~20× headroom.
+    #
+    # Operators floor at 1s — setting either to ``0`` silently falls
+    # back to the default below to avoid disabling protection entirely.
+    YOOKASSA_HTTP_CONNECT_TIMEOUT: int = 5
+    YOOKASSA_HTTP_READ_TIMEOUT: int = 10
+
+    # Bounded thread pool for synchronous yookassa SDK calls. Default 4
+    # is a balance between burst capacity (~8 req/s normal, ~2 req/s
+    # under degradation per Little's law) and memory footprint (~32MB
+    # per worker stack). High-volume operators can raise this to 6-8
+    # without splitting into polling vs webhook lanes — that split is
+    # a separate refactor.
+    YOOKASSA_MAX_CONCURRENT_REQUESTS: int = 4
     YOOKASSA_SHOP_ID: str | None = None
     YOOKASSA_SECRET_KEY: str | None = None
     YOOKASSA_RETURN_URL: str | None = None
@@ -1441,7 +1481,14 @@ class Settings(BaseSettings):
         raw_username = template.format_map(values).strip()
         sanitized_username = _sanitize(raw_username)
 
-        if not sanitized_username:
+        # Degenerate render: ни одна переменная шаблона не дала уникального
+        # значения. Напр. шаблон `user_{username}` для email-only юзера (у
+        # которого нет Telegram-username) рендерится в `user` — одинаково для
+        # ВСЕХ таких юзеров → RemnaWave отвечает 409 "username already exists"
+        # на каждую регистрацию после первой. `skeleton` — тот же шаблон с
+        # пустыми переменными; равенство ему значит «шаблон ничего не дал».
+        skeleton = _sanitize(template.format_map(defaultdict(str)))
+        if not sanitized_username or sanitized_username == skeleton:
             sanitized_username = _sanitize(f'user_{identifier}')
 
         # Резервируем место под caller-suffix, не опускаясь ниже минимальной длины.
@@ -2930,6 +2977,8 @@ class Settings(BaseSettings):
             'first_topup_bonus_kopeks': self.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
             'inviter_bonus_kopeks': self.REFERRAL_INVITER_BONUS_KOPEKS,
             'commission_percent': self.REFERRAL_COMMISSION_PERCENT,
+            'first_payment_commission_percent': self.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT,
+            'recurring_commission_tiers': self.REFERRAL_RECURRING_COMMISSION_TIERS,
             'notifications_enabled': self.REFERRAL_NOTIFICATIONS_ENABLED,
             'withdrawal_enabled': self.REFERRAL_WITHDRAWAL_ENABLED,
             'withdrawal_min_amount_kopeks': self.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,

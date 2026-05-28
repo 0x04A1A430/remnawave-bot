@@ -35,6 +35,8 @@ from app.external.remnawave_api import (
 )
 from app.services.subscription_service import get_traffic_reset_strategy
 from app.utils.subscription_utils import (
+    coerce_panel_device_limit,
+    device_limit_needs_heal,
     resolve_hwid_device_limit_for_payload,
 )
 from app.utils.timezone import get_local_timezone
@@ -1902,7 +1904,7 @@ class RemnaWaveService:
                             end_date=_expire_at,
                             traffic_limit_gb=_traffic_limit_bytes // (1024**3) if _traffic_limit_bytes > 0 else 0,
                             traffic_used_gb=_used_bytes / (1024**3),
-                            device_limit=panel_user.get('hwidDeviceLimit', 1) or 1,
+                            device_limit=coerce_panel_device_limit(panel_user.get('hwidDeviceLimit')),
                             connected_squads=_squad_uuids,
                             remnawave_uuid=panel_uuid,
                             remnawave_short_id=_short_id,
@@ -2023,7 +2025,7 @@ class RemnaWaveService:
                 'end_date': expire_at,
                 'traffic_limit_gb': traffic_limit_gb,
                 'traffic_used_gb': traffic_used_gb,
-                'device_limit': panel_user.get('hwidDeviceLimit', 1) or 1,
+                'device_limit': coerce_panel_device_limit(panel_user.get('hwidDeviceLimit')),
                 'connected_squads': squad_uuids,
                 'remnawave_short_uuid': panel_user.get('shortUuid'),
                 'subscription_url': panel_user.get('subscriptionUrl', ''),
@@ -3150,7 +3152,7 @@ class RemnaWaveService:
                             )
                             issues_fixed += 1
 
-                        if subscription.device_limit <= 0:
+                        if device_limit_needs_heal(subscription.device_limit):
                             subscription.device_limit = 1
                             logger.info('🔧 Исправлен лимит устройств для', telegram_id=user.telegram_id)
                             issues_fixed += 1

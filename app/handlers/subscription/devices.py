@@ -356,6 +356,9 @@ async def confirm_change_devices(
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription.end_date - now).total_seconds() / 86400))
         period_hint_days = days_left
+        # Cap prorate at one billing month so device addon doesn't bill N months
+        # upfront when subscription has N months left — Telegram bug #596757.
+        effective_days = min(days_left, 30)
 
         devices_discount_percent = PricingEngine.get_addon_discount_percent(
             db_user,
@@ -366,12 +369,12 @@ async def confirm_change_devices(
             devices_price_per_month,
             devices_discount_percent,
         )
-        # Цена = месячная_цена * days_left / 30
-        price = int(discounted_per_month * days_left / 30)
+        # Цена = месячная_цена * min(days_left, 30) / 30 — capped at one month
+        price = int(discounted_per_month * effective_days / 30)
         if chargeable_devices > 0:
             price = max(100, price)  # Минимум 1 рубль (только для платных устройств)
-        total_discount = int(discount_per_month * days_left / 30)
-        period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
+        total_discount = int(discount_per_month * effective_days / 30)
+        period_label = f'{effective_days} дн.' if effective_days > 1 else '1 день'
 
         if price > 0 and db_user.balance_kopeks < price:
             missing_kopeks = price - db_user.balance_kopeks
@@ -584,6 +587,7 @@ async def execute_change_devices(
 
         devices_price_per_month = chargeable_devices * price_per_device
         days_left = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
+        effective_days = min(days_left, 30)  # Cap prorate at one month — #596757
         devices_discount_percent = PricingEngine.get_addon_discount_percent(
             db_user,
             'devices',
@@ -593,7 +597,7 @@ async def execute_change_devices(
             devices_price_per_month,
             devices_discount_percent,
         )
-        price = int(discounted_per_month * days_left / 30)
+        price = int(discounted_per_month * effective_days / 30)
         if chargeable_devices > 0:
             price = max(100, price)
     else:
@@ -1475,6 +1479,7 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription.end_date - now).total_seconds() / 86400))
         period_hint_days = days_left
+        effective_days = min(days_left, 30)  # Cap prorate at one month — #596757
 
         devices_discount_percent = PricingEngine.get_addon_discount_percent(
             db_user,
@@ -1485,17 +1490,18 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             devices_price_per_month,
             devices_discount_percent,
         )
-        # Цена = месячная_цена * days_left / 30
-        price = int(discounted_per_month * days_left / 30)
+        # Цена = месячная_цена * min(days_left, 30) / 30 — capped at one month
+        price = int(discounted_per_month * effective_days / 30)
         if chargeable_devices > 0:
             price = max(100, price)  # Минимум 1 рубль (только для платных устройств)
-        total_discount = int(discount_per_month * days_left / 30)
-        period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
+        total_discount = int(discount_per_month * effective_days / 30)
+        period_label = f'{effective_days} дн.' if effective_days > 1 else '1 день'
     else:
         # Для обычных тарифов - по дням (как в кабинете)
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription.end_date - now).total_seconds() / 86400))
         period_hint_days = days_left
+        effective_days = min(days_left, 30)  # Cap prorate at one month — #596757
 
         devices_discount_percent = PricingEngine.get_addon_discount_percent(
             db_user,
@@ -1506,12 +1512,12 @@ async def confirm_add_devices(callback: types.CallbackQuery, db_user: User, db: 
             devices_price_per_month,
             devices_discount_percent,
         )
-        # Цена = месячная_цена * days_left / 30
-        price = int(discounted_per_month * days_left / 30)
+        # Цена = месячная_цена * min(days_left, 30) / 30 — capped at one month
+        price = int(discounted_per_month * effective_days / 30)
         if chargeable_devices > 0:
             price = max(100, price)  # Минимум 1 рубль (только для платных устройств)
-        total_discount = int(discount_per_month * days_left / 30)
-        period_label = f'{days_left} дн.' if days_left > 1 else '1 день'
+        total_discount = int(discount_per_month * effective_days / 30)
+        period_label = f'{effective_days} дн.' if effective_days > 1 else '1 день'
 
     logger.info(
         'Добавление устройств: ₽/мес × = ₽ (скидка ₽)',
