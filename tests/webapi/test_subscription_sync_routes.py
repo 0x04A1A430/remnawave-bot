@@ -189,3 +189,83 @@ async def test_subscriptions_extend_returns_500_when_rollback_fails(monkeypatch:
 
     assert error.value.status_code == 500
     restore_mock.assert_awaited_once()
+
+
+@pytest.mark.anyio('asyncio')
+async def test_users_patch_subscription_delegates_to_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PATCH /users/{id}/subscription is a documented alias for POST and must route
+    through the same handler. Without this test a refactor of the delegation chain could
+    silently break the PATCH endpoint while the POST tests stay green."""
+    fake_user = SimpleNamespace(id=42)
+    created_subscription = _build_subscription()
+    service_instance = SimpleNamespace(
+        update_remnawave_user=AsyncMock(return_value=SimpleNamespace(uuid='ok')),
+        create_remnawave_user=AsyncMock(return_value=None),
+    )
+
+    monkeypatch.setattr(users, '_get_user_by_id_or_telegram_id', AsyncMock(return_value=fake_user))
+    monkeypatch.setattr(users, 'get_subscription_by_user_id', AsyncMock(return_value=None))
+    monkeypatch.setattr(users, 'create_trial_subscription', AsyncMock(return_value=created_subscription))
+    monkeypatch.setattr(users, 'SubscriptionService', lambda: service_instance)
+    monkeypatch.setattr(users, 'get_user_by_id', AsyncMock(return_value=fake_user))
+    monkeypatch.setattr(users, '_serialize_user', lambda user: {'id': user.id})
+
+    payload = UserSubscriptionCreateRequest(is_trial=True, duration_days=7, replace_existing=False)
+    result = await users.patch_user_subscription(user_id=42, payload=payload, _=None, db=SimpleNamespace())
+
+    assert result == {'id': 42}
+    service_instance.update_remnawave_user.assert_awaited_once()
+
+
+def test_users_patch_subscription_route_returns_201() -> None:
+    """The PATCH-as-upsert alias is intentionally annotated 201 (not the REST-typical 200)
+    so external clients can rely on the same status code as POST. Pin this to catch any
+    future change that drifts the contract."""
+    patch_route = next(
+        route
+        for route in users.router.routes
+        if getattr(route, 'path', None) == '/{user_id}/subscription' and 'PATCH' in route.methods
+    )
+    assert patch_route.status_code == 201
+
+
+@pytest.mark.anyio('asyncio')
+async def test_users_subscription_replace_existing_restores_on_sync_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When replace_existing=True and Remnawave sync fails, the user's prior subscription
+    state must be restored from the pre-mutation snapshot — NOT hard-deleted. The earlier
+    two create-sync tests both used replace_existing=False, which exercises the
+    _delete_subscription_if_exists branch; this test pins the snapshot-restore branch."""
+    fake_user = SimpleNamespace(id=7)
+    existing_subscription = _build_subscription()
+    replaced_subscription = _build_subscription()
+    replaced_subscription.id = existing_subscription.id
+
+    sync_failure_service = SimpleNamespace(
+        update_remnawave_user=AsyncMock(return_value=None),
+        create_remnawave_user=AsyncMock(return_value=None),
+    )
+
+    monkeypatch.setattr(users, '_get_user_by_id_or_telegram_id', AsyncMock(return_value=fake_user))
+    monkeypatch.setattr(users, 'get_subscription_by_user_id', AsyncMock(return_value=existing_subscription))
+    monkeypatch.setattr(users, 'replace_subscription', AsyncMock(return_value=replaced_subscription))
+    monkeypatch.setattr(users, 'SubscriptionService', lambda: sync_failure_service)
+    monkeypatch.setattr(users, 'get_user_by_id', AsyncMock(return_value=fake_user))
+    monkeypatch.setattr(users, '_serialize_user', lambda user: {'id': user.id})
+
+    restore_mock = AsyncMock()
+    delete_mock = AsyncMock()
+    monkeypatch.setattr(users, '_restore_subscription_state', restore_mock)
+    monkeypatch.setattr(users, '_delete_subscription_if_exists', delete_mock)
+
+    payload = UserSubscriptionCreateRequest(is_trial=True, duration_days=7, replace_existing=True)
+
+    with pytest.raises(HTTPException) as error:
+        await users.create_user_subscription(user_id=7, payload=payload, _=None, db=SimpleNamespace())
+
+    assert error.value.status_code == 500
+    restore_mock.assert_awaited_once()
+    restore_args = restore_mock.await_args
+    assert restore_args.args[1] == existing_subscription.id
+    delete_mock.assert_not_awaited()
