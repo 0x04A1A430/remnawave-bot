@@ -8,12 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
 from app.database.models import User
-from app.handlers.subscription.common import (
-    build_redirect_link,
-    create_deep_link,
-    get_localized_value,
-    resolve_button_url,
-)
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
@@ -3626,3 +3620,19 @@ def get_admin_ticket_reply_cancel_keyboard(language: str = DEFAULT_LANGUAGE) -> 
             ]
         ]
     )
+
+
+# Late-bound imports — placed at the bottom to break the
+# `keyboards.inline` ↔ `handlers.subscription.__init__` ↔ `autopay.py`
+# circular import chain. `autopay.py` imports `_get_payment_method_display_name`
+# (and other helpers) from inline.py at its module top level; by deferring
+# this import until inline.py finishes loading, those symbols are guaranteed
+# to exist when subscription/__init__.py loads autopay.
+# Function bodies above reference these names; Python resolves module-level
+# globals at call time, not definition time, so the late binding works.
+from app.handlers.subscription.common import (
+    build_redirect_link,
+    create_deep_link,
+    get_localized_value,
+    resolve_button_url,
+)
