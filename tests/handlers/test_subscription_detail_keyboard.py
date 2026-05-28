@@ -70,10 +70,7 @@ def test_autopay_button_uses_legacy_callback_without_sub_id() -> None:
     keyboard = _build_subscription_detail_keyboard(sub_id=sub_id, sub=sub)
 
     autopay_buttons = [
-        button
-        for row in keyboard.inline_keyboard
-        for button in row
-        if button.callback_data == 'subscription_autopay'
+        button for row in keyboard.inline_keyboard for button in row if button.callback_data == 'subscription_autopay'
     ]
     assert len(autopay_buttons) == 1
     # Exact match — refactor to `subscription_autopay_{id}` / `apm:{id}` must fail here.
@@ -130,9 +127,7 @@ async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
         autopay_days_before=3,
     )
 
-    monkeypatch.setattr(
-        my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=subscription)
-    )
+    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=subscription))
 
     state = SimpleNamespace(update_data=AsyncMock())
     db_user = SimpleNamespace(id=1, language='ru')
@@ -160,9 +155,7 @@ async def test_show_subscription_detail_does_not_write_fsm_on_idor_miss(
     """When the subscription doesn't belong to the requesting user (IDOR check returns
     None), the handler must short-circuit BEFORE writing to FSM. Otherwise a malicious
     callback with a foreign sub_id would poison the user's FSM with someone else's id."""
-    monkeypatch.setattr(
-        my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=None)
-    )
+    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=None))
 
     state = SimpleNamespace(update_data=AsyncMock())
     db_user = SimpleNamespace(id=1, language='ru')

@@ -138,7 +138,9 @@ async def update_partner_settings(
             if request.first_payment_commission_percent is not None:
                 updates['REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT'] = str(request.first_payment_commission_percent)
             if request.recurring_commission_tiers is not None:
-                sanitized_tiers = request.recurring_commission_tiers.replace('\r\n', '').replace('\n', '').replace('\r', '')
+                sanitized_tiers = (
+                    request.recurring_commission_tiers.replace('\r\n', '').replace('\n', '').replace('\r', '')
+                )
                 updates['REFERRAL_RECURRING_COMMISSION_TIERS'] = sanitized_tiers
 
             new_lines = []

@@ -1332,12 +1332,8 @@ class MonitoringService:
                     tariff = getattr(subscription, 'tariff', None)
 
                     autopay_period = (
-                        resolve_autopay_period_candidate(
-                            getattr(subscription, 'autopay_period_days', None), tariff
-                        )
-                        or resolve_autopay_period_candidate(
-                            getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff
-                        )
+                        resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
+                        or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
                         or (tariff.get_shortest_period() if tariff else None)
                         or 30
                     )
