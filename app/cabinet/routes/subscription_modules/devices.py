@@ -391,6 +391,11 @@ async def purchase_devices(
 
         days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
         total_days = 30  # Base period for device price calculation
+        # `device_price_kopeks` is labelled "за устройство (30 дней)" in admin —
+        # cap prorate at one billing month so adding a device with N months left
+        # doesn't bill N × monthly upfront (Telegram bug report #596757/#587412).
+        # Renewal already charges device cost for the next month via pricing_engine.
+        effective_days = min(days_left, total_days)
 
         # Устройства в пределах тарифного лимита — бесплатные
         if tariff:
@@ -410,7 +415,7 @@ async def purchase_devices(
 
         # Calculate base price before discount
         base_price_per_month = device_price * chargeable_devices
-        base_price_prorated = int(base_price_per_month * days_left / total_days)
+        base_price_prorated = int(base_price_per_month * effective_days / total_days)
         if chargeable_devices > 0:
             base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
 
@@ -583,6 +588,18 @@ async def purchase_devices(
         except Exception as e:
             logger.error('Failed to send admin notification for device purchase', error=e)
 
+        # Yandex.Metrika offline conversion (#558449).
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            await yandex_conv.store_cid_and_fire_purchase(
+                user.id,
+                request.yandex_cid,
+                price_kopeks,
+            )
+        except Exception as yconv_err:
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
+
         response: dict[str, Any] = {
             'success': True,
             'message': f'Добавлено {request.devices} устройств',
@@ -669,6 +686,8 @@ async def save_devices_cart(
 
     days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
+    # Cap prorate at one billing month — see #596757 (also applied at line ~413).
+    effective_days = min(days_left, total_days)
 
     # Устройства в пределах тарифного лимита — бесплатные
     if tariff:
@@ -686,7 +705,7 @@ async def save_devices_cart(
         else:
             chargeable_devices = request.devices
 
-    base_total_price = int(device_price * chargeable_devices * days_left / total_days)
+    base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
     if chargeable_devices > 0:
         base_total_price = max(100, base_total_price)  # Minimum 1 ruble
 
@@ -783,6 +802,8 @@ async def get_device_price(
 
     days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
+    # Cap prorate at one billing month — see #596757 (also applied at line ~413).
+    effective_days = min(days_left, total_days)
 
     # Устройства в пределах тарифного лимита — бесплатные
     if tariff:
@@ -801,7 +822,7 @@ async def get_device_price(
             chargeable_devices = devices
 
     # Calculate base price before discount (total first, then floor)
-    base_total_price = int(device_price * chargeable_devices * days_left / total_days)
+    base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
     if chargeable_devices > 0:
         base_total_price = max(100, base_total_price)
 
