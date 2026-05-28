@@ -16,9 +16,14 @@ landings, KOL bots) PostgreSQL has to fetch each row and re-filter on
 A composite index lets the query plan as an index-only scan and keeps
 tier selection O(log N) in referral count.
 
-The migration is idempotent: ``CREATE INDEX IF NOT EXISTS`` so re-running
-``alembic upgrade head`` on an environment that already has the index
-(applied manually as a hotfix, or restored from a backup) does not fail.
+``CREATE INDEX CONCURRENTLY`` is used so the migration does not take an
+``ACCESS EXCLUSIVE`` lock on ``users`` during the index build — matches
+the repo convention established by migrations 0041, 0042, 0043, 0048,
+0080, 0081 for any index on ``users`` or other large tables.
+``CONCURRENTLY`` requires running outside a transaction, hence the
+``autocommit_block()``. On SQLite (used in dev/CI) ``CONCURRENTLY`` is
+not supported, so the migration falls back to the standard
+``create_index`` path there.
 
 Revision ID: 0086
 Revises: 0085
@@ -36,14 +41,34 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+INDEX_NAME = 'ix_users_referred_by_paid'
+
+
 def upgrade() -> None:
-    op.execute(
-        """
-        CREATE INDEX IF NOT EXISTS ix_users_referred_by_paid
-        ON users (referred_by_id, has_made_first_topup)
-        """
-    )
+    bind = op.get_bind()
+    dialect_name = bind.dialect.name
+
+    if dialect_name == 'postgresql':
+        with op.get_context().autocommit_block():
+            op.execute(
+                f'CREATE INDEX CONCURRENTLY IF NOT EXISTS {INDEX_NAME} '
+                'ON users (referred_by_id, has_made_first_topup)'
+            )
+    else:
+        op.create_index(
+            INDEX_NAME,
+            'users',
+            ['referred_by_id', 'has_made_first_topup'],
+            unique=False,
+        )
 
 
 def downgrade() -> None:
-    op.execute('DROP INDEX IF EXISTS ix_users_referred_by_paid')
+    bind = op.get_bind()
+    dialect_name = bind.dialect.name
+
+    if dialect_name == 'postgresql':
+        with op.get_context().autocommit_block():
+            op.execute(f'DROP INDEX CONCURRENTLY IF EXISTS {INDEX_NAME}')
+    else:
+        op.drop_index(INDEX_NAME, table_name='users')
