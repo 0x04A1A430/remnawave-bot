@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+import structlog
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Message
 
@@ -10,7 +11,40 @@ from app.config import settings
 from app.localization.texts import get_texts
 
 
+logger = structlog.get_logger(__name__)
+
 LOGO_PATH = Path(settings.LOGO_FILE)
+
+
+def _validate_logo_path(path: Path) -> bool:
+    """Return True if `path` exists and is a regular file (not a directory).
+
+    Telegram bug report #586617: when ./vpn_logo.png doesn't exist on the host
+    at first `docker compose up`, Docker silently creates an empty *directory*
+    at that bind-mount source. Inside the container the path resolves to a
+    directory → `FSInputFile(...).read()` raises `IsADirectoryError` and the
+    whole photo-send chain blows up with a stack trace. Catching it once at
+    import time lets us log a clear operator-facing message and skip sending
+    the logo, instead of crashing on every callback.
+    """
+    if not path.exists():
+        logger.warning(
+            'Logo file does not exist — photo messages will be sent without logo',
+            logo_path=str(path),
+        )
+        return False
+    if not path.is_file():
+        logger.warning(
+            'Logo path is not a regular file (likely a directory created by a '
+            'failed bind-mount) — photo messages will be sent without logo. '
+            'Fix: remove the directory and replace with a real PNG, then restart.',
+            logo_path=str(path),
+        )
+        return False
+    return True
+
+
+_logo_path_valid = _validate_logo_path(LOGO_PATH)
 
 # Telegram API: caption limit is 1024 characters AFTER HTML entity parsing (tags stripped)
 TELEGRAM_CAPTION_LIMIT = 1024
@@ -33,9 +67,15 @@ _logo_file_id: str | None = None
 
 
 def get_logo_media():
-    """Возвращает кешированный file_id или FSInputFile для логотипа."""
+    """Возвращает кешированный file_id или FSInputFile для логотипа.
+
+    Returns None if the logo file on disk is missing or a directory — callers
+    must fall back to text-only sends (see Telegram bug #586617).
+    """
     if _logo_file_id:
         return _logo_file_id
+    if not _logo_path_valid:
+        return None
     return FSInputFile(LOGO_PATH)
 
 
