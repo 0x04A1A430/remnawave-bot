@@ -1481,7 +1481,14 @@ class Settings(BaseSettings):
         raw_username = template.format_map(values).strip()
         sanitized_username = _sanitize(raw_username)
 
-        if not sanitized_username:
+        # Degenerate render: ни одна переменная шаблона не дала уникального
+        # значения. Напр. шаблон `user_{username}` для email-only юзера (у
+        # которого нет Telegram-username) рендерится в `user` — одинаково для
+        # ВСЕХ таких юзеров → RemnaWave отвечает 409 "username already exists"
+        # на каждую регистрацию после первой. `skeleton` — тот же шаблон с
+        # пустыми переменными; равенство ему значит «шаблон ничего не дал».
+        skeleton = _sanitize(template.format_map(defaultdict(str)))
+        if not sanitized_username or sanitized_username == skeleton:
             sanitized_username = _sanitize(f'user_{identifier}')
 
         # Резервируем место под caller-suffix, не опускаясь ниже минимальной длины.

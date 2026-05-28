@@ -1295,19 +1295,31 @@ async def activate_trial(
     logger.info('Trial subscription activated for user', user_id=user.id)
 
     # Create RemnaWave user
+    subscription_service = SubscriptionService()
+    panel_user = None
     try:
-        subscription_service = SubscriptionService()
         if subscription_service.is_configured:
-            await subscription_service.create_remnawave_user(db, subscription)
+            panel_user = await subscription_service.create_remnawave_user(db, subscription)
             await db.refresh(subscription)
     except Exception as e:
         logger.error('Failed to create RemnaWave user for trial', error=e)
+
+    # create_remnawave_user проглатывает RemnaWaveAPIError внутри себя и
+    # возвращает None (не пробрасывает) — поэтому одного except недостаточно.
+    # Без явной проверки результата кабинет показывал бы триал «активен» без
+    # subscription_url, а юзер так и не появлялся бы в панели Remnawave.
+    if subscription_service.is_configured and panel_user is None:
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         remnawave_retry_queue.enqueue(
             subscription_id=subscription.id,
             user_id=user.id,
             action='create',
+        )
+        logger.warning(
+            'Trial RemnaWave user not provisioned, enqueued for retry',
+            user_id=user.id,
+            subscription_id=subscription.id,
         )
 
     # Send admin notification about trial activation
