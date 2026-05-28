@@ -104,3 +104,51 @@ async def test_member_check_returns_none_on_generic_exception() -> None:
     svc = ChannelSubscriptionService(bot=AsyncMock())
     svc.bot.get_chat_member = AsyncMock(side_effect=RuntimeError('something unexpected'))
     assert await svc._rate_limited_check(123, '-100123') is None
+
+
+@pytest.mark.asyncio
+async def test_check_user_subscriptions_preserves_last_known_on_uncertain() -> None:
+    """Integration: when API check is uncertain (None), the public result
+    must reflect the last known DB value — NOT False — so the middleware's
+    `not is_subscribed` logic doesn't kick paying users out of their subs."""
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    svc = ChannelSubscriptionService(bot=AsyncMock())
+    # Force the rate-limited path to return uncertain
+    svc._rate_limited_check = AsyncMock(return_value=None)
+
+    # DB layer has a stale-but-true record for this user/channel
+    last_known = SimpleNamespace(
+        is_member=True,
+        checked_at=datetime(2020, 1, 1, tzinfo=UTC),  # stale → triggers API check
+    )
+
+    mock_db = AsyncMock()
+    mock_db.commit = AsyncMock()
+
+    async def fake_get_user_channel_subs(_db, _tg_id):
+        return [SimpleNamespace(channel_id='-100123', is_member=True, checked_at=last_known.checked_at)]
+
+    with (
+        patch('app.services.channel_subscription_service.AsyncSessionLocal') as session_local,
+        patch('app.services.channel_subscription_service.ChannelSubCache.get_sub_statuses', AsyncMock(return_value={})),
+        patch('app.services.channel_subscription_service.ChannelSubCache.set_sub_status', AsyncMock()),
+        patch(
+            'app.services.channel_subscription_service.get_user_channel_subs',
+            fake_get_user_channel_subs,
+        ),
+        patch('app.services.channel_subscription_service.upsert_user_channel_sub', AsyncMock()) as upsert_mock,
+    ):
+        session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        result = await svc._check_user_subscriptions_for_channels(
+            123,
+            [{'channel_id': '-100123', 'disable_paid_on_leave': True}],
+        )
+
+    # Last known value preserved despite API being uncertain
+    assert result['-100123'] is True
+    # And we never persisted the uncertain result
+    upsert_mock.assert_not_called()

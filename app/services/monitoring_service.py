@@ -840,14 +840,29 @@ class MonitoringService:
 
                         checked_count += 1
 
-                        # Rate-limited check for ALL channels
+                        # Rate-limited check for ALL channels.
+                        # _rate_limited_check returns Optional[bool] — None means
+                        # "could not determine" (network blip, double rate-limit,
+                        # generic exception). Treat None as "keep the last known
+                        # value" and never feed it into the deactivation path —
+                        # closes the same regression #313502 covered for the
+                        # request-time middleware. This background reconciler
+                        # would otherwise still flip annual paid subs to DISABLED
+                        # on the very next monitoring tick after a transient
+                        # Telegram API hiccup.
                         all_subscribed = True
                         unsubscribed_channels: list[dict] = []
                         for ch in channels:
-                            is_member = await channel_subscription_service._rate_limited_check(
+                            check_result = await channel_subscription_service._rate_limited_check(
                                 user.telegram_id, ch['channel_id']
                             )
-                            # Update DB + cache
+                            if check_result is None:
+                                # Skip DB/cache writes and don't mark as unsubscribed —
+                                # the next reconciler tick (or the next user
+                                # interaction in the request path) will retry.
+                                continue
+                            is_member = check_result
+                            # Update DB + cache only when we have a definitive answer
                             await upsert_user_channel_sub(batch_db, user.telegram_id, ch['channel_id'], is_member)
                             await ChannelSubCache.set_sub_status(user.telegram_id, ch['channel_id'], is_member)
 
