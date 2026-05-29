@@ -54,8 +54,44 @@ async def get_traffic_packages(
     if not subscription:
         return []
 
+    # The displayed discount must match exactly what POST /subscription/traffic
+    # charges, so the period hint mirrors POST: 30 days for tariff packages
+    # (billed monthly), otherwise the prorated remaining days (ceil, min 1) —
+    # the same value calculate_prorated_price() returns as days_charged.
+    is_tariff_mode = settings.is_tariffs_mode() and bool(subscription.tariff_id)
+    if is_tariff_mode:
+        period_hint_days = 30
+    elif subscription.end_date:
+        period_hint_days = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
+    else:
+        period_hint_days = 30
+
+    def _package_response(gb: int, base_price_kopeks: int, is_unlimited: bool) -> TrafficPackageResponse:
+        """Build a package response with the promo-group traffic discount applied.
+
+        Mirrors POST /subscription/traffic: same _apply_addon_discount path and
+        the same 1₽ minimum-charge floor, so the price shown equals the price
+        charged.
+        """
+        discount = _apply_addon_discount(user, 'traffic', base_price_kopeks, period_hint_days)
+        percent = discount['percent']
+        final_price = discount['discounted']
+        # POST floors the charge at 100 kopeks unless the discount is 100%.
+        if 0 < percent < 100 and final_price > 0:
+            final_price = max(100, final_price)
+        has_discount = percent > 0
+        return TrafficPackageResponse(
+            gb=gb,
+            price_kopeks=final_price,
+            price_rubles=final_price / 100,
+            is_unlimited=is_unlimited,
+            discount_percent=percent,
+            base_price_kopeks=base_price_kopeks if has_discount else None,
+            discount_kopeks=(base_price_kopeks - final_price) if has_discount else None,
+        )
+
     # Режим тарифов - берём пакеты из тарифа
-    if settings.is_tariffs_mode() and subscription.tariff_id:
+    if is_tariff_mode:
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
         if not tariff:
             return []
@@ -74,14 +110,7 @@ async def get_traffic_packages(
         for gb, price in packages.items():
             if price <= 0:
                 continue
-            result.append(
-                TrafficPackageResponse(
-                    gb=gb,
-                    price_kopeks=price,
-                    price_rubles=price / 100,
-                    is_unlimited=False,
-                )
-            )
+            result.append(_package_response(gb, price, is_unlimited=False))
 
         return sorted(result, key=lambda x: x.gb)
 
@@ -104,14 +133,7 @@ async def get_traffic_packages(
         if pkg['price'] <= 0:
             continue
 
-        result.append(
-            TrafficPackageResponse(
-                gb=pkg['gb'],
-                price_kopeks=pkg['price'],
-                price_rubles=pkg['price'] / 100,
-                is_unlimited=pkg['gb'] == 0,
-            )
-        )
+        result.append(_package_response(pkg['gb'], pkg['price'], is_unlimited=pkg['gb'] == 0))
 
     return result
 
