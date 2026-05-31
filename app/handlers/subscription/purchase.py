@@ -4306,9 +4306,15 @@ def register_handlers(dp: Dispatcher):
     # NB: `SubscriptionStates` уже импортирован на уровне модуля (строка 107) —
     # повторный локальный `from app.states import …` превратил бы имя в local
     # и сломал бы строку 4197 с UnboundLocalError на старте.
-    from app.handlers.subscription.devices import process_device_rename, start_device_rename
+    from app.handlers.subscription.devices import (
+        cancel_device_rename,
+        process_device_rename,
+        start_device_rename,
+    )
 
     dp.callback_query.register(start_device_rename, F.data.regexp(r'^device_rename_\d+_\d+$'))
+    # Кнопка «Отмена» в промпте переименования — чистит FSM и возвращает список.
+    dp.callback_query.register(cancel_device_rename, F.data == 'device_rename_cancel')
     # F.text — игнорируем стикеры/фото/voice пока юзер в FSM, иначе
     # message.text==None трактуется как пустая строка и очищает alias.
     dp.message.register(process_device_rename, SubscriptionStates.renaming_device, F.text)
