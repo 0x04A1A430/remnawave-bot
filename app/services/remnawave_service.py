@@ -782,8 +782,10 @@ class RemnaWaveService:
                 nodes = await api.get_all_nodes()
                 end = datetime.now(UTC)
                 start = end - timedelta(days=days)
-                start_str = start.isoformat().replace('+00:00', 'Z')
-                end_str = end.isoformat().replace('+00:00', 'Z')
+                # This endpoint validates start/end as date-only (YYYY-MM-DD);
+                # sending a full ISO datetime fails panel validation (400).
+                start_str = start.date().isoformat()
+                end_str = end.date().isoformat()
 
                 totals: dict[str, int] = {}
                 for node in nodes:
@@ -845,12 +847,20 @@ class RemnaWaveService:
             logger.error('Ошибка получения статистики запросов подписки', error=e)
             return {'error': str(e)}
 
-    def _parse_bandwidth_string(self, bandwidth_str: str) -> int:
+    def _parse_bandwidth_string(self, bandwidth_str: str | int | float) -> int:
         try:
+            # Some panel fields (e.g. recap totals) return a raw byte count as a
+            # number or an all-digit string instead of a unit-suffixed string.
+            if isinstance(bandwidth_str, (int, float)):
+                return int(bandwidth_str)
             if not bandwidth_str or bandwidth_str == '0 B' or bandwidth_str == '0':
                 return 0
 
             bandwidth_str = bandwidth_str.replace(' ', '').upper()
+
+            # Plain numeric string with no unit is already bytes.
+            if re.fullmatch(r'[0-9]+([.,][0-9]+)?', bandwidth_str):
+                return int(float(bandwidth_str.replace(',', '.')))
 
             units = {
                 'B': 1,
