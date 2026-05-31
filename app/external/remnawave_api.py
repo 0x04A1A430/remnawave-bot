@@ -972,8 +972,26 @@ class RemnaWaveAPI:
                 raise RemnaWaveAPIError(f'Failed to get outline subscription: {response.status}')
             return await response.text()
 
-    async def get_system_stats(self) -> dict[str, Any]:
-        response = await self._make_request('GET', '/api/system/stats')
+    async def get_system_stats(self, tz: str | None = None) -> dict[str, Any]:
+        params = {'tz': tz} if tz else None
+        response = await self._make_request('GET', '/api/system/stats', params=params)
+        return response['response']
+
+    async def get_health(self) -> dict[str, Any]:
+        """Panel runtime health: {runtimeMetrics: [{rss, heapUsed, heapTotal,
+        eventLoopDelayMs, eventLoopP99Ms, uptime, instanceId, ...}]}."""
+        response = await self._make_request('GET', '/api/system/health')
+        return response['response']
+
+    async def get_hwid_top_users(self, size: int = 10, start: int = 0) -> dict[str, Any]:
+        """Top users by HWID device count: {users:[{username,devicesCount,...}], total}."""
+        params = {'size': size, 'start': start}
+        response = await self._make_request('GET', '/api/hwid/devices/top-users', params=params)
+        return response['response']
+
+    async def get_subscription_request_stats(self) -> dict[str, Any]:
+        """Subscription request history: {byParsedApp:[{app,count}], hourlyRequestStats:[...]}."""
+        response = await self._make_request('GET', '/api/subscription-request-history/stats')
         return response['response']
 
     async def get_system_metadata(self) -> dict[str, Any]:
@@ -989,12 +1007,25 @@ class RemnaWaveAPI:
         response = await self._make_request('GET', '/api/system/metadata')
         return response['response']
 
-    async def get_bandwidth_stats(self) -> dict[str, Any]:
-        response = await self._make_request('GET', '/api/system/stats/bandwidth')
+    async def get_bandwidth_stats(self, tz: str | None = None) -> dict[str, Any]:
+        params = {'tz': tz} if tz else None
+        response = await self._make_request('GET', '/api/system/stats/bandwidth', params=params)
         return response['response']
 
     async def get_nodes_statistics(self) -> dict[str, Any]:
         response = await self._make_request('GET', '/api/system/stats/nodes')
+        return response['response']
+
+    async def get_stats_recap(self) -> dict[str, Any]:
+        """Panel recap: {thisMonth:{users,traffic}, total:{users,nodes,traffic,nodesRam,
+        nodesCpuCores,distinctCountries}, version, initDate}."""
+        response = await self._make_request('GET', '/api/system/stats/recap')
+        return response['response']
+
+    async def get_hwid_devices_stats(self) -> dict[str, Any]:
+        """HWID device stats: {byPlatform:[{platform,count}], byApp:[{app,count}],
+        stats:{totalUniqueDevices,totalHwidDevices,averageHwidDevicesPerUser}}."""
+        response = await self._make_request('GET', '/api/hwid/devices/stats')
         return response['response']
 
     async def get_nodes_metrics(self) -> dict[str, Any]:
