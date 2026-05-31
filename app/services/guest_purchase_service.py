@@ -1597,7 +1597,7 @@ async def _find_succeeded_provider_payment(
     ``amount_kopeks`` is ``None`` when the amount check should be skipped
     (e.g., CryptoBot where USD→RUB conversion introduces imprecision).
     """
-    from sqlalchemy import cast
+    from sqlalchemy import case, cast
     from sqlalchemy.types import JSON as SA_JSON
 
     from app.database.models import (
@@ -1617,11 +1617,23 @@ async def _find_succeeded_provider_payment(
 
     # --- CryptoBot: special case — payload field (text JSON), skip amount check ---
     if base_method == 'cryptobot':
+        # `CAST(payload AS json)` в WHERE небезопасен: Postgres не гарантирует
+        # порядок вычисления предикатов и может выполнить каст на не-JSON payload
+        # (например 'balance_2_10000' от пополнения баланса) ДО фильтра LIKE '{%',
+        # что роняет запрос с "invalid input syntax for type json" (Telegram-баг
+        # #607443). CASE гарантирует короткое замыкание — каст только для JSON-строк.
+        purchase_token_expr = case(
+            (
+                CryptoBotPayment.payload.like('{%'),
+                cast(CryptoBotPayment.payload, SA_JSON)['purchase_token'].as_string(),
+            ),
+            else_=None,
+        )
         result = await db.execute(
             select(CryptoBotPayment).where(
                 CryptoBotPayment.status == 'paid',
                 CryptoBotPayment.payload.like('{%'),
-                cast(CryptoBotPayment.payload, SA_JSON)['purchase_token'].as_string() == purchase_token,
+                purchase_token_expr == purchase_token,
             )
         )
         p = result.scalars().first()
