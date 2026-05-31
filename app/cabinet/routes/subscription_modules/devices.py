@@ -944,7 +944,10 @@ async def get_devices(
             }
 
     except Exception as e:
-        logger.error('Error fetching devices', error=e)
+        # Панель медленная/недоступна — деградируем мягко (пустой список) и логируем
+        # WARNING, как соседние читатели устройств (device_ownership, miniapp), чтобы
+        # транзиентный таймаут панели не спамил админ-чат ошибками.
+        logger.warning('Failed to load devices from RemnaWave (panel slow/unavailable)', error=str(e)[:200])
         return {
             'devices': [],
             'total': 0,
@@ -1192,7 +1195,7 @@ async def get_device_reduction_info(
                 if response:
                     connected_devices_count = response.get('total', 0)
         except Exception as e:
-            logger.error('Error getting connected devices count', error=e)
+            logger.warning('Failed to get connected devices count (panel slow/unavailable)', error=str(e)[:200])
 
     can_reduce = current_device_limit - min_device_limit
 

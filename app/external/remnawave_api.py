@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 import aiohttp
 import structlog
 
+from app.config import settings
+
 
 logger = structlog.get_logger(__name__)
 
@@ -228,6 +230,14 @@ class RemnaWaveAPIError(Exception):
         super().__init__(self.message)
 
 
+class RemnaWaveTransientError(RemnaWaveAPIError):
+    """Transient panel failure (timeout / connection) after retries — the panel is
+    slow or briefly unreachable, not a real API error. A distinct type so the
+    admin-error forwarder (app/logging_handler.py) can skip these instead of
+    spamming the admin chat on every slow-panel request; a persistent outage is
+    surfaced by the monitoring service, not by per-request error logs."""
+
+
 class RemnaWaveAPI:
     def __init__(
         self,
@@ -334,7 +344,10 @@ class RemnaWaveAPI:
         connector = aiohttp.TCPConnector(**connector_kwargs)
 
         session_kwargs = {
-            'timeout': aiohttp.ClientTimeout(total=60, connect=10),
+            'timeout': aiohttp.ClientTimeout(
+                total=settings.REMNAWAVE_API_TOTAL_TIMEOUT,
+                connect=settings.REMNAWAVE_API_CONNECT_TIMEOUT,
+            ),
             'headers': headers,
             'connector': connector,
         }
@@ -418,10 +431,29 @@ class RemnaWaveAPI:
                     )
                     await asyncio.sleep(delay)
                     continue
-                logger.error('Request failed', error=e)
-                raise RemnaWaveAPIError(f'Request failed: {e!s}')
+                # Транзиент (таймаут/обрыв связи с панелью) после ретраев — WARNING,
+                # а не ERROR: иначе медленная панель спамит админ-чат ошибками
+                # (forwarder в logging_handler шлёт только error+).
+                logger.warning(
+                    'RemnaWave request failed after retries (panel slow/unreachable)',
+                    method=method,
+                    endpoint=endpoint,
+                    error=str(e)[:200],
+                )
+                raise RemnaWaveTransientError(f'Request failed: {e!s}')
+            except (TimeoutError, asyncio.TimeoutError) as e:
+                # Total-request timeout — the panel was slow to respond. Transient:
+                # log WARNING and wrap in a typed transient error so the admin-error
+                # forwarder skips it. No retry (avoids multi-minute user-facing hangs).
+                logger.warning(
+                    'RemnaWave request timed out (panel slow)',
+                    method=method,
+                    endpoint=endpoint,
+                    error=str(e)[:200],
+                )
+                raise RemnaWaveTransientError(f'Request timed out: {method} {endpoint}') from e
 
-        raise RemnaWaveAPIError(f'Max retries exceeded for {method} {endpoint}')
+        raise RemnaWaveTransientError(f'Max retries exceeded for {method} {endpoint}')
 
     async def create_user(
         self,
