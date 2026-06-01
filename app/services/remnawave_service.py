@@ -847,7 +847,7 @@ class RemnaWaveService:
             logger.error('Ошибка получения статистики запросов подписки', error=e)
             return {'error': str(e)}
 
-    def _parse_bandwidth_string(self, bandwidth_str: str | int | float) -> int:
+    def _parse_bandwidth_string(self, bandwidth_str: str | float) -> int:
         try:
             # Some panel fields (e.g. recap totals) return a raw byte count as a
             # number or an all-digit string instead of a unit-suffixed string.

@@ -443,7 +443,7 @@ class RemnaWaveAPI:
                     error=str(e)[:200],
                 )
                 raise RemnaWaveTransientError(f'Request failed: {e!s}')
-            except (TimeoutError, asyncio.TimeoutError) as e:
+            except TimeoutError as e:
                 # Total-request timeout — the panel was slow to respond. Transient:
                 # log WARNING and wrap in a typed transient error so the admin-error
                 # forwarder skips it. No retry (avoids multi-minute user-facing hangs).

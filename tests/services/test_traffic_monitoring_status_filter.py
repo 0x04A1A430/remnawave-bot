@@ -36,9 +36,7 @@ def _mock_api_client(service, batches: list[list[MagicMock]]) -> AsyncMock:
     отдают переданные батчи по порядку (последний короткий батч завершает цикл).
     """
     api = MagicMock()
-    api.get_all_users = AsyncMock(
-        side_effect=[{'users': batch, 'total': len(batch)} for batch in batches]
-    )
+    api.get_all_users = AsyncMock(side_effect=[{'users': batch, 'total': len(batch)} for batch in batches])
 
     acm = MagicMock()
     acm.__aenter__ = AsyncMock(return_value=api)
