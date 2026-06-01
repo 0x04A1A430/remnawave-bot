@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.58.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.57.0...v3.58.0) (2026-06-01)
+
+
+### New Features
+
+* **admin-remnawave:** enrich panel statistics and fix nodes-online count ([ef74d63](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ef74d634efca28e533350be83f3437ea5d447d69))
+* **remnawave-nodes:** expose provider name + favicon ([db5caff](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/db5caff8c54b80cbd095930b517f36220d8650fa))
+
+
+### Bug Fixes
+
+* **admin-remnawave:** correct top-consumers date format and recap traffic parsing ([193638e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/193638ec00cbfe68de5d9bf3cb09e0717e0b071e))
+* **cabinet-traffic:** show promo-group discount in traffic top-up ([672acc8](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/672acc8b6424dc0f24f7927e19844c3dbc6aa3ba))
+* **cryptobot:** защитить JSON-каст payload от не-JSON balance-строк ([5758f59](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5758f59445e27e7ffb80a11c78885f206ce733d8))
+* **devices:** make rename "cancel" return to the device list ([5b7c89a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/5b7c89ab1d1f9ef5aaaec614151d4bd2e445cb8f))
+* **devices:** прорейт докупки устройств по остатку подписки, без потолка в 1 месяц ([66ca65c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/66ca65cb6ca328b6e9af928d520a3f5f45081423))
+* **remnawave-api:** не спамить админ-чат транзиентными таймаутами панели ([cd6902c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cd6902c6f6040695c4dd69171e9b9f6f3af18acb))
+* **traffic-check:** skip DISABLED/EXPIRED users in node traffic checks ([c5afb61](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c5afb6163a89f7c5602bfbc866166152701abd59))
+
 ## [3.57.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.56.0...v3.57.0) (2026-05-28)
 
 
