@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import get_user_by_remnawave_uuid
 from app.database.database import AsyncSessionLocal
+from app.external.remnawave_api import RemnaWaveUser, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
 from app.utils.cache import cache, cache_key
@@ -25,6 +26,14 @@ logger = structlog.get_logger(__name__)
 TRAFFIC_SNAPSHOT_KEY = 'traffic:snapshot'
 TRAFFIC_SNAPSHOT_TIME_KEY = 'traffic:snapshot:time'
 TRAFFIC_NOTIFICATION_CACHE_KEY = 'traffic:notifications'
+
+# Статусы, при которых пользователя НЕ нужно гонять в проверках трафика.
+# DISABLED — деактивированные, в т.ч. «хвосты» от удаления через бота: если
+# панельное удаление падает с ошибкой, бот фолбэчит на деактивацию, но свою
+# запись всё равно сносит — в панели остаётся осиротевший DISABLED-юзер.
+# EXPIRED — истёкшие подписки. У обоих нет смысла запрашивать bandwidth-stats:
+# это лишь грузит панель и вешает запрос для мёртвых UUID в таймаут.
+_NON_MONITORED_STATUSES = frozenset({UserStatus.DISABLED, UserStatus.EXPIRED})
 
 
 @dataclass
@@ -264,14 +273,19 @@ class TrafficMonitoringServiceV2:
 
     # ============== Получение пользователей ==============
 
-    async def get_all_users_with_traffic(self) -> list[dict]:
+    async def get_all_users_with_traffic(self) -> list[RemnaWaveUser]:
         """
-        Получает всех пользователей с их трафиком через батчевые запросы
-        Возвращает список словарей с информацией о пользователях
+        Получает пользователей панели батчевыми запросами для проверок трафика.
+
+        Возвращает только пользователей с активным для мониторинга статусом —
+        DISABLED/EXPIRED отсекаются (см. ``_NON_MONITORED_STATUSES``), чтобы не
+        дёргать bandwidth-stats для деактивированных «хвостов» и истёкших
+        подписок: их мёртвые UUID лишь грузят панель и вешают запрос в таймаут.
         """
-        all_users = []
+        all_users: list[RemnaWaveUser] = []
         batch_size = self.get_batch_size()
         offset = 0
+        skipped_inactive = 0
 
         try:
             async with self.remnawave_service.get_api_client() as api:
@@ -282,14 +296,22 @@ class TrafficMonitoringServiceV2:
                     if not users:
                         break
 
-                    all_users.extend(users)
+                    monitorable = [u for u in users if u.status not in _NON_MONITORED_STATUSES]
+                    skipped_inactive += len(users) - len(monitorable)
+                    all_users.extend(monitorable)
                     logger.debug('📊 Загружено пользователей...', all_users_count=len(all_users))
 
+                    # Пагинация — по сырому размеру страницы панели, не по отфильтрованному
                     if len(users) < batch_size:
                         break
 
                     offset += batch_size
 
+            if skipped_inactive:
+                logger.info(
+                    '⏭️ Пропущено неактивных пользователей (DISABLED/EXPIRED) в проверке трафика',
+                    skipped_inactive=skipped_inactive,
+                )
             logger.info('✅ Всего загружено пользователей из Remnawave', all_users_count=len(all_users))
             return all_users
 
