@@ -101,12 +101,23 @@ class RenewalRequest(BaseModel):
 
 
 class TrafficPackageResponse(BaseModel):
-    """Available traffic package."""
+    """Available traffic package.
+
+    ``price_kopeks`` / ``price_rubles`` are the *discounted* price the user
+    pays. When the user's promo group grants a traffic discount, the original
+    price is exposed via ``base_price_kopeks`` (rendered struck-through in the
+    cabinet) alongside ``discount_percent`` / ``discount_kopeks``. These fields
+    stay ``0`` / ``None`` when no discount applies — mirroring the device and
+    renewal endpoints so the frontend can display the ``-N%`` badge.
+    """
 
     gb: int
     price_kopeks: int
     price_rubles: float
     is_unlimited: bool = False
+    discount_percent: int = 0
+    base_price_kopeks: int | None = None
+    discount_kopeks: int | None = None
 
 
 class TrafficPurchaseRequest(BaseModel):

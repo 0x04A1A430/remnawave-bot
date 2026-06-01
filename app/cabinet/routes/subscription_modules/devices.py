@@ -134,7 +134,15 @@ async def purchase_devices_legacy(
         else:
             chargeable_devices = request.devices
 
-    base_total_price = device_price * chargeable_devices
+    # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка.
+    now = datetime.now(UTC)
+    end_date = subscription.end_date
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=UTC)
+    days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
+    base_total_price = int(device_price * chargeable_devices * days_left / 30)
+    if chargeable_devices > 0:
+        base_total_price = max(100, base_total_price)  # Минимум 1 рубль
 
     # Lock user row to prevent TOCTOU on promo-offer state
     from app.database.crud.user import lock_user_for_pricing
@@ -142,7 +150,7 @@ async def purchase_devices_legacy(
     user = await lock_user_for_pricing(db, user.id)
 
     # Apply discount from promo group
-    discount_result = _apply_addon_discount(user, 'devices', base_total_price, 30)
+    discount_result = _apply_addon_discount(user, 'devices', base_total_price, days_left)
     total_price = discount_result['discounted']
     devices_discount_percent = discount_result['percent']
 
@@ -391,11 +399,10 @@ async def purchase_devices(
 
         days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
         total_days = 30  # Base period for device price calculation
-        # `device_price_kopeks` is labelled "за устройство (30 дней)" in admin —
-        # cap prorate at one billing month so adding a device with N months left
-        # doesn't bill N × monthly upfront (Telegram bug report #596757/#587412).
-        # Renewal already charges device cost for the next month via pricing_engine.
-        effective_days = min(days_left, total_days)
+        # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка.
+        # Устройство активно до конца подписки; на продлении доначисляется через
+        # pricing_engine. (Раньше тут был потолок в 1 месяц — #596757/#587412.)
+        effective_days = days_left
 
         # Устройства в пределах тарифного лимита — бесплатные
         if tariff:
@@ -686,8 +693,9 @@ async def save_devices_cart(
 
     days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
-    # Cap prorate at one billing month — see #596757 (also applied at line ~413).
-    effective_days = min(days_left, total_days)
+    # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка
+    # (раньше был потолок в 1 месяц — #596757). Доначисление за устройства — на продлении.
+    effective_days = days_left
 
     # Устройства в пределах тарифного лимита — бесплатные
     if tariff:
@@ -802,8 +810,9 @@ async def get_device_price(
 
     days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
-    # Cap prorate at one billing month — see #596757 (also applied at line ~413).
-    effective_days = min(days_left, total_days)
+    # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка
+    # (раньше был потолок в 1 месяц — #596757). Доначисление за устройства — на продлении.
+    effective_days = days_left
 
     # Устройства в пределах тарифного лимита — бесплатные
     if tariff:
@@ -935,7 +944,10 @@ async def get_devices(
             }
 
     except Exception as e:
-        logger.error('Error fetching devices', error=e)
+        # Панель медленная/недоступна — деградируем мягко (пустой список) и логируем
+        # WARNING, как соседние читатели устройств (device_ownership, miniapp), чтобы
+        # транзиентный таймаут панели не спамил админ-чат ошибками.
+        logger.warning('Failed to load devices from RemnaWave (panel slow/unavailable)', error=str(e)[:200])
         return {
             'devices': [],
             'total': 0,
@@ -1183,7 +1195,7 @@ async def get_device_reduction_info(
                 if response:
                     connected_devices_count = response.get('total', 0)
         except Exception as e:
-            logger.error('Error getting connected devices count', error=e)
+            logger.warning('Failed to get connected devices count (panel slow/unavailable)', error=str(e)[:200])
 
     can_reduce = current_device_limit - min_device_limit
 

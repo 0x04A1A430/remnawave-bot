@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     REMNAWAVE_API_KEY: str | None = None
     REMNAWAVE_SECRET_KEY: str | None = None
 
+    # HTTP-таймауты запросов к панели RemnaWave (секунды). Self-hosted панели
+    # бывают медленными на коннект: раньше connect был зашит в 10с, из-за чего
+    # на медленной панели соединение рвалось (ConnectionTimeoutError). Транзиентные
+    # таймауты логируются как WARNING, чтобы не спамить админ-чат ошибками.
+    REMNAWAVE_API_CONNECT_TIMEOUT: int = 30
+    REMNAWAVE_API_TOTAL_TIMEOUT: int = 60
+
     REMNAWAVE_USERNAME: str | None = None
     REMNAWAVE_PASSWORD: str | None = None
     REMNAWAVE_CADDY_TOKEN: str | None = None
