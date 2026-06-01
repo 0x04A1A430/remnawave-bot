@@ -149,6 +149,8 @@ def _serialize_node(node_data: dict[str, Any]) -> NodeInfo:
         created_at=_parse_datetime(node_data.get('created_at')),
         updated_at=_parse_datetime(node_data.get('updated_at')),
         provider_uuid=node_data.get('provider_uuid'),
+        provider_name=node_data.get('provider_name'),
+        provider_favicon=node_data.get('provider_favicon'),
         versions=node_data.get('versions'),
         system=node_data.get('system'),
         active_plugin_uuid=node_data.get('active_plugin_uuid'),

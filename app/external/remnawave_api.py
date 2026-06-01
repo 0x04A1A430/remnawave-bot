@@ -165,6 +165,8 @@ class RemnaWaveNode:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     provider_uuid: str | None = None
+    provider_name: str | None = None  # infra-provider name (из вложенного provider)
+    provider_favicon: str | None = None  # provider.faviconLink — иконка хостера
     # v2.7.0: replaced cpuCount/cpuModel/totalRam/xrayVersion/nodeVersion
     versions: dict[str, str] | None = None  # {xray, node}
     system: dict[str, Any] | None = None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
@@ -1450,6 +1452,8 @@ class RemnaWaveAPI:
             created_at=self._parse_optional_datetime(node_data.get('createdAt')),
             updated_at=self._parse_optional_datetime(node_data.get('updatedAt')),
             provider_uuid=node_data.get('providerUuid'),
+            provider_name=(node_data.get('provider') or {}).get('name'),
+            provider_favicon=(node_data.get('provider') or {}).get('faviconLink'),
             versions=node_data.get('versions'),
             system=node_data.get('system'),
             active_plugin_uuid=node_data.get('activePluginUuid'),

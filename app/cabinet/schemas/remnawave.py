@@ -120,6 +120,8 @@ class NodeInfo(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     provider_uuid: str | None = None
+    provider_name: str | None = None
+    provider_favicon: str | None = None
     versions: dict[str, str] | None = None
     system: dict[str, Any] | None = None
     active_plugin_uuid: str | None = None
