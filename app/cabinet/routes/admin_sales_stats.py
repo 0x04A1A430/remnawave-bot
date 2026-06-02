@@ -98,6 +98,8 @@ class SalesSummary(BaseModel):
     active_subscriptions: int
     active_trials: int
     new_trials: int
+    new_paid_subscriptions: int
+    expired_subscriptions: int
     trial_to_paid_conversion: float
     renewals_count: int
     addon_revenue_kopeks: int
@@ -184,12 +186,42 @@ async def get_sales_summary(
                         else_=0,
                     )
                 ).label('new_trials'),
+                # New PAID subscriptions started in the period.
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Subscription.is_trial.is_(False),
+                                Subscription.created_at >= period_start,
+                                Subscription.created_at <= period_end,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label('new_paid'),
+                # Paid subscriptions that ENDED in the period (for net active growth).
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Subscription.is_trial.is_(False),
+                                Subscription.end_date >= period_start,
+                                Subscription.end_date <= period_end,
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label('expired_paid'),
             )
         )
         row = sub_counts_result.one()
         active_subs = row.active_paid or 0
         active_trials = row.active_trial or 0
         new_trials = row.new_trials or 0
+        new_paid_subs = row.new_paid or 0
+        expired_paid_subs = row.expired_paid or 0
 
         # Trial-to-paid conversion in period
         # Method 1: SubscriptionConversion records (only created by some purchase flows)
@@ -271,11 +303,15 @@ async def get_sales_summary(
         addon_revenue = addon_revenue_result.scalar() or 0
 
         return SalesSummary(
-            total_revenue_kopeks=total_revenue + manual_topup,
+            # Gateway revenue only — manual admin top-ups are reported separately
+            # (manual_topup_kopeks) so the headline "Доход" isn't muddied by them.
+            total_revenue_kopeks=total_revenue,
             manual_topup_kopeks=manual_topup,
             active_subscriptions=active_subs,
             active_trials=active_trials,
             new_trials=new_trials,
+            new_paid_subscriptions=new_paid_subs,
+            expired_subscriptions=expired_paid_subs,
             trial_to_paid_conversion=conversion_rate,
             renewals_count=renewals_count,
             addon_revenue_kopeks=addon_revenue,
