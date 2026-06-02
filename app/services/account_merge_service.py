@@ -687,9 +687,7 @@ async def execute_merge(
     )
 
     # 5. Мерж подписок
-    await _handle_subscription_merge(
-        db, primary, secondary, keep_subscription_from, pending_remnawave_deletions
-    )
+    await _handle_subscription_merge(db, primary, secondary, keep_subscription_from, pending_remnawave_deletions)
 
     # 6. Переназначение транзакций
     await db.execute(update(Transaction).where(Transaction.user_id == secondary.id).values(user_id=primary.id))
