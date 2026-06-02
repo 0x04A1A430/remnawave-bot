@@ -537,8 +537,14 @@ async def get_sales_stats(
         totals = totals_result.one()
         total_sales = totals.count
 
+        # Revenue and the number of payments that make it up, so the average is
+        # money-per-payment. (Previously divided by the count of *new* subscriptions,
+        # while the sum included renewals/add-ons too — that inflated the average.)
         revenue_result = await db.execute(
-            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+            select(
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                func.count(Transaction.id).label('payments'),
+            ).where(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
@@ -547,8 +553,10 @@ async def get_sales_stats(
                 )
             )
         )
-        total_revenue = revenue_result.scalar() or 0
-        avg_order = total_revenue // total_sales if total_sales > 0 else 0
+        rev_row = revenue_result.one()
+        total_revenue = rev_row.revenue or 0
+        sub_payment_count = rev_row.payments or 0
+        avg_order = total_revenue // sub_payment_count if sub_payment_count > 0 else 0
 
         by_tariff_query = await db.execute(
             select(
