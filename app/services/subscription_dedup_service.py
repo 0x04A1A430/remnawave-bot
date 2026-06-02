@@ -1,20 +1,27 @@
-"""One-shot cleanup of duplicate multi-tariff subscriptions.
+"""One-shot cleanup of duplicate multi-tariff subscriptions (DB rows only).
 
 Re-buying a tariff after it expired used to create a NEW subscription instead of
 reviving the old one, so users piled up stacks of expired same-tariff
 duplicates. The purchase path now revives in place (``create_paid_subscription``);
-this collapses the duplicates that already accumulated.
+this collapses the duplicate DB rows that already accumulated.
 
-Per (user, tariff) it keeps one survivor — most "alive" first
-(active > limited > trial > expired), then the latest ``end_date`` — and removes
-the redundant EXPIRED/DISABLED ones from BOTH the DB and the Remnawave panel,
-exactly like a normal subscription deletion (``delete_remnawave_user`` + row
-delete), so no orphaned panel users are left behind. Live subscriptions
-(active / limited / trial), lone rows and pending are never touched.
+Scope is deliberately DB-only and conservative:
+
+* Per (user, tariff) it keeps one survivor — most "alive" first
+  (active > limited > trial > expired), then the latest ``end_date`` — and
+  deletes only the redundant EXPIRED/DISABLED rows. Live subscriptions
+  (active / limited / trial), lone rows and pending are never touched, so the
+  survivor's panel user is never at risk.
+* It does NOT delete Remnawave panel users. Each multi-tariff subscription has
+  its own panel user, but panel deletion is a non-transactional API call: doing
+  it here risked removing a user that is still referenced (A063 "user not found")
+  if the surrounding DB transaction didn't commit. The expired duplicate panel
+  users are inactive and harmless; if a live subscription's panel user is ever
+  missing, the normal sync recreates it (see
+  ``SubscriptionService._create_or_update_remnawave_user_multi``).
 
 Runs once in the background on startup. Idempotent — a no-op once there are no
-duplicates. If the panel can't confirm a user's deletion, that duplicate's DB
-row is kept and retried on the next start, so the DB and panel never drift apart.
+duplicates.
 """
 
 import structlog
@@ -22,7 +29,6 @@ from sqlalchemy import select
 
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, SubscriptionStatus
-from app.services.subscription_service import SubscriptionService
 
 
 logger = structlog.get_logger(__name__)
@@ -44,8 +50,6 @@ def _survivor_key(sub: Subscription) -> tuple[int, float]:
 
 async def _run_dedupe() -> dict[str, int]:
     removed_db = 0
-    removed_panel = 0
-    service = SubscriptionService()
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -62,26 +66,10 @@ async def _run_dedupe() -> dict[str, int]:
             if len(subs) < 2:
                 continue
             subs.sort(key=_survivor_key)
-            survivor, *rest = subs
+            _survivor, *rest = subs
             for dup in rest:
                 if dup.status not in _REMOVABLE_STATUSES:
                     continue  # never remove a live subscription
-                if dup.remnawave_uuid and dup.remnawave_uuid != survivor.remnawave_uuid:
-                    try:
-                        deleted = await service.delete_remnawave_user(dup.remnawave_uuid)
-                    except Exception as error:
-                        logger.warning(
-                            'dedup: panel delete failed, keeping duplicate for retry',
-                            subscription_id=dup.id,
-                            uuid=dup.remnawave_uuid,
-                            error=error,
-                        )
-                        continue
-                    if not deleted:
-                        # Panel still has the user — keep the DB row so they stay in
-                        # sync; retried on the next start.
-                        continue
-                    removed_panel += 1
                 await db.delete(dup)
                 removed_db += 1
 
@@ -89,18 +77,14 @@ async def _run_dedupe() -> dict[str, int]:
             await db.commit()
 
     if removed_db:
-        logger.info(
-            '🧹 Схлопнуты дубли тарифных подписок',
-            removed_db=removed_db,
-            removed_panel=removed_panel,
-        )
-    return {'removed_db': removed_db, 'removed_panel': removed_panel}
+        logger.info('🧹 Схлопнуты дубли тарифных подписок', removed_db=removed_db)
+    return {'removed_db': removed_db}
 
 
 async def dedupe_expired_tariff_subscriptions() -> dict[str, int]:
-    """Background-safe entrypoint: never raises, returns the counts removed."""
+    """Background-safe entrypoint: never raises, returns the count removed."""
     try:
         return await _run_dedupe()
     except Exception as error:
         logger.error('dedup: cleanup pass failed', error=error)
-        return {'removed_db': 0, 'removed_panel': 0}
+        return {'removed_db': 0}
