@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import Integer as SAInteger, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.crud.payment_gateway_stats import get_gateway_success_rates
 from app.database.crud.transaction import (
     REAL_PAYMENT_METHODS,
     addon_description_clause,
@@ -1199,4 +1200,79 @@ async def get_deposits_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to load deposits statistics',
+        )
+
+
+# ============ Payment Health Schemas ============
+
+
+class GatewaySuccessItem(BaseModel):
+    method: str
+    total: int
+    paid: int
+    success_rate: float
+
+
+class PaymentHealthResponse(BaseModel):
+    total_attempts: int
+    total_paid: int
+    success_rate: float
+    failed_purchases: int
+    by_gateway: list[GatewaySuccessItem]
+
+
+# ============ Payment Health Endpoint ============
+
+
+@router.get('/payment-health', response_model=PaymentHealthResponse)
+async def get_payment_health(
+    days: int | None = Query(default=30),
+    start_date: str | None = Query(default=None),
+    end_date: str | None = Query(default=None),
+    admin: User = Depends(require_permission('sales_stats:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> PaymentHealthResponse:
+    """Payment reliability: per-gateway success-rate + failed-purchase rollbacks.
+
+    success-rate = paid / created per gateway (rows are inserted at initiation).
+    failed_purchases = internal balance rollbacks after a failed/guarded purchase
+    (REFUND with no payment_method) — a signal of how often purchases error out,
+    NOT money returned to customers.
+    """
+    try:
+        period_start, period_end = _parse_period(days, start_date, end_date)
+
+        gateways = await get_gateway_success_rates(db, period_start, period_end)
+        total_attempts = sum(g['total'] for g in gateways)
+        total_paid = sum(g['paid'] for g in gateways)
+        success_rate = round(total_paid / total_attempts * 100, 1) if total_attempts > 0 else 0.0
+
+        failed_result = await db.execute(
+            select(func.count(Transaction.id)).where(
+                and_(
+                    Transaction.type == TransactionType.REFUND.value,
+                    Transaction.is_completed == True,
+                    Transaction.payment_method.is_(None),
+                    Transaction.created_at >= period_start,
+                    Transaction.created_at <= period_end,
+                )
+            )
+        )
+        failed_purchases = failed_result.scalar() or 0
+
+        return PaymentHealthResponse(
+            total_attempts=total_attempts,
+            total_paid=total_paid,
+            success_rate=success_rate,
+            failed_purchases=failed_purchases,
+            by_gateway=[GatewaySuccessItem(**g) for g in gateways],
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error('Failed to get payment health', error=e, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to load payment health',
         )
