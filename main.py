@@ -440,6 +440,16 @@ async def main():
                 stage.warning(f'Ошибка запуска автосинхронизации: {e}')
                 logger.error('❌ Ошибка запуска автосинхронизации RemnaWave', error=e)
 
+        # Разовая фоновая чистка накопившихся дублей тарифных подписок (multi-tariff):
+        # лишние истёкшие дубли удаляются из БД и панели вместе, как штатное удаление.
+        # Идемпотентно — после первой чистки no-op; панель легла — повторит на след. старте.
+        try:
+            from app.services.subscription_dedup_service import dedupe_expired_tariff_subscriptions
+
+            asyncio.create_task(dedupe_expired_tariff_subscriptions())
+        except Exception as e:
+            logger.warning('Не удалось запустить чистку дублей подписок', error=e)
+
         payment_service = PaymentService(bot)
         auto_payment_verification_service.set_payment_service(payment_service)
 
