@@ -95,6 +95,8 @@ class SalesSummary(BaseModel):
     trial_to_paid_conversion: float
     renewals_count: int
     addon_revenue_kopeks: int
+    refunds_count: int
+    refunds_kopeks: int
 
 
 # ============ Summary Endpoint ============
@@ -258,6 +260,25 @@ async def get_sales_summary(
         )
         addon_revenue = addon_revenue_result.scalar() or 0
 
+        # Refunds issued in period (money returned to users). REFUND covers
+        # purchase-error rollbacks, Stars refunds and tariff refunds alike.
+        refunds_result = await db.execute(
+            select(
+                func.count(Transaction.id).label('cnt'),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('amount'),
+            ).where(
+                and_(
+                    Transaction.type == TransactionType.REFUND.value,
+                    Transaction.is_completed == True,
+                    Transaction.created_at >= period_start,
+                    Transaction.created_at <= period_end,
+                )
+            )
+        )
+        refunds_row = refunds_result.one()
+        refunds_count = refunds_row.cnt or 0
+        refunds_amount = refunds_row.amount or 0
+
         return SalesSummary(
             total_revenue_kopeks=total_revenue + manual_topup,
             manual_topup_kopeks=manual_topup,
@@ -267,6 +288,8 @@ async def get_sales_summary(
             trial_to_paid_conversion=conversion_rate,
             renewals_count=renewals_count,
             addon_revenue_kopeks=addon_revenue,
+            refunds_count=refunds_count,
+            refunds_kopeks=refunds_amount,
         )
 
     except HTTPException:
