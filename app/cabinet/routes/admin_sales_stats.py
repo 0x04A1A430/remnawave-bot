@@ -260,8 +260,13 @@ async def get_sales_summary(
         )
         addon_revenue = addon_revenue_result.scalar() or 0
 
-        # Refunds issued in period (money returned to users). REFUND covers
-        # purchase-error rollbacks, Stars refunds and tariff refunds alike.
+        # GENUINE refunds only: money actually returned to the customer through a
+        # payment gateway (Apple IAP clawback, Tribute webhook, etc.). The REFUND
+        # type is overloaded — ~21 of its sites are INTERNAL balance rollbacks after
+        # a failed/guarded purchase (payment_method stays NULL) where no money left
+        # the business. Filtering on REAL_PAYMENT_METHODS keeps only real provider
+        # refunds (and auto-picks up any future gateway). abs() because Tribute
+        # stores the refund negative while Apple stores it positive.
         refunds_result = await db.execute(
             select(
                 func.count(Transaction.id).label('cnt'),
@@ -270,6 +275,7 @@ async def get_sales_summary(
                 and_(
                     Transaction.type == TransactionType.REFUND.value,
                     Transaction.is_completed == True,
+                    Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                     Transaction.created_at >= period_start,
                     Transaction.created_at <= period_end,
                 )
