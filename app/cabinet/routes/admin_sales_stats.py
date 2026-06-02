@@ -16,6 +16,7 @@ from app.database.crud.transaction import (
     traffic_addon_clause,
 )
 from app.database.models import (
+    GuestPurchase,
     PaymentMethod,
     Subscription,
     SubscriptionConversion,
@@ -133,6 +134,23 @@ async def get_sales_summary(
             )
         )
         total_revenue = revenue_result.scalar() or 0
+
+        # Gateway-funded gifts never create a Transaction (the recipient "didn't
+        # pay"), so the buyer's real payment was otherwise invisible to revenue.
+        # Count it from GuestPurchase. Balance-funded gifts carry payment_method
+        # 'balance' and are excluded here — they're already counted via the deposit
+        # that funded the balance.
+        gift_revenue_result = await db.execute(
+            select(func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0)).where(
+                and_(
+                    GuestPurchase.is_gift.is_(True),
+                    GuestPurchase.payment_method.in_(REAL_PAYMENT_METHODS),
+                    GuestPurchase.paid_at >= period_start,
+                    GuestPurchase.paid_at <= period_end,
+                )
+            )
+        )
+        total_revenue += gift_revenue_result.scalar() or 0
 
         # Manual top-ups by admins
         manual_topup_result = await db.execute(
