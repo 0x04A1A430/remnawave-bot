@@ -2561,9 +2561,12 @@ class RemnaWaveService:
                                             user.remnawave_uuid = panel_uuid
                                         return ('updated', sub, None)
                                     except RemnaWaveAPIError as api_error:
-                                        # A018 = "user not found" in some RemnaWave versions (may return 400 or 404)
+                                        # UUID в БД протух — панель-юзера уже нет. Разные версии
+                                        # RemnaWave сообщают это по-разному: A018 или A063, и не всегда
+                                        # со статусом 404. Пересоздаём по любому из этих признаков, чтобы
+                                        # синхронизация в панель чинила рассинхрон, а не падала в ошибку.
                                         error_code = (api_error.response_data or {}).get('errorCode', '')
-                                        if api_error.status_code == 404 or error_code == 'A018':
+                                        if api_error.status_code == 404 or error_code in ('A018', 'A063'):
                                             new_user = await api.create_user(**create_kwargs)
                                             return ('created', sub, new_user)
                                         raise

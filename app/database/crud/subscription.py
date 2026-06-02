@@ -243,6 +243,85 @@ async def create_trial_subscription(
     return subscription
 
 
+async def _revive_paid_subscription(
+    db: AsyncSession,
+    subscription: Subscription,
+    *,
+    duration_days: int,
+    traffic_limit_gb: int,
+    device_limit: int | None,
+    connected_squads: list[str] | None,
+    update_server_counters: bool,
+    commit: bool,
+) -> Subscription:
+    """Revive/extend an existing (possibly expired) tariff subscription in place.
+
+    Backs the one-subscription-per-tariff invariant in multi-tariff mode: instead
+    of inserting a duplicate, reuse the record (keeping its Remnawave link).
+    Mirrors the classic extend branch — extend from the current end_date if still
+    alive, otherwise start a fresh period from now and reset used traffic.
+    """
+    now = datetime.now(UTC)
+    was_alive = subscription.end_date is not None and subscription.end_date > now
+
+    subscription.is_trial = False
+    subscription.status = SubscriptionStatus.ACTIVE.value
+    subscription.traffic_limit_gb = traffic_limit_gb
+    if device_limit is not None:
+        subscription.device_limit = device_limit
+    if connected_squads:
+        subscription.connected_squads = list(connected_squads)
+
+    base_date = subscription.end_date if was_alive else now
+    if not was_alive:
+        subscription.start_date = now
+        subscription.traffic_used_gb = 0.0
+    subscription.end_date = base_date + timedelta(days=duration_days)
+    subscription.updated_at = now
+
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
+    else:
+        await db.flush()
+
+    try:
+        killed = await deactivate_user_trial_subscriptions(
+            db, subscription.user_id, exclude_subscription_id=subscription.id
+        )
+        if killed:
+            logger.info(
+                'Deactivated trial subscriptions on paid revive',
+                user_id=subscription.user_id,
+                killed_count=len(killed),
+            )
+    except Exception as trial_err:
+        logger.warning('Failed to deactivate trials on paid revive', error=trial_err)
+
+    squad_uuids = list(subscription.connected_squads or [])
+    if update_server_counters and squad_uuids:
+        try:
+            from app.database.crud.server_squad import (
+                add_user_to_servers,
+                get_server_ids_by_uuids,
+            )
+
+            server_ids = await get_server_ids_by_uuids(db, squad_uuids)
+            if server_ids:
+                await add_user_to_servers(db, server_ids)
+        except Exception as error:
+            logger.warning('Failed to bump server counters on paid revive', error=error)
+
+    logger.info(
+        '♻️ Реанимирована подписка вместо создания дубля',
+        user_id=subscription.user_id,
+        subscription_id=subscription.id,
+        tariff_id=subscription.tariff_id,
+        was_alive=was_alive,
+    )
+    return subscription
+
+
 async def create_paid_subscription(
     db: AsyncSession,
     user_id: int,
@@ -255,6 +334,27 @@ async def create_paid_subscription(
     tariff_id: int | None = None,
     commit: bool = True,
 ) -> Subscription:
+    # Multi-tariff invariant: at most ONE subscription per (user, tariff). If a
+    # subscription for this tariff has EXPIRED, revive it in place instead of
+    # inserting a duplicate — the partial unique index only guards the alive
+    # statuses, so expired duplicates otherwise piled up. Scope intentionally
+    # narrow: an ACTIVE/LIMITED tariff still falls through to the insert and its
+    # existing unique-index "already active" handling; trials and classic mode
+    # (tariff_id is None) always create a fresh record.
+    if not is_trial and tariff_id is not None and settings.is_multi_tariff_enabled():
+        _existing = await get_subscription_by_user_and_tariff(db, user_id, tariff_id, include_inactive=True)
+        if _existing is not None and not _existing.is_trial and _existing.status == SubscriptionStatus.EXPIRED.value:
+            return await _revive_paid_subscription(
+                db,
+                _existing,
+                duration_days=duration_days,
+                traffic_limit_gb=traffic_limit_gb,
+                device_limit=device_limit,
+                connected_squads=connected_squads,
+                update_server_counters=update_server_counters,
+                commit=commit,
+            )
+
     end_date = datetime.now(UTC) + timedelta(days=duration_days)
 
     if device_limit is None:
@@ -2382,12 +2482,33 @@ async def get_subscription_by_id(db: AsyncSession, subscription_id: int) -> Subs
     return result.scalar_one_or_none()
 
 
-async def get_subscription_by_user_and_tariff(db: AsyncSession, user_id: int, tariff_id: int) -> Subscription | None:
-    """Get active/trial/limited subscription for a specific user+tariff combination.
+async def get_subscription_by_user_and_tariff(
+    db: AsyncSession,
+    user_id: int,
+    tariff_id: int,
+    *,
+    include_inactive: bool = False,
+) -> Subscription | None:
+    """Get a subscription for a specific user+tariff combination.
 
-    Includes LIMITED status because those subscriptions still have time remaining
-    (just ran out of traffic) and should be extended rather than duplicated.
+    By default matches only "alive" subscriptions (active/trial/limited) — those
+    still have time remaining and should be extended rather than duplicated.
+
+    With ``include_inactive=True`` also matches EXPIRED/DISABLED subscriptions, so
+    a re-purchase of a tariff whose subscription has already lapsed revives that
+    record instead of spawning a duplicate. The partial unique index
+    ``uq_subscriptions_user_tariff_active`` only guards the alive statuses, so
+    without this expired duplicates of the same tariff piled up for users.
+    Prefers the freshest candidate (latest end_date) — an alive one, if any.
     """
+    statuses = [
+        SubscriptionStatus.ACTIVE.value,
+        SubscriptionStatus.TRIAL.value,
+        SubscriptionStatus.LIMITED.value,
+    ]
+    if include_inactive:
+        statuses += [SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]
+
     result = await db.execute(
         select(Subscription)
         .options(
@@ -2397,15 +2518,9 @@ async def get_subscription_by_user_and_tariff(db: AsyncSession, user_id: int, ta
         .where(
             Subscription.user_id == user_id,
             Subscription.tariff_id == tariff_id,
-            Subscription.status.in_(
-                [
-                    SubscriptionStatus.ACTIVE.value,
-                    SubscriptionStatus.TRIAL.value,
-                    SubscriptionStatus.LIMITED.value,
-                ]
-            ),
+            Subscription.status.in_(statuses),
         )
-        .order_by(Subscription.created_at.desc())
+        .order_by(Subscription.end_date.desc(), Subscription.created_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()

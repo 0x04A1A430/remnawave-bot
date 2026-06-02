@@ -26,7 +26,12 @@ from app.database.crud.user import (
     set_user_oauth_provider_id,
 )
 from app.database.models import User
-from app.services.account_merge_service import compute_auth_methods, execute_merge, get_merge_preview
+from app.services.account_merge_service import (
+    compute_auth_methods,
+    execute_merge,
+    flush_remnawave_deletions,
+    get_merge_preview,
+)
 from app.utils.cache import RateLimitCache, TokenReplayCache
 
 from ..auth.merge_service import (
@@ -849,7 +854,11 @@ async def execute_merge_endpoint(
         'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
     )
 
-    # 3. Execute merge
+    # 3. Execute merge.
+    # RemnaWave user deletions are DEFERRED until after commit: an external delete
+    # can't be rolled back with the DB, so deleting before commit would (on a
+    # failed merge) leave a deleted panel user while the DB merge is rolled back.
+    deferred_deletions: list[str] = []
     try:
         merged_user = await execute_merge(
             db=db,
@@ -858,6 +867,7 @@ async def execute_merge_endpoint(
             keep_subscription_from=keep_from,
             provider=provider,
             provider_id=provider_id,
+            deferred_remnawave_deletions=deferred_deletions,
         )
         await db.commit()
     except ValueError as exc:
@@ -876,6 +886,9 @@ async def execute_merge_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Account merge failed due to an internal error',
         ) from exc
+
+    # Commit succeeded — only now drop the discarded subscription's panel user.
+    await flush_remnawave_deletions(deferred_deletions)
 
     # 4. Re-fetch merged user with full relationships for auth response
     merged_user = await get_user_by_id(db, primary_user_id)
