@@ -8,7 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy import Integer as SAInteger, and_, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.transaction import REAL_PAYMENT_METHODS
+from app.database.crud.transaction import (
+    REAL_PAYMENT_METHODS,
+    addon_description_clause,
+    device_addon_clause,
+    traffic_addon_clause,
+)
 from app.database.models import (
     PaymentMethod,
     Subscription,
@@ -236,6 +241,10 @@ async def get_sales_summary(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
+                    # A renewal is a repeat subscription payment — NOT a traffic/device
+                    # top-up (those are add-ons with their own tab); exclude them so
+                    # renewals don't double-count add-on purchases.
+                    ~addon_description_clause(Transaction.description),
                     Transaction.created_at >= period_start,
                     Transaction.created_at <= period_end,
                     Transaction.user_id.in_(renewals_subquery),
@@ -244,13 +253,15 @@ async def get_sales_summary(
         )
         renewals_count = renewals_result.scalar() or 0
 
-        # Add-on revenue
+        # Add-on revenue for the summary card = ALL add-ons (traffic + devices),
+        # so "Доп. услуги" matches the sum of the Add-ons tab. (Previously this was
+        # traffic-only and silently dropped device revenue.)
         addon_revenue_result = await db.execute(
             select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
-                    Transaction.description.ilike('%трафик%'),
+                    addon_description_clause(Transaction.description),
                     Transaction.created_at >= period_start,
                     Transaction.created_at <= period_end,
                 )
@@ -715,14 +726,19 @@ async def get_renewals_stats(
         period_start, period_end = _parse_period(days, start_date, end_date)
         is_all_time = days is not None and days == 0
 
+        # Renewals must NOT include traffic/device top-ups (they share the
+        # SUBSCRIPTION_PAYMENT type but belong to the Add-ons tab).
+        not_addon = ~addon_description_clause(Transaction.description)
+
         if is_all_time:
-            # For "all time": renewals = users with more than 1 subscription payment
+            # For "all time": renewals = users with more than 1 real subscription payment
             repeat_users_subquery = (
                 select(Transaction.user_id)
                 .where(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                         Transaction.is_completed == True,
+                        not_addon,
                     )
                 )
                 .group_by(Transaction.user_id)
@@ -738,6 +754,7 @@ async def get_renewals_stats(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                         Transaction.is_completed == True,
+                        not_addon,
                         Transaction.user_id.in_(repeat_users_subquery),
                     )
                 )
@@ -773,6 +790,7 @@ async def get_renewals_stats(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                         Transaction.is_completed == True,
+                        not_addon,
                         Transaction.created_at >= period_start,
                         Transaction.created_at <= period_end,
                         Transaction.user_id.in_(existing_users_subquery),
@@ -802,6 +820,7 @@ async def get_renewals_stats(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                         Transaction.is_completed == True,
+                        not_addon,
                         Transaction.created_at >= prev_start,
                         Transaction.created_at <= prev_end,
                         Transaction.user_id.in_(prev_existing_subquery),
@@ -822,11 +841,14 @@ async def get_renewals_stats(
         else:
             trend = 'stable'
 
+        # Denominator for renewal_rate excludes add-ons too, so the rate is
+        # renewals / (new + renewals), not diluted by traffic/device top-ups.
         total_sub_payments_result = await db.execute(
             select(func.count(Transaction.id)).where(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
+                    not_addon,
                     Transaction.created_at >= period_start,
                     Transaction.created_at <= period_end,
                 )
@@ -844,6 +866,7 @@ async def get_renewals_stats(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
+                    not_addon,
                     Transaction.created_at >= period_start,
                     Transaction.created_at <= period_end,
                     Transaction.user_id.in_(existing_users_subquery),
@@ -947,7 +970,7 @@ async def get_addons_stats(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
-                    Transaction.description.ilike('%трафик%'),
+                    traffic_addon_clause(Transaction.description),
                     Transaction.created_at >= period_start,
                     Transaction.created_at <= period_end,
                 )
@@ -985,11 +1008,11 @@ async def get_addons_stats(
             for row in daily_query
         ]
 
-        # Device purchases (transactions with 'устройств' in description)
+        # Device purchases (transactions whose description looks like a devices add-on)
         device_filter = and_(
             Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
             Transaction.is_completed == True,
-            Transaction.description.ilike('%устройств%'),
+            device_addon_clause(Transaction.description),
             Transaction.created_at >= period_start,
             Transaction.created_at <= period_end,
         )

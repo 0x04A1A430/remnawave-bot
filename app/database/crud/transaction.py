@@ -30,6 +30,39 @@ _NON_GATEWAY_METHODS = frozenset(
 REAL_PAYMENT_METHODS = [m.value for m in PaymentMethod if m.value not in _NON_GATEWAY_METHODS]
 
 
+# ── Доп. услуги (докупка трафика / устройств) ──────────────────────────────────
+#
+# Допы переиспользуют тип SUBSCRIPTION_PAYMENT, поэтому отличить их от настоящих
+# продаж/продлений можно только по тексту описания. Описания — захардкоженные
+# литералы в местах покупки (НЕ через texts.t), поэтому подстроки стабильны для
+# любого языка интерфейса. Держим их единым списком, чтобы хрупкое сопоставление
+# жило в одном месте, а не дублировалось по эндпоинтам.
+#
+# ВАЖНО (известное ограничение): если ТАРИФ назван со словом «трафик»/«устройств»,
+# обычная покупка/продление такого тарифа ложно попадёт под фильтр. Надёжное
+# решение — отдельный тип/маркер транзакции для допов; пока его нет, фрагильность
+# локализована здесь. Английский вариант «Traffic upgrade …» (кабинет) раньше
+# выпадал из %трафик% — теперь учтён.
+TRAFFIC_ADDON_PATTERNS = ('%трафик%', '%traffic upgrade%')
+DEVICE_ADDON_PATTERNS = ('%устройств%',)
+ADDON_DESCRIPTION_PATTERNS = (*TRAFFIC_ADDON_PATTERNS, *DEVICE_ADDON_PATTERNS)
+
+
+def traffic_addon_clause(description_column):
+    """SQL-условие: описание транзакции похоже на докупку трафика."""
+    return or_(*(description_column.ilike(p) for p in TRAFFIC_ADDON_PATTERNS))
+
+
+def device_addon_clause(description_column):
+    """SQL-условие: описание транзакции похоже на покупку доп. устройств."""
+    return or_(*(description_column.ilike(p) for p in DEVICE_ADDON_PATTERNS))
+
+
+def addon_description_clause(description_column):
+    """SQL-условие: транзакция — любой доп (трафик или устройства), не продажа/продление."""
+    return or_(*(description_column.ilike(p) for p in ADDON_DESCRIPTION_PATTERNS))
+
+
 async def create_transaction(
     db: AsyncSession,
     user_id: int,
