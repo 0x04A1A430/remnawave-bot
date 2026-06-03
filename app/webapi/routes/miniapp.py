@@ -6771,6 +6771,19 @@ async def preview_tariff_switch_endpoint(
             detail={'code': 'subscription_inactive', 'message': 'Subscription is not active'},
         )
 
+    if subscription.is_trial:
+        # A trial has no paid value to prorate from — "switching" it would hand the
+        # user a full paid period of the target tariff for the (often zero/cheap)
+        # upgrade cost (bug #629889 class). Trials must buy a real tariff instead.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'trial_cannot_switch',
+                'message': 'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
+                'use_purchase_flow': True,
+            },
+        )
+
     current_tariff = await get_tariff_by_id(db, subscription.tariff_id)
     new_tariff = await get_tariff_by_id(db, payload.tariff_id)
 
@@ -6872,6 +6885,19 @@ async def switch_tariff_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={'code': 'subscription_inactive', 'message': 'Subscription is not active'},
+        )
+
+    if subscription.is_trial:
+        # A trial has no paid value to prorate from — "switching" it would hand the
+        # user a full paid period of the target tariff for the (often zero/cheap)
+        # upgrade cost (bug #629889 class). Trials must buy a real tariff instead.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'trial_cannot_switch',
+                'message': 'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
+                'use_purchase_flow': True,
+            },
         )
 
     current_tariff = await get_tariff_by_id(db, subscription.tariff_id)

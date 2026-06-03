@@ -757,6 +757,7 @@ async def extend_subscription(
     traffic_limit_gb: int | None = None,
     device_limit: int | None = None,
     connected_squads: list[str] | None = None,
+    convert_trial: bool = True,
     commit: bool = True,
 ) -> Subscription:
     """Продлевает подписку на указанное количество дней.
@@ -769,6 +770,11 @@ async def extend_subscription(
         traffic_limit_gb: Лимит трафика ГБ (опционально, для режима тарифов)
         device_limit: Лимит устройств (опционально, для режима тарифов)
         connected_squads: Список UUID сквадов (опционально, для режима тарифов)
+        convert_trial: снимать ли триальный флаг при передаче tariff_id.
+            True (по умолчанию) — для НАСТОЯЩИХ покупок тарифа. Передавайте
+            False для бесплатного релейбла/смены тарифа без оплаты, иначе триал
+            превратится в фантомную платную подписку и попадёт в авто-продление
+            (баг #629889).
     """
     current_time = datetime.now(UTC)
 
@@ -875,8 +881,11 @@ async def extend_subscription(
         subscription.tariff_id = tariff_id
         logger.info('📦 Обновлен тариф подписки: →', old_tariff_id=old_tariff_id, tariff_id=tariff_id)
 
-        # При покупке тарифа сбрасываем триальный статус
-        if subscription.is_trial:
+        # При покупке тарифа сбрасываем триальный статус — но ТОЛЬКО для настоящих
+        # покупок. Бесплатный релейбл/смена тарифа без оплаты должны передавать
+        # convert_trial=False, иначе триал станет фантомной платной подпиской и
+        # попадёт в авто-продление (баг #629889).
+        if subscription.is_trial and convert_trial:
             subscription.is_trial = False
             logger.info('🎓 Подписка конвертирована из триала в платную', subscription_id=subscription.id)
 
