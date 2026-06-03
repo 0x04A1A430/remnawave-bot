@@ -15,7 +15,7 @@ from app.database.crud.promocode import (
 from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.user_promo_group import add_user_to_promo_group, has_user_promo_group
-from app.database.models import PromoCode, PromoCodeType, SubscriptionStatus, User
+from app.database.models import PromoCode, PromoCodeType, User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 
@@ -329,18 +329,14 @@ class PromoCodeService:
                 # eligible = non_daily or active_subs, active_subs is guaranteed non-empty (guard above)
                 # This branch is unreachable, but defend against future changes
                 raise ValueError('no_subscription_for_days')
-            # Конвертация триала в платную подписку при активации промокода на дни
-            if target_sub.is_trial:
-                target_sub.is_trial = False
-                if target_sub.status == SubscriptionStatus.TRIAL.value:
-                    target_sub.status = SubscriptionStatus.ACTIVE.value
-                target_sub.updated_at = datetime.now(UTC)
-                logger.info(
-                    '🎓 Промокод: конвертация триала в платную подписку',
-                    subscription_id=target_sub.id,
-                    code=promocode.code,
-                )
-
+            # NB: a days-promocode is a FREE grant, not a purchase — do NOT flip
+            # is_trial here (bug #629889 class). Converting a trial to is_trial=False
+            # without a charge un-gated it from try_auto_extend_expired_after_topup,
+            # so once the promo days lapsed the trial silently became a self-renewing
+            # paid subscription. extend_subscription already promotes TRIAL→ACTIVE
+            # status on its own (and never touches is_trial when called without a
+            # tariff_id), so the promo days still apply while the subscription
+            # correctly stays a trial and remains gated out of auto-renewal.
             await extend_subscription(db, target_sub, promocode.subscription_days)
             await self.subscription_service.update_remnawave_user(db, target_sub)
 

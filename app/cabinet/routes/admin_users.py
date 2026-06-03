@@ -1379,12 +1379,12 @@ async def update_user_subscription(
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads
 
-        # Convert trial subscription to paid when switching to a non-trial tariff
-        if subscription.is_trial and not tariff.is_trial_available:
-            subscription.is_trial = False
-            if subscription.end_date and subscription.end_date > datetime.now(UTC):
-                subscription.status = SubscriptionStatus.ACTIVE.value
-            logger.info('Converted trial subscription to paid', user_id=user_id, tariff_name=tariff.name)
+        # NB: changing the tariff is a *relabel*, not a purchase — we deliberately
+        # do NOT flip is_trial here. Bug #629889: flipping a 1-day trial to
+        # is_trial=False left a phantom "paid" subscription that, once its trial
+        # day expired, got picked up by try_auto_extend_expired_after_topup (which
+        # only renews is_trial=False subs) and granted a full ~30-day tariff period.
+        # A trial stays a trial across a tariff change and expires normally.
 
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete
