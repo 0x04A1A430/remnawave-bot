@@ -139,7 +139,11 @@ async def create_trial_subscription(
         tariff_id: ID тарифа (для режима тарифов)
     """
     duration_days = duration_days or settings.TRIAL_DURATION_DAYS
-    traffic_limit_gb = traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
+    # 0 ГБ — это осознанный БЕЗЛИМИТ (валидное значение), поэтому отличаем
+    # «не передано» (None → берём конфиг) от «0» (оставляем безлимит). `or` тут
+    # затирал бы намеренный безлимит триал-тарифа значением TRIAL_TRAFFIC_LIMIT_GB.
+    if traffic_limit_gb is None:
+        traffic_limit_gb = settings.TRIAL_TRAFFIC_LIMIT_GB
     if device_limit is None:
         device_limit = settings.TRIAL_DEVICE_LIMIT
 
