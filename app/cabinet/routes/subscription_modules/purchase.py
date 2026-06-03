@@ -1139,9 +1139,11 @@ async def get_trial_info(
         if not trial_tariff:
             trial_tariff_id = settings.get_trial_tariff_id()
             if trial_tariff_id > 0:
+                # Триальный тариф намеренно может быть НЕактивным (скрыт из списка
+                # покупки, но задаёт лимиты триала) — не отбраковываем по is_active,
+                # иначе триал падает на TRIAL_TRAFFIC_LIMIT_GB. Так же ведут себя
+                # бот и miniapp, и get_trial_tariff (по флагу is_trial_available).
                 trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and not trial_tariff.is_active:
-                    trial_tariff = None
 
         if trial_tariff:
             traffic_limit_gb = trial_tariff.traffic_limit_gb
@@ -1279,9 +1281,11 @@ async def activate_trial(
         if not trial_tariff:
             trial_tariff_id = settings.get_trial_tariff_id()
             if trial_tariff_id > 0:
+                # Триальный тариф намеренно может быть НЕактивным (скрыт из списка
+                # покупки, но задаёт лимиты триала) — не отбраковываем по is_active,
+                # иначе триал падает на TRIAL_TRAFFIC_LIMIT_GB. Так же ведут себя
+                # бот и miniapp, и get_trial_tariff (по флагу is_trial_available).
                 trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and not trial_tariff.is_active:
-                    trial_tariff = None
 
         if trial_tariff:
             from app.database.crud.server_squad import get_effective_tariff_squad_uuids
