@@ -8,6 +8,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.contest import get_active_rounds, get_attempt
 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 from app.database.database import AsyncSessionLocal
@@ -168,6 +169,17 @@ async def cmd_contests(message: types.Message, db_user, db: AsyncSession):
 @error_handler
 async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSession):
     """Show menu with available contest games."""
+    # Contests announced BEFORE the deep-link fix have this callback button on a
+    # channel post, where a callback can't render a personal menu. Redirect the
+    # clicker to open the bot instead — answerCallbackQuery accepts a
+    # t.me/{bot}?start=... link, which lands on the cmd_start contests handler.
+    chat = callback.message.chat if callback.message else None
+    if chat is not None and chat.type != 'private':
+        bot_username = settings.get_bot_username()
+        if bot_username:
+            await callback.answer(url=f'https://t.me/{bot_username}?start=contests')
+            return
+
     view = await _build_contests_menu_view(db, db_user)
     if view is None:
         await _reply_not_eligible(callback, db_user.language)
