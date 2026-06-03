@@ -37,6 +37,8 @@ router = APIRouter(prefix='/admin/landings', tags=['Cabinet Admin Landings'])
 _RESERVED_SLUGS = frozenset(
     {
         'purchase',
+        'gift',
+        'success',
         'admin',
         'api',
         'health',

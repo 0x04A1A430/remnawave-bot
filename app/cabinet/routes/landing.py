@@ -15,6 +15,7 @@ from app.cabinet.utils.locale import DEFAULT_LOCALE, resolve_locale_text
 from app.config import settings
 from app.database.crud.landing import get_active_landing_by_slug, get_purchase_by_token
 from app.database.crud.tariff import get_tariff_by_id
+from app.database.crud.user import get_user_by_email
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff
 from app.services.guest_purchase_service import (
     GuestPurchaseError,
@@ -576,17 +577,21 @@ async def claim_gift(
     ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This gift cannot be activated')
 
-    # Resolve / create the activator's email account (the gift binds here).
-    user, _is_new = await _find_or_create_user(db, 'email', body.email, purchase=purchase, tariff_id=purchase.tariff_id)
+    # Resolve the activator by email WITHOUT creating an account yet, so a
+    # rejected claim (self-gift / already-claimed) never leaves an orphan account.
+    existing_user = await get_user_by_email(db, body.email)
 
     # Self-activation guard — only meaningful for cabinet-originated gifts where
     # the buyer is a known account (landing buyers are anonymous → inert).
-    if purchase.buyer_user_id is not None and purchase.buyer_user_id == user.id:
+    if existing_user is not None and purchase.buyer_user_id is not None and purchase.buyer_user_id == existing_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
 
-    # Ownership guard — already claimed by someone else.
-    if purchase.user_id is not None and purchase.user_id != user.id:
+    # Ownership guard — already claimed by a different account.
+    if purchase.user_id is not None and (existing_user is None or purchase.user_id != existing_user.id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This gift has already been claimed')
+
+    # Guards passed — now create/finalize the account the gift binds to.
+    user, _is_new = await _find_or_create_user(db, 'email', body.email, purchase=purchase, tariff_id=purchase.tariff_id)
 
     # Bind (if unbound) and move PAID → PENDING_ACTIVATION so activate accepts it.
     if purchase.user_id is None:
