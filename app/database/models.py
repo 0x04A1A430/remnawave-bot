@@ -1758,6 +1758,27 @@ class Tariff(Base):
         prices = self.period_prices or {}
         return sorted([int(p) for p in prices.keys()])
 
+    def get_purchasable_periods(self) -> list[int]:
+        """Периоды, доступные для покупки, с учётом суточных тарифов.
+
+        У суточных тарифов ``period_prices`` пуст — оплата идёт за день,
+        поэтому единственный «период» покупки равен 1 дню. Для обычных
+        тарифов поведение совпадает с :meth:`get_available_periods`.
+        """
+        if self.is_daily and self.daily_price_kopeks:
+            return [1]
+        return self.get_available_periods()
+
+    def get_purchasable_price_for_period(self, period_days: int) -> int | None:
+        """Цена за период с учётом суточных тарифов.
+
+        Для суточного тарифа период в 1 день стоит ``daily_price_kopeks``;
+        в остальных случаях используется обычная цена из ``period_prices``.
+        """
+        if self.is_daily and period_days == 1:
+            return self.daily_price_kopeks or None
+        return self.get_price_for_period(period_days)
+
     def get_shortest_period(self) -> int | None:
         """Возвращает минимальный доступный период в днях (для автопродления)."""
         periods = self.get_available_periods()

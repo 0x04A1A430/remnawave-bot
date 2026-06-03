@@ -104,16 +104,16 @@ async def validate_and_calculate(
                 raise GuestPurchaseError('Period is not available for this tariff on this landing page')
         else:
             # No override for this tariff -> all tariff periods allowed
-            available = tariff.get_available_periods()
+            available = tariff.get_purchasable_periods()
             if period_days not in available:
                 raise GuestPurchaseError('Period is not available for this tariff')
     else:
         # No overrides at all -> use tariff's own periods
-        available = tariff.get_available_periods()
+        available = tariff.get_purchasable_periods()
         if period_days not in available:
             raise GuestPurchaseError('Period is not available for this tariff')
 
-    price_kopeks = tariff.get_price_for_period(period_days)
+    price_kopeks = tariff.get_purchasable_price_for_period(period_days)
     if price_kopeks is None:
         raise GuestPurchaseError('Price is not configured for this period')
 

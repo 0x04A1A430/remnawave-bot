@@ -58,6 +58,8 @@ class LandingTariff(BaseModel):
     device_limit: int
     tier_level: int
     periods: list[LandingTariffPeriod]
+    is_daily: bool = False  # суточный тариф: единственный период — 1 день
+    daily_price_kopeks: int = 0
 
 
 class LandingPaymentMethodSubOption(BaseModel):
@@ -331,11 +333,11 @@ async def _load_landing_tariffs(
         if tariff_period_override is not None:
             period_days_list = sorted(tariff_period_override)
         else:
-            period_days_list = tariff.get_available_periods()
+            period_days_list = tariff.get_purchasable_periods()
 
         periods = []
         for days in period_days_list:
-            price = tariff.get_price_for_period(days)
+            price = tariff.get_purchasable_price_for_period(days)
             if price is None:
                 continue
 
@@ -378,6 +380,8 @@ async def _load_landing_tariffs(
                 device_limit=tariff.device_limit,
                 tier_level=tariff.tier_level,
                 periods=periods,
+                is_daily=bool(tariff.is_daily),
+                daily_price_kopeks=tariff.daily_price_kopeks or 0,
             )
         )
 
