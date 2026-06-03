@@ -763,9 +763,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     if state_needs_update:
         await state.set_data(data)
 
-    # Handle gift code deep links: /start GIFT_{token}
-    if start_parameter and start_parameter.startswith('GIFT_'):
-        gift_token = start_parameter[5:]  # Strip "GIFT_" prefix
+    # Handle gift code deep links: /start GIFT_{token} (or giftclaim_{token} alias)
+    if start_parameter and (start_parameter.startswith('GIFT_') or start_parameter.startswith('giftclaim_')):
+        gift_token = (
+            start_parameter.removeprefix('giftclaim_')
+            if start_parameter.startswith('giftclaim_')
+            else start_parameter[5:]  # Strip "GIFT_" prefix
+        )
         if len(gift_token) >= 8:
             logger.info(
                 'Gift code deep link detected',
