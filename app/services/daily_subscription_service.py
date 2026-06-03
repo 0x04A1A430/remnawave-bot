@@ -864,6 +864,38 @@ class DailySubscriptionService:
 
             await asyncio.sleep(interval_minutes * 60)
 
+    async def start_traffic_reset_monitoring(self):
+        """Периодический сброс истёкших докупок трафика БЕЗ суточных списаний.
+
+        Запускается, когда суточные подписки выключены (DAILY_SUBSCRIPTIONS_ENABLED=
+        False). Сброс докупленного трафика — общая механика для ЛЮБОЙ установки,
+        продающей пакеты ГБ, и не должен зависеть от суточных тарифов. Без этого
+        истёкшая докупка роняет лимит резко мимо защиты _reset_subscription_traffic
+        (defer + честный сброс used панелью) → активный юзер уходит в минус по
+        трафику (60/50), баг #630055.
+        """
+        self._running = True
+        interval_minutes = self.get_check_interval_minutes()
+        logger.info(
+            '🔄 Запуск сброса докупок трафика (суточные тарифы выключены, интервал: мин)',
+            interval_minutes=interval_minutes,
+        )
+
+        while self._running:
+            try:
+                traffic_stats = await self.process_traffic_resets()
+                if traffic_stats['reset'] > 0:
+                    logger.info(
+                        '📊 Сброс трафика: проверено=, сброшено=, ошибок',
+                        traffic_stats=traffic_stats['checked'],
+                        traffic_stats_2=traffic_stats['reset'],
+                        traffic_stats_3=traffic_stats['errors'],
+                    )
+            except Exception as e:
+                logger.error('Ошибка в цикле сброса докупок трафика', error=e, exc_info=True)
+
+            await asyncio.sleep(interval_minutes * 60)
+
     def stop_monitoring(self):
         """Останавливает периодическую проверку."""
         self._running = False
