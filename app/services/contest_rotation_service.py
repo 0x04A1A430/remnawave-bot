@@ -301,9 +301,24 @@ class ContestRotationService:
         if not channel_id:
             return
 
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='🎲 Играть', callback_data='contests_menu')]]
-        )
+        # A channel post button can't open a user's private chat or show a
+        # personal menu via callback_data — use a deep link to the bot instead,
+        # which opens the contests menu in the user's private chat.
+        bot_username = settings.get_bot_username()
+        if not bot_username:
+            try:
+                me = await self.bot.get_me()
+                bot_username = me.username
+            except Exception:
+                bot_username = None
+
+        keyboard = None
+        if bot_username:
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text='🎲 Играть', url=f'https://t.me/{bot_username}?start=contests')]
+                ]
+            )
 
         try:
             await self.bot.send_message(
