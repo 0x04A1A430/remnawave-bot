@@ -1884,6 +1884,7 @@ async def check_is_admin(
 @router.post('/email/change', response_model=EmailChangeResponse)
 async def request_email_change(
     request: EmailChangeRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1893,6 +1894,20 @@ async def request_email_change(
     For verified emails: sends a 6-digit verification code to the new email.
     For unverified emails: replaces the email directly and sends verification to the new address.
     """
+    # Rate-limit: each request mails an OTP to an arbitrary address, so throttle
+    # by IP and by account to prevent code-flooding and brute-force restarts.
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, 'email_change_request', limit=5, window=300, fail_closed=True
+    ) or await RateLimitCache.is_ip_rate_limited(
+        f'user:{user.id}', 'email_change_request', limit=5, window=3600, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '300'},
+        )
+
     if not user.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1904,6 +1919,16 @@ async def request_email_change(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='New email is the same as current email',
+        )
+
+    # SECURITY: never let the change flow bind an ADMIN_EMAILS address the user
+    # does not already own. Verifying it sets email_verification_source='cabinet'
+    # (a trusted source) and would auto-grant superadmin on next login.
+    new_email_lower = request.new_email.strip().lower()
+    if new_email_lower in settings.get_admin_emails() and user.email.lower() != new_email_lower:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This email address cannot be linked to your account.',
         )
 
     # Check for disposable email
@@ -2043,6 +2068,7 @@ async def request_email_change(
 @router.post('/email/change/verify')
 async def verify_email_change(
     request: EmailChangeVerifyRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -2051,6 +2077,27 @@ async def verify_email_change(
 
     Completes the email change process if the code is valid.
     """
+    # SECURITY: the change code is a 6-digit OTP mailed to the NEW address (the
+    # attacker never sees it). Without a hard cap it is brute-forceable within
+    # its TTL. Rate-limit by IP AND by account; once the per-account cap is hit,
+    # burn the pending change so the attacker must restart (re-emailing the
+    # victim, who would notice) instead of grinding the same live code.
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_change_verify', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+    if await RateLimitCache.is_ip_rate_limited(
+        f'user:{user.id}', 'email_change_verify', limit=5, window=900, fail_closed=True
+    ):
+        await clear_email_change_pending(db, user)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many invalid attempts. Please request a new code.',
+        )
+
     success, message = await verify_and_apply_email_change(db, user, request.code)
 
     if not success:
