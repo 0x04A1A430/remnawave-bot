@@ -1074,9 +1074,35 @@ async def register_email(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='This email is already linked to your account',
             )
-        # Offer account merge instead of blocking
+        # SECURITY — account-takeover prevention. Merging absorbs the existing
+        # account (its subscription, balance, email) into the caller's account
+        # and issues a session for the result. The OAuth and Telegram link flows
+        # only mint a merge token AFTER the caller has PROVEN control of the other
+        # identity (completing the provider auth / validating signed init data).
+        # The email flow carries no such proof on its own, so we require it here:
+        # the caller must supply the EXISTING account's password. Without this,
+        # anyone who merely knows a victim's email could take over their account.
+        # Fail closed when the existing account has no password set (e.g. an
+        # OAuth-only account) — it must be merged via its own provider.
+        if not existing_email_user.password_hash or not verify_password(
+            request.password, existing_email_user.password_hash
+        ):
+            logger.warning(
+                'Email link merge denied: caller did not prove ownership of the existing account',
+                current_user_id=user.id,
+                existing_user_id=existing_email_user.id,
+                client_ip=client_ip,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    'This email is already registered to another account. '
+                    "Enter that account's password to link and merge it."
+                ),
+            )
+        # Ownership of the existing account proven — offer the merge.
         logger.info(
-            'Email register conflict: email already linked to another user, offering merge',
+            'Email register conflict: ownership verified, offering merge',
             current_user_id=user.id,
             existing_user_id=existing_email_user.id,
         )
