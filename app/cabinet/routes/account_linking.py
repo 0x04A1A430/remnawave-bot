@@ -276,27 +276,45 @@ async def _exchange_and_link_oauth(
     if current_value and str(current_value) == user_info.provider_id:
         return LinkCallbackResponse(success=True, message='already_linked')
 
-    # Check if provider_id is linked to ANOTHER user
-    existing_user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
-    if existing_user and existing_user.id != user.id:
+    if current_value:
+        # The user already has a DIFFERENT account of this provider linked.
+        # Don't silently overwrite it (that orphans the old login with no trace
+        # and quietly swaps which external identity can sign in). Require an
+        # explicit unlink first.
         logger.info(
-            'Account linking conflict: provider already linked to another user',
+            'Account linking rejected: provider slot already occupied by a different account',
             context=log_context,
             provider=provider,
-            provider_id=user_info.provider_id,
+            user_id=user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f'A {provider} account is already linked to your account. Unlink it first to link a different one.'
+            ),
+        )
+
+    # Check if provider_id is linked to ANOTHER account.
+    existing_user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
+    if existing_user and existing_user.id != user.id:
+        # A social login belongs to exactly ONE account. This used to silently
+        # offer an account MERGE (absorb the other account) — surprising and
+        # unsafe: linking a login should never move/merge accounts. Refuse it.
+        # To move the social login, the owner unlinks it from the other account
+        # first; to deliberately combine two accounts, use the email/Telegram
+        # merge flows. (You can only reach here by completing OAuth as this
+        # provider account, so this is not a takeover — but it must not be a
+        # silent merge either.)
+        logger.info(
+            'Account linking rejected: provider already linked to another account',
+            context=log_context,
+            provider=provider,
             current_user_id=user.id,
             existing_user_id=existing_user.id,
         )
-        merge_token = await create_merge_token(
-            primary_user_id=user.id,
-            secondary_user_id=existing_user.id,
-            provider=provider,
-            provider_id=user_info.provider_id,
-        )
-        return LinkCallbackResponse(
-            success=False,
-            merge_required=True,
-            merge_token=merge_token,
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=('This social account is already linked to a different account. Unlink it from that account first.'),
         )
 
     # Link the provider to current user
