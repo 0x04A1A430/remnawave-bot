@@ -1,6 +1,7 @@
 """Media upload/download routes for cabinet tickets."""
 
 import mimetypes
+import re
 
 import structlog
 from aiogram.types import BufferedInputFile
@@ -20,6 +21,9 @@ router = APIRouter(prefix='/media', tags=['Cabinet Media'])
 
 ALLOWED_MEDIA_TYPES = {'photo', 'video', 'document'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Telegram file_ids are opaque URL-safe base64 strings.
+_FILE_ID_RE = re.compile(r'^[A-Za-z0-9_-]{16,256}$')
 
 
 class MediaUploadResponse(BaseModel):
@@ -163,6 +167,14 @@ async def download_media(
     Download media file by file_id.
     Used to display images/documents in ticket messages.
     """
+    # Validate the id shape before proxying it to Telegram — file_ids are opaque
+    # URL-safe base64 strings; reject anything else early.
+    if not _FILE_ID_RE.match(file_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Media file not found',
+        )
+
     bot = create_bot()
 
     try:
@@ -188,7 +200,8 @@ async def download_media(
             media_type=media_type,
             headers={
                 'Content-Disposition': f'inline; filename={filename}',
-                'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
+                # Private attachments must never be cached by shared proxies/CDNs.
+                'Cache-Control': 'private, no-store',
             },
         )
     except HTTPException:
