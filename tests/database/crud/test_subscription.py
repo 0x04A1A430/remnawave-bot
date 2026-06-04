@@ -209,3 +209,27 @@ async def test_reset_trials_panel_not_configured_db_only(monkeypatch):
     fake_api.delete_user.assert_not_awaited()
     assert count == 2
     db.commit.assert_awaited()
+
+
+def test_is_trial_already_used_gate():
+    """Единый гейт триала (раньше дублировался в 4 местах purchase.py)."""
+    from app.database.models import Subscription, SubscriptionStatus, User
+
+    def _user(paid, sub=None):
+        u = User(has_had_paid_subscription=paid)
+        u.subscriptions = [sub] if sub is not None else []
+        return u
+
+    # уже платил → заблокирован
+    assert _user(True).is_trial_already_used() is True
+    # не платил, нет подписки → можно
+    assert _user(False).is_trial_already_used() is False
+    # не платил, есть платная активная подписка → заблокирован
+    paid_sub = Subscription(status=SubscriptionStatus.ACTIVE.value, is_trial=False)
+    assert _user(False, paid_sub).is_trial_already_used() is True
+    # не платил, активный триал → заблокирован (второй триал нельзя)
+    active_trial = Subscription(status=SubscriptionStatus.TRIAL.value, is_trial=True)
+    assert _user(False, active_trial).is_trial_already_used() is True
+    # не платил, PENDING-триал (повторная попытка оплаты) → можно
+    pending_trial = Subscription(status=SubscriptionStatus.PENDING.value, is_trial=True)
+    assert _user(False, pending_trial).is_trial_already_used() is False

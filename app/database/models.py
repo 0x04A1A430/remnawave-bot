@@ -1943,6 +1943,19 @@ class User(Base):
         # Fallback to most recent (already ordered by created_at desc)
         return self.subscriptions[0]
 
+    def is_trial_already_used(self) -> bool:
+        """Единый гейт доступности триала.
+
+        Раньше эта проверка дублировалась в 4 местах purchase.py и рассинхронилась с
+        кабинетом. Триал недоступен, если пользователь уже оплачивал подписку ЛИБО у
+        него уже есть подписка — кроме PENDING-триала (повторная попытка оплаты того
+        же триала). Требует загруженного `subscriptions` (как и свойство `subscription`).
+        """
+        if self.has_had_paid_subscription:
+            return True
+        sub = self.subscription
+        return bool(sub is not None and not (sub.status == SubscriptionStatus.PENDING.value and sub.is_trial))
+
     transactions = relationship('Transaction', back_populates='user')
     referral_earnings = relationship('ReferralEarning', foreign_keys='ReferralEarning.user_id', back_populates='user')
     discount_offers = relationship('DiscountOffer', back_populates='user')
