@@ -1550,46 +1550,27 @@ async def get_trial_statistics(db: AsyncSession) -> dict:
     }
 
 
-async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> int:
-    """Сбрасывает истёкшие триалы у неплативших — С удалением пользователя из панели.
+async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
+    """Снимает доступ и удаляет переданные триал-подписки — единый код для ботовой
+    кнопки «Сбросить триалы» и кабинетного per-user сброса.
 
-    Раньше функция сносила подписку только из БД бота. Панель-юзер при этом оставался,
-    поэтому (1) человек продолжал пользоваться VPN после «сброса», и (2) ближайший синк
-    панель→бот воскрешал подписку (`_create_subscription_from_panel_data`, is_trial=False)
-    → повторный триал так и оставался заблокирован («сбрасываешь — не сбрасываются»).
-
-    Теперь панель-юзер удаляется ПЕРВЫМ, и только при успехе сносится строка в БД.
-    Порядок «панель → БД» делает операцию race-safe относительно синка: когда удаляем
-    строку, панель-юзера уже нет — воскрешать нечего. Удаления в панели идут параллельно
-    с ограничением (Semaphore) на ОДНОМ клиенте API (как массовый синк) — операция тяжёлая.
-    Если удалить в панели не удалось (транзиентная ошибка) — строку в БД НЕ трогаем (иначе
-    снова orphan + воскрешение); такой триал подхватит следующий запуск.
+    Панель-юзер удаляется ПЕРВЫМ, и только при успехе сносится строка в БД. Порядок
+    «панель → БД» делает операцию race-safe относительно синка панель→бот: когда удаляем
+    строку, панель-юзера уже нет — воскрешать (как is_trial=False) нечего. Удаления в
+    панели идут параллельно с ограничением (Semaphore) на ОДНОМ клиенте API (как массовый
+    синк) — операция тяжёлая. Подписку, у которой удаление в панели не удалось (транзиент),
+    в БД НЕ трогаем (иначе снова orphan + воскрешение) — её подхватит следующий запуск.
+    Чистит устаревший single-tariff `user.remnawave_uuid`. НЕ коммитит — это делает
+    вызывающий. Возвращает число реально удалённых подписок.
     """
+    if not subscriptions:
+        return 0
+
     import asyncio
 
     from sqlalchemy import update
 
     from app.services.subscription_service import SubscriptionService
-
-    now = datetime.now(UTC)
-
-    result = await db.execute(
-        select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.subscription_servers),
-        )
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date <= now,
-            User.has_had_paid_subscription.is_(False),
-        )
-    )
-
-    subscriptions = result.scalars().unique().all()
-    if not subscriptions:
-        return 0
 
     is_multi = settings.is_multi_tariff_enabled()
     service = SubscriptionService()
@@ -1599,7 +1580,7 @@ async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> 
 
         async with service.get_api_client() as api:
 
-            async def _delete_panel_user(subscription: Subscription) -> bool:
+            async def _delete_panel_user(subscription) -> bool:
                 panel_uuid = (
                     subscription.remnawave_uuid
                     if is_multi
@@ -1638,11 +1619,7 @@ async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> 
 
     for subscription in to_reset:
         try:
-            await decrement_subscription_server_counts(
-                db,
-                subscription,
-                subscription_servers=subscription.subscription_servers,
-            )
+            await decrement_subscription_server_counts(db, subscription)
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
                 'Не удалось обновить счётчики серверов при сбросе триала', subscription_id=subscription.id, error=error
@@ -1664,15 +1641,44 @@ async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> 
         user_ids = list({subscription.user_id for subscription in to_reset})
         await db.execute(update(User).where(User.id.in_(user_ids)).values(remnawave_uuid=None))
 
-    try:
-        await db.commit()
-    except Exception as error:  # pragma: no cover - defensive logging
-        await db.rollback()
-        logger.error('Ошибка сохранения сброса триалов', error=error)
-        raise
-
-    logger.info('♻️ Сброшено триальных подписок (удалены из панели)', reset_count=len(to_reset))
     return len(to_reset)
+
+
+async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> int:
+    """Bulk-сброс истёкших триалов у неплативших (кнопка «Сбросить триалы» в боте).
+
+    Выбирает истёкшие триалы неплативших и делегирует снос в `wipe_trial_subscriptions`
+    (общий код с кабинетным per-user сбросом), затем коммитит.
+    """
+    now = datetime.now(UTC)
+
+    result = await db.execute(
+        select(Subscription)
+        .options(selectinload(Subscription.user))
+        .join(User, Subscription.user_id == User.id)
+        .where(
+            Subscription.is_trial.is_(True),
+            Subscription.end_date <= now,
+            User.has_had_paid_subscription.is_(False),
+        )
+    )
+
+    subscriptions = result.scalars().unique().all()
+    if not subscriptions:
+        return 0
+
+    reset_count = await wipe_trial_subscriptions(db, subscriptions)
+
+    if reset_count:
+        try:
+            await db.commit()
+        except Exception as error:  # pragma: no cover - defensive logging
+            await db.rollback()
+            logger.error('Ошибка сохранения сброса триалов', error=error)
+            raise
+
+    logger.info('♻️ Сброшено триальных подписок (удалены из панели)', reset_count=reset_count)
+    return reset_count
 
 
 async def update_subscription_usage(db: AsyncSession, subscription: Subscription, used_gb: float) -> Subscription:

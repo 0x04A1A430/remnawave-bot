@@ -2598,34 +2598,13 @@ async def reset_user_trial(
                     user_id=user_id,
                 )
             else:
-                # Delete the Remnawave panel user FIRST, then the bot row — same
-                # race-safe ordering as the bulk bot reset: once the row is gone
-                # there is no panel user left for the panel->bot sync to resurrect
-                # the (reset) trial from. `disable` would leave the user alive and
-                # re-importable, so we delete.
-                from app.services.subscription_service import SubscriptionService
+                # Снос триала — общий код с ботовым bulk-сбросом: удаляет панель-юзера
+                # ПЕРВЫМ (race-safe относительно синк-воскрешения), затем строки в БД и
+                # чистит устаревший single-tariff remnawave_uuid.
+                from app.database.crud.subscription import wipe_trial_subscriptions
 
-                subscription_service = SubscriptionService()
-                for sub in subs_to_delete:
-                    _sub_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
-                    if _sub_uuid:
-                        try:
-                            await subscription_service.delete_remnawave_user(_sub_uuid)
-                        except Exception as e:
-                            logger.warning('Failed to delete Remnawave user during trial reset', error=e)
-
-                # single-tariff: панель-юзер на уровне пользователя — чистим устаревший
-                # uuid, чтобы синк по нему ничего не восстанавливал.
-                if not settings.is_multi_tariff_enabled():
-                    user.remnawave_uuid = None
-
-                # Delete only target subscriptions
-                from sqlalchemy import delete
-
-                for sub in subs_to_delete:
-                    await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
-                    await db.execute(delete(Subscription).where(Subscription.id == sub.id))
-                subscription_deleted = True
+                wiped = await wipe_trial_subscriptions(db, subs_to_delete)
+                subscription_deleted = wiped > 0
 
     # Reset trial flag
     user.has_used_trial = False
