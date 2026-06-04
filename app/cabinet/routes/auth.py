@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import hmac
 from datetime import UTC, datetime
 
 import structlog
@@ -66,7 +67,12 @@ from ..auth.email_verification import (
     is_token_expired,
 )
 from ..auth.jwt_handler import get_refresh_token_expires_at
-from ..auth.merge_service import create_merge_token
+from ..auth.merge_service import (
+    clear_email_merge_otp,
+    create_merge_token,
+    get_email_merge_otp,
+    store_email_merge_otp,
+)
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..ip_utils import get_client_ip
 from ..schemas.auth import (
@@ -79,6 +85,7 @@ from ..schemas.auth import (
     EmailChangeResponse,
     EmailChangeVerifyRequest,
     EmailLoginRequest,
+    EmailMergeVerifyRequest,
     EmailRegisterRequest,
     EmailRegisterStandaloneRequest,
     EmailVerifyRequest,
@@ -1079,43 +1086,50 @@ async def register_email(
         # and issues a session for the result. The OAuth and Telegram link flows
         # only mint a merge token AFTER the caller has PROVEN control of the other
         # identity (completing the provider auth / validating signed init data).
-        # The email flow carries no such proof on its own, so we require it here:
-        # the caller must supply the EXISTING account's password. Without this,
-        # anyone who merely knows a victim's email could take over their account.
-        # Fail closed when the existing account has no password set (e.g. an
-        # OAuth-only account) — it must be merged via its own provider.
-        if not existing_email_user.password_hash or not verify_password(
-            request.password, existing_email_user.password_hash
-        ):
-            logger.warning(
-                'Email link merge denied: caller did not prove ownership of the existing account',
-                current_user_id=user.id,
-                existing_user_id=existing_email_user.id,
-                client_ip=client_ip,
-            )
+        # The email flow has no such proof, so we require control of the existing
+        # account's INBOX: mail a one-time code to it; the caller confirms it via
+        # /email/merge/verify, and only then is a merge token minted. Without
+        # this, anyone who merely knows a victim's email could take over their
+        # account. Works for password-less (OAuth-only) accounts too.
+        if not email_service.is_configured():
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    'This email is already registered to another account. '
-                    "Enter that account's password to link and merge it."
-                ),
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Email service is not configured; cannot verify the existing account',
             )
-        # Ownership of the existing account proven — offer the merge.
+        merge_code = generate_email_change_code()
+        await store_email_merge_otp(user.id, existing_email_user.id, email_lower, merge_code)
+        lang = user.language or 'ru'
+        expire_minutes = settings.get_cabinet_email_change_code_expire_minutes()
+        override = await get_rendered_override(
+            'email_change_code',
+            lang,
+            context={
+                'username': user.first_name or '',
+                'code': merge_code,
+                'expire_minutes': str(expire_minutes),
+            },
+            db=db,
+        )
+        custom_subject, custom_body = override or (None, None)
+        await asyncio.to_thread(
+            email_service.send_email_change_code,
+            to_email=email_lower,
+            code=merge_code,
+            username=user.first_name,
+            language=lang,
+            custom_subject=custom_subject,
+            custom_body_html=custom_body,
+        )
         logger.info(
-            'Email register conflict: ownership verified, offering merge',
+            'Email register conflict: merge confirmation code sent to existing account',
             current_user_id=user.id,
             existing_user_id=existing_email_user.id,
         )
-        merge_token = await create_merge_token(
-            primary_user_id=user.id,
-            secondary_user_id=existing_email_user.id,
-            provider='email',
-            provider_id=email_lower,
-        )
         return {
-            'message': 'Account merge required',
+            'message': 'A confirmation code was sent to that email address.',
             'merge_required': True,
-            'merge_token': merge_token,
+            'merge_verification': 'email_code',
+            'merge_token': None,
         }
 
     # Update user
@@ -1174,6 +1188,81 @@ async def register_email(
         if not settings.is_cabinet_email_verification_enabled()
         else 'Verification email sent',
         'email': request.email,
+    }
+
+
+@router.post('/email/merge/verify')
+async def verify_email_merge(
+    request: EmailMergeVerifyRequest,
+    raw_request: Request,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Confirm an email account merge with the code mailed to the existing account.
+
+    Proves the caller controls that account's inbox, then mints the merge token
+    (consumed at POST /cabinet/auth/merge/{token}).
+    """
+    # Rate-limit like the other OTP-verify endpoints (IP + per-account); on the
+    # per-account cap, burn the pending merge so a brute force can't grind the
+    # live code — the caller must restart (re-emailing the existing owner).
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_merge_verify', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+    if await RateLimitCache.is_ip_rate_limited(
+        f'user:{user.id}', 'email_merge_verify', limit=5, window=900, fail_closed=True
+    ):
+        await clear_email_merge_otp(user.id)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many invalid attempts. Please start the merge again.',
+        )
+
+    pending = await get_email_merge_otp(user.id)
+    if not pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No pending account merge. Please start again.',
+        )
+    if not hmac.compare_digest(str(pending.get('code', '')), str(request.code)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid confirmation code',
+        )
+
+    # Re-validate the target still exists and still owns that email (it could have
+    # been merged/deleted/changed in the meantime).
+    secondary_user_id = int(pending['secondary_user_id'])
+    pending_email = str(pending.get('email', ''))
+    secondary = await get_user_by_id(db, secondary_user_id)
+    if not secondary or secondary.id == user.id or (secondary.email or '').strip().lower() != pending_email:
+        await clear_email_merge_otp(user.id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='That account is no longer available to merge.',
+        )
+
+    await clear_email_merge_otp(user.id)
+    merge_token = await create_merge_token(
+        primary_user_id=user.id,
+        secondary_user_id=secondary_user_id,
+        provider='email',
+        provider_id=pending_email,
+    )
+    logger.info(
+        'Email merge confirmed via code, token issued',
+        current_user_id=user.id,
+        existing_user_id=secondary_user_id,
+    )
+    return {
+        'message': 'Account merge confirmed',
+        'merge_required': True,
+        'merge_token': merge_token,
     }
 
 

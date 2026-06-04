@@ -770,10 +770,10 @@ merge_router = APIRouter(prefix='/auth/merge', tags=['Cabinet Account Merge'])
 async def get_merge_preview_endpoint(
     raw_request: Request,
     merge_token: str = Path(..., min_length=32, max_length=64),
+    user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergePreviewResponse:
     """Preview the result of merging two accounts before confirming."""
-    # Rate limit by IP (unauthenticated endpoint)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'merge_preview', limit=15, window=60, fail_closed=True):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
@@ -787,6 +787,14 @@ async def get_merge_preview_endpoint(
 
     primary_user_id: int = token_data['primary_user_id']
     secondary_user_id: int = token_data['secondary_user_id']
+
+    # SECURITY: bind to the authenticated initiator — a leaked token alone must
+    # not let a third party preview the two accounts or run the merge.
+    if user.id != primary_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This merge can only be completed by the account that started it.',
+        )
 
     try:
         preview = await get_merge_preview(db, primary_user_id, secondary_user_id)
@@ -820,10 +828,10 @@ async def execute_merge_endpoint(
     request: MergeRequest,
     raw_request: Request,
     merge_token: str = Path(..., min_length=32, max_length=64),
+    user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> MergeResponse:
     """Execute account merge. Consumes the merge token (one-time use)."""
-    # Rate limit by IP (unauthenticated endpoint)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'merge_execute', limit=5, window=60, fail_closed=True):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
@@ -840,6 +848,16 @@ async def execute_merge_endpoint(
     secondary_user_id: int = consumed['secondary_user_id']
     provider: str = consumed.get('provider', '')
     provider_id: str = consumed.get('provider_id', '')
+
+    # SECURITY: bind execution to the authenticated initiator (the primary). A
+    # leaked token alone (e.g. from a URL in logs/history) must not let a third
+    # party run the merge. Restore the token so the real initiator can retry.
+    if user.id != primary_user_id:
+        await restore_merge_token(merge_token, consumed)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This merge can only be completed by the account that started it.',
+        )
 
     # 2. Validate keep_subscription_from — restore token if invalid
     if request.keep_subscription_from not in (primary_user_id, secondary_user_id):
