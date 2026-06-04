@@ -2564,7 +2564,6 @@ async def reset_user_trial(
 
     Actions:
     - Delete current subscription if exists
-    - Reset has_used_trial flag to False
     - User can now activate a new trial
     """
     user = await get_user_by_id(db, user_id)
@@ -2606,8 +2605,6 @@ async def reset_user_trial(
                 wiped = await wipe_trial_subscriptions(db, subs_to_delete)
                 subscription_deleted = wiped > 0
 
-    # Reset trial flag
-    user.has_used_trial = False
     user.updated_at = datetime.now(UTC)
 
     await db.commit()

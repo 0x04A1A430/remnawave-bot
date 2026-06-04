@@ -1157,7 +1157,7 @@ async def get_trial_info(
     # Check if user already has an active subscription
     subs = getattr(user, 'subscriptions', None) or []
     has_active = any(s.status == 'active' and s.end_date and s.end_date > datetime.now(UTC) for s in subs)
-    has_used_trial = any(s.is_trial for s in subs) or user.has_had_paid_subscription
+    has_used_trial = user.is_trial_already_used()
 
     if has_active:
         return TrialInfoResponse(
@@ -1220,7 +1220,7 @@ async def activate_trial(
         )
 
     # Check if user already used trial
-    if any(s.is_trial for s in subs) or user.has_had_paid_subscription:
+    if user.is_trial_already_used():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Trial already used',
