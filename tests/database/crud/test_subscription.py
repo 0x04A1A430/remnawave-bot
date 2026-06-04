@@ -126,3 +126,86 @@ async def test_extend_subscription_default_converts_trial_on_purchase(monkeypatc
     result = await extend_subscription(db, sub, 14, tariff_id=2, commit=False)
 
     assert result.is_trial is False  # genuine purchase converts the trial
+
+
+def _trial_sub(sub_id, user_id, panel_uuid):
+    from types import SimpleNamespace
+
+    user = SimpleNamespace(id=user_id, remnawave_uuid=panel_uuid)
+    return SimpleNamespace(
+        id=sub_id,
+        user_id=user_id,
+        user=user,
+        remnawave_uuid=panel_uuid,
+        subscription_servers=[],
+        connected_squads=[],
+    )
+
+
+def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=None):
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock
+
+    import app.database.crud.subscription as crud
+
+    # SELECT result -> subs; later delete/update calls ignore the return.
+    result_mock = MagicMock()
+    result_mock.scalars.return_value.unique.return_value.all.return_value = subs
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=result_mock)
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+
+    fake_api = MagicMock()
+    fake_api.delete_user = AsyncMock(side_effect=delete_side_effect)
+
+    @asynccontextmanager
+    async def fake_get_api_client():
+        yield fake_api
+
+    fake_service = SimpleNamespace(is_configured=is_configured, get_api_client=fake_get_api_client)
+    monkeypatch.setattr('app.services.subscription_service.SubscriptionService', lambda: fake_service)
+
+    fake_settings = MagicMock()
+    fake_settings.is_multi_tariff_enabled.return_value = False  # single-tariff
+    monkeypatch.setattr(crud, 'settings', fake_settings)
+    monkeypatch.setattr(crud, 'decrement_subscription_server_counts', AsyncMock())
+
+    return crud, db, fake_api
+
+
+async def test_reset_trials_deletes_panel_first_and_skips_panel_failures(monkeypatch):
+    """#630055-trial: панель удаляется ПЕРВОЙ; если удалить в панели не удалось —
+    строку в БД не трогаем (иначе orphan + воскрешение синком)."""
+    subs = [_trial_sub(1, 11, 'uuid-ok'), _trial_sub(2, 22, 'uuid-fail')]
+
+    def delete_side_effect(uuid):
+        if uuid == 'uuid-fail':
+            raise RuntimeError('panel 500')
+        return True
+
+    crud, db, fake_api = _patch_reset_env(
+        monkeypatch, subs=subs, is_configured=True, delete_side_effect=delete_side_effect
+    )
+
+    count = await crud.reset_trials_for_users_without_paid_subscription(db)
+
+    # Панель дёрнули для обоих.
+    called = {c.args[0] for c in fake_api.delete_user.await_args_list}
+    assert called == {'uuid-ok', 'uuid-fail'}
+    # Сбросили только того, у кого панель реально удалилась.
+    assert count == 1
+    db.commit.assert_awaited()
+
+
+async def test_reset_trials_panel_not_configured_db_only(monkeypatch):
+    """Панель не настроена → orphan'ить нечего, чистим только БД, без вызовов панели."""
+    subs = [_trial_sub(1, 11, 'uuid-a'), _trial_sub(2, 22, 'uuid-b')]
+    crud, db, fake_api = _patch_reset_env(monkeypatch, subs=subs, is_configured=False)
+
+    count = await crud.reset_trials_for_users_without_paid_subscription(db)
+
+    fake_api.delete_user.assert_not_awaited()
+    assert count == 2
+    db.commit.assert_awaited()
