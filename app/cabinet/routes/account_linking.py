@@ -566,11 +566,19 @@ async def link_telegram(
         if request.photo_url is not None:
             widget_data['photo_url'] = request.photo_url
 
-        # Generous max_age: Telegram caches auth data with stale auth_date
-        if not validate_telegram_login_widget(widget_data, max_age_seconds=86400 * 30):
+        # Login Widget auth is fresh per click (24h is already very generous).
+        if not validate_telegram_login_widget(widget_data, max_age_seconds=86400):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Invalid or expired Telegram Login Widget data',
+            )
+        # SECURITY: one-time use — a captured widget payload (it can travel in the
+        # redirect URL) must not be replayable to link a Telegram account.
+        widget_replay = hashlib.sha256(f'tg_widget:{widget_data.get("hash", "")}'.encode()).hexdigest()
+        if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='This Telegram authorization has already been used.',
             )
         telegram_id = request.id
         telegram_username = request.username

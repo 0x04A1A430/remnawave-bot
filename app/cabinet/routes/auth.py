@@ -728,11 +728,20 @@ async def auth_telegram_widget(
 
     widget_data = request.model_dump(exclude={'campaign_slug', 'referral_code'})
 
-    # Generous max_age: Telegram caches auth data with stale auth_date
-    if not validate_telegram_login_widget(widget_data, max_age_seconds=86400 * 30):
+    # Login Widget auth is fresh per click (24h is already very generous).
+    if not validate_telegram_login_widget(widget_data, max_age_seconds=86400):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired Telegram authentication data',
+        )
+    # SECURITY: one-time use. A widget payload can travel in the redirect URL
+    # (browser history / referrer / access logs); without a replay guard a
+    # captured payload would be a reusable login credential for the whole window.
+    widget_replay = hashlib.sha256(f'tg_widget:{widget_data.get("hash", "")}'.encode()).hexdigest()
+    if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='This Telegram authorization has already been used. Please log in again.',
         )
 
     user = await get_user_by_telegram_id(db, request.id)
