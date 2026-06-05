@@ -14,7 +14,11 @@ from aiogram.types import LabeledPrice
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.transaction import create_transaction
+from app.database.crud.transaction import (
+    create_transaction,
+    emit_transaction_side_effects,
+    get_transaction_by_external_id,
+)
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, TransactionType
 from app.external.telegram_stars import TelegramStarsService
@@ -100,6 +104,20 @@ class TelegramStarsMixin:
         sanity bound below catches obviously-bogus encodings.
         """
         try:
+            # Идемпотентность: Telegram может повторно прислать successful_payment
+            # (например, если бот не успел подтвердить обработку до таймаута). Ключ
+            # уникальности — telegram_payment_charge_id. Если транзакция с таким
+            # external_id уже есть — платёж обработан, выходим как успех.
+            existing_transaction = await get_transaction_by_external_id(
+                db, telegram_payment_charge_id, PaymentMethod.TELEGRAM_STARS
+            )
+            if existing_transaction:
+                logger.info(
+                    'Stars платёж уже обработан — пропускаю повторную обработку',
+                    telegram_payment_charge_id=telegram_payment_charge_id,
+                )
+                return True
+
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
             reconstructed_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
 
@@ -131,6 +149,10 @@ class TelegramStarsMixin:
             )
             transaction_type = TransactionType.SUBSCRIPTION_PAYMENT if simple_payload else TransactionType.DEPOSIT
 
+            # commit=False: транзакция флашится, но не коммитится здесь. Реальный
+            # коммит происходит атомарно вместе с целевым действием — активацией
+            # подписки (activate_pending_subscription) или зачислением баланса.
+            # Так нет окна, где транзакция записана, а подписка/баланс — нет.
             transaction = await create_transaction(
                 db=db,
                 user_id=user_id,
@@ -140,11 +162,13 @@ class TelegramStarsMixin:
                 payment_method=PaymentMethod.TELEGRAM_STARS,
                 external_id=telegram_payment_charge_id,
                 is_completed=True,
+                commit=False,
             )
 
             user = await get_user_by_id(db, user_id)
             if not user:
                 logger.error('Пользователь с ID не найден при обработке Stars платежа', user_id=user_id)
+                await db.rollback()
                 return False
 
             if simple_payload:
@@ -169,6 +193,12 @@ class TelegramStarsMixin:
 
         except Exception as error:
             logger.error('Ошибка обработки Stars платежа', error=error, exc_info=True)
+            # Откатываем незакоммиченную транзакцию (commit=False), чтобы она не
+            # «дозалипла» и не закоммитилась случайно мидлварью при выходе.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             return False
 
     @staticmethod
@@ -350,11 +380,31 @@ class TelegramStarsMixin:
             logger.error(
                 'Ошибка активации pending подписки для пользователя', user_id=user.id, error=error, exc_info=True
             )
+            # Активация не удалась — откатываем незакоммиченную транзакцию (commit=False),
+            # чтобы не осталось «оплаты без подписки». Telegram повторит платёж → обработаем заново.
+            await db.rollback()
             return False
 
         if not subscription:
             logger.error('Не удалось активировать pending подписку пользователя', user_id=user.id)
+            await db.rollback()
             return False
+
+        # Активация подписки уже закоммичена (activate_pending_subscription делает db.commit),
+        # и вместе с ней атомарно закоммичена транзакция (она создавалась с commit=False).
+        # Теперь шлём отложенные побочки: событие транзакции, автовыдачу промогруппы,
+        # запись в конкурс рефералов (для SUBSCRIPTION_PAYMENT).
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=amount_kopeks,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.TELEGRAM_STARS,
+            external_id=telegram_payment_charge_id,
+            is_completed=True,
+            description=transaction.description,
+        )
 
         # Consume promo-offer discount (invoice was created with discounted price)
         try:
@@ -537,6 +587,20 @@ class TelegramStarsMixin:
         topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         await db.commit()
+
+        # Баланс и транзакция (она создавалась с commit=False) закоммичены атомарно.
+        # Шлём отложенные побочки: событие payment.completed и автовыдачу промогруппы.
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=amount_kopeks,
+            user_id=user.id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.TELEGRAM_STARS,
+            external_id=telegram_payment_charge_id,
+            is_completed=True,
+            description=transaction.description,
+        )
 
         description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)'
         logger.info(
