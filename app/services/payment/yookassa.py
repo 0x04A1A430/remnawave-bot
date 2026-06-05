@@ -1371,7 +1371,9 @@ class YooKassaPaymentMixin:
         yookassa_payment_id = event_object.get('id')
 
         if not yookassa_payment_id:
-            logger.warning('Webhook без payment id', event=event)
+            # 'event' зарезервировано в structlog (это само сообщение лога), нельзя
+            # передавать его как kwarg — иначе TypeError. Берём другое имя.
+            logger.warning('Webhook без payment id', webhook_event=event)
             return False
 
         # The remote API call is a defence-in-depth cross-check of the
