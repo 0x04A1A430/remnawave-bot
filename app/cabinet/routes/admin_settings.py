@@ -29,6 +29,15 @@ _ENV_LOCKED_DETAIL = (
 )
 
 
+async def _sync_maintenance_mode_if_needed(key: str) -> None:
+    if key != 'MAINTENANCE_MODE':
+        return
+
+    from app.services.maintenance_service import maintenance_service
+
+    await maintenance_service.sync_with_settings()
+
+
 # ============ Schemas ============
 
 
@@ -280,6 +289,7 @@ async def update_setting(
         await bot_configuration_service.set_value(db, key, value)
     except ReadOnlySettingError as error:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
+    await _sync_maintenance_mode_if_needed(key)
     await db.commit()
 
     # Never log secret values in plaintext.
@@ -307,6 +317,7 @@ async def reset_setting(
         await bot_configuration_service.reset_value(db, key)
     except ReadOnlySettingError as error:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(error)) from error
+    await _sync_maintenance_mode_if_needed(key)
     await db.commit()
 
     logger.info('Admin reset setting', telegram_id=admin.telegram_id, key=key)
