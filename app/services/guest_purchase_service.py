@@ -480,6 +480,14 @@ async def fulfill_purchase(
                 )
             except Exception:
                 logger.exception('Failed to create transaction for guest purchase', purchase_id=purchase.id)
+                # Доставка уже закоммичена выше; транзакция — побочный учётный след
+                # (промогруппа/конкурс). Если её запись упала (например, дубль
+                # external_id при ретрае платёжки), откатываем ТОЛЬКО её, чтобы не
+                # «отравить» сессию и не сорвать дальнейшие коммиты (CID, постбэки).
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         # Save Yandex CID from Redis → DB (enables on_registration/on_purchase to use it)
         try:
@@ -1333,6 +1341,13 @@ async def activate_purchase(db: AsyncSession, purchase_token: str, *, skip_notif
                 )
             except Exception:
                 logger.exception('Failed to create transaction for activated purchase', purchase_id=purchase.id)
+                # Доставка уже закоммичена (db.commit выше). Транзакция — побочный
+                # учётный след; при сбое откатываем только её, иначе отравленная
+                # сессия сорвёт очистку пароля (db.commit ниже) и уведомления.
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
 
         if not skip_notification:
             try:
