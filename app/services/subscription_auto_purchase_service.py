@@ -706,7 +706,7 @@ async def _auto_extend_subscription(
         )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка: не удалось отправить WS уведомление о продлении для',
+            '⚠️ Автопокупка: не удалось отправить WS уведомление о продлении',
             format_user_id=_format_user_id(user),
             ws_error=ws_error,
         )
@@ -743,7 +743,7 @@ async def _auto_purchase_tariff(
 
     if not tariff_id or period_days <= 0:
         logger.warning(
-            '🔁 Автопокупка тарифа: некорректные данные корзины для пользователя (tariff_id period=)',
+            '🔁 Автопокупка тарифа: некорректные данные корзины для пользователя',
             format_user_id=_format_user_id(user),
             tariff_id=tariff_id,
             period_days=period_days,
@@ -1083,7 +1083,7 @@ async def _auto_purchase_tariff(
             )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка тарифа: не удалось отправить WS уведомление для',
+            '⚠️ Автопокупка тарифа: не удалось отправить WS уведомление',
             format_user_id=_format_user_id(user),
             ws_error=ws_error,
         )
@@ -1434,7 +1434,7 @@ async def _auto_purchase_daily_tariff(
             )
     except Exception as ws_error:
         logger.warning(
-            '⚠️ Автопокупка суточного тарифа: не удалось отправить WS уведомление для',
+            '⚠️ Автопокупка суточного тарифа: не удалось отправить WS уведомление',
             format_user_id=_format_user_id(user),
             ws_error=ws_error,
         )
@@ -1461,7 +1461,7 @@ async def _auto_add_devices(
 
     if devices_to_add <= 0 or cart_price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка устройств: некорректные данные корзины для пользователя (devices price=)',
+            '🔁 Автопокупка устройств: некорректные данные корзины для пользователя',
             format_user_id=_format_user_id(user),
             devices_to_add=devices_to_add,
             cart_price_kopeks=cart_price_kopeks,
@@ -1494,7 +1494,7 @@ async def _auto_add_devices(
 
     if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
         logger.warning(
-            '🔁 Автопокупка устройств: подписка пользователя не активна (status=)',
+            '🔁 Автопокупка устройств: подписка пользователя не активна',
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
         )
@@ -1683,7 +1683,7 @@ async def _auto_add_devices(
     await _delete_cart_for_subscription(user.id, cart_data)
 
     logger.info(
-        '✅ Автопокупка устройств: пользователь добавил устройств (было , стало) за коп.',
+        '✅ Автопокупка устройств: пользователь добавил устройства',
         format_user_id=_format_user_id(user),
         devices_to_add=devices_to_add,
         old_device_limit=old_device_limit,
@@ -1789,7 +1789,7 @@ async def _auto_add_traffic(
 
     if traffic_gb <= 0 or cart_price_kopeks <= 0:
         logger.warning(
-            '🔁 Автопокупка трафика: некорректные данные корзины для пользователя (traffic_gb price=)',
+            '🔁 Автопокупка трафика: некорректные данные корзины для пользователя',
             format_user_id=_format_user_id(user),
             traffic_gb=traffic_gb,
             cart_price_kopeks=cart_price_kopeks,
@@ -1852,7 +1852,7 @@ async def _auto_add_traffic(
 
     if subscription.status not in ('active', 'trial', 'disabled', 'limited', 'ACTIVE', 'TRIAL', 'DISABLED', 'LIMITED'):
         logger.warning(
-            '🔁 Автопокупка трафика: подписка пользователя не активна (status=)',
+            '🔁 Автопокупка трафика: подписка пользователя не активна',
             format_user_id=_format_user_id(user),
             subscription_status=subscription.status,
         )
@@ -2039,7 +2039,7 @@ async def _auto_add_traffic(
     await _delete_cart_for_subscription(user.id, cart_data)
 
     logger.info(
-        '✅ Автопокупка трафика: пользователь добавил ГБ (было , стало) за коп.',
+        '✅ Автопокупка трафика: пользователь добавил трафик',
         format_user_id=_format_user_id(user),
         traffic_gb=traffic_gb,
         old_traffic_limit=old_traffic_limit,

@@ -162,7 +162,7 @@ async def _handle_wheel_spin_payment(
                 promocode_id = row[0]
 
         logger.info(
-            '🎰 Creating wheel spin: user.id=, user.telegram_id=, prize',
+            '🎰 Creating wheel spin',
             user_id=user.id,
             telegram_id=user.telegram_id,
             display_name=selected_prize.display_name,
@@ -196,7 +196,7 @@ async def _handle_wheel_spin_payment(
             )
             return True
 
-        logger.info('🎰 Wheel spin created: spin.id=, spin.user_id', spin_id=spin.id, user_id=spin.user_id)
+        logger.info('🎰 Wheel spin created', spin_id=spin.id, user_id=spin.user_id)
 
         # Ensure all changes are committed (subscription days, traffic GB, etc.)
         await db.commit()
@@ -214,7 +214,7 @@ async def _handle_wheel_spin_payment(
         )
 
         logger.info(
-            '🎰 Wheel spin via Stars: user=, prize=, stars',
+            '🎰 Wheel spin via Stars',
             user_id=user.id,
             display_name=selected_prize.display_name,
             stars_amount=stars_amount,
@@ -349,7 +349,7 @@ async def _handle_trial_payment(
         )
 
         logger.info(
-            '✅ Платный триал активирован через Stars: user=, subscription=, stars',
+            '✅ Платный триал активирован через Stars',
             user_id=user.id,
             subscription_id=subscription.id,
             stars_amount=stars_amount,
@@ -449,7 +449,7 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
 
     try:
         logger.info(
-            '📋 Pre-checkout query от XTR, payload',
+            '📋 Pre-checkout query',
             from_user_id=query.from_user.id,
             total_amount=query.total_amount,
             invoice_payload=query.invoice_payload,
@@ -517,7 +517,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         user_id = message.from_user.id
 
         logger.info(
-            '💳 Успешный Stars платеж от XTR, payload: charge_id',
+            '💳 Успешный Stars платеж',
             user_id=user_id,
             total_amount=payment.total_amount,
             invoice_payload=payment.invoice_payload,
@@ -636,7 +636,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
             )
 
             logger.info(
-                '✅ Stars платеж успешно обработан: пользователь , звезд →',
+                '✅ Stars платеж успешно обработан',
                 user_id=user.id,
                 total_amount=payment.total_amount,
                 format_price=settings.format_price(amount_kopeks),

@@ -306,7 +306,7 @@ class PaymentCommonMixin:
         """Общая точка учёта успешных платежей (используется провайдерами при необходимости)."""
         try:
             logger.info(
-                'Обработан успешный платеж ₽, пользователь , метод',
+                'Обработан успешный платеж',
                 payment_id=payment_id,
                 amount_kopeks=amount_kopeks / 100,
                 user_id=user_id,

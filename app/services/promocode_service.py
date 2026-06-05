@@ -155,7 +155,7 @@ class PromoCodeService:
                             )
 
                             logger.info(
-                                '🎯 Пользователю назначена промогруппа (приоритет: ) через промокод',
+                                '🎯 Пользователю назначена промогруппа через промокод',
                                 _format_user_log=self._format_user_log(user),
                                 promo_group_name=promo_group.name,
                                 priority=promo_group.priority,
@@ -172,7 +172,7 @@ class PromoCodeService:
                             )
                     else:
                         logger.info(
-                            'ℹ️ Пользователь уже имеет промогруппу ID',
+                            'ℹ️ Пользователь уже состоит в промогруппе',
                             _format_user_log=self._format_user_log(user),
                             promo_group_id=promocode.promo_group_id,
                         )
@@ -249,7 +249,7 @@ class PromoCodeService:
             if current_discount > 0:
                 if expires_at is None or expires_at > datetime.now(UTC):
                     logger.warning(
-                        '⚠️ Пользователь попытался активировать промокод но у него уже есть активная скидка до',
+                        '⚠️ Пользователь попытался активировать промокод, но у него уже есть активная скидка',
                         _format_user_log=self._format_user_log(user),
                         code=promocode.code,
                         current_discount=current_discount,
@@ -278,7 +278,7 @@ class PromoCodeService:
             await db.flush()
 
             logger.info(
-                '✅ Пользователю назначена скидка (срок: ч.) по промокоду',
+                '✅ Пользователю назначена скидка по промокоду',
                 _format_user_log=self._format_user_log(user),
                 discount_percent=discount_percent,
                 discount_hours=discount_hours,

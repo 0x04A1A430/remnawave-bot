@@ -257,7 +257,7 @@ async def create_tariff(
     await db.refresh(tariff)
 
     logger.info(
-        "Создан тариф '' (id tier traffic=GB, devices prices=)",
+        'Создан тариф',
         tariff_name=tariff.name,
         tariff_id=tariff.id,
         tier_level=tariff.tier_level,
@@ -395,7 +395,7 @@ async def update_tariff(
     await db.commit()
     await db.refresh(tariff)
 
-    logger.info("Обновлен тариф '' (id=)", tariff_name=tariff.name, tariff_id=tariff.id)
+    logger.info('Обновлен тариф', tariff_name=tariff.name, tariff_id=tariff.id)
 
     return tariff
 
@@ -420,7 +420,7 @@ async def delete_tariff(db: AsyncSession, tariff: Tariff) -> bool:
     await db.commit()
 
     logger.info(
-        "Удален тариф '' (id=), затронуто подписок",
+        'Удален тариф',
         tariff_name=tariff_name,
         tariff_id=tariff_id,
         affected_subscriptions=affected_subscriptions,
@@ -561,7 +561,7 @@ async def sync_default_tariff_from_config(db: AsyncSession) -> Tariff | None:
         # Тариф уже существует — НЕ перезаписываем настройки из конфига.
         # Админ управляет тарифом через кабинет, синхронизация не нужна.
         logger.info(
-            "Дефолтный тариф 'Стандартный' (id=) уже существует, пропускаем sync из конфига",
+            "Дефолтный тариф 'Стандартный' уже существует, пропускаем sync из конфига",
             existing_tariff_id=existing_tariff.id,
         )
         return existing_tariff
@@ -614,7 +614,7 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
             return
 
         if not tariff.period_prices:
-            logger.warning("Тариф '' (id=) найден, но period_prices пуст", tariff_name=tariff.name, tariff_id=tariff.id)
+            logger.warning('Тариф найден, но period_prices пуст', tariff_name=tariff.name, tariff_id=tariff.id)
             return
 
         # Преобразуем строковые ключи в int
@@ -628,7 +628,7 @@ async def load_period_prices_from_db(db: AsyncSession) -> None:
                 {f'{d}д': f'{p // 100}₽' for d, p in period_prices.items()},
             )
         else:
-            logger.warning("Тариф '' не имеет активных периодов (все цены = 0)", tariff_name=tariff.name)
+            logger.warning('Тариф не имеет активных периодов (все цены = 0)', tariff_name=tariff.name)
 
     except Exception as e:
         logger.error('Ошибка загрузки периодов из БД', e=e)

@@ -377,7 +377,7 @@ class ContestRotationService:
 
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-            logger.info('Анонс игр: отправлено ошибок', sent=sent, failed=failed)
+            logger.info('Анонс игр разослан', sent=sent, failed=failed)
         except Exception as exc:
             logger.error('Ошибка рассылки анонса игр пользователям', exc=exc)
 

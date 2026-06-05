@@ -211,7 +211,7 @@ async def create_wheel_spin(
     db.add(spin)
     await db.commit()
     await db.refresh(spin)
-    logger.info('🎰 Создан спин колеса: user_id=, prize', user_id=user_id, prize_display_name=prize_display_name)
+    logger.info('🎰 Создан спин колеса', user_id=user_id, prize_display_name=prize_display_name)
     return spin
 
 

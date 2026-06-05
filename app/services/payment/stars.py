@@ -550,7 +550,7 @@ class TelegramStarsMixin:
             logger.error('Ошибка реферального начисления при покупке подписки через Stars', ref_error=ref_error)
 
         logger.info(
-            '✅ Обработан Stars платеж как покупка подписки: пользователь , звезд →',
+            '✅ Обработан Stars платеж как покупка подписки',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),
@@ -603,9 +603,7 @@ class TelegramStarsMixin:
         )
 
         description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)'
-        logger.info(
-            "🔍 Проверка реферальной логики для описания: ''", description_for_referral=description_for_referral
-        )
+        logger.info('🔍 Проверка реферальной логики для описания', description_for_referral=description_for_referral)
 
         lower_description = description_for_referral.lower()
         contains_allowed_keywords = any(
@@ -629,7 +627,7 @@ class TelegramStarsMixin:
                 logger.error('Ошибка обработки реферального пополнения', error=error)
         else:
             logger.info(
-                "❌ Описание '' не подходит для реферальной логики", description_for_referral=description_for_referral
+                '❌ Описание не подходит для реферальной логики', description_for_referral=description_for_referral
             )
 
         if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
@@ -675,7 +673,7 @@ class TelegramStarsMixin:
             )
 
         logger.info(
-            '✅ Обработан Stars платеж: пользователь , звезд →',
+            '✅ Обработан Stars платеж',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),

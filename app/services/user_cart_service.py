@@ -69,7 +69,7 @@ class UserCartService:
             await client.setex(key, effective_ttl, json_data)
             cart_mode = cart_data.get('cart_mode', 'unknown')
             logger.info(
-                '🛒 Корзина пользователя сохранена в Redis (mode=, ttl=s)',
+                '🛒 Корзина пользователя сохранена в Redis',
                 user_id=user_id,
                 cart_mode=cart_mode,
                 effective_ttl=effective_ttl,
