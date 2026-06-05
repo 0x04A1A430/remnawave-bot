@@ -2171,6 +2171,18 @@ async def try_auto_extend_expired_after_topup(
     if subscription.is_trial is not False:
         return False
 
+    # Требуем явное согласие: продлеваем с баланса после пополнения ТОЛЬКО если
+    # пользователь сам включил автоплатёж. Иначе пополнение, сделанное под другую
+    # цель (например, чтобы купить подарок), молча уходило на продление его же
+    # подписки — жалоба пользователя.
+    if not bool(getattr(subscription, 'autopay_enabled', False)):
+        logger.info(
+            '🔄 Автопродление expired: пропуск — автоплатёж пользователем не включён',
+            format_user_id=_format_user_id(user),
+            subscription_id=getattr(subscription, 'id', None),
+        )
+        return False
+
     # Only process subscriptions expired within the last 30 days
     if subscription.end_date is None:
         return False
