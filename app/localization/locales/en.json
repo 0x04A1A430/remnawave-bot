@@ -1262,7 +1262,7 @@
   "PROMOCODE_ENTER": "🎫 Enter promo code",
   "PROMOCODE_EXPIRED": "❌ Promo code has expired",
   "PROMOCODE_INVALID": "❌ Invalid promo code",
-  "PROMOCODE_SUCCESS": "🎉 Promo code applied!",
+  "PROMOCODE_SUCCESS": "🎉 Promo code applied! {description}",
   "PROMOCODE_USED": "ℹ️ Promo code has already been used",
   "PROMOCODE_ACTIVE_DISCOUNT_EXISTS": "❌ You already have an active discount. Use it before activating a new one.",
   "PROMO_GROUPS_INFO_CURRENT_LEVEL": "🏆 Current level: {name}",
