@@ -53,6 +53,9 @@ async def test_activate_promo_group_promocode_success(
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
+
     # Execute
     service = PromoCodeService()
     result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
@@ -68,16 +71,17 @@ async def test_activate_promo_group_promocode_success(
     # Verify user promo group check
     has_promo_group_mock.assert_awaited_once_with(mock_db_session, sample_user.id, sample_promo_group.id)
 
-    # Verify promo group assignment
+    # Verify promo group assignment (production passes commit=False for the atomic single-commit flow)
     add_promo_group_mock.assert_awaited_once_with(
-        mock_db_session, sample_user.id, sample_promo_group.id, assigned_by='promocode'
+        mock_db_session, sample_user.id, sample_promo_group.id, assigned_by='promocode', commit=False
     )
 
     # Verify usage recorded
     create_usage_mock.assert_awaited_once_with(mock_db_session, sample_promocode_promo_group.id, sample_user.id)
 
-    # Verify counter incremented
-    assert sample_promocode_promo_group.current_uses == 21
+    # Verify counter incremented: production uses an atomic SQL UPDATE that does
+    # not mutate the in-memory fixture, so read the +1 value from the returned envelope.
+    assert result['promocode']['current_uses'] == 21
     mock_db_session.commit.assert_awaited()
 
 
@@ -118,6 +122,9 @@ async def test_activate_promo_group_user_already_has_group(
 
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
+
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
 
     # Execute
     service = PromoCodeService()
@@ -172,6 +179,9 @@ async def test_activate_promo_group_group_not_found(
 
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
+
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
 
     # Execute
     service = PromoCodeService()
@@ -230,6 +240,9 @@ async def test_activate_promo_group_assignment_error(
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
+
     # Execute
     service = PromoCodeService()
     result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
@@ -281,16 +294,20 @@ async def test_activate_promo_group_assigned_by_value(
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
 
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
+
     # Execute
     service = PromoCodeService()
     await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
-    # Verify assigned_by="promocode"
+    # Verify assigned_by="promocode" (production passes commit=False for the atomic single-commit flow)
     add_promo_group_mock.assert_awaited_once_with(
         mock_db_session,
         sample_user.id,
         sample_promo_group.id,
         assigned_by='promocode',  # Critical assertion
+        commit=False,
     )
 
 
@@ -330,6 +347,9 @@ async def test_activate_promo_group_description_includes_group_name(
 
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
+
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
 
     # Execute
     service = PromoCodeService()
@@ -375,6 +395,9 @@ async def test_promocode_data_includes_promo_group_id(
 
     create_usage_mock = AsyncMock()
     monkeypatch.setattr('app.services.promocode_service.create_promocode_use', create_usage_mock)
+
+    # Anti-stacking gate: production imports this locally from the CRUD module
+    monkeypatch.setattr('app.database.crud.promocode.count_user_recent_activations', AsyncMock(return_value=0))
 
     # Execute
     service = PromoCodeService()
