@@ -3070,6 +3070,22 @@ async def auto_purchase_saved_cart_after_topup(
     if not carts_to_process:
         return False
 
+    # «Свежее намерение»: тихо списать баланс на подписку из корзины можно ТОЛЬКО
+    # если пользователь недавно (в пределах окна) явно вошёл в поток «недостаточно
+    # средств → корзина сохранена → выбрать оплату». Метку ставит user_cart_service
+    # при сохранении корзины с return_to_cart=True. Проверяем без удаления: метку
+    # гасим только при УСПЕШНОЙ покупке (ниже), чтобы частичное пополнение могло
+    # до-сработать со следующего пополнения. Нет метки — пополнение было ради
+    # другого (подарок, просто деньги, забытая корзина): корзину НЕ трогаем.
+    has_fresh_intent = await user_cart_service.has_topup_intent(user.id)
+    if not has_fresh_intent:
+        logger.info(
+            'Автопокупка: пропуск — нет свежего намерения пополнить ради корзины',
+            format_user_id=_format_user_id(user),
+            cart_count=len(carts_to_process),
+        )
+        return False
+
     logger.info(
         'Автопокупка: обнаружено корзин у пользователя',
         format_user_id=_format_user_id(user),
@@ -3091,6 +3107,12 @@ async def auto_purchase_saved_cart_after_topup(
         result = await _process_legacy_generic_cart(db, user, cart_data, bot=bot)
         if result:
             any_succeeded = True
+
+    # Намерение одноразовое: гасим его только когда покупка реально прошла. При
+    # неуспехе (например, частичное пополнение всё ещё меньше цены) метка остаётся
+    # в пределах TTL, чтобы следующее пополнение могло до-завершить покупку.
+    if any_succeeded:
+        await user_cart_service.clear_topup_intent(user.id)
 
     return any_succeeded
 

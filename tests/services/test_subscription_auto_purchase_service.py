@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -15,6 +16,24 @@ from app.services.subscription_purchase_service import (
     PurchaseServersConfig,
     PurchaseTrafficConfig,
 )
+
+
+@pytest.fixture(autouse=True)
+def _grant_cart_topup_intent(monkeypatch):
+    """Эти тесты моделируют «пользователь пополнил баланс ради сохранённой корзины»,
+    поэтому метку свежего намерения (cart_topup_intent) считаем выставленной.
+
+    Тихая авто-покупка после пополнения теперь срабатывает только при наличии этой
+    метки; тест, проверяющий ПРОПУСК без намерения, переопределяет фикстуру явно.
+    """
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.has_topup_intent',
+        AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.clear_topup_intent',
+        AsyncMock(),
+    )
 
 
 class DummyTexts:
@@ -748,3 +767,53 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     assert actual_total_days == 32, (
         f'Expected 32 days from now (30 purchased + 2 remaining trial), got {actual_total_days}'
     )
+
+
+async def test_auto_purchase_skipped_without_topup_intent(monkeypatch):
+    """Без свежего намерения корзина НЕ покупается, даже если она сохранена и
+    авто-покупка включена.
+
+    Это и есть фикс «захвата средств подарка»: пополнил ради другого → метки
+    нет → старая/сохранённая корзина не трогается.
+    """
+    monkeypatch.setattr(settings, 'AUTO_PURCHASE_AFTER_TOPUP_ENABLED', True)
+
+    # Переопределяем autouse-фикстуру: свежего намерения НЕТ
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.has_topup_intent',
+        AsyncMock(return_value=False),
+    )
+
+    cart_data = {
+        'period_days': 30,
+        'countries': ['ru'],
+        'traffic_gb': 0,
+        'devices': 1,
+        'total_price': 100_000,
+    }
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart',
+        AsyncMock(return_value=cart_data),
+    )
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.user_cart_service.get_all_subscription_carts',
+        AsyncMock(return_value=[]),
+    )
+
+    # Если бы дошло до покупки — эта замена поймала бы попытку (и упала бы тест)
+    def _boom(*_args, **_kwargs):
+        raise AssertionError('submit_purchase must NOT be called without fresh intent')
+
+    monkeypatch.setattr(
+        'app.services.subscription_auto_purchase_service.MiniAppSubscriptionPurchaseService',
+        _boom,
+    )
+
+    user = MagicMock(spec=User)
+    user.id = 555
+    user.balance_kopeks = 500_000
+
+    db_session = AsyncMock(spec=AsyncSession)
+    result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=AsyncMock())
+
+    assert result is False
