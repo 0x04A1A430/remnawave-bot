@@ -131,6 +131,35 @@ from app.database.models import (
 logger = structlog.get_logger(__name__)
 
 
+async def _terminate_competing_backends(conn) -> int:
+    """Drop other DB sessions so a restore TRUNCATE can grab its ACCESS EXCLUSIVE lock.
+
+    TRUNCATE needs ACCESS EXCLUSIVE, which conflicts with the ACCESS SHARE the live
+    bot/cabinet hold on every table they read (same deployment, same DB). Without this the
+    TRUNCATE waits out lock_timeout and fails with LockNotAvailableError, then the per-table
+    fallback hits the same wall (Telegram bug #649289). A restore is destructive by
+    definition — it wipes and replaces the data — so terminating the other sessions is
+    acceptable; they reconnect onto the restored data. Best-effort: if the DB role lacks
+    privilege to signal backends, we log and leave the previous behaviour unchanged.
+
+    Returns the number of backends terminated (0 on failure).
+    """
+    try:
+        result = await conn.execute(
+            text(
+                'SELECT pg_terminate_backend(pid) FROM pg_stat_activity '
+                'WHERE datname = current_database() AND pid <> pg_backend_pid()'
+            )
+        )
+        terminated = len(result.fetchall())
+        if terminated:
+            logger.info('🔌 Завершены конкурирующие сессии БД перед TRUNCATE', terminated=terminated)
+        return terminated
+    except Exception as e:
+        logger.warning('Не удалось завершить конкурирующие сессии БД перед TRUNCATE (best-effort)', error=e)
+        return 0
+
+
 @dataclass
 class BackupMetadata:
     timestamp: str
@@ -1668,10 +1697,21 @@ class BackupService:
         try:
             tables_str = ', '.join(tables_to_truncate)
             async with truncate_engine.begin() as conn:
+                # Free table locks held by the live app so TRUNCATE doesn't wait out
+                # lock_timeout and fail with LockNotAvailableError (#649289).
+                await _terminate_competing_backends(conn)
                 await conn.execute(text(f'TRUNCATE {tables_str} RESTART IDENTITY CASCADE'))
             logger.info('🗑️ Очищены все таблицы', tables_count=len(tables_to_truncate))
         except Exception as e:
             logger.error('❌ Ошибка TRUNCATE CASCADE, пробуем поштучно', error=e)
+            # The most common cause is lock contention with the live app. Free the locks
+            # once before the per-table retries (no point repeating it per table — killed
+            # sessions reconnect, and re-killing 80× just thrashes).
+            try:
+                async with truncate_engine.begin() as conn:
+                    await _terminate_competing_backends(conn)
+            except Exception as term_err:
+                logger.warning('Не удалось завершить сессии перед поштучной очисткой', error=term_err)
             # Fallback: поштучная очистка, каждая в отдельном соединении
             # чтобы PendingRollbackError не каскадировал на остальные таблицы
             failed_tables = []
