@@ -411,6 +411,21 @@ class BackupService:
 
         return timedelta(hours=hours)
 
+    @staticmethod
+    def _next_future_run(next_run: datetime, interval: timedelta, now: datetime) -> datetime:
+        """Advance next_run by one interval, skipping any already-missed slots.
+
+        A stale schedule (downtime, a first run computed in the past, or an interval
+        shorter than how long a backup takes) otherwise made _auto_backup_loop fire a
+        backup for EACH missed slot back-to-back — the reported "кидает 6 файлов подряд"
+        (Telegram bug #650541). Advancing straight to the next FUTURE slot caps it at one
+        catch-up backup.
+        """
+        next_run = next_run + interval
+        while next_run <= now:
+            next_run += interval
+        return next_run
+
     def _get_models_for_backup(self, include_logs: bool) -> list[Any]:
         models = self._base_backup_models.copy()
 
@@ -1988,7 +2003,9 @@ class BackupService:
                     logger.info('ℹ️ Автобекапы отключены через настройки, останавливаем цикл')
                     break
                 interval = self._get_backup_interval()
-                next_run = next_run + interval
+                # Skip missed slots so a stale/past next_run doesn't trigger a burst of
+                # back-to-back catch-up backups (#650541).
+                next_run = self._next_future_run(next_run, interval, datetime.now(UTC))
 
             except asyncio.CancelledError:
                 break
