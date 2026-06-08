@@ -101,6 +101,11 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
     bot = create_bot()
 
+    # Token-authoritative username so gift/referral/deep links never point at a stale bot.
+    from app.utils.bot_identity import sync_bot_username
+
+    await sync_bot_username(bot)
+
     proxy_url = settings.get_proxy_url()
     nalogo_proxy_url = settings.get_nalogo_proxy_url()
 
