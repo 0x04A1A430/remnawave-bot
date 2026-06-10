@@ -993,6 +993,7 @@ async def send_guest_notification(
         'cabinet_url': cabinet_base,
         'cabinet_email': recipient_email,
         'cabinet_password': purchase.cabinet_password,
+        'email': recipient_email,
     }
 
     if is_pending_activation:

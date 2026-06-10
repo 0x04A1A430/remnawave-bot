@@ -1124,6 +1124,7 @@ async def register_email(
             lang,
             context={
                 'username': user.first_name or '',
+                'email': email_lower,
                 'code': merge_code,
                 'expire_minutes': str(expire_minutes),
             },
@@ -1185,6 +1186,7 @@ async def register_email(
                 lang,
                 context={
                     'username': user.first_name or '',
+                    'email': request.email,
                     'verification_url': full_url,
                     'expire_hours': str(expire_hours),
                 },
@@ -1423,6 +1425,7 @@ async def register_email_standalone(
                 lang,
                 context={
                     'username': user.first_name or 'User',
+                    'email': request.email,
                     'verification_url': full_url,
                     'expire_hours': str(expire_hours),
                 },
@@ -1566,6 +1569,7 @@ async def resend_verification(
             lang,
             context={
                 'username': user.first_name or '',
+                'email': user.email,
                 'verification_url': full_url,
                 'expire_hours': str(expire_hours),
             },
@@ -1908,7 +1912,12 @@ async def forgot_password(
         override = await get_rendered_override(
             'password_reset',
             lang,
-            context={'username': user.first_name or '', 'reset_url': full_url, 'expire_hours': str(expire_hours)},
+            context={
+                'username': user.first_name or '',
+                'email': user.email,
+                'reset_url': full_url,
+                'expire_hours': str(expire_hours),
+            },
             db=db,
             required_vars=['reset_url'],
         )
@@ -2100,6 +2109,7 @@ async def request_email_change(
                 lang,
                 context={
                     'username': user.first_name or '',
+                    'email': request.new_email,
                     'verification_url': full_url,
                     'expire_hours': str(expire_hours),
                 },
@@ -2156,6 +2166,7 @@ async def request_email_change(
             lang,
             context={
                 'username': user.first_name or '',
+                'email': request.new_email,
                 'code': code,
                 'expire_minutes': str(expire_minutes),
             },

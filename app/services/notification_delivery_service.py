@@ -346,6 +346,8 @@ class NotificationDeliveryService:
             # Inject common context values used across all email templates
             context = {
                 'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
+                'username': user.first_name or user.username or '',
+                'email': user.email or '',
                 **context,
             }
 

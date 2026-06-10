@@ -20,16 +20,27 @@ logger = structlog.get_logger(__name__)
 # Placeholders available in EVERY template regardless of notification type.
 # Injected at the single render chokepoint (get_rendered_override), so an
 # admin can use them in any subject/body; per-type context wins on conflict.
-COMMON_CONTEXT_VARS = ['cabinet_url', 'service_name']
+COMMON_CONTEXT_VARS = ['service_name', 'cabinet_url', 'support_username', 'username', 'email', 'date']
 
 
 def build_common_context() -> dict[str, Any]:
-    """Values for the type-independent placeholders."""
+    """Values for the type-independent placeholders.
+
+    Instance-level values resolve here; recipient-level ones (username,
+    email) are supplied by the sending code and merged over these defaults —
+    the empty-string defaults only guarantee the placeholder never leaks
+    into a delivered email as a literal ``{username}``.
+    """
     from app.config import settings
+    from app.utils.timezone import format_email_datetime
 
     return {
-        'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
         'service_name': settings.SMTP_FROM_NAME or 'VPN Service',
+        'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
+        'support_username': getattr(settings, 'SUPPORT_USERNAME', '') or '',
+        'username': '',
+        'email': '',
+        'date': format_email_datetime(datetime.now(UTC), fmt='%d.%m.%Y'),
     }
 
 

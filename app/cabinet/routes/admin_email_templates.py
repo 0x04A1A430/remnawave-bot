@@ -545,6 +545,19 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
 
 AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua', 'fa']
 
+# Recipient-level common vars are empty until the sending code fills them —
+# in preview/test we substitute samples so the admin sees realistic values.
+COMMON_SAMPLE_CONTEXT = {'username': 'John', 'email': 'user@example.com'}
+
+
+def _build_sample_context(notification_type: str) -> dict[str, Any]:
+    """Common (real instance values) + recipient samples + per-type samples."""
+    return {
+        **build_common_context(),
+        **COMMON_SAMPLE_CONTEXT,
+        **SAMPLE_CONTEXTS.get(notification_type, {}),
+    }
+
 
 def _get_type_meta(notification_type: str) -> dict[str, Any] | None:
     return next((t for t in TEMPLATE_TYPES if t['type'] == notification_type), None)
@@ -803,8 +816,7 @@ async def preview_template(
     _validate_template_type(notification_type)
 
     language = data.language if data.language in AVAILABLE_LANGUAGES else 'ru'
-    # Common vars substitute with the instance's real values; per-type samples win.
-    sample_context = {**build_common_context(), **SAMPLE_CONTEXTS.get(notification_type, {})}
+    sample_context = _build_sample_context(notification_type)
 
     if data.body_html:
         # Preview custom content — substitute sample values, then wrap
@@ -854,8 +866,7 @@ async def send_test_email(
     _validate_template_type(notification_type)
 
     language = data.language if data.language in AVAILABLE_LANGUAGES else 'ru'
-    # Common vars substitute with the instance's real values; per-type samples win.
-    sample_context = {**build_common_context(), **SAMPLE_CONTEXTS.get(notification_type, {})}
+    sample_context = _build_sample_context(notification_type)
 
     if data.body_html:
         # Test the current editor content (possibly unsaved)

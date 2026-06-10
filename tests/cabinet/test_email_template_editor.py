@@ -240,9 +240,35 @@ async def test_override_render_injects_common_vars(monkeypatch):
 
 def test_common_vars_exposed_to_editor():
     """Редактор получает список общих переменных для всех типов."""
-    assert COMMON_CONTEXT_VARS == ['cabinet_url', 'service_name']
+    assert COMMON_CONTEXT_VARS == ['service_name', 'cabinet_url', 'support_username', 'username', 'email', 'date']
     common = build_common_context()
     assert set(common) == set(COMMON_CONTEXT_VARS)
+    # Инстанс-уровень заполнен сразу; получательские — пустые дефолты,
+    # их обязан передать отправляющий код
+    assert common['service_name']
+    assert common['date']
+    assert common['username'] == ''
+    assert common['email'] == ''
+
+
+@pytest.mark.asyncio
+async def test_recipient_common_vars_never_leak_as_literals(monkeypatch):
+    """Даже если отправитель не передал username/email — литерал {username} не уходит в письмо."""
+
+    async def fake_override(*_args, **_kwargs):
+        return {'subject': 'S', 'body_html': '<p>Привет, {username}! Письмо для {email}, дата {date}</p>'}
+
+    monkeypatch.setattr(
+        'app.cabinet.services.email_template_overrides.get_template_override',
+        fake_override,
+    )
+
+    rendered = await get_rendered_override('subscription_expired', 'ru', context={})
+    assert rendered is not None
+    _, body = rendered
+    assert '{username}' not in body
+    assert '{email}' not in body
+    assert '{date}' not in body
 
 
 @pytest.mark.asyncio
