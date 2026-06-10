@@ -200,10 +200,7 @@ def _get_method_defaults() -> dict:
             'is_configured': settings.is_overpay_enabled(),
             'default_min': settings.OVERPAY_MIN_AMOUNT_KOPEKS,
             'default_max': settings.OVERPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'fps', 'name': 'СБП'},
-            ],
+            'available_sub_options': _get_overpay_sub_options(),
         },
         'aurapay': {
             'default_display_name': settings.get_aurapay_display_name(),
@@ -288,6 +285,16 @@ def _get_platega_sub_options() -> list[dict] | None:
         return options or None
     except Exception:
         return None
+
+
+def _get_overpay_sub_options() -> list[dict]:
+    options = [
+        {'id': 'card', 'name': 'Карта'},
+        {'id': 'fps', 'name': 'СБП'},
+    ]
+    if settings.is_overpay_int_enabled():
+        options.append({'id': 'int', 'name': 'Международная карта (EUR)'})
+    return options
 
 
 # Default order of methods
