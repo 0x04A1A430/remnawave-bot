@@ -1269,6 +1269,7 @@ class EmailNotificationTemplates:
             'en': 'Verify your email address',
             'zh': '验证您的邮箱地址',
             'ua': 'Підтвердження email адреси',
+            'fa': 'تایید آدرس ایمیل',
         }
 
         greeting = {
@@ -1276,6 +1277,7 @@ class EmailNotificationTemplates:
             'en': f'Hello{", " + username if username else ""}!',
             'zh': f'您好{", " + username if username else ""}!',
             'ua': f'Вітаємо{", " + username if username else ""}!',
+            'fa': f'سلام{" " + username if username else ""}!',
         }
 
         bodies = {
@@ -1289,6 +1291,17 @@ class EmailNotificationTemplates:
                 <p><a href="{verification_url}">{verification_url}</a></p>
                 <p>Ссылка действительна в течение {expire_hours} часов.</p>
                 <p style="color: #666;">Если вы не создавали аккаунт, просто проигнорируйте это письмо.</p>
+            """,
+            'fa': f"""
+                <h2>{greeting.get('fa')}</h2>
+                <p>از ثبت‌نام شما سپاسگزاریم! لطفاً با کلیک روی دکمه زیر ایمیل خود را تایید کنید:</p>
+                <p style="text-align: center;">
+                    <a href="{verification_url}" class="button">تایید ایمیل</a>
+                </p>
+                <p>یا این لینک را در مرورگر خود کپی و باز کنید:</p>
+                <p><a href="{verification_url}">{verification_url}</a></p>
+                <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
+                <p style="color: #666;">اگر شما این حساب را ایجاد نکرده‌اید، این ایمیل را نادیده بگیرید.</p>
             """,
             'en': f"""
                 <h2>{greeting.get('en')}</h2>
@@ -1341,6 +1354,7 @@ class EmailNotificationTemplates:
             'en': 'Reset your password',
             'zh': '重置您的密码',
             'ua': 'Скидання пароля',
+            'fa': 'بازنشانی رمز عبور',
         }
 
         greeting = {
@@ -1348,9 +1362,21 @@ class EmailNotificationTemplates:
             'en': f'Hello{", " + username if username else ""}!',
             'zh': f'您好{", " + username if username else ""}!',
             'ua': f'Вітаємо{", " + username if username else ""}!',
+            'fa': f'سلام{" " + username if username else ""}!',
         }
 
         bodies = {
+            'fa': f"""
+                <h2>{greeting.get('fa')}</h2>
+                <p>درخواستی برای بازنشانی رمز عبور شما دریافت شد. برای تعیین رمز جدید روی دکمه زیر بزنید:</p>
+                <p style="text-align: center;">
+                    <a href="{reset_url}" class="button" style="background-color: #dc3545;">بازنشانی رمز عبور</a>
+                </p>
+                <p>یا این لینک را در مرورگر خود کپی و باز کنید:</p>
+                <p><a href="{reset_url}">{reset_url}</a></p>
+                <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
+                <p class="warning" style="color: #dc3545; font-weight: bold;">اگر شما درخواست بازنشانی رمز عبور نداده‌اید، این ایمیل را نادیده بگیرید یا با پشتیبانی تماس بگیرید.</p>
+            """,
             'ru': f"""
                 <h2>{greeting.get('ru')}</h2>
                 <p>Мы получили запрос на сброс вашего пароля. Нажмите на кнопку ниже, чтобы установить новый пароль:</p>
@@ -1413,6 +1439,7 @@ class EmailNotificationTemplates:
             'en': 'Email change verification code',
             'zh': '邮箱更换验证码',
             'ua': 'Код підтвердження для зміни email',
+            'fa': 'کد تایید تغییر ایمیل',
         }
 
         greeting = {
@@ -1420,6 +1447,7 @@ class EmailNotificationTemplates:
             'en': f'Hello{", " + username if username else ""}!',
             'zh': f'您好{", " + username if username else ""}!',
             'ua': f'Вітаємо{", " + username if username else ""}!',
+            'fa': f'سلام{" " + username if username else ""}!',
         }
 
         code_box = f"""
@@ -1456,6 +1484,13 @@ class EmailNotificationTemplates:
                 {code_box}
                 <p>Код дійсний протягом {expire_minutes} хвилин.</p>
                 <p style="color: #666;">Якщо ви не запитували зміну email, просто проігноруйте цей лист.</p>
+            """,
+            'fa': f"""
+                <h2>{greeting.get('fa')}</h2>
+                <p>شما درخواست تغییر ایمیل داده‌اید. برای تایید از کد زیر استفاده کنید:</p>
+                {code_box}
+                <p>این کد تا {expire_minutes} دقیقه معتبر است.</p>
+                <p style="color: #666;">اگر شما درخواست تغییر ایمیل نداده‌اید، این ایمیل را نادیده بگیرید.</p>
             """,
         }
 
