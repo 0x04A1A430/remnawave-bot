@@ -317,7 +317,16 @@ async def _start_overpay_option_topup_impl(
     max_amount = settings.OVERPAY_MAX_AMOUNT_KOPEKS // 100
     display_name = settings.get_overpay_display_name()
 
-    keyboard = await get_topup_amount_keyboard(payment_method, db_user.language, back_callback='topup_overpay')
+    min_int_kopeks = None
+    if option == 'int':
+        min_int_kopeks = math.ceil(settings.OVERPAY_INT_MIN_EUR * settings.OVERPAY_RUB_PER_EUR) * 100
+
+    keyboard = await get_topup_amount_keyboard(
+        payment_method,
+        db_user.language,
+        back_callback='topup_overpay',
+        min_amount_kopeks=min_int_kopeks,
+    )
 
     if option == 'int':
         min_eur_rub = math.ceil(settings.OVERPAY_INT_MIN_EUR * settings.OVERPAY_RUB_PER_EUR)

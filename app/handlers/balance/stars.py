@@ -115,7 +115,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         except Exception as delete_error:  # pragma: no cover - зависит от прав бота
             logger.warning('Не удалось удалить сообщение с суммой Stars', delete_error=delete_error)
 
-        if prompt_message_id:
+        if prompt_message_id and prompt_message_id != message.message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
