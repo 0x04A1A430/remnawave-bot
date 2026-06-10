@@ -1116,6 +1116,10 @@ class BotConfigurationService:
         return key in cls._env_override_keys
 
     @classmethod
+    def is_env_overridden(cls, key: str) -> bool:
+        return cls._is_env_override(key)
+
+    @classmethod
     def _format_numeric_with_unit(cls, key: str, value: float) -> str | None:
         if isinstance(value, bool):
             return None

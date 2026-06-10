@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.rules import clear_all_rules, create_or_update_rules, get_current_rules_content
 from app.database.models import User
-from app.services.system_settings_service import BotConfigurationService
+from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
-from app.utils.display_mode import display_mode_label, next_display_mode
+from app.utils.display_mode import display_mode_label
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -58,8 +58,9 @@ async def show_rules_management(callback: types.CallbackQuery, db_user: User, db
 @admin_required
 @error_handler
 async def cycle_rules_display_mode(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    new_mode = next_display_mode(settings.SERVICE_RULES_DISPLAY_MODE)
-    await BotConfigurationService.set_value(db, 'SERVICE_RULES_DISPLAY_MODE', new_mode)
+    new_mode = await cycle_display_mode_setting(callback, db, 'SERVICE_RULES_DISPLAY_MODE')
+    if new_mode is None:
+        return
     await callback.answer(f'Отображение: {display_mode_label(new_mode)}')
     await show_rules_management(callback, db_user=db_user, db=db)
 

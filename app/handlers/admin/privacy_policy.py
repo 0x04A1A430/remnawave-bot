@@ -8,12 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.localization.texts import get_texts
 from app.services.privacy_policy_service import PrivacyPolicyService
-from app.services.system_settings_service import BotConfigurationService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
-from app.utils.display_mode import display_mode_label, next_display_mode
+from app.utils.display_mode import display_mode_label
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -249,8 +249,9 @@ async def cycle_privacy_policy_display_mode(
     db: AsyncSession,
 ):
     texts = get_texts(db_user.language)
-    new_mode = next_display_mode(settings.PRIVACY_POLICY_DISPLAY_MODE)
-    await BotConfigurationService.set_value(db, 'PRIVACY_POLICY_DISPLAY_MODE', new_mode)
+    new_mode = await cycle_display_mode_setting(callback, db, 'PRIVACY_POLICY_DISPLAY_MODE')
+    if new_mode is None:
+        return
 
     overview_text, markup, _ = await _build_overview(db_user, db)
     await callback.message.edit_text(
