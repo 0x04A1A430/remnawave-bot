@@ -986,6 +986,11 @@ async def create_topup(
 
             payment_service = PaymentService()
             payment_method_type = request.payment_option or None
+            # Lava Business rejects success/fail URLs that carry a query string ("ошибочный
+            # формат ссылки", HTTP 422), unlike the other providers. Return to a clean
+            # path-based URL — the method goes in the path (read as a fallback by the result
+            # page), and success/failure is resolved by polling the backend, so no ?status=.
+            lava_return_url = f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result/lava'
             result = await payment_service.create_lava_payment(
                 db=db,
                 user_id=user.id,
@@ -996,7 +1001,7 @@ async def create_topup(
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 payment_method_type=payment_method_type,
-                return_url=cabinet_success_url,
+                return_url=lava_return_url,
             )
 
             if result and result.get('payment_url'):
