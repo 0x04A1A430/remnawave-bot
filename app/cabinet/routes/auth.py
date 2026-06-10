@@ -1128,6 +1128,7 @@ async def register_email(
                 'expire_minutes': str(expire_minutes),
             },
             db=db,
+            required_vars=['code'],
         )
         custom_subject, custom_body = override or (None, None)
         await asyncio.to_thread(
@@ -1188,6 +1189,7 @@ async def register_email(
                     'expire_hours': str(expire_hours),
                 },
                 db=db,
+                required_vars=['verification_url'],
             )
             custom_subject, custom_body = override or (None, None)
 
@@ -1425,6 +1427,7 @@ async def register_email_standalone(
                     'expire_hours': str(expire_hours),
                 },
                 db=db,
+                required_vars=['verification_url'],
             )
             custom_subject, custom_body = override or (None, None)
 
@@ -1567,6 +1570,7 @@ async def resend_verification(
                 'expire_hours': str(expire_hours),
             },
             db=db,
+            required_vars=['verification_url'],
         )
         custom_subject, custom_body = override or (None, None)
 
@@ -1906,6 +1910,7 @@ async def forgot_password(
             lang,
             context={'username': user.first_name or '', 'reset_url': full_url, 'expire_hours': str(expire_hours)},
             db=db,
+            required_vars=['reset_url'],
         )
         custom_subject, custom_body = override or (None, None)
 
@@ -2099,6 +2104,7 @@ async def request_email_change(
                     'expire_hours': str(expire_hours),
                 },
                 db=db,
+                required_vars=['verification_url'],
             )
             custom_subject, custom_body = override or (None, None)
 
@@ -2154,6 +2160,7 @@ async def request_email_change(
                 'expire_minutes': str(expire_minutes),
             },
             db=db,
+            required_vars=['code'],
         )
         custom_subject, custom_body = override or (None, None)
 

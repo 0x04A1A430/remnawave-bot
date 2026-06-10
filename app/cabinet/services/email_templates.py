@@ -62,6 +62,7 @@ class EmailNotificationTemplates:
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
             NotificationType.PASSWORD_RESET: self._password_reset_template,
+            NotificationType.EMAIL_CHANGE_CODE: self._email_change_code_template,
             NotificationType.GUEST_SUBSCRIPTION_DELIVERED: self._guest_subscription_delivered_template,
             NotificationType.GUEST_ACTIVATION_REQUIRED: self._guest_activation_required_template,
             NotificationType.GUEST_GIFT_RECEIVED: self._guest_gift_received_template,
@@ -1393,6 +1394,68 @@ class EmailNotificationTemplates:
                 <p><a href="{reset_url}">{reset_url}</a></p>
                 <p>Посилання дійсне протягом {expire_hours} годин.</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">Якщо ви не запитували скидання пароля, проігноруйте цей лист або зв'яжіться з підтримкою.</p>
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _email_change_code_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for email change verification code."""
+        username = html.escape(context.get('username', ''))
+        code = html.escape(str(context.get('code', '')))
+        expire_minutes = context.get('expire_minutes', 10)
+
+        subjects = {
+            'ru': 'Код подтверждения для смены email',
+            'en': 'Email change verification code',
+            'zh': '邮箱更换验证码',
+            'ua': 'Код підтвердження для зміни email',
+        }
+
+        greeting = {
+            'ru': f'Здравствуйте{", " + username if username else ""}!',
+            'en': f'Hello{", " + username if username else ""}!',
+            'zh': f'您好{", " + username if username else ""}!',
+            'ua': f'Вітаємо{", " + username if username else ""}!',
+        }
+
+        code_box = f"""
+                <div class="highlight" style="text-align: center;">
+                    <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: monospace; margin: 10px 0;">{code}</p>
+                </div>
+        """
+
+        bodies = {
+            'ru': f"""
+                <h2>{greeting.get('ru')}</h2>
+                <p>Вы запросили смену email адреса. Используйте код ниже для подтверждения:</p>
+                {code_box}
+                <p>Код действителен в течение {expire_minutes} минут.</p>
+                <p style="color: #666;">Если вы не запрашивали смену email, просто проигнорируйте это письмо.</p>
+            """,
+            'en': f"""
+                <h2>{greeting.get('en')}</h2>
+                <p>You requested to change your email address. Use the code below to confirm:</p>
+                {code_box}
+                <p>This code will expire in {expire_minutes} minutes.</p>
+                <p style="color: #666;">If you didn't request an email change, you can safely ignore this email.</p>
+            """,
+            'zh': f"""
+                <h2>{greeting.get('zh')}</h2>
+                <p>您请求更换邮箱地址。请使用以下验证码确认：</p>
+                {code_box}
+                <p>此验证码将在 {expire_minutes} 分钟后过期。</p>
+                <p style="color: #666;">如果您没有请求更换邮箱，请忽略此邮件。</p>
+            """,
+            'ua': f"""
+                <h2>{greeting.get('ua')}</h2>
+                <p>Ви запросили зміну email адреси. Використовуйте код нижче для підтвердження:</p>
+                {code_box}
+                <p>Код дійсний протягом {expire_minutes} хвилин.</p>
+                <p style="color: #666;">Якщо ви не запитували зміну email, просто проігноруйте цей лист.</p>
             """,
         }
 

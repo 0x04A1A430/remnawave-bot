@@ -1054,7 +1054,10 @@ async def send_guest_notification(
             from app.cabinet.services.email_template_overrides import get_rendered_override
 
             cred_rendered = await get_rendered_override(
-                NotificationType.GUEST_CABINET_CREDENTIALS.value, language, context
+                NotificationType.GUEST_CABINET_CREDENTIALS.value,
+                language,
+                context,
+                required_vars=['cabinet_email', 'cabinet_password'],
             )
             if cred_rendered:
                 cred_subject, cred_body = cred_rendered
