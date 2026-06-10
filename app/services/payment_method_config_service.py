@@ -327,6 +327,38 @@ DEFAULT_METHOD_ORDER = [
 ]
 
 
+DEFAULT_QUICK_AMOUNTS = [10000, 30000, 50000, 100000]
+MAX_QUICK_AMOUNTS = 10
+
+
+def normalize_quick_amounts(values: list | None) -> list[int] | None:
+    if values is None:
+        return None
+    if not isinstance(values, list):
+        raise ValueError('quick_amounts must be a list')
+    unique: set[int] = set()
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError('quick_amounts items must be integers')
+        if value <= 0:
+            raise ValueError('quick_amounts items must be positive')
+        unique.add(value)
+    if len(unique) > MAX_QUICK_AMOUNTS:
+        raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')
+    if not unique:
+        return None
+    return sorted(unique)
+
+
+def get_effective_quick_amounts(
+    quick_amounts: list[int] | None,
+    min_amount_kopeks: int,
+    max_amount_kopeks: int,
+) -> list[int]:
+    source = quick_amounts or DEFAULT_QUICK_AMOUNTS
+    return [amount for amount in source if min_amount_kopeks <= amount <= max_amount_kopeks]
+
+
 # ============ Initialization ============
 
 
@@ -450,6 +482,7 @@ async def update_config(
         'is_enabled',
         'display_name',
         'sub_options',
+        'quick_amounts',
         'min_amount_kopeks',
         'max_amount_kopeks',
         'user_type_filter',
@@ -459,7 +492,10 @@ async def update_config(
     )
     for key in updatable_fields:
         if key in data:
-            setattr(config, key, data[key])
+            value = data[key]
+            if key == 'quick_amounts':
+                value = normalize_quick_amounts(value)
+            setattr(config, key, value)
 
     # Update promo groups M2M if specified
     if promo_group_ids is not None:
@@ -598,6 +634,7 @@ async def get_enabled_methods_for_user(
                 'min_amount_kopeks': min_amount,
                 'max_amount_kopeks': max_amount,
                 'options': options,
+                'quick_amounts': get_effective_quick_amounts(config.quick_amounts, min_amount, max_amount),
                 'sort_order': config.sort_order,
                 # Если True — кабинет, получив payment_url, делает
                 # window.location.href сразу вместо показа панели с ссылкой.
