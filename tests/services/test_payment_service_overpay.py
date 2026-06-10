@@ -318,6 +318,42 @@ async def test_legacy_call_without_option_keeps_old_behavior(
     assert captured['payment_method'] is None
 
 
+@pytest.mark.asyncio
+async def test_guest_payment_forwards_int_option(
+    overpay_settings: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service = PaymentService.__new__(PaymentService)
+    service.bot = None
+    received: dict[str, Any] = {}
+
+    async def fake_create_overpay_payment(**kwargs: Any) -> dict[str, Any]:
+        received.update(kwargs)
+        return {
+            'local_payment_id': 7,
+            'payment_url': 'https://pay.overpay.io/form',
+            'overpay_payment_id': 'op-7',
+        }
+
+    async def fake_getter(db: Any, payment_id: int) -> None:
+        return None
+
+    monkeypatch.setattr(service, 'create_overpay_payment', fake_create_overpay_payment, raising=False)
+    monkeypatch.setattr(overpay_crud_module, 'get_overpay_payment_by_id', fake_getter, raising=False)
+
+    result = await service.create_guest_payment(
+        DummySession(),
+        amount_kopeks=100000,
+        payment_method='overpay_int',
+        description='guest',
+        purchase_token='tok-1',
+        return_url='https://return',
+    )
+
+    assert result is not None
+    assert result['provider'] == 'overpay'
+    assert received['option'] == 'int'
+
+
 def test_status_map_extended() -> None:
     for status in ('charged', 'approved', 'settled', 'completed', 'success', 'successful'):
         assert OVERPAY_STATUS_MAP[status] == ('success', True)
