@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -316,16 +317,7 @@ async def _start_overpay_option_topup_impl(
     max_amount = settings.OVERPAY_MAX_AMOUNT_KOPEKS // 100
     display_name = settings.get_overpay_display_name()
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '◀️ Назад'),
-                    callback_data='topup_overpay',
-                )
-            ]
-        ]
-    )
+    keyboard = await get_topup_amount_keyboard(payment_method, db_user.language, back_callback='topup_overpay')
 
     if option == 'int':
         min_eur_rub = math.ceil(settings.OVERPAY_INT_MIN_EUR * settings.OVERPAY_RUB_PER_EUR)
