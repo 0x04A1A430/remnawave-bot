@@ -477,6 +477,9 @@ async def update_config(
     if not config:
         return None
 
+    if 'quick_amounts' in data:
+        data = {**data, 'quick_amounts': normalize_quick_amounts(data['quick_amounts'])}
+
     # Update scalar fields
     updatable_fields = (
         'is_enabled',
@@ -492,10 +495,7 @@ async def update_config(
     )
     for key in updatable_fields:
         if key in data:
-            value = data[key]
-            if key == 'quick_amounts':
-                value = normalize_quick_amounts(value)
-            setattr(config, key, value)
+            setattr(config, key, data[key])
 
     # Update promo groups M2M if specified
     if promo_group_ids is not None:

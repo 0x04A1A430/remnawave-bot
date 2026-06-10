@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.services.payment_method_config_service import (
+    DEFAULT_QUICK_AMOUNTS,
+    MAX_QUICK_AMOUNTS,
     _get_method_defaults,
     get_all_configs,
     get_all_promo_groups,
@@ -41,6 +43,8 @@ class PaymentMethodConfigResponse(BaseModel):
     default_display_name: str
     sub_options: dict | None = None
     available_sub_options: list[SubOptionInfo] | None = None
+    quick_amounts: list[int] | None = None
+    default_quick_amounts: list[int] = Field(default_factory=lambda: list(DEFAULT_QUICK_AMOUNTS))
     min_amount_kopeks: int | None = None
     max_amount_kopeks: int | None = None
     default_min_amount_kopeks: int
@@ -76,6 +80,21 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
         for key in v:
             if not isinstance(key, str) or len(key) > 50:
                 raise ValueError('sub_options keys must be strings of at most 50 characters')
+        return v
+
+    quick_amounts: list[int] | None = None
+    reset_quick_amounts: bool = False
+
+    @field_validator('quick_amounts')
+    @classmethod
+    def validate_quick_amounts(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return None
+        if len(v) > MAX_QUICK_AMOUNTS:
+            raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')
+        for amount in v:
+            if amount <= 0:
+                raise ValueError('quick_amounts items must be positive')
         return v
 
     first_topup_filter: str | None = Field(default=None, pattern='^(any|yes|no)$')
@@ -120,6 +139,7 @@ def _enrich_config(config, defaults: dict) -> PaymentMethodConfigResponse:
         default_display_name=method_def.get('default_display_name', config.method_id),
         sub_options=config.sub_options,
         available_sub_options=available_sub_options,
+        quick_amounts=getattr(config, 'quick_amounts', None),
         min_amount_kopeks=config.min_amount_kopeks,
         max_amount_kopeks=config.max_amount_kopeks,
         default_min_amount_kopeks=method_def.get('default_min', 1000),
@@ -210,6 +230,11 @@ async def update_payment_method(
     if request.sub_options is not None:
         data['sub_options'] = request.sub_options
 
+    if request.reset_quick_amounts:
+        data['quick_amounts'] = None
+    elif request.quick_amounts is not None:
+        data['quick_amounts'] = request.quick_amounts
+
     if request.reset_min_amount:
         data['min_amount_kopeks'] = None
     elif request.min_amount_kopeks is not None:
@@ -234,7 +259,10 @@ async def update_payment_method(
 
     promo_group_ids = request.allowed_promo_group_ids
 
-    config = await update_config(db, method_id, data, promo_group_ids)
+    try:
+        config = await update_config(db, method_id, data, promo_group_ids)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error))
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

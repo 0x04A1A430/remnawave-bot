@@ -53,6 +53,10 @@ def test_normalize_rejects_more_than_ten_items():
         normalize_quick_amounts(list(range(100, 1200, 100)))
 
 
+def test_normalize_caps_after_dedupe():
+    assert normalize_quick_amounts([100] * 11 + [200]) == [100, 200]
+
+
 def test_effective_returns_defaults_when_not_configured():
     assert get_effective_quick_amounts(None, 0, 10000000) == DEFAULT_QUICK_AMOUNTS
 
@@ -60,3 +64,7 @@ def test_effective_returns_defaults_when_not_configured():
 def test_effective_filters_by_min_max():
     assert get_effective_quick_amounts(None, 20000, 60000) == [30000, 50000]
     assert get_effective_quick_amounts([5000, 70000, 200000], 10000, 100000) == [70000]
+
+
+def test_effective_returns_empty_when_all_filtered_out():
+    assert get_effective_quick_amounts([5000], 10000, 100000) == []
