@@ -12,6 +12,8 @@ from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..services.email_template_overrides import (
+    COMMON_CONTEXT_VARS,
+    build_common_context,
     delete_template_override,
     get_all_overrides,
     get_overrides_for_type,
@@ -665,7 +667,11 @@ async def list_template_types(
             }
         )
 
-    return {'items': result, 'available_languages': AVAILABLE_LANGUAGES}
+    return {
+        'items': result,
+        'available_languages': AVAILABLE_LANGUAGES,
+        'common_context_vars': COMMON_CONTEXT_VARS,
+    }
 
 
 @router.get('/{notification_type}', summary='Get templates for a notification type')
@@ -723,6 +729,7 @@ async def get_templates_for_type(
         'label': type_meta['label'],
         'description': type_meta['description'],
         'context_vars': type_meta['context_vars'],
+        'common_context_vars': COMMON_CONTEXT_VARS,
         'languages': languages,
     }
 
@@ -796,7 +803,8 @@ async def preview_template(
     _validate_template_type(notification_type)
 
     language = data.language if data.language in AVAILABLE_LANGUAGES else 'ru'
-    sample_context = SAMPLE_CONTEXTS.get(notification_type, {})
+    # Common vars substitute with the instance's real values; per-type samples win.
+    sample_context = {**build_common_context(), **SAMPLE_CONTEXTS.get(notification_type, {})}
 
     if data.body_html:
         # Preview custom content — substitute sample values, then wrap
@@ -846,7 +854,8 @@ async def send_test_email(
     _validate_template_type(notification_type)
 
     language = data.language if data.language in AVAILABLE_LANGUAGES else 'ru'
-    sample_context = SAMPLE_CONTEXTS.get(notification_type, {})
+    # Common vars substitute with the instance's real values; per-type samples win.
+    sample_context = {**build_common_context(), **SAMPLE_CONTEXTS.get(notification_type, {})}
 
     if data.body_html:
         # Test the current editor content (possibly unsaved)

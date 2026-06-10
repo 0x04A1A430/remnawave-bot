@@ -19,6 +19,8 @@ from app.cabinet.routes.admin_email_templates import (
     preview_template,
 )
 from app.cabinet.services.email_template_overrides import (
+    COMMON_CONTEXT_VARS,
+    build_common_context,
     get_rendered_override,
     substitute_context_vars,
 )
@@ -197,6 +199,50 @@ async def test_preview_substitutes_sample_values_into_custom_body():
     assert html.escape(sample_url) in result['body_html']
     assert '{verification_url}' not in result['body_html']
     assert result['subject'] == 'Привет, John'
+
+
+@pytest.mark.asyncio
+async def test_preview_substitutes_common_vars_into_custom_body():
+    """Общие переменные ({cabinet_url}, {service_name}) работают в любом шаблоне."""
+    data = EmailTemplatePreviewRequest(
+        language='ru',
+        subject='От {service_name}',
+        body_html='<p>Кабинет: <a href="{cabinet_url}">{cabinet_url}</a>, команда {service_name}</p>',
+    )
+    result = await preview_template('subscription_expired', data, _admin=None)
+    common = build_common_context()
+    assert '{cabinet_url}' not in result['body_html']
+    assert '{service_name}' not in result['body_html']
+    assert common['service_name'] in result['body_html']
+    assert result['subject'] == f'От {common["service_name"]}'
+
+
+@pytest.mark.asyncio
+async def test_override_render_injects_common_vars(monkeypatch):
+    """Боевой рендер override подставляет общие переменные без участия вызывающего кода."""
+
+    async def fake_override(*_args, **_kwargs):
+        return {'subject': '{service_name}', 'body_html': '<p>{cabinet_url} / {service_name}</p>'}
+
+    monkeypatch.setattr(
+        'app.cabinet.services.email_template_overrides.get_template_override',
+        fake_override,
+    )
+
+    rendered = await get_rendered_override('subscription_expired', 'ru', context={})
+    assert rendered is not None
+    subject, body = rendered
+    common = build_common_context()
+    assert subject == common['service_name']
+    assert '{cabinet_url}' not in body
+    assert '{service_name}' not in body
+
+
+def test_common_vars_exposed_to_editor():
+    """Редактор получает список общих переменных для всех типов."""
+    assert COMMON_CONTEXT_VARS == ['cabinet_url', 'service_name']
+    common = build_common_context()
+    assert set(common) == set(COMMON_CONTEXT_VARS)
 
 
 @pytest.mark.asyncio
