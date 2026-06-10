@@ -12,6 +12,32 @@ from app.database.models import PaymentMethodConfig, PromoGroup
 logger = structlog.get_logger(__name__)
 
 
+# ============ Display-name override cache ============
+# The cabinet stores per-method name overrides in PaymentMethodConfig.display_name.
+# The bot keyboards (app/keyboards/inline.py) are synchronous and have no DB handle,
+# so they read overrides from this in-process cache instead. It is warmed at startup
+# and refreshed whenever the cabinet edits a method, keeping bot button labels in sync
+# with the cabinet. Bot and cabinet run in the same process, so refresh is immediate.
+_display_name_overrides: dict[str, str] = {}
+
+
+async def refresh_display_name_overrides(db: AsyncSession) -> None:
+    """Reload the method_id -> display_name override cache from the DB."""
+    global _display_name_overrides
+    result = await db.execute(
+        select(PaymentMethodConfig.method_id, PaymentMethodConfig.display_name).where(
+            PaymentMethodConfig.display_name.isnot(None)
+        )
+    )
+    _display_name_overrides = {method_id: name for method_id, name in result.all() if name and name.strip()}
+    logger.debug('Кэш имён платёжных методов обновлён', count=len(_display_name_overrides))
+
+
+def get_display_name_override(method_id: str) -> str | None:
+    """Sync read of a cabinet-set display name for a method, or None if not set."""
+    return _display_name_overrides.get(method_id)
+
+
 # ============ Default method definitions ============
 
 
@@ -439,6 +465,7 @@ async def update_config(
 
     await db.commit()
     await db.refresh(config)
+    await refresh_display_name_overrides(db)
     return config
 
 

@@ -71,8 +71,15 @@ def _coerce_value(key: str, value: Any) -> Any:
 
 
 def _serialize_definition(definition, include_choices: bool = True) -> SettingDefinition:
-    current = bot_configuration_service.get_current_value(definition.key)
-    original = bot_configuration_service.get_original_value(definition.key)
+    # SECURITY: never echo plaintext secrets (payment keys, SMTP/panel passwords, API
+    # tokens) over the settings API. is_masked_secret gates on a non-empty *string* value so
+    # numeric settings whose names merely contain TOKEN/KEY stay visible and editable.
+    raw_current = bot_configuration_service.get_current_value(definition.key)
+    is_secret = bot_configuration_service.is_masked_secret(definition.key, raw_current)
+    current = bot_configuration_service.mask_secret_value(definition.key, raw_current)
+    original = bot_configuration_service.mask_secret_value(
+        definition.key, bot_configuration_service.get_original_value(definition.key)
+    )
     has_override = bot_configuration_service.has_override(definition.key)
 
     choices: list[SettingChoice] = []
@@ -99,6 +106,7 @@ def _serialize_definition(definition, include_choices: bool = True) -> SettingDe
         original=original,
         has_override=has_override,
         read_only=bot_configuration_service.is_read_only(definition.key),
+        is_secret=is_secret,
         choices=choices,
     )
 
@@ -153,6 +161,10 @@ async def update_setting(
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+
+    # Re-sent mask sentinel means the secret was left untouched — don't overwrite it.
+    if bot_configuration_service.is_secret_key(key) and payload.value == bot_configuration_service.SECRET_MASK:
+        return _serialize_definition(definition)
 
     value = _coerce_value(key, payload.value)
     try:

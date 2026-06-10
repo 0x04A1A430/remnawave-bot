@@ -498,9 +498,15 @@ class BackupService:
                     await meta_file.write(json_lib.dumps(metadata, ensure_ascii=False, indent=2))
 
                 mode = 'w:gz' if compress else 'w'
-                with tarfile.open(backup_path, mode) as tar:
-                    for item in await asyncio.to_thread(lambda: list(staging_dir.iterdir())):
-                        tar.add(item, arcname=item.name)
+
+                def _write_archive() -> None:
+                    # tar.add reads + gzip-compresses each file; running it inline froze the
+                    # whole event loop (and thus the bot) for the duration of every auto-backup.
+                    with tarfile.open(backup_path, mode) as tar:
+                        for item in staging_dir.iterdir():
+                            tar.add(item, arcname=item.name)
+
+                await asyncio.to_thread(_write_archive)
 
             file_size = (await asyncio.to_thread(backup_path.stat)).st_size
 
@@ -857,8 +863,13 @@ class BackupService:
             temp_path = Path(temp_dir)
 
             mode = 'r:gz' if backup_path.suffixes and backup_path.suffixes[-1] == '.gz' else 'r'
-            with tarfile.open(backup_path, mode) as tar:
-                tar.extractall(temp_path, filter='data')
+
+            def _extract_archive() -> None:
+                # Decompress + extract off the event loop so a large restore doesn't freeze the bot.
+                with tarfile.open(backup_path, mode) as tar:
+                    tar.extractall(temp_path, filter='data')
+
+            await asyncio.to_thread(_extract_archive)
 
             metadata_path = temp_path / 'metadata.json'
             if not await asyncio.to_thread(metadata_path.exists):

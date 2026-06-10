@@ -42,6 +42,7 @@ from app.middlewares.channel_checker import (
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
+from app.services.guest_purchase_service import GIFT_TOKEN_MIN_PREFIX_LENGTH
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.phantom_service import claim_phantom, merge_phantom_into_user
 from app.services.pinned_message_service import (
@@ -140,13 +141,21 @@ async def _activate_pending_gift_after_registration(
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
-        from app.services.guest_purchase_service import activate_purchase as svc_activate
+        from app.services.guest_purchase_service import (
+            GIFT_TOKEN_MIN_PREFIX_LENGTH,
+            activate_purchase as svc_activate,
+        )
 
-        # Support both full token and prefix-based lookup (Telegram truncates long start params)
+        # Support both full token and prefix-based lookup (Telegram truncates the token by
+        # the GIFT_/giftclaim_ prefix length). Require a long minimum prefix so a short,
+        # guessable value can't claim an arbitrary gift via startswith().
         if len(gift_token) >= 64:
             token_filter = GuestPurchase.token == gift_token
-        else:
+        elif len(gift_token) >= GIFT_TOKEN_MIN_PREFIX_LENGTH:
             token_filter = GuestPurchase.token.startswith(gift_token)
+        else:
+            logger.warning('Gift deep link token too short for prefix lookup', token_length=len(gift_token))
+            return
 
         gift_result = await db.execute(
             select(GuestPurchase)
@@ -770,7 +779,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             if start_parameter.startswith('giftclaim_')
             else start_parameter[5:]  # Strip "GIFT_" prefix
         )
-        if len(gift_token) >= 8:
+        # Reject tokens too short to be a legitimately-truncated gift token — a short prefix
+        # would match (and claim) an arbitrary gift via the startswith lookup downstream.
+        if len(gift_token) >= GIFT_TOKEN_MIN_PREFIX_LENGTH:
             logger.info(
                 'Gift code deep link detected',
                 token_prefix=gift_token[:5],

@@ -3330,6 +3330,30 @@ class Settings(BaseSettings):
         )
         return self.BOT_TOKEN
 
+    def collect_insecure_default_warnings(self) -> list[str]:
+        """Return warnings about insecure default/secret configuration.
+
+        Surfaced once at startup (via the structured logger) so operators notice when the
+        bot runs with shipped defaults that must be changed before production.
+        """
+        messages: list[str] = []
+
+        if self.POSTGRES_PASSWORD == 'secure_password_123' and 'postgresql' in self.get_database_url():
+            messages.append(
+                'POSTGRES_PASSWORD is the shipped default ("secure_password_123"). '
+                'Set a unique strong password before exposing this deployment.'
+            )
+
+        if self.is_cabinet_enabled() and not self.CABINET_JWT_SECRET:
+            messages.append(
+                'CABINET_JWT_SECRET is not set — cabinet JWTs are signed with BOT_TOKEN, which is '
+                'widely exposed (Telegram API, payment-provider configs). A BOT_TOKEN leak would let '
+                'anyone forge cabinet sessions. Set CABINET_JWT_SECRET to a unique value: '
+                'python -c "import secrets; print(secrets.token_urlsafe(64))"'
+            )
+
+        return messages
+
     def get_cabinet_access_token_expire_minutes(self) -> int:
         return max(1, self.CABINET_ACCESS_TOKEN_EXPIRE_MINUTES)
 

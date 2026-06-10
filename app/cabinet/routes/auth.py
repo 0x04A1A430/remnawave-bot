@@ -1075,8 +1075,18 @@ async def register_email(
             detail='Disposable email addresses are not allowed',
         )
 
-    # Check if email already exists (case-insensitive, exclude deleted users)
+    # SECURITY: never let registration/linking bind an ADMIN_EMAILS address. Admin
+    # authority is keyed off email_verified alone (config.is_admin / get_current_admin_user),
+    # so with email verification disabled this would be a no-proof superadmin grant.
+    # Mirrors the /email/change guard.
     email_lower = (request.email or '').strip().lower()
+    if email_lower and email_lower in {e.lower() for e in settings.get_admin_emails()}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This email address cannot be linked to your account.',
+        )
+
+    # Check if email already exists (case-insensitive, exclude deleted users)
     existing_result = await db.execute(
         select(User).where(
             func.lower(User.email) == email_lower,
@@ -1317,8 +1327,18 @@ async def register_email_standalone(
             detail='Disposable email addresses are not allowed',
         )
 
-    # Проверить что email не занят (без учёта регистра)
+    # SECURITY: never let standalone registration claim an ADMIN_EMAILS address. With
+    # email verification disabled this flow sets email_verified=True with no inbox proof,
+    # and admin authority is keyed off email_verified — so an unverified ADMIN_EMAILS
+    # registration would grant superadmin on first login. Mirrors the /email/change guard.
     email_lower = (request.email or '').strip().lower()
+    if email_lower and email_lower in {e.lower() for e in settings.get_admin_emails()}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This email address cannot be used for registration.',
+        )
+
+    # Проверить что email не занят (без учёта регистра)
     existing = await db.execute(select(User).where(func.lower(User.email) == email_lower))
     if existing.scalar_one_or_none():
         raise HTTPException(

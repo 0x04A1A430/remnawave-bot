@@ -87,6 +87,40 @@ class BotConfigurationService:
     READ_ONLY_KEYS: set[str] = set()
     PLAIN_TEXT_KEYS: set[str] = set()
 
+    # Placeholder returned to clients in place of a secret's real value. When this
+    # exact sentinel comes back on an update, the write is skipped so the stored
+    # secret is preserved (the admin left the masked field untouched).
+    SECRET_MASK: str = '••••••••'
+
+    @classmethod
+    def is_secret_key(cls, key: str) -> bool:
+        """True if a setting holds a secret whose value must never be echoed to clients.
+
+        Mirrors the masking heuristic used by ``format_value`` for the bot UI so the
+        REST settings API (cabinet + web API) never returns plaintext payment keys,
+        SMTP/panel passwords, API tokens, etc.
+        """
+        if key in cls.PLAIN_TEXT_KEYS:
+            return False
+        return any(keyword in key.upper() for keyword in ('TOKEN', 'SECRET', 'PASSWORD', 'KEY'))
+
+    @classmethod
+    def is_masked_secret(cls, key: str, value: Any) -> bool:
+        """True if (key, value) is a secret string whose value must be masked.
+
+        Only *string* values are masked: the name heuristic matches some non-secret numeric
+        settings (e.g. CABINET_ACCESS_TOKEN_EXPIRE_MINUTES, WATA_PUBLIC_KEY_CACHE_SECONDS) that
+        must stay visible and editable, so gate on the value actually being a non-empty str.
+        """
+        return cls.is_secret_key(key) and isinstance(value, str) and value != ''
+
+    @classmethod
+    def mask_secret_value(cls, key: str, value: Any) -> Any:
+        """Return ``SECRET_MASK`` for a set secret string value, otherwise the value unchanged."""
+        if cls.is_masked_secret(key, value):
+            return cls.SECRET_MASK
+        return value
+
     CATEGORY_TITLES: dict[str, str] = {
         'CORE': '🤖 Основные настройки',
         'SUPPORT': '💬 Поддержка и тикеты',
@@ -1287,6 +1321,13 @@ class BotConfigurationService:
         if cls._is_env_override(key):
             return False
         return key in cls._overrides_raw
+
+    @classmethod
+    def is_env_locked(cls, key: str) -> bool:
+        """True if the key is pinned in the environment (.env), so its value
+        shadows the DB and cannot be changed from the cabinet. Edits to such a
+        key would be silently discarded — callers must surface this instead."""
+        return cls._is_env_override(key)
 
     @classmethod
     def get_current_value(cls, key: str) -> Any:

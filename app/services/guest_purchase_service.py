@@ -40,6 +40,15 @@ from app.services.subscription_service import SubscriptionService
 
 logger = structlog.get_logger(__name__)
 
+# GuestPurchase.token is a unique 64-char value. A gift deep-link (``GIFT_<token>`` /
+# ``giftclaim_<token>``) overflows Telegram's 64-char start_param limit, so Telegram
+# truncates the token by the prefix length — the surviving prefix is still >= 54 chars.
+# Prefix-based lookups must therefore require a long minimum length: matching on a short
+# prefix (the old 8-char floor) let an attacker enumerate and claim arbitrary unclaimed
+# gifts. 48 base64url chars (~288 bits) is unguessable yet accepts every legitimate
+# truncation.
+GIFT_TOKEN_MIN_PREFIX_LENGTH = 48
+
 _TELEGRAM_USERNAME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
 

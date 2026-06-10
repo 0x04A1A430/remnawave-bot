@@ -513,18 +513,39 @@ async def check_tribute_payment_duplicate(
 
 async def create_unique_tribute_transaction(
     db: AsyncSession, user_id: int, payment_id: str, amount_kopeks: int, description: str
-) -> Transaction:
+) -> tuple[Transaction, bool]:
+    """Create a Tribute deposit transaction idempotently.
+
+    Returns ``(transaction, created)``. When ``created`` is False the payment was
+    already processed (a replayed webhook) and the caller MUST NOT credit the balance
+    again.
+    """
     external_id = f'donation_{payment_id}'
 
     existing = await get_transaction_by_external_id(db, external_id, PaymentMethod.TRIBUTE)
 
     if existing:
+        # Synthesized fallback ids (``tribute_<tg>_<amount>``) are NOT unique per payment,
+        # so a user legitimately repeating a same-amount donation must still be credited —
+        # keep the disambiguating suffix for those only. A real Tribute event id is unique,
+        # so a collision there means a replayed webhook: stay idempotent and do not
+        # double-credit. (The previous unconditional timestamped suffix defeated the
+        # uq_transaction_external_id_method constraint and credited again on every replay
+        # delivered after the 24h dedup window.)
+        if not str(payment_id).startswith('tribute_'):
+            logger.info(
+                'Tribute: повторный webhook с тем же payment_id — идемпотентно, начисление пропускаем',
+                external_id=external_id,
+                transaction_id=existing.id,
+            )
+            return existing, False
+
         timestamp = int(datetime.now(UTC).timestamp())
         external_id = f'donation_{payment_id}_{amount_kopeks}_{timestamp}'
 
-        logger.info('Создан уникальный external_id для избежания дубликатов', external_id=external_id)
+        logger.info('Создан уникальный external_id для fallback payment_id', external_id=external_id)
 
-    return await create_transaction(
+    transaction = await create_transaction(
         db=db,
         user_id=user_id,
         type=TransactionType.DEPOSIT,
@@ -534,3 +555,4 @@ async def create_unique_tribute_transaction(
         external_id=external_id,
         is_completed=True,
     )
+    return transaction, True

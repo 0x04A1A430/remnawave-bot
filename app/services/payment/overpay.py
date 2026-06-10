@@ -237,6 +237,32 @@ class OverpayPaymentMixin:
 
             # Финализируем платеж если оплачен — без промежуточного commit
             if is_paid:
+                # Defense in depth: the Overpay webhook is authenticated only by mTLS at the
+                # reverse proxy, which the application itself cannot verify. Before crediting,
+                # cross-check the authoritative status with Overpay over the mTLS API client so a
+                # forged "paid" callback for a still-unpaid invoice is rejected. Fail OPEN (trust
+                # the webhook) on API errors so a transient Overpay outage never blocks a
+                # genuinely-paid callback — same posture as the YooKassa cross-check.
+                try:
+                    remote = await overpay_service.get_payment(payment.order_id)
+                    remote_status = (remote or {}).get('status')
+                    if remote_status is not None:
+                        _, remote_paid = OVERPAY_STATUS_MAP.get(remote_status, ('pending', False))
+                        if not remote_paid:
+                            logger.warning(
+                                'Overpay webhook: API не подтвердил оплату — начисление отклонено',
+                                order_id=payment.order_id,
+                                webhook_status=overpay_status,
+                                api_status=remote_status,
+                            )
+                            return False
+                except Exception as cross_check_error:
+                    logger.warning(
+                        'Overpay webhook: не удалось перепроверить статус через API — доверяем вебхуку',
+                        order_id=payment.order_id,
+                        error=cross_check_error,
+                    )
+
                 # Inline field assignments to keep FOR UPDATE lock intact
                 payment.status = internal_status
                 payment.is_paid = True

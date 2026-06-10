@@ -1565,6 +1565,32 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def _apply_payment_name_overrides(keyboard: list[list[InlineKeyboardButton]]) -> None:
+    """Replace payment-method button labels with cabinet-set display names.
+
+    Bot keyboards build labels from locale strings / ``*_DISPLAY_NAME`` settings,
+    which ignore the per-method overrides operators set in the cabinet
+    (``PaymentMethodConfig.display_name``). Here we decode the method_id from each
+    ``topup_*`` callback and, when an override exists, show it — so bot button
+    labels stay in sync with the cabinet. No override -> the original label is kept.
+    """
+    from app.services.payment_method_config_service import get_display_name_override
+
+    for row in keyboard:
+        for idx, button in enumerate(row):
+            data = button.callback_data or ''
+            if data.startswith('topup_amount|'):
+                parts = data.split('|')
+                method = parts[1] if len(parts) > 1 else ''
+            elif data.startswith('topup_'):
+                method = data[len('topup_') :]
+            else:
+                continue
+            override = get_display_name_override(method) if method else None
+            if override:
+                row[idx] = button.model_copy(update={'text': override})
+
+
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -2141,6 +2167,8 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+
+    _apply_payment_name_overrides(keyboard)
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

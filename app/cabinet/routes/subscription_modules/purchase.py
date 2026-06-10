@@ -661,6 +661,18 @@ async def purchase_tariff(
         traffic_limit_gb = tariff.traffic_limit_gb
         custom_traffic_gb = None
         if request.traffic_gb is not None and tariff.can_purchase_custom_traffic():
+            # Validate against the tariff's allowed custom-traffic range. Without this an
+            # out-of-range value makes get_price_for_custom_traffic() return None, which the
+            # pricing engine treats as 0 — provisioning free (even unlimited) traffic. The
+            # bot-side flow clamps the same input (tariff_purchase.py); mirror that here.
+            if request.traffic_gb < tariff.min_traffic_gb or request.traffic_gb > tariff.max_traffic_gb:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f'Traffic must be between {tariff.min_traffic_gb} and '
+                        f'{tariff.max_traffic_gb} GB for this tariff'
+                    ),
+                )
             custom_traffic_gb = request.traffic_gb
             traffic_limit_gb = request.traffic_gb
 
