@@ -21,6 +21,7 @@ from . import (
     promo_offers,
     promocodes,
     public_offer,
+    quick_amounts,
     referrals,
     remnawave,
     reports,
