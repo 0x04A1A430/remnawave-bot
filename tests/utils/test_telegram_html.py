@@ -1,3 +1,5 @@
+import re
+
 from app.utils.telegram_html import (
     html_to_telegram,
     info_page_faq_to_telegram,
@@ -44,6 +46,23 @@ def test_heading_becomes_bold_block():
 def test_link_kept_only_with_http_href():
     assert html_to_telegram('<a href="https://example.com">x</a>') == '<a href="https://example.com">x</a>'
     assert html_to_telegram('<a href="javascript:alert(1)">x</a>') == 'x'
+
+
+def test_oversized_href_drops_anchor_but_keeps_text():
+    href = 'https://example.com/?token=' + 'x' * 5000
+    body = 'word ' * 1500
+    rendered = html_to_telegram(f'<p>{body}</p><p>see <a href="{href}">{body}</a> end</p>')
+    assert '<a' not in rendered
+    assert 'see' in rendered and 'end' in rendered
+    chunks = split_telegram_text(rendered)
+    assert chunks
+    for chunk in chunks:
+        assert len(chunk) <= 4096
+        assert not re.search(r'<[^>]*$', chunk)
+
+
+def test_misnested_skip_closers_recover():
+    assert html_to_telegram('<svg><script></svg></script><p>after</p>') == 'after'
 
 
 def test_text_entities_are_escaped():
@@ -95,6 +114,21 @@ def test_split_never_exceeds_telegram_hard_limit():
     text = '<b>' + 'a' * 12000 + '</b>'
     chunks = split_telegram_text(text, max_length=3500)
     assert all(len(chunk) <= 4096 for chunk in chunks)
+
+
+def test_split_link_text_spanning_chunks_stays_within_hard_limit():
+    href = 'https://example.com/' + 'y' * 620
+    text = f'<a href="{href}">' + 'b' * 8000 + '</a>'
+    chunks = split_telegram_text(text, max_length=3500)
+    assert all(len(chunk) <= 4096 for chunk in chunks)
+    assert all(chunk.count('<a ') == chunk.count('</a>') for chunk in chunks)
+
+
+def test_hard_split_backs_off_incomplete_entity():
+    text = 'x' * 97 + '&amp;' + 'y' * 200
+    chunks = split_telegram_text(text, max_length=100)
+    assert chunks[0] == 'x' * 97
+    assert chunks[1].startswith('&amp;')
 
 
 def test_faq_content_rendered_as_question_blocks():

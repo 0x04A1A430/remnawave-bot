@@ -18,8 +18,16 @@ _SAFE_HREF_RE = re.compile(r'^https?://', re.IGNORECASE)
 
 _TAG_RE = re.compile(r'<(/?)(\w[\w-]*)(?:\s+[^>]*)?>')
 
+_INCOMPLETE_ENTITY_RE = re.compile(r'&[#\w]{0,9}$')
+
+_MAX_HREF_LENGTH = 1024
+
+_TELEGRAM_HARD_LIMIT = 4096
+
 
 class _TelegramHtmlRenderer(HTMLParser):
+    CDATA_CONTENT_ELEMENTS = ()
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self._parts: list[str] = []
@@ -75,8 +83,10 @@ class _TelegramHtmlRenderer(HTMLParser):
         if tag == 'a':
             href = next((value for name, value in attrs if name == 'href'), None)
             if href and _SAFE_HREF_RE.match(href.strip()):
-                self._parts.append(f'<a href="{html_module.escape(href.strip(), quote=True)}">')
-                self._open_tags.append('a')
+                escaped = html_module.escape(href.strip(), quote=True)
+                if len(escaped) <= _MAX_HREF_LENGTH:
+                    self._parts.append(f'<a href="{escaped}">')
+                    self._open_tags.append('a')
             return
         if tag in TELEGRAM_ALLOWED_TAGS:
             self._parts.append(f'<{tag}>')
@@ -85,8 +95,9 @@ class _TelegramHtmlRenderer(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
         if self._skip_stack:
-            if tag == self._skip_stack[-1]:
-                self._skip_stack.pop()
+            if tag in self._skip_stack:
+                while self._skip_stack and self._skip_stack.pop() != tag:
+                    pass
             return
         if tag in {'ul', 'ol'}:
             if self._list_stack:
@@ -179,7 +190,10 @@ def _trim_broken_tag(chunk: str) -> str:
     last_open = chunk.rfind('<')
     last_close = chunk.rfind('>')
     if last_open > last_close:
-        return chunk[:last_open]
+        chunk = chunk[:last_open]
+    match = _INCOMPLETE_ENTITY_RE.search(chunk)
+    if match:
+        chunk = chunk[: match.start()]
     return chunk
 
 
@@ -218,4 +232,14 @@ def split_telegram_text(text: str | None, *, max_length: int = 3500) -> list[str
     if current:
         raw_chunks.append(current)
 
-    return _balance_chunks(raw_chunks)
+    safe: list[str] = []
+    for chunk in _balance_chunks(raw_chunks):
+        if len(chunk) <= _TELEGRAM_HARD_LIMIT:
+            safe.append(chunk)
+        elif max_length > 1000:
+            safe.extend(split_telegram_text(chunk, max_length=max_length - 500))
+        else:
+            safe.extend(
+                chunk[index : index + _TELEGRAM_HARD_LIMIT] for index in range(0, len(chunk), _TELEGRAM_HARD_LIMIT)
+            )
+    return safe
