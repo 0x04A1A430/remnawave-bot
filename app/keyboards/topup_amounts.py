@@ -81,7 +81,7 @@ async def get_topup_amount_keyboard(
             async with AsyncSessionLocal() as session:
                 amounts = await _load_quick_amounts(session, method)
     except Exception as error:
-        logger.warning('Не удалось загрузить быстрые суммы пополнения', method=method, error=error)
+        logger.warning('Не удалось загрузить быстрые суммы пополнения', method=method, error=error, exc_info=True)
 
     texts = get_texts(language)
     keyboard: list[list[InlineKeyboardButton]] = []

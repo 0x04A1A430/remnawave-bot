@@ -59,6 +59,24 @@ async def test_keyboard_builds_amount_buttons_within_limits(monkeypatch: pytest.
     assert keyboard.inline_keyboard[0][0].text == '300 ₽'
 
 
+async def test_keyboard_chunks_amounts_two_per_row(monkeypatch: pytest.MonkeyPatch):
+    config = SimpleNamespace(
+        quick_amounts=[10000, 30000, 50000],
+        min_amount_kopeks=10000,
+        max_amount_kopeks=10000000,
+    )
+
+    async def fake_get_config(db, method_id):
+        return config
+
+    monkeypatch.setattr(topup_amounts, 'get_config_by_method_id', fake_get_config)
+
+    keyboard = await get_topup_amount_keyboard('cryptobot', db=object())
+
+    assert [len(row) for row in keyboard.inline_keyboard] == [2, 1, 1]
+    assert keyboard.inline_keyboard[-1][0].callback_data == 'menu_balance'
+
+
 async def test_keyboard_falls_back_to_back_only_on_db_error(monkeypatch: pytest.MonkeyPatch):
     async def failing_get_config(db, method_id):
         raise RuntimeError('db is down')
