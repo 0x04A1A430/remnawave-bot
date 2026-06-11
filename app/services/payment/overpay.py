@@ -24,7 +24,6 @@ OVERPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'prepared': ('processing', False),
     'prepared_for_holder_metadata_collecting': ('processing', False),
     'processing': ('processing', False),
-    'refund_in_progress': ('processing', False),
     'declined': ('declined', False),
     'rejected': ('rejected', False),
     'error': ('error', False),

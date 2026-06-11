@@ -83,7 +83,7 @@ async def test_create_payment_s2s_payload_contract(service: tuple[OverpayService
         currency='RUB',
         project_id='sbp-terminal',
         merchant_transaction_id='tx-9',
-        client_email='user_555@telegram.bot',
+        client_email='user@example.com',
         return_url='https://t.me/testbot',
     )
 
@@ -98,9 +98,25 @@ async def test_create_payment_s2s_payload_contract(service: tuple[OverpayService
         'projectId': 'sbp-terminal',
         'merchantTransactionId': 'tx-9',
         'location': {'ip': '203.0.113.10'},
-        'client': {'email': 'user_555@telegram.bot'},
+        'client': {'email': 'user@example.com'},
         'options': {'returnUrl': 'https://t.me/testbot'},
     }
+
+
+@pytest.mark.asyncio
+async def test_create_payment_s2s_omits_client_without_email(service: tuple[OverpayService, FakeClient]) -> None:
+    svc, fake = service
+    fake.post_responses = [FakeResponse(201, {'id': 'order-11', 'status': 'pending'})]
+
+    await svc.create_payment_s2s(
+        amount='150.00',
+        currency='RUB',
+        project_id='sbp-terminal',
+        merchant_transaction_id='tx-11',
+        return_url='https://t.me/testbot',
+    )
+
+    assert 'client' not in fake.post_calls[0]['json']
 
 
 @pytest.mark.asyncio
@@ -170,9 +186,9 @@ async def test_wait_for_redirect_link_stops_on_declined(service: tuple[OverpaySe
 @pytest.mark.asyncio
 async def test_wait_for_redirect_link_gives_up_after_attempts(service: tuple[OverpayService, FakeClient]) -> None:
     svc, fake = service
-    fake.get_responses = [FakeResponse(200, {'orders': [{'status': 'pending'}]}) for _ in range(10)]
+    fake.get_responses = [FakeResponse(200, {'orders': [{'status': 'processing'}]}) for _ in range(4)]
 
     link = await svc.wait_for_redirect_link('order-3', delay=0)
 
     assert link is None
-    assert len(fake.get_calls) == 10
+    assert len(fake.get_calls) == 4

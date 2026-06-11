@@ -355,8 +355,33 @@ async def test_guest_payment_forwards_int_option(
 
 
 def test_status_map_extended() -> None:
-    for status in ('charged', 'approved', 'settled', 'completed', 'success', 'successful'):
-        assert OVERPAY_STATUS_MAP[status] == ('success', True)
-    for status in ('expired', 'cancelled', 'failed', 'declined', 'rejected', 'error'):
-        internal, is_paid = OVERPAY_STATUS_MAP[status]
+    assert OVERPAY_STATUS_MAP['charged'] == ('success', True)
+    assert OVERPAY_STATUS_MAP['authorized'] == ('authorized', False)
+    for status in (
+        'preflight',
+        'new',
+        'prepared',
+        'prepared_for_holder_metadata_collecting',
+        'processing',
+        'declined',
+        'rejected',
+        'error',
+        'reversed',
+        'refunded',
+        'chargeback',
+        'representment',
+        'credited',
+    ):
+        _, is_paid = OVERPAY_STATUS_MAP[status]
         assert is_paid is False
+    for status in (
+        'approved',
+        'settled',
+        'completed',
+        'success',
+        'successful',
+        'expired',
+        'cancelled',
+        'failed',
+    ):
+        assert status not in OVERPAY_STATUS_MAP
