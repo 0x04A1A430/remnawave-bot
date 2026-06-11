@@ -344,9 +344,7 @@ def normalize_quick_amounts(values: list | None) -> list[int] | None:
         if value <= 0:
             raise ValueError('quick_amounts items must be positive')
         if value > MAX_QUICK_AMOUNT_KOPEKS:
-            raise ValueError(
-                f'quick_amounts items must not exceed {MAX_QUICK_AMOUNT_KOPEKS // 100} rub'
-            )
+            raise ValueError(f'quick_amounts items must not exceed {MAX_QUICK_AMOUNT_KOPEKS // 100} rub')
         unique.add(value)
     if len(unique) > MAX_QUICK_AMOUNTS:
         raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')
