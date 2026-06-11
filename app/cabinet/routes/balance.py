@@ -866,7 +866,10 @@ async def create_topup(
             payment_service = PaymentService()
             option = (request.payment_option or '').strip().lower() or None
             if option is not None and option not in ('fps', 'card', 'int'):
-                option = None
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail='Invalid Overpay payment_option',
+                )
             result = await payment_service.create_overpay_payment(
                 db=db,
                 user_id=user.id,

@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User
 from app.services.payment_method_config_service import (
     DEFAULT_QUICK_AMOUNTS,
-    MAX_QUICK_AMOUNTS,
     _get_method_defaults,
     get_all_configs,
     get_all_promo_groups,
     get_config_by_method_id,
+    normalize_quick_amounts,
     update_config,
     update_sort_order,
 )
@@ -88,14 +88,7 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
     @field_validator('quick_amounts')
     @classmethod
     def validate_quick_amounts(cls, v: list[int] | None) -> list[int] | None:
-        if v is None:
-            return None
-        if len(v) > MAX_QUICK_AMOUNTS:
-            raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')
-        for amount in v:
-            if amount <= 0:
-                raise ValueError('quick_amounts items must be positive')
-        return v
+        return normalize_quick_amounts(v)
 
     first_topup_filter: str | None = Field(default=None, pattern='^(any|yes|no)$')
     promo_group_filter_mode: str | None = Field(default=None, pattern='^(all|selected)$')

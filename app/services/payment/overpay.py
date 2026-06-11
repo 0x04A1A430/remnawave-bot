@@ -18,28 +18,21 @@ from app.utils.user_utils import format_referrer_info
 
 OVERPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'charged': ('success', True),
-    'approved': ('success', True),
-    'settled': ('success', True),
-    'completed': ('success', True),
-    'success': ('success', True),
-    'successful': ('success', True),
     'authorized': ('authorized', False),
     'preflight': ('pending', False),
     'new': ('pending', False),
-    'created': ('pending', False),
-    'initialized': ('pending', False),
-    'pending': ('pending', False),
-    'processing': ('processing', False),
     'prepared': ('processing', False),
-    'rejected': ('rejected', False),
+    'prepared_for_holder_metadata_collecting': ('processing', False),
+    'processing': ('processing', False),
+    'refund_in_progress': ('processing', False),
     'declined': ('declined', False),
-    'expired': ('expired', False),
-    'cancelled': ('cancelled', False),
-    'failed': ('failed', False),
+    'rejected': ('rejected', False),
+    'error': ('error', False),
     'reversed': ('reversed', False),
     'refunded': ('refunded', False),
     'chargeback': ('chargeback', False),
-    'error': ('error', False),
+    'representment': ('chargeback', False),
+    'credited': ('credited', False),
 }
 
 OVERPAY_OPTIONS = ('fps', 'card', 'int')
@@ -155,7 +148,7 @@ class OverpayPaymentMixin:
                         currency=currency,
                         project_id=project_id,
                         merchant_transaction_id=order_id,
-                        client_email=email or f'user_{tg_id}@telegram.bot',
+                        client_email=email or None,
                         return_url=effective_return_url,
                     )
                 except Exception as e:
@@ -316,6 +309,10 @@ class OverpayPaymentMixin:
                 try:
                     remote = await overpay_service.get_payment(payment.order_id)
                     remote_status = (remote or {}).get('status')
+                    if remote_status is None:
+                        orders = (remote or {}).get('orders') or []
+                        if orders:
+                            remote_status = orders[0].get('status')
                     if remote_status is not None:
                         _, remote_paid = OVERPAY_STATUS_MAP.get(remote_status, ('pending', False))
                         if not remote_paid:

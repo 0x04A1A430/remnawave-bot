@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from app.database.database import AsyncSessionLocal
 from app.services.payment_method_config_service import (
     DEFAULT_QUICK_AMOUNTS,
+    MAX_QUICK_AMOUNT_KOPEKS,
     MAX_QUICK_AMOUNTS,
     _get_method_defaults,
     get_all_configs,
@@ -159,14 +160,15 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
             if not cleaned:
                 continue
             kopeks = round(float(cleaned) * 100)
-            if kopeks <= 0:
+            if kopeks <= 0 or kopeks > MAX_QUICK_AMOUNT_KOPEKS:
                 raise ValueError(cleaned)
             amounts_kopeks.append(kopeks)
         if not amounts_kopeks or len(amounts_kopeks) > MAX_QUICK_AMOUNTS:
             raise ValueError(message.text)
     except (ValueError, OverflowError):
         await message.answer(
-            f'❌ Неверный формат. Отправьте до {MAX_QUICK_AMOUNTS} положительных сумм в рублях через запятую, '
+            f'❌ Неверный формат. Отправьте до {MAX_QUICK_AMOUNTS} положительных сумм в рублях через запятую '
+            f'(не более {MAX_QUICK_AMOUNT_KOPEKS // 100} ₽ каждая), '
             'например: <code>100, 300, 500, 1000</code>'
         )
         return

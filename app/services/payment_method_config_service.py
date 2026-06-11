@@ -329,6 +329,7 @@ DEFAULT_METHOD_ORDER = [
 
 DEFAULT_QUICK_AMOUNTS = [10000, 30000, 50000, 100000]
 MAX_QUICK_AMOUNTS = 10
+MAX_QUICK_AMOUNT_KOPEKS = 100_000_000
 
 
 def normalize_quick_amounts(values: list | None) -> list[int] | None:
@@ -342,6 +343,10 @@ def normalize_quick_amounts(values: list | None) -> list[int] | None:
             raise ValueError('quick_amounts items must be integers')
         if value <= 0:
             raise ValueError('quick_amounts items must be positive')
+        if value > MAX_QUICK_AMOUNT_KOPEKS:
+            raise ValueError(
+                f'quick_amounts items must not exceed {MAX_QUICK_AMOUNT_KOPEKS // 100} rub'
+            )
         unique.add(value)
     if len(unique) > MAX_QUICK_AMOUNTS:
         raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')

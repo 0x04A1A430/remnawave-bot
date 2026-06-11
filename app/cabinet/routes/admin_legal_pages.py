@@ -69,7 +69,9 @@ def _display_mode_env_locked(page_key: str) -> bool:
     return bot_configuration_service.is_env_overridden(_DISPLAY_MODE_KEYS[page_key])
 
 
-async def _set_display_mode(db: AsyncSession, page_key: str, value: str) -> None:
+def _check_display_mode_writable(page_key: str, value: str | None) -> None:
+    if not value:
+        return
     key = _DISPLAY_MODE_KEYS[page_key]
     normalized = normalize_display_mode(value)
     current = normalize_display_mode(getattr(settings, key, None))
@@ -78,6 +80,12 @@ async def _set_display_mode(db: AsyncSession, page_key: str, value: str) -> None
             status_code=status.HTTP_409_CONFLICT,
             detail='display_mode is locked by environment variable',
         )
+
+
+async def _set_display_mode(db: AsyncSession, page_key: str, value: str) -> None:
+    key = _DISPLAY_MODE_KEYS[page_key]
+    normalized = normalize_display_mode(value)
+    _check_display_mode_writable(page_key, value)
     await bot_configuration_service.set_value(db, key, normalized)
     await db.commit()
 
@@ -275,6 +283,7 @@ async def update_privacy_policy_admin(
 ) -> LegalDocumentResponse:
     items = request.items or []
     languages = [_require_language(item.language) for item in items]
+    _check_display_mode_writable('privacy-policy', request.display_mode)
     for lang, item in zip(languages, items, strict=True):
         try:
             await upsert_privacy_policy(db, lang, item.content, is_enabled=item.is_enabled)
@@ -305,6 +314,7 @@ async def update_public_offer_admin(
 ) -> LegalDocumentResponse:
     items = request.items or []
     languages = [_require_language(item.language) for item in items]
+    _check_display_mode_writable('public-offer', request.display_mode)
     for lang, item in zip(languages, items, strict=True):
         try:
             await upsert_public_offer(db, lang, item.content, is_enabled=item.is_enabled)
@@ -335,6 +345,7 @@ async def update_rules_admin(
 ) -> RulesResponse:
     items = request.items or []
     languages = [_require_language(item.language) for item in items]
+    _check_display_mode_writable('rules', request.display_mode)
     for lang, item in zip(languages, items, strict=True):
         if item.content.strip():
             await create_or_update_rules(db, item.content, lang)
@@ -362,6 +373,7 @@ async def update_faq_admin(
 ) -> FaqResponse:
     items = request.settings or []
     languages = [_require_language(item.language) for item in items]
+    _check_display_mode_writable('faq', request.display_mode)
     for lang, item in zip(languages, items, strict=True):
         try:
             await set_faq_enabled(db, lang, item.is_enabled)

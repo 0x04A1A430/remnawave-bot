@@ -231,14 +231,14 @@ class OverpayService:
         currency: str = 'RUB',
         project_id: str,
         merchant_transaction_id: str,
-        client_email: str,
+        client_email: str | None = None,
         return_url: str,
         payment_method: str = 'fps',
     ) -> dict[str, Any]:
         if not settings.OVERPAY_SERVER_IP:
             raise OverpayAPIError(0, 'OVERPAY_SERVER_IP is not configured')
 
-        payload = {
+        payload: dict[str, Any] = {
             'paymentMethod': payment_method,
             'type': 'PURCHASE',
             'amount': amount,
@@ -246,9 +246,10 @@ class OverpayService:
             'projectId': project_id,
             'merchantTransactionId': merchant_transaction_id,
             'location': {'ip': settings.OVERPAY_SERVER_IP},
-            'client': {'email': client_email},
             'options': {'returnUrl': return_url},
         }
+        if client_email:
+            payload['client'] = {'email': client_email}
 
         logger.info(
             'Overpay API create_payment_s2s',
@@ -292,8 +293,8 @@ class OverpayService:
         self,
         order_id: str,
         *,
-        attempts: int = 10,
-        delay: float = 0.5,
+        attempts: int = 4,
+        delay: float = 0.3,
     ) -> str | None:
         last_status = None
         for attempt in range(attempts):
@@ -314,7 +315,7 @@ class OverpayService:
                         redirect_link = interaction.get('redirectLink')
                         if redirect_link:
                             return redirect_link
-                        if last_status in ('error', 'declined', 'rejected', 'failed'):
+                        if last_status in ('error', 'declined', 'rejected'):
                             break
                 else:
                     logger.warning(
