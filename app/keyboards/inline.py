@@ -810,6 +810,8 @@ def get_info_menu_keyboard(
     show_public_offer: bool = False,
     show_faq: bool = False,
     show_promo_groups: bool = False,
+    show_rules: bool = True,
+    custom_pages: list[tuple[int, str]] | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -855,7 +857,18 @@ def get_info_menu_keyboard(
             ]
         )
 
-    buttons.append([InlineKeyboardButton(text=texts.MENU_RULES, callback_data='menu_rules')])
+    if show_rules:
+        buttons.append([InlineKeyboardButton(text=texts.MENU_RULES, callback_data='menu_rules')])
+
+    for page_id, page_title in custom_pages or []:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=page_title,
+                    callback_data=f'info_page:{page_id}:1',
+                )
+            ]
+        )
 
     server_status_mode = settings.get_server_status_mode()
     server_status_text = texts.t('MENU_SERVER_STATUS', '📊 Статус серверов')

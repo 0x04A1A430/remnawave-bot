@@ -212,6 +212,7 @@ async def get_payment_methods(
                 max_amount_kopeks=method_data['max_amount_kopeks'],
                 is_available=True,
                 options=options,
+                quick_amounts=method_data.get('quick_amounts') or [],
                 open_url_direct=bool(method_data.get('open_url_direct', False)),
             )
         )
@@ -863,6 +864,12 @@ async def create_topup(
                 )
 
             payment_service = PaymentService()
+            option = (request.payment_option or '').strip().lower() or None
+            if option is not None and option not in ('fps', 'card', 'int'):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail='Invalid Overpay payment_option',
+                )
             result = await payment_service.create_overpay_payment(
                 db=db,
                 user_id=user.id,
@@ -873,6 +880,7 @@ async def create_topup(
                 email=getattr(user, 'email', None),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
+                option=option,
             )
 
             if result and result.get('payment_url'):

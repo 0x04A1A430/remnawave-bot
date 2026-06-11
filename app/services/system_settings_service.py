@@ -191,6 +191,7 @@ class BotConfigurationService:
         'DEBUG': '🧪 Режим разработки',
         'MODERATION': '🛡️ Модерация и фильтры',
         'BAN_NOTIFICATIONS': '🚫 Тексты уведомлений о блокировках',
+        'INFO_PAGES': '📄 Инфо-страницы',
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -262,6 +263,7 @@ class BotConfigurationService:
         'DEBUG': 'Отладочные функции и безопасный режим.',
         'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
         'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
+        'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
     }
 
     @staticmethod
@@ -402,6 +404,10 @@ class BotConfigurationService:
         # (expires_at, new_expires_at). Lives in the TIMEZONE
         # category so operators find it next to TIMEZONE itself.
         'EMAIL_DATE_FORMAT': 'TIMEZONE',
+        'PRIVACY_POLICY_DISPLAY_MODE': 'INFO_PAGES',
+        'PUBLIC_OFFER_DISPLAY_MODE': 'INFO_PAGES',
+        'SERVICE_RULES_DISPLAY_MODE': 'INFO_PAGES',
+        'FAQ_DISPLAY_MODE': 'INFO_PAGES',
     }
 
     CATEGORY_PREFIX_OVERRIDES: dict[str, str] = {
@@ -582,6 +588,26 @@ class BotConfigurationService:
             ChoiceOption('large', '🔵 Large'),
             ChoiceOption('medium', '🟡 Medium'),
             ChoiceOption('small', '🟢 Small'),
+        ],
+        'PRIVACY_POLICY_DISPLAY_MODE': [
+            ChoiceOption('bot', '🤖 Только бот'),
+            ChoiceOption('web', '🌐 Только веб'),
+            ChoiceOption('both', '🔁 Бот и веб'),
+        ],
+        'PUBLIC_OFFER_DISPLAY_MODE': [
+            ChoiceOption('bot', '🤖 Только бот'),
+            ChoiceOption('web', '🌐 Только веб'),
+            ChoiceOption('both', '🔁 Бот и веб'),
+        ],
+        'SERVICE_RULES_DISPLAY_MODE': [
+            ChoiceOption('bot', '🤖 Только бот'),
+            ChoiceOption('web', '🌐 Только веб'),
+            ChoiceOption('both', '🔁 Бот и веб'),
+        ],
+        'FAQ_DISPLAY_MODE': [
+            ChoiceOption('bot', '🤖 Только бот'),
+            ChoiceOption('web', '🌐 Только веб'),
+            ChoiceOption('both', '🔁 Бот и веб'),
         ],
     }
 
@@ -1088,6 +1114,10 @@ class BotConfigurationService:
     @classmethod
     def _is_env_override(cls, key: str) -> bool:
         return key in cls._env_override_keys
+
+    @classmethod
+    def is_env_overridden(cls, key: str) -> bool:
+        return cls._is_env_override(key)
 
     @classmethod
     def _format_numeric_with_unit(cls, key: str, value: float) -> str | None:

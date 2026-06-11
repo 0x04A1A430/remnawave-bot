@@ -31,7 +31,9 @@ async def test_send_promo_notifications_works_off_plain_ids(monkeypatch):
     monkeypatch.setattr(m, '_get_bot', lambda: bot)
     # Isolate the fan-out from the keyboard helper (which needs miniapp config).
     monkeypatch.setattr(
-        m, 'build_miniapp_or_callback_button', lambda text, callback_data: InlineKeyboardButton(text=text, callback_data=callback_data)
+        m,
+        'build_miniapp_or_callback_button',
+        lambda text, callback_data: InlineKeyboardButton(text=text, callback_data=callback_data),
     )
 
     sent, failed = await m._send_promo_notifications(

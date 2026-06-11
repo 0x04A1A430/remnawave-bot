@@ -3787,6 +3787,8 @@ class PaymentMethodConfig(Base):
     # Для методов с вариантами: yookassa, pal24, platega
     sub_options = Column(JSON, nullable=True, default=None)
 
+    quick_amounts = Column(JSON, nullable=True, default=None)
+
     # Переопределение мин/макс сумм (null = из env)
     min_amount_kopeks = Column(Integer, nullable=True)
     max_amount_kopeks = Column(Integer, nullable=True)
@@ -4213,6 +4215,7 @@ class InfoPage(Base):
     sort_order = Column(Integer, nullable=False, default=0, server_default='0')
     icon = Column(String(50), nullable=True)
     replaces_tab = Column(String(20), nullable=True)  # 'faq', 'rules', 'privacy', 'offer', or null
+    display_mode = Column(String(10), nullable=False, default='both', server_default='both')
     created_at = Column(AwareDateTime(), server_default=func.now())
     updated_at = Column(AwareDateTime(), server_default=func.now(), onupdate=func.now())
 

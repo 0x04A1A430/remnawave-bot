@@ -200,10 +200,7 @@ def _get_method_defaults() -> dict:
             'is_configured': settings.is_overpay_enabled(),
             'default_min': settings.OVERPAY_MIN_AMOUNT_KOPEKS,
             'default_max': settings.OVERPAY_MAX_AMOUNT_KOPEKS,
-            'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'fps', 'name': 'СБП'},
-            ],
+            'available_sub_options': _get_overpay_sub_options(),
         },
         'aurapay': {
             'default_display_name': settings.get_aurapay_display_name(),
@@ -290,6 +287,16 @@ def _get_platega_sub_options() -> list[dict] | None:
         return None
 
 
+def _get_overpay_sub_options() -> list[dict]:
+    options = [
+        {'id': 'card', 'name': 'Карта'},
+        {'id': 'fps', 'name': 'СБП'},
+    ]
+    if settings.is_overpay_int_enabled():
+        options.append({'id': 'int', 'name': 'Международная карта (EUR)'})
+    return options
+
+
 # Default order of methods
 DEFAULT_METHOD_ORDER = [
     'telegram_stars',
@@ -318,6 +325,41 @@ DEFAULT_METHOD_ORDER = [
     'donut',
     'lava',
 ]
+
+
+DEFAULT_QUICK_AMOUNTS = [10000, 30000, 50000, 100000]
+MAX_QUICK_AMOUNTS = 10
+MAX_QUICK_AMOUNT_KOPEKS = 100_000_000
+
+
+def normalize_quick_amounts(values: list | None) -> list[int] | None:
+    if values is None:
+        return None
+    if not isinstance(values, list):
+        raise ValueError('quick_amounts must be a list')
+    unique: set[int] = set()
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError('quick_amounts items must be integers')
+        if value <= 0:
+            raise ValueError('quick_amounts items must be positive')
+        if value > MAX_QUICK_AMOUNT_KOPEKS:
+            raise ValueError(f'quick_amounts items must not exceed {MAX_QUICK_AMOUNT_KOPEKS // 100} rub')
+        unique.add(value)
+    if len(unique) > MAX_QUICK_AMOUNTS:
+        raise ValueError(f'quick_amounts cannot have more than {MAX_QUICK_AMOUNTS} items')
+    if not unique:
+        return None
+    return sorted(unique)
+
+
+def get_effective_quick_amounts(
+    quick_amounts: list[int] | None,
+    min_amount_kopeks: int,
+    max_amount_kopeks: int,
+) -> list[int]:
+    source = quick_amounts or DEFAULT_QUICK_AMOUNTS
+    return [amount for amount in source if min_amount_kopeks <= amount <= max_amount_kopeks]
 
 
 # ============ Initialization ============
@@ -438,11 +480,15 @@ async def update_config(
     if not config:
         return None
 
+    if 'quick_amounts' in data:
+        data = {**data, 'quick_amounts': normalize_quick_amounts(data['quick_amounts'])}
+
     # Update scalar fields
     updatable_fields = (
         'is_enabled',
         'display_name',
         'sub_options',
+        'quick_amounts',
         'min_amount_kopeks',
         'max_amount_kopeks',
         'user_type_filter',
@@ -591,6 +637,7 @@ async def get_enabled_methods_for_user(
                 'min_amount_kopeks': min_amount,
                 'max_amount_kopeks': max_amount,
                 'options': options,
+                'quick_amounts': get_effective_quick_amounts(config.quick_amounts, min_amount, max_amount),
                 'sort_order': config.sort_order,
                 # Если True — кабинет, получив payment_url, делает
                 # window.location.href сразу вместо показа панели с ссылкой.
