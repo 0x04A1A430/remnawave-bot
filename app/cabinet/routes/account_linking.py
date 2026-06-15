@@ -786,7 +786,7 @@ async def link_server_complete(
 
 
 # ---------------------------------------------------------------------------
-# Router 2: Merge (NO JWT required)
+# Router 2: Merge (JWT required — bound to the authenticated initiator)
 # ---------------------------------------------------------------------------
 
 merge_router = APIRouter(prefix='/auth/merge', tags=['Cabinet Account Merge'])
