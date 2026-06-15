@@ -13,6 +13,7 @@ POST /subscription/devices/save-cart
 
 from __future__ import annotations
 
+import asyncio
 import math
 from datetime import UTC, datetime
 from typing import Any
@@ -42,6 +43,12 @@ from .helpers import _apply_addon_discount, resolve_subscription
 
 
 logger = structlog.get_logger(__name__)
+
+# Cap inline RemnaWave panel sync on user-facing cabinet requests. The product is
+# committed before the sync, so a slow/unavailable panel must not hold the HTTP
+# response open (the cabinet pay button is bound to the request and would spin
+# after delivery). Past this budget the sync is deferred to remnawave_retry_queue.
+REMNAWAVE_SYNC_TIMEOUT = 10.0
 
 router = APIRouter()
 
@@ -259,7 +266,8 @@ async def purchase_devices_legacy(
     await db.refresh(subscription)
     await db.refresh(user)
 
-    # Sync with RemnaWave
+    # Sync with RemnaWave (time-bounded — see REMNAWAVE_SYNC_TIMEOUT; product is
+    # already committed, defer slow syncs to remnawave_retry_queue).
     try:
         service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
@@ -267,10 +275,11 @@ async def purchase_devices_legacy(
         else:
             _should_create = not getattr(user, 'remnawave_uuid', None)
 
-        if _should_create:
-            await service.create_remnawave_user(db, subscription)
-        else:
-            await service.update_remnawave_user(db, subscription)
+        async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
+            if _should_create:
+                await service.create_remnawave_user(db, subscription)
+            else:
+                await service.update_remnawave_user(db, subscription)
     except Exception as e:
         logger.error('Failed to sync devices with RemnaWave (legacy endpoint)', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
@@ -533,7 +542,8 @@ async def purchase_devices(
         await db.commit()
         await db.refresh(subscription)
 
-        # Sync with RemnaWave
+        # Sync with RemnaWave (time-bounded — see REMNAWAVE_SYNC_TIMEOUT; product is
+        # already committed, defer slow syncs to remnawave_retry_queue).
         service = SubscriptionService()
         try:
             if settings.is_multi_tariff_enabled():
@@ -541,10 +551,11 @@ async def purchase_devices(
             else:
                 _should_create = not getattr(user, 'remnawave_uuid', None)
 
-            if _should_create:
-                await service.create_remnawave_user(db, subscription)
-            else:
-                await service.update_remnawave_user(db, subscription)
+            async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
+                if _should_create:
+                    await service.create_remnawave_user(db, subscription)
+                else:
+                    await service.update_remnawave_user(db, subscription)
         except Exception as e:
             logger.error('Failed to sync devices with RemnaWave', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
