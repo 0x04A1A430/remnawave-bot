@@ -72,7 +72,6 @@ async def activate_promocode(
         if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
             try:
                 from app.bot_factory import create_bot
-
                 from app.services.admin_notification_service import AdminNotificationService
 
                 bot = create_bot()
