@@ -1594,6 +1594,10 @@ async def create_user_by_oauth(
     referred_by_id: int | None = None,
 ) -> User:
     """Create a new user via OAuth provider."""
+    # Normalize the provider email to lowercase so it matches every other flow
+    # (email registration and the OAuth-link backfill both lowercase) and the
+    # case-insensitive unique-email lookups stay consistent.
+    email = email.strip().lower() if email else None
     referral_code = await create_unique_referral_code(db)
     normalized_language = _normalize_language_code(language)
     default_group = await _get_or_create_default_promo_group(db)
