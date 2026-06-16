@@ -75,14 +75,15 @@ class EtoplatezhiPaymentMixin:
             )
             return None
 
-        # Получаем telegram_id пользователя для order_id
-        payment_module = import_module('app.services.payment_service')
+        # order_id/customer_id строим по внутреннему user_id: он всегда есть и
+        # уникален, в отличие от telegram_id (None у telegram-less юзеров →
+        # customer_id="None" и отклонение анти-фрод-системой EtoPlatezhi).
         if user_id is not None:
             tg_id = user_id
         else:
             tg_id = 'guest'
 
-        # Генерируем уникальный order_id с telegram_id для удобного поиска
+        # Генерируем уникальный order_id с user_id для удобного поиска
         order_id = f'etp{tg_id}_{uuid.uuid4().hex[:6]}'
         amount_rubles = amount_kopeks / 100
         currency = settings.ETOPLATEZHI_CURRENCY
