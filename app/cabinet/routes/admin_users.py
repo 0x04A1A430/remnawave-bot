@@ -3146,9 +3146,7 @@ async def sync_user_from_panel(
                     # never bind two subs to the same panel user (telegram_id is one-to-many
                     # in multi-tariff). This is what makes the panel->bot repair work after
                     # the sibling-expiry corruption.
-                    linked_uuids = {
-                        s.remnawave_uuid for s in from_subs if s.id != selected_sub.id and s.remnawave_uuid
-                    }
+                    linked_uuids = {s.remnawave_uuid for s in from_subs if s.id != selected_sub.id and s.remnawave_uuid}
                     candidates = []
                     if user.telegram_id:
                         candidates = list(await api.get_user_by_telegram_id(user.telegram_id) or [])

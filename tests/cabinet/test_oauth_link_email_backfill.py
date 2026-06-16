@@ -87,9 +87,7 @@ async def test_skips_backfill_when_email_owned_by_another_account_but_still_link
     user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False)
     other = SimpleNamespace(id=2)
 
-    result, set_id, db = await _run_link(
-        user, email='taken@gmail.com', email_verified=True, email_owner=other
-    )
+    result, set_id, db = await _run_link(user, email='taken@gmail.com', email_verified=True, email_owner=other)
 
     assert result.success is True
     assert user.email is None  # not stolen from the other account

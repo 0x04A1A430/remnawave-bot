@@ -760,11 +760,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
     msg_start_arg = start_args[1] if len(start_args) > 1 else None
 
-    if (
-        pending_start_payload
-        and msg_start_arg
-        and pending_start_payload != msg_start_arg
-    ):
+    if pending_start_payload and msg_start_arg and pending_start_payload != msg_start_arg:
         # Одновременно есть аргумент из сообщения и pending payload.
         # Payload был сохранён при блокировке каналом — это источник
         # первого касания. Если он является активной кампанией —
@@ -784,9 +780,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         if payload_is_campaign:
             start_parameter = pending_start_payload
             logger.info(
-                '📦 START: pending_start_payload — '
-                'кампания первого касания, '
-                'приоритет над новым аргументом',
+                '📦 START: pending_start_payload — кампания первого касания, приоритет над новым аргументом',
                 pending_start_payload=pending_start_payload,
                 message_arg=msg_start_arg,
             )

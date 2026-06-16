@@ -82,8 +82,13 @@ async def _call(user, sub_id, api):
 async def test_relinks_uuid_wiped_sub_and_restores_status_and_squads():
     sub = _wiped_sub(84)
     user = SimpleNamespace(
-        id=7, telegram_id=123, email=None, remnawave_uuid=None,
-        subscriptions=[sub], last_remnawave_sync=None, updated_at=None,
+        id=7,
+        telegram_id=123,
+        email=None,
+        remnawave_uuid=None,
+        subscriptions=[sub],
+        last_remnawave_sync=None,
+        updated_at=None,
     )
     panel = _panel_user('44bd15ff', squads=('sq1', 'sq2'))
     api = MagicMock()
@@ -106,8 +111,13 @@ async def test_does_not_steal_panel_user_already_linked_to_sibling():
     sibling = _wiped_sub(85)
     sibling.remnawave_uuid = 'SIBLING-UUID'  # already linked
     user = SimpleNamespace(
-        id=7, telegram_id=123, email=None, remnawave_uuid=None,
-        subscriptions=[wiped, sibling], last_remnawave_sync=None, updated_at=None,
+        id=7,
+        telegram_id=123,
+        email=None,
+        remnawave_uuid=None,
+        subscriptions=[wiped, sibling],
+        last_remnawave_sync=None,
+        updated_at=None,
     )
     own_panel = _panel_user('OWN-UUID')
     sibling_panel = _panel_user('SIBLING-UUID')
@@ -126,8 +136,13 @@ async def test_does_not_steal_panel_user_already_linked_to_sibling():
 async def test_ambiguous_orphans_refuse_to_relink():
     sub = _wiped_sub(84)
     user = SimpleNamespace(
-        id=7, telegram_id=123, email=None, remnawave_uuid=None,
-        subscriptions=[sub], last_remnawave_sync=None, updated_at=None,
+        id=7,
+        telegram_id=123,
+        email=None,
+        remnawave_uuid=None,
+        subscriptions=[sub],
+        last_remnawave_sync=None,
+        updated_at=None,
     )
     api = MagicMock()
     api.get_user_by_uuid = AsyncMock(return_value=None)

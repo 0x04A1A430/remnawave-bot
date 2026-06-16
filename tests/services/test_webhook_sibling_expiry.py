@@ -80,7 +80,9 @@ async def _drive(svc, user, deleted, panel_user=None, error=None):
 async def test_pre_multitariff_sibling_with_future_end_date_not_expired():
     deleted = _sub(1, SubscriptionStatus.EXPIRED.value, end_days=-10, remnawave_uuid='DEAD', squads=[])
     sibling = _sub(2, SubscriptionStatus.ACTIVE.value, end_days=900, remnawave_uuid=None, squads=['sq1', 'sq2'])
-    user = SimpleNamespace(id=7, telegram_id=123, language='ru', remnawave_uuid='LIVE', subscriptions=[deleted, sibling])
+    user = SimpleNamespace(
+        id=7, telegram_id=123, language='ru', remnawave_uuid='LIVE', subscriptions=[deleted, sibling]
+    )
 
     svc = _service()
     async with _drive(svc, user, deleted, panel_user=None) as api:
@@ -95,7 +97,9 @@ async def test_pre_multitariff_sibling_with_future_end_date_not_expired():
 async def test_sibling_alive_in_panel_via_user_uuid_fallback_not_expired():
     deleted = _sub(1, SubscriptionStatus.EXPIRED.value, end_days=-10, remnawave_uuid='DEAD', squads=[])
     sibling = _sub(2, SubscriptionStatus.ACTIVE.value, end_days=-1, remnawave_uuid=None, squads=['sq1'])
-    user = SimpleNamespace(id=7, telegram_id=123, language='ru', remnawave_uuid='LIVE', subscriptions=[deleted, sibling])
+    user = SimpleNamespace(
+        id=7, telegram_id=123, language='ru', remnawave_uuid='LIVE', subscriptions=[deleted, sibling]
+    )
 
     svc = _service()
     async with _drive(svc, user, deleted, panel_user=MagicMock()) as api:
@@ -141,7 +145,9 @@ async def test_intentional_panel_deletion_suppresses_sibling_sweep():
     try:
         deleted = _sub(1, SubscriptionStatus.EXPIRED.value, end_days=-10, remnawave_uuid='DEAD', squads=[])
         sibling = _sub(2, SubscriptionStatus.ACTIVE.value, end_days=-1, remnawave_uuid='SIB', squads=['sq1'])
-        user = SimpleNamespace(id=7, telegram_id=123, language='ru', remnawave_uuid=None, subscriptions=[deleted, sibling])
+        user = SimpleNamespace(
+            id=7, telegram_id=123, language='ru', remnawave_uuid=None, subscriptions=[deleted, sibling]
+        )
 
         await svc._handle_user_deleted(AsyncMock(), user, deleted, {'uuid': 'DEAD'})
 

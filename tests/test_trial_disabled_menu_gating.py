@@ -19,14 +19,11 @@ from app.database.models import User
 
 
 def _menu_has_trial(markup) -> bool:
-    return any(
-        getattr(btn, 'callback_data', None) == 'menu_trial'
-        for row in markup.inline_keyboard
-        for btn in row
-    )
+    return any(getattr(btn, 'callback_data', None) == 'menu_trial' for row in markup.inline_keyboard for btn in row)
 
 
 # --- Surface 1: default sync keyboard -------------------------------------
+
 
 def test_keyboard_hides_trial_when_duration_zero():
     from app.keyboards.inline import get_main_menu_keyboard
@@ -59,6 +56,7 @@ def test_keyboard_hides_trial_when_disabled_for_all():
 
 # --- Surface 2: custom-menu constructor path ------------------------------
 
+
 def test_menu_layout_hides_trial_when_disabled():
     from app.services.menu_layout import MenuContext
     from app.services.menu_layout.service import MenuLayoutService
@@ -83,6 +81,7 @@ def test_menu_layout_hides_trial_when_disabled():
 
 
 # --- Surface 3: handlers --------------------------------------------------
+
 
 def _make_cb_user_db():
     cb = AsyncMock(spec=CallbackQuery)

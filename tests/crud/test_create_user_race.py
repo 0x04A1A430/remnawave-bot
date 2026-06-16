@@ -89,6 +89,7 @@ def _integrity_error_text_only(message: str) -> IntegrityError:
 # Tests for _violated_constraint helper
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestViolatedConstraint:
     def test_prefers_asyncpg_cause_constraint_name(self):
         """`constraint_name` из `cause` читается в первую очередь."""
@@ -130,6 +131,7 @@ class TestViolatedConstraint:
 # Tests for create_user (race-condition handling)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _patch_dependencies(
     db: AsyncMock,
     existing_user=None,
@@ -163,8 +165,13 @@ class TestCreateUserHappyPath:
 
         patches = _patch_dependencies(db)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=user),
         ):
             result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
@@ -183,8 +190,13 @@ class TestCreateUserRaceCondition:
 
         patches = _patch_dependencies(db, existing_user=existing)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
         ):
             result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
@@ -206,8 +218,13 @@ class TestCreateUserRaceCondition:
 
         patches = _patch_dependencies(db, existing_user=existing)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
         ):
             result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
@@ -224,8 +241,13 @@ class TestCreateUserRaceCondition:
 
         patches = _patch_dependencies(db, existing_user=existing)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
             patch('app.services.event_emitter.event_emitter', new=MagicMock(emit=emit_mock), create=True),
         ):
@@ -241,8 +263,13 @@ class TestCreateUserRaceCondition:
         # get_user_by_telegram_id всегда возвращает None
         patches = _patch_dependencies(db, existing_user=None)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
         ):
             with pytest.raises(IntegrityError):
@@ -272,8 +299,13 @@ class TestCreateUserSequenceDesync:
 
         patches = _patch_dependencies(db)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=user),
             patch('app.database.crud.user._sync_users_sequence', new=sync_mock),
         ):
@@ -291,8 +323,13 @@ class TestCreateUserSequenceDesync:
 
         patches = _patch_dependencies(db, existing_user=None)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
             patch('app.database.crud.user._sync_users_sequence', new=sync_mock),
         ):
@@ -308,16 +345,20 @@ class TestCreateUserUnknownIntegrityError:
         """FK по referred_by_id или другой неизвестный IntegrityError — пробрасывается."""
         db = _make_db(
             commit_side_effect=_integrity_error_text_only(
-                'insert or update on table "users" violates foreign key constraint '
-                '"users_referred_by_id_fkey"'
+                'insert or update on table "users" violates foreign key constraint "users_referred_by_id_fkey"'
             )
         )
         new_user = _make_user()
 
         patches = _patch_dependencies(db, existing_user=None)
         with (
-            patches[0], patches[1], patches[2], patches[3],
-            patches[4], patches[5], patches[6],
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
             patch('app.database.crud.user.User', return_value=new_user),
         ):
             with pytest.raises(IntegrityError):

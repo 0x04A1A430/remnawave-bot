@@ -468,9 +468,7 @@ async def _upload_offline_conversion_yclid(yclid: str, amount_rubles: float, ts:
                 await asyncio.sleep(RETRY_DELAY)
                 continue
 
-            logger.error(
-                'offline conversion rejected', yclid=masked, status=resp.status_code, body=resp.text[:200]
-            )
+            logger.error('offline conversion rejected', yclid=masked, status=resp.status_code, body=resp.text[:200])
             return False
 
         except Exception as exc:
