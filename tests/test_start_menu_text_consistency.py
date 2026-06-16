@@ -11,8 +11,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_start_main_menu_text_delegates_to_menu_builder(monkeypatch):
-    from app.handlers import menu as menu_mod
-    from app.handlers import start as start_mod
+    from app.handlers import menu as menu_mod, start as start_mod
 
     seen = {}
 
