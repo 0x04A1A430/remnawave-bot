@@ -829,6 +829,37 @@ async def _apply_base_limit_preserving_active_purchases(
     return purchased_gb, subscription.traffic_limit_gb
 
 
+def _should_carry_remaining_days(*, is_trial: bool, source_is_free: bool) -> bool:
+    """Переносить ли остаток дней при СМЕНЕ тарифа на новый срок.
+
+    - Триал: переносим только если включён TRIAL_ADD_REMAINING_DAYS_TO_PAID.
+    - Бесплатный 0₽ тариф (``source_is_free`` уже учитывает TARIFF_SWITCH_RESET_FREE_DAYS):
+      не переносим — наспамленные дни нельзя бесплатно унести на платный тариф.
+    - Обычная платная подписка: переносим как раньше.
+    """
+    if is_trial and not settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+        return False
+    if source_is_free:
+        return False
+    return True
+
+
+async def _is_free_source_tariff(db: AsyncSession, tariff_id: int) -> bool:
+    """True, если исходный тариф полностью бесплатный (0₽).
+
+    Любая ошибка → False (переносим дни как раньше), чтобы смена тарифа никогда
+    не падала из-за этой проверки.
+    """
+    try:
+        from app.database.crud.tariff import get_tariff_by_id
+
+        tariff = await get_tariff_by_id(db, tariff_id)
+        return bool(tariff is not None and tariff.is_free)
+    except Exception as e:
+        logger.warning('Не удалось определить бесплатность исходного тарифа', tariff_id=tariff_id, error=e)
+        return False
+
+
 async def extend_subscription(
     db: AsyncSession,
     subscription: Subscription,
@@ -896,11 +927,19 @@ async def extend_subscription(
         subscription.end_date = subscription.end_date + timedelta(days=days)
         logger.info('📅 Срок подписки уменьшен', abs=abs(days), end_date=subscription.end_date)
     elif is_tariff_change:
-        # При СМЕНЕ тарифа сохраняем оставшееся время активной подписки
-        # Для триалов — только если включена настройка TRIAL_ADD_REMAINING_DAYS_TO_PAID
+        # При СМЕНЕ тарифа сохраняем оставшееся время активной подписки.
+        # НЕ переносим дни, если исходная подписка — триал (без
+        # TRIAL_ADD_REMAINING_DAYS_TO_PAID) ИЛИ бесплатный 0₽ тариф
+        # (TARIFF_SWITCH_RESET_FREE_DAYS) — иначе наспамленные на бесплатке дни
+        # бесплатно уносятся на платный тариф.
         remaining_seconds = 0
         if subscription.end_date and subscription.end_date > current_time:
-            if not subscription.is_trial or settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+            source_is_free = bool(
+                settings.TARIFF_SWITCH_RESET_FREE_DAYS
+                and subscription.tariff_id  # ещё старый тариф — переназначается ниже
+                and await _is_free_source_tariff(db, subscription.tariff_id)
+            )
+            if _should_carry_remaining_days(is_trial=subscription.is_trial, source_is_free=source_is_free):
                 remaining = subscription.end_date - current_time
                 remaining_seconds = max(0, remaining.total_seconds())
                 logger.info(
@@ -908,6 +947,12 @@ async def extend_subscription(
                     remaining_seconds=int(remaining_seconds),
                     subscription_id=subscription.id,
                     is_trial=subscription.is_trial,
+                )
+            elif source_is_free:
+                logger.info(
+                    '🧹 Смена с бесплатного тарифа: остаток дней не переносится',
+                    subscription_id=subscription.id,
+                    source_tariff_id=subscription.tariff_id,
                 )
         subscription.end_date = current_time + timedelta(days=days, seconds=remaining_seconds)
         subscription.start_date = current_time
@@ -1368,6 +1413,35 @@ async def deactivate_subscription(db: AsyncSession, subscription: Subscription, 
         await db.refresh(subscription)
 
     logger.info('❌ Подписка пользователя деактивирована', user_id=subscription.user_id)
+    return subscription
+
+
+async def reset_subscription(db: AsyncSession, subscription: Subscription, *, commit: bool = True) -> Subscription:
+    """Полностью обнулить подписку «как будто пользователь её не оформлял», НЕ удаляя
+    пользователя из БД (тикеты и аккаунт сохраняются).
+
+    Снимает накопленные дни (в т.ч. наспамленные на бесплатном тарифе), сбрасывает
+    трафик и доступ к серверам, помечает подписку DISABLED. Доступ в панели RemnaWave
+    снимается вызывающей стороной (``disable_remnawave_user``). После этого пользователь
+    может купить тариф с нуля и сам выбрать срок.
+    """
+    now = datetime.now(UTC)
+    subscription.status = SubscriptionStatus.DISABLED.value
+    subscription.end_date = now  # обнуляем срок — наспамленные дни больше не переносятся
+    subscription.connected_squads = []
+    subscription.traffic_used_gb = 0.0
+    subscription.autopay_enabled = False  # не списывать за обнулённую подписку
+    subscription.updated_at = now
+
+    if commit:
+        await db.commit()
+        await db.refresh(subscription)
+
+    logger.info(
+        '🧹 Подписка обнулена администратором (пользователь и тикеты сохранены)',
+        subscription_id=subscription.id,
+        user_id=subscription.user_id,
+    )
     return subscription
 
 

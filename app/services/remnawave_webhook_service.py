@@ -1165,9 +1165,14 @@ class RemnaWaveWebhookService:
             except (ValueError, TypeError):
                 pass
 
-        # Sync expire date — panel is the source of truth for user.modified events
+        # Sync expire date — panel is the source of truth for user.modified events.
+        # НО: если подписка намеренно ОТКЛЮЧЕНА в боте (обнуление/деактивация админом),
+        # не воскрешаем её срок из устаревшего panel expireAt — иначе наспамленные дни
+        # могли бы «вернуться» после обнуления (см. crud.reset_subscription). Статус
+        # отдельно синхронизируется ниже: при panel ACTIVE + future end_date подписка
+        # всё равно может корректно реактивироваться через обычное продление/активацию.
         expire_at = data.get('expireAt')
-        if expire_at:
+        if expire_at and subscription.status != SubscriptionStatus.DISABLED.value:
             try:
                 parsed_dt = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                 new_end_date = parsed_dt.astimezone(UTC)

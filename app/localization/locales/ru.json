@@ -985,6 +985,7 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n    ✅ Количество устройств увеличено!\n\n    📱 Было: {old_count} → Стало: {new_count}\n    💰 Списано: {amount}\n    ",
   "CHANGE_DEVICES_TITLE": "📱 Изменение количества устройств",
   "CHANGE_TARIFF_BUTTON": "📦 Тариф",
+  "BUY_TARIFF_BUTTON": "📦 Купить тариф",
   "CHANNEL_CHECK_BUTTON": "✅ Я подписался",
   "CHANNEL_CHECK_NOT_SUBSCRIBED": "Вы ещё не подписались на все каналы! Подпишитесь и попробуйте снова.",
   "CHANNEL_REQUIRED_TEXT": "Пожалуйста, подпишитесь на обязательные каналы и нажмите кнопку ниже.",

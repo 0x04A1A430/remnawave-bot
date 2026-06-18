@@ -1002,6 +1002,12 @@ async def _render_user_subscription_overview(
                     types.InlineKeyboardButton(text='🗑 Удалить', callback_data=f'admin_sub_delete_{user_id}{_sid}')
                 )
             keyboard.append(row)
+
+        # Обнулить подписку «как будто не оформляли»: сбросить наспамленные дни и доступ,
+        # отключить в панели — но СОХРАНИТЬ пользователя и его тикеты (в отличие от удаления).
+        keyboard.append(
+            [types.InlineKeyboardButton(text='🧹 Обнулить подписку', callback_data=f'admin_sub_reset_{user_id}{_sid}')]
+        )
     else:
         text += '❌ <b>Подписка отсутствует</b>\n\n'
         text += 'Пользователь еще не активировал подписку.'
@@ -3313,6 +3319,85 @@ async def confirm_subscription_deactivation(callback: types.CallbackQuery, db_us
         )
 
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def reset_user_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    """Подтверждение полного обнуления подписки (с сохранением пользователя и тикетов)."""
+    user_id, subscription_id = _extract_admin_sub_context(callback.data)
+
+    _sid = f'_s{subscription_id}' if subscription_id else ''
+    back_cb = (
+        f'admin_user_sub_select_{user_id}_{subscription_id}'
+        if subscription_id
+        else f'admin_user_subscription_{user_id}'
+    )
+
+    await callback.message.edit_text(
+        '🧹 <b>Обнуление подписки</b>\n\n'
+        'Подписка будет полностью обнулена «как будто пользователь её не оформлял»:\n'
+        '• срок и наспамленные дни сбрасываются\n'
+        '• трафик и доступ к серверам снимаются\n'
+        '• пользователь <b>отключается</b> в панели RemnaWave (не удаляется)\n\n'
+        '✅ Сам пользователь и его тикеты <b>остаются</b> в боте.\n'
+        'После этого он сможет купить тариф с нуля и выбрать срок.',
+        reply_markup=get_confirmation_keyboard(f'admin_sub_reset_confirm_{user_id}{_sid}', back_cb, db_user.language),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_subscription_reset(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    user_id, subscription_id = _extract_admin_sub_context(callback.data)
+
+    back_cb = (
+        f'admin_user_sub_select_{user_id}_{subscription_id}'
+        if subscription_id
+        else f'admin_user_subscription_{user_id}'
+    )
+
+    success = await _reset_user_subscription(db, user_id, db_user.id, subscription_id=subscription_id)
+
+    message = (
+        '✅ Подписка обнулена. Пользователь и его тикеты сохранены.' if success else '❌ Ошибка обнуления подписки'
+    )
+    await callback.message.edit_text(
+        message,
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[[types.InlineKeyboardButton(text='📱 К подписке', callback_data=back_cb)]]
+        ),
+    )
+    await callback.answer()
+
+
+async def _reset_user_subscription(
+    db: AsyncSession, user_id: int, admin_id: int, subscription_id: int | None = None
+) -> bool:
+    try:
+        from app.services.subscription_service import reset_subscription_with_panel
+
+        subscription = await _resolve_admin_subscription(db, user_id, subscription_id)
+        if not subscription:
+            logger.error('Подписка не найдена для пользователя', user_id=user_id)
+            return False
+
+        user = await get_user_by_id(db, user_id)
+        result = await reset_subscription_with_panel(db, user, subscription)
+
+        logger.info(
+            'Админ обнулил подписку пользователя (пользователь и тикеты сохранены)',
+            admin_id=admin_id,
+            user_id=user_id,
+            subscription_id=subscription.id,
+            panel_disabled=result.get('panel_disabled'),
+        )
+        return True
+
+    except Exception as e:
+        logger.error('Ошибка обнуления подписки', error=e)
+        return False
 
 
 @admin_required
@@ -6304,6 +6389,12 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(confirm_subscription_deactivation, F.data.startswith('admin_sub_deactivate_confirm_'))
+
+    dp.callback_query.register(
+        reset_user_subscription, F.data.startswith('admin_sub_reset_') & ~F.data.contains('confirm')
+    )
+
+    dp.callback_query.register(confirm_subscription_reset, F.data.startswith('admin_sub_reset_confirm_'))
 
     dp.callback_query.register(activate_user_subscription, F.data.startswith('admin_sub_activate_'))
 

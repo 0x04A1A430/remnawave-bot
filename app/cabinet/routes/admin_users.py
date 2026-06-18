@@ -1492,6 +1492,29 @@ async def update_user_subscription(
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
+    if request.action == 'reset':
+        # Полностью обнулить подписку «как будто пользователь её не оформлял»: снять
+        # наспамленные дни, обнулить трафик/сквады, пометить DISABLED и ОТКЛЮЧИТЬ в
+        # панели RemnaWave (не удаляя). Пользователь и его тикеты сохраняются —
+        # дальше юзер сам покупает тариф с нуля и выбирает срок.
+        from app.services.subscription_service import reset_subscription_with_panel
+
+        result = await reset_subscription_with_panel(db, user, subscription)
+
+        logger.info(
+            'Admin reset subscription for user',
+            admin_id=admin.id,
+            user_id=user_id,
+            subscription_id=subscription.id,
+            panel_disabled=result.get('panel_disabled'),
+        )
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message='Subscription reset',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
     if request.action == 'activate':
         # Проверка: нельзя активировать, если у пользователя уже есть
         # другая активная подписка с тем же тарифом

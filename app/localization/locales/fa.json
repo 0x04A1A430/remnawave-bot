@@ -985,6 +985,7 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n    ✅ تعداد دستگاه افزایش یافت!\n\n    📱 قبلی: {old_count} → جدید: {new_count}\n    💰 کسر: {amount}\n",
   "CHANGE_DEVICES_TITLE": "📱 تغییر تعداد دستگاه",
   "CHANGE_TARIFF_BUTTON": "📦 تعرفه",
+  "BUY_TARIFF_BUTTON": "📦 خرید تعرفه",
   "CHANNEL_CHECK_BUTTON": "✅ عضو شدم",
   "CHANNEL_CHECK_NOT_SUBSCRIBED": "شما هنوز در همه کانال‌ها عضو نشده‌اید! لطفاً عضو شوید و دوباره امتحان کنید.",
   "CHANNEL_REQUIRED_TEXT": "لطفاً در کانال‌های اجباری عضو شوید و سپس دکمه زیر را فشار دهید.",

@@ -1753,6 +1753,20 @@ class Tariff(Base):
         prices = self.period_prices or {}
         return prices.get(str(period_days))
 
+    @property
+    def is_free(self) -> bool:
+        """Тариф полностью бесплатный (все доступные цены = 0).
+
+        Используется при смене тарифа: дни, наспамленные на бесплатном (0₽) тарифе,
+        не переносятся на платный — см. extend_subscription / TARIFF_SWITCH_RESET_FREE_DAYS.
+        """
+        if self.is_daily:
+            return (self.daily_price_kopeks or 0) <= 0
+        prices = list((self.period_prices or {}).values())
+        if not prices:
+            return False
+        return all((price or 0) <= 0 for price in prices)
+
     def get_available_periods(self) -> list[int]:
         """Возвращает список доступных периодов в днях."""
         prices = self.period_prices or {}

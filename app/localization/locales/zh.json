@@ -1962,6 +1962,7 @@
   "PAID_TRIAL_PAYMENT_DESC": "{days} 天试用订阅",
   "REFERRAL_CODE_QUESTION": "\n🤝 <b>您有推荐码或兑换码吗？</b>\n\n如果您有兑换码或来自朋友的推荐链接，请现在输入以获取奖励！\n\n请输入代码或点击“跳过”：\n",
   "CHANGE_TARIFF_BUTTON": "📦 套餐",
+  "BUY_TARIFF_BUTTON": "📦 购买套餐",
   "CONTEST_UNKNOWN": "不支持此竞赛类型。",
   "PERIOD": "周期",
   "ADMIN_CONTESTS_LIST": "📋 当前竞赛"

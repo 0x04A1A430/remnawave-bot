@@ -1964,5 +1964,6 @@
   "ADMIN_SYNC_TO_PANEL": "⬆️ Sync to panel",
   "ADMIN_USER_REFERRALS_UPDATED": "✅ The referral list has been updated.",
   "ADMIN_USERS_FILTER_POTENTIAL_CUSTOMERS_TITLE": "💰 Potential customers",
-  "CHANGE_TARIFF_BUTTON": "📦 Plan"
+  "CHANGE_TARIFF_BUTTON": "📦 Plan",
+  "BUY_TARIFF_BUTTON": "📦 Buy a plan"
 }

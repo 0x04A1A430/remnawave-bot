@@ -1244,13 +1244,23 @@ def get_subscription_keyboard(
                 )
             ]
             if settings.is_tariffs_mode() and subscription:
-                # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение
-                tariff_callback = 'tariff_switch' if is_daily_tariff else 'instant_switch'
-                settings_row.append(
-                    InlineKeyboardButton(
-                        text=texts.t('CHANGE_TARIFF_BUTTON', '📦 Тариф'), callback_data=tariff_callback
+                # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
+                # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
+                # Теперь для таких подписок показываем «Купить тариф» (покупку с нуля).
+                if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
+                    settings_row.append(
+                        InlineKeyboardButton(
+                            text=texts.t('BUY_TARIFF_BUTTON', '📦 Купить тариф'), callback_data='menu_buy'
+                        )
                     )
-                )
+                else:
+                    # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение
+                    tariff_callback = 'tariff_switch' if is_daily_tariff else 'instant_switch'
+                    settings_row.append(
+                        InlineKeyboardButton(
+                            text=texts.t('CHANGE_TARIFF_BUTTON', '📦 Тариф'), callback_data=tariff_callback
+                        )
+                    )
             keyboard.append(settings_row)
 
             # Кнопка докупки трафика для платных подписок
