@@ -116,6 +116,16 @@ class Settings(BaseSettings):
 
     DATABASE_MODE: str = 'auto'
 
+    # Параметры пула подключений к PostgreSQL. Раньше были захардкожены в
+    # app/database/database.py — вынесены в .env, чтобы масштабировать пул под
+    # нагрузку без пересборки образа. При нескольких воркерах каждый процесс
+    # держит СВОЙ пул, поэтому суммарно ≈ WORKERS * (POOL_SIZE + MAX_OVERFLOW)
+    # соединений — держите ниже max_connections PostgreSQL. Для SQLite не
+    # применяются (там используется NullPool без пулинга).
+    DATABASE_POOL_SIZE: int = 20
+    DATABASE_MAX_OVERFLOW: int = 20
+    DATABASE_POOL_TIMEOUT: int = 30
+
     REDIS_URL: str = 'redis://localhost:6379/0'
     CART_TTL_SECONDS: int = 3600  # Время жизни корзины пользователя в Redis (1 час)
     # «Свежее намерение» пополнить ради сохранённой корзины. Тихая авто-покупка из
@@ -1226,6 +1236,38 @@ class Settings(BaseSettings):
             return max(1, value_int)
         except (TypeError, ValueError):
             return 10
+
+    @field_validator('DATABASE_POOL_SIZE', mode='before')
+    @classmethod
+    def ensure_positive_database_pool_size(cls, value: int | None) -> int:
+        # pool_size=0 в SQLAlchemy QueuePool означает «без лимита» — это footgun,
+        # который легко исчерпает max_connections PostgreSQL, поэтому держим >= 1.
+        try:
+            if value is None or value == '':
+                return 20
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return 20
+
+    @field_validator('DATABASE_MAX_OVERFLOW', mode='before')
+    @classmethod
+    def ensure_nonnegative_database_max_overflow(cls, value: int | None) -> int:
+        try:
+            if value is None or value == '':
+                return 20
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 20
+
+    @field_validator('DATABASE_POOL_TIMEOUT', mode='before')
+    @classmethod
+    def ensure_positive_database_pool_timeout(cls, value: int | None) -> int:
+        try:
+            if value is None or value == '':
+                return 30
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return 30
 
     @field_validator('LOG_FILE', mode='before')
     @classmethod
