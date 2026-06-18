@@ -147,10 +147,15 @@ def decide_autopay_fail_notification(
     Returns 'first' | 'final' | 'repeat' | None. None means stay silent this tick.
     Pure function — no I/O — so the full notification policy is unit-testable.
     """
-    if max_notifications <= 0 or state.count >= max_notifications:
+    if max_notifications <= 0:
         return None
 
-    in_final_window = final_reminder_hours > 0 and 0 <= hours_left <= final_reminder_hours
+    # The final "subscription is about to be disconnected" reminder is the single
+    # most important message, so it must be allowed even when periodic repeats have
+    # already hit the per-cycle cap — it fires exactly once (guarded by final_sent).
+    # No lower 0-bound on hours_left: if a coarse MONITORING_INTERVAL steps past the
+    # window so the tick only lands after end_date, the still-unsent final must go.
+    in_final_window = final_reminder_hours > 0 and hours_left <= final_reminder_hours
 
     if state.count == 0:
         # First failure of the cycle. If it already lands inside the final window,
@@ -159,6 +164,9 @@ def decide_autopay_fail_notification(
 
     if in_final_window and not state.final_sent:
         return 'final'
+
+    if state.count >= max_notifications:
+        return None
 
     if repeat_interval_hours > 0 and (now_ts - state.last_sent_ts) / 3600.0 >= repeat_interval_hours:
         return 'repeat'
@@ -437,10 +445,19 @@ class MonitoringService:
             )
 
     async def _maybe_notify_autopay_failure(
-        self, user, charge_amount: int, subscription, current_time: datetime
+        self,
+        user,
+        charge_amount: int,
+        subscription,
+        current_time: datetime,
+        *,
+        cause: str = 'insufficient_balance',
     ) -> None:
         """Send an autopay-failure notification iff policy allows it this tick, then
-        record state. Policy = decide_autopay_fail_notification() + AUTOPAY_FAIL_* config."""
+        record state. Policy = decide_autopay_fail_notification() + AUTOPAY_FAIL_* config.
+
+        `cause` ('charge_error' | 'insufficient_balance') selects the email/non-Telegram
+        reason wording so a non-balance charge failure isn't mislabelled as low balance."""
         cycle_token = int(subscription.end_date.timestamp())
         now_ts = current_time.timestamp()
         hours_left = (subscription.end_date - current_time).total_seconds() / 3600.0
@@ -463,11 +480,12 @@ class MonitoringService:
                 user, user.balance_kopeks, charge_amount, subscription=subscription, is_final=is_final
             )
         elif not user.telegram_id:
-            reason_text = (
-                'Последнее напоминание: подписка скоро отключится — недостаточно средств'
-                if is_final
-                else 'Недостаточно средств на балансе'
-            )
+            if is_final:
+                reason_text = 'Последнее напоминание: подписка скоро отключится — недостаточно средств'
+            elif cause == 'charge_error':
+                reason_text = 'Ошибка списания средств'
+            else:
+                reason_text = 'Недостаточно средств на балансе'
             await notification_delivery_service.notify_autopay_failed(user=user, reason=reason_text)
 
         apply_autopay_fail_notification(state, reason, now_ts)
@@ -1637,7 +1655,9 @@ class MonitoringService:
                             )
                         else:
                             failed_count += 1
-                            await self._maybe_notify_autopay_failure(user, charge_amount, subscription, current_time)
+                            await self._maybe_notify_autopay_failure(
+                                user, charge_amount, subscription, current_time, cause='charge_error'
+                            )
                             logger.warning(
                                 '💳 Ошибка списания средств для автопродления пользователя',
                                 user_identifier=user_identifier,
