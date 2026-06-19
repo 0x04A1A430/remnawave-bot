@@ -23,6 +23,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.utils.cache import RateLimitCache, cache, cache_key
+from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.timezone import format_local_datetime
 
@@ -1008,6 +1009,14 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
     role = service.resolve_recipient_role()
     if role == 'none':
         return None
+    # В cabinet-режиме добавляем кнопку «открыть тикет в кабинете»: web_app в личке,
+    # t.me Mini App диплинк в группе (где web_app недоступен). None — если не
+    # cabinet-режим / кабинет не настроен / в группе нет зарегистрированного Mini App.
+    cabinet_button = build_admin_ticket_cabinet_button(
+        ticket.id,
+        text=get_texts(settings.DEFAULT_LANGUAGE).t('OPEN_TICKET_IN_CABINET', '🗂 Открыть в кабинете'),
+        in_group=(role == 'group'),
+    )
     return get_ticket_notification_keyboard(
         ticket.id,
         user_id=user.id if user else None,
@@ -1017,6 +1026,7 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
         is_user_blocked=getattr(ticket, 'is_user_reply_blocked', False),
         is_admin=(role == 'admin'),
         fsm_enabled=(role != 'group'),
+        cabinet_button=cabinet_button,
         language=settings.DEFAULT_LANGUAGE,
     )
 

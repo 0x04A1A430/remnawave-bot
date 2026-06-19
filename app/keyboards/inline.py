@@ -3688,9 +3688,10 @@ def get_ticket_notification_keyboard(
     is_user_blocked: bool = False,
     is_admin: bool = False,
     fsm_enabled: bool = True,
+    cabinet_button: InlineKeyboardButton | None = None,
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
-    """Клавиатура для уведомления о тикете в личном чате.
+    """Клавиатура для уведомления о тикете (личный или групповой админ-чат).
 
     Отображает кнопки действий без «⬅️ Назад» — она не имеет смысла вне
     контекста админки. Набор кнопок зависит от роли получателя:
@@ -3709,10 +3710,17 @@ def get_ticket_notification_keyboard(
             («Ответить», «Блок по времени»). В групповом/супергруппа-чате бот
             из-за privacy mode не видит обычный текст ответа, поэтому туда
             передаём ``False`` — остаются только надёжные callback/URL-кнопки.
+        cabinet_button: готовая кнопка «открыть тикет в кабинете» (web_app в личке
+            или t.me Mini App диплинк в группе). Размещается самым верхом. ``None`` —
+            не cabinet-режим / кабинет не настроен.
         language: язык локализации.
     """
     texts = get_texts(language)
     keyboard: list[list[InlineKeyboardButton]] = []
+
+    # Кнопка кабинета — самым верхом, чтобы была заметна (если передана).
+    if cabinet_button is not None:
+        keyboard.append([cabinet_button])
 
     # URL-кнопки: не требуют прав, опциональны по наличию данных
     url_row: list[InlineKeyboardButton] = []

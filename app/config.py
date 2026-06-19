@@ -914,6 +914,11 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
     MINIAPP_STATIC_PATH: str = 'miniapp'
+    # Короткое имя Telegram Mini App (BotFather → /newapp), напр. 'cabinet'.
+    # Нужно только для диплинков t.me/<bot>/<app>?startapp=… которые открывают
+    # кабинет из ГРУППОВЫХ чатов (web_app-кнопки в группах не работают). В личке
+    # достаточно MINIAPP_CUSTOM_URL. Пусто → в группах кнопка кабинета не строится.
+    MINIAPP_APP_SHORT_NAME: str = ''
 
     # Media upload settings (news article images/videos)
     MEDIA_UPLOAD_DIR: str = './uploads'

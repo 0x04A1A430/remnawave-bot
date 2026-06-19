@@ -20,10 +20,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from aiogram.types import InlineKeyboardButton
 
 from app.keyboards.inline import get_ticket_notification_keyboard
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.support_settings_service import SupportSettingsService
+from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 
 
 # --- helpers ---------------------------------------------------------------
@@ -263,3 +265,71 @@ def test_role_numeric_string_chat_id_is_resolved(service_factory):
     # ADMIN_NOTIFICATIONS_CHAT_ID may arrive as a numeric string from env.
     service = service_factory('100', admins={100})
     assert service.resolve_recipient_role() == 'admin'
+
+
+# --- cabinet deep-link button -----------------------------------------------
+
+
+@pytest.fixture
+def cabinet_settings(monkeypatch):
+    """Configure settings for the cabinet deep-link button.
+
+    is_cabinet_mode / get_bot_username are Settings methods → patch on the class;
+    MINIAPP_* are fields → patch on the instance.
+    """
+
+    def _configure(*, cabinet_mode=True, custom_url='https://cab.example.com', short_name='cabinet', bot='mybot'):
+        from app.config import settings
+
+        monkeypatch.setattr(type(settings), 'is_cabinet_mode', lambda self: cabinet_mode, raising=False)
+        monkeypatch.setattr(type(settings), 'get_bot_username', lambda self: bot, raising=False)
+        monkeypatch.setattr(settings, 'MINIAPP_CUSTOM_URL', custom_url, raising=False)
+        monkeypatch.setattr(settings, 'MINIAPP_APP_SHORT_NAME', short_name, raising=False)
+
+    return _configure
+
+
+def test_cabinet_button_none_when_not_cabinet_mode(cabinet_settings):
+    cabinet_settings(cabinet_mode=False)
+    assert build_admin_ticket_cabinet_button(42, text='x', in_group=False) is None
+    assert build_admin_ticket_cabinet_button(42, text='x', in_group=True) is None
+
+
+def test_cabinet_button_private_is_webapp_to_admin_ticket_path(cabinet_settings):
+    cabinet_settings()
+    btn = build_admin_ticket_cabinet_button(42, text='🗂 Кабинет', in_group=False)
+    assert btn is not None
+    assert btn.web_app is not None
+    assert btn.web_app.url == 'https://cab.example.com/admin/tickets/42'
+    assert btn.url is None
+
+
+def test_cabinet_button_private_none_without_custom_url(cabinet_settings):
+    cabinet_settings(custom_url='')
+    assert build_admin_ticket_cabinet_button(42, text='x', in_group=False) is None
+
+
+def test_cabinet_button_group_is_startapp_deeplink(cabinet_settings):
+    cabinet_settings()
+    btn = build_admin_ticket_cabinet_button(42, text='🗂 Кабинет', in_group=True)
+    assert btn is not None
+    assert btn.url == 'https://t.me/mybot/cabinet?startapp=admin_ticket_42'
+    assert btn.web_app is None
+
+
+def test_cabinet_button_group_none_without_short_name(cabinet_settings):
+    # No registered Mini App → can't build a group-safe deep link.
+    cabinet_settings(short_name='')
+    assert build_admin_ticket_cabinet_button(42, text='x', in_group=True) is None
+
+
+def test_cabinet_button_group_none_without_bot_username(cabinet_settings):
+    cabinet_settings(bot=None)
+    assert build_admin_ticket_cabinet_button(42, text='x', in_group=True) is None
+
+
+def test_keyboard_places_cabinet_button_on_top():
+    cab = InlineKeyboardButton(text='🗂 Кабинет', url='https://t.me/mybot/cabinet?startapp=admin_ticket_7')
+    kb = get_ticket_notification_keyboard(7, user_id=42, is_admin=True, cabinet_button=cab)
+    # First row is the cabinet button.
+    assert kb.inline_keyboard[0][0].url == 'https://t.me/mybot/cabinet?startapp=admin_ticket_7'
