@@ -3687,6 +3687,7 @@ def get_ticket_notification_keyboard(
     is_closed: bool = False,
     is_user_blocked: bool = False,
     is_admin: bool = False,
+    fsm_enabled: bool = True,
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     """Клавиатура для уведомления о тикете в личном чате.
@@ -3704,6 +3705,10 @@ def get_ticket_notification_keyboard(
         is_closed: тикет уже закрыт — скрываем «Ответить» и «Закрыть».
         is_user_blocked: показываем «Разблокировать» вместо блок-контролов.
         is_admin: получатель — полный админ (не модератор).
+        fsm_enabled: показывать ли кнопки, запускающие ввод текста через FSM
+            («Ответить», «Блок по времени»). В групповом/супергруппа-чате бот
+            из-за privacy mode не видит обычный текст ответа, поэтому туда
+            передаём ``False`` — остаются только надёжные callback/URL-кнопки.
         language: язык локализации.
     """
     texts = get_texts(language)
@@ -3730,7 +3735,9 @@ def get_ticket_notification_keyboard(
             ]
         )
 
-    if not is_closed:
+    # «Ответить» запускает FSM (ввод текста) — в группе/канале ненадёжно
+    # (privacy mode бота не пропускает обычный текст), поэтому только при fsm_enabled.
+    if not is_closed and fsm_enabled:
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -3739,6 +3746,8 @@ def get_ticket_notification_keyboard(
                 )
             ]
         )
+    # «Закрыть» — обычный callback, работает везде, включая группу.
+    if not is_closed:
         keyboard.append(
             [
                 InlineKeyboardButton(
@@ -3759,18 +3768,22 @@ def get_ticket_notification_keyboard(
             ]
         )
     else:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t('BLOCK_FOREVER', '🚫 Заблокировать'),
-                    callback_data=f'admin_block_user_perm_ticket_{ticket_id}',
-                ),
+        # «Заблокировать навсегда» — обычный callback (работает в группе);
+        # «Блок по времени» запускает FSM → только при fsm_enabled.
+        block_row = [
+            InlineKeyboardButton(
+                text=texts.t('BLOCK_FOREVER', '🚫 Заблокировать'),
+                callback_data=f'admin_block_user_perm_ticket_{ticket_id}',
+            )
+        ]
+        if fsm_enabled:
+            block_row.append(
                 InlineKeyboardButton(
                     text=texts.t('BLOCK_BY_TIME', '⏳ Блок по времени'),
                     callback_data=f'admin_block_user_ticket_{ticket_id}',
-                ),
-            ]
-        )
+                )
+            )
+        keyboard.append(block_row)
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

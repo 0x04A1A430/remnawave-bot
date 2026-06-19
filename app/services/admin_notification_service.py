@@ -1430,15 +1430,22 @@ class AdminNotificationService:
         Returns:
             'admin'     — полный набор кнопок;
             'moderator' — набор без «👤 К пользователю» (@admin_required);
-            'none'      — без кнопок (группа/канал, посторонний,
-                          или ADMIN_NOTIFICATIONS_CHAT_ID задан строкой @username).
+            'group'     — групповой/супергруппа/канал админ-чат: только надёжные
+                          (не-FSM) кнопки, т.к. конкретного получателя не определить
+                          и FSM-ввод в общем чате не работает (privacy mode бота);
+            'none'      — без кнопок (посторонний в личке, либо
+                          ADMIN_NOTIFICATIONS_CHAT_ID задан строкой @username).
         """
         try:
             chat_id = int(self.chat_id)
         except (TypeError, ValueError):
             return 'none'  # строка @username или None — тип чата не определить
-        if chat_id <= 0:
-            return 'none'  # супергруппа / канал / старая группа — FSM-кнопки опасны
+        if chat_id < 0:
+            # супергруппа / канал / старая группа — доверенный админ-чат оператора,
+            # но конкретного получателя не определить → только надёжные кнопки.
+            return 'group'
+        if chat_id == 0:
+            return 'none'  # невалидный chat_id
         if settings.is_admin(chat_id):
             return 'admin'
 

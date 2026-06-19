@@ -998,13 +998,15 @@ async def close_ticket_notification(callback: types.CallbackQuery, db_user: User
 def _build_ticket_notification_keyboard(service: AdminNotificationService, ticket: Ticket, user: User | None):
     """Собирает клавиатуру действий для уведомления о тикете по роли получателя.
 
-    Возвращает None, если получатель не админ/модератор (группа, канал,
-    посторонний) — в этом случае кнопки не показываются.
+    Возвращает None только для роли 'none' (посторонний в личке / строковый
+    chat_id). Для группового/супергруппа админ-чата ('group') показываем урезанный
+    набор без FSM-кнопок — «Ответить»/«Блок по времени» в общем чате не работают
+    из-за privacy mode бота, остаются надёжные URL/callback-кнопки.
     """
     from app.config import settings
 
     role = service.resolve_recipient_role()
-    if role not in ('admin', 'moderator'):
+    if role == 'none':
         return None
     return get_ticket_notification_keyboard(
         ticket.id,
@@ -1014,6 +1016,7 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
         is_closed=ticket.is_closed,
         is_user_blocked=getattr(ticket, 'is_user_reply_blocked', False),
         is_admin=(role == 'admin'),
+        fsm_enabled=(role != 'group'),
         language=settings.DEFAULT_LANGUAGE,
     )
 

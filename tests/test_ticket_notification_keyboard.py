@@ -138,6 +138,51 @@ def test_notification_keyboard_never_has_back_button():
     assert 'admin_tickets' not in _callbacks(kb)
 
 
+# --- group keyboard (fsm_enabled=False): reliable buttons only --------------
+
+
+def test_group_keyboard_omits_fsm_buttons_keeps_reliable():
+    # Group/channel recipient: no FSM buttons (reply, block-by-time), but the
+    # reliable callbacks + URL buttons remain.
+    kb = get_ticket_notification_keyboard(
+        7, user_id=42, telegram_id=123, username='john', is_admin=False, fsm_enabled=False
+    )
+    callbacks = _callbacks(kb)
+    # FSM buttons are gone:
+    assert 'admin_reply_ticket_7' not in callbacks
+    assert 'admin_block_user_ticket_7' not in callbacks
+    # Reliable (non-FSM) actions stay:
+    assert 'admin_close_ticket_7' in callbacks
+    assert 'admin_block_user_perm_ticket_7' in callbacks
+    # URL buttons stay (admin chat → trusted, no contact-leak concern):
+    urls = _urls(kb)
+    assert 'tg://resolve?domain=john' in urls
+    assert 'tg://user?id=123' in urls
+
+
+def test_group_keyboard_omits_user_manage():
+    # "К пользователю" is @admin_required and we can't gate per-tapper in a group.
+    kb = get_ticket_notification_keyboard(7, user_id=42, is_admin=False, fsm_enabled=False)
+    assert not _has_user_manage(kb)
+
+
+def test_group_keyboard_blocked_shows_unblock():
+    kb = get_ticket_notification_keyboard(7, user_id=42, is_user_blocked=True, fsm_enabled=False)
+    callbacks = _callbacks(kb)
+    assert 'admin_unblock_user_ticket_7' in callbacks
+    assert 'admin_block_user_perm_ticket_7' not in callbacks
+    assert 'admin_block_user_ticket_7' not in callbacks
+
+
+def test_group_keyboard_closed_ticket_leaves_only_block_forever():
+    kb = get_ticket_notification_keyboard(7, user_id=42, is_closed=True, fsm_enabled=False)
+    callbacks = _callbacks(kb)
+    assert 'admin_reply_ticket_7' not in callbacks
+    assert 'admin_close_ticket_7' not in callbacks
+    assert 'admin_block_user_ticket_7' not in callbacks
+    assert 'admin_block_user_perm_ticket_7' in callbacks
+
+
 # --- resolve_recipient_role -------------------------------------------------
 
 
@@ -191,11 +236,16 @@ def test_role_outsider_private_chat_is_none(service_factory):
     assert service.resolve_recipient_role() == 'none'
 
 
-@pytest.mark.parametrize('chat_id', [-1001234567890, -123, 0])
-def test_role_group_channel_or_nonpositive_is_none(service_factory, chat_id):
+@pytest.mark.parametrize('chat_id', [-1001234567890, -123])
+def test_role_group_or_channel_is_group(service_factory, chat_id):
     service = service_factory(chat_id, admins={100, chat_id}, moderators={chat_id})
-    # Even if the negative/zero id were (absurdly) in the admin set, a non-positive
-    # chat is a group/channel — never attach FSM buttons.
+    # A negative chat is a group/channel (trusted admin chat): role 'group' →
+    # reliable, non-FSM buttons only. Returns before the admin/moderator check.
+    assert service.resolve_recipient_role() == 'group'
+
+
+def test_role_zero_chat_id_is_none(service_factory):
+    service = service_factory(0, admins={100})
     assert service.resolve_recipient_role() == 'none'
 
 
