@@ -116,6 +116,15 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if settings.is_admin(telegram_id):
             return await handler(event, data)
 
+        # Moderators are support staff: never gate them behind mandatory channel
+        # subscription, otherwise the ticket reply/block FSM flows exposed by the
+        # new notification buttons (issue #2988) get silently swallowed for an
+        # unsubscribed moderator. In-memory cache check, no I/O on the hot path.
+        from app.services.support_settings_service import SupportSettingsService
+
+        if SupportSettingsService.is_moderator(telegram_id):
+            return await handler(event, data)
+
         state: FSMContext = data.get('state')
         current_state = await state.get_state() if state else None
         if is_registration_process(event, current_state):
