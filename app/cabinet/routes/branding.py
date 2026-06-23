@@ -441,7 +441,20 @@ async def get_logo():
     }
     media_type = media_types.get(suffix, 'image/png')
 
-    return FileResponse(logo_path, media_type=media_type, headers={'Cache-Control': 'public, max-age=3600'})
+    return FileResponse(
+        logo_path,
+        media_type=media_type,
+        headers={
+            'Cache-Control': 'public, max-age=3600',
+            # The logo may be an SVG (admin-uploaded). Rendering via <img> never
+            # runs SVG scripts, but opening /branding/logo as a top-level document
+            # would. Block that XSS surface: nosniff + a sandboxed CSP that forbids
+            # script execution. CSP on this image response is ignored when loaded
+            # as an <img> subresource, so logo display is unaffected.
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        },
+    )
 
 
 @router.put('/name', response_model=BrandingResponse)
