@@ -114,6 +114,9 @@ _ADMIN_SERVICE_EVENTS: dict[str, str] = {
     'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
     'service.login_attempt_success': '🔓 Успешный вход в панель',
     'service.subpage_config_changed': '📄 Конфиг страницы подписки изменён',
+    # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
+    'service.api_token_created': '🔑 Создан API-токен панели',
+    'service.api_token_deleted': '🗝️ Удалён API-токен панели',
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {

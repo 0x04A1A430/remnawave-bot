@@ -87,3 +87,10 @@ async def test_no_subscription_sends_nothing():
     svc = _service()
     await svc._handle_user_expiration(None, _user(), None, {'meta': {'expiration': -24}})
     svc._notify_user.assert_not_awaited()
+
+
+async def test_new_2_8_0_api_token_admin_events_registered():
+    """2.8.0 added service.api_token_created/deleted — surfaced as admin notifications."""
+    svc = _service()
+    assert 'service.api_token_created' in svc._admin_handlers
+    assert 'service.api_token_deleted' in svc._admin_handlers
