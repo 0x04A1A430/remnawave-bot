@@ -764,9 +764,12 @@ class RemnaWaveService:
             if not by_app_raw:
                 app_counts: dict[str, int] = {}
                 for p in by_platform:
-                    for a in p.get('byApp', []) or []:
+                    nested = p.get('byApp')
+                    if not isinstance(nested, list):  # malformed/absent — skip, don't blow up the whole payload
+                        continue
+                    for a in nested:
                         name = a.get('app') or 'Unknown'
-                        app_counts[name] = app_counts.get(name, 0) + (a.get('count', 0) or 0)
+                        app_counts[name] = app_counts.get(name, 0) + (a.get('count') or 0)
                 by_app_raw = [{'app': name, 'count': count} for name, count in app_counts.items()]
 
             return {
@@ -775,9 +778,9 @@ class RemnaWaveService:
                     for u in top.get('users', [])
                 ],
                 'by_platform': [
-                    {'platform': p.get('platform') or 'Unknown', 'count': p.get('count', 0)} for p in by_platform
+                    {'platform': p.get('platform') or 'Unknown', 'count': p.get('count') or 0} for p in by_platform
                 ],
-                'by_app': [{'app': a.get('app') or 'Unknown', 'count': a.get('count', 0)} for a in by_app_raw],
+                'by_app': [{'app': a.get('app') or 'Unknown', 'count': a.get('count') or 0} for a in by_app_raw],
                 'total_unique_devices': stats.get('totalUniqueDevices', 0),
                 'total_hwid_devices': stats.get('totalHwidDevices', 0),
                 'average_devices_per_user': stats.get('averageHwidDevicesPerUser', 0),
