@@ -35,6 +35,23 @@ def _sent_key(svc: RemnaWaveWebhookService) -> str:
     return svc._notify_user.await_args.args[1]
 
 
+def _receiver_data(expiration) -> dict:
+    """Build the handler ``data`` exactly as the webhook receiver does.
+
+    The receiver injects the envelope ``meta`` under ``data['_meta']`` (see
+    app/webserver/remnawave_webhook.py: "Inject meta into data so handlers can
+    access it via data.get('_meta')"). Handlers read ``_meta`` — NOT ``meta``.
+    Tests MUST go through this contract, otherwise they silently pass against
+    the wrong key and mask a production break (every notification lost).
+    """
+    payload = {'event': 'user.expiration', 'meta': {'expiration': expiration}}
+    data: dict = {}
+    meta = payload.get('meta')
+    if isinstance(meta, dict):
+        data['_meta'] = meta
+    return data
+
+
 async def test_new_and_old_events_both_registered():
     svc = _service()
     # 2.8.0 event handled...
@@ -58,26 +75,36 @@ async def test_canonical_hours_map_to_legacy_messages():
     }
     for hours, expected in cases.items():
         svc = _service()
-        await svc._handle_user_expiration(None, _user(), _sub(), {'meta': {'expiration': hours}})
+        await svc._handle_user_expiration(None, _user(), _sub(), _receiver_data(hours))
         svc._notify_user.assert_awaited_once()
         assert _sent_key(svc) == expected
+
+
+async def test_reads_receiver_meta_key_not_raw_meta():
+    """Regression: the handler reads data['_meta'] (receiver contract). A payload
+    carrying the RAW envelope key 'meta' (i.e. receiver injection skipped) must
+    NOT produce a notification — this is exactly the bug that silently dropped
+    every user.expiration notification on 2.8.0."""
+    svc = _service()
+    await svc._handle_user_expiration(None, _user(), _sub(), {'meta': {'expiration': -24}})
+    svc._notify_user.assert_not_awaited()
 
 
 async def test_non_canonical_negative_picks_nearest_before_message():
     svc = _service()
     # -30 is closest to -24 → "expires in <24h" message.
-    await svc._handle_user_expiration(None, _user(), _sub(), {'meta': {'expiration': -30}})
+    await svc._handle_user_expiration(None, _user(), _sub(), _receiver_data(-30))
     assert _sent_key(svc) == 'WEBHOOK_SUB_EXPIRES_24H'
 
 
 async def test_non_canonical_positive_uses_expired_message():
     svc = _service()
-    await svc._handle_user_expiration(None, _user(), _sub(), {'meta': {'expiration': 48}})
+    await svc._handle_user_expiration(None, _user(), _sub(), _receiver_data(48))
     assert _sent_key(svc) == 'WEBHOOK_SUB_EXPIRED_24H_AGO'
 
 
 async def test_missing_or_invalid_meta_sends_nothing():
-    for data in ({'meta': {}}, {'meta': {'expiration': 'oops'}}, {}, {'meta': None}):
+    for data in ({'_meta': {}}, {'_meta': {'expiration': 'oops'}}, {}, {'_meta': None}):
         svc = _service()
         await svc._handle_user_expiration(None, _user(), _sub(), data)
         svc._notify_user.assert_not_awaited()
@@ -85,7 +112,7 @@ async def test_missing_or_invalid_meta_sends_nothing():
 
 async def test_no_subscription_sends_nothing():
     svc = _service()
-    await svc._handle_user_expiration(None, _user(), None, {'meta': {'expiration': -24}})
+    await svc._handle_user_expiration(None, _user(), None, _receiver_data(-24))
     svc._notify_user.assert_not_awaited()
 
 

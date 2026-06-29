@@ -1599,7 +1599,10 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.expiration: подписка не найдена в БД, пропуск', user_id=user.id)
             return
 
-        meta = data.get('meta') if isinstance(data.get('meta'), dict) else {}
+        # Ресивер кладёт envelope-meta вебхука в data['_meta'] (см.
+        # remnawave_webhook.py: «Inject meta into data ... via data.get('_meta')»),
+        # ровно как читает сосед _handle_user_not_connected. НЕ 'meta'.
+        meta = data.get('_meta') if isinstance(data.get('_meta'), dict) else {}
         raw = meta.get('expiration', data.get('expiration'))
         try:
             hours = int(raw)
@@ -1654,8 +1657,8 @@ class RemnaWaveWebhookService:
         # Extract threshold percentage from meta or data
         percent = data.get('thresholdPercent') or data.get('threshold', '')
         if not percent:
-            # Try to extract from meta
-            meta = data.get('meta', {})
+            # Envelope-meta живёт в data['_meta'] (ресивер), не в 'meta'.
+            meta = data.get('_meta', {})
             if isinstance(meta, dict):
                 percent = meta.get('thresholdPercent', '80')
 
