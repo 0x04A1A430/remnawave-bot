@@ -426,8 +426,12 @@ class RemnaWaveWebhookService:
         # Build message from event data (escape all untrusted values to prevent HTML injection)
         lines = [f'<b>{title}</b>']
 
-        # Extract common fields
-        name = html.escape(data.get('name') or data.get('nodeName') or data.get('username') or '')
+        # Extract common fields. 2.8.0 service.api_token_* events nest the token
+        # name under data.apiToken.name (see service.event.interface.ts).
+        api_token = data.get('apiToken') if isinstance(data.get('apiToken'), dict) else {}
+        name = html.escape(
+            data.get('name') or data.get('nodeName') or data.get('username') or api_token.get('name') or ''
+        )
         if name:
             lines.append(f'Имя: <code>{name}</code>')
 

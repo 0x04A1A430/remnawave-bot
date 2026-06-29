@@ -2037,7 +2037,7 @@ class RemnaWaveService:
                         else:
                             _sub_status = SubscriptionStatus.DISABLED
 
-                        _traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0) or 0
+                        _traffic_limit_bytes = int(panel_user.get('trafficLimitBytes') or 0)  # 2.8.0: number→int
                         _used_bytes = panel_user.get('usedTrafficBytes', 0) or 0
                         _squads = panel_user.get('activeInternalSquads', []) or []
                         _squad_uuids = []
@@ -2170,7 +2170,7 @@ class RemnaWaveService:
             else:
                 status = SubscriptionStatus.DISABLED
 
-            traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0)
+            traffic_limit_bytes = int(panel_user.get('trafficLimitBytes') or 0)  # 2.8.0: number→int
             traffic_limit_gb = traffic_limit_bytes // (1024**3) if traffic_limit_bytes > 0 else 0
 
             used_traffic_bytes = _get_user_traffic_bytes(panel_user)
