@@ -297,13 +297,20 @@ class SubscriptionService:
         # short_id (6 hex chars) приклеивается к base; helper гарантирует, что
         # итоговая длина ≤ REMNAWAVE_USERNAME_MAX_LENGTH (исторический баг с
         # `didykmarin_email_didykmarin_703_49883b` — 38 chars вместо 36).
+        #
+        # КРИТИЧНО для multi-tariff: суффикс ОБЯЗАН быть уникален per-subscription,
+        # иначе два тарифа одного юзера собирают ОДИНАКОВЫЙ username → панель
+        # возвращает одного и того же пользователя → общий HWID-лимит (баг «лимит
+        # по наименьшему тарифу»). На пустой/legacy short_id ('' из server_default)
+        # падаем на детерминированный per-subscription суффикс по id.
+        short_suffix = subscription.remnawave_short_id or f'sub{subscription.id}'
         username = settings.build_remnawave_subscription_username(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
             email=user.email,
             user_id=user.id,
-            suffix=f'_{subscription.remnawave_short_id}',
+            suffix=f'_{short_suffix}',
         )
 
         updated_user = await api.create_user(username=username, **common_kwargs)
