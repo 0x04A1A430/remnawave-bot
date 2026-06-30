@@ -296,11 +296,7 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
-    if (
-        settings.is_lava_enabled()
-        and not settings.is_lava_sbp_enabled()
-        and not settings.is_lava_card_enabled()
-    ):
+    if settings.is_lava_enabled() and not settings.is_lava_sbp_enabled() and not settings.is_lava_card_enabled():
         lava_name = settings.get_lava_display_name()
         methods.append(
             {
