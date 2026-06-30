@@ -83,6 +83,45 @@ async def _resolve_subscription(callback, db_user, db, state=None):
     return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
+async def _resolve_switch_subscription(callback, db_user, db, state=None):
+    """Resolve the subscription for tariff-switch flows (issue #3012).
+
+    Unlike the generic resolver, this NEVER reads the trailing callback segment as
+    a subscription_id — switch callbacks end in tariff_id/period, which the generic
+    resolver would mistake for a sub_id (and renew/switch the WRONG subscription
+    when that number equals one of the user's subscription ids). The switch entry
+    (show_tariff_switch_list / show_instant_switch_list) stores the chosen
+    subscription in FSM ``active_subscription_id``, so it is authoritative here.
+    """
+    from app.database.crud.subscription import (
+        get_active_subscriptions_by_user_id,
+        get_subscription_by_id_for_user,
+        get_subscription_by_user_id,
+    )
+
+    if not settings.is_multi_tariff_enabled():
+        sub = await get_subscription_by_user_id(db, db_user.id)
+        return sub, (sub.id if sub else None)
+
+    if state:
+        try:
+            data = await state.get_data()
+            fsm_sub_id = data.get('active_subscription_id')
+            if fsm_sub_id:
+                sub = await get_subscription_by_id_for_user(db, fsm_sub_id, db_user.id)
+                if sub:
+                    return sub, fsm_sub_id
+        except Exception:
+            pass
+
+    active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+    if len(active_subs) == 1:
+        return active_subs[0], active_subs[0].id
+
+    await callback.answer('Выберите подписку', show_alert=True)
+    return None, None
+
+
 def _apply_promo_discount(price: int, group_pct: int, offer_pct: int = 0) -> int:
     """Применяет стекинг скидок к цене (sequential floor division, как PricingEngine)."""
     from app.services.pricing_engine import PricingEngine
@@ -2823,7 +2862,7 @@ async def show_tariff_switch_list(
     await state.clear()
 
     # Проверяем наличие активной подписки
-    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
         return
 
@@ -2945,7 +2984,7 @@ async def select_tariff_switch(
         return
 
     # Проверяем разрешение на смену в данном направлении
-    current_subscription_sw, _sw_sub_id_check = await _resolve_subscription(callback, db_user, db, state)
+    current_subscription_sw, _sw_sub_id_check = await _resolve_switch_subscription(callback, db_user, db, state)
     if current_subscription_sw and current_subscription_sw.tariff_id:
         cur_tariff_sw = await get_tariff_by_id(db, current_subscription_sw.tariff_id)
         if cur_tariff_sw:
@@ -2978,7 +3017,7 @@ async def select_tariff_switch(
         user_balance = db_user.balance_kopeks or 0
 
         # Проверяем текущую подписку на оставшиеся дни (switched FROM, not TO)
-        current_subscription, _sw_sub_id = await _resolve_subscription(callback, db_user, db, state)
+        current_subscription, _sw_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
         days_warning = ''
         if current_subscription and current_subscription.end_date:
             remaining = current_subscription.end_date - datetime.now(UTC)
@@ -3104,7 +3143,7 @@ async def select_tariff_switch_period(
             current_tariff_name = html.escape(current_tariff.name)
 
     # Получаем текущую подписку (switched FROM, not TO) для расчёта оставшегося времени
-    subscription, _sw_period_sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _sw_period_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if subscription and subscription.end_date:
         max(0, (subscription.end_date - datetime.now(UTC)).days)
 
@@ -3178,7 +3217,7 @@ async def confirm_tariff_switch(
     db_user = await lock_user_for_pricing(db, db_user.id)
 
     # Проверяем наличие подписки (switched FROM — resolved via FSM state)
-    subscription, _sw_confirm_sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _sw_confirm_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
@@ -3455,7 +3494,7 @@ async def confirm_daily_tariff_switch(
         return
 
     # Проверяем наличие подписки — ищем подписку FROM (текущую), не TO (новый тариф)
-    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer('У вас нет активной подписки', show_alert=True)
         return
@@ -3859,7 +3898,7 @@ async def show_instant_switch_list(
     await state.clear()
 
     # Проверяем наличие активной подписки
-    subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
         return
 
@@ -3979,7 +4018,7 @@ async def preview_instant_switch(
     remaining_days = data.get('remaining_days', 0)
 
     # Resolve the subscription being switched FROM (via FSM state active_subscription_id)
-    subscription, _isw_sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _isw_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription or not subscription.tariff_id:
         await callback.answer('Подписка не найдена', show_alert=True)
         return
@@ -4149,7 +4188,7 @@ async def confirm_instant_switch(
         return
 
     # Проверяем подписку (switched FROM — resolved via FSM state)
-    subscription, _isw_confirm_sub_id = await _resolve_subscription(callback, db_user, db, state)
+    subscription, _isw_confirm_sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer('Подписка не найдена', show_alert=True)
         return
