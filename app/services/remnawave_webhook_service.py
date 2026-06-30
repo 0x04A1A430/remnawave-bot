@@ -1177,8 +1177,17 @@ class RemnaWaveWebhookService:
             except (ValueError, TypeError):
                 pass
 
-        # Sync used traffic
-        used_traffic_bytes = data.get('usedTrafficBytes')
+        # Sync used traffic. usedTrafficBytes живёт в nested userTraffic
+        # (ExtendedUsersSchema.userTraffic; базовый UsersSchema плоского поля не
+        # содержит) — читаем nested-first, как _get_user_traffic_bytes в sync-сервисе,
+        # с fallback на плоский ключ для старых панелей. Без этого used-traffic не
+        # синхронизировался из user.modified-вебхуков (поле всегда было None).
+        user_traffic = data.get('userTraffic')
+        used_traffic_bytes = (
+            user_traffic.get('usedTrafficBytes')
+            if isinstance(user_traffic, dict) and user_traffic.get('usedTrafficBytes') is not None
+            else data.get('usedTrafficBytes')
+        )
         if used_traffic_bytes is not None:
             try:
                 new_used_gb = round(int(used_traffic_bytes) / (1024**3), 2)

@@ -121,3 +121,24 @@ async def test_new_2_8_0_api_token_admin_events_registered():
     svc = _service()
     assert 'service.api_token_created' in svc._admin_handlers
     assert 'service.api_token_deleted' in svc._admin_handlers
+
+
+async def test_user_modified_syncs_used_traffic_from_nested_user_traffic():
+    """usedTrafficBytes lives nested in userTraffic (ExtendedUsersSchema); the
+    user.modified handler must read it there, else used-traffic never syncs."""
+    svc = _service()
+    sub = MagicMock()
+    sub.status = 'active'
+    sub.traffic_used_gb = 0.0
+    await svc._handle_user_modified(AsyncMock(), _user(), sub, {'userTraffic': {'usedTrafficBytes': 5 * 1024**3}})
+    assert sub.traffic_used_gb == 5.0
+
+
+async def test_user_modified_used_traffic_falls_back_to_flat_key():
+    """Old panels send a flat usedTrafficBytes — keep the fallback working."""
+    svc = _service()
+    sub = MagicMock()
+    sub.status = 'active'
+    sub.traffic_used_gb = 0.0
+    await svc._handle_user_modified(AsyncMock(), _user(), sub, {'usedTrafficBytes': 2 * 1024**3})
+    assert sub.traffic_used_gb == 2.0
