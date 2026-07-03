@@ -1473,7 +1473,7 @@
   "SUBSCRIPTION_HAPP_OPEN_LINK": "<a href=\"{subscription_link}\">Открыть ссылку в Happ</a>",
   "SUBSCRIPTION_HAPP_OPEN_TITLE": "<b>Подключение через Happ</b>",
   "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT": "Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
-  "SUBSCRIPTION_IMPORT_LINK_SECTION": "<b>Ваша ссылка для импорта в VPN приложение:</b>\n<blockquote>{subscription_url}</blockquote>",
+  "SUBSCRIPTION_IMPORT_LINK_SECTION": "<b>Ваша ссылка для подключения:</b>\n<code>{subscription_url}</code>",
   "SUBSCRIPTION_INFO": "\n<b>Информация о подписке</b>\n\n<b>Статус:</b> {status}\n<b>Тип:</b> {type}\n<b>Действует до:</b> {end_date}\n<b>Осталось дней:</b> {days_left}\n\n<b>Трафик:</b> {traffic_used} / {traffic_limit}\n<b>Устройства:</b> {devices_used} / {devices_limit}\n\n<b>Автоплатеж:</b> {autopay_status}\n",
   "SUBSCRIPTION_LINK_GENERATING_NOTICE": "{purchase_text}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
   "SUBSCRIPTION_LINK_HIDDEN_NOTICE": "Ссылка подписки доступна по кнопкам ниже или в разделе «Моя подписка».",

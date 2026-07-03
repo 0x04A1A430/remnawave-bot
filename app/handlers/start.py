@@ -1423,7 +1423,7 @@ async def _continue_registration_after_rules(
         await complete_registration_from_callback(callback, state, db)
     else:
         try:
-            await callback.message.edit_text(
+            await callback.message.answer(
                 texts.t(
                     'REFERRAL_CODE_QUESTION',
                     "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
@@ -1460,6 +1460,11 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext,
 
         if callback.data == 'rules_accept':
             logger.info('Правила приняты пользователем', from_user_id=callback.from_user.id)
+
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
 
             # Пытаемся показать политику конфиденциальности
             policy_shown = await _show_privacy_policy_after_rules(callback, state, db, language)
