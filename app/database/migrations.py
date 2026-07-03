@@ -76,9 +76,10 @@ async def run_alembic_upgrade() -> None:
 
     if db_state == 'legacy':
         logger.warning(
-            'Обнаружена существующая БД без alembic_version — автоматический stamp 0001 (переход с universal_migration)'
+            'Обнаружена существующая БД без alembic_version — автоматический stamp head (схема уже создана моделями)'
         )
-        await _stamp_alembic_revision(_INITIAL_REVISION)
+        await _stamp_alembic_revision('head')
+        return
 
     cfg = _get_alembic_config()
     loop = asyncio.get_running_loop()
