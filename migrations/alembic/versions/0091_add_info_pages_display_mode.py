@@ -10,10 +10,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'info_pages',
-        sa.Column('display_mode', sa.String(length=10), nullable=False, server_default='both'),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('info_pages')}
+    if 'display_mode' not in existing_cols:
+        op.add_column(
+            'info_pages',
+            sa.Column('display_mode', sa.String(length=10), nullable=False, server_default='both'),
+        )
 
 
 def downgrade() -> None:

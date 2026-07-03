@@ -64,7 +64,7 @@ def upgrade() -> None:
     # supported by SQLite ≥ 3.8.0, which the project requires.
     op.execute(
         """
-        CREATE UNIQUE INDEX uq_referral_earnings_registration_pending
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_referral_earnings_registration_pending
         ON referral_earnings (user_id, referral_id)
         WHERE reason = 'referral_registration_pending'
         """

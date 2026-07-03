@@ -18,10 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'broadcast_history',
-        sa.Column('category', sa.String(20), nullable=False, server_default='system'),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('broadcast_history')}
+    if 'category' not in existing_cols:
+        op.add_column(
+            'broadcast_history',
+            sa.Column('category', sa.String(20), nullable=False, server_default='system'),
+        )
 
 
 def downgrade() -> None:

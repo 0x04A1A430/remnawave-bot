@@ -18,33 +18,38 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
     # 1. Remove UNIQUE constraint from subscriptions.user_id
-    # First drop the unique index/constraint
-    op.drop_constraint('subscriptions_user_id_key', 'subscriptions', type_='unique')
+    existing_unique = {u['name'] for u in inspector.get_unique_constraints('subscriptions')}
+    if 'subscriptions_user_id_key' in existing_unique:
+        op.drop_constraint('subscriptions_user_id_key', 'subscriptions', type_='unique')
 
     # Ensure regular index exists on user_id (was implicit with unique)
-    op.create_index('ix_subscriptions_user_id', 'subscriptions', ['user_id'])
-
-    # 2. Add composite indexes for multi-subscription queries
-    op.create_index('ix_subscriptions_user_status', 'subscriptions', ['user_id', 'status'])
-    op.create_index('ix_subscriptions_user_tariff_status', 'subscriptions', ['user_id', 'tariff_id', 'status'])
+    existing_indexes = {idx['name'] for idx in inspector.get_indexes('subscriptions')}
+    if 'ix_subscriptions_user_id' not in existing_indexes:
+        op.create_index('ix_subscriptions_user_id', 'subscriptions', ['user_id'])
+    if 'ix_subscriptions_user_status' not in existing_indexes:
+        op.create_index('ix_subscriptions_user_status', 'subscriptions', ['user_id', 'status'])
+    if 'ix_subscriptions_user_tariff_status' not in existing_indexes:
+        op.create_index('ix_subscriptions_user_tariff_status', 'subscriptions', ['user_id', 'tariff_id', 'status'])
 
     # 3. Partial unique index: prevent duplicate active/trial subscriptions for same tariff
     op.execute(
         sa.text(
-            """
-            CREATE UNIQUE INDEX uq_subscriptions_user_tariff_active
-            ON subscriptions (user_id, tariff_id)
-            WHERE tariff_id IS NOT NULL AND status IN ('active', 'trial')
-            """
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_subscriptions_user_tariff_active "
+            "ON subscriptions (user_id, tariff_id) "
+            "WHERE tariff_id IS NOT NULL AND status IN ('active', 'trial')"
         )
     )
 
     # 4. Add remnawave_uuid column to subscriptions
-    op.add_column('subscriptions', sa.Column('remnawave_uuid', sa.String(255), nullable=True))
+    existing_cols = {c['name'] for c in inspector.get_columns('subscriptions')}
+    if 'remnawave_uuid' not in existing_cols:
+        op.add_column('subscriptions', sa.Column('remnawave_uuid', sa.String(255), nullable=True))
 
     # 5. Data migration: copy User.remnawave_uuid → Subscription.remnawave_uuid
-    # for existing subscriptions that have remnawave_short_uuid (i.e., linked to Remnawave)
     op.execute(
         sa.text(
             """
@@ -59,7 +64,9 @@ def upgrade() -> None:
     )
 
     # 6. Change tariff_id FK from SET NULL to RESTRICT
-    op.drop_constraint('subscriptions_tariff_id_fkey', 'subscriptions', type_='foreignkey')
+    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('subscriptions')}
+    if 'subscriptions_tariff_id_fkey' in existing_fks:
+        op.drop_constraint('subscriptions_tariff_id_fkey', 'subscriptions', type_='foreignkey')
     op.create_foreign_key(
         'subscriptions_tariff_id_fkey',
         'subscriptions',

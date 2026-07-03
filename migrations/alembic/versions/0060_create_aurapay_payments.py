@@ -18,6 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    if conn.execute(sa.text("SELECT to_regclass('public.aurapay_payments')")).scalar():
+        return
     op.create_table(
         'aurapay_payments',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),

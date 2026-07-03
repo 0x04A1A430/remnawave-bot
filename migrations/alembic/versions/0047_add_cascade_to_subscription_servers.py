@@ -45,18 +45,24 @@ def _get_actual_fk_name(connection, table: str, column: str) -> str | None:
 
 def upgrade() -> None:
     connection = op.get_bind()
+    inspector = sa.inspect(connection)
+    existing_indexes = {idx['name'] for idx in inspector.get_indexes('subscription_servers')}
+    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('subscription_servers')}
+
     actual_fk = _get_actual_fk_name(connection, 'subscription_servers', 'subscription_id')
     if actual_fk:
         op.drop_constraint(actual_fk, 'subscription_servers', type_='foreignkey')
-    op.create_foreign_key(
-        'subscription_servers_subscription_id_fkey',
-        'subscription_servers',
-        'subscriptions',
-        ['subscription_id'],
-        ['id'],
-        ondelete='CASCADE',
-    )
-    op.create_index('ix_subscription_servers_subscription_id', 'subscription_servers', ['subscription_id'])
+    if 'subscription_servers_subscription_id_fkey' not in existing_fks:
+        op.create_foreign_key(
+            'subscription_servers_subscription_id_fkey',
+            'subscription_servers',
+            'subscriptions',
+            ['subscription_id'],
+            ['id'],
+            ondelete='CASCADE',
+        )
+    if 'ix_subscription_servers_subscription_id' not in existing_indexes:
+        op.create_index('ix_subscription_servers_subscription_id', 'subscription_servers', ['subscription_id'])
 
 
 def downgrade() -> None:

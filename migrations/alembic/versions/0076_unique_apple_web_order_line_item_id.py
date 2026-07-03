@@ -19,6 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     web_order_duplicates = bind.execute(
         sa.text(
             """
@@ -56,30 +58,37 @@ def upgrade() -> None:
             f'duplicate values exist: {sample}'
         )
 
-    op.drop_index('ix_apple_transactions_web_order_line_item_id', table_name='apple_transactions')
+    existing_at_indexes = {idx['name'] for idx in inspector.get_indexes('apple_transactions')}
+    existing_an_indexes = {idx['name'] for idx in inspector.get_indexes('apple_notifications')}
+
+    if 'ix_apple_transactions_web_order_line_item_id' in existing_at_indexes:
+        op.drop_index('ix_apple_transactions_web_order_line_item_id', table_name='apple_transactions')
     op.create_index(
         'ix_apple_transactions_web_order_line_item_id',
         'apple_transactions',
         ['web_order_line_item_id'],
         unique=True,
     )
-    op.create_index(
-        'ix_apple_transactions_signed_transaction_hash',
-        'apple_transactions',
-        ['signed_transaction_hash'],
-    )
-    op.create_index(
-        'ix_apple_notifications_payload_hash',
-        'apple_notifications',
-        ['payload_hash'],
-        unique=True,
-    )
-    op.create_index(
-        'ix_apple_notifications_status_received_at',
-        'apple_notifications',
-        ['status', 'received_at'],
-        postgresql_where=sa.text("status IN ('received','failed')"),
-    )
+    if 'ix_apple_transactions_signed_transaction_hash' not in existing_at_indexes:
+        op.create_index(
+            'ix_apple_transactions_signed_transaction_hash',
+            'apple_transactions',
+            ['signed_transaction_hash'],
+        )
+    if 'ix_apple_notifications_payload_hash' not in existing_an_indexes:
+        op.create_index(
+            'ix_apple_notifications_payload_hash',
+            'apple_notifications',
+            ['payload_hash'],
+            unique=True,
+        )
+    if 'ix_apple_notifications_status_received_at' not in existing_an_indexes:
+        op.create_index(
+            'ix_apple_notifications_status_received_at',
+            'apple_notifications',
+            ['status', 'received_at'],
+            postgresql_where=sa.text("status IN ('received','failed')"),
+        )
 
 
 def downgrade() -> None:

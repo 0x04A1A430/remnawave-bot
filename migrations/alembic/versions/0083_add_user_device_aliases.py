@@ -25,6 +25,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    if conn.execute(sa.text("SELECT to_regclass('public.user_device_aliases')")).scalar():
+        return
     op.create_table(
         'user_device_aliases',
         sa.Column('id', sa.Integer(), nullable=False),
