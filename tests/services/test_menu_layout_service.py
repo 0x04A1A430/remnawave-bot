@@ -15,7 +15,7 @@ async def test_build_button_connect_direct_mode_with_url():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': '🔗 Подключиться'},
+        'text': {'ru': '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'direct',
         'webapp_url': 'https://example.com/miniapp',
@@ -45,7 +45,7 @@ async def test_build_button_connect_direct_mode_with_subscription_url():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': '🔗 Подключиться'},
+        'text': {'ru': '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'direct',
         'webapp_url': None,
@@ -83,7 +83,7 @@ async def test_build_button_connect_callback_mode():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': '🔗 Подключиться'},
+        'text': {'ru': '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'callback',
         'webapp_url': None,
@@ -112,7 +112,7 @@ async def test_build_button_connect_direct_mode_fallback_to_callback():
     button_config = {
         'type': 'builtin',
         'builtin_id': 'connect',
-        'text': {'ru': '🔗 Подключиться'},
+        'text': {'ru': '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'},
         'action': 'subscription_connect',
         'open_mode': 'direct',
         'webapp_url': None,
