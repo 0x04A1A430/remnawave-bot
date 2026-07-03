@@ -452,8 +452,8 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
 def _build_user_button_label(user: User) -> str:
     status_emoji_map = {
         UserStatus.ACTIVE.value: '',
-        UserStatus.BLOCKED.value: '',
-        UserStatus.DELETED.value: '',
+        UserStatus.BLOCKED.value: '×',
+        UserStatus.DELETED.value: '️',
     }
     status_emoji = status_emoji_map.get(getattr(user, 'status', None), '')
 
@@ -462,7 +462,7 @@ def _build_user_button_label(user: User) -> str:
         if subscription.is_trial:
             subscription_emoji = ''
         elif subscription.is_active:
-            subscription_emoji = ''
+            subscription_emoji = '$'
         else:
             subscription_emoji = ''
     else:
