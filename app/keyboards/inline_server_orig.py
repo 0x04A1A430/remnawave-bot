@@ -11,6 +11,7 @@ from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.button_emoji import make_button
+from app.utils.device_display import format_device_label
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.pricing_utils import (
@@ -682,8 +683,8 @@ def get_main_menu_keyboard(
             if settings.is_multi_tariff_enabled()
             else texts.MENU_SUBSCRIPTION
         )
-        paired_buttons.append(make_button(text=sub_btn_text, callback_data='menu_subscription'))
-        paired_buttons.append(make_button(text=texts.t('MANAGE_DEVICES_BUTTON', 'Устройства'), callback_data='subscription_manage_devices'))
+        paired_buttons.append(make_button(text=sub_btn_text, callback_data='menu_subscription', style='primary'))
+        paired_buttons.append(make_button(text=texts.t('MANAGE_DEVICES_BUTTON', 'Устройства'), callback_data='subscription_manage_devices', style='primary'))
 
         # Добавляем кнопку докупки трафика для лимитированных подписок
         # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
@@ -1254,6 +1255,17 @@ def get_subscription_keyboard(
                         )
                     ]
                 )
+
+    if not settings.is_multi_tariff_enabled():
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
+                    callback_data='subscription_settings',
+                    style='primary',
+                )
+            ]
+        )
 
     keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
@@ -2208,7 +2220,7 @@ def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFA
                     text=texts.t('TOPUP_BALANCE_BUTTON', '💳 Пополнить баланс'), callback_data='balance_topup'
                 )
             ],
-            [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
+            [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription', style='primary')],
         ]
     )
 
@@ -3193,7 +3205,7 @@ def get_devices_management_keyboard(
         else:
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
-            device_info = f'{platform} - {device_model}'
+            device_info = format_device_label(platform, device_model)
 
         if len(device_info) > 22:
             device_info = device_info[:19] + '...'
@@ -3316,8 +3328,9 @@ def get_updated_subscription_settings_keyboard(
     keyboard.append(
         [
             make_button(
-                text=texts.t('MANAGE_DEVICES_BUTTON', '🔧 Управление устройствами'),
+                text=texts.t('MANAGE_DEVICES_BUTTON', 'Управление устройствами'),
                 callback_data='subscription_manage_devices',
+                style='primary',
             )
         ]
     )
@@ -3370,6 +3383,7 @@ def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> Inl
                 make_button(
                     text=texts.t('MANAGE_DEVICES_BUTTON', '🔧 Управление устройствами'),
                     callback_data='subscription_manage_devices',
+                    style='primary',
                 )
             ],
             [
