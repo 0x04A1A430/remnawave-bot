@@ -12,6 +12,7 @@ on subscription_id for efficient CASCADE deletes and joins.
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import text
 
