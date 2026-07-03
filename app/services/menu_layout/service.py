@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.utils.button_emoji import make_button
 from app.database.crud.system_setting import upsert_system_setting
 from app.database.models import SystemSetting
 from app.localization.texts import get_texts
@@ -1048,16 +1049,16 @@ class MenuLayoutService:
 
         # Строим кнопку в зависимости от типа
         if button_type == 'url':
-            return InlineKeyboardButton(text=text, url=action, icon_custom_emoji_id=custom_emoji_id)
+            return make_button(text=text, url=action, icon_custom_emoji_id=custom_emoji_id)
         if button_type == 'mini_app':
-            return InlineKeyboardButton(
+            return make_button(
                 text=text,
                 web_app=types.WebAppInfo(url=action),
                 icon_custom_emoji_id=custom_emoji_id,
             )
         if button_type == 'callback':
             # Кастомная кнопка с callback_data
-            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+            return make_button(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
         # builtin - проверяем open_mode
         if open_mode == 'direct':
             # Прямое открытие Mini App через WebAppInfo
@@ -1083,7 +1084,13 @@ class MenuLayoutService:
             # Проверяем, что это действительно URL
             if url and (url.startswith('http://') or url.startswith('https://')):
                 logger.info('Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
-                return InlineKeyboardButton(
+                if is_connect_button:
+                    return make_button(
+                        text=text,
+                        url=url,
+                        icon_custom_emoji_id=custom_emoji_id,
+                    )
+                return make_button(
                     text=text,
                     web_app=types.WebAppInfo(url=url),
                     icon_custom_emoji_id=custom_emoji_id,
@@ -1095,10 +1102,10 @@ class MenuLayoutService:
                 value='есть' if context.subscription else 'нет',
             )
             # Fallback на callback_data
-            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+            return make_button(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
         # Стандартный callback_data
         logger.debug('Кнопка connect: open_mode=, используем callback_data', open_mode=open_mode, action=action)
-        return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
+        return make_button(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
 
     # --- Построение клавиатуры ---
 
