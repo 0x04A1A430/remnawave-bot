@@ -1,5 +1,4 @@
 import math
-import re
 from datetime import UTC, datetime
 
 import structlog
@@ -632,6 +631,7 @@ def get_main_menu_keyboard(
             return make_button(
                 text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                 callback_data='subscription_connect',
+                style='success',
             )
 
         if connect_mode == 'miniapp_subscription':
@@ -673,6 +673,7 @@ def get_main_menu_keyboard(
                                 if settings.is_multi_tariff_enabled()
                                 else 'open_subscription_link'
                             ),
+                            style='success',
                         )
                     ]
                 )
@@ -3217,11 +3218,11 @@ def get_devices_management_keyboard(
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
             emoji_tag = _PLATFORM_EMOJI.get(platform, '')
-            device_info = f'{emoji_tag} {platform} - {device_model}'
-
-        if len(device_info) > 22:
-            plain = re.sub(r'<[^>]+>', '', device_info)
-            device_info = (plain[:19] + '...') if len(plain) > 19 else plain
+            device_info = f'{platform} - {device_model}'
+            if len(device_info) > 19:
+                device_info = device_info[:16] + '...'
+            if emoji_tag:
+                device_info = f'{emoji_tag} {device_info}'
 
         keyboard.append(
             [make_button(text=f'{device_info}', callback_data=f'reset_device_{i}_{pagination.page}')]
@@ -3255,6 +3256,7 @@ def get_devices_management_keyboard(
             make_button(
                 text=texts.t('RESET_ALL_DEVICES_BUTTON', 'Сбросить все устройства'),
                 callback_data='reset_all_devices',
+                style='danger',
             )
         ]
     )
@@ -3343,8 +3345,9 @@ def get_updated_subscription_settings_keyboard(
         keyboard.append(
             [
                 make_button(
-                    text=texts.t('SUBSCRIPTION_REVOKE_BTN', 'Перевыпустить подписку'),
+                    text=texts.t('SUBSCRIPTION_REVOKE_BTN', "<tg-emoji emoji-id='5846024087033353251'>🔑</tg-emoji> Перевыпустить подписку"),
                     callback_data='subscription_revoke',
+                    style='danger',
                 )
             ]
         )
