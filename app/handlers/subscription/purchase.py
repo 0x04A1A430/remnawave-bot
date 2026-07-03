@@ -2960,7 +2960,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
             'Израсходовано: {traffic_used} / {traffic_limit}\n'
             'Истекает: {end_date}\n'
             'Устройства: {devices_used} / {devices_limit}\n\n'
-            'До перевыпуска: {time_left}'
+            'До перевыпуска: {revoke_cooldown}'
         ),
     )
 
