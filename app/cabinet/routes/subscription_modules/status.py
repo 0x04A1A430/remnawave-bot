@@ -196,7 +196,7 @@ async def get_happ_downloads(
         },
         'macos': {
             'name': 'macOS',
-            'icon': '️',
+            'icon': '',
             'link': settings.get_happ_download_link('macos'),
         },
         'windows': {

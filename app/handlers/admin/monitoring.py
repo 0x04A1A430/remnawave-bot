@@ -29,7 +29,7 @@ router = Router()
 
 
 def _format_toggle(enabled: bool) -> str:
-    return '🟢 Вкл' if enabled else 'Выкл'
+    return 'Вкл' if enabled else 'Выкл'
 
 
 def _build_notification_settings_view(language: str):
@@ -94,12 +94,12 @@ def _build_notification_settings_view(language: str):
             ],
             [
                 InlineKeyboardButton(
-                    text=f'️ Скидка 2-3 дня: {second_percent}%', callback_data='admin_mon_notify_edit_2d_percent'
+                    text=f'Скидка 2-3 дня: {second_percent}%', callback_data='admin_mon_notify_edit_2d_percent'
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'⏱️ Срок скидки 2-3 дня: {second_hours} ч', callback_data='admin_mon_notify_edit_2d_hours'
+                    text=f'Срок скидки 2-3 дня: {second_hours} ч', callback_data='admin_mon_notify_edit_2d_hours'
                 )
             ],
             [
@@ -115,13 +115,13 @@ def _build_notification_settings_view(language: str):
             ],
             [
                 InlineKeyboardButton(
-                    text=f'️ Скидка {third_days} дней: {third_percent}%',
+                    text=f'Скидка {third_days} дней: {third_percent}%',
                     callback_data='admin_mon_notify_edit_nd_percent',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'⏱️ Срок скидки {third_days} дней: {third_hours} ч',
+                    text=f'Срок скидки {third_days} дней: {third_hours} ч',
                     callback_data='admin_mon_notify_edit_nd_hours',
                 )
             ],
@@ -175,6 +175,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
         message = template.format(
             end_date=(now - timedelta(days=1)).strftime('%d.%m.%Y %H:%M'),
             price=price_30_days,
+            tariff_label='',
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -207,6 +208,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
             percent=percent,
             expires_at=(now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M'),
             trigger_days=3,
+            tariff_label='',
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -246,6 +248,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
             percent=percent,
             trigger_days=trigger_days,
             expires_at=(now + timedelta(hours=valid_hours)).strftime('%d.%m.%Y %H:%M'),
+            tariff_label='',
         )
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -339,7 +342,7 @@ async def admin_monitoring_menu(callback: CallbackQuery):
         async with AsyncSessionLocal() as db:
             status = await monitoring_service.get_monitoring_status(db)
 
-            running_status = '🟢 Работает' if status['is_running'] else 'Остановлен'
+            running_status = 'Работает' if status['is_running'] else 'Остановлен'
             last_update = status['last_update'].strftime('%H:%M:%S') if status['last_update'] else 'Никогда'
 
             text = f"""
@@ -372,14 +375,14 @@ async def admin_monitoring_menu(callback: CallbackQuery):
 async def admin_monitoring_settings(callback: CallbackQuery):
     try:
         global_status = (
-            '🟢 Включены' if NotificationSettingsService.are_notifications_globally_enabled() else 'Отключены'
+            'Включены' if NotificationSettingsService.are_notifications_globally_enabled() else 'Отключены'
         )
         second_percent = NotificationSettingsService.get_second_wave_discount_percent()
         third_percent = NotificationSettingsService.get_third_wave_discount_percent()
         third_days = NotificationSettingsService.get_third_wave_trigger_days()
 
         text = (
-            '️ <b>Настройки мониторинга</b>\n\n'
+            '<b>Настройки мониторинга</b>\n\n'
             f'<b>Уведомления пользователям:</b> {global_status}\n'
             f'• Скидка 2-3 дня: {second_percent}%\n'
             f'• Скидка после {third_days} дней: {third_percent}%\n\n'
@@ -417,7 +420,7 @@ async def admin_notify_settings(callback: CallbackQuery):
 async def toggle_trial_channel_notification(callback: CallbackQuery):
     enabled = NotificationSettingsService.is_trial_channel_unsubscribed_enabled()
     NotificationSettingsService.set_trial_channel_unsubscribed_enabled(not enabled)
-    await callback.answer('Включено' if not enabled else '⏸️ Отключено')
+    await callback.answer('Включено' if not enabled else 'Отключено')
     await _render_notification_settings(callback)
 
 
@@ -438,7 +441,7 @@ async def preview_trial_channel_notification(callback: CallbackQuery):
 async def toggle_expired_1d_notification(callback: CallbackQuery):
     enabled = NotificationSettingsService.is_expired_1d_enabled()
     NotificationSettingsService.set_expired_1d_enabled(not enabled)
-    await callback.answer('Включено' if not enabled else '⏸️ Отключено')
+    await callback.answer('Включено' if not enabled else 'Отключено')
     await _render_notification_settings(callback)
 
 
@@ -459,7 +462,7 @@ async def preview_expired_1d_notification(callback: CallbackQuery):
 async def toggle_second_wave_notification(callback: CallbackQuery):
     enabled = NotificationSettingsService.is_second_wave_enabled()
     NotificationSettingsService.set_second_wave_enabled(not enabled)
-    await callback.answer('Включено' if not enabled else '⏸️ Отключено')
+    await callback.answer('Включено' if not enabled else 'Отключено')
     await _render_notification_settings(callback)
 
 
@@ -480,7 +483,7 @@ async def preview_second_wave_notification(callback: CallbackQuery):
 async def toggle_third_wave_notification(callback: CallbackQuery):
     enabled = NotificationSettingsService.is_third_wave_enabled()
     NotificationSettingsService.set_third_wave_enabled(not enabled)
-    await callback.answer('Включено' if not enabled else '⏸️ Отключено')
+    await callback.answer('Включено' if not enabled else 'Отключено')
     await _render_notification_settings(callback)
 
 
@@ -638,7 +641,7 @@ async def stop_monitoring_callback(callback: CallbackQuery):
             return
 
         monitoring_service.stop_monitoring()
-        await callback.answer('⏹️ Мониторинг остановлен!')
+        await callback.answer('Мониторинг остановлен!')
 
         await admin_monitoring_menu(callback)
 
@@ -651,7 +654,7 @@ async def stop_monitoring_callback(callback: CallbackQuery):
 @admin_required
 async def force_check_callback(callback: CallbackQuery):
     try:
-        await callback.answer('⏳ Выполняем проверку подписок...')
+        await callback.answer('Выполняем проверку подписок...')
 
         async with AsyncSessionLocal() as db:
             results = await monitoring_service.force_check_subscriptions(db)
@@ -690,12 +693,12 @@ async def traffic_check_callback(callback: CallbackQuery):
         # Проверяем, включен ли мониторинг трафика
         if not traffic_monitoring_scheduler.is_enabled():
             await callback.answer(
-                '️ Мониторинг трафика отключен в настройках\nВключите TRAFFIC_FAST_CHECK_ENABLED=true в .env',
+                'Мониторинг трафика отключен в настройках\nВключите TRAFFIC_FAST_CHECK_ENABLED=true в .env',
                 show_alert=True,
             )
             return
 
-        await callback.answer('⏳ Запускаем проверку трафика (дельта)...')
+        await callback.answer('Запускаем проверку трафика (дельта)...')
 
         # Используем run_fast_check — он сравнивает с snapshot и отправляет уведомления
         from app.services.traffic_monitoring_service import traffic_monitoring_scheduler_v2
@@ -722,7 +725,7 @@ async def traffic_check_callback(callback: CallbackQuery):
 """
 
         if violations:
-            text += '\n️ <b>Превышения дельты:</b>\n'
+            text += '\n<b>Превышения дельты:</b>\n'
             for v in violations[:10]:
                 name = html.escape(v.full_name or '') or v.user_uuid[:8]
                 text += f'• {name}: +{v.used_traffic_gb:.1f} ГБ\n'
@@ -809,7 +812,7 @@ async def clear_logs_callback(callback: CallbackQuery):
             await db.commit()
 
             if deleted_count > 0:
-                await callback.answer(f'️ Удалено {deleted_count} записей логов')
+                await callback.answer(f'Удалено {deleted_count} записей логов')
             else:
                 await callback.answer('Логи уже пусты')
 
@@ -830,8 +833,8 @@ async def test_notifications_callback(callback: CallbackQuery):
 Это тестовое сообщение для проверки работы системы уведомлений.
 
 <b>Статус системы:</b>
-• Мониторинг: {'🟢 Работает' if monitoring_service.is_running else 'Остановлен'}
-• Уведомления: {'🟢 Включены' if settings.ENABLE_NOTIFICATIONS else 'Отключены'}
+• Мониторинг: {'Работает' if monitoring_service.is_running else 'Остановлен'}
+• Уведомления: {'Включены' if settings.ENABLE_NOTIFICATIONS else 'Отключены'}
 • Время теста: {datetime.now(UTC).strftime('%H:%M:%S %d.%m.%Y')}
 
 Если вы получили это сообщение, система уведомлений работает корректно!
@@ -886,7 +889,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 
 <b>Система:</b>
 • Интервал: {settings.MONITORING_INTERVAL} мин
-• Уведомления: {'🟢 Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else 'Выкл'}
+• Уведомления: {'Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else 'Выкл'}
 • Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней
 """
 
@@ -901,12 +904,12 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
 
                 nalogo_section = f"""
 <b>Чеки NaloGO:</b>
-• Сервис: {'🟢 Работает' if running else 'Остановлен'}
+• Сервис: {'Работает' if running else 'Остановлен'}
 • В очереди: {queue_len} чек(ов)"""
                 if queue_len > 0:
                     nalogo_section += f'\n• На сумму: {total_amount:,.2f} ₽'
                 if pending_count > 0:
-                    nalogo_section += f'\n️ <b>Требуют проверки: {pending_count} ({pending_amount:,.2f} ₽)</b>'
+                    nalogo_section += f'\n<b>Требуют проверки: {pending_count} ({pending_amount:,.2f} ₽)</b>'
                 text += nalogo_section
 
             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -927,7 +930,7 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
                 if pending_count > 0:
                     nalogo_buttons.append(
                         InlineKeyboardButton(
-                            text=f'️ Проверить ({pending_count})', callback_data='admin_mon_nalogo_pending'
+                            text=f'Проверить ({pending_count})', callback_data='admin_mon_nalogo_pending'
                         )
                     )
                 nalogo_buttons.append(
@@ -965,9 +968,9 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
         if processed > 0:
             text = f'Обработано: {processed} чек(ов)'
             if remaining > 0:
-                text += f'\n⏳ Осталось в очереди: {remaining}'
+                text += f'\nОсталось в очереди: {remaining}'
         elif remaining > 0:
-            text = f'️ Сервис nalog.ru недоступен\n⏳ В очереди: {remaining} чек(ов)'
+            text = f'Сервис nalog.ru недоступен\nВ очереди: {remaining} чек(ов)'
         else:
             text = 'Очередь пуста'
 
@@ -1011,7 +1014,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
 
 <b>Система:</b>
 • Интервал: {settings.MONITORING_INTERVAL} мин
-• Уведомления: {'🟢 Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else 'Выкл'}
+• Уведомления: {'Вкл' if getattr(settings, 'ENABLE_NOTIFICATIONS', True) else 'Выкл'}
 • Автооплата: {', '.join(map(str, settings.get_autopay_warning_days()))} дней
 """
 
@@ -1023,7 +1026,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
 
                 nalogo_section = f"""
 <b>Чеки NaloGO:</b>
-• Сервис: {'🟢 Работает' if running else 'Остановлен'}
+• Сервис: {'Работает' if running else 'Остановлен'}
 • В очереди: {queue_len} чек(ов)"""
                 if queue_len > 0:
                     nalogo_section += f'\n• На сумму: {total_amount:,.2f} ₽'
@@ -1072,7 +1075,7 @@ async def nalogo_pending_callback(callback: CallbackQuery):
             await callback.answer('Нет чеков на проверку', show_alert=True)
             return
 
-        text = f'️ <b>Чеки требующие проверки: {len(receipts)}</b>\n\n'
+        text = f'<b>Чеки требующие проверки: {len(receipts)}</b>\n\n'
         text += 'Проверьте в lknpd.nalog.ru созданы ли эти чеки.\n\n'
 
         buttons = []
@@ -1422,7 +1425,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
         if missing_count == 0:
             text += '<b>Все платежи имеют чеки!</b>'
         else:
-            text += f'️ <b>Без чеков:</b> {missing_count} платежей на {missing_amount:,.2f} ₽\n\n'
+            text += f'<b>Без чеков:</b> {missing_count} платежей на {missing_amount:,.2f} ₽\n\n'
 
             # Показываем по датам (последние)
             sorted_dates = sorted(by_date.keys(), reverse=True)
@@ -1564,7 +1567,7 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
         nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='️', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
+            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
 
         keyboard.append(nav_row)
 
@@ -1572,7 +1575,7 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
         [
             [
                 InlineKeyboardButton(text='Обновить', callback_data='admin_mon_logs'),
-                InlineKeyboardButton(text='️ Очистить', callback_data='admin_mon_clear_logs'),
+                InlineKeyboardButton(text='Очистить', callback_data='admin_mon_clear_logs'),
             ],
             [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
         ]
@@ -1590,7 +1593,7 @@ def get_monitoring_logs_back_keyboard():
                 InlineKeyboardButton(text='Обновить', callback_data='admin_mon_logs'),
                 InlineKeyboardButton(text='Фильтры', callback_data='admin_mon_logs_filters'),
             ],
-            [InlineKeyboardButton(text='️ Очистить логи', callback_data='admin_mon_clear_logs')],
+            [InlineKeyboardButton(text='Очистить логи', callback_data='admin_mon_clear_logs')],
             [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
         ]
     )
@@ -1603,7 +1606,7 @@ async def monitoring_command(message: Message):
         async with AsyncSessionLocal() as db:
             status = await monitoring_service.get_monitoring_status(db)
 
-            running_status = '🟢 Работает' if status['is_running'] else 'Остановлен'
+            running_status = 'Работает' if status['is_running'] else 'Остановлен'
 
             text = f"""
 <b>Быстрый статус мониторинга</b>
@@ -1709,7 +1712,7 @@ async def process_notification_value_input(message: Message, state: FSMContext):
 
 
 def _format_traffic_toggle(enabled: bool) -> str:
-    return '🟢 Вкл' if enabled else 'Выкл'
+    return 'Вкл' if enabled else 'Выкл'
 
 
 def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
@@ -1733,7 +1736,7 @@ def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text=f'⏱ Интервал: {fast_interval} мин', callback_data='admin_traffic_edit_fast_interval'
+                    text=f'Интервал: {fast_interval} мин', callback_data='admin_traffic_edit_fast_interval'
                 )
             ],
             [
@@ -1757,7 +1760,7 @@ def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
                     text=f'Суточный порог: {daily_threshold} ГБ', callback_data='admin_traffic_edit_daily_threshold'
                 )
             ],
-            [InlineKeyboardButton(text=f'⏳ Кулдаун: {cooldown} мин', callback_data='admin_traffic_edit_cooldown')],
+            [InlineKeyboardButton(text=f'Кулдаун: {cooldown} мин', callback_data='admin_traffic_edit_cooldown')],
             [InlineKeyboardButton(text='← Назад', callback_data='admin_monitoring')],
         ]
     )
@@ -1772,7 +1775,7 @@ def _build_traffic_settings_text() -> str:
     daily_status = _format_traffic_toggle(daily_enabled)
 
     text = (
-        '️ <b>Настройки мониторинга трафика</b>\n\n'
+        '<b>Настройки мониторинга трафика</b>\n\n'
         f'<b>Быстрая проверка:</b> {fast_status}\n'
         f'• Интервал: {settings.TRAFFIC_FAST_CHECK_INTERVAL_MINUTES} мин\n'
         f'• Порог дельты: {settings.TRAFFIC_FAST_CHECK_THRESHOLD_GB} ГБ\n\n'
@@ -1825,7 +1828,7 @@ async def toggle_fast_check(callback: CallbackQuery):
             await BotConfigurationService.set_value(db, 'TRAFFIC_FAST_CHECK_ENABLED', new_value)
             await db.commit()
 
-        await callback.answer('Включено' if new_value else '⏸️ Отключено')
+        await callback.answer('Включено' if new_value else 'Отключено')
 
         # Обновляем отображение
         text = _build_traffic_settings_text()
@@ -1851,7 +1854,7 @@ async def toggle_daily_check(callback: CallbackQuery):
             await BotConfigurationService.set_value(db, 'TRAFFIC_DAILY_CHECK_ENABLED', new_value)
             await db.commit()
 
-        await callback.answer('Включено' if new_value else '⏸️ Отключено')
+        await callback.answer('Включено' if new_value else 'Отключено')
 
         text = _build_traffic_settings_text()
         keyboard = _build_traffic_settings_keyboard()
@@ -1874,7 +1877,7 @@ async def edit_fast_interval(callback: CallbackQuery, state: FSMContext):
         settings_message_id=callback.message.message_id,
     )
     await callback.answer()
-    await callback.message.answer('⏱ Введите интервал быстрой проверки в минутах (минимум 1):')
+    await callback.message.answer('Введите интервал быстрой проверки в минутах (минимум 1):')
 
 
 @router.callback_query(F.data == 'admin_traffic_edit_fast_threshold')
@@ -1936,7 +1939,7 @@ async def edit_cooldown(callback: CallbackQuery, state: FSMContext):
         settings_message_id=callback.message.message_id,
     )
     await callback.answer()
-    await callback.message.answer('⏳ Введите кулдаун уведомлений в минутах (минимум 1):')
+    await callback.message.answer('Введите кулдаун уведомлений в минутах (минимум 1):')
 
 
 @router.message(AdminStates.editing_traffic_setting)

@@ -377,7 +377,7 @@ class Pal24PaymentMixin:
 
         # FOR UPDATE lock already acquired by caller — just check idempotency
         if payment.transaction_id:
-            logger.info('Pal24 платеж уже привязан к транзакции (trigger=)', bill_id=payment.bill_id, trigger=trigger)
+            logger.info('Pal24 платеж уже привязан к транзакции', bill_id=payment.bill_id, trigger=trigger)
             return True
 
         # --- Guest purchase flow (landing page) ---
@@ -397,7 +397,7 @@ class Pal24PaymentMixin:
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                'Пользователь не найден для Pal24 платежа (trigger=)',
+                'Пользователь не найден для Pal24 платежа',
                 user_id=payment.user_id,
                 bill_id=payment.bill_id,
                 trigger=trigger,
@@ -433,7 +433,7 @@ class Pal24PaymentMixin:
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = '🆕 Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
         await db.commit()
 
@@ -512,7 +512,7 @@ class Pal24PaymentMixin:
             )
 
         logger.info(
-            'Обработан Pal24 платеж для пользователя (trigger=)',
+            'Обработан Pal24 платеж для пользователя',
             bill_id=payment.bill_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -558,8 +558,8 @@ class Pal24PaymentMixin:
                     payment_id_str = str(payment.payment_id)
                     try:
                         payment_response = await service.get_payment_status(payment_id_str)
-                    except Pal24APIError as error:
-                        logger.error('Ошибка Pal24 API при получении статуса платежа', error=error)
+                    except Pal24APIError:
+                        logger.debug('Pal24 payment_id не найден или невалиден', payment_id=payment_id_str)
                     else:
                         if payment_response:
                             remote_payloads['payment_status'] = payment_response
@@ -569,8 +569,8 @@ class Pal24PaymentMixin:
 
                 try:
                     payments_response = await service.get_bill_payments(bill_id_str)
-                except Pal24APIError as error:
-                    logger.error('Ошибка Pal24 API при получении списка платежей', error=error)
+                except Pal24APIError:
+                    logger.debug('Pal24 bill payments не найдены', bill_id=bill_id_str)
                 else:
                     if payments_response:
                         remote_payloads['bill_payments'] = payments_response

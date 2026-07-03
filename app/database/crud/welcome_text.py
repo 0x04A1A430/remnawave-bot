@@ -155,7 +155,7 @@ async def create_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        'Создан приветственный текст ID (активный включен=)',
+        'Создан приветственный текст',
         welcome_text_id=welcome_text.id,
         is_active=welcome_text.is_active,
         is_enabled=welcome_text.is_enabled,
@@ -189,7 +189,7 @@ async def update_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        'Обновлен приветственный текст ID (активный включен=)',
+        'Обновлен приветственный текст',
         welcome_text_id=welcome_text.id,
         is_active=welcome_text.is_active,
         is_enabled=welcome_text.is_enabled,
@@ -200,12 +200,12 @@ async def update_welcome_text(
 async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
     await db.delete(welcome_text)
     await db.commit()
-    logger.info('️ Удален приветственный текст ID', welcome_text_id=welcome_text.id)
+    logger.info('Удален приветственный текст ID', welcome_text_id=welcome_text.id)
 
 
 async def get_current_welcome_text_or_default() -> str:
     return (
-        'Привет, {user_name}! 3 дней VPN бесплатно! '
+        'Привет, {user_name}!  3 дней VPN бесплатно! '
         'Подключайтесь за минуту и забудьте о блокировках. '
         'До 1 Гбит/с скорость '
         'Умный VPN — можно не отключать для большинства российских сервисов '

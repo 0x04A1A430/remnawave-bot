@@ -1,4 +1,5 @@
 import html
+import math
 from datetime import UTC, datetime
 
 from aiogram import types
@@ -96,7 +97,7 @@ async def handle_add_countries(callback: types.CallbackQuery, db_user: User, db:
             '- будет добавлена (платно)\n'
             '- будет отключена (бесплатно)\n'
             '- не выбрана\n\n'
-            '️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!'
+            '<b>Важно:</b> Повторное подключение отключенных стран будет платным!'
         ),
     ).format(
         current_count=len(current_countries),
@@ -258,7 +259,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
     if not added and not removed:
         await callback.answer(
-            texts.t('COUNTRY_CHANGES_NOT_FOUND', '️ Изменения не обнаружены'),
+            texts.t('COUNTRY_CHANGES_NOT_FOUND', 'Изменения не обнаружены'),
             show_alert=True,
         )
         return
@@ -266,7 +267,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
     logger.info('Добавлено: Удалено', added=added, removed=removed)
 
     now = datetime.now(UTC)
-    days_to_pay = max(1, (subscription.end_date - now).days)
+    days_to_pay = max(1, math.ceil((subscription.end_date - now).total_seconds() / 86400))
 
     period_hint_days = days_to_pay if days_to_pay > 0 else None
 
@@ -336,7 +337,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '️ <b>Недостаточно средств</b>\n\n'
+                '<b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
@@ -344,8 +345,8 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
             ),
         ).format(
             required=required_text,
-            balance=texts.format_price(db_user.balance_kopeks),
-            missing=texts.format_price(missing_kopeks),
+            balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+            missing=texts.format_price(missing_kopeks, round_kopeks=False),
         )
 
         await callback.message.answer(
@@ -378,7 +379,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
             )
             if not success:
                 await callback.answer(
-                    texts.t('PAYMENT_CHARGE_ERROR', '️ Ошибка списания средств'),
+                    texts.t('PAYMENT_CHARGE_ERROR', 'Ошибка списания средств'),
                     show_alert=True,
                 )
                 return
@@ -412,7 +413,18 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         await db.commit()
 
         subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)
+        try:
+            await subscription_service.update_remnawave_user(db, subscription, sync_squads=True)
+        except Exception as rw_err:
+            logger.error('Ошибка синхронизации с RemnaWave при смене стран', error=rw_err)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+                remnawave_retry_queue.enqueue(
+                    subscription_id=subscription.id,
+                    user_id=subscription.user_id,
+                    action='update',
+                )
 
         await db.refresh(subscription)
 
@@ -489,7 +501,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
         )
 
     except Exception as e:
-        logger.error('️ Ошибка применения изменений', error=e)
+        logger.error('Ошибка применения изменений', error=e)
         await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     await callback.answer()
@@ -541,7 +553,7 @@ async def countries_continue(callback: types.CallbackQuery, state: FSMContext, d
     texts = get_texts(db_user.language)
 
     if not data.get('countries'):
-        await callback.answer('️ Выберите хотя бы одну страну!', show_alert=True)
+        await callback.answer('Выберите хотя бы одну страну!', show_alert=True)
         return
 
     if not settings.is_devices_selection_enabled():
@@ -604,15 +616,15 @@ async def _get_available_countries(promo_group_id: int | None = None):
                 squad_name = squad['name']
 
                 if not any(
-                    flag in squad_name for flag in ['🇳🇱', '🇩🇪', '🇺🇸', '🇫🇷', '🇬🇧', '🇮🇹', '🇪🇸', '🇨🇦', '🇯🇵', '🇸🇬', '🇦🇺']
+                    flag in squad_name for flag in ['', '', '', '', '', '', '', '', '', '', '']
                 ):
                     name_lower = squad_name.lower()
                     if 'netherlands' in name_lower or 'нидерланды' in name_lower or 'nl' in name_lower:
-                        squad_name = f'🇳🇱 {squad_name}'
+                        squad_name = f'{squad_name}'
                     elif 'germany' in name_lower or 'германия' in name_lower or 'de' in name_lower:
-                        squad_name = f'🇩🇪 {squad_name}'
+                        squad_name = f'{squad_name}'
                     elif 'usa' in name_lower or 'сша' in name_lower or 'america' in name_lower or 'us' in name_lower:
-                        squad_name = f'🇺🇸 {squad_name}'
+                        squad_name = f'{squad_name}'
                     else:
                         squad_name = f'{squad_name}'
 
@@ -634,7 +646,7 @@ async def _get_available_countries(promo_group_id: int | None = None):
         fallback_countries = [
             {
                 'uuid': 'default-free',
-                'name': '🆓 Бесплатный сервер',
+                'name': 'Бесплатный сервер',
                 'price_kopeks': 0,
                 'is_available': True,
                 'description': '',
@@ -813,7 +825,7 @@ async def confirm_add_countries_to_subscription(
     removed_countries = [c for c in current_countries if c not in selected_countries]
 
     if not new_countries and not removed_countries:
-        await callback.answer('️ Изменения не обнаружены', show_alert=True)
+        await callback.answer('Изменения не обнаружены', show_alert=True)
         return
 
     # TOCTOU protection: lock user row before reading discount and charging balance
@@ -861,21 +873,21 @@ async def confirm_add_countries_to_subscription(
         if country['uuid'] in removed_countries:
             removed_countries_names.append(html.escape(country['name']))
 
-    if new_countries and db_user.balance_kopeks < total_price:
+    if new_countries and total_price > 0 and db_user.balance_kopeks < total_price:
         missing_kopeks = total_price - db_user.balance_kopeks
         message_text = texts.t(
             'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                '️ <b>Недостаточно средств</b>\n\n'
+                '<b>Недостаточно средств</b>\n\n'
                 'Стоимость услуги: {required}\n'
                 'На балансе: {balance}\n'
                 'Не хватает: {missing}\n\n'
                 'Выберите способ пополнения. Сумма подставится автоматически.'
             ),
         ).format(
-            required=texts.format_price(total_price),
-            balance=texts.format_price(db_user.balance_kopeks),
-            missing=texts.format_price(missing_kopeks),
+            required=texts.format_price(total_price, round_kopeks=False),
+            balance=texts.format_price(db_user.balance_kopeks, round_kopeks=False),
+            missing=texts.format_price(missing_kopeks, round_kopeks=False),
         )
 
         await callback.message.edit_text(

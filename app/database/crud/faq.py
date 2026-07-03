@@ -130,7 +130,7 @@ async def update_faq_page(
 async def delete_faq_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(FaqPage).where(FaqPage.id == page_id))
     await db.commit()
-    logger.info('️ Страница FAQ удалена', page_id=page_id)
+    logger.info('Страница FAQ удалена', page_id=page_id)
 
 
 async def bulk_update_order(

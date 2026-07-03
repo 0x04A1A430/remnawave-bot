@@ -113,7 +113,7 @@ class UserService:
                 f'<b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
                 f'Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
                 f'{"─" * 25}\n\n'
-                f'️ <b>ВАЖНО!</b> ️\n\n'
+                f'<b>ВАЖНО!</b> \n\n'
                 f'<b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
                 f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
                 f'<b>Выберите действие:</b>'
@@ -148,7 +148,7 @@ class UserService:
         """
         if amount_kopeks > 0:
             # Пополнение
-            emoji = "<tg-emoji emoji-id='5974217466270716579'>💵</tg-emoji>"
+            emoji = ''
             amount_text = f'+{settings.format_price(amount_kopeks)}'
             message = (
                 f'{emoji} <b>Баланс пополнен!</b>\n\n'
@@ -158,7 +158,7 @@ class UserService:
             )
         else:
             # Списание
-            emoji = "<tg-emoji emoji-id='5974217466270716579'>💵</tg-emoji>"
+            emoji = ''
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
             message = (
                 f'{emoji} <b>Средства списаны с баланса</b>\n\n'
@@ -605,7 +605,7 @@ class UserService:
             await db.refresh(user)
 
             logger.info(
-                "Промогруппа пользователя обновлена на ''",
+                'Промогруппа пользователя обновлена',
                 telegram_id=user.telegram_id,
                 promo_group_name=promo_group.name,
             )
@@ -686,7 +686,7 @@ class UserService:
 
             if has_active_paid:
                 logger.info(
-                    '⏭️ Пропуск отключения RemnaWave и подписки: у пользователя активная оплаченная подписка',
+                    'Пропуск отключения RemnaWave и подписки: у пользователя активная оплаченная подписка',
                     user_id=user_id,
                     remnawave_uuid=user.remnawave_uuid,
                 )
@@ -768,6 +768,14 @@ class UserService:
                             subscription_id=sub.id,
                             error=e,
                         )
+                        from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+                        if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
+                            remnawave_retry_queue.enqueue(
+                                subscription_id=sub.id,
+                                user_id=sub.user_id,
+                                action='update',
+                            )
             await db.commit()
 
             logger.info('Админ разблокировал пользователя', admin_id=admin_id, user_id=user_id)
@@ -794,9 +802,7 @@ class UserService:
                 return result
 
             user_id_display = user.telegram_id or user.email or f'#{user.id}'
-            logger.info(
-                '️ Начинаем полное удаление пользователя (ID: )', user_id=user_id, user_id_display=user_id_display
-            )
+            logger.info('Начинаем полное удаление пользователя', user_id=user_id, user_id_display=user_id_display)
 
             from app.config import settings
             from app.database.crud.subscription import is_active_paid_subscription
@@ -811,11 +817,21 @@ class UserService:
             if panel_uuids:
                 if not force_panel_delete and any(is_active_paid_subscription(sub) for sub in subs):
                     logger.info(
-                        '⏭️ Пропуск отключения RemnaWave при удалении: у пользователя активная оплаченная подписка',
+                        'Пропуск отключения RemnaWave при удалении: у пользователя активная оплаченная подписка',
                         user_id=user_id,
                     )
                 else:
                     delete_mode = 'delete' if force_panel_delete else settings.get_remnawave_user_delete_mode()
+
+                    # Помечаем ВСЕ UUID до цикла, чтобы webhook от первого удаления
+                    # не пришёл раньше чем помечены остальные
+                    if delete_mode == 'delete':
+                        from app.services.remnawave_webhook_service import RemnaWaveWebhookService
+
+                        RemnaWaveWebhookService.mark_intentional_panel_deletion(
+                            panel_uuids=panel_uuids,
+                            telegram_id=int(user.telegram_id) if user.telegram_id else None,
+                        )
 
                     for panel_uuid in panel_uuids:
                         try:
@@ -835,7 +851,7 @@ class UserService:
                                     else:
                                         result.panel_error = 'Remnawave API вернул ошибку удаления'
                                         logger.warning(
-                                            '️ Не удалось удалить пользователя из панели Remnawave',
+                                            'Не удалось удалить пользователя из панели Remnawave',
                                             remnawave_uuid=panel_uuid,
                                         )
                             else:
@@ -853,7 +869,7 @@ class UserService:
                                 else:
                                     result.panel_error = 'disable_remnawave_user вернул False'
                                     logger.warning(
-                                        '️ Не удалось деактивировать пользователя в RemnaWave',
+                                        'Не удалось деактивировать пользователя в RemnaWave',
                                         remnawave_uuid=panel_uuid,
                                         delete_mode=delete_mode,
                                     )
@@ -861,7 +877,7 @@ class UserService:
                         except Exception as e:
                             result.panel_error = 'Ошибка обработки пользователя в Remnawave'
                             logger.warning(
-                                '️ Ошибка обработки пользователя в Remnawave',
+                                'Ошибка обработки пользователя в Remnawave',
                                 delete_mode=delete_mode,
                                 remnawave_uuid=panel_uuid,
                                 error=e,
@@ -1136,6 +1152,67 @@ class UserService:
             except Exception as e:
                 logger.error('Ошибка удаления KassaAi платежей', error=e)
 
+            # Платёжные провайдеры, которые ссылаются на transactions через FK без ON DELETE,
+            # но раньше не очищались в этом блоке. Без них DELETE FROM transactions падал с
+            # ForeignKeyViolationError (например, rollypay_payments_transaction_id_fkey).
+            from app.database.models import (
+                AntilopayPayment,
+                AppleTransaction,
+                AuraPayPayment,
+                DonutPayment,
+                EtoplatezhiPayment,
+                JupiterPayment,
+                LavaPayment,
+                OverpayPayment,
+                PayPearPayment,
+                RioPayPayment,
+                RollyPayPayment,
+                SeverPayPayment,
+            )
+
+            extra_payment_models = (
+                RioPayPayment,
+                RollyPayPayment,
+                SeverPayPayment,
+                PayPearPayment,
+                OverpayPayment,
+                AuraPayPayment,
+                EtoplatezhiPayment,
+                AntilopayPayment,
+                JupiterPayment,
+                DonutPayment,
+                LavaPayment,
+            )
+            for model in extra_payment_models:
+                try:
+                    async with db.begin_nested():
+                        await db.execute(update(model).where(model.user_id == user_id).values(transaction_id=None))
+                        await db.flush()
+                        await db.execute(delete(model).where(model.user_id == user_id))
+                        await db.flush()
+                except Exception as error:
+                    logger.error(
+                        'Ошибка удаления платежей провайдера',
+                        provider=model.__tablename__,
+                        error=str(error),
+                    )
+
+            # Apple IAP: FK поле называется transaction_id_fk (не transaction_id),
+            # поэтому отдельным блоком. user_id имеет CASCADE на users, но это сработает
+            # позже при DELETE User — а DELETE Transaction раньше падал бы из-за FK на apple_transactions.
+            try:
+                async with db.begin_nested():
+                    await db.execute(
+                        update(AppleTransaction)
+                        .where(AppleTransaction.user_id == user_id)
+                        .values(transaction_id_fk=None)
+                    )
+                    await db.flush()
+                    await db.execute(delete(AppleTransaction).where(AppleTransaction.user_id == user_id))
+                    await db.flush()
+            except Exception as error:
+                logger.error('Ошибка удаления Apple IAP платежей', error=str(error))
+
             try:
                 async with db.begin_nested():
                     transactions_result = await db.execute(select(Transaction).where(Transaction.user_id == user_id))
@@ -1271,7 +1348,7 @@ class UserService:
                                 if int_squad_ids:
                                     await remove_user_from_servers(db, int_squad_ids)
                             except Exception as sq_err:
-                                logger.warning('️ Не удалось уменьшить счётчик серверов', error=sq_err)
+                                logger.warning('Не удалось уменьшить счётчик серверов', error=sq_err)
             except Exception as e:
                 logger.error('Ошибка удаления подписок', error=e)
 
@@ -1280,14 +1357,13 @@ class UserService:
                     AccessPolicy,
                     AdminAuditLog,
                     AdminRole,
-                    RioPayPayment,
                     SavedPaymentMethod,
                     UserRole,
                     WithdrawalRequest,
                 )
 
                 await db.execute(delete(SavedPaymentMethod).where(SavedPaymentMethod.user_id == user_id))
-                await db.execute(delete(RioPayPayment).where(RioPayPayment.user_id == user_id))
+                # RioPayPayment удаляется выше в extra_payment_models — здесь дубликат не нужен.
                 await db.execute(delete(AdminAuditLog).where(AdminAuditLog.user_id == user_id))
                 await db.execute(delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user_id))
                 await db.execute(
@@ -1306,7 +1382,7 @@ class UserService:
 
             result.bot_deleted = True
             logger.info(
-                'Пользователь (ID: ) полностью удален администратором',
+                'Пользователь полностью удалён администратором',
                 user_id_display=user_id_display,
                 user_id=user_id,
                 admin_id=admin_id,

@@ -103,7 +103,7 @@ class MulenPayPaymentMixin:
             )
 
             logger.info(
-                'Создан платеж на ₽ для пользователя',
+                'Создан MulenPay платеж',
                 display_name=display_name,
                 mulen_payment_id=mulen_payment_id,
                 amount_rubles=amount_rubles,
@@ -167,7 +167,7 @@ class MulenPayPaymentMixin:
 
             if not payment:
                 logger.error(
-                    'платеж не найден (uuid id=)',
+                    'MulenPay платеж не найден',
                     display_name=display_name,
                     uuid_value=uuid_value,
                     mulen_payment_id_raw=mulen_payment_id_raw,
@@ -341,7 +341,7 @@ class MulenPayPaymentMixin:
                 promo_group = user.get_primary_promo_group()
                 subscription = getattr(user, 'subscription', None)
                 referrer_info = format_referrer_info(user)
-                topup_status = '🆕 Первое пополнение' if was_first_topup else 'Пополнение'
+                topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
                 if getattr(self, 'bot', None):
                     try:

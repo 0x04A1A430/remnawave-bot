@@ -201,7 +201,7 @@ class ServerLotteryStrategy(BaseGameStrategy):
 
     game_type = GameType.SERVER_LOTTERY
 
-    DEFAULT_FLAGS = ['🇸🇪', '🇸🇬', '🇺🇸', '🇷🇺', '🇩🇪', '🇯🇵', '🇧🇷', '🇦🇺', '🇨🇦', '🇫🇷']
+    DEFAULT_FLAGS = ['', '', '', '', '', '', '', '', '', '']
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
         flags = template_payload.get('flags') or self.DEFAULT_FLAGS
@@ -289,7 +289,7 @@ class BlitzReactionStrategy(BaseGameStrategy):
         )
 
         return GameRenderResult(
-            text=texts.t('CONTEST_BLITZ_PROMPT', '️ Блиц! Нажми «Я здесь!»'),
+            text=texts.t('CONTEST_BLITZ_PROMPT', 'Блиц! Нажми «Я здесь!»'),
             keyboard=keyboard,
         )
 

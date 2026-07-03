@@ -13,16 +13,26 @@ POST /subscription/devices/save-cart
 
 from __future__ import annotations
 
+import asyncio
+import math
 from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
+from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cabinet.utils.device_ownership import verify_hwid_belongs_to_user
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
+from app.database.crud.user_device_alias import (
+    delete_alias,
+    get_aliases_for_user,
+    normalize_alias,
+    set_alias,
+)
 from app.database.models import Subscription, TransactionType, User
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
@@ -34,12 +44,24 @@ from .helpers import _apply_addon_discount, resolve_subscription
 
 logger = structlog.get_logger(__name__)
 
+# Cap inline RemnaWave panel sync on user-facing cabinet requests. The product is
+# committed before the sync, so a slow/unavailable panel must not hold the HTTP
+# response open (the cabinet pay button is bound to the request and would spin
+# after delivery). Past this budget the sync is deferred to remnawave_retry_queue.
+REMNAWAVE_SYNC_TIMEOUT = 10.0
+
 router = APIRouter()
 
 
 def _resolve_panel_uuid(subscription: Subscription | None, user: User) -> str | None:
-    """Resolve RemnaWave panel UUID: per-subscription in multi-tariff, user-level otherwise."""
-    if settings.is_multi_tariff_enabled() and subscription and subscription.remnawave_uuid:
+    """Resolve RemnaWave panel UUID: per-subscription in multi-tariff, user-level otherwise.
+
+    Multi-tariff: each subscription is its OWN panel user — return the sub's UUID
+    and do NOT fall back to ``user.remnawave_uuid`` when it's null. The fallback
+    would read/operate on another tariff's panel user, making HWID devices/limit
+    look shared across tariffs (баг с общим лимитом «по наименьшему тарифу»).
+    """
+    if settings.is_multi_tariff_enabled() and subscription is not None:
         return subscription.remnawave_uuid
     return user.remnawave_uuid
 
@@ -108,7 +130,32 @@ async def purchase_devices_legacy(
             detail='Докупка устройств недоступна',
         )
 
-    base_total_price = device_price * request.devices
+    # Устройства в пределах тарифного лимита — бесплатные
+    current_devices = subscription.device_limit or 1
+    if tariff:
+        tariff_included = tariff.device_limit or 0
+        if current_devices < tariff_included:
+            free_devices = tariff_included - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+    else:
+        free_baseline = settings.DEFAULT_DEVICE_LIMIT
+        if current_devices < free_baseline:
+            free_devices = free_baseline - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+
+    # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка.
+    now = datetime.now(UTC)
+    end_date = subscription.end_date
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=UTC)
+    days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
+    base_total_price = int(device_price * chargeable_devices * days_left / 30)
+    if chargeable_devices > 0:
+        base_total_price = max(100, base_total_price)  # Минимум 1 рубль
 
     # Lock user row to prevent TOCTOU on promo-offer state
     from app.database.crud.user import lock_user_for_pricing
@@ -116,7 +163,7 @@ async def purchase_devices_legacy(
     user = await lock_user_for_pricing(db, user.id)
 
     # Apply discount from promo group
-    discount_result = _apply_addon_discount(user, 'devices', base_total_price, 30)
+    discount_result = _apply_addon_discount(user, 'devices', base_total_price, days_left)
     total_price = discount_result['discounted']
     devices_discount_percent = discount_result['percent']
 
@@ -134,8 +181,8 @@ async def purchase_devices_legacy(
             detail=f'Максимальное количество устройств: {max_device_limit}',
         )
 
-    # Check balance
-    if user.balance_kopeks < total_price:
+    # Check balance (skip for 100% discount)
+    if total_price > 0 and user.balance_kopeks < total_price:
         missing = total_price - user.balance_kopeks
 
         # Сохраняем корзину для автопокупки после пополнения
@@ -225,24 +272,37 @@ async def purchase_devices_legacy(
     await db.refresh(subscription)
     await db.refresh(user)
 
-    # Sync with RemnaWave
+    # Sync with RemnaWave (time-bounded — see REMNAWAVE_SYNC_TIMEOUT; product is
+    # already committed, defer slow syncs to remnawave_retry_queue).
     try:
         service = SubscriptionService()
-        if _resolve_panel_uuid(subscription, user):
-            await service.update_remnawave_user(db, subscription)
+        if settings.is_multi_tariff_enabled():
+            _should_create = not subscription.remnawave_uuid
         else:
-            await service.create_remnawave_user(db, subscription)
+            _should_create = not getattr(user, 'remnawave_uuid', None)
+
+        async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
+            if _should_create:
+                await service.create_remnawave_user(db, subscription)
+            else:
+                await service.update_remnawave_user(db, subscription)
     except Exception as e:
         logger.error('Failed to sync devices with RemnaWave (legacy endpoint)', error=e)
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+        remnawave_retry_queue.enqueue(
+            subscription_id=subscription.id,
+            user_id=user.id,
+            action='create' if _should_create else 'update',
+        )
 
     # Отправляем уведомление админам
     try:
-        from aiogram import Bot
-
+        from app.bot_factory import create_bot
         from app.services.admin_notification_service import AdminNotificationService
 
-        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
-            bot = Bot(token=settings.BOT_TOKEN)
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+            bot = create_bot()
             try:
                 notification_service = AdminNotificationService(bot)
                 await notification_service.send_subscription_update_notification(
@@ -351,13 +411,34 @@ async def purchase_devices(
         if end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=UTC)
 
-        days_left = max(1, (end_date - now).days)
+        days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
         total_days = 30  # Base period for device price calculation
+        # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка.
+        # Устройство активно до конца подписки; на продлении доначисляется через
+        # pricing_engine. (Раньше тут был потолок в 1 месяц — #596757/#587412.)
+        effective_days = days_left
+
+        # Устройства в пределах тарифного лимита — бесплатные
+        if tariff:
+            tariff_included = tariff.device_limit or 0
+            if current_devices < tariff_included:
+                free_devices = tariff_included - current_devices
+                chargeable_devices = max(0, request.devices - free_devices)
+            else:
+                chargeable_devices = request.devices
+        else:
+            free_baseline = settings.DEFAULT_DEVICE_LIMIT
+            if current_devices < free_baseline:
+                free_devices = free_baseline - current_devices
+                chargeable_devices = max(0, request.devices - free_devices)
+            else:
+                chargeable_devices = request.devices
 
         # Calculate base price before discount
-        base_price_per_month = device_price * request.devices
-        base_price_prorated = int(base_price_per_month * days_left / total_days)
-        base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
+        base_price_per_month = device_price * chargeable_devices
+        base_price_prorated = int(base_price_per_month * effective_days / total_days)
+        if chargeable_devices > 0:
+            base_price_prorated = max(100, base_price_prorated)  # Minimum 1 ruble
 
         # Lock user BEFORE discount computation to prevent TOCTOU on promo group
         from app.database.crud.user import lock_user_for_pricing
@@ -375,8 +456,8 @@ async def purchase_devices(
         if devices_discount_percent < 100:
             price_kopeks = max(100, price_kopeks)
 
-        # Check balance
-        if user.balance_kopeks < price_kopeks:
+        # Check balance (skip for 100% discount)
+        if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
             missing = price_kopeks - user.balance_kopeks
 
             # Сохраняем корзину для автопокупки после пополнения
@@ -466,15 +547,29 @@ async def purchase_devices(
         await db.commit()
         await db.refresh(subscription)
 
-        # Sync with RemnaWave
+        # Sync with RemnaWave (time-bounded — see REMNAWAVE_SYNC_TIMEOUT; product is
+        # already committed, defer slow syncs to remnawave_retry_queue).
         service = SubscriptionService()
         try:
-            if _resolve_panel_uuid(subscription, user):
-                await service.update_remnawave_user(db, subscription)
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
             else:
-                await service.create_remnawave_user(db, subscription)
+                _should_create = not getattr(user, 'remnawave_uuid', None)
+
+            async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
+                if _should_create:
+                    await service.create_remnawave_user(db, subscription)
+                else:
+                    await service.update_remnawave_user(db, subscription)
         except Exception as e:
             logger.error('Failed to sync devices with RemnaWave', error=e)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=user.id,
+                action='create' if _should_create else 'update',
+            )
 
         await db.refresh(user)
 
@@ -494,12 +589,11 @@ async def purchase_devices(
 
         # Отправляем уведомление админам
         try:
-            from aiogram import Bot
-
+            from app.bot_factory import create_bot
             from app.services.admin_notification_service import AdminNotificationService
 
-            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
-                bot = Bot(token=settings.BOT_TOKEN)
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+                bot = create_bot()
                 try:
                     notification_service = AdminNotificationService(bot)
                     await notification_service.send_subscription_update_notification(
@@ -515,6 +609,19 @@ async def purchase_devices(
                     await bot.session.close()
         except Exception as e:
             logger.error('Failed to send admin notification for device purchase', error=e)
+
+        # Yandex.Metrika offline conversion (#558449).
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            # Purchase event fires centrally from create_transaction; here we
+            # only persist the request-body CID synchronously (#558449).
+            await yandex_conv.store_cid_only(
+                user.id,
+                request.yandex_cid,
+            )
+        except Exception as yconv_err:
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         response: dict[str, Any] = {
             'success': True,
@@ -600,11 +707,31 @@ async def save_devices_cart(
     if end_date.tzinfo is None:
         end_date = end_date.replace(tzinfo=UTC)
 
-    days_left = max(1, (end_date - now).days)
+    days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
+    # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка
+    # (раньше был потолок в 1 месяц — #596757). Доначисление за устройства — на продлении.
+    effective_days = days_left
 
-    base_total_price = int(device_price * request.devices * days_left / total_days)
-    base_total_price = max(100, base_total_price)  # Minimum 1 ruble
+    # Устройства в пределах тарифного лимита — бесплатные
+    if tariff:
+        tariff_included = tariff.device_limit or 0
+        if current_devices < tariff_included:
+            free_devices = tariff_included - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+    else:
+        free_baseline = settings.DEFAULT_DEVICE_LIMIT
+        if current_devices < free_baseline:
+            free_devices = free_baseline - current_devices
+            chargeable_devices = max(0, request.devices - free_devices)
+        else:
+            chargeable_devices = request.devices
+
+    base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
+    if chargeable_devices > 0:
+        base_total_price = max(100, base_total_price)  # Minimum 1 ruble
 
     # Apply discount from promo group
     period_hint_days = days_left
@@ -697,12 +824,32 @@ async def get_device_price(
     if end_date.tzinfo is None:
         end_date = end_date.replace(tzinfo=UTC)
 
-    days_left = max(1, (end_date - now).days)
+    days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     total_days = 30
+    # Прорейт по фактическому остатку подписки — как трафик/серверы, без потолка
+    # (раньше был потолок в 1 месяц — #596757). Доначисление за устройства — на продлении.
+    effective_days = days_left
+
+    # Устройства в пределах тарифного лимита — бесплатные
+    if tariff:
+        tariff_included = tariff.device_limit or 0
+        if current_devices < tariff_included:
+            free_devices = tariff_included - current_devices
+            chargeable_devices = max(0, devices - free_devices)
+        else:
+            chargeable_devices = devices
+    else:
+        free_baseline = settings.DEFAULT_DEVICE_LIMIT
+        if current_devices < free_baseline:
+            free_devices = free_baseline - current_devices
+            chargeable_devices = max(0, devices - free_devices)
+        else:
+            chargeable_devices = devices
 
     # Calculate base price before discount (total first, then floor)
-    base_total_price = int(device_price * devices * days_left / total_days)
-    base_total_price = max(100, base_total_price)
+    base_total_price = int(device_price * chargeable_devices * effective_days / total_days)
+    if chargeable_devices > 0:
+        base_total_price = max(100, base_total_price)
 
     # Apply discount from promo group
     period_hint_days = days_left
@@ -735,6 +882,7 @@ async def get_device_price(
         response['discount_percent'] = devices_discount_percent
         response['discount_kopeks'] = discount_value
         response['base_total_price_kopeks'] = base_total_price
+        response['original_price_per_device_kopeks'] = base_total_price // devices if devices > 0 else 0
 
     return response
 
@@ -773,6 +921,19 @@ async def get_devices(
             response = await api.get_user_devices_all(_puuid)
 
             devices_list = response.get('devices', [])
+            # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
+            # чем N+1 при сборке списка устройств. Aliases декоративны: при
+            # сбое чтения возвращаем список без них, а не 500.
+            try:
+                aliases = await get_aliases_for_user(db, user.id)
+            except Exception as alias_error:
+                logger.warning(
+                    'Failed to load device aliases, falling back to defaults',
+                    user_id=user.id,
+                    error=str(alias_error)[:200],
+                )
+                aliases = {}
+
             formatted_devices = []
             for device in devices_list:
                 hwid = device.get('hwid') or device.get('deviceId') or device.get('id')
@@ -786,6 +947,9 @@ async def get_devices(
                         'platform': platform,
                         'device_model': model,
                         'created_at': created_at,
+                        # Локальное имя, заданное юзером. None — алиаса нет,
+                        # фронт фоллбэчит на platform/device_model.
+                        'local_name': aliases.get(hwid) or None,
                     }
                 )
 
@@ -796,12 +960,77 @@ async def get_devices(
             }
 
     except Exception as e:
-        logger.error('Error fetching devices', error=e)
+        # Панель медленная/недоступна — деградируем мягко (пустой список) и логируем
+        # WARNING, как соседние читатели устройств (device_ownership, miniapp), чтобы
+        # транзиентный таймаут панели не спамил админ-чат ошибками.
+        logger.warning('Failed to load devices from RemnaWave (panel slow/unavailable)', error=str(e)[:200])
         return {
             'devices': [],
             'total': 0,
             'device_limit': subscription.device_limit or 0,
         }
+
+
+class DeviceRenameRequest(BaseModel):
+    """Payload for `PATCH /subscription/devices/{hwid}/name`.
+
+    `name` accepts either a non-empty string (set/update) or null/empty
+    string (clear the alias and fall back to the default platform/model
+    label). Length is capped at ALIAS_MAX_LENGTH on the backend.
+    """
+
+    name: str | None = None
+
+
+# Hwid ownership validation lives in app.cabinet.utils.device_ownership —
+# shared between the user-facing rename endpoint below and the admin
+# override in app/cabinet/routes/admin_users.py. Keeps both call sites
+# from drifting on multi-tariff semantics again.
+
+
+@router.patch('/devices/{hwid}/name')
+async def rename_device(
+    hwid: str,
+    request: DeviceRenameRequest,
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> dict[str, Any]:
+    """Set/clear a local alias for the user's HWID device.
+
+    Scope is per-(user, hwid), so the alias is visible across ALL of the
+    user's subscriptions in multi-tariff mode — same physical device, same
+    nickname.
+
+    Empty/null `name` clears the alias and returns `{local_name: null}`.
+    """
+    # Subscription resolution здесь только для access-проверки: убеждаемся,
+    # что юзер действительно владеет устройством через какую-то из своих
+    # подписок. Сам alias всё равно глобальный per (user, hwid).
+    subscription = await resolve_subscription(db, user, subscription_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+
+    hwid = (hwid or '').strip()
+    if not hwid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
+
+    # Guard against orphan rows: only accept rename requests for devices
+    # the user actually owns in RemnaWave panel right now. Multi-tariff
+    # aware (unions devices across all panel UUIDs the user holds).
+    if not await verify_hwid_belongs_to_user(user, hwid):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Device not found on your account',
+        )
+
+    normalized = normalize_alias(request.name)
+    if normalized:
+        saved = await set_alias(db, user.id, hwid, normalized)
+        return {'hwid': hwid, 'local_name': saved}
+
+    await delete_alias(db, user.id, hwid)
+    return {'hwid': hwid, 'local_name': None}
 
 
 @router.delete('/devices/{hwid}')
@@ -982,7 +1211,7 @@ async def get_device_reduction_info(
                 if response:
                     connected_devices_count = response.get('total', 0)
         except Exception as e:
-            logger.error('Error getting connected devices count', error=e)
+            logger.warning('Failed to get connected devices count (panel slow/unavailable)', error=str(e)[:200])
 
     can_reduce = current_device_limit - min_device_limit
 

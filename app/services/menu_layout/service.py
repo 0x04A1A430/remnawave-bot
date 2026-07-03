@@ -352,6 +352,8 @@ class MenuLayoutService:
             button['open_mode'] = updates['open_mode']
         if 'webapp_url' in updates:
             button['webapp_url'] = updates['webapp_url']
+        if 'icon_custom_emoji_id' in updates:
+            button['icon_custom_emoji_id'] = updates['icon_custom_emoji_id']
 
         buttons[actual_button_id] = button
         config['buttons'] = buttons
@@ -788,6 +790,9 @@ class MenuLayoutService:
         if conditions.get('show_trial') is True:
             if context.has_had_paid_subscription or context.has_active_subscription:
                 return False
+            # Триал отключён глобально (нулевая длительность или для всех типов)
+            if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
+                return False
 
         # show_buy
         if conditions.get('show_buy') is True:
@@ -1006,6 +1011,7 @@ class MenuLayoutService:
         open_mode = button_config.get('open_mode', 'callback')
         webapp_url = button_config.get('webapp_url')
         icon = button_config.get('icon', '')
+        custom_emoji_id = button_config.get('icon_custom_emoji_id') or None
 
         # Логирование для отладки кнопки connect
         is_connect_button = (
@@ -1030,32 +1036,28 @@ class MenuLayoutService:
         if not text:
             return None
 
-        # Добавляем иконку если есть и текст не начинается с неё
-        if icon and not text.startswith(icon):
+        # Добавляем юникод-иконку если есть и текст не начинается с неё.
+        # Если параллельно задан icon_custom_emoji_id — Telegram сам рендерит кастом emoji
+        # слева, и юникод-icon вызвал бы дубль (две иконки), поэтому пропускаем.
+        if icon and not custom_emoji_id and not text.startswith(icon):
             text = f'{icon} {text}'
 
         # Форматируем динамический текст
         if button_config.get('dynamic_text'):
             text = cls._format_dynamic_text(text, context, texts)
 
-        # Спецобработка для кнопки поддержки — всегда URL
-        if effective_button_id == 'support':
-            support_url = settings.get_support_contact_url() or 'https://t.me/'
-            return InlineKeyboardButton(text=text, url=support_url)
-
-        # Спецобработка для кнопки поддержки — всегда URL
-        if effective_button_id == 'support':
-            support_url = settings.get_support_contact_url() or 'https://t.me/'
-            return InlineKeyboardButton(text=text, url=support_url)
-
         # Строим кнопку в зависимости от типа
         if button_type == 'url':
-            return InlineKeyboardButton(text=text, url=action)
+            return InlineKeyboardButton(text=text, url=action, icon_custom_emoji_id=custom_emoji_id)
         if button_type == 'mini_app':
-            return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=action))
+            return InlineKeyboardButton(
+                text=text,
+                web_app=types.WebAppInfo(url=action),
+                icon_custom_emoji_id=custom_emoji_id,
+            )
         if button_type == 'callback':
             # Кастомная кнопка с callback_data
-            return InlineKeyboardButton(text=text, callback_data=action)
+            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
         # builtin - проверяем open_mode
         if open_mode == 'direct':
             # Прямое открытие Mini App через WebAppInfo
@@ -1081,7 +1083,11 @@ class MenuLayoutService:
             # Проверяем, что это действительно URL
             if url and (url.startswith('http://') or url.startswith('https://')):
                 logger.info('Кнопка connect: open_mode=direct, используем URL: ...', url=url[:50])
-                return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url))
+                return InlineKeyboardButton(
+                    text=text,
+                    web_app=types.WebAppInfo(url=url),
+                    icon_custom_emoji_id=custom_emoji_id,
+                )
             logger.warning(
                 'Кнопка connect: open_mode=direct, но URL не найден. webapp_url=, action=, subscription_url',
                 webapp_url=webapp_url,
@@ -1089,10 +1095,10 @@ class MenuLayoutService:
                 value='есть' if context.subscription else 'нет',
             )
             # Fallback на callback_data
-            return InlineKeyboardButton(text=text, callback_data=action)
+            return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
         # Стандартный callback_data
         logger.debug('Кнопка connect: open_mode=, используем callback_data', open_mode=open_mode, action=action)
-        return InlineKeyboardButton(text=text, callback_data=action)
+        return InlineKeyboardButton(text=text, callback_data=action, icon_custom_emoji_id=custom_emoji_id)
 
     # --- Построение клавиатуры ---
 

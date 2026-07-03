@@ -36,6 +36,7 @@ from app.database.models import InlineGiftSubscription
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
+from app.utils.button_emoji import make_button
 
 
 logger = structlog.get_logger(__name__)
@@ -181,7 +182,7 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str, state=Non
             return True
 
         if not _check_recipient(gift, telegram_id, username):
-            await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
+            await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', 'Этот подарок предназначен другому пользователю.'))
             return True
 
         # Unregistered user — save gift code and let start.py run registration
@@ -248,7 +249,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         if not _check_recipient(gift, telegram_id, username):
             await callback.message.edit_text(
-                texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'),
+                texts.t('INLINE_GIFT_WRONG_RECIPIENT', 'Этот подарок предназначен другому пользователю.'),
                 parse_mode='HTML',
             )
             return
@@ -257,7 +258,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
             await callback.message.edit_text(texts.t('INLINE_GIFT_NOT_REGISTERED', 'Вы не зарегистрированы. Напишите /start.'))
             return
 
-        await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATING', '⏳ Активируем подарок...'))
+        await callback.message.edit_text(texts.t('INLINE_GIFT_ACTIVATING', 'Активируем подарок...'))
 
         gift_type = getattr(gift, 'gift_type', 'subscription') or 'subscription'
         add_extra_squad = getattr(gift, 'add_extra_squad', False) or False
@@ -282,13 +283,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 success_text = texts.t(
                     'INLINE_GIFT_DISCOUNT_SUCCESS',
-                    '✅ <b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
+                    '<b>Скидка активирована!</b>\n\n<blockquote>Скидка {pct}% — промокод: <code>{code}</code></blockquote>',
                 ).format(pct=pct, code=promo_code_str)
                 back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
+                    make_button(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
                 ]])
                 await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
-                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'), 0, 1)
+                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', 'Активировано'), 0, 1)
                 return
 
             if gift_type == 'balance':
@@ -305,13 +306,13 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 success_text = texts.t(
                     'INLINE_GIFT_BALANCE_SUCCESS',
-                    '✅ <b>Баланс пополнен!</b>\n\n<blockquote>+{rub} ₽ добавлено на ваш счёт</blockquote>',
+                    '<b>Баланс пополнен!</b>\n\n<blockquote>+{rub} ₽ добавлено на ваш счёт</blockquote>',
                 ).format(rub=rub)
                 back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-                    types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
+                    make_button(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
                 ]])
                 await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
-                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано'), 0, 1)
+                await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_ACTIVATED_BUTTON', 'Активировано'), 0, 1)
                 return
 
             # Subscription
@@ -416,19 +417,19 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
         if changes:
             success_text = texts.t(
                 'INLINE_GIFT_SUCCESS_CHANGES',
-                '✅ <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
+                '<b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
             ).format(changes=changes)
         else:
-            success_text = texts.t('INLINE_GIFT_SUCCESS', '✅ <b>Подарок активирован!</b>\n\nПодписка обновлена.')
+            success_text = texts.t('INLINE_GIFT_SUCCESS', '<b>Подарок активирован!</b>\n\nПодписка обновлена.')
 
         back_kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-            types.InlineKeyboardButton(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
+            make_button(text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'), callback_data='back_to_menu')
         ]])
         await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
 
         fully_used = new_activated >= max_act
         button_text = (
-            texts.t('INLINE_GIFT_ACTIVATED_BUTTON', '✓ Активировано')
+            texts.t('INLINE_GIFT_ACTIVATED_BUTTON', 'Активировано')
             if fully_used
             else texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(n=remaining)
         )
@@ -444,11 +445,11 @@ async def _update_inline_button(bot: Bot, inline_msg_id: str | None, text: str, 
             bot_username = settings.BOT_USERNAME or ''
             deep_link = f'https://t.me/{bot_username}?start=bs_{gift_code}'
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text=text, url=deep_link)
+                make_button(text=text, url=deep_link)
             ]])
         else:
             kb = types.InlineKeyboardMarkup(inline_keyboard=[[
-                types.InlineKeyboardButton(text=text, callback_data='igift_noop')
+                make_button(text=text, callback_data='igift_noop')
             ]])
         await bot.edit_message_reply_markup(inline_message_id=raw, reply_markup=kb)
     except Exception as e:
@@ -473,7 +474,7 @@ async def handle_cancel_callback(callback: types.CallbackQuery) -> None:
             inline_msg_id = gift.inline_message_id
 
     await callback.message.edit_text(texts.t('INLINE_GIFT_CANCELLED', 'Активация отменена.'))
-    await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_CANCELLED_BUTTON', '✗ Отменено'), 0, 1)
+    await _update_inline_button(callback.bot, inline_msg_id, texts.t('INLINE_GIFT_CANCELLED_BUTTON', 'Отменено'), 0, 1)
 
 
 async def handle_noop_callback(callback: types.CallbackQuery) -> None:
@@ -507,7 +508,7 @@ async def show_pending_inline_gift(message: types.Message, gift_code: str) -> No
             return
 
         if not _check_recipient(gift, telegram_id, username):
-            await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', '🚫 Этот подарок предназначен другому пользователю.'))
+            await message.answer(texts.t('INLINE_GIFT_WRONG_RECIPIENT', 'Этот подарок предназначен другому пользователю.'))
             return
 
         if gift.recipient_telegram_id == 0 and max_act == 1:

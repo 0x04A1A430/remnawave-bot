@@ -170,6 +170,35 @@ def _validate_permissions(permissions: list[str]) -> None:
         )
 
 
+def _permission_covered(perm: str, held: set[str]) -> bool:
+    """True when a held permission set grants `perm` (supports *:* and section:* wildcards)."""
+    if '*:*' in held or perm in held:
+        return True
+    section = perm.split(':', 1)[0] if ':' in perm else perm
+    return f'{section}:*' in held
+
+
+async def _ensure_can_grant(db: AsyncSession, admin: User, admin_level: int, permissions: list[str]) -> None:
+    """Block privilege escalation: an admin may only grant permissions they hold.
+
+    Hierarchy guards only check the numeric role LEVEL, so without this a
+    delegated admin holding roles:create / roles:assign could mint a lower-level
+    role carrying permissions (or *:*) they were never given and assign it to
+    themselves. Env/legacy and DB Superadmins (promoted above SUPERADMIN_LEVEL by
+    _get_admin_level) may grant anything.
+    """
+    if admin_level > SUPERADMIN_LEVEL:
+        return
+    held_list, _names, _level = await UserRoleCRUD.get_user_permissions(db, admin.id)
+    held = set(held_list)
+    not_held = sorted(p for p in permissions if not _permission_covered(p, held))
+    if not_held:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f'You cannot grant permissions you do not hold: {", ".join(not_held)}',
+        )
+
+
 # ============ Routes ============
 
 
@@ -295,6 +324,9 @@ async def create_role(
             detail='Cannot create a role with level >= your own role level',
         )
 
+    # Cannot grant permissions the creating admin does not themselves hold.
+    await _ensure_can_grant(db, admin, admin_level, payload.permissions)
+
     # Check name uniqueness
     existing = await AdminRoleCRUD.get_by_name(db, payload.name)
     if existing:
@@ -364,6 +396,8 @@ async def update_role(
     # Validate permissions
     if 'permissions' in update_data and update_data['permissions'] is not None:
         _validate_permissions(update_data['permissions'])
+        # Cannot raise a role's permissions beyond what the editing admin holds.
+        await _ensure_can_grant(db, admin, admin_level, update_data['permissions'])
 
     # Check name uniqueness if name is changing
     if 'name' in update_data and update_data['name'] != role.name:
@@ -458,6 +492,10 @@ async def assign_role(
             detail='Cannot assign a role with level >= your own role level',
         )
 
+    # Cannot hand out a role whose permissions exceed the assigning admin's own
+    # (otherwise roles:assign alone lets an admin grab any lower-level role's perms).
+    await _ensure_can_grant(db, admin, admin_level, role.permissions or [])
+
     # Verify target user exists
     from app.database.crud.user import get_user_by_id
 
@@ -542,8 +580,11 @@ async def revoke_role(
             detail='Cannot revoke a role at or above your own level',
         )
 
-    # Revoke directly on the locked object (avoid CRUD re-fetch without FOR UPDATE)
+    # Revoke directly on the locked object (avoid CRUD re-fetch without FOR UPDATE).
+    # revocation_source='ui' защищает manual decision от автоматической реактивации
+    # bootstrap'ом при следующем рестарте бота (см. _assign_if_missing).
     user_role.is_active = False
+    user_role.revocation_source = 'ui'
     await db.flush()
     await db.commit()
 
@@ -553,6 +594,7 @@ async def revoke_role(
         assignment_id=assignment_id,
         target_user_id=user_role.user_id,
         role_name=role.name,
+        revocation_source='ui',
     )
 
     return {'message': 'Role revoked', 'assignment_id': assignment_id}

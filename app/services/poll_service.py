@@ -29,7 +29,7 @@ logger = structlog.get_logger(__name__)
 def _build_poll_invitation_text(poll: Poll, language: str) -> str:
     texts = get_texts(language)
 
-    lines: list[str] = [f'️ <b>{html.escape(poll.title)}</b>']
+    lines: list[str] = [f'<b>{html.escape(poll.title)}</b>']
     if poll.description:
         lines.append(html.escape(poll.description))
 
@@ -159,7 +159,7 @@ async def send_poll_to_users(
                     # Проверяем, является ли ошибка связанной с лимитом подключений
                     if 'too many clients' in str(error).lower():
                         logger.warning(
-                            '️ Ограничение на количество подключений к БД: пользователю',
+                            'Ограничение на количество подключений к БД при обработке пользователя',
                             poll_id=poll_id,
                             telegram_id=user_snapshot.telegram_id,
                         )

@@ -52,7 +52,7 @@ async def start_simple_subscription_purchase(
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
 
         await callback.message.edit_text(
@@ -124,7 +124,7 @@ async def start_simple_subscription_purchase(
 
     can_pay_from_balance = user_balance_kopeks >= price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_START_BALANCE | user= | balance= | min_required= | can_pay',
+        'SIMPLE_SUBSCRIPTION_DEBUG_START_BALANCE',
         db_user_id=db_user.id,
         user_balance_kopeks=user_balance_kopeks,
         price_kopeks=price_kopeks,
@@ -176,6 +176,7 @@ async def start_simple_subscription_purchase(
     message_lines.extend(
         [
             f'Трафик: {traffic_label}',
+            f'Сервер: {server_label}',
             '',
             f'Стоимость: {settings.format_price(price_kopeks)}',
             f'Ваш баланс: {settings.format_price(user_balance_kopeks)}',
@@ -187,7 +188,7 @@ async def start_simple_subscription_purchase(
     if has_active_paid_subscription:
         # У пользователя уже есть активная платная подписка
         message_lines.append(
-            '️ У вас уже есть активная платная подписка. '
+            'У вас уже есть активная платная подписка. '
             'Покупка простой подписки изменит параметры вашей текущей подписки. '
             'Требуется подтверждение.'
         )
@@ -269,7 +270,7 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append(
-            [types.InlineKeyboardButton(text='⭐ Telegram Stars', callback_data='simple_subscription_stars')]
+            [types.InlineKeyboardButton(text='Telegram Stars', callback_data='simple_subscription_stars')]
         )
 
     if settings.is_yookassa_enabled():
@@ -355,14 +356,12 @@ async def _ensure_simple_subscription_squad_uuid(
 
         resolved_uuid = await get_random_active_squad_uuid(db)
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error('SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ERROR | user= | error', user_id=user_id, error=error)
+        logger.error('SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ERROR', user_id=user_id, error=error)
         return None
 
     if resolved_uuid:
         await state.update_data(resolved_squad_uuid=resolved_uuid)
-        logger.info(
-            'SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ASSIGNED | user= | squad', user_id=user_id, resolved_uuid=resolved_uuid
-        )
+        logger.info('SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ASSIGNED', user_id=user_id, resolved_uuid=resolved_uuid)
 
     return resolved_uuid
 
@@ -392,7 +391,7 @@ async def handle_simple_subscription_pay_with_balance(
     if current_subscription and not getattr(current_subscription, 'is_trial', False) and current_subscription.is_active:
         # У пользователя есть активная платная подписка - требуем подтверждение
         await callback.answer(
-            '️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку.', show_alert=True
+            'У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку.', show_alert=True
         )
         return
 
@@ -425,7 +424,7 @@ async def handle_simple_subscription_pay_with_balance(
 
     total_required = price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_PAY_BALANCE | user= | period= | base= | traffic= | devices= | servers= | discount= | total_required= | balance',
+        'SIMPLE_SUBSCRIPTION_DEBUG_PAY_BALANCE',
         db_user_id=db_user.id,
         subscription_params=subscription_params['period_days'],
         price_breakdown=price_breakdown.get('base_price', 0),
@@ -440,7 +439,7 @@ async def handle_simple_subscription_pay_with_balance(
     # Проверяем баланс пользователя
     user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
 
-    if user_balance_kopeks < total_required:
+    if total_required > 0 and user_balance_kopeks < total_required:
         await callback.answer('Недостаточно средств на балансе для оплаты подписки', show_alert=True)
         return
 
@@ -548,6 +547,14 @@ async def handle_simple_subscription_pay_with_balance(
                 sync_error=sync_error,
                 exc_info=True,
             )
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+                remnawave_retry_queue.enqueue(
+                    subscription_id=subscription.id,
+                    user_id=subscription.user_id,
+                    action='create',
+                )
 
         # Отправляем уведомление об успешной покупке
         server_label = _get_simple_subscription_server_label(
@@ -572,6 +579,7 @@ async def handle_simple_subscription_pay_with_balance(
         success_lines.extend(
             [
                 f'Трафик: {success_traffic_label}',
+                f'Сервер: {server_label}',
                 '',
                 f'Списано с баланса: {settings.format_price(price_kopeks)}',
                 f'Ваш баланс: {settings.format_price(db_user.balance_kopeks)}',
@@ -670,7 +678,7 @@ async def handle_simple_subscription_pay_with_balance(
         await callback.answer()
 
         logger.info(
-            'Пользователь успешно купил подписку с баланса на ₽',
+            'Пользователь успешно купил подписку с баланса',
             telegram_id=db_user.telegram_id,
             price_kopeks=price_kopeks / 100,
         )
@@ -739,7 +747,7 @@ async def handle_simple_subscription_other_payment_methods(
     user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
     can_pay_from_balance = user_balance_kopeks >= price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_METHODS | user= | balance= | base= | traffic= | devices= | servers= | discount= | total_required= | can_pay',
+        'SIMPLE_SUBSCRIPTION_DEBUG_METHODS',
         db_user_id=db_user.id,
         user_balance_kopeks=user_balance_kopeks,
         price_breakdown=price_breakdown.get('base_price', 0),
@@ -774,6 +782,7 @@ async def handle_simple_subscription_other_payment_methods(
     message_lines.extend(
         [
             f'Трафик: {payment_traffic_label}',
+            f'Сервер: {server_label}',
             '',
             f'Стоимость: {settings.format_price(price_kopeks)}',
             '',
@@ -832,7 +841,7 @@ async def handle_simple_subscription_payment_method(
     if current_subscription and not getattr(current_subscription, 'is_trial', False) and current_subscription.is_active:
         # У пользователя есть активная платная подписка - показываем сообщение
         await callback.answer(
-            '️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку через главное меню.',
+            'У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку через главное меню.',
             show_alert=True,
         )
         return
@@ -1190,6 +1199,11 @@ async def handle_simple_subscription_payment_method(
                 f'Актив: {crypto_result["asset"]}\n'
                 f'Курс: 1 USD ≈ {usd_rate:.2f} ₽\n'
                 f'ID платежа: {crypto_result["invoice_id"][:8]}...\n\n'
+                '<b>Инструкция:</b>\n'
+                "1. Нажмите кнопку 'Оплатить через CryptoBot'\n"
+                '2. Выберите актив и следуйте подсказкам\n'
+                '3. Подтвердите перевод\n'
+                '4. Средства зачислятся автоматически\n\n'
                 f'Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}'
             )
 
@@ -1295,7 +1309,13 @@ async def handle_simple_subscription_payment_method(
             message_lines.extend(
                 [
                     '',
-                    f'Если возникнут проблемы, обратитесь к {settings.get_support_contact_display_html()}',
+                    '<b>Инструкция:</b>',
+                    "1. Нажмите кнопку 'Оплатить через Heleket'",
+                    '2. Следуйте подсказкам на странице оплаты',
+                    '3. Подтвердите перевод',
+                    '4. Средства зачислятся автоматически',
+                    '',
+                    f'Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}',
                 ]
             )
 
@@ -1376,8 +1396,12 @@ async def handle_simple_subscription_payment_method(
                     '<b>Оплата через {mulenpay_name_html}</b>\n\n'
                     'Сумма: {amount}\n'
                     'ID платежа: {payment_id}\n\n'
-                    '\n'
-                    'Если возникнут проблемы, обратитесь к {support}'
+                    '<b>Инструкция:</b>\n'
+                    "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
+                    '2. Следуйте подсказкам платежной системы\n'
+                    '3. Подтвердите перевод\n'
+                    '4. Средства зачислятся автоматически\n\n'
+                    'Если возникнут проблемы, обратитесь в {support}'
                 ),
             )
 
@@ -1538,6 +1562,7 @@ async def handle_simple_subscription_payment_method(
                     '<b>Оплата через PayPalych</b>\n\n'
                     'Сумма: {amount}\n'
                     'ID счета: {bill_id}\n\n'
+                    '<b>Инструкция:</b>\n{steps}\n\n'
                     'Если возникнут проблемы, обратитесь в {support}'
                 ),
             )
@@ -1688,12 +1713,12 @@ async def check_simple_pal24_payment_status(
         payment = status_info['payment']
 
         status_labels = {
-            'NEW': ('⏳', 'Ожидает оплаты'),
-            'PROCESS': ('⌛', 'Обрабатывается'),
+            'NEW': ('', 'Ожидает оплаты'),
+            'PROCESS': ('', 'Обрабатывается'),
             'SUCCESS': ('', 'Оплачен'),
             'FAIL': ('', 'Отменен'),
-            'UNDERPAID': ('️', 'Недоплата'),
-            'OVERPAID': ('️', 'Переплата'),
+            'UNDERPAID': ('', 'Недоплата'),
+            'OVERPAID': ('', 'Переплата'),
         }
 
         emoji, status_text = status_labels.get(payment.status, ('', 'Неизвестно'))
@@ -1726,7 +1751,7 @@ async def check_simple_pal24_payment_status(
         elif payment.status in {'NEW', 'PROCESS'}:
             message_lines += [
                 '',
-                '⏳ Платеж еще не завершен. Оплатите счет и проверьте статус позже.',
+                'Платеж еще не завершен. Оплатите счет и проверьте статус позже.',
             ]
             if sbp_link:
                 message_lines += ['', f'СБП: {sbp_link}']
@@ -1837,11 +1862,11 @@ async def check_simple_mulenpay_payment_status(
 
     texts = get_texts(user_language)
     status_labels = {
-        'created': ('⏳', 'Ожидает оплаты'),
-        'processing': ('⌛', 'Обрабатывается'),
+        'created': ('', 'Ожидает оплаты'),
+        'processing': ('', 'Обрабатывается'),
         'success': ('', 'Оплачен'),
         'canceled': ('', 'Отменен'),
-        'error': ('️', 'Ошибка'),
+        'error': ('', 'Ошибка'),
         'hold': ('', 'Холд'),
         'unknown': ('', 'Неизвестно'),
     }
@@ -1858,9 +1883,9 @@ async def check_simple_mulenpay_payment_status(
     ]
 
     if payment.is_paid:
-        message_lines.append('\nПлатеж успешно завершен! Средства уже зачислены.')
+        message_lines.append('\n Платеж успешно завершен! Средства уже зачислены.')
     elif payment.status in {'created', 'processing'}:
-        message_lines.append('\n⏳ Платеж еще не завершен. Завершите оплату и проверьте статус позже.')
+        message_lines.append('\n Платеж еще не завершен. Завершите оплату и проверьте статус позже.')
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1901,7 +1926,7 @@ async def check_simple_cryptobot_payment_status(
         return
 
     status_labels = {
-        'active': ('⏳', 'Ожидает оплаты'),
+        'active': ('', 'Ожидает оплаты'),
         'paid': ('', 'Оплачен'),
         'expired': ('', 'Истек'),
     }
@@ -1928,9 +1953,9 @@ async def check_simple_cryptobot_payment_status(
     ]
 
     if payment.status == 'paid':
-        message_lines.append('\nПлатеж подтвержден. Средства уже зачислены.')
+        message_lines.append('\n Платеж подтвержден. Средства уже зачислены.')
     elif payment.status == 'active':
-        message_lines.append('\n⏳ Платеж еще ожидает подтверждения. Оплатите счет и проверьте статус позже.')
+        message_lines.append('\n Платеж еще ожидает подтверждения. Оплатите счет и проверьте статус позже.')
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1971,14 +1996,14 @@ async def check_simple_heleket_payment_status(
         return
 
     status_labels = {
-        'check': ('⏳', 'Ожидает оплаты'),
+        'check': ('', 'Ожидает оплаты'),
         'paid': ('', 'Оплачен'),
         'paid_over': ('', 'Оплачен (переплата)'),
-        'wrong_amount': ('️', 'Неверная сумма'),
+        'wrong_amount': ('', 'Неверная сумма'),
         'cancel': ('', 'Отменен'),
         'fail': ('', 'Ошибка'),
-        'process': ('⌛', 'Обрабатывается'),
-        'confirm_check': ('⌛', 'Ожидает подтверждения'),
+        'process': ('', 'Обрабатывается'),
+        'confirm_check': ('', 'Ожидает подтверждения'),
     }
 
     emoji, status_text = status_labels.get(payment.status, ('', 'Неизвестно'))
@@ -2008,14 +2033,14 @@ async def check_simple_heleket_payment_status(
         message_lines.append(f'Оплата: {payment.payer_amount} {payment.payer_currency}')
 
     if payment.is_paid:
-        message_lines.append('\nПлатеж успешно завершен! Средства уже зачислены.')
+        message_lines.append('\n Платеж успешно завершен! Средства уже зачислены.')
     elif payment.status in {'check', 'process', 'confirm_check'}:
-        message_lines.append('\n⏳ Платеж еще обрабатывается. Завершите оплату и проверьте статус позже.')
+        message_lines.append('\n Платеж еще обрабатывается. Завершите оплату и проверьте статус позже.')
         if payment.payment_url:
-            message_lines.append(f'\nСсылка на оплату: {payment.payment_url}')
+            message_lines.append(f'\n Ссылка на оплату: {payment.payment_url}')
     elif payment.status in {'fail', 'cancel', 'wrong_amount'}:
         message_lines.append(
-            f'\nПлатеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}'
+            f'\n Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}'
         )
 
     keyboard = types.InlineKeyboardMarkup(
@@ -2060,8 +2085,8 @@ async def check_simple_wata_payment_status(
     texts = get_texts(settings.DEFAULT_LANGUAGE)
 
     status_labels = {
-        'Opened': ('⏳', texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты')),
-        'Closed': ('⌛', texts.t('WATA_STATUS_CLOSED', 'Обрабатывается')),
+        'Opened': ('', texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты')),
+        'Closed': ('', texts.t('WATA_STATUS_CLOSED', 'Обрабатывается')),
         'Paid': ('', texts.t('WATA_STATUS_PAID', 'Оплачен')),
         'Declined': ('', texts.t('WATA_STATUS_DECLINED', 'Отклонен')),
     }
@@ -2077,9 +2102,9 @@ async def check_simple_wata_payment_status(
     ]
 
     if payment.is_paid:
-        message_lines.append('\nПлатеж успешно завершен! Средства уже зачислены.')
+        message_lines.append('\n Платеж успешно завершен! Средства уже зачислены.')
     elif payment.status in {'Opened', 'Closed'}:
-        message_lines.append('\n⏳ Платеж еще не завершен. Завершите оплату и проверьте статус позже.')
+        message_lines.append('\n Платеж еще не завершен. Завершите оплату и проверьте статус позже.')
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -2147,7 +2172,7 @@ async def confirm_simple_subscription_purchase(
 
     total_required = price_kopeks
     logger.warning(
-        'SIMPLE_SUBSCRIPTION_DEBUG_CONFIRM | user= | period= | base= | traffic= | devices= | servers= | discount= | total_required= | balance',
+        'SIMPLE_SUBSCRIPTION_DEBUG_CONFIRM',
         db_user_id=db_user.id,
         subscription_params=subscription_params['period_days'],
         price_breakdown=price_breakdown.get('base_price', 0),
@@ -2162,7 +2187,7 @@ async def confirm_simple_subscription_purchase(
     # Проверяем баланс пользователя
     user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
 
-    if user_balance_kopeks < total_required:
+    if total_required > 0 and user_balance_kopeks < total_required:
         await callback.answer('Недостаточно средств на балансе для оплаты подписки', show_alert=True)
         return
 
@@ -2270,6 +2295,14 @@ async def confirm_simple_subscription_purchase(
                 sync_error=sync_error,
                 exc_info=True,
             )
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            if hasattr(subscription, 'id') and hasattr(subscription, 'user_id'):
+                remnawave_retry_queue.enqueue(
+                    subscription_id=subscription.id,
+                    user_id=subscription.user_id,
+                    action='create',
+                )
 
         # Отправляем уведомление об успешной покупке
         server_label = _get_simple_subscription_server_label(
@@ -2294,6 +2327,7 @@ async def confirm_simple_subscription_purchase(
         success_lines.extend(
             [
                 f'Трафик: {success_traffic_label}',
+                f'Сервер: {server_label}',
                 '',
                 f'Списано с баланса: {settings.format_price(price_kopeks)}',
                 f'Ваш баланс: {settings.format_price(db_user.balance_kopeks)}',
@@ -2392,7 +2426,7 @@ async def confirm_simple_subscription_purchase(
         await callback.answer()
 
         logger.info(
-            'Пользователь успешно купил подписку с баланса на ₽',
+            'Пользователь успешно купил подписку с баланса',
             telegram_id=db_user.telegram_id,
             price_kopeks=price_kopeks / 100,
         )

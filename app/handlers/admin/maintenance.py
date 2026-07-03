@@ -10,6 +10,7 @@ from app.database.models import User
 from app.keyboards.admin import get_admin_main_keyboard, get_maintenance_keyboard
 from app.localization.texts import get_texts
 from app.services.maintenance_service import maintenance_service
+from app.services.system_settings_service import bot_configuration_service
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -19,6 +20,14 @@ logger = structlog.get_logger(__name__)
 class MaintenanceStates(StatesGroup):
     waiting_for_reason = State()
     waiting_for_notification_message = State()
+
+
+async def _persist_maintenance_mode(db: AsyncSession, enabled: bool) -> None:
+    try:
+        await bot_configuration_service.set_value(db, 'MAINTENANCE_MODE', enabled)
+        await db.commit()
+    except Exception as error:
+        logger.error('Не удалось сохранить MAINTENANCE_MODE после переключения из бота', enabled=enabled, error=error)
 
 
 @admin_required
@@ -43,7 +52,7 @@ async def show_maintenance_panel(callback: types.CallbackQuery, db_user: User, d
     api_emoji = '' if status_info['api_status'] else ''
     api_text = 'Доступно' if status_info['api_status'] else 'Недоступно'
 
-    monitoring_emoji = '' if status_info['monitoring_active'] else '⏹️'
+    monitoring_emoji = '' if status_info['monitoring_active'] else ''
     monitoring_text = 'Запущен' if status_info['monitoring_active'] else 'Остановлен'
 
     enabled_info = ''
@@ -60,7 +69,7 @@ async def show_maintenance_panel(callback: types.CallbackQuery, db_user: User, d
 
     failures_info = ''
     if status_info['consecutive_failures'] > 0:
-        failures_info = f'\n️ <b>Неудачных проверок подряд:</b> {status_info["consecutive_failures"]}'
+        failures_info = f'\n<b>Неудачных проверок подряд:</b> {status_info["consecutive_failures"]}'
 
     panel_info = f'\n<b>Панель Remnawave:</b> {panel_status["description"]}'
     if panel_status.get('response_time'):
@@ -73,7 +82,7 @@ async def show_maintenance_panel(callback: types.CallbackQuery, db_user: User, d
 {api_emoji} <b>API Remnawave:</b> {api_text}
 {monitoring_emoji} <b>Мониторинг:</b> {monitoring_text}
 ️ <b>Автозапуск мониторинга:</b> {'Включен' if status_info['monitoring_configured'] else 'Отключен'}
-⏱️ <b>Интервал проверки:</b> {status_info['check_interval']}с
+<b>Интервал проверки:</b> {status_info['check_interval']}с
 <b>Автовключение:</b> {'Включено' if status_info['auto_enable_configured'] else 'Отключено'}
 {panel_info}
 {enabled_info}
@@ -103,6 +112,8 @@ async def toggle_maintenance_mode(callback: types.CallbackQuery, db_user: User, 
     if is_active:
         success = await maintenance_service.disable_maintenance()
         if success:
+            await _persist_maintenance_mode(db, False)
+        if success:
             await callback.answer('Режим техработ выключен', show_alert=True)
         else:
             await callback.answer('Ошибка выключения режима техработ', show_alert=True)
@@ -131,6 +142,8 @@ async def process_maintenance_reason(message: types.Message, db_user: User, db: 
         reason = message.text[:200]
 
     success = await maintenance_service.enable_maintenance(reason=reason, auto=False)
+    if success:
+        await _persist_maintenance_mode(db, True)
 
     if success:
         response_text = 'Режим техработ включен'
@@ -199,9 +212,9 @@ async def check_panel_status(callback: types.CallbackQuery, db_user: User, db: A
         status_data = await rw_service.check_panel_health()
 
         status_text = {
-            'online': '🟢 Панель работает нормально',
+            'online': 'Панель работает нормально',
             'offline': 'Панель недоступна',
-            'degraded': '🟡 Панель работает со сбоями',
+            'degraded': 'Панель работает со сбоями',
         }.get(status_data['status'], 'Статус неизвестен')
 
         message_parts = [
@@ -209,7 +222,7 @@ async def check_panel_status(callback: types.CallbackQuery, db_user: User, db: A
             f'{status_text}',
             f'Время отклика: {status_data.get("response_time", 0)}с',
             f'Пользователей онлайн: {status_data.get("users_online", 0)}',
-            f'️ Нод онлайн: {status_data.get("nodes_online", 0)}/{status_data.get("total_nodes", 0)}',
+            f'Нод онлайн: {status_data.get("nodes_online", 0)}/{status_data.get("total_nodes", 0)}',
         ]
 
         attempts_used = status_data.get('attempts_used')
@@ -235,11 +248,11 @@ async def send_manual_notification(callback: types.CallbackQuery, db_user: User,
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                types.InlineKeyboardButton(text='🟢 Онлайн', callback_data='manual_notify_online'),
+                types.InlineKeyboardButton(text='Онлайн', callback_data='manual_notify_online'),
                 types.InlineKeyboardButton(text='Офлайн', callback_data='manual_notify_offline'),
             ],
             [
-                types.InlineKeyboardButton(text='🟡 Проблемы', callback_data='manual_notify_degraded'),
+                types.InlineKeyboardButton(text='Проблемы', callback_data='manual_notify_degraded'),
                 types.InlineKeyboardButton(text='Обслуживание', callback_data='manual_notify_maintenance'),
             ],
             [types.InlineKeyboardButton(text='Отмена', callback_data='maintenance_panel')],
@@ -269,9 +282,9 @@ async def handle_manual_notification(callback: types.CallbackQuery, db_user: Use
     await state.update_data(notification_status=status)
 
     status_names = {
-        'online': '🟢 Онлайн',
+        'online': 'Онлайн',
         'offline': 'Офлайн',
-        'degraded': '🟡 Проблемы',
+        'degraded': 'Проблемы',
         'maintenance': 'Обслуживание',
     }
 

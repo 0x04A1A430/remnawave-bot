@@ -1107,7 +1107,7 @@ async def test_get_payment_methods_includes_wata(monkeypatch):
     assert wata_method is not None
     assert wata_method.min_amount_kopeks == 5000
     assert wata_method.max_amount_kopeks == 7500000
-    assert wata_method.icon == ''
+    assert wata_method.icon == '🌊'
     assert wata_method.integration_type == MiniAppPaymentIntegrationType.REDIRECT
     assert wata_method.iframe_config is None
 

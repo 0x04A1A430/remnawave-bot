@@ -59,7 +59,7 @@ async def reset_trials(
 
     message = texts.t(
         'ADMIN_TRIALS_RESET_RESULT',
-        '️ Сбросили {reset_count} триалов.\n\n'
+        'Сбросили {reset_count} триалов.\n\n'
         '• Использовано всего: {used}\n'
         '• Активно сейчас: {active}\n'
         '• Доступно к сбросу: {resettable}',

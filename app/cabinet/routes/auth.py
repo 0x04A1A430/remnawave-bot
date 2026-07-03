@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import hmac
 from datetime import UTC, datetime
 
 import structlog
@@ -31,6 +32,10 @@ from app.database.crud.user import (
 from app.database.models import CabinetRefreshToken, User, UserStatus
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
+from app.services.rbac_bootstrap_service import (
+    ensure_superadmin_role_on_login,
+    is_user_admin_by_env,
+)
 from app.services.referral_service import process_referral_registration
 from app.services.web_auth_service import (
     WEB_AUTH_TOKEN_TTL,
@@ -39,6 +44,7 @@ from app.services.web_auth_service import (
     poll_web_auth_token,
 )
 from app.utils.cache import RateLimitCache, TokenReplayCache
+from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..auth import (
@@ -61,7 +67,12 @@ from ..auth.email_verification import (
     is_token_expired,
 )
 from ..auth.jwt_handler import get_refresh_token_expires_at
-from ..auth.merge_service import create_merge_token
+from ..auth.merge_service import (
+    clear_email_merge_otp,
+    create_merge_token,
+    get_email_merge_otp,
+    store_email_merge_otp,
+)
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..ip_utils import get_client_ip
 from ..schemas.auth import (
@@ -74,6 +85,7 @@ from ..schemas.auth import (
     EmailChangeResponse,
     EmailChangeVerifyRequest,
     EmailLoginRequest,
+    EmailMergeVerifyRequest,
     EmailRegisterRequest,
     EmailRegisterStandaloneRequest,
     EmailVerifyRequest,
@@ -117,6 +129,26 @@ def _user_to_response(user: User) -> UserResponse:
 
 async def _create_auth_response(user: User, db: AsyncSession) -> AuthResponse:
     """Create full auth response with tokens and RBAC permissions."""
+    # Idempotent Superadmin re-assignment for users in ADMIN_IDS / ADMIN_EMAILS.
+    # Покрывает кейс: юзер был удалён через кабинет → пересоздан через /start
+    # → у нового user.id нет роли, потому что RBAC bootstrap отрабатывает только
+    # на старте бота. Без этой проверки админ из ADMIN_IDS получает access_token
+    # с пустыми permissions до следующего рестарта и видит 401 на /me/is-admin.
+    try:
+        await ensure_superadmin_role_on_login(db, user)
+    except Exception as bootstrap_error:
+        # IntegrityError изолирован savepoint'ом внутри ensure_superadmin_role_on_login,
+        # сюда долетают только программистские/инфраструктурные сбои (DB down, attribute
+        # errors). Login сам не валится — get_user_permissions ниже выдаст актуальное
+        # состояние ролей, какое бы оно ни было.
+        logger.error(
+            'Failed to ensure Superadmin role on login',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            error=str(bootstrap_error),
+            exc_info=True,
+        )
+
     user_permissions, user_role_names, user_role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
 
     access_token = create_access_token(
@@ -144,96 +176,140 @@ async def _store_refresh_token(
     refresh_token: str,
     device_info: str | None = None,
 ) -> None:
-    """Store refresh token hash in database."""
+    """Store refresh token hash in database using upsert to avoid duplicate key errors."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     expires_at = get_refresh_token_expires_at()
 
-    token_record = CabinetRefreshToken(
+    stmt = pg_insert(CabinetRefreshToken).values(
         user_id=user_id,
         token_hash=token_hash,
         device_info=device_info,
         expires_at=expires_at,
     )
-    db.add(token_record)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        logger.debug('Refresh token already exists (duplicate)', user_id=user_id)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=['token_hash'],
+        set_={
+            'expires_at': expires_at,
+            'device_info': device_info,
+            'revoked_at': None,
+        },
+    )
+    await db.execute(stmt)
+    await db.commit()
 
 
 async def _process_campaign_bonus(
     db: AsyncSession,
     user: User,
     campaign_slug: str | None,
+    telegram_id: int | None = None,
 ) -> CampaignBonusInfo | None:
-    """Process campaign bonus for user during auth. Never raises."""
+    """Process campaign bonus for user during auth. Never raises.
+
+    If ``campaign_slug`` is not provided but ``telegram_id`` is given, the
+    function falls back to Redis ``pending_campaign:{telegram_id}`` -- populated
+    by the bot's /start handler when a user opens an advertising campaign link
+    but then completes registration via the cabinet WebApp (Telegram menu
+    button) instead of the bot dialog. The Redis entry is cleared after a
+    successful consumption attempt.
+    """
+    pending_campaign_consumed = False
+    if not campaign_slug and telegram_id:
+        try:
+            from app.services.referral_service import get_pending_campaign
+
+            pending = await get_pending_campaign(telegram_id)
+            if pending and pending.get('campaign_slug'):
+                campaign_slug = pending['campaign_slug']
+                pending_campaign_consumed = True
+                logger.info(
+                    'Resolved campaign from Redis pending_campaign (cabinet)',
+                    telegram_id=telegram_id,
+                    campaign_slug=campaign_slug,
+                )
+        except Exception as e:
+            logger.warning('Failed to check pending campaign', error=e)
+
     if not campaign_slug:
         return None
     try:
-        campaign = await get_campaign_by_start_parameter(db, campaign_slug, only_active=True)
-        if not campaign:
-            return None
+        try:
+            campaign = await get_campaign_by_start_parameter(db, campaign_slug, only_active=True)
+            if not campaign:
+                return None
 
-        # Skip if user IS the campaign partner — prevent self-referral
-        if campaign.partner_user_id and campaign.partner_user_id == user.id:
-            logger.debug(
-                'Skipping campaign attribution: user is the campaign partner',
-                user_id=user.id,
-                campaign_id=campaign.id,
-            )
-            return None
-
-        # Lock user row to prevent concurrent bonus application (race condition)
-        await db.execute(select(User).where(User.id == user.id).with_for_update())
-
-        existing = await get_campaign_registration_by_user(db, user.id)
-        if existing:
-            logger.debug('User already has campaign registration', user_id=user.id)
-            return None
-
-        # Привязать реферала к партнёру кампании (если партнёр назначен и юзер ещё не привязан)
-        if campaign.partner_user_id and not user.referred_by_id:
-            user.referred_by_id = campaign.partner_user_id
-            await db.flush()
-            try:
-                from app.bot_factory import create_bot
-
-                async with create_bot() as bot:
-                    await process_referral_registration(db, user.id, campaign.partner_user_id, bot=bot)
-                logger.info(
-                    'Referral set from campaign partner',
+            # Skip if user IS the campaign partner — prevent self-referral
+            if campaign.partner_user_id and campaign.partner_user_id == user.id:
+                logger.debug(
+                    'Skipping campaign attribution: user is the campaign partner',
                     user_id=user.id,
-                    partner_user_id=campaign.partner_user_id,
                     campaign_id=campaign.id,
                 )
-            except Exception as e:
-                logger.error('Failed to process referral from campaign partner', error=e)
+                return None
 
-        service = AdvertisingCampaignService()
-        result = await service.apply_campaign_bonus(db, user, campaign)
-        if not result.success:
-            return None
+            # Lock user row to prevent concurrent bonus application (race condition)
+            await db.execute(select(User).where(User.id == user.id).with_for_update())
 
-        # Refresh user to get updated balance after bonus
-        await db.refresh(user)
+            existing = await get_campaign_registration_by_user(db, user.id)
+            if existing:
+                logger.debug('User already has campaign registration', user_id=user.id)
+                return None
 
-        return CampaignBonusInfo(
-            campaign_name=campaign.name,
-            bonus_type=result.bonus_type or campaign.bonus_type,
-            balance_kopeks=result.balance_kopeks,
-            subscription_days=result.subscription_days,
-            tariff_name=result.tariff_name,
-        )
-    except Exception:
-        logger.exception('Failed to process campaign bonus', user_id=user.id, campaign_slug=campaign_slug)
-        try:
-            await db.rollback()
-            # Re-fetch user so session stays usable for the caller
+            # Привязать реферала к партнёру кампании (если партнёр назначен и юзер ещё не привязан)
+            if campaign.partner_user_id and not user.referred_by_id:
+                user.referred_by_id = campaign.partner_user_id
+                await db.flush()
+                try:
+                    from app.bot_factory import create_bot
+
+                    async with create_bot() as bot:
+                        await process_referral_registration(db, user.id, campaign.partner_user_id, bot=bot)
+                    logger.info(
+                        'Referral set from campaign partner',
+                        user_id=user.id,
+                        partner_user_id=campaign.partner_user_id,
+                        campaign_id=campaign.id,
+                    )
+                except Exception as e:
+                    logger.error('Failed to process referral from campaign partner', error=e)
+
+            service = AdvertisingCampaignService()
+            result = await service.apply_campaign_bonus(db, user, campaign)
+            if not result.success:
+                return None
+
+            # Refresh user to get updated balance after bonus
             await db.refresh(user)
+
+            return CampaignBonusInfo(
+                campaign_name=campaign.name,
+                bonus_type=result.bonus_type or campaign.bonus_type,
+                balance_kopeks=result.balance_kopeks,
+                subscription_days=result.subscription_days,
+                tariff_name=result.tariff_name,
+            )
         except Exception:
-            logger.exception('Failed to rollback after campaign bonus error', user_id=user.id)
-        return None
+            logger.exception('Failed to process campaign bonus', user_id=user.id, campaign_slug=campaign_slug)
+            try:
+                await db.rollback()
+                # Re-fetch user so session stays usable for the caller
+                await db.refresh(user)
+            except Exception:
+                logger.exception('Failed to rollback after campaign bonus error', user_id=user.id)
+            return None
+    finally:
+        # Clear Redis pending_campaign whenever we consumed it. Done regardless
+        # of success — if processing failed (already applied, race, exception),
+        # we don't want to keep retrying on every subsequent login.
+        if pending_campaign_consumed and telegram_id:
+            try:
+                from app.services.referral_service import clear_pending_campaign
+
+                await clear_pending_campaign(telegram_id)
+            except Exception:
+                pass
 
 
 async def _process_referral_code(
@@ -379,7 +455,7 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                 connected_squads = [
                     s.get('uuid', '') for s in (panel_user.active_internal_squads or []) if s.get('uuid')
                 ]
-                device_limit = panel_user.hwid_device_limit or 0
+                device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit, default=0)
 
                 # Determine status
                 current_time = datetime.now(UTC)
@@ -552,10 +628,22 @@ async def auth_telegram(
             logger.info('User profile updated from initData', user_id=user.id)
 
     if user.status != UserStatus.ACTIVE.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
-        )
+        # DELETED users authenticating via initData (cryptographically
+        # signed by Telegram) get auto-revived inline — the signature on
+        # initData is the moral equivalent of a fresh /start. BLOCKED
+        # users still get the hard 403.
+        # revive_deleted_user does NOT commit — the endpoint's commit
+        # at the end of the function persists this together with
+        # cabinet_last_login in one round-trip.
+        if user.status == UserStatus.DELETED.value:
+            from app.services.user_revival_service import revive_deleted_user
+
+            await revive_deleted_user(db, user, source='cabinet_telegram_login')
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail='User account is not active',
+            )
 
     # Update last login
     user.cabinet_last_login = datetime.now(UTC)
@@ -569,6 +657,34 @@ async def auth_telegram(
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
 
+    # Race-resilience: an existing user whose miniapp opened BEFORE
+    # the bot's /start handler finished processing may still have
+    # referred_by_id=None despite the user clicking the referral link.
+    # The pending_referral Redis key the cabinet checked above was
+    # not yet written at that moment. Now that /start has had a chance
+    # to run, the key may exist — try the eager attach helper. It
+    # idempotently no-ops when referred_by_id is already set, and
+    # otherwise reads Redis pending_referral + attaches + fires the
+    # registration event exactly once.
+    #
+    # SECURITY: do NOT pass `request.referral_code` here. The cabinet
+    # request body is fully client-controlled, and accepting it for
+    # the retroactive branch would let any user POST an arbitrary
+    # referrer code and self-attach it to their orphan (no-referrer)
+    # account — monetizing the multi-account self-referral attack.
+    # The Redis pending_referral key is provably written by the bot
+    # itself (only after validating the ref-link click maps to THIS
+    # telegram_id), so it's the only trusted retroactive source.
+    if not is_new_user:
+        from app.services.referral_service import attach_referrer_if_missing
+
+        await attach_referrer_if_missing(
+            db,
+            user,
+            referral_code=None,
+            source='cabinet_telegram_retroactive',
+        )
+
     # Clear Redis pending referral after successful user creation with referral
     if referrer_id:
         try:
@@ -578,8 +694,11 @@ async def auth_telegram(
         except Exception:
             pass
 
-    # Process campaign bonus
-    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
+    # Process campaign bonus.
+    # Pass telegram_id so the function can fall back to Redis pending_campaign
+    # if the user came via /start <campaign> in the bot but completed
+    # registration in the WebApp without an explicit campaign_slug.
+    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug, telegram_id=telegram_id)
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
@@ -609,32 +728,62 @@ async def auth_telegram_widget(
 
     widget_data = request.model_dump(exclude={'campaign_slug', 'referral_code'})
 
-    # Generous max_age: Telegram caches auth data with stale auth_date
-    if not validate_telegram_login_widget(widget_data, max_age_seconds=86400 * 30):
+    # Login Widget auth is fresh per click (24h is already very generous).
+    if not validate_telegram_login_widget(widget_data, max_age_seconds=86400):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Invalid or expired Telegram authentication data',
         )
+    # SECURITY: one-time use. A widget payload can travel in the redirect URL
+    # (browser history / referrer / access logs); without a replay guard a
+    # captured payload would be a reusable login credential for the whole window.
+    widget_replay = hashlib.sha256(f'tg_widget:{widget_data.get("hash", "")}'.encode()).hexdigest()
+    if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='This Telegram authorization has already been used. Please log in again.',
+        )
 
     user = await get_user_by_telegram_id(db, request.id)
 
-    # Resolve referral code to referrer ID for new users
+    # Resolve referral code to referrer ID for new users.
+    # Order: explicit request.referral_code, then Redis pending_referral
+    # written by /start ref_XYZ. The Redis fallback used to be missing
+    # from this widget endpoint (initData endpoint had it, widget didn't),
+    # so users who hit /start ref_XYZ then logged in via Telegram Login
+    # Widget were silently losing attribution.
     referrer_id = None
-    if request.referral_code and not user:
-        try:
-            referrer = await get_user_by_referral_code(db, request.referral_code)
-            if referrer:
-                # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
-                if referrer.telegram_id and referrer.telegram_id == request.id:
-                    logger.warning(
-                        'Self-referral attempt blocked via telegram_id',
+    if not user:
+        if request.referral_code:
+            try:
+                referrer = await get_user_by_referral_code(db, request.referral_code)
+                if referrer:
+                    # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
+                    if referrer.telegram_id and referrer.telegram_id == request.id:
+                        logger.warning(
+                            'Self-referral attempt blocked via telegram_id',
+                            telegram_id=request.id,
+                            referral_code=request.referral_code,
+                        )
+                    else:
+                        referrer_id = referrer.id
+            except Exception as e:
+                logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+
+        if not referrer_id and request.id:
+            try:
+                from app.services.referral_service import get_pending_referral
+
+                pending = await get_pending_referral(request.id)
+                if pending and pending.get('referrer_id'):
+                    referrer_id = pending['referrer_id']
+                    logger.info(
+                        'Resolved referral from Redis pending_referral (widget)',
                         telegram_id=request.id,
-                        referral_code=request.referral_code,
+                        referrer_id=referrer_id,
                     )
-                else:
-                    referrer_id = referrer.id
-        except Exception as e:
-            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+            except Exception as e:
+                logger.warning('Failed to check pending referral (widget)', error=e)
 
     is_new_user = not user
     if not user:
@@ -676,6 +825,21 @@ async def auth_telegram_widget(
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
 
+    # Race-resilience: existing users whose miniapp opened before the
+    # bot's /start finished may still be missing the referrer. The
+    # Redis pending_referral is the only TRUSTED source for retroactive
+    # attach (request.referral_code is client-controlled — see security
+    # comment in /telegram above).
+    if not is_new_user:
+        from app.services.referral_service import attach_referrer_if_missing
+
+        await attach_referrer_if_missing(
+            db,
+            user,
+            referral_code=None,
+            source='cabinet_widget_retroactive',
+        )
+
     # Clear Redis pending referral after successful registration
     if referrer_id and request.id:
         try:
@@ -685,8 +849,8 @@ async def auth_telegram_widget(
         except Exception:
             pass
 
-    # Process campaign bonus
-    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
+    # Process campaign bonus (pending_campaign Redis fallback for Telegram Login Widget)
+    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug, telegram_id=request.id)
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
@@ -768,23 +932,43 @@ async def auth_telegram_oidc(
 
     user = await get_user_by_telegram_id(db, telegram_id)
 
-    # Resolve referral code for new users
+    # Resolve referral code for new users.
+    # Order: explicit request.referral_code, then Redis pending_referral
+    # written by /start ref_XYZ. The Redis fallback was previously
+    # missing from this OIDC endpoint — users who hit /start ref_XYZ
+    # then logged in via the cabinet's OIDC flow lost attribution.
     referrer_id = None
-    if request.referral_code and not user:
-        try:
-            referrer = await get_user_by_referral_code(db, request.referral_code)
-            if referrer:
-                # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
-                if referrer.telegram_id and referrer.telegram_id == telegram_id:
-                    logger.warning(
-                        'Self-referral attempt blocked via telegram_id',
+    if not user:
+        if request.referral_code:
+            try:
+                referrer = await get_user_by_referral_code(db, request.referral_code)
+                if referrer:
+                    # Self-referral protection by telegram_id (user doesn't exist yet, can't compare user.id)
+                    if referrer.telegram_id and referrer.telegram_id == telegram_id:
+                        logger.warning(
+                            'Self-referral attempt blocked via telegram_id',
+                            telegram_id=telegram_id,
+                            referral_code=request.referral_code,
+                        )
+                    else:
+                        referrer_id = referrer.id
+            except Exception as e:
+                logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+
+        if not referrer_id and telegram_id:
+            try:
+                from app.services.referral_service import get_pending_referral
+
+                pending = await get_pending_referral(telegram_id)
+                if pending and pending.get('referrer_id'):
+                    referrer_id = pending['referrer_id']
+                    logger.info(
+                        'Resolved referral from Redis pending_referral (oidc)',
                         telegram_id=telegram_id,
-                        referral_code=request.referral_code,
+                        referrer_id=referrer_id,
                     )
-                else:
-                    referrer_id = referrer.id
-        except Exception as e:
-            logger.warning('Failed to resolve referral code', referral_code=request.referral_code, error=e)
+            except Exception as e:
+                logger.warning('Failed to check pending referral (oidc)', error=e)
 
     is_new_user = not user
     if not user:
@@ -809,10 +993,9 @@ async def auth_telegram_oidc(
     # Update user info from OIDC claims
     if username and username != user.username:
         user.username = username
-    if first_name and first_name != user.first_name:
-        user.first_name = first_name
-    if last_name is not None and last_name != user.last_name:
-        user.last_name = last_name
+    # NOTE: не обновляем first_name/last_name из OIDC
+    # Telegram OIDC возвращает только поле name как полное имя без разделения на first/last
+    # Имя правильно заполняется через middleware при обычном использовании бота
 
     user.cabinet_last_login = datetime.now(UTC)
     await db.commit()
@@ -823,6 +1006,21 @@ async def auth_telegram_oidc(
     # Process referral code (only for new users — existing users cannot be assigned a referrer)
     await _process_referral_code(db, user, request.referral_code, is_new_user=is_new_user)
 
+    # Race-resilience: an existing user whose miniapp opened before the
+    # bot's /start finished may still have referred_by_id=None. The
+    # Redis pending_referral is the only TRUSTED source for retroactive
+    # attach (request.referral_code is client-controlled — see security
+    # comment in /telegram above).
+    if not is_new_user:
+        from app.services.referral_service import attach_referrer_if_missing
+
+        await attach_referrer_if_missing(
+            db,
+            user,
+            referral_code=None,
+            source='cabinet_oidc_retroactive',
+        )
+
     # Clear Redis pending referral after successful registration
     if referrer_id and telegram_id:
         try:
@@ -832,7 +1030,8 @@ async def auth_telegram_oidc(
         except Exception:
             pass
 
-    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
+    # Process campaign bonus (pending_campaign Redis fallback for Telegram OIDC)
+    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug, telegram_id=telegram_id)
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
@@ -876,8 +1075,18 @@ async def register_email(
             detail='Disposable email addresses are not allowed',
         )
 
-    # Check if email already exists (case-insensitive, exclude deleted users)
+    # SECURITY: never let registration/linking bind an ADMIN_EMAILS address. Admin
+    # authority is keyed off email_verified alone (config.is_admin / get_current_admin_user),
+    # so with email verification disabled this would be a no-proof superadmin grant.
+    # Mirrors the /email/change guard.
     email_lower = (request.email or '').strip().lower()
+    if email_lower and email_lower in {e.lower() for e in settings.get_admin_emails()}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This email address cannot be linked to your account.',
+        )
+
+    # Check if email already exists (case-insensitive, exclude deleted users)
     existing_result = await db.execute(
         select(User).where(
             func.lower(User.email) == email_lower,
@@ -891,22 +1100,57 @@ async def register_email(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='This email is already linked to your account',
             )
-        # Offer account merge instead of blocking
+        # SECURITY — account-takeover prevention. Merging absorbs the existing
+        # account (its subscription, balance, email) into the caller's account
+        # and issues a session for the result. The OAuth and Telegram link flows
+        # only mint a merge token AFTER the caller has PROVEN control of the other
+        # identity (completing the provider auth / validating signed init data).
+        # The email flow has no such proof, so we require control of the existing
+        # account's INBOX: mail a one-time code to it; the caller confirms it via
+        # /email/merge/verify, and only then is a merge token minted. Without
+        # this, anyone who merely knows a victim's email could take over their
+        # account. Works for password-less (OAuth-only) accounts too.
+        if not email_service.is_configured():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Email service is not configured; cannot verify the existing account',
+            )
+        merge_code = generate_email_change_code()
+        await store_email_merge_otp(user.id, existing_email_user.id, email_lower, merge_code)
+        lang = user.language or 'ru'
+        expire_minutes = settings.get_cabinet_email_change_code_expire_minutes()
+        override = await get_rendered_override(
+            'email_change_code',
+            lang,
+            context={
+                'username': user.first_name or '',
+                'email': email_lower,
+                'code': merge_code,
+                'expire_minutes': str(expire_minutes),
+            },
+            db=db,
+            required_vars=['code'],
+        )
+        custom_subject, custom_body = override or (None, None)
+        await asyncio.to_thread(
+            email_service.send_email_change_code,
+            to_email=email_lower,
+            code=merge_code,
+            username=user.first_name,
+            language=lang,
+            custom_subject=custom_subject,
+            custom_body_html=custom_body,
+        )
         logger.info(
-            'Email register conflict: email already linked to another user, offering merge',
+            'Email register conflict: merge confirmation code sent to existing account',
             current_user_id=user.id,
             existing_user_id=existing_email_user.id,
         )
-        merge_token = await create_merge_token(
-            primary_user_id=user.id,
-            secondary_user_id=existing_email_user.id,
-            provider='email',
-            provider_id=email_lower,
-        )
         return {
-            'message': 'Account merge required',
+            'message': 'A confirmation code was sent to that email address.',
             'merge_required': True,
-            'merge_token': merge_token,
+            'merge_verification': 'email_code',
+            'merge_token': None,
         }
 
     # Update user
@@ -942,10 +1186,12 @@ async def register_email(
                 lang,
                 context={
                     'username': user.first_name or '',
+                    'email': request.email,
                     'verification_url': full_url,
                     'expire_hours': str(expire_hours),
                 },
                 db=db,
+                required_vars=['verification_url'],
             )
             custom_subject, custom_body = override or (None, None)
 
@@ -965,6 +1211,81 @@ async def register_email(
         if not settings.is_cabinet_email_verification_enabled()
         else 'Verification email sent',
         'email': request.email,
+    }
+
+
+@router.post('/email/merge/verify')
+async def verify_email_merge(
+    request: EmailMergeVerifyRequest,
+    raw_request: Request,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """
+    Confirm an email account merge with the code mailed to the existing account.
+
+    Proves the caller controls that account's inbox, then mints the merge token
+    (consumed at POST /cabinet/auth/merge/{token}).
+    """
+    # Rate-limit like the other OTP-verify endpoints (IP + per-account); on the
+    # per-account cap, burn the pending merge so a brute force can't grind the
+    # live code — the caller must restart (re-emailing the existing owner).
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_merge_verify', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+    if await RateLimitCache.is_ip_rate_limited(
+        f'user:{user.id}', 'email_merge_verify', limit=5, window=900, fail_closed=True
+    ):
+        await clear_email_merge_otp(user.id)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many invalid attempts. Please start the merge again.',
+        )
+
+    pending = await get_email_merge_otp(user.id)
+    if not pending:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No pending account merge. Please start again.',
+        )
+    if not hmac.compare_digest(str(pending.get('code', '')), str(request.code)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Invalid confirmation code',
+        )
+
+    # Re-validate the target still exists and still owns that email (it could have
+    # been merged/deleted/changed in the meantime).
+    secondary_user_id = int(pending['secondary_user_id'])
+    pending_email = str(pending.get('email', ''))
+    secondary = await get_user_by_id(db, secondary_user_id)
+    if not secondary or secondary.id == user.id or (secondary.email or '').strip().lower() != pending_email:
+        await clear_email_merge_otp(user.id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='That account is no longer available to merge.',
+        )
+
+    await clear_email_merge_otp(user.id)
+    merge_token = await create_merge_token(
+        primary_user_id=user.id,
+        secondary_user_id=secondary_user_id,
+        provider='email',
+        provider_id=pending_email,
+    )
+    logger.info(
+        'Email merge confirmed via code, token issued',
+        current_user_id=user.id,
+        existing_user_id=secondary_user_id,
+    )
+    return {
+        'message': 'Account merge confirmed',
+        'merge_required': True,
+        'merge_token': merge_token,
     }
 
 
@@ -1010,8 +1331,18 @@ async def register_email_standalone(
             detail='Disposable email addresses are not allowed',
         )
 
-    # Проверить что email не занят (без учёта регистра)
+    # SECURITY: never let standalone registration claim an ADMIN_EMAILS address. With
+    # email verification disabled this flow sets email_verified=True with no inbox proof,
+    # and admin authority is keyed off email_verified — so an unverified ADMIN_EMAILS
+    # registration would grant superadmin on first login. Mirrors the /email/change guard.
     email_lower = (request.email or '').strip().lower()
+    if email_lower and email_lower in {e.lower() for e in settings.get_admin_emails()}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This email address cannot be used for registration.',
+        )
+
+    # Проверить что email не занят (без учёта регистра)
     existing = await db.execute(select(User).where(func.lower(User.email) == email_lower))
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -1052,6 +1383,10 @@ async def register_email_standalone(
         referred_by_id=referrer.id if referrer else None,
     )
 
+    # Сохранить campaign_slug для обработки при верификации email
+    if request.campaign_slug:
+        user.pending_campaign_slug = request.campaign_slug
+
     # Для тестового email или отключённой верификации - автоматически верифицировать
     if is_test_email or not settings.is_cabinet_email_verification_enabled():
         user.email_verified = True
@@ -1063,6 +1398,11 @@ async def register_email_standalone(
             await _sync_subscription_from_panel_by_email(db, user)
         except Exception:
             logger.warning('Failed to sync panel subscription after auto-verify', user_id=user.id, exc_info=True)
+        # Process campaign bonus immediately for auto-verified users
+        if request.campaign_slug:
+            await _process_campaign_bonus(db, user, request.campaign_slug)
+            user.pending_campaign_slug = None
+            await db.commit()
     else:
         # Сгенерировать токен верификации
         verification_token = generate_verification_token()
@@ -1085,10 +1425,12 @@ async def register_email_standalone(
                 lang,
                 context={
                     'username': user.first_name or 'User',
+                    'email': request.email,
                     'verification_url': full_url,
                     'expire_hours': str(expire_hours),
                 },
                 db=db,
+                required_vars=['verification_url'],
             )
             custom_subject, custom_body = override or (None, None)
 
@@ -1157,9 +1499,11 @@ async def verify_email(
             detail='Verification token has expired',
         )
 
-    # Mark email as verified
+    # Mark email as verified through cabinet OTP — trusted source for admin
+    # escalation (юзер реально получил code на email и ввёл его).
     user.email_verified = True
     user.email_verified_at = datetime.now(UTC)
+    user.email_verification_source = 'cabinet'
     user.email_verification_token = None
     user.email_verification_expires = None
     user.cabinet_last_login = datetime.now(UTC)
@@ -1173,8 +1517,12 @@ async def verify_email(
     response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token)
 
-    # Process campaign bonus
-    response.campaign_bonus = await _process_campaign_bonus(db, user, request.campaign_slug)
+    # Process campaign bonus (prefer request param, fallback to saved slug from registration)
+    effective_campaign_slug = request.campaign_slug or user.pending_campaign_slug
+    response.campaign_bonus = await _process_campaign_bonus(db, user, effective_campaign_slug)
+    if user.pending_campaign_slug:
+        user.pending_campaign_slug = None
+        await db.commit()
     if response.campaign_bonus:
         response.user = _user_to_response(user)
 
@@ -1221,10 +1569,12 @@ async def resend_verification(
             lang,
             context={
                 'username': user.first_name or '',
+                'email': user.email,
                 'verification_url': full_url,
                 'expire_hours': str(expire_hours),
             },
             db=db,
+            required_vars=['verification_url'],
         )
         custom_subject, custom_body = override or (None, None)
 
@@ -1311,17 +1661,29 @@ async def login_email(
             detail='Invalid email or password',
         )
 
+    # Status check BEFORE email-verification gate:
+    # 1. Security: emitting `account_deleted` here after correct
+    #    password would be an enumeration oracle. A successful login
+    #    that returns 403 `account_deleted` confirms BOTH email-exists
+    #    AND password-correct AND row-is-deleted — strictly worse than
+    #    the standard 401. Return generic invalid-credentials instead.
+    # 2. Correctness: a DELETED user whose email_verified=False would
+    #    otherwise hit the "Please verify your email first" branch and
+    #    never see the deletion message. The non-disclosing 401 below
+    #    sidesteps that ordering issue entirely.
+    # BLOCKED users also fall here — same generic 401 keeps admin
+    # actions opaque to attackers.
+    if user.status != UserStatus.ACTIVE.value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalid email or password',
+        )
+
     # Test email and disabled verification bypass the check
     if not user.email_verified and not is_test_email and settings.is_cabinet_email_verification_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Please verify your email first',
-        )
-
-    if user.status != UserStatus.ACTIVE.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
         )
 
     user.cabinet_last_login = datetime.now(UTC)
@@ -1473,6 +1835,24 @@ async def auto_login(
             detail='Account is deactivated',
         )
 
+    # SECURITY: auto-login токены создаются по результатам guest purchase, где
+    # User.telegram_id выставляется из bot.get_chat('@username') без proof of
+    # ownership — то есть атакер может сделать guest-purchase с username админа
+    # и получить токен, ведущий к этому user. Запрещаем такой path для админов
+    # из ADMIN_IDS / ADMIN_EMAILS — пусть проходят полную Telegram WebApp /
+    # password аутентификацию.
+    if is_user_admin_by_env(user).is_admin:
+        logger.warning(
+            'Auto-login blocked for admin account — must use full auth flow',
+            user_id=user.id,
+            telegram_id=user.telegram_id,
+            client_ip=client_ip,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='Administrator accounts cannot use auto-login. Please sign in via Telegram.',
+        )
+
     response = await _create_auth_response(user, db)
     await _store_refresh_token(db, user.id, response.refresh_token)
     user.cabinet_last_login = datetime.now(UTC)
@@ -1532,8 +1912,14 @@ async def forgot_password(
         override = await get_rendered_override(
             'password_reset',
             lang,
-            context={'username': user.first_name or '', 'reset_url': full_url, 'expire_hours': str(expire_hours)},
+            context={
+                'username': user.first_name or '',
+                'email': user.email,
+                'reset_url': full_url,
+                'expire_hours': str(expire_hours),
+            },
             db=db,
+            required_vars=['reset_url'],
         )
         custom_subject, custom_body = override or (None, None)
 
@@ -1630,6 +2016,7 @@ async def check_is_admin(
 @router.post('/email/change', response_model=EmailChangeResponse)
 async def request_email_change(
     request: EmailChangeRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1639,6 +2026,20 @@ async def request_email_change(
     For verified emails: sends a 6-digit verification code to the new email.
     For unverified emails: replaces the email directly and sends verification to the new address.
     """
+    # Rate-limit: each request mails an OTP to an arbitrary address, so throttle
+    # by IP and by account to prevent code-flooding and brute-force restarts.
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, 'email_change_request', limit=5, window=300, fail_closed=True
+    ) or await RateLimitCache.is_ip_rate_limited(
+        f'user:{user.id}', 'email_change_request', limit=5, window=3600, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '300'},
+        )
+
     if not user.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1650,6 +2051,16 @@ async def request_email_change(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='New email is the same as current email',
+        )
+
+    # SECURITY: never let the change flow bind an ADMIN_EMAILS address the user
+    # does not already own. Verifying it sets email_verification_source='cabinet'
+    # (a trusted source) and would auto-grant superadmin on next login.
+    new_email_lower = request.new_email.strip().lower()
+    if new_email_lower in settings.get_admin_emails() and user.email.lower() != new_email_lower:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail='This email address cannot be linked to your account.',
         )
 
     # Check for disposable email
@@ -1698,10 +2109,12 @@ async def request_email_change(
                 lang,
                 context={
                     'username': user.first_name or '',
+                    'email': request.new_email,
                     'verification_url': full_url,
                     'expire_hours': str(expire_hours),
                 },
                 db=db,
+                required_vars=['verification_url'],
             )
             custom_subject, custom_body = override or (None, None)
 
@@ -1753,10 +2166,12 @@ async def request_email_change(
             lang,
             context={
                 'username': user.first_name or '',
+                'email': request.new_email,
                 'code': code,
                 'expire_minutes': str(expire_minutes),
             },
             db=db,
+            required_vars=['code'],
         )
         custom_subject, custom_body = override or (None, None)
 
@@ -1789,6 +2204,7 @@ async def request_email_change(
 @router.post('/email/change/verify')
 async def verify_email_change(
     request: EmailChangeVerifyRequest,
+    raw_request: Request,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1797,6 +2213,27 @@ async def verify_email_change(
 
     Completes the email change process if the code is valid.
     """
+    # SECURITY: the change code is a 6-digit OTP mailed to the NEW address (the
+    # attacker never sees it). Without a hard cap it is brute-forceable within
+    # its TTL. Rate-limit by IP AND by account; once the per-account cap is hit,
+    # burn the pending change so the attacker must restart (re-emailing the
+    # victim, who would notice) instead of grinding the same live code.
+    client_ip = get_client_ip(raw_request)
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_change_verify', limit=5, window=60, fail_closed=True):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
+        )
+    if await RateLimitCache.is_ip_rate_limited(
+        f'user:{user.id}', 'email_change_verify', limit=5, window=900, fail_closed=True
+    ):
+        await clear_email_change_pending(db, user)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail='Too many invalid attempts. Please request a new code.',
+        )
+
     success, message = await verify_and_apply_email_change(db, user, request.code)
 
     if not success:

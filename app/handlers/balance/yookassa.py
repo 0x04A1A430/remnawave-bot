@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -52,7 +53,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
         f'Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:'
     )
 
-    keyboard = get_back_keyboard(db_user.language)
+    keyboard = await get_topup_amount_keyboard('yookassa', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(message_text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -98,7 +99,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
         f'Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:'
     )
 
-    keyboard = get_back_keyboard(db_user.language)
+    keyboard = await get_topup_amount_keyboard('yookassa_sbp', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(message_text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -206,7 +207,7 @@ async def process_yookassa_payment_amount(
         except Exception as delete_error:  # pragma: no cover - зависит от прав бота
             logger.warning('Не удалось удалить сообщение с суммой YooKassa', delete_error=delete_error)
 
-        if prompt_message_id:
+        if prompt_message_id and prompt_message_id != message.message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
@@ -254,7 +255,7 @@ async def process_yookassa_payment_amount(
 
         await state.clear()
         logger.info(
-            'Создан платеж YooKassa для пользователя ₽, ID',
+            'Создан платеж YooKassa',
             telegram_id=db_user.telegram_id,
             value=amount_kopeks // 100,
             payment_result=payment_result['yookassa_payment_id'],
@@ -430,7 +431,7 @@ async def process_yookassa_sbp_payment_amount(
         except Exception as delete_error:  # pragma: no cover - зависит от прав бота
             logger.warning('Не удалось удалить сообщение с суммой YooKassa (СБП)', delete_error=delete_error)
 
-        if prompt_message_id:
+        if prompt_message_id and prompt_message_id != message.message_id:
             try:
                 await message.bot.delete_message(prompt_chat_id, prompt_message_id)
             except Exception as delete_error:  # pragma: no cover - диагностический лог
@@ -499,7 +500,7 @@ async def process_yookassa_sbp_payment_amount(
 
         await state.clear()
         logger.info(
-            'Создан платеж YooKassa СБП для пользователя ₽, ID',
+            'Создан платеж YooKassa СБП',
             telegram_id=db_user.telegram_id,
             value=amount_kopeks // 100,
             payment_result=payment_result['yookassa_payment_id'],
@@ -525,8 +526,8 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
             return
 
         status_emoji = {
-            'pending': '⏳',
-            'waiting_for_capture': '⌛',
+            'pending': '',
+            'waiting_for_capture': '',
             'succeeded': '',
             'canceled': '',
             'failed': '',
@@ -554,7 +555,7 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
         if payment.is_succeeded:
             message_text += '\nПлатеж успешно завершен!\n\nСредства зачислены на баланс.'
         elif payment.is_pending:
-            message_text += "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
+            message_text += "\n Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
         elif payment.is_failed:
             message_text += f'\nПлатеж не прошел. Обратитесь в {settings.get_support_contact_display()}'
 

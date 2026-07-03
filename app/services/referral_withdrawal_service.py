@@ -260,7 +260,7 @@ class ReferralWithdrawalService:
             analysis['flags'].append(f'Пополнил {own_deposits / 100:.0f}₽, но ничего не покупал!')
         elif own_deposits > spending * ratio_threshold and spending > 0:
             analysis['risk_score'] += 25
-            analysis['flags'].append(f'🟠 Пополнил {own_deposits / 100:.0f}₽, потратил только {spending / 100:.0f}₽')
+            analysis['flags'].append(f'Пополнил {own_deposits / 100:.0f}₽, потратил только {spending / 100:.0f}₽')
 
         # 2. Получаем информацию о рефералах
         referrals = await db.execute(select(User).where(User.referred_by_id == user_id))
@@ -329,7 +329,7 @@ class ReferralWithdrawalService:
             analysis['details']['suspicious_referrals'] = suspicious_referrals
 
             if suspicious_referrals:
-                analysis['flags'].append(f'️ Подозрительная активность у {len(suspicious_referrals)} реферала(ов)')
+                analysis['flags'].append(f'Подозрительная активность у {len(suspicious_referrals)} реферала(ов)')
 
             # Общая статистика по рефералам (за всё время, только реальные платежи)
             all_ref_deposits = await db.execute(
@@ -354,7 +354,7 @@ class ReferralWithdrawalService:
             # Проверка: только 1 платящий реферал
             if ref_stats.paying_count == 1 and balance_stats['total_earned'] > 50000:
                 analysis['risk_score'] += 20
-                analysis['flags'].append('️ Весь доход от одного реферала')
+                analysis['flags'].append('Весь доход от одного реферала')
 
         # 4. Анализ реферальных начислений по типам
         earnings = await db.execute(
@@ -381,7 +381,7 @@ class ReferralWithdrawalService:
 
         if recent_count > 20:
             analysis['risk_score'] += 15
-            analysis['flags'].append(f'️ {recent_count} начислений за неделю ({recent_amount / 100:.0f}₽)')
+            analysis['flags'].append(f'{recent_count} начислений за неделю ({recent_amount / 100:.0f}₽)')
 
         analysis['details']['recent_activity'] = {
             'week_earnings_count': recent_count,
@@ -403,15 +403,15 @@ class ReferralWithdrawalService:
         elif score >= 50:
             analysis['risk_level'] = 'high'
             analysis['recommendation'] = 'review'
-            analysis['recommendation_text'] = '🟠 ТРЕБУЕТ ПРОВЕРКИ'
+            analysis['recommendation_text'] = 'ТРЕБУЕТ ПРОВЕРКИ'
         elif score >= 30:
             analysis['risk_level'] = 'medium'
             analysis['recommendation'] = 'review'
-            analysis['recommendation_text'] = '🟡 Рекомендуется проверить'
+            analysis['recommendation_text'] = 'Рекомендуется проверить'
         else:
             analysis['risk_level'] = 'low'
             analysis['recommendation'] = 'approve'
-            analysis['recommendation_text'] = '🟢 Можно одобрить'
+            analysis['recommendation_text'] = 'Можно одобрить'
 
         return analysis
 
@@ -596,7 +596,7 @@ class ReferralWithdrawalService:
 
         if stats['pending'] > 0:
             text += (
-                texts.t('REFERRAL_WITHDRAWAL_STATS_PENDING', '⏳ На рассмотрении: <b>{amount}</b>').format(
+                texts.t('REFERRAL_WITHDRAWAL_STATS_PENDING', 'На рассмотрении: <b>{amount}</b>').format(
                     amount=texts.format_price(stats['pending'])
                 )
                 + '\n'
@@ -619,7 +619,7 @@ class ReferralWithdrawalService:
 
     def format_analysis_for_admin(self, analysis: dict) -> str:
         """Форматирует анализ для отображения админу."""
-        risk_emoji = {'low': '🟢', 'medium': '🟡', 'high': '🟠', 'critical': ''}
+        risk_emoji = {'low': '', 'medium': '', 'high': '', 'critical': ''}
 
         text = f"""
 <b>Анализ на подозрительную активность</b>
@@ -630,7 +630,7 @@ class ReferralWithdrawalService:
 """
 
         if analysis.get('flags'):
-            text += '\n️ <b>Предупреждения:</b>\n'
+            text += '\n <b>Предупреждения:</b>\n'
             for flag in analysis['flags']:
                 text += f'  {flag}\n'
 

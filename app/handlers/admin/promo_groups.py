@@ -121,7 +121,7 @@ def _format_period_discounts_lines(texts, group: PromoGroup, language: str) -> l
 
     header = texts.t(
         'ADMIN_PROMO_GROUP_PERIOD_DISCOUNTS_HEADER',
-        '⏳ Скидки по периодам:',
+        'Скидки по периодам:',
     )
 
     lines = [header]
@@ -293,7 +293,7 @@ def _build_edit_menu_content(
 ) -> tuple[str, types.InlineKeyboardMarkup]:
     header = texts.t(
         'ADMIN_PROMO_GROUP_EDIT_MENU_TITLE',
-        '️ Настройки промогруппы «{name}»',
+        'Настройки промогруппы «{name}»',
     ).format(name=html.escape(group.name))
 
     lines = [header]
@@ -319,7 +319,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_NAME',
-                    '️ Изменить название',
+                    'Изменить название',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_name',
             )
@@ -364,7 +364,7 @@ def _build_edit_menu_content(
             types.InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_GROUP_EDIT_FIELD_PERIODS',
-                    '⏳ Скидки по периодам',
+                    'Скидки по периодам',
                 ),
                 callback_data=f'promo_group_edit_field_{group.id}_periods',
             )
@@ -463,7 +463,7 @@ async def show_promo_groups_menu(
 
         keyboard_rows = []
         for group, member_count in groups:
-            icon = '⭐' if group.is_default else ''
+            icon = '' if group.is_default else ''
             default_suffix = texts.t('ADMIN_PROMO_GROUPS_DEFAULT_LABEL', ' (базовая)') if group.is_default else ''
             members_label = texts.t(
                 'ADMIN_PROMO_GROUPS_MEMBERS_COUNT',
@@ -558,7 +558,7 @@ async def show_promo_group_details(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', '️ Изменить'),
+                text=texts.t('ADMIN_PROMO_GROUP_EDIT_BUTTON', 'Изменить'),
                 callback_data=f'promo_group_edit_{group.id}',
             )
         ]
@@ -568,7 +568,7 @@ async def show_promo_group_details(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', '️ Удалить'),
+                    text=texts.t('ADMIN_PROMO_GROUP_DELETE_BUTTON', 'Удалить'),
                     callback_data=f'promo_group_delete_{group.id}',
                 )
             ]
@@ -810,7 +810,7 @@ async def process_create_group_auto_assign(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_PROMO_GROUP_CREATED_BACK_BUTTON',
-                            '↩️ К промогруппам',
+                            'К промогруппам',
                         ),
                         callback_data='admin_promo_groups',
                     )

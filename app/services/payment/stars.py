@@ -14,7 +14,11 @@ from aiogram.types import LabeledPrice
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.transaction import create_transaction
+from app.database.crud.transaction import (
+    create_transaction,
+    emit_transaction_side_effects,
+    get_transaction_by_external_id,
+)
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, TransactionType
 from app.external.telegram_stars import TelegramStarsService
@@ -57,7 +61,7 @@ class TelegramStarsMixin:
 
             invoice_link = await self.bot.create_invoice_link(
                 title='Пополнение баланса VPN',
-                description=f'{description} (≈{stars_amount} ⭐)',
+                description=f'{description} (≈{stars_amount} )',
                 payload=payload or f'balance_topup_{amount_kopeks}',
                 provider_token='',
                 currency='XTR',
@@ -83,10 +87,55 @@ class TelegramStarsMixin:
         payload: str,
         telegram_payment_charge_id: str,
     ) -> bool:
-        """Финализирует платеж, пришедший из Telegram Stars, и обновляет баланс пользователя."""
+        """Финализирует платеж, пришедший из Telegram Stars, и обновляет баланс пользователя.
+
+        Credit derivation order:
+          1. If payload encodes the originally-requested ``amount_kopeks``
+             (every balance-topup flow does this), credit that exact
+             amount. This is what the user actually asked for; the
+             stars-to-rubles back-conversion can drift by sub-ruble
+             fractions (banker's rounding at quote time, non-1.0
+             operator rates).
+          2. Otherwise fall back to ``stars × current_rate`` — best-effort
+             for old payloads or paths we haven't catalogued.
+
+        Telegram passes the payload back byte-for-byte from the
+        ``create_invoice_link`` call, so payload trust is fine; the
+        sanity bound below catches obviously-bogus encodings.
+        """
         try:
+            # Идемпотентность: Telegram может повторно прислать successful_payment
+            # (например, если бот не успел подтвердить обработку до таймаута). Ключ
+            # уникальности — telegram_payment_charge_id. Если транзакция с таким
+            # external_id уже есть — платёж обработан, выходим как успех.
+            existing_transaction = await get_transaction_by_external_id(
+                db, telegram_payment_charge_id, PaymentMethod.TELEGRAM_STARS
+            )
+            if existing_transaction:
+                logger.info(
+                    'Stars платёж уже обработан — пропускаю повторную обработку',
+                    telegram_payment_charge_id=telegram_payment_charge_id,
+                )
+                return True
+
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
-            amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
+            reconstructed_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
+
+            payload_kopeks = self._parse_balance_topup_kopeks(payload)
+            if payload_kopeks is not None and self._is_payload_amount_plausible(
+                payload_kopeks=payload_kopeks,
+                reconstructed_kopeks=reconstructed_kopeks,
+            ):
+                amount_kopeks = payload_kopeks
+            else:
+                if payload_kopeks is not None:
+                    logger.warning(
+                        'Stars payload amount diverged from stars×rate; using reconstructed amount',
+                        payload_kopeks=payload_kopeks,
+                        reconstructed_kopeks=reconstructed_kopeks,
+                        stars_amount=stars_amount,
+                    )
+                amount_kopeks = reconstructed_kopeks
 
             simple_payload = self._parse_simple_subscription_payload(
                 payload,
@@ -94,12 +143,16 @@ class TelegramStarsMixin:
             )
 
             transaction_description = (
-                f'Оплата подписки через Telegram Stars ({stars_amount} ⭐)'
+                f'Оплата подписки через Telegram Stars ({stars_amount} )'
                 if simple_payload
-                else f'Пополнение через Telegram Stars ({stars_amount} ⭐)'
+                else f'Пополнение через Telegram Stars ({stars_amount} )'
             )
             transaction_type = TransactionType.SUBSCRIPTION_PAYMENT if simple_payload else TransactionType.DEPOSIT
 
+            # commit=False: транзакция флашится, но не коммитится здесь. Реальный
+            # коммит происходит атомарно вместе с целевым действием — активацией
+            # подписки (activate_pending_subscription) или зачислением баланса.
+            # Так нет окна, где транзакция записана, а подписка/баланс — нет.
             transaction = await create_transaction(
                 db=db,
                 user_id=user_id,
@@ -109,11 +162,13 @@ class TelegramStarsMixin:
                 payment_method=PaymentMethod.TELEGRAM_STARS,
                 external_id=telegram_payment_charge_id,
                 is_completed=True,
+                commit=False,
             )
 
             user = await get_user_by_id(db, user_id)
             if not user:
                 logger.error('Пользователь с ID не найден при обработке Stars платежа', user_id=user_id)
+                await db.rollback()
                 return False
 
             if simple_payload:
@@ -138,7 +193,77 @@ class TelegramStarsMixin:
 
         except Exception as error:
             logger.error('Ошибка обработки Stars платежа', error=error, exc_info=True)
+            # Откатываем незакоммиченную транзакцию (commit=False), чтобы она не
+            # «дозалипла» и не закоммитилась случайно мидлварью при выходе.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             return False
+
+    @staticmethod
+    def _parse_balance_topup_kopeks(payload: str) -> int | None:
+        """Extract the original ``amount_kopeks`` from a balance-topup payload.
+
+        Known producers (and the slot where amount_kopeks lives):
+          * ``balance_topup_{kopeks}``                           — bot, services/payment/stars.py
+          * ``balance_{user_id}_{kopeks}``                       — miniapp.py
+          * ``balance_{user_id}_{kopeks}_{suffix}``              — miniapp variant
+          * ``balance_topup_{user_id}_{kopeks}_{ts}``            — cabinet/routes/balance.py
+
+        Returns ``None`` for any payload that doesn't match a known
+        balance-topup shape (including subscription-payment payloads
+        that start with ``simple_sub_``). Callers should handle that
+        case by falling back to the stars-to-rubles back-conversion.
+        """
+        if not payload or not payload.startswith('balance'):
+            return None
+
+        parts = payload.split('_')
+        # parts[0] == 'balance' guaranteed by the prefix check above.
+
+        candidate: str | None = None
+        if len(parts) >= 2 and parts[1] == 'topup':
+            # `balance_topup_{kopeks}`               → kopeks at index 2
+            # `balance_topup_{uid}_{kopeks}_{ts}`    → kopeks at index 3
+            if len(parts) == 3:
+                candidate = parts[2]
+            elif len(parts) >= 4:
+                candidate = parts[3]
+        elif len(parts) >= 3:
+            # `balance_{uid}_{kopeks}[_suffix]`      → kopeks at index 2
+            candidate = parts[2]
+
+        if candidate is None:
+            return None
+        try:
+            kopeks = int(candidate)
+        except ValueError:
+            return None
+        return kopeks if kopeks > 0 else None
+
+    @staticmethod
+    def _is_payload_amount_plausible(
+        *,
+        payload_kopeks: int,
+        reconstructed_kopeks: int,
+    ) -> bool:
+        """Sanity bound: payload amount must be in the same ballpark as stars×rate.
+
+        Rejects pathological payloads that would massively over-credit
+        the user. The bound is intentionally generous (20% or 100
+        kopeks, whichever is larger) so legitimate rate changes between
+        invoice creation and payment, or precision quirks at fractional
+        rubles, don't trip it.
+
+        Telegram passes the payload back verbatim from ``create_invoice_link``
+        so external tampering is not the threat model — this is a bug
+        catcher for misconfigured callers, not a security boundary.
+        """
+        if payload_kopeks <= 0 or reconstructed_kopeks <= 0:
+            return False
+        tolerance = max(int(reconstructed_kopeks * 0.20), 100)
+        return abs(payload_kopeks - reconstructed_kopeks) <= tolerance
 
     @staticmethod
     def _parse_simple_subscription_payload(
@@ -255,11 +380,31 @@ class TelegramStarsMixin:
             logger.error(
                 'Ошибка активации pending подписки для пользователя', user_id=user.id, error=error, exc_info=True
             )
+            # Активация не удалась — откатываем незакоммиченную транзакцию (commit=False),
+            # чтобы не осталось «оплаты без подписки». Telegram повторит платёж → обработаем заново.
+            await db.rollback()
             return False
 
         if not subscription:
             logger.error('Не удалось активировать pending подписку пользователя', user_id=user.id)
+            await db.rollback()
             return False
+
+        # Активация подписки уже закоммичена (activate_pending_subscription делает db.commit),
+        # и вместе с ней атомарно закоммичена транзакция (она создавалась с commit=False).
+        # Теперь шлём отложенные побочки: событие транзакции, автовыдачу промогруппы,
+        # запись в конкурс рефералов (для SUBSCRIPTION_PAYMENT).
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=amount_kopeks,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            payment_method=PaymentMethod.TELEGRAM_STARS,
+            external_id=telegram_payment_charge_id,
+            is_completed=True,
+            description=transaction.description,
+        )
 
         # Consume promo-offer discount (invoice was created with discounted price)
         try:
@@ -286,6 +431,13 @@ class TelegramStarsMixin:
                 sync_error=sync_error,
                 exc_info=True,
             )
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+                action='create',
+            )
 
         period_display = period_days
         if not period_display and getattr(subscription, 'start_date', None) and getattr(subscription, 'end_date', None):
@@ -311,7 +463,7 @@ class TelegramStarsMixin:
 
                         _t = await get_tariff_by_id(db, subscription.tariff_id)
                         if _t:
-                            tariff_line = f'\nТариф: «{_t.name}»'
+                            tariff_line = f'\n Тариф: «{_t.name}»'
                     except Exception:
                         pass
                 success_message = (
@@ -319,7 +471,7 @@ class TelegramStarsMixin:
                     f'Период: {period_display} дней\n'
                     f'Устройства: {getattr(subscription, "device_limit", 1)}\n'
                     f'Трафик: {traffic_label}\n'
-                    f'⭐ Оплата: {stars_amount} ⭐ ({settings.format_price(amount_kopeks)})'
+                    f'Оплата: {stars_amount}  ({settings.format_price(amount_kopeks)})'
                     f'{tariff_line}\n\n'
                     "Для подключения перейдите в раздел 'Моя подписка'"
                 )
@@ -351,7 +503,19 @@ class TelegramStarsMixin:
                     'Пользователь получил уведомление об оплате подписки через Stars', telegram_id=user.telegram_id
                 )
             except Exception as error:  # pragma: no cover - диагностический лог
-                logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
+                from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+
+                # Подписка уже активирована, уведомление — best-effort.
+                # Транзиентные сетевые ошибки не должны попадать в админ-чат.
+                if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
+                    logger.warning(
+                        'Не доставлено Stars-уведомление о подписке (транзиент)',
+                        telegram_id=user.telegram_id,
+                        error=str(error)[:200],
+                        error_type=type(error).__name__,
+                    )
+                else:
+                    logger.error('Ошибка отправки уведомления о подписке через Stars', error=error, exc_info=True)
 
         if getattr(self, 'bot', None):
             try:
@@ -386,7 +550,7 @@ class TelegramStarsMixin:
             logger.error('Ошибка реферального начисления при покупке подписки через Stars', ref_error=ref_error)
 
         logger.info(
-            'Обработан Stars платеж как покупка подписки: пользователь , звезд →',
+            'Обработан Stars платеж как покупка подписки',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),
@@ -420,14 +584,26 @@ class TelegramStarsMixin:
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = '🆕 Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
         await db.commit()
 
-        description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)'
-        logger.info(
-            "Проверка реферальной логики для описания: ''", description_for_referral=description_for_referral
+        # Баланс и транзакция (она создавалась с commit=False) закоммичены атомарно.
+        # Шлём отложенные побочки: событие payment.completed и автовыдачу промогруппы.
+        await emit_transaction_side_effects(
+            db,
+            transaction,
+            amount_kopeks=amount_kopeks,
+            user_id=user.id,
+            type=TransactionType.DEPOSIT,
+            payment_method=PaymentMethod.TELEGRAM_STARS,
+            external_id=telegram_payment_charge_id,
+            is_completed=True,
+            description=transaction.description,
         )
+
+        description_for_referral = f'Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} )'
+        logger.info('Проверка реферальной логики для описания', description_for_referral=description_for_referral)
 
         lower_description = description_for_referral.lower()
         contains_allowed_keywords = any(
@@ -451,7 +627,7 @@ class TelegramStarsMixin:
                 logger.error('Ошибка обработки реферального пополнения', error=error)
         else:
             logger.info(
-                "Описание '' не подходит для реферальной логики", description_for_referral=description_for_referral
+                'Описание не подходит для реферальной логики', description_for_referral=description_for_referral
             )
 
         if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
@@ -497,7 +673,7 @@ class TelegramStarsMixin:
             )
 
         logger.info(
-            'Обработан Stars платеж: пользователь , звезд →',
+            'Обработан Stars платеж',
             user_id=user.id,
             stars_amount=stars_amount,
             format_price=settings.format_price(amount_kopeks),

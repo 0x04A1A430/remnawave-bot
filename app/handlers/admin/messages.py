@@ -177,7 +177,7 @@ async def _persist_broadcast_result(
                 broadcast_history = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast_history:
                     logger.critical(
-                        'Не удалось найти запись BroadcastHistory # для записи результатов', broadcast_id=broadcast_id
+                        'Не удалось найти запись BroadcastHistory для записи результатов', broadcast_id=broadcast_id
                     )
                     return
 
@@ -189,7 +189,7 @@ async def _persist_broadcast_result(
                 await session.commit()
 
                 logger.info(
-                    'Результаты рассылки сохранены (id sent failed blocked status=)',
+                    'Результаты рассылки сохранены',
                     broadcast_id=broadcast_id,
                     sent_count=sent_count,
                     failed_count=failed_count,
@@ -200,7 +200,7 @@ async def _persist_broadcast_result(
 
         except InterfaceError as error:
             logger.warning(
-                'Ошибка соединения при сохранении результатов рассылки (попытка /)',
+                'Ошибка соединения при сохранении результатов рассылки, повтор',
                 attempt=attempt,
                 max_retries=max_retries,
                 error=error,
@@ -210,14 +210,14 @@ async def _persist_broadcast_result(
                 retry_delay *= 2
             else:
                 logger.critical(
-                    'Не удалось сохранить результаты рассылки после попыток (id=)',
+                    'Не удалось сохранить результаты рассылки после всех попыток',
                     max_retries=max_retries,
                     broadcast_id=broadcast_id,
                 )
 
         except Exception as error:
             logger.critical(
-                'Неожиданная ошибка при сохранении результатов рассылки (id=)',
+                'Неожиданная ошибка при сохранении результатов рассылки',
                 broadcast_id=broadcast_id,
                 exc_info=error,
             )
@@ -305,7 +305,7 @@ async def prompt_pinned_message_update(
 ):
     await state.set_state(AdminStates.editing_pinned_message)
     await callback.message.edit_text(
-        '️ <b>Новое закрепленное сообщение</b>\n\n'
+        '<b>Новое закрепленное сообщение</b>\n\n'
         'Пришлите текст, фото или видео, которое нужно закрепить.\n'
         'Бот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
         reply_markup=types.InlineKeyboardMarkup(
@@ -370,7 +370,7 @@ async def delete_pinned_message(
         return
 
     await callback.message.edit_text(
-        '️ <b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
+        '<b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
         parse_mode='HTML',
     )
 
@@ -393,7 +393,7 @@ async def delete_pinned_message(
         '<b>Закрепленное сообщение удалено</b>\n\n'
         f'Чатов обработано: {total}\n'
         f'Откреплено: {unpinned_count}\n'
-        f'️ Ошибок: {failed_count}\n\n'
+        f'Ошибок: {failed_count}\n\n'
         'Новое сообщение можно задать кнопкой "Обновить".',
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
@@ -503,7 +503,7 @@ async def handle_pinned_broadcast_now(
             '<b>Закрепленное сообщение обновлено</b>\n\n'
             'Получателей: {total}\n'
             'Отправлено: {sent}\n'
-            '️ Ошибок: {failed}',
+            'Ошибок: {failed}',
         ).format(total=total, sent=sent_count, failed=failed_count),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
@@ -624,7 +624,7 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
         text = f'<b>История рассылок</b> (страница {page}/{total_pages})\n\n'
 
         for broadcast in broadcasts:
-            status_emoji = '' if broadcast.status == 'completed' else '' if broadcast.status == 'failed' else '⏳'
+            status_emoji = '' if broadcast.status == 'completed' else '' if broadcast.status == 'failed' else ''
             success_rate = (
                 round((broadcast.sent_count / broadcast.total_count * 100), 1) if broadcast.total_count > 0 else 0
             )
@@ -789,7 +789,7 @@ async def process_broadcast_message(message: types.Message, db_user: User, state
     await state.update_data(broadcast_message=broadcast_text)
 
     await message.answer(
-        '️ <b>Добавление медиафайла</b>\n\n'
+        '<b>Добавление медиафайла</b>\n\n'
         'Вы можете добавить к сообщению фото, видео или документ.\n'
         'Или пропустить этот шаг.\n\n'
         'Выберите тип медиа:',
@@ -882,7 +882,7 @@ async def show_media_preview(message: types.Message, db_user: User, state: FSMCo
     media_file_id = data.get('media_file_id')
 
     preview_text = (
-        f'️ <b>Медиафайл добавлен</b>\n\n'
+        f'<b>Медиафайл добавлен</b>\n\n'
         f'<b>Тип:</b> {media_type}\n'
         f'Файл сохранен и готов к отправке\n\n'
         f'Что делать дальше?'
@@ -929,7 +929,7 @@ async def handle_media_confirmation(callback: types.CallbackQuery, db_user: User
 async def handle_change_media(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     await safe_edit_or_send_text(
         callback,
-        '️ <b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:',
+        '<b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:',
         reply_markup=get_broadcast_media_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -950,7 +950,7 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
     media_info = ''
     if has_media:
         media_type = data.get('media_type', 'файл')
-        media_info = f'\n️ <b>Медиафайл:</b> {media_type} добавлен'
+        media_info = f'\n<b>Медиафайл:</b> {media_type} добавлен'
 
     text = f"""
 <b>Выбор дополнительных кнопок</b>
@@ -1075,7 +1075,7 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
     media_info = ''
     if has_media:
         media_type_names = {'photo': 'Фотография', 'video': 'Видео', 'document': 'Документ'}
-        media_info = f'\n️ <b>Медиафайл:</b> {media_type_names.get(media_type, media_type)}'
+        media_info = f'\n<b>Медиафайл:</b> {media_type_names.get(media_type, media_type)}'
 
     ordered_keys = [button_key for row in BUTTON_ROWS for button_key in row]
     button_labels = get_broadcast_button_labels(db_user.language)
@@ -1107,7 +1107,7 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
     ]
 
     if has_media:
-        keyboard.append([types.InlineKeyboardButton(text='️ Изменить медиа', callback_data='change_media')])
+        keyboard.append([types.InlineKeyboardButton(text='Изменить медиа', callback_data='change_media')])
 
     keyboard.append([types.InlineKeyboardButton(text='Отмена', callback_data='admin_messages')])
 
@@ -1186,7 +1186,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     await safe_edit_or_send_text(
         callback,
-        '<b>Подготовка рассылки...</b>\n\n⏳ Загружаю список получателей...',
+        '<b>Подготовка рассылки...</b>\n\nЗагружаю список получателей...',
         reply_markup=None,
         parse_mode='HTML',
     )
@@ -1318,7 +1318,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                 wait_seconds = e.retry_after + 1
                 flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
                 logger.warning(
-                    'FloodWait: Telegram просит подождать сек (пользователь , попытка /)',
+                    'FloodWait: Telegram просит подождать перед повтором отправки',
                     retry_after=e.retry_after,
                     telegram_id=telegram_id,
                     attempt=attempt + 1,
@@ -1338,7 +1338,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
             except Exception as e:
                 logger.error(
-                    'Ошибка отправки пользователю (попытка /)',
+                    'Ошибка отправки пользователю, повтор',
                     telegram_id=telegram_id,
                     attempt=attempt + 1,
                     MAX_SEND_RETRIES=_MAX_SEND_RETRIES,
@@ -1380,7 +1380,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
                 f'{blocked_line}'
                 f'• Ошибок: {current_failed}\n'
                 f'• Обработано: {processed}/{total}\n\n'
-                f'⏳ Не закрывайте диалог — рассылка продолжается...'
+                f'Не закрывайте диалог — рассылка продолжается...'
             )
         return ''
 
@@ -1466,7 +1466,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     )
 
     success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
-    media_info = f'\n️ <b>Медиафайл:</b> {media_type}' if has_media else ''
+    media_info = f'\n<b>Медиафайл:</b> {media_type}' if has_media else ''
     blocked_line = f'• Заблокировали бота: {blocked_count}\n' if blocked_count else ''
 
     result_text = (
@@ -1504,7 +1504,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
 
     await state.clear()
     logger.info(
-        'Рассылка завершена админом : sent failed total= (медиа:)',
+        'Рассылка завершена админом',
         admin_telegram_id=admin_telegram_id,
         sent_count=sent_count,
         failed_count=failed_count,
@@ -1559,6 +1559,7 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
                 Subscription.user_id == User.id,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
             )
+            .correlate(User)
             .exists()
         )
         query = select(sql_func.count(User.id)).where(base_filter, ~subquery)
@@ -1599,42 +1600,29 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         result = await db.execute(query)
         return result.scalar() or 0
 
-    if target == 'expired':
-        # Истекшие подписки
+    if target in ('expired', 'expired_subscribers'):
+        # Истекшие подписки — исключаем юзеров с хотя бы одной активной
         now = datetime.now(UTC)
         expired_statuses = [
             SubscriptionStatus.EXPIRED.value,
             SubscriptionStatus.DISABLED.value,
             SubscriptionStatus.LIMITED.value,
         ]
-        query = (
-            select(sql_func.count(distinct(User.id)))
-            .outerjoin(Subscription, User.id == Subscription.user_id)
+        has_active_sub = (
+            select(Subscription.id)
             .where(
-                base_filter,
-                or_(
-                    Subscription.status.in_(expired_statuses),
-                    and_(Subscription.end_date <= now, Subscription.status != SubscriptionStatus.ACTIVE.value),
-                    and_(Subscription.id == None, User.has_had_paid_subscription == True),
-                ),
+                Subscription.user_id == User.id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
             )
+            .correlate(User)
+            .exists()
         )
-        result = await db.execute(query)
-        return result.scalar() or 0
-
-    if target == 'expired_subscribers':
-        # То же что и expired
-        now = datetime.now(UTC)
-        expired_statuses = [
-            SubscriptionStatus.EXPIRED.value,
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.LIMITED.value,
-        ]
         query = (
             select(sql_func.count(distinct(User.id)))
             .outerjoin(Subscription, User.id == Subscription.user_id)
             .where(
                 base_filter,
+                ~has_active_sub,
                 or_(
                     Subscription.status.in_(expired_statuses),
                     and_(Subscription.end_date <= now, Subscription.status != SubscriptionStatus.ACTIVE.value),
@@ -1785,6 +1773,9 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         for user in users:
             subs = getattr(user, 'subscriptions', None) or []
             if subs:
+                has_active = any(s.is_active for s in subs)
+                if has_active:
+                    continue  # Skip users who have at least one active subscription
                 has_expired = any(s.status in expired_statuses or (s.end_date <= now and not s.is_active) for s in subs)
                 if has_expired:
                     expired_users.append(user)
@@ -1833,6 +1824,9 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         for user in users:
             subs = getattr(user, 'subscriptions', None) or []
             if subs:
+                has_active = any(s.is_active for s in subs)
+                if has_active:
+                    continue  # Skip users who have at least one active subscription
                 has_expired = any(s.status in expired_statuses or (s.end_date <= now and not s.is_active) for s in subs)
                 if has_expired:
                     expired_users.append(user)

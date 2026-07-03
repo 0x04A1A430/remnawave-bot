@@ -140,7 +140,7 @@ def get_telegram_formatting_info() -> str:
 @error_handler
 async def show_welcome_text_panel(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     welcome_settings = await get_current_welcome_text_settings(db)
-    status_emoji = '🟢' if welcome_settings['is_enabled'] else ''
+    status_emoji = '' if welcome_settings['is_enabled'] else ''
     status_text = 'включено' if welcome_settings['is_enabled'] else 'отключено'
 
     await callback.message.edit_text(
@@ -159,7 +159,7 @@ async def show_welcome_text_panel(callback: types.CallbackQuery, db_user: User, 
 async def toggle_welcome_text(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     new_status = await toggle_welcome_text_status(db, db_user.id)
 
-    status_emoji = '🟢' if new_status else ''
+    status_emoji = '' if new_status else ''
     status_text = 'включено' if new_status else 'отключено'
     action_text = 'включены' if new_status else 'отключены'
 
@@ -187,7 +187,7 @@ async def show_current_welcome_text(callback: types.CallbackQuery, db_user: User
     else:
         status = 'Текущий приветственный текст:'
 
-    status_emoji = '🟢' if is_enabled else ''
+    status_emoji = '' if is_enabled else ''
     status_text = 'включено' if is_enabled else 'отключено'
 
     placeholders = get_available_placeholders()
@@ -288,7 +288,7 @@ async def process_welcome_text_edit(message: types.Message, state: FSMContext, d
 
     if success:
         welcome_settings = await get_current_welcome_text_settings(db)
-        status_emoji = '🟢' if welcome_settings['is_enabled'] else ''
+        status_emoji = '' if welcome_settings['is_enabled'] else ''
         status_text = 'включено' if welcome_settings['is_enabled'] else 'отключено'
 
         placeholders = get_available_placeholders()
@@ -321,7 +321,7 @@ async def reset_welcome_text(callback: types.CallbackQuery, db_user: User, db: A
 
     if success:
         welcome_settings = await get_current_welcome_text_settings(db)
-        status_emoji = '🟢' if welcome_settings['is_enabled'] else ''
+        status_emoji = '' if welcome_settings['is_enabled'] else ''
         status_text = 'включено' if welcome_settings['is_enabled'] else 'отключено'
 
         await callback.message.edit_text(
@@ -360,7 +360,7 @@ async def show_preview_welcome_text(callback: types.CallbackQuery, db_user: User
 
     if preview_text:
         await callback.message.edit_text(
-            f'️ Предварительный просмотр\n\n'
+            f'Предварительный просмотр\n\n'
             f"Как будет выглядеть текст для пользователя 'Иван' (@test_user):\n\n"
             f'<code>{preview_text}</code>',
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),
@@ -368,7 +368,7 @@ async def show_preview_welcome_text(callback: types.CallbackQuery, db_user: User
         )
     else:
         await callback.message.edit_text(
-            '️ Предварительный просмотр\n\n'
+            'Предварительный просмотр\n\n'
             'Приветственные сообщения отключены.\n'
             'Новые пользователи не будут получать приветственный текст после регистрации.',
             reply_markup=get_welcome_text_keyboard(db_user.language, welcome_settings['is_enabled']),

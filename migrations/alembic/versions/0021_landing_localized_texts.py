@@ -24,12 +24,12 @@ def upgrade() -> None:
     op.execute("""
         UPDATE landing_pages
         SET title = jsonb_build_object('ru', title)
-        WHERE title IS NOT NULL AND title != '';
+        WHERE title IS NOT NULL AND title::text != '';
     """)
     op.execute("""
         UPDATE landing_pages
         SET title = '{"ru": ""}'::jsonb
-        WHERE title IS NULL OR title = '';
+        WHERE title IS NULL OR title::text = '';
     """)
 
     # subtitle (nullable)

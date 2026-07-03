@@ -200,7 +200,7 @@ class ReferralContestService:
         )
 
         if not leaderboard:
-            logger.info('Конкурс : пока нет участников', contest_id=contest.id)
+            logger.info('Конкурс: пока нет участников', contest_id=contest.id)
 
         if is_final:
             await mark_final_summary_sent(db, contest)
@@ -300,6 +300,10 @@ class ReferralContestService:
         if contest.prize_text:
             lines.append('')
             lines.append(f'Приз: {html.escape(contest.prize_text)}')
+
+        # Respect per-category enable/disable
+        if not getattr(settings, 'ADMIN_NOTIFICATIONS_PROMO_ENABLED', True):
+            return
 
         try:
             await self.bot.send_message(

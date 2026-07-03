@@ -40,7 +40,7 @@ async def _render_question_text(
         current=current_index,
         total=total,
     )
-    lines = [f'️ <b>{html.escape(poll_title)}</b>', '', header, '', html.escape(question.text)]
+    lines = [f'<b>{html.escape(poll_title)}</b>', '', header, '', html.escape(question.text)]
     return '\n'.join(lines)
 
 

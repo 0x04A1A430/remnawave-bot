@@ -304,7 +304,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         if subscription.is_active:
             status_text = 'Оплачена'
         else:
-            status_text = '⌛ Истекла'
+            status_text = 'Истекла'
         type_text = 'Платная подписка'
 
     traffic_limit = subscription.traffic_limit_gb or 0
@@ -341,7 +341,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         countries_count=len(subscription.connected_squads or []),
         devices_used=devices_used,
         devices_limit=subscription.device_limit,
-        autopay_status='Включен' if subscription.autopay_enabled else '⌛ Выключен',
+        autopay_status='Включен' if subscription.autopay_enabled else 'Выключен',
     )
 
     if subscription_cost > 0:

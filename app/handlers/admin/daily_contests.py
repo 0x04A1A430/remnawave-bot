@@ -55,7 +55,7 @@ async def show_daily_contests(
         lines.append(texts.t('ADMIN_CONTESTS_EMPTY', 'Пока нет созданных конкурсов.'))
     else:
         for tpl in templates:
-            status = '🟢' if tpl.is_enabled else '️'
+            status = '' if tpl.is_enabled else ''
             prize_info = f'{tpl.prize_value} ({tpl.prize_type})' if tpl.prize_type else tpl.prize_value
             lines.append(f'{status} <b>{tpl.name}</b> (slug: {tpl.slug}) — приз {prize_info}, макс {tpl.max_winners}')
 
@@ -82,7 +82,7 @@ async def show_daily_contests(
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'️ {tpl.name}',
+                    text=f'{tpl.name}',
                     callback_data=f'admin_daily_contest_{tpl.id}',
                 )
             ]
@@ -117,7 +117,7 @@ async def show_daily_contest(
 
     lines = [
         f'<b>{tpl.name}</b> (slug: {tpl.slug})',
-        f'{texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "🟢 Активен") if tpl.is_enabled else texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "️ Выключен")}',
+        f'{texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "Активен") if tpl.is_enabled else texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "Выключен")}',
         f'Тип приза: {tpl.prize_type or "days"} | Значение: {tpl.prize_value or "1"}',
         f'Макс победителей: {tpl.max_winners}',
         f'Попыток/польз: {tpl.attempts_per_user}',

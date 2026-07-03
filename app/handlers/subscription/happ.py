@@ -43,7 +43,7 @@ async def handle_happ_download_platform_choice(callback: types.CallbackQuery, db
     platform_names = {
         'ios': texts.t('HAPP_PLATFORM_IOS', 'iOS'),
         'android': texts.t('HAPP_PLATFORM_ANDROID', 'Android'),
-        'macos': texts.t('HAPP_PLATFORM_MACOS', '️ Mac OS'),
+        'macos': texts.t('HAPP_PLATFORM_MACOS', 'Mac OS'),
         'windows': texts.t('HAPP_PLATFORM_WINDOWS', 'Windows'),
     }
 

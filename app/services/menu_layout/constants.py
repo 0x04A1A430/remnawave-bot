@@ -169,7 +169,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'resume_checkout': {
             'type': 'builtin',
             'builtin_id': 'resume_checkout',
-            'text': {'ru': '↩️ Вернуться к оформлению', 'en': '↩️ Resume checkout'},
+            'text': {'ru': 'Вернуться к оформлению', 'en': 'Resume checkout'},
             'action': 'return_to_saved_cart',
             'enabled': True,
             'visibility': 'all',
@@ -179,7 +179,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'promocode': {
             'type': 'builtin',
             'builtin_id': 'promocode',
-            'text': {'ru': '️ Промокод', 'en': '️ Promo code'},
+            'text': {'ru': 'Промокод', 'en': 'Promo code'},
             'action': 'menu_promocode',
             'enabled': True,
             'visibility': 'all',
@@ -219,7 +219,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'admin_panel': {
             'type': 'builtin',
             'builtin_id': 'admin_panel',
-            'text': {'ru': '️ Админ панель', 'en': '️ Admin panel'},
+            'text': {'ru': 'Админ панель', 'en': 'Admin panel'},
             'action': 'admin_panel',
             'enabled': True,
             'visibility': 'admins',
@@ -229,7 +229,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'moderator_panel': {
             'type': 'builtin',
             'builtin_id': 'moderator_panel',
-            'text': {'ru': '‍️ Модерация', 'en': '‍️ Moderation'},
+            'text': {'ru': '‍ Модерация', 'en': '‍ Moderation'},
             'action': 'moderator_panel',
             'enabled': True,
             'visibility': 'moderators',
@@ -301,14 +301,14 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
     },
     {
         'id': 'resume_checkout',
-        'default_text': {'ru': '↩️ Вернуться к оформлению', 'en': '↩️ Resume checkout'},
+        'default_text': {'ru': 'Вернуться к оформлению', 'en': 'Resume checkout'},
         'callback_data': 'return_to_saved_cart',
         'default_conditions': {'has_saved_cart': True},
         'supports_dynamic_text': False,
     },
     {
         'id': 'promocode',
-        'default_text': {'ru': '️ Промокод', 'en': '️ Promo code'},
+        'default_text': {'ru': 'Промокод', 'en': 'Promo code'},
         'callback_data': 'menu_promocode',
         'default_conditions': None,
         'supports_dynamic_text': False,
@@ -350,14 +350,14 @@ BUILTIN_BUTTONS_INFO: list[dict[str, Any]] = [
     },
     {
         'id': 'admin_panel',
-        'default_text': {'ru': '️ Админ панель', 'en': '️ Admin panel'},
+        'default_text': {'ru': 'Админ панель', 'en': 'Admin panel'},
         'callback_data': 'admin_panel',
         'default_conditions': {'is_admin': True},
         'supports_dynamic_text': False,
     },
     {
         'id': 'moderator_panel',
-        'default_text': {'ru': '‍️ Модерация', 'en': '‍️ Moderation'},
+        'default_text': {'ru': '‍ Модерация', 'en': '‍ Moderation'},
         'callback_data': 'moderator_panel',
         'default_conditions': {'is_moderator': True},
         'supports_dynamic_text': False,
@@ -414,8 +414,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'menu_server_status',
         'name': 'Статус серверов',
         'category': 'menu',
-        'icon': '️',
-        'text': {'ru': '️ Статус серверов', 'en': '️ Server Status'},
+        'icon': '',
+        'text': {'ru': 'Статус серверов', 'en': 'Server Status'},
     },
     # Баланс
     {
@@ -445,8 +445,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'subscription_settings',
         'name': 'Настройки подписки',
         'category': 'subscription',
-        'icon': '️',
-        'text': {'ru': '️ Настройки', 'en': '️ Settings'},
+        'icon': '',
+        'text': {'ru': 'Настройки', 'en': 'Settings'},
         'requires_subscription': True,
     },
     {
@@ -573,8 +573,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'happ_download_macos',
         'name': 'Скачать Happ macOS',
         'category': 'happ',
-        'icon': '️',
-        'text': {'ru': '️ macOS', 'en': '️ macOS'},
+        'icon': '',
+        'text': {'ru': 'macOS', 'en': 'macOS'},
     },
     {
         'callback_data': 'happ_download_windows',
@@ -588,8 +588,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'referral_create_invite',
         'name': 'Создать инвайт',
         'category': 'referral',
-        'icon': '️',
-        'text': {'ru': '️ Создать инвайт', 'en': '️ Create invite'},
+        'icon': '',
+        'text': {'ru': 'Создать инвайт', 'en': 'Create invite'},
     },
     {
         'callback_data': 'referral_show_qr',
@@ -617,8 +617,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'create_ticket',
         'name': 'Создать тикет',
         'category': 'support',
-        'icon': '️',
-        'text': {'ru': '️ Создать тикет', 'en': '️ Create ticket'},
+        'icon': '',
+        'text': {'ru': 'Создать тикет', 'en': 'Create ticket'},
     },
     {
         'callback_data': 'my_tickets',
@@ -640,8 +640,8 @@ AVAILABLE_CALLBACKS: list[dict[str, Any]] = [
         'callback_data': 'clear_saved_cart',
         'name': 'Очистить корзину',
         'category': 'purchase',
-        'icon': '️',
-        'text': {'ru': '️ Очистить корзину', 'en': '️ Clear cart'},
+        'icon': '',
+        'text': {'ru': 'Очистить корзину', 'en': 'Clear cart'},
     },
     {
         'callback_data': 'subscription_confirm',

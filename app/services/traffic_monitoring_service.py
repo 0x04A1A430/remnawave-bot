@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import get_user_by_remnawave_uuid
 from app.database.database import AsyncSessionLocal
+from app.external.remnawave_api import RemnaWaveUser, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
 from app.utils.cache import cache, cache_key
@@ -25,6 +26,14 @@ logger = structlog.get_logger(__name__)
 TRAFFIC_SNAPSHOT_KEY = 'traffic:snapshot'
 TRAFFIC_SNAPSHOT_TIME_KEY = 'traffic:snapshot:time'
 TRAFFIC_NOTIFICATION_CACHE_KEY = 'traffic:notifications'
+
+# Статусы, при которых пользователя НЕ нужно гонять в проверках трафика.
+# DISABLED — деактивированные, в т.ч. «хвосты» от удаления через бота: если
+# панельное удаление падает с ошибкой, бот фолбэчит на деактивацию, но свою
+# запись всё равно сносит — в панели остаётся осиротевший DISABLED-юзер.
+# EXPIRED — истёкшие подписки. У обоих нет смысла запрашивать bandwidth-stats:
+# это лишь грузит панель и вешает запрос для мёртвых UUID в таймаут.
+_NON_MONITORED_STATUSES = frozenset({UserStatus.DISABLED, UserStatus.EXPIRED})
 
 
 @dataclass
@@ -124,12 +133,12 @@ class TrafficMonitoringServiceV2:
                 # Сохраняем время создания snapshot
                 await cache.set(TRAFFIC_SNAPSHOT_TIME_KEY, datetime.now(UTC).isoformat(), expire=ttl)
                 logger.info(
-                    'Snapshot сохранён в Redis: пользователей, TTL ч',
+                    'Snapshot сохранён в Redis',
                     snapshot_count=len(snapshot),
                     value=ttl // 3600,
                 )
             else:
-                logger.warning('️ Не удалось сохранить snapshot в Redis')
+                logger.warning('Не удалось сохранить snapshot в Redis')
             return success
         except Exception as e:
             logger.error('Ошибка сохранения snapshot в Redis', error=e)
@@ -143,7 +152,7 @@ class TrafficMonitoringServiceV2:
             if snapshot_data is not None and isinstance(snapshot_data, dict):
                 # Конвертируем обратно в float
                 result = {uuid: float(bytes_val) for uuid, bytes_val in snapshot_data.items()}
-                logger.debug('Snapshot загружен из Redis: пользователей', result_count=len(result))
+                logger.debug('Snapshot загружен из Redis', result_count=len(result))
                 return result
             return None
         except Exception as e:
@@ -264,32 +273,45 @@ class TrafficMonitoringServiceV2:
 
     # ============== Получение пользователей ==============
 
-    async def get_all_users_with_traffic(self) -> list[dict]:
+    async def get_all_users_with_traffic(self) -> list[RemnaWaveUser]:
         """
-        Получает всех пользователей с их трафиком через батчевые запросы
-        Возвращает список словарей с информацией о пользователях
+        Получает пользователей панели батчевыми запросами для проверок трафика.
+
+        Возвращает только пользователей с активным для мониторинга статусом —
+        DISABLED/EXPIRED отсекаются (см. ``_NON_MONITORED_STATUSES``), чтобы не
+        дёргать bandwidth-stats для деактивированных «хвостов» и истёкших
+        подписок: их мёртвые UUID лишь грузят панель и вешают запрос в таймаут.
         """
-        all_users = []
+        all_users: list[RemnaWaveUser] = []
         batch_size = self.get_batch_size()
-        offset = 0
+        cursor: str | None = None
+        skipped_inactive = 0
 
         try:
             async with self.remnawave_service.get_api_client() as api:
                 while True:
-                    result = await api.get_all_users(start=offset, size=batch_size)
+                    # 2.8.0: курсорная (keyset) пагинация /api/users/stream
+                    result = await api.get_all_users_page_stream(cursor=cursor, size=batch_size)
                     users = result.get('users', [])
 
                     if not users:
                         break
 
-                    all_users.extend(users)
+                    monitorable = [u for u in users if u.status not in _NON_MONITORED_STATUSES]
+                    skipped_inactive += len(users) - len(monitorable)
+                    all_users.extend(monitorable)
                     logger.debug('Загружено пользователей...', all_users_count=len(all_users))
 
-                    if len(users) < batch_size:
+                    if not result.get('hasMore') or not result.get('nextCursor'):
                         break
 
-                    offset += batch_size
+                    cursor = result['nextCursor']
 
+            if skipped_inactive:
+                logger.info(
+                    'Пропущено неактивных пользователей (DISABLED/EXPIRED) в проверке трафика',
+                    skipped_inactive=skipped_inactive,
+                )
             logger.info('Всего загружено пользователей из Remnawave', all_users_count=len(all_users))
             return all_users
 
@@ -346,7 +368,7 @@ class TrafficMonitoringServiceV2:
         # Fallback на память
         self._memory_snapshot = snapshot.copy()
         self._memory_snapshot_time = datetime.now(UTC)
-        logger.warning('️ Redis недоступен, snapshot сохранён в память')
+        logger.warning('Redis недоступен, snapshot сохранён в память')
         return True
 
     async def create_initial_snapshot(self) -> int:
@@ -360,7 +382,7 @@ class TrafficMonitoringServiceV2:
         if existing_snapshot is not None:
             age = await self.get_snapshot_age_minutes()
             logger.info(
-                'Найден существующий snapshot в Redis: пользователей, возраст мин',
+                'Найден существующий snapshot в Redis',
                 existing_snapshot_count=len(existing_snapshot),
                 age=round(age, 1),
             )
@@ -385,15 +407,13 @@ class TrafficMonitoringServiceV2:
                 new_snapshot[user.uuid] = current_bytes
 
             except Exception as e:
-                logger.error('Ошибка при создании snapshot для', uuid=user.uuid, error=e)
+                logger.error('Ошибка при создании snapshot для пользователя', uuid=user.uuid, error=e)
 
         # Сохраняем в Redis (с fallback на память)
         await self._save_snapshot(new_snapshot)
 
         elapsed = (datetime.now(UTC) - start_time).total_seconds()
-        logger.info(
-            'Snapshot создан за с: пользователей', elapsed=round(elapsed, 1), new_snapshot_count=len(new_snapshot)
-        )
+        logger.info('Snapshot создан', elapsed=round(elapsed, 1), new_snapshot_count=len(new_snapshot))
 
         return len(new_snapshot)
 
@@ -435,7 +455,7 @@ class TrafficMonitoringServiceV2:
         else:
             age = await self.get_snapshot_age_minutes()
             logger.info(
-                'Быстрая проверка трафика (snapshot мин назад, порог ГБ)...',
+                'Быстрая проверка трафика',
                 age=round(age, 1),
                 get_fast_check_threshold_gb=self.get_fast_check_threshold_gb(),
             )
@@ -449,7 +469,7 @@ class TrafficMonitoringServiceV2:
         # Загружаем предыдущий snapshot (из Redis или памяти)
         previous_snapshot = await self._get_current_snapshot()
         logger.info(
-            'Предыдущий snapshot: пользователей (is_first_run=)',
+            'Загружен предыдущий snapshot',
             previous_snapshot_count=len(previous_snapshot),
             is_first_run=is_first_run,
         )
@@ -494,7 +514,7 @@ class TrafficMonitoringServiceV2:
                     continue
 
                 logger.info(
-                    '️ Превышение дельты: ... + ГБ (порог ГБ, previous= ГБ, current= ГБ)',
+                    'Превышение дельты трафика',
                     uuid=user.uuid[:8],
                     delta_gb=round(delta_gb, 2),
                     get_fast_check_threshold_gb=self.get_fast_check_threshold_gb(),
@@ -505,7 +525,7 @@ class TrafficMonitoringServiceV2:
                 # Проверяем исключённых пользователей (служебные/тунельные)
                 if user.uuid.lower() in excluded_user_uuids:
                     logger.info(
-                        '⏭️ Пропускаем ... пользователь в списке исключений (служебный/тунельный)', uuid=user.uuid[:8]
+                        'Пропускаем ... пользователь в списке исключений (служебный/тунельный)', uuid=user.uuid[:8]
                     )
                     continue
 
@@ -513,7 +533,7 @@ class TrafficMonitoringServiceV2:
                 last_node_uuid = user_traffic.last_connected_node_uuid
                 if not self.should_monitor_node(last_node_uuid):
                     logger.warning(
-                        '⏭️ Пропускаем нода не в списке мониторинга',
+                        'Пропускаем нода не в списке мониторинга',
                         uuid=user.uuid[:8],
                         last_node_uuid=last_node_uuid or 'неизвестна',
                     )
@@ -540,19 +560,19 @@ class TrafficMonitoringServiceV2:
 
         # Обновляем snapshot (в Redis с fallback на память)
         await self._save_snapshot(new_snapshot)
-        logger.info('Новый snapshot сохранён: пользователей', new_snapshot_count=len(new_snapshot))
+        logger.info('Новый snapshot сохранён', new_snapshot_count=len(new_snapshot))
 
         elapsed = (datetime.now(UTC) - start_time).total_seconds()
 
         if is_first_run:
             logger.info(
-                'Snapshot создан за с: пользователей. Следующая проверка покажет превышения.',
+                'Snapshot создан. Следующая проверка покажет превышения.',
                 elapsed=round(elapsed, 1),
                 new_snapshot_count=len(new_snapshot),
             )
         else:
             logger.info(
-                'Быстрая проверка завершена за с: пользователей, с дельтой >0, превышений',
+                'Быстрая проверка завершена',
                 elapsed=round(elapsed, 1),
                 users_count=len(users),
                 users_with_delta=users_with_delta,
@@ -635,7 +655,7 @@ class TrafficMonitoringServiceV2:
                     )
 
                 except Exception as e:
-                    logger.error('Ошибка суточной проверки для', uuid=user.uuid, error=e)
+                    logger.error('Ошибка суточной проверки для пользователя', uuid=user.uuid, error=e)
                     return None
 
         # Параллельная проверка
@@ -648,7 +668,7 @@ class TrafficMonitoringServiceV2:
 
         elapsed = (datetime.now(UTC) - start_time).total_seconds()
         logger.info(
-            'Суточная проверка завершена за с: пользователей, превышений',
+            'Суточная проверка завершена',
             elapsed=round(elapsed, 1),
             users_count=len(users),
             violations_count=len(violations),
@@ -673,7 +693,7 @@ class TrafficMonitoringServiceV2:
         max_notifications = 10
         if len(violations) > max_notifications:
             logger.warning(
-                '️ Слишком много превышений отправляем только первые',
+                'Слишком много превышений отправляем только первые',
                 violations_count=len(violations),
                 max_notifications=max_notifications,
             )
@@ -683,7 +703,7 @@ class TrafficMonitoringServiceV2:
             try:
                 if not await self.should_send_notification(violation.user_uuid):
                     logger.info(
-                        '⏭️ Кулдаун для ... пропускаем уведомление (кулдаун мин)',
+                        'Кулдаун: пропускаем уведомление',
                         user_uuid=violation.user_uuid[:8],
                         value=self.get_notification_cooldown_seconds() // 60,
                     )
@@ -695,7 +715,7 @@ class TrafficMonitoringServiceV2:
                     db_user = await get_user_by_remnawave_uuid(db, violation.user_uuid)
                     if db_user:
                         user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-                        user_info = f'<b>{html.escape(db_user.full_name or "Без имени")}</b>\nID: <code>{user_id_display}</code>\n'
+                        user_info = f'<b>{html.escape(db_user.full_name or "Без имени")}</b>\n ID: <code>{user_id_display}</code>\n'
                         if db_user.username:
                             user_info += f'Username: @{html.escape(db_user.username)}\n'
 
@@ -713,7 +733,7 @@ class TrafficMonitoringServiceV2:
                     traffic_label = 'Использовано'
 
                 message = (
-                    f'️ <b>Превышение трафика</b>\n\n'
+                    f'<b>Превышение трафика</b>\n\n'
                     f'{user_info}'
                     f'UUID: <code>{violation.user_uuid}</code>\n\n'
                     f'{check_type_emoji} <b>{check_type_name}</b>\n'
@@ -724,25 +744,25 @@ class TrafficMonitoringServiceV2:
 
                 # Показываем название ноды и UUID
                 if violation.last_node_name:
-                    message += f'\nСервер: <b>{violation.last_node_name}</b>'
+                    message += f'\n Сервер: <b>{violation.last_node_name}</b>'
                     if violation.last_node_uuid:
                         message += f'\n   <code>{violation.last_node_uuid}</code>'
                 elif violation.last_node_uuid:
-                    message += f'\nСервер: <code>{violation.last_node_uuid}</code>'
+                    message += f'\n Сервер: <code>{violation.last_node_uuid}</code>'
 
-                message += f'\n\n{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")} UTC'
+                message += f'\n\n {datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")} UTC'
 
                 await admin_service.send_suspicious_traffic_notification(message, bot, topic_id)
                 await self.record_notification(violation.user_uuid)
 
-                logger.info('Уведомление отправлено для', user_uuid=violation.user_uuid)
+                logger.info('Уведомление отправлено пользователю', user_uuid=violation.user_uuid)
 
                 # Задержка между отправками (защита от flood)
                 if i < len(violations) - 1:
                     await asyncio.sleep(0.5)
 
             except Exception as e:
-                logger.error('Ошибка отправки уведомления для', user_uuid=violation.user_uuid, error=e)
+                logger.error('Ошибка отправки уведомления пользователю', user_uuid=violation.user_uuid, error=e)
 
 
 class TrafficMonitoringSchedulerV2:
@@ -782,14 +802,16 @@ class TrafficMonitoringSchedulerV2:
         # Запускаем быструю проверку
         if self.service.is_fast_check_enabled():
             interval = self.service.get_fast_check_interval_seconds()
-            logger.info('Запуск быстрой проверки трафика каждые мин', value=interval // 60)
+            logger.info('Запуск быстрой проверки трафика', value=interval // 60)
             self._fast_check_task = asyncio.create_task(self._run_fast_check_loop(interval))
 
         # Запускаем суточную проверку
         if self.service.is_daily_check_enabled():
             check_time = self.service.get_daily_check_time()
             if check_time:
-                logger.info('Запуск суточной проверки трафика в', check_time=check_time.strftime('%H:%M'))
+                logger.info(
+                    'Запуск суточной проверки трафика по расписанию', check_time=check_time.strftime('%H:%M')
+                )
                 self._daily_check_task = asyncio.create_task(self._run_daily_check_loop(check_time))
 
     async def stop(self):
@@ -817,7 +839,7 @@ class TrafficMonitoringSchedulerV2:
     async def _run_fast_check_loop(self, interval_seconds: int):
         """Цикл быстрой проверки"""
         # Сначала ждём интервал (snapshot уже создан в start())
-        logger.info('⏳ Первая проверка через минут...', value=interval_seconds // 60)
+        logger.info('Первая проверка через минут...', value=interval_seconds // 60)
         await asyncio.sleep(interval_seconds)
 
         while self._is_running:
@@ -842,7 +864,7 @@ class TrafficMonitoringSchedulerV2:
                     next_run += timedelta(days=1)
 
                 delay = (next_run - now).total_seconds()
-                logger.debug('Следующая суточная проверка через ч', delay=round(delay / 3600, 1))
+                logger.debug('Запланирована следующая суточная проверка', delay=round(delay / 3600, 1))
 
                 await asyncio.sleep(delay)
 
@@ -913,7 +935,7 @@ class TrafficMonitoringService:
             return is_exceeded, traffic_info
 
         except Exception as e:
-            logger.error('Ошибка проверки трафика для', user_uuid=user_uuid, error=e)
+            logger.error('Ошибка проверки трафика для пользователя', user_uuid=user_uuid, error=e)
             return False, {'total_gb': 0, 'nodes': []}
 
     async def process_suspicious_traffic(self, db: AsyncSession, user_uuid: str, traffic_info: dict, bot):

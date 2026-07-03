@@ -6,11 +6,14 @@ from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import User
+from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.localization.texts import get_texts
 from app.services.faq_service import FaqService
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
+from app.utils.display_mode import display_mode_label
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -57,7 +60,7 @@ async def _build_overview(
     if setting and not setting.is_enabled:
         status_text = texts.t(
             'ADMIN_FAQ_STATUS_DISABLED',
-            '️ Показ FAQ выключен.',
+            'Показ FAQ выключен.',
         )
     elif active_pages:
         status_text = texts.t(
@@ -67,12 +70,12 @@ async def _build_overview(
     elif total_pages:
         status_text = texts.t(
             'ADMIN_FAQ_STATUS_ENABLED_EMPTY',
-            '️ FAQ включён, но нет активных страниц.',
+            'FAQ включён, но нет активных страниц.',
         )
     else:
         status_text = texts.t(
             'ADMIN_FAQ_STATUS_EMPTY',
-            '️ FAQ ещё не настроен.',
+            'FAQ ещё не настроен.',
         )
 
     pages_overview = texts.t(
@@ -188,6 +191,18 @@ async def _build_overview(
     buttons.append(
         [
             types.InlineKeyboardButton(
+                text=texts.t(
+                    'ADMIN_FAQ_DISPLAY_MODE_BUTTON',
+                    'Отображение: {mode}',
+                ).format(mode=display_mode_label(settings.FAQ_DISPLAY_MODE)),
+                callback_data='admin_faq_display_mode',
+            )
+        ]
+    )
+
+    buttons.append(
+        [
+            types.InlineKeyboardButton(
                 text=texts.t('ADMIN_FAQ_HTML_HELP', 'HTML помощь'),
                 callback_data='admin_faq_help',
             )
@@ -254,6 +269,31 @@ async def toggle_faq(
 
 @admin_required
 @error_handler
+async def cycle_faq_display_mode(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    new_mode = await cycle_display_mode_setting(callback, db, 'FAQ_DISPLAY_MODE')
+    if new_mode is None:
+        return
+
+    overview_text, markup = await _build_overview(db_user, db)
+    await callback.message.edit_text(
+        overview_text,
+        reply_markup=markup,
+    )
+    await callback.answer(
+        texts.t(
+            'ADMIN_DISPLAY_MODE_CHANGED',
+            'Отображение: {mode}',
+        ).format(mode=display_mode_label(new_mode))
+    )
+
+
+@admin_required
+@error_handler
 async def start_create_faq_page(
     callback: types.CallbackQuery,
     db_user: User,
@@ -276,7 +316,7 @@ async def start_create_faq_page(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_FAQ_CANCEL_BUTTON',
-                            '← Отмена',
+                            'Отмена',
                         ),
                         callback_data='admin_faq_cancel',
                     )
@@ -404,7 +444,7 @@ async def process_new_faq_content(
                 types.InlineKeyboardButton(
                     text=texts.t(
                         'ADMIN_FAQ_BACK_TO_LIST',
-                        '← К настройкам FAQ',
+                        'К настройкам FAQ',
                     ),
                     callback_data='admin_faq',
                 )
@@ -443,7 +483,7 @@ async def show_faq_page_details(
         await callback.answer(
             texts.t(
                 'ADMIN_FAQ_PAGE_NOT_FOUND',
-                '️ Страница не найдена.',
+                'Страница не найдена.',
             ),
             show_alert=True,
         )
@@ -503,7 +543,7 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_EDIT_TITLE_BUTTON', '️ Изменить заголовок'),
+                text=texts.t('ADMIN_FAQ_EDIT_TITLE_BUTTON', 'Изменить заголовок'),
                 callback_data=f'admin_faq_edit_title:{page.id}',
             )
         ]
@@ -536,11 +576,11 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_MOVE_UP', '↑ Выше'),
+                text=texts.t('ADMIN_FAQ_PAGE_MOVE_UP', 'Выше'),
                 callback_data=f'admin_faq_move:{page.id}:up',
             ),
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', '↓ Ниже'),
+                text=texts.t('ADMIN_FAQ_PAGE_MOVE_DOWN', 'Ниже'),
                 callback_data=f'admin_faq_move:{page.id}:down',
             ),
         ]
@@ -549,7 +589,7 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_PAGE_DELETE_BUTTON', '️ Удалить'),
+                text=texts.t('ADMIN_FAQ_PAGE_DELETE_BUTTON', 'Удалить'),
                 callback_data=f'admin_faq_delete:{page.id}',
             )
         ]
@@ -558,7 +598,7 @@ async def show_faq_page_details(
     buttons.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '← К настройкам FAQ'),
+                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'),
                 callback_data='admin_faq',
             )
         ]
@@ -600,7 +640,7 @@ async def start_edit_faq_title(
         await callback.answer(
             texts.t(
                 'ADMIN_FAQ_PAGE_NOT_FOUND',
-                '️ Страница не найдена.',
+                'Страница не найдена.',
             ),
             show_alert=True,
         )
@@ -620,7 +660,7 @@ async def start_edit_faq_title(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_FAQ_CANCEL_BUTTON',
-                            '← Отмена',
+                            'Отмена',
                         ),
                         callback_data=f'admin_faq_page:{page.id}',
                     )
@@ -665,7 +705,7 @@ async def process_edit_faq_title(
 
     if not page_id:
         await state.clear()
-        await message.answer(texts.t('ADMIN_FAQ_UNEXPECTED_STATE', '️ Состояние сброшено.'))
+        await message.answer(texts.t('ADMIN_FAQ_UNEXPECTED_STATE', 'Состояние сброшено.'))
         return
 
     page = await FaqService.get_page(
@@ -678,7 +718,7 @@ async def process_edit_faq_title(
 
     if not page:
         await message.answer(
-            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', '️ Страница не найдена.'),
+            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'),
         )
         await state.clear()
         return
@@ -692,7 +732,7 @@ async def process_edit_faq_title(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '← К настройкам FAQ'),
+                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'),
                         callback_data='admin_faq',
                     )
                 ]
@@ -728,7 +768,7 @@ async def start_edit_faq_content(
 
     if not page:
         await callback.answer(
-            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', '️ Страница не найдена.'),
+            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'),
             show_alert=True,
         )
         return
@@ -747,7 +787,7 @@ async def start_edit_faq_content(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             'ADMIN_FAQ_CANCEL_BUTTON',
-                            '← Отмена',
+                            'Отмена',
                         ),
                         callback_data=f'admin_faq_page:{page.id}',
                     )
@@ -802,7 +842,7 @@ async def process_edit_faq_content(
 
     if not page_id:
         await state.clear()
-        await message.answer(texts.t('ADMIN_FAQ_UNEXPECTED_STATE', '️ Состояние сброшено.'))
+        await message.answer(texts.t('ADMIN_FAQ_UNEXPECTED_STATE', 'Состояние сброшено.'))
         return
 
     page = await FaqService.get_page(
@@ -815,7 +855,7 @@ async def process_edit_faq_content(
 
     if not page:
         await message.answer(
-            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', '️ Страница не найдена.'),
+            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'),
         )
         await state.clear()
         return
@@ -829,7 +869,7 @@ async def process_edit_faq_content(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '← К настройкам FAQ'),
+                        text=texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'),
                         callback_data='admin_faq',
                     )
                 ]
@@ -864,7 +904,7 @@ async def toggle_faq_page(
 
     if not page:
         await callback.answer(
-            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', '️ Страница не найдена.'),
+            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'),
             show_alert=True,
         )
         return
@@ -911,7 +951,7 @@ async def delete_faq_page(
 
     if not page:
         await callback.answer(
-            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', '️ Страница не найдена.'),
+            texts.t('ADMIN_FAQ_PAGE_NOT_FOUND', 'Страница не найдена.'),
             show_alert=True,
         )
         return
@@ -933,7 +973,7 @@ async def delete_faq_page(
         await FaqService.reorder_pages(db, db_user.language, remaining_sorted)
 
     await callback.answer(
-        texts.t('ADMIN_FAQ_PAGE_DELETED', '️ Страница удалена.'),
+        texts.t('ADMIN_FAQ_PAGE_DELETED', 'Страница удалена.'),
         show_alert=True,
     )
 
@@ -1013,7 +1053,7 @@ async def show_faq_html_help(
     buttons = [
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', '← К настройкам FAQ'),
+                text=texts.t('ADMIN_FAQ_BACK_TO_LIST', 'К настройкам FAQ'),
                 callback_data='admin_faq',
             )
         ]
@@ -1034,6 +1074,10 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         toggle_faq,
         F.data == 'admin_faq_toggle',
+    )
+    dp.callback_query.register(
+        cycle_faq_display_mode,
+        F.data == 'admin_faq_display_mode',
     )
     dp.callback_query.register(
         start_create_faq_page,

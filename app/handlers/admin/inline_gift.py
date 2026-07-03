@@ -11,6 +11,9 @@ Syntax:
     @botname @user -p 30 500 3     — то же с явным флагом -p
     @botname @user -p -1           — навсегда
 
+  Temp traffic (временный трафик, не меняет постоянный лимит):
+    @botname @user -t 100          — +100 ГБ временного трафика (30 дней)
+
   Multi-activation (первым N):
     @botname -r 5 30               — 5 активаций, 30 дней
     @botname -r 5 30 500 3         — 5 активаций, 30 дней, 500 ГБ, 3 уст.
@@ -62,7 +65,7 @@ def _is_admin(telegram_id: int) -> bool:
 
 @dataclass
 class ParsedQuery:
-    gift_type: Literal['subscription', 'discount', 'balance', 'multi']
+    gift_type: Literal['subscription', 'discount', 'balance', 'multi', 'temp_traffic']
     username: str
     target_id: int          # >0 when user entered numeric ID
     multi_count: int        # >0 for -r mode
@@ -72,6 +75,7 @@ class ParsedQuery:
     discount_percent: int
     balance_rub: int
     add_extra_squad: bool = field(default=False)
+    temp_traffic_gb: int = field(default=0)  # >0 for -t mode (временный трафик)
 
 
 def _parse_val(s: str, allow_neg_one: bool = False) -> int | None:
@@ -164,6 +168,10 @@ def _parse_query(query_text: str) -> ParsedQuery:
         rub = int(args[0]) if args and args[0].isdigit() else 0
         return ParsedQuery('balance', username, target_id, 0, None, None, None, 0, rub, add_bc)
 
+    if flag == '-t':
+        gb = max(1, int(args[0])) if args and args[0].isdigit() else 0
+        return ParsedQuery('temp_traffic', username, target_id, 0, None, None, None, 0, 0, add_bc, gb)
+
     if flag == '-p':
         days, traffic, devices = _parse_sub_args(args)
         return ParsedQuery('subscription', username, target_id, 0, days, traffic, devices, 0, 0, add_bc)
@@ -253,6 +261,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         ('hint_multi', '-r N дни [гб [уст.]]',    'Первым N: -r 5 30  /  -r 5 30 500 3', '-r 5 30'),
         ('hint_disc',  '@user -d процент',         'Скидка: @user -d 15', '@user -d 15'),
         ('hint_bal',   '@user -b сумма',           'Баланс: @user -b 1500', '@user -b 1500'),
+        ('hint_t',     '@user -t гб',              'Временный трафик (30 дн.): @user -t 100', '@user -t 100'),
         ('hint_bc',    '... -bc',                  'Доп. сервер: @user 30 -bc  /  -r 5 30 -bc', '@user 30 -bc'),
     ]
     results = []
@@ -277,11 +286,13 @@ def _flag_hint(query_text: str, texts) -> str:
         return '-d процент  — скидка'
     if '-b' in t:
         return '-b сумма  — пополнить баланс'
+    if '-t' in t:
+        return '-t гб  — временный трафик 30 дней'
     if '-p' in t:
         return '-p дни [гб [уст.]]  |  - для пропуска позиции'
     if '-bc' in t:
         return '-bc  — добавить в доп. сервер'
-    return '@user дни [гб [уст.]] | -r N | -d % | -b ₽  |  - пропуск'
+    return '@user дни [гб [уст.]] | -r N | -d % | -b ₽ | -t гб  |  - пропуск'
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
@@ -434,6 +445,18 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         description = texts.t('INLINE_GIFT_BALANCE_DESC', '+{rub} ₽ на баланс').format(rub=rub)
         title = f'{recipient_display} — +{rub} ₽'
 
+    elif parsed.gift_type == 'temp_traffic':
+        gb = parsed.temp_traffic_gb
+        if not gb:
+            await inline_query.answer([], **hint_kwargs)
+            return
+        safe = html.escape(recipient_display)
+        hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
+        body = texts.t('INLINE_GIFT_TEMP_TRAFFIC_BODY', '+{gb} ГБ трафика (на 30 дней)').format(gb=gb)
+        caption = f'<b>{safe}</b>\n\n<blockquote>{body}</blockquote>\n\n<code>{hint}</code>'
+        description = f'+{gb} ГБ трафика (30 дней)'
+        title = f'{recipient_display} — +{gb} ГБ трафика'
+
     else:
         summary = _gift_summary(parsed.days, parsed.traffic_gb, parsed.devices, texts, bc=parsed.add_extra_squad)
 
@@ -475,7 +498,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         return
 
     gift_code = chosen.result_id
-    if gift_code in ('info_only', 'hint_sub', 'hint_multi', 'hint_disc', 'hint_bal', 'hint_bc'):
+    if gift_code in ('info_only', 'hint_sub', 'hint_multi', 'hint_disc', 'hint_bal', 'hint_t', 'hint_bc'):
         return
 
     inline_message_id = chosen.inline_message_id
@@ -555,6 +578,20 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 balance_amount_kopeks=parsed.balance_rub * 100,
+                add_extra_squad=False,
+                inline_message_id=inline_message_id or intended_sentinel,
+            )
+        elif parsed.gift_type == 'temp_traffic':
+            if not parsed.temp_traffic_gb:
+                return
+            gift = InlineGiftSubscription(
+                gift_code=gift_code,
+                recipient_telegram_id=recipient_telegram_id,
+                sender_user_id=admin_user.id if admin_user else None,
+                gift_type='temp_traffic',
+                days=0,
+                traffic_limit_gb=parsed.temp_traffic_gb,  # используем это поле для хранения кол-ва ГБ
+                device_limit=1,
                 add_extra_squad=False,
                 inline_message_id=inline_message_id or intended_sentinel,
             )

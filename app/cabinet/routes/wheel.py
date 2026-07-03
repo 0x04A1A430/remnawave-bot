@@ -187,6 +187,7 @@ async def get_spin_history(
         items.append(
             SpinHistoryItem(
                 id=spin.id,
+                prize_id=spin.prize_id,
                 payment_type=spin.payment_type,
                 payment_amount=spin.payment_amount,
                 prize_type=spin.prize_type,
@@ -291,7 +292,7 @@ async def create_stars_invoice(
         async with create_bot() as bot:
             invoice_url = await bot.create_invoice_link(
                 title='Колесо удачи',
-                description=f'Спин колеса удачи ({stars_amount} ⭐)',
+                description=f'Спин колеса удачи ({stars_amount} )',
                 payload=payload,
                 provider_token='',
                 currency='XTR',

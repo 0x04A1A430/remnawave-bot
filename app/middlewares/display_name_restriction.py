@@ -65,7 +65,7 @@ CHAR_TRANSLATION = str.maketrans(
     }
 )
 
-COLLAPSE_PATTERN = re.compile(r"[\s\._\-/\\|,:;•·﹒․⋅··`~'\"!?()\[\]{}<>+=]+")
+COLLAPSE_PATTERN = re.compile(r"[\s\._\-/\\|,:;•·․⋅··`~'\"!?()\[\]{}<>+=]+")
 
 
 class DisplayNameRestrictionMiddleware(BaseMiddleware):
@@ -85,6 +85,9 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
         if not user or user.is_bot:
             return await handler(event, data)
 
+        if not settings.DISPLAY_NAME_RESTRICTION_ENABLED:
+            return await handler(event, data)
+
         display_name = self._build_display_name(user)
         username = user.username or ''
 
@@ -102,7 +105,7 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
             )
 
             logger.warning(
-                "DisplayNameRestriction: user blocked due to suspicious name ''",
+                'DisplayNameRestriction: user blocked due to suspicious name',
                 user_id=user.id,
                 suspicious_value=suspicious_value,
             )

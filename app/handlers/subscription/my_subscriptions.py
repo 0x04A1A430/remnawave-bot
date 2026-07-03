@@ -32,9 +32,9 @@ def _status_emoji(sub) -> str:
     """Return status emoji based on subscription's actual status."""
     actual = sub.actual_status
     if actual in ('active', 'trial'):
-        return '🟢'
+        return ''
     if actual == 'limited':
-        return '🟡'
+        return ''
     return ''
 
 
@@ -70,10 +70,10 @@ def _format_subscription_line(sub, idx: int) -> str:
     end_date = sub.end_date.strftime('%d.%m.%Y') if sub.end_date else '—'
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
-    parts.append(f'   Трафик: {traffic}')
+    parts.append(f'Трафик: {traffic}')
     if devices:
-        parts.append(f'   Устройства: {devices}')
-    parts.append(f'   До: {end_date}')
+        parts.append(f'Устройства: {devices}')
+    parts.append(f'До: {end_date}')
 
     return '\n'.join(parts)
 
@@ -86,7 +86,7 @@ def _build_subscriptions_keyboard(subscriptions: list, language: str) -> types.I
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'️ {tariff_name}',
+                    text=f'{tariff_name}',
                     callback_data=f'sm:{sub.id}',
                 )
             ]
@@ -103,7 +103,7 @@ def _build_subscriptions_keyboard(subscriptions: list, language: str) -> types.I
     # Back button
     buttons.append(
         [
-            types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu'),
+            types.InlineKeyboardButton(text='Назад', callback_data='back_to_menu'),
         ]
     )
 
@@ -126,13 +126,24 @@ def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKe
     buttons.append([types.InlineKeyboardButton(text='Продлить', callback_data=f'se:{sub_id}')])
 
     if not is_inactive:
+        buttons.append([types.InlineKeyboardButton(text='Автоплатеж', callback_data='subscription_autopay')])
         buttons.append([types.InlineKeyboardButton(text='Трафик', callback_data=f'st:{sub_id}')])
         buttons.append([types.InlineKeyboardButton(text='Устройства', callback_data=f'sd:{sub_id}')])
 
     if is_inactive:
         buttons.append([types.InlineKeyboardButton(text='Удалить подписку', callback_data=f'sub_del:{sub_id}')])
 
-    buttons.append([types.InlineKeyboardButton(text='◀️ К списку подписок', callback_data='my_subscriptions')])
+    if not is_inactive and settings.is_subscription_revoke_enabled():
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text='Перевыпустить',
+                    callback_data=f'sr:{sub_id}',
+                )
+            ]
+        )
+
+    buttons.append([types.InlineKeyboardButton(text='К списку подписок', callback_data='my_subscriptions')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -155,7 +166,7 @@ async def show_my_subscriptions(
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Купить подписку', callback_data='menu_buy')],
-                [types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')],
+                [types.InlineKeyboardButton(text='Назад', callback_data='back_to_menu')],
             ]
         )
     else:
@@ -190,6 +201,10 @@ async def show_subscription_detail(
         await callback.answer('Подписка не найдена', show_alert=True)
         return
 
+    # Persist active sub_id so downstream handlers without sub_id in callback_data
+    # (e.g. 'subscription_autopay') can resolve the right subscription via FSM.
+    await state.update_data(active_subscription_id=sub_id)
+
     tariff_name = subscription.tariff.name if subscription.tariff else 'Подписка'
 
     # Traffic
@@ -211,7 +226,7 @@ async def show_subscription_detail(
     )
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():
-        text += f'\n<code>{subscription.subscription_url}</code>'
+        text += f'\n <code>{subscription.subscription_url}</code>'
 
     keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)
 
@@ -325,7 +340,7 @@ async def handle_subscription_devices(
     keyboard.append(
         [types.InlineKeyboardButton(text='Управление устройствами', callback_data=f'device_management:{sub_id}')]
     )
-    keyboard.append([types.InlineKeyboardButton(text='◀️ Назад', callback_data=f'sm:{sub_id}')])
+    keyboard.append([types.InlineKeyboardButton(text='Назад', callback_data=f'sm:{sub_id}')])
 
     await callback.message.edit_text(
         text,
@@ -391,7 +406,7 @@ async def handle_subscription_delete_confirm(
 
     text = (
         f'<b>Удалить подписку «{tariff_name}»?</b>\n\n'
-        '️ Подписка будет удалена безвозвратно.\n'
+        'Подписка будет удалена безвозвратно.\n'
         'Все данные, устройства и настройки будут потеряны.\n'
         'Это действие нельзя отменить.'
     )
@@ -399,7 +414,7 @@ async def handle_subscription_delete_confirm(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text='Да, удалить', callback_data=f'sub_del_yes:{sub_id}')],
-            [types.InlineKeyboardButton(text='◀️ Отмена', callback_data=f'sm:{sub_id}')],
+            [types.InlineKeyboardButton(text='Отмена', callback_data=f'sm:{sub_id}')],
         ]
     )
 
@@ -433,6 +448,11 @@ async def handle_subscription_delete_execute(
     # Delete from RemnaWave panel (stops webhooks / phantom notifications)
     if subscription.remnawave_uuid:
         try:
+            from app.services.remnawave_webhook_service import RemnaWaveWebhookService
+
+            # Suppress the self-inflicted user.deleted webhook so its sibling-expiry
+            # sweep never touches the user's other (still-active) subscriptions.
+            RemnaWaveWebhookService.mark_intentional_panel_deletion(panel_uuids=[subscription.remnawave_uuid])
             service = SubscriptionService()
             await service.delete_remnawave_user(subscription.remnawave_uuid)
         except Exception as e:

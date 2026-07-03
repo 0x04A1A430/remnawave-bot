@@ -99,7 +99,7 @@ def _build_auto_sync_view(status: RemnaWaveAutoSyncStatus) -> tuple[str, types.I
         reason_text = reason_map.get(status.last_run_reason or '', '—')
         result_icon = '' if status.last_run_success else ''
         result_label = 'успешно' if status.last_run_success else 'с ошибками'
-        error_block = f'\n️ Ошибка: {status.last_run_error}' if status.last_run_error else ''
+        error_block = f'\nОшибка: {status.last_run_error}' if status.last_run_error else ''
         last_run_text = (
             f'{result_icon} {result_label}\n'
             f'• Старт: {started_text}\n'
@@ -108,14 +108,14 @@ def _build_auto_sync_view(status: RemnaWaveAutoSyncStatus) -> tuple[str, types.I
         )
     elif status.last_run_started_at:
         last_run_text = (
-            '⏳ Синхронизация началась, но еще не завершилась'
+            'Синхронизация началась, но еще не завершилась'
             if status.is_running
             else f'Последний запуск: {format_datetime(status.last_run_started_at)}'
         )
     else:
         last_run_text = '—'
 
-    running_text = '⏳ Выполняется сейчас' if status.is_running else 'Ожидание'
+    running_text = 'Выполняется сейчас' if status.is_running else 'Ожидание'
     toggle_text = 'Отключить' if status.enabled else 'Включить'
 
     text = f"""<b>Автосинхронизация RemnaWave</b>
@@ -123,7 +123,7 @@ def _build_auto_sync_view(status: RemnaWaveAutoSyncStatus) -> tuple[str, types.I
 ️ <b>Статус:</b> {'Включена' if status.enabled else 'Отключена'}
 <b>Расписание:</b> {times_text}
 <b>Следующий запуск:</b> {next_run_text if status.enabled else '—'}
-⏱️ <b>Состояние:</b> {running_text}
+<b>Состояние:</b> {running_text}
 
 <b>Последний запуск:</b>
 {last_run_text}
@@ -241,7 +241,7 @@ def _build_migration_keyboard(
         if page < total_pages:
             nav_buttons.append(
                 types.InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=f'{prefix}_page_{page + 1}',
                 )
             )
@@ -971,7 +971,7 @@ async def show_system_stats(callback: types.CallbackQuery, db_user: User, db: As
 
     users_status_text = ''
     for status, count in users_by_status.items():
-        status_emoji = {'ACTIVE': '', 'DISABLED': '', 'LIMITED': '️', 'EXPIRED': ''}.get(status, '')
+        status_emoji = {'ACTIVE': '', 'DISABLED': '', 'LIMITED': '', 'EXPIRED': ''}.get(status, '')
         users_status_text += f'  {status_emoji} {status}: {count}\n'
 
     top_nodes_text = ''
@@ -1186,7 +1186,7 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
 
     if not nodes:
         await callback.message.edit_text(
-            '️ Ноды не найдены или ошибка подключения',
+            'Ноды не найдены или ошибка подключения',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_remnawave')]]
             ),
@@ -1194,11 +1194,11 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
         await callback.answer()
         return
 
-    text = '️ <b>Управление нодами</b>\n\n'
+    text = '<b>Управление нодами</b>\n\n'
     keyboard = []
 
     for node in nodes:
-        status_emoji = '🟢' if node['is_node_online'] else ''
+        status_emoji = '' if node['is_node_online'] else ''
         connection_emoji = '' if node['is_connected'] else ''
 
         text += f'{status_emoji} {connection_emoji} <b>{node["name"]}</b>\n'
@@ -1206,7 +1206,7 @@ async def show_nodes_management(callback: types.CallbackQuery, db_user: User, db
         text += f'Онлайн: {node["users_online"] or 0}\n\n'
 
         keyboard.append(
-            [types.InlineKeyboardButton(text=f'️ {node["name"]}', callback_data=f'admin_node_manage_{node["uuid"]}')]
+            [types.InlineKeyboardButton(text=f'{node["name"]}', callback_data=f'admin_node_manage_{node["uuid"]}')]
         )
 
     keyboard.extend(
@@ -1232,7 +1232,7 @@ async def show_node_details(callback: types.CallbackQuery, db_user: User, db: As
         await callback.answer('Нода не найдена', show_alert=True)
         return
 
-    status_emoji = '🟢' if node['is_node_online'] else ''
+    status_emoji = '' if node['is_node_online'] else ''
     xray_emoji = '' if node['is_xray_running'] else ''
 
     status_change = format_datetime(node['last_status_change']) if node.get('last_status_change') else '—'
@@ -1328,7 +1328,7 @@ async def show_node_statistics(callback: types.CallbackQuery, db_user: User, db:
         await callback.answer('Нода не найдена', show_alert=True)
         return
 
-    status_emoji = '🟢' if node['is_node_online'] else ''
+    status_emoji = '' if node['is_node_online'] else ''
     xray_emoji = '' if node['is_xray_running'] else ''
     xray_uptime_sec = node.get('xray_uptime', 0)
     if xray_uptime_sec:
@@ -1623,7 +1623,7 @@ async def show_squad_inbounds_selection(callback: types.CallbackQuery, db_user: 
         )
 
     if len(all_inbounds) > 15:
-        text += f'\n️ Показано первые 15 из {len(all_inbounds)} инбаундов'
+        text += f'\nПоказано первые 15 из {len(all_inbounds)} инбаундов'
 
     keyboard.extend(
         [
@@ -1987,7 +1987,7 @@ async def process_squad_name(message: types.Message, db_user: User, db: AsyncSes
         )
 
     if len(all_inbounds) > 15:
-        text += f'\n️ Показано первые 15 из {len(all_inbounds)} инбаундов'
+        text += f'\nПоказано первые 15 из {len(all_inbounds)} инбаундов'
 
     keyboard.extend(
         [
@@ -2168,10 +2168,10 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
         finished_text = format_datetime(status.last_run_finished_at)
         last_result = f'{result_icon} {result_label} ({finished_text})'
     elif status.last_run_started_at:
-        last_result = f'⏳ Запущено {format_datetime(status.last_run_started_at)}'
+        last_result = f'Запущено {format_datetime(status.last_run_started_at)}'
 
     status_lines = [
-        f'️ Статус: {"Включена" if status.enabled else "Отключена"}',
+        f'Статус: {"Включена" if status.enabled else "Отключена"}',
         f'Расписание: {times_text}',
         f'Следующий запуск: {next_run_text if status.enabled else "—"}',
         f'Последний запуск: {last_result}',
@@ -2184,8 +2184,8 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
         '• Обновление данных существующих пользователей\n'
         '• Деактивация подписок пользователей, отсутствующих в панели\n'
         '• Сохранение балансов пользователей\n'
-        '• ⏱️ Время выполнения: 2-5 минут\n\n'
-        '️ <b>Важно:</b>\n'
+        '• Время выполнения: 2-5 минут\n\n'
+        '<b>Важно:</b>\n'
         '• Во время синхронизации не выполняйте другие операции\n'
         '• При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы\n'
         '• Рекомендуется делать полную синхронизацию ежедневно\n'
@@ -2210,7 +2210,7 @@ async def show_sync_options(callback: types.CallbackQuery, db_user: User, db: As
         ],
         [
             types.InlineKeyboardButton(
-                text='️ Настройки автосинхронизации',
+                text='Настройки автосинхронизации',
                 callback_data='admin_rw_auto_sync',
             )
         ],
@@ -2359,7 +2359,7 @@ async def run_auto_sync_now(
 
     if not result.get('started'):
         await callback.message.edit_text(
-            '️ <b>Синхронизация уже выполняется</b>\n\n' + base_text,
+            '<b>Синхронизация уже выполняется</b>\n\n' + base_text,
             reply_markup=keyboard,
             parse_mode='HTML',
         )
@@ -2479,7 +2479,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
 • Деактивация подписок отсутствующих пользователей
 • Сохранение балансов
 
-⏳ Пожалуйста, подождите...
+Пожалуйста, подождите...
 """
 
     await callback.message.edit_text(progress_text, reply_markup=None)
@@ -2493,7 +2493,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
         status_emoji = ''
         status_text = 'успешно завершена'
     elif stats['errors'] < total_operations:
-        status_emoji = '️'
+        status_emoji = ''
         status_text = 'завершена с предупреждениями'
     else:
         status_emoji = ''
@@ -2503,7 +2503,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
 {status_emoji} <b>Полная синхронизация {status_text}</b>
 
 <b>Результат:</b>
-• 🆕 Создано: {stats['created']}
+• Создано: {stats['created']}
 • Обновлено: {stats['updated']}
 • ️ Деактивировано: {stats.get('deleted', 0)}
 • Ошибок: {stats['errors']}
@@ -2572,13 +2572,13 @@ async def sync_users_to_panel(
         status_emoji = ''
         status_text = 'успешно завершена'
     else:
-        status_emoji = '️' if (stats['created'] + stats['updated']) > 0 else ''
-        status_text = 'завершена с предупреждениями' if status_emoji == '️' else 'завершена с ошибками'
+        status_emoji = '' if (stats['created'] + stats['updated']) > 0 else ''
+        status_text = 'завершена с предупреждениями' if status_emoji == '' else 'завершена с ошибками'
 
     text = (
         f'{status_emoji} <b>Синхронизация в панель {status_text}</b>\n\n'
         '<b>Результаты:</b>\n'
-        f'• 🆕 Создано: {stats["created"]}\n'
+        f'• Создано: {stats["created"]}\n'
         f'• Обновлено: {stats["updated"]}\n'
         f'• Ошибок: {stats["errors"]}'
     )
@@ -2604,13 +2604,13 @@ async def show_sync_recommendations(callback: types.CallbackQuery, db_user: User
     remnawave_service = RemnaWaveService()
     recommendations = await remnawave_service.get_sync_recommendations(db)
 
-    priority_emoji = {'low': '🟢', 'medium': '🟡', 'high': ''}
+    priority_emoji = {'low': '', 'medium': '', 'high': ''}
 
     text = f"""
 <b>Рекомендации по синхронизации</b>
 
-{priority_emoji.get(recommendations['priority'], '🟢')} <b>Приоритет:</b> {recommendations['priority'].upper()}
-⏱️ <b>Время выполнения:</b> {recommendations['estimated_time']}
+{priority_emoji.get(recommendations['priority'], '')} <b>Приоритет:</b> {recommendations['priority'].upper()}
+<b>Время выполнения:</b> {recommendations['estimated_time']}
 
 <b>Рекомендуемое действие:</b>
 """
@@ -2620,7 +2620,7 @@ async def show_sync_recommendations(callback: types.CallbackQuery, db_user: User
     elif recommendations['sync_type'] == 'update_only':
         text += 'Обновление данных'
     elif recommendations['sync_type'] == 'new_only':
-        text += '🆕 Синхронизация новых'
+        text += 'Синхронизация новых'
     else:
         text += 'Синхронизация не требуется'
 
@@ -2667,7 +2667,7 @@ async def validate_subscriptions(callback: types.CallbackQuery, db_user: User, d
         status_emoji = ''
         status_text = 'успешно завершена'
     else:
-        status_emoji = '️'
+        status_emoji = ''
         status_text = 'завершена с ошибками'
 
     text = f"""
@@ -2688,7 +2688,7 @@ async def validate_subscriptions(callback: types.CallbackQuery, db_user: User, d
         text += '• Настройки устройств\n'
 
     if stats['errors'] > 0:
-        text += '\n️ Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации.'
+        text += '\nОбнаружены ошибки при обработке.\nПроверьте логи для подробной информации.'
 
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить валидацию', callback_data='sync_validate')],
@@ -2715,7 +2715,7 @@ async def cleanup_subscriptions(callback: types.CallbackQuery, db_user: User, db
         status_emoji = ''
         status_text = 'успешно завершена'
     else:
-        status_emoji = '️'
+        status_emoji = ''
         status_text = 'завершена с ошибками'
 
     text = f"""
@@ -2728,14 +2728,14 @@ async def cleanup_subscriptions(callback: types.CallbackQuery, db_user: User, db
 """
 
     if stats['deactivated'] > 0:
-        text += '\n️ <b>Деактивированные подписки:</b>\n'
+        text += '\n<b>Деактивированные подписки:</b>\n'
         text += 'Отключены подписки пользователей, которые\n'
         text += 'отсутствуют в панели Remnawave.\n'
     else:
         text += '\nВсе подписки актуальны!\nНеактуальных подписок не найдено.'
 
     if stats['errors'] > 0:
-        text += '\n️ Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации.'
+        text += '\nОбнаружены ошибки при обработке.\nПроверьте логи для подробной информации.'
 
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить очистку', callback_data='sync_cleanup')],
@@ -2751,10 +2751,10 @@ async def cleanup_subscriptions(callback: types.CallbackQuery, db_user: User, db
 @error_handler
 async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     await callback.message.edit_text(
-        '️ Выполняется принудительная очистка всех пользователей, отсутствующих в панели...\n\n'
-        '️ ВНИМАНИЕ: Это полностью удалит ВСЕ данные пользователей!\n'
+        'Выполняется принудительная очистка всех пользователей, отсутствующих в панели...\n\n'
+        'ВНИМАНИЕ: Это полностью удалит ВСЕ данные пользователей!\n'
         'Включая: транзакции, реферальные доходы, промокоды, серверы, балансы\n\n'
-        '⏳ Пожалуйста, подождите...',
+        'Пожалуйста, подождите...',
         reply_markup=None,
     )
 
@@ -2765,7 +2765,7 @@ async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_use
         status_emoji = ''
         status_text = 'успешно завершена'
     else:
-        status_emoji = '️'
+        status_emoji = ''
         status_text = 'завершена с ошибками'
 
     text = f"""
@@ -2794,7 +2794,7 @@ async def force_cleanup_all_orphaned_users(callback: types.CallbackQuery, db_use
         text += '\nНеактуальных подписок не найдено!\nВсе пользователи синхронизированы с панелью.'
 
     if stats['errors'] > 0:
-        text += '\n️ Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации.'
+        text += '\nОбнаружены ошибки при обработке.\nПроверьте логи для подробной информации.'
 
     keyboard = [
         [types.InlineKeyboardButton(text='Повторить очистку', callback_data='force_cleanup_orphaned')],
@@ -2832,7 +2832,7 @@ async def confirm_force_cleanup(callback: types.CallbackQuery, db_user: User, db
 """
 
     keyboard = [
-        [types.InlineKeyboardButton(text='️ ДА, ОЧИСТИТЬ ВСЕ', callback_data='force_cleanup_orphaned')],
+        [types.InlineKeyboardButton(text='ДА, ОЧИСТИТЬ ВСЕ', callback_data='force_cleanup_orphaned')],
         [types.InlineKeyboardButton(text='Отмена', callback_data='admin_rw_sync')],
     ]
 
@@ -2860,7 +2860,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
         progress_text += '• Обновление информации о трафике\n'
         progress_text += '• Синхронизация подписок\n'
 
-    progress_text += '\n⏳ Пожалуйста, подождите...'
+    progress_text += '\nПожалуйста, подождите...'
 
     await callback.message.edit_text(progress_text, reply_markup=None)
 
@@ -2877,7 +2877,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
         status_emoji = ''
         status_text = 'успешно завершена'
     elif stats['errors'] < total_operations:
-        status_emoji = '️'
+        status_emoji = ''
         status_text = 'завершена с предупреждениями'
     else:
         status_emoji = ''
@@ -2890,13 +2890,13 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
 """
 
     if sync_type == 'all_users':
-        text += f'• 🆕 Создано: {stats["created"]}\n'
+        text += f'• Создано: {stats["created"]}\n'
         text += f'• Обновлено: {stats["updated"]}\n'
         if 'deleted' in stats:
-            text += f'• ️ Удалено: {stats["deleted"]}\n'
+            text += f'• Удалено: {stats["deleted"]}\n'
         text += f'• Ошибок: {stats["errors"]}\n'
     elif sync_type == 'new_users':
-        text += f'• 🆕 Создано: {stats["created"]}\n'
+        text += f'• Создано: {stats["created"]}\n'
         text += f'• Ошибок: {stats["errors"]}\n'
         if stats['created'] == 0 and stats['errors'] == 0:
             text += '\nНовых пользователей не найдено'
@@ -2907,12 +2907,12 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
             text += '\nВсе данные актуальны'
 
     if stats['errors'] > 0:
-        text += '\n️ <b>Внимание:</b>\n'
+        text += '\n<b>Внимание:</b>\n'
         text += 'Некоторые операции завершились с ошибками.\n'
         text += 'Проверьте логи для получения подробной информации.'
 
     if sync_type == 'all_users' and 'deleted' in stats and stats['deleted'] > 0:
-        text += '\n️ <b>Удаленные подписки:</b>\n'
+        text += '\n<b>Удаленные подписки:</b>\n'
         text += 'Деактивированы подписки пользователей,\n'
         text += 'которые отсутствуют в панели Remnawave.'
 
@@ -2967,7 +2967,7 @@ async def show_squads_management(callback: types.CallbackQuery, db_user: User, d
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
-                        text=f'️ {squad["name"]}', callback_data=f'admin_squad_manage_{squad["uuid"]}'
+                        text=f'{squad["name"]}', callback_data=f'admin_squad_manage_{squad["uuid"]}'
                     )
                 ]
             )

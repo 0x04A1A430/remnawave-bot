@@ -156,7 +156,7 @@ async def show_moderator_panel(callback: types.CallbackQuery, db_user: User, db:
         ]
     )
     await callback.message.edit_text(
-        texts.t('ADMIN_SUPPORT_MODERATION_TITLE', '‍️ <b>Модерация поддержки</b>')
+        texts.t('ADMIN_SUPPORT_MODERATION_TITLE', '‍<b>Модерация поддержки</b>')
         + '\n\n'
         + texts.t('ADMIN_SUPPORT_MODERATION_DESCRIPTION', 'Доступ к тикетам поддержки.'),
         parse_mode='HTML',
@@ -222,7 +222,7 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
             nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_support_audit_page_{page - 1}'))
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
         if page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='️', callback_data=f'admin_support_audit_page_{page + 1}'))
+            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_support_audit_page_{page + 1}'))
 
     kb_rows = []
     if nav_row:
@@ -240,7 +240,7 @@ async def show_settings_submenu(callback: types.CallbackQuery, db_user: User, db
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_SETTINGS_SUBMENU_TITLE', '️ **Настройки системы**\n\n')
+        texts.t('ADMIN_SETTINGS_SUBMENU_TITLE', '**Настройки системы**\n\n')
         + texts.t('ADMIN_SETTINGS_SUBMENU_DESCRIPTION', 'Управление Remnawave, мониторингом и другими настройками:'),
         reply_markup=get_admin_settings_submenu_keyboard(db_user.language),
         parse_mode='Markdown',
@@ -254,7 +254,7 @@ async def show_system_submenu(callback: types.CallbackQuery, db_user: User, db: 
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('ADMIN_SYSTEM_SUBMENU_TITLE', '️ **Системные функции**\n\n')
+        texts.t('ADMIN_SYSTEM_SUBMENU_TITLE', '**Системные функции**\n\n')
         + texts.t(
             'ADMIN_SYSTEM_SUBMENU_DESCRIPTION', 'Отчеты, обновления, логи, резервные копии и системные операции:'
         ),
@@ -295,7 +295,7 @@ async def clear_rules_command(message: types.Message, db_user: User, db: AsyncSe
                 'Правила очищены командой администратором', telegram_id=db_user.telegram_id, full_name=db_user.full_name
             )
         else:
-            await message.reply('️ <b>Нет правил для очистки</b>\n\nАктивные правила не найдены.')
+            await message.reply('<b>Нет правил для очистки</b>\n\nАктивные правила не найдены.')
 
     except Exception as e:
         logger.error('Ошибка при очистке правил командой', error=e)

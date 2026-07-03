@@ -106,7 +106,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
         [
             types.InlineKeyboardButton(
                 text=(
-                    f'{"" if sla_enabled else "⏹️"} '
+                    f'{"" if sla_enabled else ""} '
                     f'{texts.t("ADMIN_SUPPORT_SETTINGS_SLA_LABEL", "SLA")}: '
                     f'{status_enabled if sla_enabled else status_disabled}'
                 ),
@@ -117,7 +117,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_SLA_TIME', '⏳ Время SLA: {minutes} мин').format(
+                text=texts.t('ADMIN_SUPPORT_SETTINGS_SLA_TIME', 'Время SLA: {minutes} мин').format(
                     minutes=sla_minutes
                 ),
                 callback_data='admin_support_set_sla_minutes',
@@ -131,7 +131,7 @@ def _get_support_settings_keyboard(language: str) -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_SUPPORT_SETTINGS_MODERATORS_COUNT', '‍️ Модераторы: {count}').format(
+                text=texts.t('ADMIN_SUPPORT_SETTINGS_MODERATORS_COUNT', '‍Модераторы: {count}').format(
                     count=mod_count
                 ),
                 callback_data='admin_support_list_moderators',
@@ -220,7 +220,7 @@ async def start_set_sla_minutes(callback: types.CallbackQuery, db_user: User, db
     await callback.message.edit_text(
         texts.t(
             'ADMIN_SUPPORT_SLA_SETUP_PROMPT',
-            '⏳ <b>Настройка SLA</b>\n\nВведите количество минут ожидания ответа (целое число > 0):',
+            '<b>Настройка SLA</b>\n\nВведите количество минут ожидания ответа (целое число > 0):',
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
@@ -264,7 +264,7 @@ async def start_add_moderator(callback: types.CallbackQuery, db_user: User, db: 
     await callback.message.edit_text(
         texts.t(
             'ADMIN_SUPPORT_ASSIGN_MODERATOR_PROMPT',
-            '‍️ <b>Назначение модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
+            '‍<b>Назначение модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
@@ -282,7 +282,7 @@ async def start_remove_moderator(callback: types.CallbackQuery, db_user: User, d
     await callback.message.edit_text(
         texts.t(
             'ADMIN_SUPPORT_REMOVE_MODERATOR_PROMPT',
-            '‍️ <b>Удаление модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
+            '‍<b>Удаление модератора</b>\n\nОтправьте Telegram ID пользователя (число)',
         ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
@@ -345,7 +345,7 @@ async def list_moderators(callback: types.CallbackQuery, db_user: User, db: Asyn
         await callback.answer(texts.t('ADMIN_SUPPORT_MODERATORS_EMPTY', 'Список пуст'), show_alert=True)
         return
     text = (
-        texts.t('ADMIN_SUPPORT_MODERATORS_TITLE', '‍️ <b>Модераторы</b>')
+        texts.t('ADMIN_SUPPORT_MODERATORS_TITLE', '‍<b>Модераторы</b>')
         + '\n\n'
         + '\n'.join([f'• <code>{tid}</code>' for tid in moderators])
     )

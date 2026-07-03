@@ -138,6 +138,9 @@ class EmailRegisterStandaloneRequest(BaseModel):
     referral_code: str | None = Field(
         None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
     )
+    campaign_slug: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+    )
 
 
 class CampaignBonusInfo(BaseModel):
@@ -179,6 +182,12 @@ class EmailChangeVerifyRequest(BaseModel):
     """Request to verify email change with code."""
 
     code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$', description='6-digit verification code')
+
+
+class EmailMergeVerifyRequest(BaseModel):
+    """Request to confirm an email account merge with the emailed code."""
+
+    code: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$', description='6-digit confirmation code')
 
 
 class EmailChangeResponse(BaseModel):

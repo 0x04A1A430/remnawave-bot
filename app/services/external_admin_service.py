@@ -27,14 +27,14 @@ async def ensure_external_admin_token(
     username_raw = (bot_username or '').strip()
     if not username_raw:
         logger.warning(
-            '️ Не удалось обеспечить токен внешней админки: username бота отсутствует',
+            'Не удалось обеспечить токен внешней админки: username бота отсутствует',
         )
         return None
 
     normalized_username = username_raw.lstrip('@').lower()
     if not normalized_username:
         logger.warning(
-            '️ Не удалось обеспечить токен внешней админки: username пустой после нормализации',
+            'Не удалось обеспечить токен внешней админки: username пустой после нормализации',
         )
         return None
 
@@ -61,7 +61,7 @@ async def ensure_external_admin_token(
                     existing_bot_id = int(existing_bot_id_raw)
                 except (TypeError, ValueError):  # pragma: no cover - защита от мусорных значений
                     logger.warning(
-                        '️ Не удалось разобрать сохраненный идентификатор бота внешней админки',
+                        'Не удалось разобрать сохраненный идентификатор бота внешней админки',
                         existing_bot_id_raw=existing_bot_id_raw,
                     )
 
@@ -92,7 +92,7 @@ async def ensure_external_admin_token(
                     )
                     await session.commit()
                     logger.warning(
-                        '️ Токен внешней админки очищен из-за несовпадения идентификаторов бота',
+                        'Токен внешней админки очищен из-за несовпадения идентификаторов бота',
                     )
                 except Exception as cleanup_error:  # pragma: no cover - защитный блок
                     await session.rollback()
@@ -136,7 +136,7 @@ async def ensure_external_admin_token(
             except ReadOnlySettingError:  # pragma: no cover - force=True предотвращает исключение
                 await session.rollback()
                 logger.warning(
-                    '️ Не удалось сохранить токен внешней админки из-за ограничения доступа',
+                    'Не удалось сохранить токен внешней админки из-за ограничения доступа',
                 )
                 return None
 

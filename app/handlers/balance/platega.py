@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -20,8 +21,7 @@ logger = structlog.get_logger(__name__)
 
 
 def _get_active_methods() -> list[int]:
-    methods = settings.get_platega_active_methods()
-    return [code for code in methods if code in {2, 10, 11, 12, 13}]
+    return settings.get_platega_active_methods()
 
 
 async def _prompt_amount(
@@ -43,6 +43,7 @@ async def _prompt_amount(
         # Если сумма уже известна (например, после быстрого выбора),
         # сразу создаём платеж и сбрасываем временное значение.
         await state.update_data(platega_pending_amount=None)
+        await state.set_state(BalanceStates.waiting_for_amount)
 
         from app.database.database import AsyncSessionLocal
 
@@ -71,7 +72,7 @@ async def _prompt_amount(
         (f'<b>Оплата через Platega ({{method_name}})</b>\n\n{default_prompt_body}Оплата происходит через Platega.'),
     )
 
-    keyboard = get_back_keyboard(db_user.language)
+    keyboard = await get_topup_amount_keyboard('platega', db_user.language, back_callback='back_to_menu')
 
     await message.edit_text(
         prompt_template.format(
@@ -130,7 +131,7 @@ async def start_platega_payment(
         await callback.answer(
             texts.t(
                 'PLATEGA_METHODS_NOT_CONFIGURED',
-                '️ На стороне Platega нет доступных методов оплаты',
+                'На стороне Platega нет доступных методов оплаты',
             ),
             show_alert=True,
         )
@@ -184,7 +185,7 @@ async def handle_platega_method_selection(
         return
 
     if method_code not in _get_active_methods():
-        await callback.answer('️ Этот способ сейчас недоступен', show_alert=True)
+        await callback.answer('Этот способ сейчас недоступен', show_alert=True)
         return
 
     await _prompt_amount(callback.message, db_user, state, method_code)
@@ -233,7 +234,7 @@ async def start_platega_direct_method(
         return
 
     if method_code not in _get_active_methods():
-        await callback.answer('️ Этот способ сейчас недоступен', show_alert=True)
+        await callback.answer('Этот способ сейчас недоступен', show_alert=True)
         return
 
     await _prompt_amount(callback.message, db_user, state, method_code)
@@ -283,7 +284,7 @@ async def process_platega_payment_amount(
         await message.answer(
             texts.t(
                 'PLATEGA_METHOD_SELECTION_REQUIRED',
-                '️ Выберите способ оплаты Platega перед вводом суммы',
+                'Выберите способ оплаты Platega перед вводом суммы',
             )
         )
         await state.set_state(BalanceStates.waiting_for_platega_method)
@@ -295,8 +296,9 @@ async def process_platega_payment_amount(
                 'PLATEGA_AMOUNT_TOO_LOW',
                 'Минимальная сумма для оплаты через Platega: {amount}',
             ).format(amount=settings.format_price(settings.PLATEGA_MIN_AMOUNT_KOPEKS)),
-            reply_markup=get_back_keyboard(db_user.language),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
+        await state.set_state(BalanceStates.waiting_for_amount)
         return
 
     if amount_kopeks > settings.PLATEGA_MAX_AMOUNT_KOPEKS:
@@ -305,8 +307,9 @@ async def process_platega_payment_amount(
                 'PLATEGA_AMOUNT_TOO_HIGH',
                 'Максимальная сумма для оплаты через Platega: {amount}',
             ).format(amount=settings.format_price(settings.PLATEGA_MAX_AMOUNT_KOPEKS)),
-            reply_markup=get_back_keyboard(db_user.language),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
+        await state.set_state(BalanceStates.waiting_for_amount)
         return
 
     try:
@@ -440,11 +443,11 @@ async def check_platega_payment_status(
         status_info = await payment_service.get_platega_payment_status(db, local_payment_id)
     except Exception as error:
         logger.exception('Ошибка проверки статуса Platega', error=error)
-        await callback.answer('️ Ошибка проверки статуса', show_alert=True)
+        await callback.answer('Ошибка проверки статуса', show_alert=True)
         return
 
     if not status_info:
-        await callback.answer('️ Платёж не найден', show_alert=True)
+        await callback.answer('Платёж не найден', show_alert=True)
         return
 
     payment = status_info.get('payment')

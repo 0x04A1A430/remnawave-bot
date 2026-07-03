@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import User
 from app.services.promocode_service import PromoCodeService
 
@@ -67,6 +68,28 @@ async def activate_promocode(
         balance_before_rubles = result.get('balance_before_kopeks', 0) / 100
         balance_after_rubles = result.get('balance_after_kopeks', 0) / 100
 
+        # Send admin notification (same as bot handler)
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+            try:
+                from app.bot_factory import create_bot
+                from app.services.admin_notification_service import AdminNotificationService
+
+                bot = create_bot()
+                try:
+                    notification_service = AdminNotificationService(bot)
+                    await notification_service.send_promocode_activation_notification(
+                        db,
+                        user,
+                        result.get('promocode', {'code': request.code.strip()}),
+                        result.get('description', ''),
+                        result.get('balance_before_kopeks'),
+                        result.get('balance_after_kopeks'),
+                    )
+                finally:
+                    await bot.session.close()
+            except Exception:
+                pass
+
         return PromocodeActivateResponse(
             success=True,
             message='Promo code activated successfully',
@@ -79,6 +102,8 @@ async def activate_promocode(
     error_messages = {
         'not_found': 'Promo code not found',
         'expired': 'Promo code has expired',
+        'inactive': 'Promo code is deactivated',
+        'not_yet_valid': 'Promo code is not yet active',
         'used': 'Promo code has been fully used',
         'already_used_by_user': 'You have already used this promo code',
         'active_discount_exists': 'You already have an active discount. Deactivate it first via /deactivate-discount',
@@ -86,6 +111,8 @@ async def activate_promocode(
         'subscription_not_found': 'Subscription not found',
         'not_first_purchase': 'This promo code is only available for first purchase',
         'daily_limit': 'Too many promo code activations today',
+        'trial_subscription_exists': 'You already have a subscription, so this trial code cannot be applied',
+        'trial_provisioning_failed': 'Could not provision the trial right now, please try again later',
         'user_not_found': 'User not found',
         'server_error': 'Server error occurred',
     }
@@ -93,9 +120,13 @@ async def activate_promocode(
     error_code = result.get('error', 'server_error')
     error_message = error_messages.get(error_code, 'Failed to activate promo code')
 
+    # Structured error so the frontend maps a stable machine code to a localized
+    # message instead of substring-matching English prose (the old contract
+    # silently degraded every unmapped code to «Ошибка сервера»). Mirrors the
+    # maintenance / blacklisted / channel-subscription guards in dependencies.py.
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=error_message,
+        detail={'code': error_code, 'message': error_message},
     )
 
 
@@ -133,5 +164,5 @@ async def deactivate_discount_promocode(
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=error_message,
+        detail={'code': error_code, 'message': error_message},
     )

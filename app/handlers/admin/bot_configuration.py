@@ -63,7 +63,7 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
     },
     'payments': {
         'title': 'Платежные системы',
-        'description': 'YooKassa, CryptoBot, Heleket, CloudPayments, Freekassa, MulenPay, PAL24, Wata, Platega, Tribute, Kassa AI, RioPay, SeverPay и Telegram Stars.',
+        'description': 'YooKassa, CryptoBot, Heleket, CloudPayments, Freekassa, MulenPay, PAL24, Wata, Platega, Tribute, Kassa AI, RioPay, SeverPay, PayPear, RollyPay и Telegram Stars.',
         'icon': '',
         'categories': (
             'PAYMENT',
@@ -76,6 +76,10 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
             'KASSA_AI',
             'RIOPAY',
             'SEVERPAY',
+            'PAYPEAR',
+            'ROLLYPAY',
+            'OVERPAY',
+            'AURAPAY',
             'MULENPAY',
             'PAL24',
             'WATA',
@@ -124,6 +128,7 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
             'INTERFACE',
             'INTERFACE_BRANDING',
             'INTERFACE_SUBSCRIPTION',
+            'INFO_PAGES',
             'CONNECT_BUTTON',
             'MINIAPP',
             'HAPP',
@@ -154,7 +159,6 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
             'LOG',
             'MODERATION',
             'DEBUG',
-            'EXTERNAL_ADMIN',
         ),
     },
 }
@@ -252,7 +256,7 @@ def _get_group_description(group_key: str) -> str:
 
 def _get_group_icon(group_key: str) -> str:
     meta = _get_group_meta(group_key)
-    return str(meta.get('icon', '️'))
+    return str(meta.get('icon', ''))
 
 
 def _get_group_status(group_key: str) -> tuple[str, str]:
@@ -276,42 +280,42 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
         if active == 0:
             return '', 'Нет активных платежей'
         if active < total:
-            return '🟡', f'Активно {active} из {total}'
-        return '🟢', 'Все системы активны'
+            return '', f'Активно {active} из {total}'
+        return '', 'Все системы активны'
 
     if key == 'remnawave':
         api_ready = bool(
             settings.REMNAWAVE_API_URL
             and (settings.REMNAWAVE_API_KEY or (settings.REMNAWAVE_USERNAME and settings.REMNAWAVE_PASSWORD))
         )
-        return ('🟢', 'API подключено') if api_ready else ('🟡', 'Нужно указать URL и ключи')
+        return ('', 'API подключено') if api_ready else ('', 'Нужно указать URL и ключи')
 
     if key == 'server':
         mode = (settings.SERVER_STATUS_MODE or '').lower()
         monitoring_active = mode not in {'', 'disabled'}
         if monitoring_active:
-            return '🟢', 'Мониторинг активен'
+            return '', 'Мониторинг активен'
         if settings.MONITORING_INTERVAL:
-            return '🟡', 'Доступны только отчеты'
+            return '', 'Доступны только отчеты'
         return '', 'Мониторинг выключен'
 
     if key == 'maintenance':
         if settings.MAINTENANCE_MODE:
-            return '🟡', 'Режим ТО включен'
-        return '🟢', 'Рабочий режим'
+            return '', 'Режим ТО включен'
+        return '', 'Рабочий режим'
 
     if key == 'notifications':
         user_on = settings.is_notifications_enabled()
         admin_on = settings.is_admin_notifications_enabled()
         if user_on and admin_on:
-            return '🟢', 'Все уведомления включены'
+            return '', 'Все уведомления включены'
         if user_on or admin_on:
-            return '🟡', 'Часть уведомлений включена'
+            return '', 'Часть уведомлений включена'
         return '', 'Уведомления отключены'
 
     if key == 'trial':
         if settings.TRIAL_DURATION_DAYS > 0:
-            return '🟢', f'{settings.TRIAL_DURATION_DAYS} дней пробного периода'
+            return '', f'{settings.TRIAL_DURATION_DAYS} дней пробного периода'
         return '', 'Триал отключен'
 
     if key == 'referral':
@@ -320,40 +324,40 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
             or settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS
             or settings.REFERRAL_INVITER_BONUS_KOPEKS
         )
-        return ('🟢', 'Программа активна') if active else ('', 'Бонусы не заданы')
+        return ('', 'Программа активна') if active else ('', 'Бонусы не заданы')
 
     if key == 'core':
         token_ok = bool(getattr(settings, 'BOT_TOKEN', ''))
         # Channel subscription channels are now managed via DB (admin panel),
         # not a single CHANNEL_LINK setting. Dashboard cannot async-query DB here.
         if token_ok:
-            return '🟢', 'Бот готов к работе'
-        return '🟡', 'Проверьте токен бота'
+            return '', 'Бот готов к работе'
+        return '', 'Проверьте токен бота'
 
     if key == 'subscriptions':
         price_ready = settings.PRICE_30_DAYS > 0 and settings.AVAILABLE_SUBSCRIPTION_PERIODS
-        return ('🟢', 'Тарифы настроены') if price_ready else ('', 'Нужно задать цены')
+        return ('', 'Тарифы настроены') if price_ready else ('', 'Нужно задать цены')
 
     if key == 'database':
         mode = (settings.DATABASE_MODE or 'auto').lower()
         if mode == 'postgresql':
-            return '🟢', 'PostgreSQL'
+            return '', 'PostgreSQL'
         if mode == 'sqlite':
-            return '🟡', 'SQLite режим'
-        return '🟢', 'Авто режим'
+            return '', 'SQLite режим'
+        return '', 'Авто режим'
 
     if key == 'interface':
         branding = bool(settings.ENABLE_LOGO_MODE or settings.MINIAPP_CUSTOM_URL)
-        return ('🟢', 'Брендинг настроен') if branding else ('', 'Настройки по умолчанию')
+        return ('', 'Брендинг настроен') if branding else ('', 'Настройки по умолчанию')
 
-    return '🟢', 'Готово к работе'
+    return '', 'Готово к работе'
 
 
 def _get_setting_icon(definition, current_value: object) -> str:
     key_upper = definition.key.upper()
 
     if definition.python_type is bool:
-        return '' if bool(current_value) else ''
+        return '✅' if bool(current_value) else '❌'
 
     if bot_configuration_service.has_choices(definition.key):
         return ''
@@ -370,13 +374,13 @@ def _get_setting_icon(definition, current_value: object) -> str:
             return ''
 
     if any(keyword in key_upper for keyword in ('TIME', 'HOUR', 'MINUTE')):
-        return '⏱'
+        return ''
     if 'DAYS' in key_upper:
         return ''
     if 'GB' in key_upper or 'TRAFFIC' in key_upper:
         return ''
 
-    return '️'
+    return ''
 
 
 def _render_dashboard_overview() -> str:
@@ -393,7 +397,7 @@ def _render_dashboard_overview() -> str:
             )
 
     lines: list[str] = [
-        '️ <b>ПАНЕЛЬ УПРАВЛЕНИЯ БОТОМ</b>',
+        '<b>ПАНЕЛЬ УПРАВЛЕНИЯ БОТОМ</b>',
         '',
         f'Всего параметров: <b>{total_settings}</b> • Переопределено: <b>{total_overrides}</b>',
         '',
@@ -496,7 +500,7 @@ def _build_search_results_keyboard(results: list[dict[str, object]]) -> types.In
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='← В главное меню',
+                text='В главное меню',
                 callback_data='admin_bot_config',
             )
         ]
@@ -529,7 +533,7 @@ async def start_settings_search(
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='← В главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='В главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text(
@@ -575,7 +579,7 @@ async def handle_search_query(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='← Попробовать снова',
+                        text='Попробовать снова',
                         callback_data='botcfg_action:search',
                     )
                 ],
@@ -617,7 +621,7 @@ async def show_presets(
     rows: list[list[types.InlineKeyboardButton]] = []
     for chunk in _chunk(buttons, 2):
         rows.append(list(chunk))
-    rows.append([types.InlineKeyboardButton(text='← Главное меню', callback_data='admin_bot_config')])
+    rows.append([types.InlineKeyboardButton(text='Главное меню', callback_data='admin_bot_config')])
 
     await callback.message.edit_text(
         text,
@@ -666,7 +670,7 @@ async def preview_preset(
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [types.InlineKeyboardButton(text='Применить', callback_data=f'botcfg_preset_apply:{preset_key}')],
-            [types.InlineKeyboardButton(text='← Назад', callback_data='botcfg_action:presets')],
+            [types.InlineKeyboardButton(text='Назад', callback_data='botcfg_action:presets')],
         ]
     )
 
@@ -700,11 +704,11 @@ async def apply_preset(
             applied.append(setting_key)
         except ReadOnlySettingError:
             logger.info(
-                'Пропускаем настройку из пресета : только для чтения', setting_key=setting_key, preset_key=preset_key
+                'Пропускаем настройку из пресета: только для чтения', setting_key=setting_key, preset_key=preset_key
             )
         except Exception as error:
             logger.warning(
-                'Не удалось применить пресет для', preset_key=preset_key, setting_key=setting_key, error=error
+                'Не удалось применить настройку из пресета', preset_key=preset_key, setting_key=setting_key, error=error
             )
     await db.commit()
 
@@ -719,7 +723,7 @@ async def apply_preset(
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text='← К пресетам', callback_data='botcfg_action:presets')],
+            [types.InlineKeyboardButton(text='К пресетам', callback_data='botcfg_action:presets')],
             [types.InlineKeyboardButton(text='Главное меню', callback_data='admin_bot_config')],
         ]
     )
@@ -783,7 +787,7 @@ async def start_import_settings(
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='← Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='Главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text(
@@ -910,7 +914,7 @@ async def show_settings_history(
         lines.append('История изменений пуста.')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='← Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='Главное меню', callback_data='admin_bot_config')]]
     )
 
     await callback.message.edit_text('\n'.join(lines), parse_mode='HTML', reply_markup=keyboard)
@@ -928,8 +932,8 @@ async def show_help(
     text = (
         '<b>Как работать с панелью</b>\n\n'
         '• Навигируйте по категориям, чтобы увидеть связанные настройки.\n'
-        '• Значок ️ рядом с параметром означает, что значение переопределено.\n'
-        '• Используйте поиск для быстрого доступа к нужной настройке.\n'
+        '• Значок  рядом с параметром означает, что значение переопределено.\n'
+        '• Используйте  поиск для быстрого доступа к нужной настройке.\n'
         '• Экспортируйте .env перед крупными изменениями, чтобы иметь резервную копию.\n'
         '• Импорт позволяет восстановить конфигурацию или применить шаблон.\n'
         '• Все секретные ключи скрываются в интерфейсе автоматически.'
@@ -1110,7 +1114,7 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='← Назад в админку',
+                text='Назад в админку',
                 callback_data='admin_submenu_settings',
             )
         ]
@@ -1140,7 +1144,7 @@ def _build_categories_keyboard(
         for definition in bot_configuration_service.get_settings_for_category(category_key):
             if bot_configuration_service.has_override(definition.key):
                 overrides += 1
-        badge = '️ •' if overrides else '•'
+        badge = '✳️ •' if overrides else '•'
         button_text = f'{badge} {label} ({count})'
         buttons.append(
             types.InlineKeyboardButton(
@@ -1157,7 +1161,7 @@ def _build_categories_keyboard(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='← ',
+                    text='',
                     callback_data=f'botcfg_group:{group_key}:{page - 1}',
                 )
             )
@@ -1170,7 +1174,7 @@ def _build_categories_keyboard(
         if page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=f'botcfg_group:{group_key}:{page + 1}',
                 )
             )
@@ -1179,7 +1183,7 @@ def _build_categories_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='← К разделам',
+                text='К разделам',
                 callback_data='admin_bot_config',
             )
         ]
@@ -1243,7 +1247,7 @@ def _build_settings_keyboard(
         label = texts.t('PAYMENT_CARD_PAL24', 'Банковская карта (PayPalych)')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'pal24')])
     elif category_key == 'TELEGRAM':
-        label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')
+        label = texts.t('PAYMENT_TELEGRAM_STARS', 'Telegram Stars')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'stars')])
     elif category_key == 'CRYPTOBOT':
         label = texts.t('PAYMENT_CRYPTOBOT', 'Криптовалюта (CryptoBot)')
@@ -1260,6 +1264,18 @@ def _build_settings_keyboard(
     elif category_key == 'SEVERPAY':
         label = texts.t('PAYMENT_SEVERPAY', f'{settings.get_severpay_display_name()}')
         test_payment_buttons.append([_test_button(f'{label} · тест', 'severpay')])
+    elif category_key == 'PAYPEAR':
+        label = texts.t('PAYMENT_PAYPEAR', f'{settings.get_paypear_display_name()}')
+        test_payment_buttons.append([_test_button(f'{label} · тест', 'paypear')])
+    elif category_key == 'ROLLYPAY':
+        label = texts.t('PAYMENT_ROLLYPAY', f'{settings.get_rollypay_display_name()}')
+        test_payment_buttons.append([_test_button(f'{label} · тест', 'rollypay')])
+    elif category_key == 'OVERPAY':
+        label = texts.t('PAYMENT_OVERPAY', f'{settings.get_overpay_display_name()}')
+        test_payment_buttons.append([_test_button(f'{label} · тест', 'overpay')])
+    elif category_key == 'AURAPAY':
+        label = texts.t('PAYMENT_AURAPAY', f'{settings.get_aurapay_display_name()}')
+        test_payment_buttons.append([_test_button(f'{label} · тест', 'aurapay')])
 
     if test_payment_buttons:
         rows.extend(test_payment_buttons)
@@ -1268,7 +1284,7 @@ def _build_settings_keyboard(
         current_value = bot_configuration_service.get_current_value(definition.key)
         value_preview = bot_configuration_service.format_value_for_list(definition.key)
         icon = _get_setting_icon(definition, current_value)
-        override_badge = '️' if bot_configuration_service.has_override(definition.key) else '•'
+        override_badge = '✳️' if bot_configuration_service.has_override(definition.key) else '•'
         button_text = f'{override_badge} {icon} {definition.display_name}'
         if value_preview != '—':
             button_text += f' · {value_preview}'
@@ -1289,7 +1305,7 @@ def _build_settings_keyboard(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='← ',
+                    text='',
                     callback_data=(f'botcfg_cat:{group_key}:{category_key}:{category_page}:{page - 1}'),
                 )
             )
@@ -1297,7 +1313,7 @@ def _build_settings_keyboard(
         if page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=(f'botcfg_cat:{group_key}:{category_key}:{category_page}:{page + 1}'),
                 )
             )
@@ -1306,7 +1322,7 @@ def _build_settings_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='← К категориям',
+                text='К категориям',
                 callback_data=f'botcfg_group:{group_key}:{category_page}',
             )
         ]
@@ -1375,7 +1391,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='️ Изменить',
+                    text='Изменить',
                     callback_data=(f'botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}'),
                 )
             ]
@@ -1385,7 +1401,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='️ Сбросить',
+                    text='Сбросить',
                     callback_data=(f'botcfg_reset:{group_key}:{category_page}:{settings_page}:{callback_token}'),
                 )
             ]
@@ -1404,7 +1420,7 @@ def _build_setting_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='← Назад',
+                text='Назад',
                 callback_data=(f'botcfg_cat:{group_key}:{definition.category_key}:{category_page}:{settings_page}'),
             )
         ]
@@ -1438,7 +1454,7 @@ def _render_setting_text(key: str) -> str:
     if original_value not in {None, ''}:
         lines.append(f'По умолчанию: {original_value}')
 
-    lines.append(f'️ Переопределено: {"Да" if summary["has_override"] else "Нет"}')
+    lines.append(f'Переопределено: {"Да" if summary["has_override"] else "Нет"}')
 
     if summary.get('is_read_only'):
         lines.append('Режим: Только для чтения (управляется автоматически)')
@@ -1451,7 +1467,7 @@ def _render_setting_text(key: str) -> str:
     if example:
         lines.append(f'Пример: {example}')
     if warning:
-        lines.append(f'️ Важно: {warning}')
+        lines.append(f'Важно: {warning}')
     if dependencies:
         lines.append(f'Связанные: {dependencies}')
 
@@ -1461,7 +1477,7 @@ def _render_setting_text(key: str) -> str:
         lines.append('')
         lines.append('Доступные значения:')
         for option in choices:
-            marker = '' if current_raw == option.value else '•'
+            marker = '✅' if current_raw == option.value else '•'
             value_display = bot_configuration_service.format_value_human(key, option.value)
             description = option.description or ''
             base_line = f'{marker} {option.label} — <code>{value_display}</code>'
@@ -1674,7 +1690,7 @@ async def show_simple_subscription_squad_selector(
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
 
     for server in squads:
-        status_icon = '' if server.squad_uuid == current_uuid else ('🟢' if server.is_available else '')
+        status_icon = '[=]' if server.squad_uuid == current_uuid else ('[OK]' if server.is_available else '[X]')
         label_parts = [status_icon, server.display_name]
         if server.country_code:
             label_parts.append(f'({server.country_code.upper()})')
@@ -1701,7 +1717,7 @@ async def show_simple_subscription_squad_selector(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='← ',
+                    text='',
                     callback_data=(
                         f'botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{token}:{page - 1}'
                     ),
@@ -1710,7 +1726,7 @@ async def show_simple_subscription_squad_selector(
         if page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=(
                         f'botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{token}:{page + 1}'
                     ),
@@ -1722,7 +1738,7 @@ async def show_simple_subscription_squad_selector(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text='← Назад',
+                text='Назад',
                 callback_data=(f'botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}'),
             )
         ]
@@ -1830,7 +1846,7 @@ async def test_remnawave_connection(
     if status == 'connected':
         message = 'Подключение успешно'
     elif status == 'not_configured':
-        message = f'️ {result.get("message", "RemnaWave API не настроен")}'
+        message = f'{result.get("message", "RemnaWave API не настроен")}'
     else:
         base_message = result.get('message', 'Ошибка подключения')
         status_code = result.get('status_code')
@@ -2168,13 +2184,13 @@ async def test_payment_provider(
         message_text = (
             '<b>Тестовый платеж Telegram Stars</b>\n\n'
             f'Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'⭐ К оплате: {stars_amount}'
+            f'К оплате: {stars_amount}'
         )
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Открыть счет'),
+                        text=texts.t('PAYMENT_TELEGRAM_STARS', 'Открыть счет'),
                         url=invoice_link,
                     )
                 ]
@@ -2450,7 +2466,7 @@ async def start_edit_setting(
     texts = get_texts(db_user.language)
 
     instructions = [
-        '️ <b>Редактирование настройки</b>',
+        '<b>Редактирование настройки</b>',
         f'Название: {summary["name"]}',
         f'Ключ: <code>{summary["key"]}</code>',
         f'Тип: {summary["type"]}',
@@ -2508,20 +2524,20 @@ async def handle_edit_setting(
         return
 
     if bot_configuration_service.is_read_only(key):
-        await message.answer('️ Эта настройка доступна только для чтения.')
+        await message.answer('Эта настройка доступна только для чтения.')
         await state.clear()
         return
 
     try:
         value = bot_configuration_service.parse_user_value(key, message.text or '')
     except ValueError as error:
-        await message.answer(f'️ {error}')
+        await message.answer(f'{error}')
         return
 
     try:
         await bot_configuration_service.set_value(db, key, value)
     except ReadOnlySettingError:
-        await message.answer('️ Эта настройка доступна только для чтения.')
+        await message.answer('Эта настройка доступна только для чтения.')
         await state.clear()
         return
     await db.commit()
@@ -2559,20 +2575,20 @@ async def handle_direct_setting_input(
         return
 
     if bot_configuration_service.is_read_only(key):
-        await message.answer('️ Эта настройка доступна только для чтения.')
+        await message.answer('Эта настройка доступна только для чтения.')
         await state.clear()
         return
 
     try:
         value = bot_configuration_service.parse_user_value(key, message.text or '')
     except ValueError as error:
-        await message.answer(f'️ {error}')
+        await message.answer(f'{error}')
         return
 
     try:
         await bot_configuration_service.set_value(db, key, value)
     except ReadOnlySettingError:
-        await message.answer('️ Эта настройка доступна только для чтения.')
+        await message.answer('Эта настройка доступна только для чтения.')
         await state.clear()
         return
     await db.commit()
@@ -2777,14 +2793,14 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             if current_name:
                 text += f'Текущий: <b>{html.escape(current_name)}</b>\n\n'
             else:
-                text += f'️ Текущий UUID не найден: <code>{html.escape(str(current_uuid))}</code>\n\n'
+                text += f'Текущий UUID не найден: <code>{html.escape(str(current_uuid))}</code>\n\n'
         else:
             text += 'Конфиг не выбран (гайд-режим отключён)\n\n'
 
         text += 'Выберите конфигурацию для гайд-режима:'
 
         for config in configs:
-            prefix = '' if config.uuid == current_uuid else ''
+            prefix = '✅ ' if config.uuid == current_uuid else ''
             keyboard.append(
                 [
                     types.InlineKeyboardButton(
@@ -2804,7 +2820,7 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_settings')])
+    keyboard.append([types.InlineKeyboardButton(text='Назад', callback_data='admin_submenu_settings')])
 
     await callback.message.edit_text(
         text,

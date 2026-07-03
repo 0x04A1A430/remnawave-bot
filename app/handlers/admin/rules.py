@@ -5,10 +5,13 @@ from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.rules import clear_all_rules, create_or_update_rules, get_current_rules_content
 from app.database.models import User
+from app.handlers.admin.display_mode_button import cycle_display_mode_setting
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
+from app.utils.display_mode import display_mode_label
 from app.utils.validators import get_html_help_text, validate_html_tags
 
 
@@ -37,13 +40,29 @@ async def show_rules_management(callback: types.CallbackQuery, db_user: User, db
     keyboard = [
         [types.InlineKeyboardButton(text='Редактировать правила', callback_data='admin_edit_rules')],
         [types.InlineKeyboardButton(text='Просмотр правил', callback_data='admin_view_rules')],
-        [types.InlineKeyboardButton(text='️ Очистить правила', callback_data='admin_clear_rules')],
+        [types.InlineKeyboardButton(text='Очистить правила', callback_data='admin_clear_rules')],
+        [
+            types.InlineKeyboardButton(
+                text=f'Отображение: {display_mode_label(settings.SERVICE_RULES_DISPLAY_MODE)}',
+                callback_data='admin_rules_display_mode',
+            )
+        ],
         [types.InlineKeyboardButton(text='Помощь по HTML', callback_data='admin_rules_help')],
-        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_settings')],
+        [types.InlineKeyboardButton(text='Назад', callback_data='admin_submenu_settings')],
     ]
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def cycle_rules_display_mode(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    new_mode = await cycle_display_mode_setting(callback, db, 'SERVICE_RULES_DISPLAY_MODE')
+    if new_mode is None:
+        return
+    await callback.answer(f'Отображение: {display_mode_label(new_mode)}')
+    await show_rules_management(callback, db_user=db_user, db=db)
 
 
 @admin_required
@@ -55,15 +74,15 @@ async def view_current_rules(callback: types.CallbackQuery, db_user: User, db: A
         is_valid, error_msg = validate_html_tags(current_rules)
         warning = ''
         if not is_valid:
-            warning = f'\n\n️ <b>Внимание:</b> В правилах найдена ошибка HTML: {error_msg}'
+            warning = f'\n\n<b>Внимание:</b> В правилах найдена ошибка HTML: {error_msg}'
 
         await callback.message.edit_text(
             f'<b>Текущие правила сервиса</b>\n\n{current_rules}{warning}',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text='️ Редактировать', callback_data='admin_edit_rules')],
-                    [types.InlineKeyboardButton(text='️ Очистить', callback_data='admin_clear_rules')],
-                    [types.InlineKeyboardButton(text='← Назад', callback_data='admin_rules')],
+                    [types.InlineKeyboardButton(text='Редактировать', callback_data='admin_edit_rules')],
+                    [types.InlineKeyboardButton(text='Очистить', callback_data='admin_clear_rules')],
+                    [types.InlineKeyboardButton(text='Назад', callback_data='admin_rules')],
                 ]
             ),
         )
@@ -74,8 +93,8 @@ async def view_current_rules(callback: types.CallbackQuery, db_user: User, db: A
             'Ошибка при загрузке правил. Возможно, в тексте есть некорректные HTML теги.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text='️ Очистить правила', callback_data='admin_clear_rules')],
-                    [types.InlineKeyboardButton(text='← Назад', callback_data='admin_rules')],
+                    [types.InlineKeyboardButton(text='Очистить правила', callback_data='admin_clear_rules')],
+                    [types.InlineKeyboardButton(text='Назад', callback_data='admin_rules')],
                 ]
             ),
         )
@@ -91,7 +110,7 @@ async def start_edit_rules(callback: types.CallbackQuery, db_user: User, state: 
         preview = _safe_preview(current_rules, 500)
 
         text = (
-            '️ <b>Редактирование правил</b>\n\n'
+            '<b>Редактирование правил</b>\n\n'
             f'<b>Текущие правила:</b>\n<code>{preview}</code>\n\n'
             'Отправьте новый текст правил сервиса.\n\n'
             '<i>Поддерживается HTML разметка. Все теги будут проверены перед сохранением.</i>\n\n'
@@ -142,14 +161,14 @@ async def process_rules_edit(message: types.Message, db_user: User, state: FSMCo
 
     try:
         preview_text = f'<b>Предварительный просмотр новых правил:</b>\n\n{new_rules}\n\n'
-        preview_text += '️ <b>Внимание!</b> Новые правила будут показываться всем пользователям.\n\n'
+        preview_text += '<b>Внимание!</b> Новые правила будут показываться всем пользователям.\n\n'
         preview_text += 'Сохранить изменения?'
 
         if len(preview_text) > 4000:
             preview_text = (
                 '<b>Предварительный просмотр новых правил:</b>\n\n'
                 f'{_safe_preview(new_rules, 500)}\n\n'
-                f'️ <b>Внимание!</b> Новые правила будут показываться всем пользователям.\n\n'
+                f'<b>Внимание!</b> Новые правила будут показываться всем пользователям.\n\n'
                 f'Текст правил: {len(new_rules)} символов\n'
                 f'Сохранить изменения?'
             )
@@ -171,7 +190,7 @@ async def process_rules_edit(message: types.Message, db_user: User, state: FSMCo
     except Exception as e:
         logger.error('Ошибка при показе превью правил', error=e)
         await message.answer(
-            '️ <b>Подтверждение сохранения правил</b>\n\n'
+            '<b>Подтверждение сохранения правил</b>\n\n'
             f'Новые правила готовы к сохранению ({len(new_rules)} символов).\n'
             f'HTML теги проверены и корректны.\n\n'
             f'Сохранить изменения?',
@@ -261,8 +280,8 @@ async def save_rules(callback: types.CallbackQuery, db_user: User, state: FSMCon
 @error_handler
 async def clear_rules_confirmation(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     await callback.message.edit_text(
-        '️ <b>Очистка правил сервиса</b>\n\n'
-        '️ <b>ВНИМАНИЕ!</b> Вы собираетесь полностью удалить все правила сервиса.\n\n'
+        '<b>Очистка правил сервиса</b>\n\n'
+        '<b>ВНИМАНИЕ!</b> Вы собираетесь полностью удалить все правила сервиса.\n\n'
         'После очистки пользователи будут видеть стандартные правила по умолчанию.\n\n'
         'Это действие нельзя отменить. Продолжить?',
         reply_markup=types.InlineKeyboardMarkup(
@@ -320,7 +339,7 @@ async def show_html_help(callback: types.CallbackQuery, db_user: User, db: Async
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Редактировать правила', callback_data='admin_edit_rules')],
-                [types.InlineKeyboardButton(text='← Назад', callback_data='admin_rules')],
+                [types.InlineKeyboardButton(text='Назад', callback_data='admin_rules')],
             ]
         ),
     )
@@ -329,6 +348,7 @@ async def show_html_help(callback: types.CallbackQuery, db_user: User, db: Async
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_rules_management, F.data == 'admin_rules')
+    dp.callback_query.register(cycle_rules_display_mode, F.data == 'admin_rules_display_mode')
     dp.callback_query.register(view_current_rules, F.data == 'admin_view_rules')
     dp.callback_query.register(start_edit_rules, F.data == 'admin_edit_rules')
     dp.callback_query.register(save_rules, F.data == 'admin_save_rules')

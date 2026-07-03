@@ -128,7 +128,7 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
 
         # Добавляем информацию об ошибках, если есть
         if error_ids:
-            result_text += '\n\n️ <b>Telegram ID с ошибками:</b>\n'
+            result_text += '\n\n<b>Telegram ID с ошибками:</b>\n'
             result_text += f'<code>{", ".join(map(str, error_ids[:10]))}</code>'  # Показываем первые 10
             if len(error_ids) > 10:
                 result_text += f' и еще {len(error_ids) - 10}...'

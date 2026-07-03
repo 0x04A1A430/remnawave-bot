@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import html as html_mod
+import math
 import re
 import time
 from datetime import UTC, datetime
@@ -39,6 +40,18 @@ async def resolve_subscription_from_context(
     2. FSM state 'active_subscription_id' (set by my_subscriptions delegation)
     3. Single active subscription (auto-select)
     4. Legacy: db_user.subscription (single-tariff mode)
+
+    ⚠️ FOOTGUN (issue #3012): priority #1 trusts the LAST colon-segment as a
+    subscription_id. A handler reached by a callback shaped ``prefix:<int>`` where
+    that trailing int is NOT a subscription_id (a period, GB amount, device count,
+    days, tariff_id, page…) will resolve the WRONG subscription whenever that number
+    equals one of the user's OTHER subscription ids — and may renew/switch/charge it.
+    INVARIANT for callers: do NOT route a ``prefix:<non-sub-id-int>`` callback through
+    this resolver. Either put the real subscription_id as the trailing segment, use a
+    non-colon separator (``foo_5`` bypasses priority #1 → FSM), or parse the sub_id
+    explicitly and load via ``get_subscription_by_id_for_user``. The tariff
+    extend/switch flows were fixed this way; the rest of the codebase currently holds
+    this invariant (audited).
     """
     from app.database.crud.subscription import (
         get_active_subscriptions_by_user_id,
@@ -405,11 +418,37 @@ async def get_apps_for_platform_async(device_type: str, language: str = 'ru') ->
 
 def normalize_app(app: dict[str, Any]) -> dict[str, Any]:
     """Normalize Remnawave app dict to a unified format with blocks."""
+
+    # Extract urlScheme from blocks if not present at root level
+    url_scheme = app.get('urlScheme', '')
+
+    if not url_scheme:
+        # Try to extract from subscriptionLink button in blocks
+        blocks = app.get('blocks', [])
+        for block in blocks:
+            if not isinstance(block, dict):
+                continue
+            buttons = block.get('buttons', [])
+            for btn in buttons:
+                if not isinstance(btn, dict):
+                    continue
+                if btn.get('type') == 'subscriptionLink':
+                    link = btn.get('link', '') or btn.get('url', '')
+                    if '{{SUBSCRIPTION_LINK}}' in link:
+                        url_scheme = link.split('{{SUBSCRIPTION_LINK}}')[0]
+                        break
+            if url_scheme:
+                break
+
+    # Validate extracted scheme contains ://
+    if url_scheme and '://' not in url_scheme:
+        url_scheme = ''
+
     return {
         'id': app.get('id', app.get('name', 'unknown')),
         'name': app.get('name', ''),
         'isFeatured': app.get('featured', app.get('isFeatured', False)),
-        'urlScheme': app.get('urlScheme', ''),
+        'urlScheme': url_scheme,
         'isNeedBase64Encoding': app.get('isNeedBase64Encoding', False),
         'blocks': app.get('blocks', []),
         '_raw': app,
@@ -545,7 +584,7 @@ def get_traffic_switch_keyboard(
     # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
         now = datetime.now(UTC)
-        days_left = max(1, (subscription_end_date - now).days)
+        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
         period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
     else:

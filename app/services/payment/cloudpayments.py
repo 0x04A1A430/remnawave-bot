@@ -361,7 +361,7 @@ class CloudPaymentsPaymentMixin:
             await db.commit()
             await db.refresh(user)
 
-        topup_status = '🆕 Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
         if getattr(self, 'bot', None):
             try:
@@ -427,7 +427,7 @@ class CloudPaymentsPaymentMixin:
             await db.commit()
 
         logger.info(
-            'CloudPayments платёж неуспешен: invoice reason= (code=)',
+            'CloudPayments платёж неуспешен',
             invoice_id=invoice_id,
             reason=reason,
             reason_code=reason_code,
