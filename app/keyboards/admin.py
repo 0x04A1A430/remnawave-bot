@@ -190,7 +190,7 @@ def get_admin_settings_submenu_keyboard(language: str = 'ru') -> InlineKeyboardM
             ],
             [
                 make_button(
-                    text=texts.t('ADMIN_MONITORING_SETTINGS', '<tg-emoji emoji-id='5874986954180791957'>📶</tg-emoji> Настройки мониторинга'),
+                    text=texts.t('ADMIN_MONITORING_SETTINGS', "<tg-emoji emoji-id='5874986954180791957'>📶</tg-emoji> Настройки мониторинга"),
                     callback_data='admin_mon_settings',
                 )
             ],
@@ -259,7 +259,7 @@ def get_admin_system_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMar
                 make_button(text=_t(texts, 'ADMIN_SYSTEM_BACKUPS', "<tg-emoji emoji-id='5899757765743615694'>⬇️</tg-emoji> Бекапы"), callback_data='backup_panel'),
             ],
             [make_button(text=_t(texts, 'ADMIN_SYSTEM_LOGS', "<tg-emoji emoji-id='5877316724830768997'>🗃</tg-emoji> Логи"), callback_data='admin_system_logs')],
-            [make_button(text=texts.t('ADMIN_REPORTS', '<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Отчеты'), callback_data='admin_reports')],
+            [make_button(text=texts.t('ADMIN_REPORTS', "<tg-emoji emoji-id='5877485980901971030'>📊</tg-emoji> Отчеты"), callback_data='admin_reports')],
             [make_button(text=texts.BACK, callback_data='admin_panel')],
         ]
     )
