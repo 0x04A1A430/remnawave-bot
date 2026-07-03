@@ -18,6 +18,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    exists = conn.execute(
+        sa.text("SELECT to_regclass('public.severpay_payments')")
+    ).scalar()
+    if exists:
+        return
     op.create_table(
         'severpay_payments',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
