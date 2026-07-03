@@ -1483,6 +1483,7 @@
   "SUBSCRIPTION_LINK_STEP3": "3. Найдите функцию \"Добавить подписку\" или \"Import\"",
   "SUBSCRIPTION_LINK_STEP4": "4. Вставьте скопированную ссылку",
   "SUBSCRIPTION_LINK_UNAVAILABLE": "Ссылка подписки недоступна",
+  "SUBSCRIPTION_COPY_LINK_ALERT": "Ваша ссылка подписки:\n{link}",
   "SUBSCRIPTION_LINK_USAGE_TITLE": "<b>Как использовать:</b>",
   "SUBSCRIPTION_NONE": "Нет активной подписки",
   "SUBSCRIPTION_NOT_FOUND": "Подписка не найдена",

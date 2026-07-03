@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError
+from app.external.remnawave_api import RemnaWaveAPI
 
 
 def _api() -> RemnaWaveAPI:
@@ -96,32 +96,3 @@ async def test_users_stream_stops_when_next_cursor_is_null_even_if_has_more_true
 
     assert [u['uuid'] for u in users] == ['a']
     assert api._make_request.call_count == 1
-
-
-async def test_happ_encrypt_disables_itself_after_404():
-    """2.8.0 removed POST /api/system/tools/happ/encrypt → 404 must disable further calls."""
-    RemnaWaveAPI._happ_encrypt_unavailable = False
-    api = _api()
-    api._make_request = AsyncMock(side_effect=RemnaWaveAPIError('Not Found', 404, {}))
-    try:
-        assert await api.encrypt_happ_crypto_link('vless://x') is None
-        assert RemnaWaveAPI._happ_encrypt_unavailable is True
-
-        # Subsequent calls short-circuit without touching the removed endpoint.
-        api._make_request.reset_mock()
-        assert await api.encrypt_happ_crypto_link('vless://y') is None
-        api._make_request.assert_not_called()
-    finally:
-        RemnaWaveAPI._happ_encrypt_unavailable = False
-
-
-async def test_happ_encrypt_non_404_error_keeps_endpoint_enabled():
-    """A transient 5xx must NOT permanently disable happ-encrypt (only a 404 = removed)."""
-    RemnaWaveAPI._happ_encrypt_unavailable = False
-    api = _api()
-    api._make_request = AsyncMock(side_effect=RemnaWaveAPIError('boom', 500, {}))
-    try:
-        assert await api.encrypt_happ_crypto_link('vless://x') is None
-        assert RemnaWaveAPI._happ_encrypt_unavailable is False
-    finally:
-        RemnaWaveAPI._happ_encrypt_unavailable = False

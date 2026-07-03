@@ -1,6 +1,6 @@
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InaccessibleMessage, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -11,6 +11,7 @@ from app.keyboards.inline import (
     get_happ_download_button_row,
 )
 from app.localization.texts import get_texts
+from app.utils.button_emoji import make_button
 from app.utils.subscription_utils import (
     convert_subscription_link_to_happ_scheme,
     get_display_subscription_link,
@@ -95,12 +96,12 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         web_app=types.WebAppInfo(url=subscription_link),
                     )
                 ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+                [make_button(text=texts.BACK, callback_data=back_cb)],
             ]
         )
 
@@ -129,12 +130,12 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+                [make_button(text=texts.BACK, callback_data=back_cb)],
             ]
         )
 
@@ -150,11 +151,11 @@ async def handle_connect_subscription(
         )
 
     elif connect_mode == 'link':
-        rows = [[InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', 'Подключиться'), url=subscription_link)]]
+        rows = [[make_button(text=texts.t('CONNECT_BUTTON', 'Подключиться'), url=subscription_link)]]
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             rows.append(happ_row)
-        rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
+        rows.append([make_button(text=texts.BACK, callback_data=back_cb)])
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -171,7 +172,7 @@ async def handle_connect_subscription(
     elif connect_mode == 'happ_cryptolink':
         rows = [
             [
-                InlineKeyboardButton(
+                make_button(
                     text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                     callback_data=f'open_subscription_link:{sub_id}'
                     if settings.is_multi_tariff_enabled()
@@ -182,7 +183,7 @@ async def handle_connect_subscription(
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             rows.append(happ_row)
-        rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
+        rows.append([make_button(text=texts.BACK, callback_data=back_cb)])
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -216,7 +217,7 @@ async def handle_connect_subscription(
                 ),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+                        [make_button(text=texts.BACK, callback_data=back_cb)],
                     ]
                 ),
                 parse_mode='HTML',
@@ -354,14 +355,14 @@ async def handle_open_subscription_link(
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('CONNECT_BUTTON', 'Подключиться'),
                         callback_data=f'subscription_connect:{sub_id}'
                         if settings.is_multi_tariff_enabled()
                         else 'subscription_connect',
                     )
                 ],
-                [InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)],
+                [make_button(text=texts.BACK, callback_data=back_cb)],
             ]
         ),
         parse_mode='HTML',

@@ -1337,10 +1337,8 @@ class RemnaWaveService:
                     logger.info('Загружаем пользователей', cursor=cursor, size=size)
 
                     # 2.8.0: курсорная (keyset) пагинация /api/users/stream — устойчива
-                    # к мутациям во время обхода. enrich_happ_links=False: bulk-список
-                    # не содержит happ.cryptoLink, а обогащать каждого пользователя
-                    # отдельным запросом дорого (и happ-encrypt удалён в 2.8.0).
-                    page = await api.get_all_users_page_stream(cursor=cursor, size=size, enrich_happ_links=False)
+                    # к мутациям во время обхода.
+                    page = await api.get_all_users_page_stream(cursor=cursor, size=size)
                     users_batch = page['users']
 
                     logger.info(
@@ -1903,7 +1901,7 @@ class RemnaWaveService:
                 size = 500
 
                 while True:
-                    page = await api.get_all_users_page_stream(cursor=cursor, size=size, enrich_happ_links=False)
+                    page = await api.get_all_users_page_stream(cursor=cursor, size=size)
                     users_batch = page['users']
                     for user_obj in users_batch:
                         panel_users.append(

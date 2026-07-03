@@ -414,25 +414,6 @@ async def get_app_config(
         subscription_url = subscription.subscription_url
         subscription_crypto_link = subscription.subscription_crypto_link
 
-    # Generate crypto link on the fly if subscription_url exists but crypto link is missing.
-    # This covers synced users where enrich_happ_links was not called.
-    if subscription_url and not subscription_crypto_link:
-        try:
-            service = RemnaWaveService()
-            async with service.get_api_client() as api:
-                encrypted = await api.encrypt_happ_crypto_link(subscription_url)
-                if encrypted:
-                    subscription_crypto_link = encrypted
-                    if subscription:
-                        subscription.subscription_crypto_link = encrypted
-                        await db.commit()
-                        logger.info(
-                            'Generated and saved crypto link for user',
-                            user_id=user.id,
-                        )
-        except Exception as e:
-            logger.debug('Could not generate crypto link', error=e)
-
     config = await _load_app_config_async()
 
     if not config:
