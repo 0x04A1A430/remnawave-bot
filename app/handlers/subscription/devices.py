@@ -1,6 +1,5 @@
 import html as html_mod
 import math
-import re
 from datetime import UTC, datetime
 
 from aiogram import types
@@ -934,8 +933,7 @@ async def show_devices_page(
                 device_info = f'{html_mod.escape(platform)} - {html_mod.escape(device_model)}'
 
             if len(device_info) > 35:
-                plain = re.sub(r'<[^>]+>', '', device_info)
-                device_info = (plain[:32] + '...') if len(plain) > 32 else plain
+                device_info = device_info[:32] + '...'
 
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
@@ -943,11 +941,6 @@ async def show_devices_page(
             ).format(device=f'{emoji_tag} {device_info}' if emoji_tag else device_info)
 
         devices_text += '</blockquote>\n'
-
-    devices_text += texts.t(
-        'DEVICE_MANAGEMENT_ACTIONS',
-        '\n<b>Действия:</b>\n• Выберите устройство для сброса\n• Или сбросьте все устройства сразу',
-    )
 
     await callback.message.edit_text(
         devices_text,
