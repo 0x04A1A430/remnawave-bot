@@ -1,4 +1,5 @@
 import math
+import re
 from datetime import UTC, datetime
 
 import structlog
@@ -3209,8 +3210,6 @@ def get_devices_management_keyboard(
     keyboard = []
 
     for i, device in enumerate(devices):
-        # Локальный alias (если юзер задал) приоритетнее платформенной строки.
-        # `local_name` проставляется в attach_aliases_to_devices() ДО рендера.
         local_name = (device.get('local_name') or '').strip()
         if local_name:
             device_info = local_name
@@ -3221,18 +3220,11 @@ def get_devices_management_keyboard(
             device_info = f'{emoji_tag} {platform} - {device_model}'
 
         if len(device_info) > 22:
-            device_info = device_info[:19] + '...'
+            plain = re.sub(r'<[^>]+>', '', device_info)
+            device_info = (plain[:19] + '...') if len(plain) > 19 else plain
 
-        # Ряд: pencil-кнопка переименования (компактная иконка) + сброс
-        # устройства с его лейблом (исторический callback).
         keyboard.append(
-            [
-                make_button(
-                    text=texts.t('DEVICE_RENAME_BUTTON', ''),
-                    callback_data=f'device_rename_{i}_{pagination.page}',
-                ),
-                make_button(text=f'{device_info}', callback_data=f'reset_device_{i}_{pagination.page}'),
-            ]
+            [make_button(text=f'{device_info}', callback_data=f'reset_device_{i}_{pagination.page}')]
         )
 
     if pagination.total_pages > 1:

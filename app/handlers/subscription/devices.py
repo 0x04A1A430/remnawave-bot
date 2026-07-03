@@ -901,20 +901,13 @@ async def show_devices_page(
     texts = get_texts(db_user.language)
     devices_per_page = 5
 
-    # Все вызовы рендера проходят через show_devices_page, поэтому единое место
-    # для прикрепления локальных имён — здесь. Клавиатура и текст подтягивают
-    # `local_name` из enriched dict'ов.
     devices_list = await _enrich_devices_with_aliases(devices_list, db_user.id)
 
     pagination = paginate_list(devices_list, page=page, per_page=devices_per_page)
 
     devices_text = texts.t(
         'DEVICE_MANAGEMENT_OVERVIEW',
-        (
-            '<b>Управление устройствами</b>\n\n'
-            'Всего подключено: {total} устройств\n'
-            'Страница {page} из {pages}\n\n'
-        ),
+        '<b>Управление устройствами</b>\n\n',
     ).format(total=len(devices_list), page=pagination.page, pages=pagination.total_pages)
 
     if pagination.items:
@@ -929,15 +922,16 @@ async def show_devices_page(
             'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
         }
 
+        devices_text += '<blockquote>'
         for device in pagination.items:
             local_name = (device.get('local_name') or '').strip()
             if local_name:
-                device_info = local_name
+                device_info = html_mod.escape(local_name)
             else:
                 platform = device.get('platform', 'Unknown')
                 device_model = device.get('deviceModel', 'Unknown')
                 emoji_tag = _PLATFORM_EMOJI.get(platform, '')
-                device_info = f'{emoji_tag} {platform} - {device_model}'
+                device_info = f'{html_mod.escape(platform)} - {html_mod.escape(device_model)}'
 
             if len(device_info) > 35:
                 plain = re.sub(r'<[^>]+>', '', device_info)
@@ -946,16 +940,13 @@ async def show_devices_page(
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '• {device}\n',
-            ).format(device=device_info)
+            ).format(device=f'{emoji_tag} {device_info}' if emoji_tag else device_info)
+
+        devices_text += '</blockquote>\n'
 
     devices_text += texts.t(
         'DEVICE_MANAGEMENT_ACTIONS',
-        (
-            '\n <b>Действия:</b>\n'
-            '•  — переименовать устройство (видно только вам)\n'
-            '•  — сбросить устройство\n'
-            '• Или сбросьте все устройства сразу'
-        ),
+        '\n<b>Действия:</b>\n• Выберите устройство для сброса\n• Или сбросьте все устройства сразу',
     )
 
     await callback.message.edit_text(
