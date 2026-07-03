@@ -96,8 +96,8 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
 
         keyboard_rows.extend(
             [
-                [types.InlineKeyboardButton(text='️ Настройки', callback_data='admin_referrals_settings')],
-                [types.InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
+                [types.InlineKeyboardButton(text='Настройки', callback_data='admin_referrals_settings')],
+                [types.InlineKeyboardButton(text='Назад', callback_data='admin_panel')],
             ]
         )
 
@@ -134,7 +134,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Повторить', callback_data='admin_referrals')],
-                [types.InlineKeyboardButton(text='← Назад', callback_data='admin_panel')],
+                [types.InlineKeyboardButton(text='Назад', callback_data='admin_panel')],
             ]
         )
 
@@ -163,7 +163,7 @@ def _get_top_keyboard(period: str, sort_by: str) -> types.InlineKeyboardMarkup:
                 types.InlineKeyboardButton(text=sort_invited, callback_data=f'admin_top_ref:{period}:invited'),
             ],
             [types.InlineKeyboardButton(text='Обновить', callback_data=f'admin_top_ref:{period}:{sort_by}')],
-            [types.InlineKeyboardButton(text='← К статистике', callback_data='admin_referrals')],
+            [types.InlineKeyboardButton(text='К статистике', callback_data='admin_referrals')],
         ]
     )
 
@@ -236,10 +236,10 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
                 # Выделяем основную метрику в зависимости от сортировки
                 if sort_by == 'invited':
                     text += f'{emoji}{i}. {display_text}\n'
-                    text += f'   <b>{count} приглашённых</b> | {settings.format_price(earned)}\n\n'
+                    text += f'<b>{count} приглашённых</b> |  {settings.format_price(earned)}\n\n'
                 else:
                     text += f'{emoji}{i}. {display_text}\n'
-                    text += f'   <b>{settings.format_price(earned)}</b> | {count} приглашённых\n\n'
+                    text += f'<b>{settings.format_price(earned)}</b> |  {count} приглашённых\n\n'
         else:
             text += 'Нет данных за выбранный период\n'
 
@@ -263,7 +263,7 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
 @error_handler
 async def show_referral_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     text = f"""
-️ <b>Настройки реферальной системы</b>
+<b>Настройки реферальной системы</b>
 
 <b>Бонусы и награды:</b>
 • Минимальная сумма пополнения для участия: {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}
@@ -281,7 +281,7 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
 """
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='← К статистике', callback_data='admin_referrals')]]
+        inline_keyboard=[[types.InlineKeyboardButton(text='К статистике', callback_data='admin_referrals')]]
     )
 
     await callback.message.edit_text(text, reply_markup=keyboard)
@@ -303,7 +303,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
             keyboard_rows.append(
                 [types.InlineKeyboardButton(text='Тестовое начисление', callback_data='admin_test_referral_earning')]
             )
-        keyboard_rows.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_referrals')])
+        keyboard_rows.append([types.InlineKeyboardButton(text='Назад', callback_data='admin_referrals')])
 
         await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
         await callback.answer()
@@ -317,7 +317,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
         user_tg_id = user.telegram_id if user else 'N/A'
 
         risk_emoji = (
-            '🟢' if req.risk_score < 30 else '🟡' if req.risk_score < 50 else '🟠' if req.risk_score < 70 else ''
+            'low' if req.risk_score < 30 else 'mid' if req.risk_score < 50 else 'high' if req.risk_score < 70 else 'MAX'
         )
 
         text += f'<b>#{req.id}</b> — {user_name} (ID{user_tg_id})\n'
@@ -340,7 +340,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
             [types.InlineKeyboardButton(text='Тестовое начисление', callback_data='admin_test_referral_earning')]
         )
 
-    keyboard_rows.append([types.InlineKeyboardButton(text='← Назад', callback_data='admin_referrals')])
+    keyboard_rows.append([types.InlineKeyboardButton(text='Назад', callback_data='admin_referrals')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
     await callback.answer()
@@ -366,7 +366,7 @@ async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, 
     analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
 
     status_text = {
-        WithdrawalRequestStatus.PENDING.value: '⏳ Ожидает',
+        WithdrawalRequestStatus.PENDING.value: 'Ожидает',
         WithdrawalRequestStatus.APPROVED.value: 'Одобрена',
         WithdrawalRequestStatus.REJECTED.value: 'Отклонена',
         WithdrawalRequestStatus.COMPLETED.value: 'Выполнена',
@@ -412,7 +412,7 @@ ID: <code>{user_tg_id}</code>
         keyboard.append(
             [types.InlineKeyboardButton(text='Профиль пользователя', callback_data=f'admin_user_manage_{user.id}')]
         )
-    keyboard.append([types.InlineKeyboardButton(text='← К списку', callback_data='admin_withdrawal_requests')])
+    keyboard.append([types.InlineKeyboardButton(text='К списку', callback_data='admin_withdrawal_requests')])
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard))
     await callback.answer()
@@ -566,7 +566,7 @@ async def start_test_referral_earning(
 • <code>123456789 500</code> — начислит 500₽ пользователю 123456789
 • <code>987654321 1000</code> — начислит 1000₽ пользователю 987654321
 
-️ Это создаст реальную запись ReferralEarning, как будто пользователь заработал с реферала.
+Это создаст реальную запись ReferralEarning, как будто пользователь заработал с реферала.
 """
 
     keyboard = types.InlineKeyboardMarkup(
@@ -724,13 +724,13 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
 """
 
         if report.lost_referrals:
-            text += '\n<b>Потерянные рефералы:</b>\n'
+            text += '\n<b> Потерянные рефералы:</b>\n'
             text += '<i>(пришли по ссылке, но реферер не засчитался)</i>\n\n'
 
             for i, lost in enumerate(report.lost_referrals[:15], 1):
                 # Статус пользователя
                 if not lost.registered:
-                    status = '️ Не в БД'
+                    status = 'Не в БД'
                 elif not lost.has_referrer:
                     status = 'Без реферера'
                 else:
@@ -760,14 +760,14 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
             if len(report.lost_referrals) > 15:
                 text += f'\n<i>... и ещё {len(report.lost_referrals) - 15}</i>\n'
         else:
-            text += '\n<b>Все рефералы засчитаны!</b>\n'
+            text += '\n <b>Все рефералы засчитаны!</b>\n'
 
         # Информация о логах
         log_path = referral_diagnostics_service.log_path
         log_exists = await asyncio.to_thread(log_path.exists)
         log_size = (await asyncio.to_thread(log_path.stat)).st_size if log_exists else 0
 
-        text += f'\n<i>{log_path.name}'
+        text += f'\n<i> {log_path.name}'
         if log_exists:
             text += f' ({log_size / 1024:.0f} KB)'
             text += f' | Строк: {report.lines_in_period}'
@@ -798,7 +798,7 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
         keyboard_rows.extend(
             [
                 [types.InlineKeyboardButton(text='Обновить', callback_data=f'admin_ref_diag:{period}')],
-                [types.InlineKeyboardButton(text='← К статистике', callback_data='admin_referrals')],
+                [types.InlineKeyboardButton(text='К статистике', callback_data='admin_referrals')],
             ]
         )
 
@@ -884,7 +884,7 @@ async def preview_referral_fixes(callback: types.CallbackQuery, db_user: User, d
                 user_name = f'ID{detail.telegram_id}'
 
             if detail.error:
-                text += f'{i}. {user_name} — {html.escape(str(detail.error))}\n'
+                text += f'{i}. {user_name} —  {html.escape(str(detail.error))}\n'
             else:
                 text += f'{i}. {user_name}\n'
                 if detail.referred_by_set:
@@ -902,10 +902,10 @@ async def preview_referral_fixes(callback: types.CallbackQuery, db_user: User, d
         if len(fix_report.details) > 10:
             text += f'\n<i>... и ещё {len(fix_report.details) - 10}</i>\n'
 
-        text += '\n️ <b>Внимание!</b> Это только предпросмотр. Нажмите "Применить", чтобы выполнить исправления.'
+        text += '\n <b>Внимание!</b> Это только предпросмотр. Нажмите "Применить", чтобы выполнить исправления.'
 
         # Кнопка назад зависит от источника
-        back_button_text = '← К диагностике'
+        back_button_text = 'К диагностике'
         back_button_callback = f'admin_ref_diag:{period}' if period != 'uploaded_file' else 'admin_referral_diagnostics'
 
         keyboard = types.InlineKeyboardMarkup(
@@ -1000,7 +1000,7 @@ async def apply_referral_fixes(callback: types.CallbackQuery, db_user: User, db:
 
         # Показываем ошибки
         if fix_report.errors > 0:
-            text += '\n<b>Ошибки:</b>\n'
+            text += '\n<b> Ошибки:</b>\n'
             error_count = 0
             for detail in fix_report.details:
                 if detail.error and error_count < 5:
@@ -1021,7 +1021,7 @@ async def apply_referral_fixes(callback: types.CallbackQuery, db_user: User, db:
             keyboard_rows.append(
                 [types.InlineKeyboardButton(text='Обновить диагностику', callback_data=f'admin_ref_diag:{period}')]
             )
-        keyboard_rows.append([types.InlineKeyboardButton(text='← К статистике', callback_data='admin_referrals')])
+        keyboard_rows.append([types.InlineKeyboardButton(text='К статистике', callback_data='admin_referrals')])
 
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -1094,15 +1094,15 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='Начислить все бонусы', callback_data='admin_ref_bonus_apply')],
                     [types.InlineKeyboardButton(text='Обновить', callback_data='admin_ref_check_bonuses')],
-                    [types.InlineKeyboardButton(text='← К диагностике', callback_data='admin_referral_diagnostics')],
+                    [types.InlineKeyboardButton(text='К диагностике', callback_data='admin_referral_diagnostics')],
                 ]
             )
         else:
-            text += '\n<b>Все бонусы начислены!</b>'
+            text += '\n <b>Все бонусы начислены!</b>'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [types.InlineKeyboardButton(text='Обновить', callback_data='admin_ref_check_bonuses')],
-                    [types.InlineKeyboardButton(text='← К диагностике', callback_data='admin_referral_diagnostics')],
+                    [types.InlineKeyboardButton(text='К диагностике', callback_data='admin_referral_diagnostics')],
                 ]
             )
 
@@ -1153,7 +1153,7 @@ async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
 """
 
         if fix_report.errors > 0:
-            text += f'\n️ Ошибок: {fix_report.errors}'
+            text += f'\n Ошибок: {fix_report.errors}'
 
         # Очищаем отчёт из state
         await state.update_data(missing_bonuses_report=None)
@@ -1161,7 +1161,7 @@ async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Проверить снова', callback_data='admin_ref_check_bonuses')],
-                [types.InlineKeyboardButton(text='← К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text='К диагностике', callback_data='admin_referral_diagnostics')],
             ]
         )
 
@@ -1198,7 +1198,7 @@ async def sync_referrals_with_contest(
                 'Создайте конкурс в разделе "Конкурсы" для синхронизации.',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='← К диагностике', callback_data='admin_referral_diagnostics')]
+                        [types.InlineKeyboardButton(text='К диагностике', callback_data='admin_referral_diagnostics')]
                     ]
                 ),
             )
@@ -1236,7 +1236,7 @@ async def sync_referrals_with_contest(
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [types.InlineKeyboardButton(text='Синхронизировать снова', callback_data='admin_ref_sync_contest')],
-                [types.InlineKeyboardButton(text='← К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text='К диагностике', callback_data='admin_referral_diagnostics')],
             ]
         )
 
@@ -1260,7 +1260,7 @@ async def request_log_file_upload(callback: types.CallbackQuery, db_user: User, 
 
 Файл будет проанализирован на наличие потерянных рефералов за ВСЕ время, записанное в логе.
 
-️ <b>Важно:</b>
+<b>Важно:</b>
 • Файл должен быть текстовым (.log, .txt)
 • Максимальный размер: 50 MB
 • После анализа файл будет автоматически удалён
@@ -1338,7 +1338,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
         file = await message.bot.get_file(message.document.file_id)
         await message.bot.download_file(file.file_path, temp_file_path)
 
-        logger.info('Файл загружен: ( байт)', temp_file_path=temp_file_path, file_size=message.document.file_size)
+        logger.info('Файл загружен', temp_file_path=temp_file_path, file_size=message.document.file_size)
 
         # Обновляем статус
         await status_message.edit_text(
@@ -1362,13 +1362,13 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
 """
 
         if report.lost_referrals:
-            text += '\n<b>Потерянные рефералы:</b>\n'
+            text += '\n<b> Потерянные рефералы:</b>\n'
             text += '<i>(пришли по ссылке, но реферер не засчитался)</i>\n\n'
 
             for i, lost in enumerate(report.lost_referrals[:15], 1):
                 # Статус пользователя
                 if not lost.registered:
-                    status = '️ Не в БД'
+                    status = 'Не в БД'
                 elif not lost.has_referrer:
                     status = 'Без реферера'
                 else:
@@ -1398,7 +1398,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
             if len(report.lost_referrals) > 15:
                 text += f'\n<i>... и ещё {len(report.lost_referrals) - 15}</i>\n'
         else:
-            text += '\n<b>Все рефералы засчитаны!</b>\n'
+            text += '\n <b>Все рефералы засчитаны!</b>\n'
 
         # Сохраняем отчёт в state для дальнейшего использования (сериализуем в dict)
         await state.update_data(
@@ -1416,8 +1416,8 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
 
         keyboard_rows.extend(
             [
-                [types.InlineKeyboardButton(text='← К диагностике', callback_data='admin_referral_diagnostics')],
-                [types.InlineKeyboardButton(text='← К статистике', callback_data='admin_referrals')],
+                [types.InlineKeyboardButton(text='К диагностике', callback_data='admin_referral_diagnostics')],
+                [types.InlineKeyboardButton(text='К статистике', callback_data='admin_referrals')],
             ]
         )
 
@@ -1450,7 +1450,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                         ],
                         [
                             types.InlineKeyboardButton(
-                                text='← К диагностике', callback_data='admin_referral_diagnostics'
+                                text='К диагностике', callback_data='admin_referral_diagnostics'
                             )
                         ],
                     ]
@@ -1461,7 +1461,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
                 f'Ошибка при анализе файла: {html.escape(str(e))}',
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [types.InlineKeyboardButton(text='← Назад', callback_data='admin_referral_diagnostics')]
+                        [types.InlineKeyboardButton(text='Назад', callback_data='admin_referral_diagnostics')]
                     ]
                 ),
             )
@@ -1471,7 +1471,7 @@ async def receive_log_file(message: types.Message, db_user: User, db: AsyncSessi
         if temp_file_path and await asyncio.to_thread(Path(temp_file_path).exists):
             try:
                 await asyncio.to_thread(Path(temp_file_path).unlink)
-                logger.info('️ Временный файл удалён', temp_file_path=temp_file_path)
+                logger.info('Временный файл удалён', temp_file_path=temp_file_path)
             except Exception as e:
                 logger.error('Ошибка удаления временного файла', error=e)
 

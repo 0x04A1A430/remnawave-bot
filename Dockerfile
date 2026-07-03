@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.13-slim
 
-ARG VERSION="v3.43.0" # x-release-please-version
+ARG VERSION="v3.62.0" # x-release-please-version
 ARG BUILD_DATE
 ARG VCS_REF
 
@@ -33,14 +33,14 @@ WORKDIR /app
 
 COPY --chown=app:app . .
 
-RUN mkdir -p logs data uploads/images uploads/videos uploads/thumbnails && \
-    chown -R app:app logs data uploads
-
-USER app
+RUN mkdir -p logs data uploads/images uploads/videos uploads/thumbnails locales && \
+    chown -R app:app logs data uploads locales && \
+    chmod 755 logs data uploads locales
 
 ENV PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    HOME=/home/app \
     VERSION=${VERSION} \
     BUILD_DATE=${BUILD_DATE} \
     VCS_REF=${VCS_REF}
@@ -55,6 +55,8 @@ LABEL org.opencontainers.image.title="RemnaWaveBot" \
       org.opencontainers.image.source="https://github.com/cy7su/remnawave-bot" \
       org.opencontainers.image.url="https://github.com/cy7su/remnawave-bot" \
       org.opencontainers.image.vendor="cy6su"
+
+ENTRYPOINT ["python", "entrypoint.py"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1

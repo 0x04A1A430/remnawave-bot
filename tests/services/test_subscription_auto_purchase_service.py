@@ -136,7 +136,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
                 'subscription': MagicMock(),
                 'transaction': MagicMock(),
                 'was_trial_conversion': False,
-                'message': 'Subscription purchased',
+                'message': '🎉 Subscription purchased',
             }
 
     monkeypatch.setattr(

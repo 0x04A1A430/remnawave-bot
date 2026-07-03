@@ -56,9 +56,9 @@ def _format_contest_summary(contest, texts, tz: ZoneInfo) -> str:
     end_local = end_local.astimezone(tz)
 
     status = (
-        texts.t('ADMIN_CONTEST_STATUS_ACTIVE', '🟢 Активен')
+        texts.t('ADMIN_CONTEST_STATUS_ACTIVE', 'Активен')
         if contest.is_active
-        else texts.t('ADMIN_CONTEST_STATUS_INACTIVE', '️ Выключен')
+        else texts.t('ADMIN_CONTEST_STATUS_INACTIVE', 'Выключен')
     )
 
     period = f'{start_local.strftime("%d.%m %H:%M")} — {end_local.strftime("%d.%m %H:%M")} ({tz.key})'
@@ -842,9 +842,9 @@ async def sync_contest(
         '',
         '<b>СИНХРОНИЗАЦИЯ:</b>',
         f'   Рефералов в периоде: <b>{stats.get("total_events", 0)}</b>',
-        f'   ️ Отфильтровано (вне периода): <b>{stats.get("filtered_out_events", 0)}</b>',
+        f'   Отфильтровано (вне периода): <b>{stats.get("filtered_out_events", 0)}</b>',
         f'   Обновлено сумм: <b>{stats.get("updated", 0)}</b>',
-        f'   ⏭ Без изменений: <b>{stats.get("skipped", 0)}</b>',
+        f'Без изменений: <b>{stats.get("skipped", 0)}</b>',
         '',
         f'Рефералов оплатили: <b>{stats.get("paid_count", 0)}</b>',
         f'Рефералов не оплатили: <b>{stats.get("unpaid_count", 0)}</b>',
@@ -933,7 +933,7 @@ async def debug_contest_transactions(
         f'   Начало: <code>{debug_data.get("contest_start")}</code>',
         f'   Конец: <code>{debug_data.get("contest_end")}</code>',
         f'<b>Рефералов в периоде:</b> {debug_data.get("referral_count", 0)}',
-        f'️ <b>Отфильтровано (вне периода):</b> {debug_data.get("filtered_out", 0)}',
+        f'<b>Отфильтровано (вне периода):</b> {debug_data.get("filtered_out", 0)}',
         f'<b>Всего событий в БД:</b> {debug_data.get("total_all_events", 0)}',
         '',
         '<b>СУММЫ:</b>',
@@ -1027,7 +1027,7 @@ async def show_virtual_participants(
             rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=f'️ {vp.display_name}',
+                        text=f'{vp.display_name}',
                         callback_data=f'admin_contest_vp_edit_{vp.id}',
                     ),
                     types.InlineKeyboardButton(
@@ -1175,7 +1175,7 @@ async def delete_virtual_participant_handler(
             rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=f'️ {v.display_name}', callback_data=f'admin_contest_vp_edit_{v.id}'
+                        text=f'{v.display_name}', callback_data=f'admin_contest_vp_edit_{v.id}'
                     ),
                     types.InlineKeyboardButton(text='', callback_data=f'admin_contest_vp_del_{v.id}'),
                 ]
@@ -1371,7 +1371,7 @@ async def start_edit_virtual_participant(
     await state.set_state(AdminStates.editing_virtual_participant_count)
     await state.update_data(vp_edit_id=vp_id, vp_edit_contest_id=vp.contest_id)
     await callback.message.edit_text(
-        f'️ <b>{vp.display_name}</b>\n'
+        f'<b>{vp.display_name}</b>\n'
         f'Текущее кол-во рефералов: <b>{vp.referral_count}</b>\n\n'
         f'Введите новое количество:',
         reply_markup=types.InlineKeyboardMarkup(

@@ -72,7 +72,7 @@ async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, 
         # Подготовим моки
         mock_cart_service.save_user_cart = AsyncMock(return_value=True)
         mock_keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='', callback_data='confirm')]]
+            inline_keyboard=[[InlineKeyboardButton(text='✅', callback_data='confirm')]]
         )
         mock_keyboard_func.return_value = mock_keyboard
 
@@ -139,7 +139,7 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = '30 дней'
         mock_keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='', callback_data='confirm')]]
+            inline_keyboard=[[InlineKeyboardButton(text='✅', callback_data='confirm')]]
         )
         mock_keyboard_func.return_value = mock_keyboard
 
@@ -214,12 +214,12 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
         mock_user.balance_kopeks = 50000
 
         summary_text = (
-            'Восстановленная корзина\n\n'
-            'Период: 60 дней\n'
-            'Трафик: 40 ГБ\n'
-            'Страны: Russia, USA\n'
-            'Устройства: 3\n\n'
-            'Общая стоимость: 440 ₽\n\n'
+            '🛒 Восстановленная корзина\n\n'
+            '📅 Период: 60 дней\n'
+            '📊 Трафик: 40 ГБ\n'
+            '🌍 Страны: Russia, USA\n'
+            '📱 Устройства: 3\n\n'
+            '💎 Общая стоимость: 440 ₽\n\n'
             'Подтверждаете покупку?'
         )
 
@@ -229,7 +229,7 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
         await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
 
         mock_callback_query.message.edit_text.assert_not_called()
-        mock_callback_query.answer.assert_called_once_with('Корзина восстановлена!')
+        mock_callback_query.answer.assert_called_once_with('✅ Корзина восстановлена!')
         mock_state.set_data.assert_called_once_with(cart_data)
         mock_state.set_state.assert_called_once()
         mock_cart_service.save_user_cart.assert_not_called()
@@ -278,7 +278,7 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
         mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = '30 дней'
         mock_keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text='', callback_data='confirm')]]
+            inline_keyboard=[[InlineKeyboardButton(text='✅', callback_data='confirm')]]
         )
         mock_keyboard_func.return_value = mock_keyboard
 
@@ -309,7 +309,7 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
         assert normalized_data['saved_cart'] is True
 
         edited_text = mock_callback_query.message.edit_text.call_args[0][0]
-        assert '' not in edited_text
+        assert '📱' not in edited_text
 
         mock_callback_query.answer.assert_called_once()
 
@@ -406,4 +406,4 @@ async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query,
         mock_clear_draft.assert_awaited_once_with(mock_user.id)
         mock_cart_service.delete_user_cart.assert_awaited_once_with(mock_user.id)
         mock_show_main_menu.assert_awaited_once_with(mock_callback_query, mock_user, mock_db)
-        mock_callback_query.answer.assert_called_once_with('Покупка отменена')
+        mock_callback_query.answer.assert_called_once_with('❌ Покупка отменена')

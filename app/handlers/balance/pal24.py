@@ -13,6 +13,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -234,7 +235,7 @@ async def _send_pal24_payment_message(
         await state.clear()
 
         logger.info(
-            'Создан PayPalych счет для пользователя : ₽, ID метод',
+            'Создан PayPalych счет',
             telegram_id=db_user.telegram_id,
             amount_kopeks=amount_kopeks / 100,
             bill_id=bill_id,
@@ -301,7 +302,7 @@ async def start_pal24_payment(
         ),
     )
 
-    keyboard = get_back_keyboard(db_user.language)
+    keyboard = await get_topup_amount_keyboard('pal24', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(
         message_text,
@@ -484,12 +485,12 @@ async def check_pal24_payment_status(
         payment = status_info['payment']
 
         status_labels = {
-            'NEW': ('⏳', 'Ожидает оплаты'),
-            'PROCESS': ('⌛', 'Обрабатывается'),
+            'NEW': ('', 'Ожидает оплаты'),
+            'PROCESS': ('', 'Обрабатывается'),
             'SUCCESS': ('', 'Оплачен'),
             'FAIL': ('', 'Отменен'),
-            'UNDERPAID': ('️', 'Недоплата'),
-            'OVERPAID': ('️', 'Переплата'),
+            'UNDERPAID': ('', 'Недоплата'),
+            'OVERPAID': ('', 'Переплата'),
         }
 
         emoji, status_text = status_labels.get(payment.status, ('', 'Неизвестно'))
@@ -575,7 +576,7 @@ async def check_pal24_payment_status(
             message_lines.append('Платеж успешно завершен! Средства уже на балансе.')
         elif payment.status in {'NEW', 'PROCESS'}:
             message_lines.append('')
-            message_lines.append('⏳ Платеж еще не завершен. Оплатите счет и проверьте статус позже.')
+            message_lines.append('Платеж еще не завершен. Оплатите счет и проверьте статус позже.')
             if sbp_link:
                 message_lines.append('')
                 message_lines.append(f'СБП: {sbp_link}')

@@ -20,7 +20,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                 text='Открыть репозиторий', url=f'https://github.com/{version_service.repo}/releases'
             )
         ],
-        [InlineKeyboardButton(text='◀️ Назад', callback_data='admin_panel')],
+        [InlineKeyboardButton(text='Назад', callback_data='admin_panel')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -29,7 +29,7 @@ def get_updates_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 def get_version_info_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text='Обновить', callback_data='admin_updates_info')],
-        [InlineKeyboardButton(text='◀️ К обновлениям', callback_data='admin_updates')],
+        [InlineKeyboardButton(text='К обновлениям', callback_data='admin_updates')],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -46,7 +46,7 @@ async def show_updates_menu(callback: types.CallbackQuery, db_user: User, db: As
         total_newer = version_info['total_newer']
         last_check = version_info['last_check']
 
-        status_icon = '🆕' if has_updates else ''
+        status_icon = '' if has_updates else ''
         status_text = f'Доступно {total_newer} обновлений' if has_updates else 'Актуальная версия'
 
         last_check_text = ''
@@ -101,7 +101,7 @@ async def check_updates(callback: types.CallbackQuery, db_user: User, db: AsyncS
             updates_text = '\n'.join(updates_list)
             more_text = f'\n\nИ еще {len(newer_releases) - 5} обновлений...' if len(newer_releases) > 5 else ''
 
-            message = f"""🆕 <b>НАЙДЕНЫ ОБНОВЛЕНИЯ</b>
+            message = f"""<b>НАЙДЕНЫ ОБНОВЛЕНИЯ</b>
 
 <b>Текущая версия:</b> <code>{version_service.current_version}</code>
 <b>Доступно обновлений:</b> {len(newer_releases)}
@@ -152,18 +152,18 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
         current_info = '<b>ТЕКУЩАЯ ВЕРСИЯ</b>\n\n'
 
         if current_release:
-            current_info += f'️ <b>Версия:</b> <code>{current_release.tag_name}</code>\n'
+            current_info += f'<b>Версия:</b> <code>{current_release.tag_name}</code>\n'
             current_info += f'<b>Дата релиза:</b> {current_release.formatted_date}\n'
             if current_release.short_description:
                 current_info += f'<b>Описание:</b>\n{current_release.short_description}\n'
         else:
-            current_info += f'️ <b>Версия:</b> <code>{current_version}</code>\n'
+            current_info += f'<b>Версия:</b> <code>{current_version}</code>\n'
             current_info += '<b>Статус:</b> Информация о релизе недоступна\n'
 
         message_parts = [current_info]
 
         if has_updates and newer_releases:
-            updates_info = '\n🆕 <b>ДОСТУПНЫЕ ОБНОВЛЕНИЯ</b>\n\n'
+            updates_info = '\n<b>ДОСТУПНЫЕ ОБНОВЛЕНИЯ</b>\n\n'
 
             for i, release in enumerate(newer_releases):
                 icon = '' if i == 0 else ''

@@ -968,12 +968,14 @@ class MiniAppSubscriptionPurchaseService:
             'breakdown': [{'label': item['label'], 'value': item['value']} for item in breakdown],
             'balance_kopeks': context.balance_kopeks,
             'balanceKopeks': context.balance_kopeks,
-            'balance_label': texts.format_price(context.balance_kopeks),
-            'balanceLabel': texts.format_price(context.balance_kopeks),
+            # round_kopeks=False — без него при FX-rounding нехватке (<1₽) юзер видит
+            # "Баланс 150 ₽, не хватает 0 ₽" и не понимает что мешает покупке.
+            'balance_label': texts.format_price(context.balance_kopeks, round_kopeks=False),
+            'balanceLabel': texts.format_price(context.balance_kopeks, round_kopeks=False),
             'missing_amount_kopeks': missing,
             'missingAmountKopeks': missing,
-            'missing_amount_label': texts.format_price(missing) if missing else None,
-            'missingAmountLabel': texts.format_price(missing) if missing else None,
+            'missing_amount_label': texts.format_price(missing, round_kopeks=False) if missing else None,
+            'missingAmountLabel': texts.format_price(missing, round_kopeks=False) if missing else None,
             'can_purchase': missing == 0,
             'canPurchase': missing == 0,
             'status_message': status_message,
@@ -989,10 +991,12 @@ class MiniAppSubscriptionPurchaseService:
         user = context.user
         texts = get_texts(getattr(user, 'language', None))
 
-        if pricing.final_total <= 0:
+        # Block only if pricing is genuinely invalid (no base price configured).
+        # final_total == 0 with base_original_total > 0 means a valid 100% discount.
+        if pricing.final_total <= 0 and pricing.base_original_total <= 0:
             raise PurchaseValidationError('Invalid total amount', code='calculation_error')
 
-        if user.balance_kopeks < pricing.final_total:
+        if pricing.final_total > 0 and user.balance_kopeks < pricing.final_total:
             raise PurchaseBalanceError(
                 texts.t(
                     'MINIAPP_PURCHASE_STATUS_INSUFFICIENT',
@@ -1164,12 +1168,22 @@ class MiniAppSubscriptionPurchaseService:
                 logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
 
         try:
-            _purch_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                else getattr(user, 'remnawave_uuid', None)
-            )
-            if _purch_uuid:
+            # In multi-tariff mode, each subscription has its own panel user.
+            # A new subscription has no remnawave_uuid yet, so always CREATE.
+            # In single-tariff mode, reuse the user-level UUID if available.
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
+            else:
+                _should_create = not getattr(user, 'remnawave_uuid', None)
+
+            if _should_create:
+                await subscription_service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=True,
+                    reset_reason='miniapp purchase',
+                )
+            else:
                 await subscription_service.update_remnawave_user(
                     db,
                     subscription,
@@ -1177,15 +1191,15 @@ class MiniAppSubscriptionPurchaseService:
                     reset_reason='miniapp purchase',
                     sync_squads=True,
                 )
-            else:
-                await subscription_service.create_remnawave_user(
-                    db,
-                    subscription,
-                    reset_traffic=True,
-                    reset_reason='miniapp purchase',
-                )
         except Exception as remnawave_error:  # pragma: no cover - defensive logging
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=user.id,
+                action='create' if not getattr(subscription, 'remnawave_uuid', None) else 'update',
+            )
 
         transaction = await create_transaction(
             db=db,

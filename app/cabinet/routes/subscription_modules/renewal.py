@@ -57,7 +57,14 @@ async def get_renewal_options(
         return []
 
     # Determine available periods
-    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+    # Скрытый/неактивный тариф (например, триальный после промокода) —
+    # не показываем его периоды, используем стандартные
+    if (
+        subscription.tariff_id
+        and subscription.tariff
+        and subscription.tariff.is_active
+        and subscription.tariff.period_prices
+    ):
         periods = sorted(int(k) for k in subscription.tariff.period_prices.keys())
     else:
         periods = settings.get_available_renewal_periods()
@@ -67,7 +74,7 @@ async def get_renewal_options(
     for period in periods:
         pricing = await pricing_engine.calculate_renewal_price(db, subscription, period, user=user)
 
-        if pricing.final_total <= 0 and pricing.base_price <= 0:
+        if pricing.final_total <= 0 and pricing.original_total <= 0:
             continue
 
         original_price = pricing.original_total
@@ -128,7 +135,12 @@ async def renew_subscription(
             detail=f'Cannot renew subscription with status: {_actual_status}',
         )
 
-    if subscription.tariff_id and subscription.tariff and subscription.tariff.period_prices:
+    if (
+        subscription.tariff_id
+        and subscription.tariff
+        and subscription.tariff.is_active
+        and subscription.tariff.period_prices
+    ):
         available_periods = [int(p) for p in subscription.tariff.period_prices.keys()]
     else:
         available_periods = settings.get_available_renewal_periods()
@@ -155,7 +167,7 @@ async def renew_subscription(
     promo_offer_discount_value = pricing.promo_offer_discount
     promo_offer_discount_percent = pricing.breakdown.get('offer_discount_pct', 0)
 
-    if price_kopeks <= 0 and pricing.base_price <= 0:
+    if price_kopeks <= 0 and pricing.original_total <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Invalid renewal period',
@@ -168,8 +180,8 @@ async def renew_subscription(
 
     tariff = subscription.tariff if subscription.tariff_id else None
 
-    # Check balance
-    if user.balance_kopeks < price_kopeks:
+    # Check balance (skip for 100% discount)
+    if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         missing = price_kopeks - user.balance_kopeks
 
         # Get tariff info for cart
@@ -224,7 +236,7 @@ async def renew_subscription(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing)}',
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
                 'missing_amount': missing,
                 'cart_saved': True,
                 'cart_mode': 'extend',
@@ -253,6 +265,19 @@ async def renew_subscription(
                 'message': 'Недостаточно средств (concurrent check)',
             },
         )
+
+    # Yandex.Metrika offline conversion — see /purchase endpoint for context (#558449).
+    try:
+        from app.services import yandex_offline_conv_service as yandex_conv
+
+        # Purchase event fires centrally from create_transaction; here we only
+        # persist the request-body CID synchronously (#558449).
+        await yandex_conv.store_cid_only(
+            user.id,
+            request.yandex_cid,
+        )
+    except Exception as yconv_err:
+        logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
     response: dict[str, Any] = {
         'message': 'Subscription renewed successfully',

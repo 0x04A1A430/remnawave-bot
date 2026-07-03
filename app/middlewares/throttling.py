@@ -85,7 +85,7 @@ class ThrottlingMiddleware(BaseMiddleware):
                     max_calls=self.start_max_calls,
                 )
                 try:
-                    await event.answer(f'⏳ Слишком много запросов. Попробуйте через {cooldown} сек.')
+                    await event.answer(f'Слишком много запросов. Попробуйте через {cooldown} сек.')
                 except TelegramAPIError:
                     pass
                 self.start_buckets[user_id] = timestamps
@@ -115,14 +115,14 @@ class ThrottlingMiddleware(BaseMiddleware):
                     if is_ticket_state:
                         return None
                 try:
-                    await event.answer('⏳ Пожалуйста, не отправляйте сообщения так часто!')
+                    await event.answer('Пожалуйста, не отправляйте сообщения так часто!')
                 except TelegramAPIError:
                     pass
                 return None
             # Для callback допустим краткое уведомление
             if isinstance(event, CallbackQuery):
                 try:
-                    await event.answer('⏳ Слишком быстро! Подождите немного.', show_alert=True)
+                    await event.answer('Слишком быстро! Подождите немного.', show_alert=True)
                 except TelegramAPIError:
                     pass
                 return None

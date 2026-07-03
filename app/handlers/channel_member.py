@@ -78,6 +78,9 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
 
             for subscription in disabled_subs:
                 await reactivate_subscription(db, subscription)
+                # Ставим штамп чтобы webhook user.disabled (echo от нашего disable)
+                # не переотключил подписку при быстрой реподписке
+                subscription.last_webhook_update_at = datetime.now(UTC)
             logger.info(
                 'Subscriptions reactivated via channel event',
                 telegram_id=user.id,

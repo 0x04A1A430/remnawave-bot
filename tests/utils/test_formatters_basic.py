@@ -85,7 +85,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
         end_date=future,
         language='ru',
     )
-    assert active.startswith('Активна')
+    assert active.startswith('✅ Активна')
     assert '(' in active and ')' in active
 
     past = datetime.now(UTC) - timedelta(days=1)
@@ -95,7 +95,7 @@ def test_format_subscription_status_handles_active_and_expired() -> None:
         end_date=past,
         language='ru',
     )
-    assert expired == 'Истекла'
+    assert expired == '⏰ Истекла'
 
 
 def test_format_traffic_usage_supports_unlimited() -> None:
@@ -106,11 +106,11 @@ def test_format_traffic_usage_supports_unlimited() -> None:
 
 def test_format_boolean_localises_output() -> None:
     """Булевые значения отображаются локализованными словами."""
-    assert formatters.format_boolean(True, language='ru') == 'Да'
-    assert formatters.format_boolean(False, language='en') == 'No'
+    assert formatters.format_boolean(True, language='ru') == '✅ Да'
+    assert formatters.format_boolean(False, language='en') == '❌ No'
 
 
 def test_format_boolean_uses_russian_fallback_for_fa() -> None:
     """Для fa булевы значения пока используют базовый ru fallback."""
-    assert formatters.format_boolean(True, language='fa') == 'Да'
-    assert formatters.format_boolean(False, language='fa') == 'Нет'
+    assert formatters.format_boolean(True, language='fa') == '✅ Да'
+    assert formatters.format_boolean(False, language='fa') == '❌ Нет'

@@ -141,7 +141,7 @@ def _render_creation_progress(
     status_message: str | None = None,
     error_message: str | None = None,
 ) -> str:
-    lines: list[str] = ['️ <b>Создание опроса</b>']
+    lines: list[str] = ['<b>Создание опроса</b>']
 
     title_prompt = texts.t(
         'ADMIN_POLLS_CREATION_TITLE_PROMPT',
@@ -258,7 +258,7 @@ def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeybo
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'️ {poll.title[:40]}',
+                    text=f'{poll.title[:40]}',
                     callback_data=f'poll_view:{poll.id}',
                 )
             ]
@@ -312,7 +312,7 @@ def _build_poll_details_keyboard(poll_id: int, language: str) -> types.InlineKey
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_DELETE', '️ Удалить'),
+                    text=texts.t('ADMIN_POLLS_DELETE', 'Удалить'),
                     callback_data=f'poll_delete:{poll_id}',
                 )
             ],
@@ -367,7 +367,7 @@ def _build_target_keyboard(poll_id: int, language: str) -> types.InlineKeyboardM
             ],
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_POLLS_CUSTOM_TARGET', '️ По критериям'),
+                    text=texts.t('ADMIN_POLLS_CUSTOM_TARGET', 'По критериям'),
                     callback_data=f'poll_custom_menu:{poll_id}',
                 )
             ],
@@ -456,7 +456,7 @@ async def show_polls_panel(callback: types.CallbackQuery, db_user: User, db: Asy
     polls = await list_polls(db)
     texts = get_texts(db_user.language)
 
-    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', '️ <b>Опросы</b>'), '']
+    lines = [texts.t('ADMIN_POLLS_LIST_TITLE', '<b>Опросы</b>'), '']
     if not polls:
         lines.append(texts.t('ADMIN_POLLS_LIST_EMPTY', 'Опросов пока нет.'))
     else:
@@ -884,7 +884,7 @@ async def process_poll_question(
 
 async def _render_poll_details(poll: Poll, language: str) -> str:
     texts = get_texts(language)
-    lines = [f'️ <b>{html.escape(poll.title)}</b>']
+    lines = [f'<b>{html.escape(poll.title)}</b>']
     if poll.description:
         lines.append(html.escape(poll.description))
 
@@ -1140,7 +1140,7 @@ async def confirm_poll_delete(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('ADMIN_POLLS_DELETE', '️ Удалить'),
+                        text=texts.t('ADMIN_POLLS_DELETE', 'Удалить'),
                         callback_data=f'poll_delete_confirm:{poll_id}',
                     )
                 ],
@@ -1170,7 +1170,7 @@ async def delete_poll_handler(
 
     if success:
         await callback.message.edit_text(
-            texts.t('ADMIN_POLLS_DELETED', '️ Опрос удалён.'),
+            texts.t('ADMIN_POLLS_DELETED', 'Опрос удалён.'),
             reply_markup=_build_polls_keyboard(await list_polls(db), db_user.language),
         )
     else:

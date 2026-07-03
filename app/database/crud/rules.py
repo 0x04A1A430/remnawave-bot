@@ -38,7 +38,7 @@ async def create_or_update_rules(
     await db.commit()
     await db.refresh(new_rules)
 
-    logger.info('Правила для языка обновлены (ID: )', language=language, new_rules_id=new_rules.id)
+    logger.info('Правила обновлены', language=language, new_rules_id=new_rules.id)
     return new_rules
 
 
@@ -71,7 +71,7 @@ async def get_current_rules_content(db: AsyncSession, language: str = 'ru') -> s
     if rules:
         return rules.content
     return """
-<b>Правила использования сервиса</b>
+🔒 <b>Правила использования сервиса</b>
 
 1. Сервис предоставляется "как есть" без каких-либо гарантий.
 

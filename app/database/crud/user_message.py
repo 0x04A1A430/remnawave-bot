@@ -147,7 +147,7 @@ async def delete_user_message(db: AsyncSession, message_id: int) -> bool:
     await db.delete(message)
     await db.commit()
 
-    logger.info('️ Удалено сообщение ID', message_id=message_id)
+    logger.info('Удалено сообщение ID', message_id=message_id)
     return True
 
 

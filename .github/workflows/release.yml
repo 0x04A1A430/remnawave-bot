@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+
+  release:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 ${{ github.ref_name }}^ 2>/dev/null || echo "")
+          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          TAG="${{ github.ref_name }}"
+          PREV_TAG="${{ steps.prev_tag.outputs.tag }}"
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="$TAG"
+          else
+            RANGE="${PREV_TAG}..${TAG}"
+          fi
+
+          # Collect commits by category
+          FEATURES=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -iE "^feat" || true)
+          FIXES=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -iE "^fix" || true)
+          PERF=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -iE "^perf|^refactor" || true)
+          DOCS=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -iE "^docs|^style" || true)
+          CHORE=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -iE "^chore|^ci|^build|^test" || true)
+          OTHER=$(git log $RANGE --pretty=format:"%s|%an|%h" --no-merges | grep -ivE "^(feat|fix|perf|refactor|docs|style|chore|ci|build|test)" || true)
+
+          # Collect unique contributors
+          CONTRIBUTORS=$(git log $RANGE --pretty=format:"%an" --no-merges | sort -u)
+
+          # Stats
+          TOTAL_COMMITS=$(git log $RANGE --oneline --no-merges | wc -l | tr -d ' ')
+          FILES_CHANGED=$(git diff --stat $RANGE 2>/dev/null | tail -1 || echo "N/A")
+
+          # Format function
+          format_section() {
+            local commits="$1"
+            if [ -n "$commits" ]; then
+              echo "$commits" | while IFS='|' read -r msg author hash; do
+                # Clean conventional commit prefix
+                clean_msg=$(echo "$msg" | sed -E 's/^(feat|fix|perf|refactor|docs|style|chore|ci|build|test)(\([^)]*\))?:\s*//')
+                echo "- ${clean_msg} (\`${hash}\`) — @${author}"
+              done
+            fi
+          }
+
+          # Build changelog
+          {
+            echo "changelog<<CHANGELOG_EOF"
+
+            if [ -n "$FEATURES" ]; then
+              echo "### New Features"
+              echo ""
+              format_section "$FEATURES"
+              echo ""
+            fi
+
+            if [ -n "$FIXES" ]; then
+              echo "### Bug Fixes"
+              echo ""
+              format_section "$FIXES"
+              echo ""
+            fi
+
+            if [ -n "$PERF" ]; then
+              echo "### Performance & Refactoring"
+              echo ""
+              format_section "$PERF"
+              echo ""
+            fi
+
+            if [ -n "$DOCS" ]; then
+              echo "### Documentation & Style"
+              echo ""
+              format_section "$DOCS"
+              echo ""
+            fi
+
+            if [ -n "$CHORE" ]; then
+              echo "### Maintenance"
+              echo ""
+              format_section "$CHORE"
+              echo ""
+            fi
+
+            if [ -n "$OTHER" ]; then
+              echo "### Other Changes"
+              echo ""
+              format_section "$OTHER"
+              echo ""
+            fi
+
+            echo "---"
+            echo ""
+            echo "### Contributors"
+            echo ""
+            if [ -n "$CONTRIBUTORS" ]; then
+              echo "$CONTRIBUTORS" | while read -r name; do
+                echo "- @${name}"
+              done
+            fi
+            echo ""
+            echo "### Stats"
+            echo ""
+            echo "- **Commits:** ${TOTAL_COMMITS}"
+            echo "- **Changes:** ${FILES_CHANGED}"
+            if [ -n "$PREV_TAG" ]; then
+              echo "- **Full diff:** [\`${PREV_TAG}...${TAG}\`](https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG})"
+            fi
+
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            ## What's Changed
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ---
+
+            ### Docker
+
+            ```bash
+            # Docker Hub
+            docker pull fr1ngg/remnawave-bedolaga-telegram-bot:${{ github.ref_name }}
+
+            # GitHub Container Registry
+            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            ### Update
+
+            ```bash
+            # Docker Compose
+            docker compose pull && docker compose up -d
+
+            # Or with Make
+            make reload
+            ```
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') || contains(github.ref_name, 'dev') }}
+          generate_release_notes: false

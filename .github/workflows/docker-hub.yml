@@ -1,0 +1,113 @@
+name: BedolagaBot
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0  
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Get version info
+      id: version
+      run: |
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+        echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+        # Read base version from release-please manifest (single source of truth)
+        BASE_VERSION=$(jq -r '."."' .release-please-manifest.json)
+
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:latest,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
+          echo "🏷️ Собираем релизную версию: $VERSION"
+        elif [[ $GITHUB_REF == refs/heads/main ]]; then
+          VERSION="v${BASE_VERSION}-${SHORT_SHA}"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:latest,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
+          echo "🚀 Собираем версию из main: $VERSION"
+        elif [[ $GITHUB_REF == refs/heads/dev ]]; then
+          VERSION="v${BASE_VERSION}-dev-${SHORT_SHA}"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:dev,fr1ngg/remnawave-bedolaga-telegram-bot:${VERSION}"
+          echo "🧪 Собираем dev версию: $VERSION"
+        else
+          VERSION="v${BASE_VERSION}-pr-${SHORT_SHA}"
+          TAGS="fr1ngg/remnawave-bedolaga-telegram-bot:pr-${SHORT_SHA}"
+          echo "🔀 Собираем PR версию: $VERSION"
+        fi
+
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tags=$TAGS" >> $GITHUB_OUTPUT
+        echo "should_push=${{ github.event_name != 'pull_request' }}" >> $GITHUB_OUTPUT
+
+        echo "=== Информация о сборке ==="
+        echo "Версия: $VERSION"
+        echo "Коммит: $SHORT_SHA"
+        echo "Теги: $TAGS"
+        echo "Push: ${{ github.event_name != 'pull_request' }}"
+        echo "==========================="
+
+    - name: Login to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: ${{ steps.version.outputs.should_push }}
+        tags: ${{ steps.version.outputs.tags }}
+        build-args: |
+          VERSION=${{ steps.version.outputs.version }}
+          BUILD_DATE=${{ steps.version.outputs.build_date }}
+          VCS_REF=${{ steps.version.outputs.short_sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        labels: |
+          org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          org.opencontainers.image.created=${{ steps.version.outputs.build_date }}
+          org.opencontainers.image.revision=${{ steps.version.outputs.short_sha }}
+          org.opencontainers.image.title=Bedolaga RemnaWave Bot
+          org.opencontainers.image.description=Telegram bot for RemnaWave VPN service
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+    - name: Build Summary
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "## 🚀 Docker Hub Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Параметр | Значение |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|----------|" >> $GITHUB_STEP_SUMMARY
+        echo "| **Версия** | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Коммит** | \`${{ steps.version.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Дата сборки** | \`${{ steps.version.outputs.build_date }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Registry** | Docker Hub |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Ветка** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Статус** | ✅ Опубликован |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Опубликованные теги:" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.version.outputs.tags }}" | tr ',' '\n' >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Ссылки:" >> $GITHUB_STEP_SUMMARY
+        echo "- [Docker Hub Repository](https://hub.docker.com/r/fr1ngg/remnawave-bedolaga-telegram-bot)" >> $GITHUB_STEP_SUMMARY

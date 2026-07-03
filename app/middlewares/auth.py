@@ -30,7 +30,9 @@ async def _refresh_remnawave_description(remnawave_uuid: str, description: str, 
         logger.info('[Middleware] Описание пользователя обновлено в RemnaWave', telegram_id=telegram_id)
     except Exception as remnawave_error:
         logger.error(
-            '[Middleware] Ошибка обновления RemnaWave для', telegram_id=telegram_id, remnawave_error=remnawave_error
+            '[Middleware] Ошибка обновления описания пользователя в RemnaWave',
+            telegram_id=telegram_id,
+            remnawave_error=remnawave_error,
         )
 
 
@@ -89,9 +91,9 @@ class AuthMiddleware(BaseMiddleware):
                         await db.commit()
                         return result
                     if isinstance(event, Message):
-                        await event.answer('▶️ Для начала работы необходимо выполнить команду /start')
+                        await event.answer('Для начала работы необходимо выполнить команду /start')
                     elif isinstance(event, CallbackQuery):
-                        await event.answer('▶️ Необходимо начать с команды /start', show_alert=True)
+                        await event.answer('Необходимо начать с команды /start', show_alert=True)
                     logger.info('Заблокирован незарегистрированный пользователь', user_id=user.id)
                     return None
                 from app.database.models import UserStatus
@@ -148,7 +150,7 @@ class AuthMiddleware(BaseMiddleware):
                         return result
                     if isinstance(event, Message):
                         await event.answer(
-                            'Ваш аккаунт был удален.\nДля повторной регистрации выполните команду /start'
+                            'Ваш аккаунт был удален.\n Для повторной регистрации выполните команду /start'
                         )
                     elif isinstance(event, CallbackQuery):
                         await event.answer(
@@ -163,7 +165,7 @@ class AuthMiddleware(BaseMiddleware):
                     old_username = db_user.username
                     db_user.username = user.username
                     logger.info(
-                        '[Middleware] Username обновлен для',
+                        '[Middleware] Username пользователя обновлен',
                         user_id=user.id,
                         old_username=old_username,
                         username=db_user.username,
@@ -176,7 +178,7 @@ class AuthMiddleware(BaseMiddleware):
                     old_first_name = db_user.first_name
                     db_user.first_name = safe_first
                     logger.info(
-                        '[Middleware] Имя обновлено для',
+                        '[Middleware] Имя пользователя обновлено',
                         user_id=user.id,
                         old_first_name=old_first_name,
                         first_name=db_user.first_name,
@@ -187,7 +189,7 @@ class AuthMiddleware(BaseMiddleware):
                     old_last_name = db_user.last_name
                     db_user.last_name = safe_last
                     logger.info(
-                        '[Middleware] Фамилия обновлена для',
+                        '[Middleware] Фамилия пользователя обновлена',
                         user_id=user.id,
                         old_last_name=old_last_name,
                         last_name=db_user.last_name,
@@ -238,10 +240,10 @@ class AuthMiddleware(BaseMiddleware):
                     await db.commit()
                 except (InterfaceError, OperationalError) as conn_err:
                     # Соединение закрылось (таймаут после долгой операции) - просто логируем
-                    logger.warning('️ Соединение с БД закрыто после обработки, пропускаем commit', conn_err=conn_err)
+                    logger.warning('Соединение с БД закрыто после обработки, пропускаем commit', conn_err=conn_err)
                 except Exception as commit_err:
                     # Transaction aborted (e.g. handler swallowed a ProgrammingError) — rollback
-                    logger.warning('️ Не удалось commit после обработки, rollback', commit_err=commit_err)
+                    logger.warning('Не удалось commit после обработки, rollback', commit_err=commit_err)
                     try:
                         await db.rollback()
                     except Exception:

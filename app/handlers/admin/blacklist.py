@@ -58,7 +58,7 @@ URL к черному списку: <code>{url_text}</code>
         ],
         [
             types.InlineKeyboardButton(
-                text='️ URL к GitHub' if not github_url else '️ Изменить URL', callback_data='admin_blacklist_set_url'
+                text='URL к GitHub' if not github_url else 'Изменить URL', callback_data='admin_blacklist_set_url'
             )
         ],
         [

@@ -102,7 +102,7 @@ async def create_promocode_use(db: AsyncSession, promocode_id: int, user_id: int
             await db.flush()
     except IntegrityError:
         logger.warning(
-            '️ Дублирующая запись использования промокода (race condition)',
+            'Дублирующая запись использования промокода (race condition)',
             promocode_id=promocode_id,
             user_id=user_id,
         )
@@ -180,7 +180,7 @@ async def delete_promocode(db: AsyncSession, promocode: PromoCode) -> bool:
         await db.delete(promocode)
         await db.commit()
 
-        logger.info('️ Удален промокод', code=promocode.code)
+        logger.info('Удален промокод', code=promocode.code)
         return True
 
     except Exception as e:

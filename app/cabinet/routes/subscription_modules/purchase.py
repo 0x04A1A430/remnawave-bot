@@ -10,6 +10,7 @@ POST /subscription/trial
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,6 +26,7 @@ from app.database.crud.subscription import (
     create_trial_subscription,
     decrement_subscription_server_counts,
     extend_subscription,
+    get_subscription_by_id_for_user,
     get_subscription_by_user_id,
 )
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
@@ -50,12 +52,19 @@ from ...schemas.subscription import (
     PurchasePreviewRequest,
     SubscriptionResponse,
     TariffPurchaseRequest,
+    TrialActivateRequest,
     TrialInfoResponse,
 )
 from .helpers import _subscription_to_response
 
 
 logger = structlog.get_logger(__name__)
+
+# Cap inline RemnaWave panel sync on user-facing cabinet requests. The product is
+# committed before the sync, so a slow/unavailable panel must not hold the HTTP
+# response open (the cabinet pay button is bound to the request and would spin
+# after delivery). Past this budget the sync is deferred to remnawave_retry_queue.
+REMNAWAVE_SYNC_TIMEOUT = 10.0
 
 router = APIRouter()
 
@@ -178,7 +187,7 @@ async def _build_tariff_response(
 
             periods.append(period_data)
 
-    traffic_label = '️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
+    traffic_label = 'Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
 
     # Apply discount to daily price if applicable (group + promo-offer)
     daily_price = getattr(tariff, 'daily_price_kopeks', 0)
@@ -304,9 +313,7 @@ async def get_purchase_options(
                 from app.database.crud.subscription import get_active_subscriptions_by_user_id
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-                purchased_tariff_ids = {
-                    s.tariff_id for s in active_subs if s.tariff_id and s.status in ('active', 'trial')
-                }
+                purchased_tariff_ids = {s.tariff_id for s in active_subs if s.tariff_id and not s.is_trial}
 
                 if subscription_id:
                     from app.database.crud.subscription import get_subscription_by_id_for_user
@@ -355,6 +362,9 @@ async def get_purchase_options(
                 'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
                 if settings.is_multi_tariff_enabled()
                 else False,
+                # Направления смены тарифа
+                'tariff_switch_upgrade_enabled': settings.TARIFF_SWITCH_UPGRADE_ENABLED,
+                'tariff_switch_downgrade_enabled': settings.TARIFF_SWITCH_DOWNGRADE_ENABLED,
             }
 
         # Classic mode - return periods
@@ -489,12 +499,11 @@ async def submit_purchase(
 
         # Отправляем уведомление админам о покупке подписки
         try:
-            from aiogram import Bot
-
+            from app.bot_factory import create_bot
             from app.services.admin_notification_service import AdminNotificationService
 
-            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
-                bot = Bot(token=settings.BOT_TOKEN)
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+                bot = create_bot()
                 try:
                     notification_service = AdminNotificationService(bot)
                     is_new_subscription = result.get('was_trial_conversion') or not context.subscription
@@ -515,6 +524,21 @@ async def submit_purchase(
 
         # Refresh expired objects after db.commit() in _record_subscription_event
         await db.refresh(subscription)
+
+        # Persist Yandex CID (if frontend cached it) and fire offline-conv
+        # purchase event — closes the race where the separate /yandex-cid POST
+        # hadn't completed yet. See #558449.
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            # Purchase event fires centrally from create_transaction; here we
+            # only persist the request-body CID synchronously (#558449).
+            await yandex_conv.store_cid_only(
+                user.id,
+                request.yandex_cid,
+            )
+        except Exception as yconv_err:
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         return {
             'success': True,
@@ -644,14 +668,60 @@ async def purchase_tariff(
         traffic_limit_gb = tariff.traffic_limit_gb
         custom_traffic_gb = None
         if request.traffic_gb is not None and tariff.can_purchase_custom_traffic():
+            # Validate against the tariff's allowed custom-traffic range. Without this an
+            # out-of-range value makes get_price_for_custom_traffic() return None, which the
+            # pricing engine treats as 0 — provisioning free (even unlimited) traffic. The
+            # bot-side flow clamps the same input (tariff_purchase.py); mirror that here.
+            if request.traffic_gb < tariff.min_traffic_gb or request.traffic_gb > tariff.max_traffic_gb:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f'Traffic must be between {tariff.min_traffic_gb} and '
+                        f'{tariff.max_traffic_gb} GB for this tariff'
+                    ),
+                )
             custom_traffic_gb = request.traffic_gb
             traffic_limit_gb = request.traffic_gb
 
-        # Determine device_limit for renewal pricing
+        # Determine device_limit for renewal pricing.
+        #
+        # When the frontend passes an explicit ``subscription_id`` (the
+        # user clicked "Renew this subscription" rather than a fresh
+        # catalog buy), use it via the ownership-checked lookup. This
+        # is race-resistant: even if a concurrent panel webhook briefly
+        # flips the target sub's status between request arrival and
+        # this query, the ID-based lookup still finds the right row.
+        # Without this pin, the bot was hitting the partial UNIQUE
+        # ``uq_subscriptions_user_tariff_active`` on confirm and
+        # logging "Тариф уже активен" — the exact production scenario
+        # the bot-side fix already closed (commit 5cd53e4c).
+        existing_subscription = None
         if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+            if request.subscription_id is not None:
+                existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
+                # If the pinned sub points to a different tariff than
+                # the request carries (admin swap, stale client state),
+                # ignore it and fall back to tariff-level lookup so the
+                # purchase doesn't extend a sub of the wrong tariff.
+                if existing_subscription and existing_subscription.tariff_id != tariff.id:
+                    logger.warning(
+                        'Cabinet purchase: explicit subscription_id has divergent tariff_id; falling back',
+                        request_subscription_id=request.subscription_id,
+                        pinned_tariff_id=existing_subscription.tariff_id,
+                        request_tariff_id=tariff.id,
+                        user_id=user.id,
+                    )
+                    existing_subscription = None
+            if existing_subscription is None:
+                from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
-            existing_subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id)
+                # include_inactive=True so an EXPIRED (or disabled) trial of THIS
+                # tariff is found and converted in place via the extend branch
+                # below (same Remnawave user → same link). Without it the expired
+                # trial is invisible → killed → re-created with a new link.
+                existing_subscription = await get_subscription_by_user_and_tariff(
+                    db, user.id, tariff.id, include_inactive=True
+                )
         else:
             existing_subscription = await get_subscription_by_user_id(db, user.id)
         device_limit = None
@@ -678,15 +748,17 @@ async def purchase_tariff(
         promo_offer_discount_value = result.promo_offer_discount
         price_before_promo_offer = price_kopeks + promo_offer_discount_value
 
-        # Safety guard: reject zero-price purchases for non-daily tariffs (defense in depth)
-        if price_kopeks <= 0 and result.base_price <= 0 and not is_daily_tariff:
+        # Safety guard: reject zero-price purchases for non-daily tariffs (defense in depth).
+        # Use original_total (pre-discount price) — base_price is already discounted,
+        # so a 100% group discount legitimately makes it 0.
+        if price_kopeks <= 0 and result.original_total <= 0 and not is_daily_tariff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Invalid tariff period or pricing configuration',
             )
 
         # Check balance
-        if user.balance_kopeks < price_kopeks:
+        if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
             missing = price_kopeks - user.balance_kopeks
 
             # Save cart for auto-purchase after balance top-up
@@ -739,7 +811,7 @@ async def purchase_tariff(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': f'Недостаточно средств. Не хватает {settings.format_price(missing)}',
+                    'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
                     'missing_amount': missing,
                     'cart_saved': True,
                     'cart_mode': cart_data['cart_mode'],
@@ -892,25 +964,41 @@ async def purchase_tariff(
             except Exception as trial_err:
                 logger.warning('Failed to disable trial on RemnaWave', error=trial_err, trial_id=trial_sub.id)
         try:
-            if subscription.remnawave_uuid:
-                # Existing subscription with Remnawave user — update it
-                await service.update_remnawave_user(
-                    db,
-                    subscription,
-                    reset_traffic=True,
-                    reset_reason='покупка тарифа (cabinet)',
-                    sync_squads=True,
-                )
+            # Mirror the bot handler logic: in single-tariff mode, check user.remnawave_uuid
+            # (webhook clears it on panel deletion), not subscription.remnawave_uuid
+            if settings.is_multi_tariff_enabled():
+                _should_create = not subscription.remnawave_uuid
             else:
-                # New subscription — create new Remnawave user
-                await service.create_remnawave_user(
-                    db,
-                    subscription,
-                    reset_traffic=True,
-                    reset_reason='покупка тарифа (cabinet)',
-                )
+                _should_create = not getattr(user, 'remnawave_uuid', None)
+
+            # Time-bounded (see REMNAWAVE_SYNC_TIMEOUT): the subscription is already
+            # committed, so a slow panel must not keep the cabinet pay button spinning;
+            # past the budget the sync is deferred to remnawave_retry_queue below.
+            async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
+                if not _should_create:
+                    await service.update_remnawave_user(
+                        db,
+                        subscription,
+                        reset_traffic=True,
+                        reset_reason='покупка тарифа (cabinet)',
+                        sync_squads=True,
+                    )
+                else:
+                    await service.create_remnawave_user(
+                        db,
+                        subscription,
+                        reset_traffic=True,
+                        reset_reason='покупка тарифа (cabinet)',
+                    )
         except Exception as remnawave_error:
             logger.error('Failed to sync subscription with RemnaWave', remnawave_error=remnawave_error)
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(
+                subscription_id=subscription.id,
+                user_id=user.id,
+                action='create' if _should_create else 'update',
+            )
 
         # Save cart for auto-renewal (not for daily tariffs - they have their own charging)
         if not is_daily_tariff:
@@ -930,6 +1018,19 @@ async def purchase_tariff(
 
         await db.refresh(user)
         await db.refresh(subscription)
+
+        # Yandex.Metrika offline conversion — see /purchase endpoint for context (#558449).
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            # Purchase event fires centrally from create_transaction; here we
+            # only persist the request-body CID synchronously (#558449).
+            await yandex_conv.store_cid_only(
+                user.id,
+                request.yandex_cid,
+            )
+        except Exception as yconv_err:
+            logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
         response: dict[str, Any] = {
             'success': True,
@@ -990,12 +1091,11 @@ async def purchase_tariff(
 
         # Отправляем уведомление админам о покупке/продлении тарифа
         try:
-            from aiogram import Bot
-
+            from app.bot_factory import create_bot
             from app.services.admin_notification_service import AdminNotificationService
 
-            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
-                bot = Bot(token=settings.BOT_TOKEN)
+            if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+                bot = create_bot()
                 try:
                     notification_service = AdminNotificationService(bot)
                     # Определяем тип покупки: новая подписка или продление
@@ -1068,9 +1168,11 @@ async def get_trial_info(
         if not trial_tariff:
             trial_tariff_id = settings.get_trial_tariff_id()
             if trial_tariff_id > 0:
+                # Триальный тариф намеренно может быть НЕактивным (скрыт из списка
+                # покупки, но задаёт лимиты триала) — не отбраковываем по is_active,
+                # иначе триал падает на TRIAL_TRAFFIC_LIMIT_GB. Так же ведут себя
+                # бот и miniapp, и get_trial_tariff (по флагу is_trial_available).
                 trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and not trial_tariff.is_active:
-                    trial_tariff = None
 
         if trial_tariff:
             traffic_limit_gb = trial_tariff.traffic_limit_gb
@@ -1084,7 +1186,7 @@ async def get_trial_info(
     # Check if user already has an active subscription
     subs = getattr(user, 'subscriptions', None) or []
     has_active = any(s.status == 'active' and s.end_date and s.end_date > datetime.now(UTC) for s in subs)
-    has_used_trial = any(s.is_trial for s in subs) or user.has_had_paid_subscription
+    has_used_trial = user.is_trial_already_used()
 
     if has_active:
         return TrialInfoResponse(
@@ -1123,6 +1225,7 @@ async def get_trial_info(
 
 @router.post('/trial', response_model=SubscriptionResponse)
 async def activate_trial(
+    request: TrialActivateRequest | None = None,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1146,7 +1249,7 @@ async def activate_trial(
         )
 
     # Check if user already used trial
-    if any(s.is_trial for s in subs) or user.has_had_paid_subscription:
+    if user.is_trial_already_used():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Trial already used',
@@ -1158,7 +1261,7 @@ async def activate_trial(
         from app.database.crud.user import subtract_user_balance
 
         price_kopeks = settings.TRIAL_ACTIVATION_PRICE
-        if user.balance_kopeks < price_kopeks:
+        if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
@@ -1175,6 +1278,24 @@ async def activate_trial(
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail='Failed to charge trial activation fee',
+            )
+
+        # Persist the request-body CID BEFORE create_transaction. The
+        # SUBSCRIPTION_PAYMENT below fires the purchase event centrally
+        # (background fire_purchase_bg reads the CID from the DB), so the CID
+        # must be stored and committed first or the fire races it and no-ops
+        # (#558449). store_cid_and_fire_trial below still handles the separate
+        # 'trial-add' event.
+        cabinet_cid = request.yandex_cid if request is not None else None
+        try:
+            from app.services import yandex_offline_conv_service as yandex_conv
+
+            await yandex_conv.store_cid_only(user.id, cabinet_cid)
+        except Exception as yconv_err:
+            logger.debug(
+                'yandex_conv CID persist (pre-transaction) failed (non-fatal)',
+                user_id=user.id,
+                error=str(yconv_err),
             )
 
         # Создаём транзакцию для учёта списания за триал
@@ -1207,14 +1328,18 @@ async def activate_trial(
         if not trial_tariff:
             trial_tariff_id = settings.get_trial_tariff_id()
             if trial_tariff_id > 0:
+                # Триальный тариф намеренно может быть НЕактивным (скрыт из списка
+                # покупки, но задаёт лимиты триала) — не отбраковываем по is_active,
+                # иначе триал падает на TRIAL_TRAFFIC_LIMIT_GB. Так же ведут себя
+                # бот и miniapp, и get_trial_tariff (по флагу is_trial_available).
                 trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
-                if trial_tariff and not trial_tariff.is_active:
-                    trial_tariff = None
 
         if trial_tariff:
+            from app.database.crud.server_squad import get_effective_tariff_squad_uuids
+
             trial_traffic_limit = trial_tariff.traffic_limit_gb
             trial_device_limit = trial_tariff.device_limit
-            trial_squads = trial_tariff.allowed_squads or []
+            trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
             tariff_id_for_trial = trial_tariff.id
             tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
             if tariff_trial_days:
@@ -1227,6 +1352,13 @@ async def activate_trial(
             )
     except Exception as e:
         logger.error('Error getting trial tariff', error=e)
+
+    # No trial tariff configured, use the legacy random trial squad fallback.
+    if not trial_squads:
+        from app.database.crud.server_squad import get_random_trial_squad_uuid
+
+        trial_squad_uuid = await get_random_trial_squad_uuid(db)
+        trial_squads = [trial_squad_uuid] if trial_squad_uuid else []
 
     # Create trial subscription
     subscription = await create_trial_subscription(
@@ -1242,22 +1374,44 @@ async def activate_trial(
     logger.info('Trial subscription activated for user', user_id=user.id)
 
     # Create RemnaWave user
+    subscription_service = SubscriptionService()
+    panel_user = None
     try:
-        subscription_service = SubscriptionService()
         if subscription_service.is_configured:
-            await subscription_service.create_remnawave_user(db, subscription)
-            await db.refresh(subscription)
+            # Time-bounded (see REMNAWAVE_SYNC_TIMEOUT): on timeout the panel_user
+            # stays None and the check below enqueues remnawave_retry_queue, instead
+            # of holding the cabinet response open after the trial is committed.
+            async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
+                panel_user = await subscription_service.create_remnawave_user(db, subscription)
+                await db.refresh(subscription)
     except Exception as e:
         logger.error('Failed to create RemnaWave user for trial', error=e)
 
+    # create_remnawave_user проглатывает RemnaWaveAPIError внутри себя и
+    # возвращает None (не пробрасывает) — поэтому одного except недостаточно.
+    # Без явной проверки результата кабинет показывал бы триал «активен» без
+    # subscription_url, а юзер так и не появлялся бы в панели Remnawave.
+    if subscription_service.is_configured and panel_user is None:
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+        remnawave_retry_queue.enqueue(
+            subscription_id=subscription.id,
+            user_id=user.id,
+            action='create',
+        )
+        logger.warning(
+            'Trial RemnaWave user not provisioned, enqueued for retry',
+            user_id=user.id,
+            subscription_id=subscription.id,
+        )
+
     # Send admin notification about trial activation
     try:
-        from aiogram import Bot
-
+        from app.bot_factory import create_bot
         from app.services.admin_notification_service import AdminNotificationService
 
-        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
-            bot = Bot(token=settings.BOT_TOKEN)
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
+            bot = create_bot()
             try:
                 notification_service = AdminNotificationService(bot)
                 charged_amount = settings.TRIAL_ACTIVATION_PRICE if requires_payment else None
@@ -1268,5 +1422,24 @@ async def activate_trial(
                 await bot.session.close()
     except Exception as e:
         logger.error('Failed to send trial activation notification', error=e)
+
+    # Yandex.Metrika offline conversion — sibling to #558449. Fire two events
+    # when applicable: the regular 'trial-add' for every trial activation,
+    # plus 'purchase' if TRIAL_PAYMENT_ENABLED and money was actually charged.
+    cabinet_cid = request.yandex_cid if request is not None else None
+    try:
+        from app.services import yandex_offline_conv_service as yandex_conv
+
+        # 'trial-add' event still fires here. The paid-trial 'purchase' event is
+        # NOT fired here anymore: when a trial activation fee is charged it
+        # creates a SUBSCRIPTION_PAYMENT transaction, which fires the purchase
+        # event centrally from create_transaction (avoids double-fire).
+        await yandex_conv.store_cid_and_fire_trial(user.id, cabinet_cid)
+    except Exception as yconv_err:
+        logger.debug(
+            'yandex_conv trial/purchase hook failed (non-fatal)',
+            user_id=user.id,
+            error=str(yconv_err),
+        )
 
     return _subscription_to_response(subscription, user=user)

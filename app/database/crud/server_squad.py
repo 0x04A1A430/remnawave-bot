@@ -33,7 +33,15 @@ logger = structlog.get_logger(__name__)
 
 async def _get_default_promo_group_id(db: AsyncSession) -> int | None:
     result = await db.execute(select(PromoGroup.id).where(PromoGroup.is_default.is_(True)).limit(1))
-    return result.scalar_one_or_none()
+    default_id = result.scalar_one_or_none()
+    if default_id is not None:
+        return default_id
+
+    # На пустой БД дефолтной промогруппы нет — создаём автоматически
+    from app.database.crud.user import _get_or_create_default_promo_group
+
+    default_group = await _get_or_create_default_promo_group(db)
+    return default_group.id
 
 
 async def create_server_squad(
@@ -84,7 +92,7 @@ async def create_server_squad(
     await db.commit()
     await db.refresh(server_squad)
 
-    logger.info('Создан сервер (UUID: )', display_name=display_name, squad_uuid=squad_uuid)
+    logger.info('Создан сервер', display_name=display_name, squad_uuid=squad_uuid)
     return server_squad
 
 
@@ -153,6 +161,20 @@ async def get_available_server_squads(
 
     result = await db.execute(query)
     return result.scalars().unique().all()
+
+
+async def get_effective_tariff_squad_uuids(
+    db: AsyncSession,
+    allowed_squads: Sequence[str] | None,
+) -> list[str]:
+    """Resolve tariff squads, treating an empty list as "all available squads"."""
+
+    normalized = [str(squad_uuid) for squad_uuid in (allowed_squads or []) if squad_uuid]
+    if normalized:
+        return list(dict.fromkeys(normalized))
+
+    available = await get_available_server_squads(db)
+    return [squad.squad_uuid for squad in available if squad.squad_uuid]
 
 
 async def get_active_server_squads(db: AsyncSession) -> list[ServerSquad]:
@@ -281,7 +303,7 @@ async def delete_server_squad(db: AsyncSession, server_id: int) -> bool:
     await db.execute(delete(ServerSquad).where(ServerSquad.id == server_id))
     await db.commit()
 
-    logger.info('️ Удален сервер (ID: )', server_id=server_id)
+    logger.info('Удален сервер', server_id=server_id)
     return True
 
 
@@ -339,7 +361,7 @@ async def sync_with_remnawave(db: AsyncSession, remnawave_squads: list[dict]) ->
         subscription_ids = {row[0] for row in subscription_ids_result.fetchall()}
 
         for server in removed_servers:
-            logger.info('️ Удаляется сервер (UUID:)', display_name=server.display_name, squad_uuid=server.squad_uuid)
+            logger.info('Удаляется сервер', display_name=server.display_name, squad_uuid=server.squad_uuid)
 
         await db.execute(delete(SubscriptionServer).where(SubscriptionServer.server_squad_id.in_(removed_ids)))
 
@@ -679,7 +701,7 @@ async def ensure_servers_synced(db: AsyncSession) -> None:
 
         subscription_service = SubscriptionService()
         if not subscription_service.is_configured:
-            logger.warning('️ RemnaWave не настроен, серверы не синхронизированы')
+            logger.warning('RemnaWave не настроен, серверы не синхронизированы')
             return
 
         # Получаем скводы из RemnaWave
@@ -689,7 +711,7 @@ async def ensure_servers_synced(db: AsyncSession) -> None:
             return
 
         if not squads:
-            logger.warning('️ RemnaWave вернул пустой список серверов')
+            logger.warning('RemnaWave вернул пустой список серверов')
             return
 
         # Синхронизируем

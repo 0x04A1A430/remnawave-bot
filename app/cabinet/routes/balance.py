@@ -207,11 +207,13 @@ async def get_payment_methods(
             PaymentMethodResponse(
                 id=method_id,
                 name=method_data['name'],
-                description=None,
+                description=method_data.get('description'),
                 min_amount_kopeks=method_data['min_amount_kopeks'],
                 max_amount_kopeks=method_data['max_amount_kopeks'],
                 is_available=True,
                 options=options,
+                quick_amounts=method_data.get('quick_amounts') or [],
+                open_url_direct=bool(method_data.get('open_url_direct', False)),
             )
         )
 
@@ -275,7 +277,7 @@ async def create_stars_invoice(
         async with create_bot() as bot:
             invoice_url = await bot.create_invoice_link(
                 title='Пополнение баланса VPN',
-                description=f'Пополнение баланса на {normalized_kopeks / 100:.2f} ₽ ({stars_amount} ⭐)',
+                description=f'Пополнение баланса на {normalized_kopeks / 100:.2f} ₽ ({stars_amount} )',
                 payload=payload,
                 provider_token='',
                 currency='XTR',
@@ -578,6 +580,7 @@ async def create_topup(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method=option,
             )
 
             if result:
@@ -698,7 +701,7 @@ async def create_topup(
                 )
 
             # Use payment_option to select sbp or card
-            KASSA_AI_OPTION_MAP = {'sbp': 44, 'card': 36}
+            KASSA_AI_OPTION_MAP = {'sbp': 44, 'card': 36, 'sberpay': 43}
             option = (request.payment_option or '').strip().lower()
             ps_id = KASSA_AI_OPTION_MAP.get(option)  # None = use env default
 
@@ -793,6 +796,231 @@ async def create_topup(
                     detail='Failed to create SeverPay payment',
                 )
 
+        elif request.payment_method == 'paypear':
+            if not settings.is_paypear_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='PayPear payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_paypear_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create PayPear payment',
+                )
+
+        elif request.payment_method == 'rollypay':
+            if not settings.is_rollypay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='RollyPay payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_rollypay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create RollyPay payment',
+                )
+
+        elif request.payment_method == 'overpay':
+            if not settings.is_overpay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Overpay payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            option = (request.payment_option or '').strip().lower() or None
+            if option is not None and option not in ('fps', 'card', 'int'):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail='Invalid Overpay payment_option',
+                )
+            result = await payment_service.create_overpay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+                option=option,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Overpay payment',
+                )
+
+        elif request.payment_method == 'aurapay':
+            if not settings.is_aurapay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='AuraPay payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_aurapay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create AuraPay payment',
+                )
+
+        elif request.payment_method == 'jupiter':
+            if not settings.is_jupiter_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Jupiter payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_jupiter_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Jupiter payment',
+                )
+
+        elif request.payment_method == 'donut':
+            if not settings.is_donut_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Donut payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            result = await payment_service.create_donut_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Donut payment',
+                )
+
+        elif request.payment_method == 'lava':
+            if not settings.is_lava_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='Lava payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            # Lava Business rejects success/fail URLs that carry a query string ("ошибочный
+            # формат ссылки", HTTP 422), unlike the other providers. Return to a clean
+            # path-based URL — the method goes in the path (read as a fallback by the result
+            # page), and success/failure is resolved by polling the backend, so no ?status=.
+            lava_return_url = f'{settings.CABINET_URL.rstrip("/")}/balance/top-up/result/lava'
+            result = await payment_service.create_lava_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=lava_return_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create Lava payment',
+                )
+
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(
@@ -834,8 +1062,8 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.PAL24:
         mapping = {
-            'new': ('⏳', 'Ожидает оплаты'),
-            'process': ('⌛', 'Обрабатывается'),
+            'new': ('', 'Ожидает оплаты'),
+            'process': ('', 'Обрабатывается'),
             'success': ('', 'Оплачено'),
             'fail': ('', 'Ошибка'),
             'canceled': ('', 'Отменено'),
@@ -844,8 +1072,8 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.MULENPAY:
         mapping = {
-            'created': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Обрабатывается'),
+            'created': ('', 'Ожидает оплаты'),
+            'processing': ('', 'Обрабатывается'),
             'hold': ('', 'На удержании'),
             'success': ('', 'Оплачено'),
             'canceled': ('', 'Отменено'),
@@ -855,31 +1083,31 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.WATA:
         mapping = {
-            'opened': ('⏳', 'Ожидает оплаты'),
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'processing': ('⌛', 'Обрабатывается'),
+            'opened': ('', 'Ожидает оплаты'),
+            'pending': ('', 'Ожидает оплаты'),
+            'processing': ('', 'Обрабатывается'),
             'paid': ('', 'Оплачено'),
             'closed': ('', 'Оплачено'),
             'declined': ('', 'Отклонено'),
             'canceled': ('', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
+            'expired': ('', 'Истёк'),
         }
         return mapping.get(status, ('', 'Неизвестно'))
 
     if record.method == PaymentMethod.PLATEGA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'inprogress': ('⌛', 'Обрабатывается'),
+            'pending': ('', 'Ожидает оплаты'),
+            'inprogress': ('', 'Обрабатывается'),
             'confirmed': ('', 'Оплачено'),
             'failed': ('', 'Ошибка'),
             'canceled': ('', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
+            'expired': ('', 'Истёк'),
         }
         return mapping.get(status, ('', 'Неизвестно'))
 
     if record.method == PaymentMethod.HELEKET:
         if status in {'pending', 'created', 'waiting', 'check', 'processing'}:
-            return '⏳', 'Ожидает оплаты'
+            return '', 'Ожидает оплаты'
         if status in {'paid', 'paid_over'}:
             return '', 'Оплачено'
         if status in {'cancel', 'canceled', 'fail', 'failed', 'expired'}:
@@ -888,8 +1116,8 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.YOOKASSA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'waiting_for_capture': ('⌛', 'Обрабатывается'),
+            'pending': ('', 'Ожидает оплаты'),
+            'waiting_for_capture': ('', 'Обрабатывается'),
             'succeeded': ('', 'Оплачено'),
             'canceled': ('', 'Отменено'),
         }
@@ -897,16 +1125,16 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.CRYPTOBOT:
         mapping = {
-            'active': ('⏳', 'Ожидает оплаты'),
+            'active': ('', 'Ожидает оплаты'),
             'paid': ('', 'Оплачено'),
-            'expired': ('⌛', 'Истёк'),
+            'expired': ('', 'Истёк'),
         }
         return mapping.get(status, ('', 'Неизвестно'))
 
     if record.method == PaymentMethod.CLOUDPAYMENTS:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
-            'authorized': ('⌛', 'Авторизовано'),
+            'pending': ('', 'Ожидает оплаты'),
+            'authorized': ('', 'Авторизовано'),
             'completed': ('', 'Оплачено'),
             'failed': ('', 'Ошибка'),
         }
@@ -914,7 +1142,7 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.FREEKASSA:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
+            'pending': ('', 'Ожидает оплаты'),
             'success': ('', 'Оплачено'),
             'paid': ('', 'Оплачено'),
             'canceled': ('', 'Отменено'),
@@ -924,23 +1152,62 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
 
     if record.method == PaymentMethod.KASSA_AI:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
+            'pending': ('', 'Ожидает оплаты'),
             'success': ('', 'Оплачено'),
             'paid': ('', 'Оплачено'),
             'canceled': ('', 'Отменено'),
             'failed': ('', 'Ошибка'),
-            'expired': ('⌛', 'Истёк'),
+            'expired': ('', 'Истёк'),
         }
         return mapping.get(status, ('', 'Неизвестно'))
 
     if record.method == PaymentMethod.RIOPAY:
         mapping = {
-            'pending': ('⏳', 'Ожидает оплаты'),
+            'pending': ('', 'Ожидает оплаты'),
             'success': ('', 'Оплачено'),
             'failed': ('', 'Ошибка'),
             'canceled': ('', 'Отменено'),
-            'expired': ('⌛', 'Истёк'),
-            'amount_mismatch': ('️', 'Несовпадение суммы'),
+            'expired': ('', 'Истёк'),
+            'amount_mismatch': ('', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('', 'Неизвестно'))
+
+    if record.method == PaymentMethod.JUPITER:
+        mapping = {
+            'pending': ('', 'Ожидает оплаты'),
+            'processing': ('', 'Обрабатывается'),
+            'success': ('', 'Оплачено'),
+            'cancelled': ('', 'Отменено'),
+            'declined': ('', 'Отклонено'),
+            'error': ('', 'Ошибка'),
+            'amount_mismatch': ('', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('', 'Неизвестно'))
+
+    if record.method == PaymentMethod.DONUT:
+        mapping = {
+            'pending': ('', 'Ожидает оплаты'),
+            'created': ('', 'Создано'),
+            'processing': ('', 'Обрабатывается'),
+            'success': ('', 'Оплачено'),
+            'cancelled': ('', 'Отменено'),
+            'error': ('', 'Ошибка'),
+            'amount_mismatch': ('', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('', 'Неизвестно'))
+
+    if record.method == PaymentMethod.LAVA:
+        mapping = {
+            'pending': ('', 'Ожидает оплаты'),
+            'created': ('', 'Создано'),
+            'processing': ('', 'Обрабатывается'),
+            'success': ('', 'Оплачено'),
+            'cancel': ('', 'Отменено'),
+            'cancelled': ('', 'Отменено'),
+            'expired': ('', 'Истёк'),
+            'failed': ('', 'Ошибка'),
+            'error': ('', 'Ошибка'),
+            'amount_mismatch': ('', 'Несовпадение суммы'),
         }
         return mapping.get(status, ('', 'Неизвестно'))
 
@@ -1085,15 +1352,20 @@ async def get_latest_payment_by_method(
     from sqlalchemy.orm import selectinload
 
     from app.database.models import (
+        AuraPayPayment,
         CloudPaymentsPayment,
         CryptoBotPayment,
         FreekassaPayment,
         HeleketPayment,
         KassaAiPayment,
         MulenPayPayment,
+        OverpayPayment,
         Pal24Payment,
+        PayPearPayment,
         PlategaPayment,
         RioPayPayment,
+        RollyPayPayment,
+        SeverPayPayment,
         WataPayment,
         YooKassaPayment,
     )
@@ -1110,6 +1382,11 @@ async def get_latest_payment_by_method(
         PaymentMethod.FREEKASSA: FreekassaPayment,
         PaymentMethod.KASSA_AI: KassaAiPayment,
         PaymentMethod.RIOPAY: RioPayPayment,
+        PaymentMethod.SEVERPAY: SeverPayPayment,
+        PaymentMethod.ROLLYPAY: RollyPayPayment,
+        PaymentMethod.PAYPEAR: PayPearPayment,
+        PaymentMethod.OVERPAY: OverpayPayment,
+        PaymentMethod.AURAPAY: AuraPayPayment,
     }
 
     model = model_map.get(payment_method)

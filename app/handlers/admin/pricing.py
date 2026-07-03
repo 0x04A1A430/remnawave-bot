@@ -78,8 +78,8 @@ TRIAL_ENTRIES: tuple[SettingEntry, ...] = (
     SettingEntry(
         key='TRIAL_DURATION_DAYS',
         section='trial',
-        label_ru='⏳ Длительность (дни)',
-        label_en='⏳ Duration (days)',
+        label_ru='Длительность (дни)',
+        label_en='Duration (days)',
         action='input',
     ),
     SettingEntry(
@@ -137,8 +137,8 @@ CORE_PRICING_ENTRIES: tuple[SettingEntry, ...] = (
     SettingEntry(
         key='BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED',
         section='core',
-        label_ru='️ Базовые скидки для групп',
-        label_en='️ Base group discounts',
+        label_ru='Базовые скидки для групп',
+        label_en='Base group discounts',
         action='toggle',
         description_ru='Включает применение базовых скидок для групповых промо-периодов.',
         description_en='Enables base discounts for promo group periods.',
@@ -199,8 +199,8 @@ CORE_PRICING_ENTRIES: tuple[SettingEntry, ...] = (
     SettingEntry(
         key='TRAFFIC_SELECTION_MODE',
         section='core',
-        label_ru='️ Режим выбора трафика',
-        label_en='️ Traffic selection mode',
+        label_ru='Режим выбора трафика',
+        label_en='Traffic selection mode',
         action='choice',
         choices=(
             ChoiceOption('selectable', 'Выбор пакетов', 'Selectable'),
@@ -357,11 +357,11 @@ def _format_core_summary(lang_code: str) -> str:
     traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
     mode = settings.TRAFFIC_SELECTION_MODE.lower()
     if mode == 'fixed':
-        traffic_mode = '️ fixed'
+        traffic_mode = 'fixed'
     elif mode == 'fixed_with_topup':
-        traffic_mode = '️ fixed+topup'
+        traffic_mode = 'fixed+topup'
     else:
-        traffic_mode = '️ selectable'
+        traffic_mode = 'selectable'
     traffic_label = _format_traffic_label(traffic_limit, lang_code, short=True)
     return f'{base_price}, {device_limit} , {traffic_label}, {traffic_mode}'
 
@@ -387,7 +387,7 @@ def _get_traffic_items(lang_code: str) -> list[PriceItem]:
             continue
 
         label = _format_traffic_label(package['gb'], lang_code)
-        icon = '' if package['enabled'] else '️'
+        icon = '' if package['enabled'] else ''
         items.append((field, f'{icon} {label}', int(package['price'])))
     return items
 
@@ -461,9 +461,9 @@ def _build_settings_section(
     if section == 'trial':
         title = texts.t('ADMIN_PRICING_SECTION_TRIAL_TITLE', 'Пробный период')
     elif section == 'core':
-        title = texts.t('ADMIN_PRICING_SECTION_CORE_TITLE', '️ Настройки тарифов')
+        title = texts.t('ADMIN_PRICING_SECTION_CORE_TITLE', 'Настройки тарифов')
     else:
-        title = texts.t('ADMIN_PRICING_SECTION_SETTINGS_GENERIC', '️ Настройки')
+        title = texts.t('ADMIN_PRICING_SECTION_SETTINGS_GENERIC', 'Настройки')
 
     lines: list[str] = [title, '']
     keyboard_rows: list[list[types.InlineKeyboardButton]] = []
@@ -483,7 +483,7 @@ def _build_settings_section(
         formatted = bot_configuration_service.format_value_human(entry.key, value)
 
         if entry.action == 'toggle':
-            state_icon = '' if bool(value) else '️'
+            state_icon = '' if bool(value) else ''
             lines.append(f'{state_icon} <b>{label}</b> — {formatted}')
             button_text = texts.t(
                 'ADMIN_PRICING_SETTING_TOGGLE_STATEFUL',
@@ -502,7 +502,7 @@ def _build_settings_section(
             buttons: list[types.InlineKeyboardButton] = []
             for option in entry.choices:
                 is_active = value == option.value
-                icon = '' if is_active else '️'
+                icon = '' if is_active else ''
                 buttons.append(
                     types.InlineKeyboardButton(
                         text=f'{icon} {option.label(lang_code)}',
@@ -517,7 +517,7 @@ def _build_settings_section(
             lines.append(f'• <b>{label}</b>: {formatted}')
             button_text = texts.t(
                 'ADMIN_PRICING_SETTING_EDIT_WITH_VALUE',
-                '️ {label} • {value}',
+                '{label} • {value}',
             ).format(label=label, value=formatted)
             keyboard_rows.append(
                 [
@@ -586,7 +586,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
     buttons: list[types.InlineKeyboardButton] = []
 
     for package in packages:
-        icon = '' if package['enabled'] else '️'
+        icon = '' if package['enabled'] else ''
         label = _format_traffic_label(package['gb'], lang_code, short=True)
         buttons.append(
             types.InlineKeyboardButton(
@@ -645,7 +645,7 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
 
     sub_buttons = []
     for days in subscription_options:
-        icon = '' if days in available_subscription else '️'
+        icon = '' if days in available_subscription else ''
         sub_buttons.append(
             types.InlineKeyboardButton(
                 text=f'{icon} {days}{suffix}',
@@ -657,7 +657,7 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
 
     renew_buttons = []
     for days in renewal_options:
-        icon = '' if days in available_renewal else '️'
+        icon = '' if days in available_renewal else ''
         renew_buttons.append(
             types.InlineKeyboardButton(
                 text=f'{icon} {days}{suffix}',
@@ -697,7 +697,7 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
         '',
         f'<b>{texts.t("ADMIN_PRICING_MENU_SUMMARY", "Краткая сводка")}</b>',
         f'{texts.t("ADMIN_PRICING_MENU_SUMMARY_TRIAL", "Триал: {summary}").format(summary=summary_trial)}',
-        f'️ {texts.t("ADMIN_PRICING_MENU_SUMMARY_CORE", "Базовые лимиты: {summary}").format(summary=summary_core)}',
+        f'{texts.t("ADMIN_PRICING_MENU_SUMMARY_CORE", "Базовые лимиты: {summary}").format(summary=summary_core)}',
         f'{texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIOD_OPTIONS", "Доступные периоды: {summary}").format(summary=summary_period_options)}',
         f'{texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIODS", "Стоимость периодов: {summary}").format(summary=summary_periods)}',
         f'{texts.t("ADMIN_PRICING_MENU_SUMMARY_TRAFFIC", "Пакеты трафика: {summary}").format(summary=summary_traffic)}',
@@ -714,7 +714,7 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
                     callback_data='admin_pricing_section:trial',
                 ),
                 types.InlineKeyboardButton(
-                    text=texts.t('ADMIN_PRICING_BUTTON_CORE', '️ Настройки тарифов'),
+                    text=texts.t('ADMIN_PRICING_BUTTON_CORE', 'Настройки тарифов'),
                     callback_data='admin_pricing_section:core',
                 ),
             ],
@@ -852,7 +852,7 @@ async def _render_message_by_id(
             parse_mode='HTML',
         )
     except TelegramBadRequest as error:
-        logger.debug('Failed to edit pricing message by id', error=error)
+        logger.debug('Failed to edit pricing message', error=error)
         await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode='HTML')
 
 
@@ -1019,7 +1019,7 @@ async def start_setting_edit(
         example = guidance.get('example') or '—'
         warning = guidance.get('warning') or ''
         prompt_parts = [
-            f'️ <b>{texts.t("ADMIN_PRICING_SETTING_EDIT_TITLE", "Настройка параметра")}</b>',
+            f'<b>{texts.t("ADMIN_PRICING_SETTING_EDIT_TITLE", "Настройка параметра")}</b>',
             '',
             f'{texts.t("ADMIN_PRICING_SETTING_PARAMETER", "Параметр")}: <b>{label}</b>',
             f'{texts.t("ADMIN_PRICING_SETTING_CURRENT", "Текущее значение")}: <b>{formatted_current}</b>',
@@ -1034,7 +1034,7 @@ async def start_setting_edit(
             ]
         )
         if warning:
-            prompt_parts.append(f'️ {texts.t("ADMIN_PRICING_SETTING_WARNING", "Важно")}: {warning}')
+            prompt_parts.append(f'{texts.t("ADMIN_PRICING_SETTING_WARNING", "Важно")}: {warning}')
         prompt_parts.extend(
             [
                 '',

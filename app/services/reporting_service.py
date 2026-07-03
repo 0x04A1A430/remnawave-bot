@@ -292,7 +292,7 @@ class ReportingService:
 
         # Поддержка
         lines += [
-            '️ <b>Поддержка</b>',
+            '<b>Поддержка</b>',
             f'• Новых тикетов: {stats["new_tickets"]}',
             f'• Активных тикетов сейчас: {totals["open_tickets"]}',
             '',

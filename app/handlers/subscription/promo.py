@@ -138,7 +138,7 @@ async def claim_discount_offer(
         offer.is_active = False
         await db.commit()
         await callback.answer(
-            texts.get('DISCOUNT_CLAIM_EXPIRED', '️ Время действия предложения истекло'),
+            texts.get('DISCOUNT_CLAIM_EXPIRED', 'Время действия предложения истекло'),
             show_alert=True,
         )
         return

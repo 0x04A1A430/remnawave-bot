@@ -68,10 +68,58 @@ class ReadOnlySettingError(RuntimeError):
 
 
 class BotConfigurationService:
-    EXCLUDED_KEYS: set[str] = {'BOT_TOKEN', 'ADMIN_IDS'}
+    # SECURITY: keys that must NEVER be editable through the settings API. Beyond
+    # the bot token, this covers admin IDENTITY and core AUTH secrets — a
+    # delegated admin holding only `settings:edit` could otherwise add their own
+    # email to ADMIN_EMAILS and become a full superadmin, or overwrite the JWT /
+    # web-api / webhook secrets to forge sessions and requests. Payment-provider
+    # secrets are intentionally NOT here: operators configure those via the UI.
+    EXCLUDED_KEYS: set[str] = {
+        'BOT_TOKEN',
+        'ADMIN_IDS',
+        'ADMIN_EMAILS',
+        'CABINET_JWT_SECRET',
+        'WEB_API_DEFAULT_TOKEN',
+        'WEB_API_TOKEN_HMAC_SECRET',
+        'WEBHOOK_SECRET_TOKEN',
+    }
 
-    READ_ONLY_KEYS: set[str] = {'EXTERNAL_ADMIN_TOKEN', 'EXTERNAL_ADMIN_TOKEN_BOT_ID'}
-    PLAIN_TEXT_KEYS: set[str] = {'EXTERNAL_ADMIN_TOKEN', 'EXTERNAL_ADMIN_TOKEN_BOT_ID'}
+    READ_ONLY_KEYS: set[str] = set()
+    PLAIN_TEXT_KEYS: set[str] = set()
+
+    # Placeholder returned to clients in place of a secret's real value. When this
+    # exact sentinel comes back on an update, the write is skipped so the stored
+    # secret is preserved (the admin left the masked field untouched).
+    SECRET_MASK: str = '••••••••'
+
+    @classmethod
+    def is_secret_key(cls, key: str) -> bool:
+        """True if a setting holds a secret whose value must never be echoed to clients.
+
+        Mirrors the masking heuristic used by ``format_value`` for the bot UI so the
+        REST settings API (cabinet + web API) never returns plaintext payment keys,
+        SMTP/panel passwords, API tokens, etc.
+        """
+        if key in cls.PLAIN_TEXT_KEYS:
+            return False
+        return any(keyword in key.upper() for keyword in ('TOKEN', 'SECRET', 'PASSWORD', 'PASSPHRASE', 'KEY'))
+
+    @classmethod
+    def is_masked_secret(cls, key: str, value: Any) -> bool:
+        """True if (key, value) is a secret string whose value must be masked.
+
+        Only *string* values are masked: the name heuristic matches some non-secret numeric
+        settings (e.g. CABINET_ACCESS_TOKEN_EXPIRE_MINUTES, WATA_PUBLIC_KEY_CACHE_SECONDS) that
+        must stay visible and editable, so gate on the value actually being a non-empty str.
+        """
+        return cls.is_secret_key(key) and isinstance(value, str) and value != ''
+
+    @classmethod
+    def mask_secret_value(cls, key: str, value: Any) -> Any:
+        """Return ``SECRET_MASK`` for a set secret string value, otherwise the value unchanged."""
+        if cls.is_masked_secret(key, value):
+            return cls.SECRET_MASK
+        return value
 
     CATEGORY_TITLES: dict[str, str] = {
         'CORE': 'Основные настройки',
@@ -80,8 +128,8 @@ class BotConfigurationService:
         'CHANNEL': 'Обязательная подписка',
         'TIMEZONE': 'Timezone',
         'PAYMENT': 'Общие платежные настройки',
-        'PAYMENT_VERIFICATION': '️ Проверка платежей',
-        'TELEGRAM': '⭐ Telegram Stars',
+        'PAYMENT_VERIFICATION': 'Проверка платежей',
+        'TELEGRAM': 'Telegram Stars',
         'TELEGRAM_WIDGET': 'Telegram Login Widget',
         'TELEGRAM_OIDC': 'Telegram Login (OIDC)',
         'CRYPTOBOT': 'CryptoBot',
@@ -91,13 +139,21 @@ class BotConfigurationService:
         'KASSA_AI': 'KassaAI',
         'RIOPAY': 'RioPay',
         'SEVERPAY': 'SeverPay',
-        'YOOKASSA': '🟣 YooKassa',
+        'PAYPEAR': 'PayPear',
+        'ROLLYPAY': 'RollyPay',
+        'OVERPAY': 'Overpay',
+        'AURAPAY': 'AuraPay',
+        'ANTILOPAY': 'Antilopay',
+        'ETOPLATEZHI': 'Etoplatezhi',
+        'JUPITER': 'Jupiter',
+        'DONUT': 'Donut',
+        'LAVA': 'Lava',
+        'YOOKASSA': 'YooKassa',
         'PLATEGA': '{platega_name}',
         'TRIBUTE': 'Tribute',
         'MULENPAY': '{mulenpay_name}',
         'PAL24': 'PAL24 / PayPalych',
         'WATA': 'Wata',
-        'EXTERNAL_ADMIN': '️ Внешняя админка',
         'SUBSCRIPTIONS_CORE': 'Подписки и лимиты',
         'SIMPLE_SUBSCRIPTION': 'Простая покупка',
         'PERIODS': 'Периоды подписок',
@@ -111,11 +167,11 @@ class BotConfigurationService:
         'ADMIN_NOTIFICATIONS': 'Оповещения администраторам',
         'ADMIN_REPORTS': 'Автоматические отчеты',
         'INTERFACE': 'Интерфейс и брендинг',
-        'INTERFACE_BRANDING': '️ Брендинг',
+        'INTERFACE_BRANDING': 'Брендинг',
         'INTERFACE_SUBSCRIPTION': 'Ссылка на подписку',
         'CONNECT_BUTTON': 'Кнопка подключения',
         'MINIAPP': 'Mini App',
-        'HAPP': '🅷 Happ',
+        'HAPP': 'Happ',
         'SKIP': 'Быстрый старт',
         'ADDITIONAL': 'Дополнительные приложения',
         'DATABASE': 'База данных',
@@ -133,8 +189,9 @@ class BotConfigurationService:
         'WEBHOOK_NOTIFICATIONS': 'Уведомления от вебхуков',
         'LOG': 'Логирование',
         'DEBUG': 'Режим разработки',
-        'MODERATION': '️ Модерация и фильтры',
+        'MODERATION': 'Модерация и фильтры',
         'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках',
+        'INFO_PAGES': 'Инфо-страницы',
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
@@ -152,6 +209,15 @@ class BotConfigurationService:
         'FREEKASSA': 'Freekassa: ID магазина, API ключ, секретные слова и вебхуки.',
         'KASSA_AI': 'KassaAI: отдельная платёжка api.fk.life с СБП, картами и SberPay.',
         'RIOPAY': 'RioPay: платёжная система api.riopay.online с поддержкой карт и СБП.',
+        'PAYPEAR': 'PayPear: платёжная система api.paypear.ru с поддержкой карт, СБП, SberPay и T-Pay.',
+        'ROLLYPAY': 'RollyPay: платёжный шлюз rollypay.io с СБП, картами и криптовалютой.',
+        'OVERPAY': 'Overpay: платёжный шлюз pay.overpay.io с mTLS и поддержкой карт и СБП.',
+        'AURAPAY': 'AuraPay: платёжный шлюз aurapay.tech с поддержкой карт и СБП.',
+        'ANTILOPAY': 'Antilopay: lk.antilopay.com, оплата картой, СБП и SberPay.',
+        'ETOPLATEZHI': 'Etoplatezhi: paymentpage.etoplatezhi.ru, оплата картой и через СБП.',
+        'JUPITER': 'Jupiter (FPGate P2P v2.1): app.juppiter.tech, эквайринг СБП с HMAC-SHA256.',
+        'DONUT': 'Donut P2P: gw.donut.business, P2P-оплата картой, СБП по телефону и QR.',
+        'LAVA': 'Lava Business: gate.lava.ru, оплата картой и СБП с HMAC-SHA256 и подтверждением через webhook.',
         'PLATEGA': '{platega_name}: merchant ID, секрет, ссылки возврата и методы оплаты.',
         'MULENPAY': 'Платежи {mulenpay_name} и параметры магазина.',
         'PAL24': 'PAL24 / PayPalych подключения и лимиты.',
@@ -160,7 +226,6 @@ class BotConfigurationService:
         'TELEGRAM_WIDGET': 'Внешний вид виджета авторизации Telegram на странице входа в кабинет.',
         'TELEGRAM_OIDC': 'OpenID Connect авторизация через Telegram (новая система). Требует настройки в BotFather > Bot Settings > Web Login.',
         'WATA': 'Wata: токен доступа, тип платежа и пределы сумм.',
-        'EXTERNAL_ADMIN': 'Токен внешней админки для проверки запросов.',
         'SUBSCRIPTIONS_CORE': 'Лимиты устройств, трафика и базовые цены подписок.',
         'SIMPLE_SUBSCRIPTION': 'Параметры упрощённой покупки: период, трафик, устройства и сквады.',
         'PERIODS': 'Доступные периоды подписок и продлений.',
@@ -198,6 +263,7 @@ class BotConfigurationService:
         'DEBUG': 'Отладочные функции и безопасный режим.',
         'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
         'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
+        'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
     }
 
     @staticmethod
@@ -334,6 +400,14 @@ class BotConfigurationService:
         'REMNAWAVE_AUTO_SYNC_ENABLED': 'REMNAWAVE',
         'REMNAWAVE_AUTO_SYNC_TIMES': 'REMNAWAVE',
         'CABINET_REMNA_SUB_CONFIG': 'MINIAPP',
+        # Date format applied to email-template variables
+        # (expires_at, new_expires_at). Lives in the TIMEZONE
+        # category so operators find it next to TIMEZONE itself.
+        'EMAIL_DATE_FORMAT': 'TIMEZONE',
+        'PRIVACY_POLICY_DISPLAY_MODE': 'INFO_PAGES',
+        'PUBLIC_OFFER_DISPLAY_MODE': 'INFO_PAGES',
+        'SERVICE_RULES_DISPLAY_MODE': 'INFO_PAGES',
+        'FAQ_DISPLAY_MODE': 'INFO_PAGES',
     }
 
     CATEGORY_PREFIX_OVERRIDES: dict[str, str] = {
@@ -363,13 +437,21 @@ class BotConfigurationService:
         'KASSA_AI_': 'KASSA_AI',
         'RIOPAY_': 'RIOPAY',
         'SEVERPAY_': 'SEVERPAY',
+        'PAYPEAR_': 'PAYPEAR',
+        'ROLLYPAY_': 'ROLLYPAY',
+        'OVERPAY_': 'OVERPAY',
+        'AURAPAY_': 'AURAPAY',
+        'ANTILOPAY_': 'ANTILOPAY',
+        'ETOPLATEZHI_': 'ETOPLATEZHI',
+        'JUPITER_': 'JUPITER',
+        'DONUT_': 'DONUT',
+        'LAVA_': 'LAVA',
         'PLATEGA_': 'PLATEGA',
         'MULENPAY_': 'MULENPAY',
         'PAL24_': 'PAL24',
         'PAYMENT_': 'PAYMENT',
         'PAYMENT_VERIFICATION_': 'PAYMENT_VERIFICATION',
         'WATA_': 'WATA',
-        'EXTERNAL_ADMIN_': 'EXTERNAL_ADMIN',
         'SIMPLE_SUBSCRIPTION_': 'SIMPLE_SUBSCRIPTION',
         'CONNECT_BUTTON_HAPP': 'HAPP',
         'HAPP_': 'HAPP',
@@ -410,7 +492,7 @@ class BotConfigurationService:
             ChoiceOption('fixed_with_topup', 'Фикс. лимит + докупка'),
         ],
         'DEFAULT_TRAFFIC_RESET_STRATEGY': [
-            ChoiceOption('NO_RESET', '️ Без сброса'),
+            ChoiceOption('NO_RESET', 'Без сброса'),
             ChoiceOption('DAY', 'Ежедневно'),
             ChoiceOption('WEEK', 'Еженедельно'),
             ChoiceOption('MONTH', 'Ежемесячно'),
@@ -434,7 +516,7 @@ class BotConfigurationService:
         'CABINET_BUTTON_STYLE': [
             ChoiceOption('', 'По секциям (авто)'),
             ChoiceOption('primary', 'Синий'),
-            ChoiceOption('success', '🟢 Зелёный'),
+            ChoiceOption('success', 'Зелёный'),
             ChoiceOption('danger', 'Красный'),
         ],
         'SALES_MODE': [
@@ -486,13 +568,13 @@ class BotConfigurationService:
             ChoiceOption(12, '12 — НДС 22/122'),
         ],
         'MULENPAY_LANGUAGE': [
-            ChoiceOption('ru', '🇷🇺 Русский'),
-            ChoiceOption('en', '🇬🇧 Английский'),
+            ChoiceOption('ru', 'Русский'),
+            ChoiceOption('en', 'Английский'),
         ],
         'LOG_LEVEL': [
             ChoiceOption('DEBUG', 'Debug'),
             ChoiceOption('INFO', 'Info'),
-            ChoiceOption('WARNING', '️ Warning'),
+            ChoiceOption('WARNING', 'Warning'),
             ChoiceOption('ERROR', 'Error'),
             ChoiceOption('CRITICAL', 'Critical'),
         ],
@@ -504,8 +586,28 @@ class BotConfigurationService:
         ],
         'TELEGRAM_WIDGET_SIZE': [
             ChoiceOption('large', 'Large'),
-            ChoiceOption('medium', '🟡 Medium'),
-            ChoiceOption('small', '🟢 Small'),
+            ChoiceOption('medium', 'Medium'),
+            ChoiceOption('small', 'Small'),
+        ],
+        'PRIVACY_POLICY_DISPLAY_MODE': [
+            ChoiceOption('bot', 'Только бот'),
+            ChoiceOption('web', 'Только веб'),
+            ChoiceOption('both', 'Бот и веб'),
+        ],
+        'PUBLIC_OFFER_DISPLAY_MODE': [
+            ChoiceOption('bot', 'Только бот'),
+            ChoiceOption('web', 'Только веб'),
+            ChoiceOption('both', 'Бот и веб'),
+        ],
+        'SERVICE_RULES_DISPLAY_MODE': [
+            ChoiceOption('bot', 'Только бот'),
+            ChoiceOption('web', 'Только веб'),
+            ChoiceOption('both', 'Бот и веб'),
+        ],
+        'FAQ_DISPLAY_MODE': [
+            ChoiceOption('bot', 'Только бот'),
+            ChoiceOption('web', 'Только веб'),
+            ChoiceOption('both', 'Бот и веб'),
         ],
     }
 
@@ -726,20 +828,6 @@ class BotConfigurationService:
                 'Если результат пустой, используется user_{telegram_id}.'
             ),
         },
-        'EXTERNAL_ADMIN_TOKEN': {
-            'description': 'Приватный токен, который использует внешняя админка для проверки запросов.',
-            'format': 'Значение генерируется автоматически из username бота и его токена и доступно только для чтения.',
-            'example': 'Генерируется автоматически',
-            'warning': 'Токен обновится при смене username или токена бота.',
-            'dependencies': 'Username телеграм-бота, токен бота',
-        },
-        'EXTERNAL_ADMIN_TOKEN_BOT_ID': {
-            'description': 'Идентификатор телеграм-бота, с которым связан токен внешней админки.',
-            'format': 'Проставляется автоматически после первого запуска и не редактируется вручную.',
-            'example': '123456789',
-            'warning': 'Несовпадение ID блокирует обновление токена, предотвращая его подмену на другом боте.',
-            'dependencies': 'Результат вызова getMe() в Telegram Bot API',
-        },
         'TRIAL_USER_TAG': {
             'description': (
                 'Тег, который бот передаст пользователю при активации триальной подписки в панели RemnaWave.'
@@ -944,6 +1032,11 @@ class BotConfigurationService:
             'format': 'Булево значение.',
             'example': 'true',
         },
+        'WEBHOOK_NOTIFY_TORRENT_DETECTED': {
+            'description': 'Уведомление пользователю при обнаружении торрент-трафика.',
+            'format': 'Булево значение.',
+            'example': 'true',
+        },
         'RESET_TRAFFIC_ON_TARIFF_SWITCH': {
             'description': (
                 'Автоматически сбрасывает счётчик использованного трафика '
@@ -1023,6 +1116,10 @@ class BotConfigurationService:
         return key in cls._env_override_keys
 
     @classmethod
+    def is_env_overridden(cls, key: str) -> bool:
+        return cls._is_env_override(key)
+
+    @classmethod
     def _format_numeric_with_unit(cls, key: str, value: float) -> str | None:
         if isinstance(value, bool):
             return None
@@ -1082,8 +1179,8 @@ class BotConfigurationService:
                 return '—'
             if key in cls.PLAIN_TEXT_KEYS:
                 return cleaned
-            if any(keyword in key.upper() for keyword in ('TOKEN', 'SECRET', 'PASSWORD', 'KEY')):
-                return '••••••••'
+            if cls.is_secret_key(key):
+                return cls.SECRET_MASK
             items = cls._split_comma_values(cleaned)
             if items:
                 return ', '.join(items)
@@ -1256,6 +1353,13 @@ class BotConfigurationService:
         return key in cls._overrides_raw
 
     @classmethod
+    def is_env_locked(cls, key: str) -> bool:
+        """True if the key is pinned in the environment (.env), so its value
+        shadows the DB and cannot be changed from the cabinet. Edits to such a
+        key would be silently discarded — callers must surface this instead."""
+        return cls._is_env_override(key)
+
+    @classmethod
     def get_current_value(cls, key: str) -> Any:
         return getattr(settings, key)
 
@@ -1268,7 +1372,7 @@ class BotConfigurationService:
         if value is None:
             return '—'
         if isinstance(value, bool):
-            return 'Да' if value else 'Нет'
+            return '✅ Да' if value else '❌ Нет'
         if isinstance(value, (int, float)):
             return str(value)
         if isinstance(value, (list, dict, tuple, set)):
@@ -1752,6 +1856,31 @@ class BotConfigurationService:
                     SupportSettingsService.set_system_mode(str(value))
                 except Exception as error:
                     logger.error('Не удалось синхронизировать SupportSettingsService', error=error)
+            elif key in {
+                'BACKUP_AUTO_ENABLED',
+                'BACKUP_INTERVAL_HOURS',
+                'BACKUP_TIME',
+                'BACKUP_MAX_KEEP',
+                'BACKUP_COMPRESSION',
+                'BACKUP_INCLUDE_LOGS',
+                'BACKUP_LOCATION',
+            }:
+                # Изменения настроек бекапа из кабинета — рестартим scheduler-таску,
+                # чтобы новые BACKUP_TIME/INTERVAL вступили в силу немедленно
+                # (без ожидания следующего цикла или рестарта бота).
+                try:
+                    import asyncio
+
+                    from app.services.backup_service import backup_service
+
+                    backup_service.reload_settings_from_db()
+                    if backup_service._settings.auto_backup_enabled:
+                        # Перезапускаем таску с пересчётом next_run на основе свежих настроек
+                        asyncio.create_task(backup_service.start_auto_backup())
+                    else:
+                        asyncio.create_task(backup_service.stop_auto_backup())
+                except Exception as error:
+                    logger.error('Не удалось применить новые настройки бекапа', error=error)
             elif key in {
                 'REMNAWAVE_API_URL',
                 'REMNAWAVE_API_KEY',

@@ -150,7 +150,7 @@ class PlategaPaymentMixin:
             )
 
         if not payment:
-            logger.warning('Platega webhook: платеж не найден (id=)', transaction_id=transaction_id)
+            logger.warning('Platega webhook: платеж не найден', transaction_id=transaction_id)
             return False
 
         # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
@@ -440,7 +440,7 @@ class PlategaPaymentMixin:
             external_id=transaction_external_id or payment.correlation_id,
         )
 
-        topup_status = '🆕 Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
         try:
             from app.services.referral_service import process_referral_topup

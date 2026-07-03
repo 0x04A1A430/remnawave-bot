@@ -97,7 +97,7 @@ async def delete_poll(db: AsyncSession, poll_id: int) -> bool:
 
     await db.delete(poll)
     await db.commit()
-    logger.info('️ Удалён опрос', poll_id=poll_id)
+    logger.info('Удалён опрос', poll_id=poll_id)
     return True
 
 

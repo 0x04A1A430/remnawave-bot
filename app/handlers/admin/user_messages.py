@@ -48,13 +48,13 @@ def get_user_messages_keyboard(language: str = 'ru'):
 def get_message_actions_keyboard(message_id: int, is_active: bool, language: str = 'ru'):
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-    status_text = 'Деактивировать' if is_active else '🟢 Активировать'
+    status_text = 'Деактивировать' if is_active else 'Активировать'
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='️ Редактировать', callback_data=f'edit_user_message:{message_id}')],
+            [InlineKeyboardButton(text='Редактировать', callback_data=f'edit_user_message:{message_id}')],
             [InlineKeyboardButton(text=status_text, callback_data=f'toggle_user_message:{message_id}')],
-            [InlineKeyboardButton(text='️ Удалить', callback_data=f'delete_user_message:{message_id}')],
+            [InlineKeyboardButton(text='Удалить', callback_data=f'delete_user_message:{message_id}')],
             [InlineKeyboardButton(text='К списку', callback_data='list_user_messages:0')],
         ]
     )
@@ -130,7 +130,7 @@ async def process_new_message_text(message: types.Message, state: FSMContext, db
         await message.answer(
             f'<b>Сообщение добавлено!</b>\n\n'
             f'<b>ID:</b> {new_message.id}\n'
-            f'<b>Статус:</b> {"🟢 Активно" if new_message.is_active else "Неактивно"}\n'
+            f'<b>Статус:</b> {"Активно" if new_message.is_active else "Неактивно"}\n'
             f'<b>Создано:</b> {new_message.created_at.strftime("%d.%m.%Y %H:%M")}\n\n'
             f'<b>Предварительный просмотр:</b>\n'
             f'<blockquote>{message_text}</blockquote>',
@@ -174,7 +174,7 @@ async def list_user_messages(callback: types.CallbackQuery, db_user: User, db: A
     text = '<b>Список сообщений</b>\n\n'
 
     for msg in messages:
-        status_emoji = '🟢' if msg.is_active else ''
+        status_emoji = '' if msg.is_active else ''
         preview = msg.message_text[:100] + '...' if len(msg.message_text) > 100 else msg.message_text
         preview = preview.replace('<', '&lt;').replace('>', '&gt;')
 
@@ -185,7 +185,7 @@ async def list_user_messages(callback: types.CallbackQuery, db_user: User, db: A
     keyboard = []
 
     for msg in messages:
-        status_emoji = '🟢' if msg.is_active else ''
+        status_emoji = '' if msg.is_active else ''
         keyboard.append(
             [InlineKeyboardButton(text=f'{status_emoji} ID {msg.id}', callback_data=f'view_user_message:{msg.id}')]
         )
@@ -197,7 +197,7 @@ async def list_user_messages(callback: types.CallbackQuery, db_user: User, db: A
     nav_buttons.append(InlineKeyboardButton(text='Добавить', callback_data='add_user_message'))
 
     if len(messages) == limit:
-        nav_buttons.append(InlineKeyboardButton(text='Вперед ️', callback_data=f'list_user_messages:{page + 1}'))
+        nav_buttons.append(InlineKeyboardButton(text='Вперед ', callback_data=f'list_user_messages:{page + 1}'))
 
     if nav_buttons:
         keyboard.append(nav_buttons)
@@ -227,7 +227,7 @@ async def view_user_message(callback: types.CallbackQuery, db_user: User, db: As
 
     safe_content = sanitize_html(message.message_text)
 
-    status_text = '🟢 Активно' if message.is_active else 'Неактивно'
+    status_text = 'Активно' if message.is_active else 'Неактивно'
 
     text = (
         f'<b>Сообщение ID {message.id}</b>\n\n'
@@ -304,7 +304,7 @@ async def show_messages_stats(callback: types.CallbackQuery, db_user: User, db: 
     text = (
         '<b>Статистика сообщений</b>\n\n'
         f'Всего сообщений: <b>{stats["total_messages"]}</b>\n'
-        f'🟢 Активных: <b>{stats["active_messages"]}</b>\n'
+        f'Активных: <b>{stats["active_messages"]}</b>\n'
         f'Неактивных: <b>{stats["inactive_messages"]}</b>\n\n'
         'Активные сообщения показываются пользователям случайным образом '
         'в главном меню между информацией о подписке и кнопками действий.'
@@ -336,7 +336,7 @@ async def edit_user_message_start(callback: types.CallbackQuery, state: FSMConte
         return
 
     await callback.message.edit_text(
-        f'️ <b>Редактирование сообщения ID {message.id}</b>\n\n'
+        f'<b>Редактирование сообщения ID {message.id}</b>\n\n'
         f'<b>Текущий текст:</b>\n'
         f'<blockquote>{sanitize_html(message.message_text)}</blockquote>\n\n'
         f'Введите новый текст сообщения или отправьте /cancel для отмены:',

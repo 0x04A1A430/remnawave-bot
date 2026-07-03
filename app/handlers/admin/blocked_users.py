@@ -58,14 +58,14 @@ class BlockedUsersText(Enum):
         '• Активных: {active_users}\n'
         '• Ошибок: {errors}\n'
         '• Без Telegram ID: {skipped}\n\n'
-        '⏱ Время сканирования: {duration:.1f}с'
+        'Время сканирования: {duration:.1f}с'
     )
     SCAN_NO_BLOCKED = '<b>Отлично!</b>\n\nНе найдено пользователей, заблокировавших бота.'
 
     BLOCKED_LIST_TITLE = '<b>Заблокированные пользователи</b> ({count})\n\n'
     BLOCKED_USER_ROW = '• {name} (ID: <code>{telegram_id}</code>)\n'
 
-    CLEANUP_CONFIRM_TITLE = '️ <b>Подтверждение действия</b>\n\n'
+    CLEANUP_CONFIRM_TITLE = '<b>Подтверждение действия</b>\n\n'
     CLEANUP_CONFIRM_DELETE_DB = (
         'Вы собираетесь <b>удалить из БД</b> {count} пользователей.\n'
         'Это действие необратимо!\n\n'
@@ -208,7 +208,7 @@ def get_blocked_list_keyboard(
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page + 1}',
                 )
             )
@@ -645,7 +645,7 @@ async def handle_confirm_action(
     )
 
     logger.info(
-        'Очистка заблокированных пользователей завершена: DB=, RW=, marked=, errors',
+        'Очистка заблокированных пользователей завершена',
         deleted_from_db=result.deleted_from_db,
         deleted_from_remnawave=result.deleted_from_remnawave,
         marked_as_blocked=result.marked_as_blocked,

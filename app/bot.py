@@ -34,6 +34,7 @@ from app.handlers.admin import (
     maintenance as admin_maintenance,
     messages as admin_messages,
     monitoring as admin_monitoring,
+    overpay_certificate as admin_overpay_certificate,
     payments as admin_payments,
     polls as admin_polls,
     pricing as admin_pricing,
@@ -42,6 +43,7 @@ from app.handlers.admin import (
     promo_offers as admin_promo_offers,
     promocodes as admin_promocodes,
     public_offer as admin_public_offer,
+    quick_amounts as admin_quick_amounts,
     referrals as admin_referrals,
     remnawave as admin_remnawave,
     reports as admin_reports,
@@ -102,6 +104,11 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     from app.bot_factory import create_bot
 
     bot = create_bot()
+
+    # Token-authoritative username so gift/referral/deep links never point at a stale bot.
+    from app.utils.bot_identity import sync_bot_username
+
+    await sync_bot_username(bot)
 
     proxy_url = settings.get_proxy_url()
     nalogo_proxy_url = settings.get_nalogo_proxy_url()
@@ -219,6 +226,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_blacklist.register_blacklist_handlers(dp)
     admin_blocked_users.register_handlers(dp)
     admin_required_channels.register_handlers(dp)
+    admin_quick_amounts.register_handlers(dp)
+    admin_overpay_certificate.register_handlers(dp)
     register_channel_member_handlers(dp)
     register_gift_activation_handlers(dp)
     register_inline_gift_handlers(dp)
@@ -228,7 +237,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     user_contests.register_handlers(dp)
     user_polls.register_handlers(dp)
     simple_subscription.register_simple_subscription_handlers(dp)
-    logger.info('⭐ Зарегистрированы обработчики Telegram Stars платежей')
+    logger.info('Зарегистрированы обработчики Telegram Stars платежей')
     logger.info('Зарегистрированы обработчики простой покупки')
     logger.info('Зарегистрированы обработчики простой подписки')
 
@@ -241,29 +250,29 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     else:
         logger.info('Мониторинг техработ отключен настройками')
 
-    logger.info('️ GlobalErrorMiddleware активирован - бот защищен от устаревших callback queries')
+    logger.info('GlobalErrorMiddleware активирован - бот защищен от устаревших callback queries')
 
     # Validate CONNECT_BUTTON_MODE dependencies
     if not settings.get_happ_cryptolink_redirect_template():
         if settings.CONNECT_BUTTON_MODE == 'happ_cryptolink':
             logger.warning(
-                '️ CONNECT_BUTTON_MODE=happ_cryptolink, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
+                'CONNECT_BUTTON_MODE=happ_cryptolink, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
                 'Кнопка "Подключиться" не будет отображаться.'
             )
         elif settings.CONNECT_BUTTON_MODE == 'guide':
             logger.warning(
-                '️ CONNECT_BUTTON_MODE=guide, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
+                'CONNECT_BUTTON_MODE=guide, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
                 'Кнопка "Подключиться" в гайдах не будет работать — Telegram не поддерживает '
                 'кастомные схемы (happ://, v2ray://) в inline-кнопках без HTTPS-редиректа.'
             )
     if settings.CONNECT_BUTTON_MODE == 'miniapp_custom' and not settings.MINIAPP_CUSTOM_URL:
         logger.warning(
-            '️ CONNECT_BUTTON_MODE=miniapp_custom, но MINIAPP_CUSTOM_URL не задан! '
+            'CONNECT_BUTTON_MODE=miniapp_custom, но MINIAPP_CUSTOM_URL не задан! '
             'Кнопка "Подключиться" не будет работать.'
         )
     if settings.is_cabinet_mode() and not settings.MINIAPP_CUSTOM_URL:
         logger.warning(
-            '️ MAIN_MENU_MODE=cabinet, но MINIAPP_CUSTOM_URL не задан! '
+            'MAIN_MENU_MODE=cabinet, но MINIAPP_CUSTOM_URL не задан! '
             'Кнопки кабинета не смогут открывать разделы MiniApp. '
             'Установите MINIAPP_CUSTOM_URL.'
         )
@@ -286,12 +295,35 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         except Exception as e:
             logger.warning('Failed to load menu layout cache', error=e)
 
+    try:
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+        await remnawave_retry_queue.start()
+        logger.info('RemnaWave retry queue запущен')
+    except Exception as e:
+        logger.error('Ошибка запуска RemnaWave retry queue', error=e)
+
     logger.info('Бот успешно настроен')
+
+    try:
+        from app.services.backup_service import backup_service
+        await backup_service.start_auto_backup()
+        logger.info('Автобэкапы запущены')
+    except Exception as e:
+        logger.warning('Не удалось запустить автобэкапы', error=e)
 
     return bot, dp
 
 
 async def shutdown_bot():
+    try:
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+        await remnawave_retry_queue.stop()
+        logger.info('RemnaWave retry queue остановлен')
+    except Exception as e:
+        logger.error('Ошибка остановки RemnaWave retry queue', error=e)
+
     try:
         await maintenance_service.stop_monitoring()
         logger.info('Мониторинг техработ остановлен')

@@ -298,7 +298,7 @@ async def delete_prize_endpoint(
             detail='Prize not found',
         )
 
-    logger.info('️ Admin deleted prize', telegram_id=admin.telegram_id, prize_id=prize_id)
+    logger.info('Admin deleted prize', telegram_id=admin.telegram_id, prize_id=prize_id)
 
 
 @router.post('/prizes/reorder', status_code=status.HTTP_200_OK)

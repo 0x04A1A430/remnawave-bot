@@ -27,7 +27,7 @@ class CacheService:
             RateLimitCache._rate_limit_sha = None
             logger.info('Подключение к Redis кешу установлено')
         except Exception as e:
-            logger.warning('️ Не удалось подключиться к Redis', error=e)
+            logger.warning('Не удалось подключиться к Redis', error=e)
             self._connected = False
 
     async def disconnect(self):
@@ -166,7 +166,7 @@ class CacheService:
 
         try:
             await self.redis_client.flushall()
-            logger.info('️ Кеш полностью очищен')
+            logger.info('Кеш полностью очищен')
             return True
         except Exception as e:
             logger.error('Ошибка очистки кеша', error=e)

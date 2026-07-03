@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: remnawave_bot_db
+    container_name: remnawave_bot2_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
@@ -25,7 +25,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: remnawave_bot_redis
+    container_name: remnawave_bot2_redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
@@ -40,7 +40,7 @@ services:
 
   bot:
     build: .
-    container_name: remnawave_bot
+    container_name: remnawave_bot2
     restart: unless-stopped
     depends_on:
       postgres:
@@ -75,7 +75,7 @@ services:
       # Загруженные медиафайлы (изображения/видео для новостей)
       - ./uploads:/app/uploads:rw
     ports:
-      - '${WEB_API_PORT:-8080}:8080'
+      - '8081:8080'
     networks:
       - bot_network
     healthcheck:
@@ -100,7 +100,7 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
     driver_opts:
       com.docker.network.driver.mtu: 1350

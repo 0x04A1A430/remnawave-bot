@@ -228,6 +228,6 @@ def test_get_platega_active_methods_returns_default(monkeypatch: pytest.MonkeyPa
 
 def test_platega_method_display_helpers() -> None:
     assert settings.get_platega_method_display_name(10) == 'Банковские карты (RUB)'
-    assert settings.get_platega_method_display_title(10) == 'Карты (RUB)'
+    assert settings.get_platega_method_display_title(10) == '💳 Карты (RUB)'
     assert settings.get_platega_method_display_name(999) == 'Метод 999'
     assert settings.get_platega_method_display_title(999) == 'Platega 999'

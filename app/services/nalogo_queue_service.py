@@ -71,7 +71,7 @@ class NalogoQueueService:
         self._running = True
         self._task = asyncio.create_task(self._process_queue_loop())
         logger.info(
-            'Сервис очереди чеков NaloGO запущен (интервал: с, задержка между чеками: с)',
+            'Сервис очереди чеков NaloGO запущен',
             _check_interval=self._check_interval,
             _receipt_delay=self._receipt_delay,
         )
@@ -156,11 +156,20 @@ class NalogoQueueService:
             payment_id = receipt_data.get('payment_id', 'unknown')
             amount = receipt_data.get('amount', 0)
 
-            # Логируем количество попыток (чек никогда не удаляется из очереди)
-            if attempts >= 10:
-                logger.warning(
-                    'Чек уже много попыток, продолжаем пытаться...', payment_id=payment_id, attempts=attempts
+            # Проверяем лимит попыток
+            if attempts >= self._max_attempts:
+                logger.error(
+                    'Чек превысил максимальное количество попыток, удалён из очереди',
+                    payment_id=payment_id,
+                    attempts=attempts,
+                    max_attempts=self._max_attempts,
                 )
+                # Удаляем метку "в очереди" — чек больше не будет обрабатываться
+                if payment_id and payment_id != 'unknown':
+                    queued_key = f'nalogo:queued:{payment_id}'
+                    await cache.delete(queued_key)
+                failed += 1
+                continue
 
             # Пытаемся отправить чек
             try:
@@ -215,7 +224,7 @@ class NalogoQueueService:
                         await cache.delete(queued_key)
 
                     logger.info(
-                        'Чек из очереди успешно создан: (payment_id=, попытка )',
+                        'Чек из очереди успешно создан',
                         receipt_uuid=receipt_uuid,
                         payment_id=payment_id,
                         attempts=attempts + 1,
@@ -226,7 +235,7 @@ class NalogoQueueService:
                     failed += 1
                     service_unavailable = True
                     logger.warning(
-                        'Не удалось создать чек из очереди (payment_id=), возвращен в очередь (попытка /)',
+                        'Не удалось создать чек из очереди, возвращён в очередь',
                         payment_id=payment_id,
                         attempts=attempts + 1,
                         _max_attempts=self._max_attempts,
@@ -237,7 +246,7 @@ class NalogoQueueService:
             except Exception as error:
                 await self._nalogo_service.requeue_receipt(receipt_data)
                 failed += 1
-                logger.error('Ошибка при создании чека из очереди (payment_id=)', payment_id=payment_id, error=error)
+                logger.error('Ошибка при создании чека из очереди', payment_id=payment_id, error=error)
                 # Прекращаем попытки при ошибке
                 break
 
@@ -246,7 +255,7 @@ class NalogoQueueService:
 
         if processed > 0 or failed > 0 or skipped > 0:
             logger.info(
-                'Обработка очереди завершена: успешно=, неудачно=, пропущено',
+                'Обработка очереди завершена',
                 processed=processed,
                 failed=failed,
                 skipped=skipped,
@@ -262,7 +271,7 @@ class NalogoQueueService:
                 total_queued_amount = sum(r.get('amount', 0) for r in queued)
 
                 message = (
-                    f'<b>️ Проблема с отправкой чеков NaloGO</b>\n\n'
+                    f'<b> Проблема с отправкой чеков NaloGO</b>\n\n'
                     f'Сервис nalog.ru временно недоступен.\n\n'
                     f'<b>В очереди:</b> {remaining} чек(ов)\n'
                     f'<b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'

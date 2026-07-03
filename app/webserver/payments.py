@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import hmac
+import ipaddress
 import json
-from collections.abc import Iterable
 
 import structlog
 from aiogram import Bot
@@ -37,94 +36,82 @@ def _create_cors_response() -> Response:
     )
 
 
-def _extract_header(request: Request, header_names: Iterable[str]) -> str | None:
-    for header_name in header_names:
-        value = request.headers.get(header_name)
-        if value:
-            return value.strip()
-    return None
+def _resolve_proxied_client_ip(request: Request) -> str | None:
+    """Resolve the client IP without trusting attacker-settable forwarding headers.
+
+    A direct connection from a public peer uses that peer address; client-supplied X-Real-IP /
+    X-Forwarded-For are honoured only when the immediate peer is a local/private reverse proxy
+    (the only party trusted to have set them). Otherwise an attacker could forge a whitelisted
+    source IP to pass a webhook IP-allowlist check.
+    """
+    peer = request.client.host if request.client else None
+
+    def _is_local_proxy(ip: str | None) -> bool:
+        if not ip:
+            return False
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+
+    if peer and not _is_local_proxy(peer):
+        return peer
+
+    forwarded = request.headers.get('x-real-ip') or request.headers.get('x-forwarded-for', '').split(',')[0].strip()
+    return forwarded or peer
 
 
 def _verify_mulenpay_signature(request: Request, raw_body: bytes) -> bool:
+    """Verify the MulenPay webhook signature.
+
+    MulenPay places the signature in the JSON body as the ``sign`` field
+    (not in any HTTP header), per the official OpenAPI spec at
+    https://mulenpay.ru/docs/api and the ``mulenpay-api`` Python SDK
+    (``mulenpay_api/utils/calculus.py``). The algorithm is::
+
+        data_str = ''.join(str(v) for v in data.values())  # excluding 'sign'
+        expected = sha1((data_str + secret_key).encode()).hexdigest()
+
+    Until 2.5.7 the legacy aiohttp webhook server bypassed verification
+    altogether (commented-out 401, ``TODO: Включить обратно``). The
+    FastAPI unified server enforces it strictly, so any pre-existing
+    header-based code paths would 401 every real MulenPay callback —
+    which is exactly the incident this function fixes.
+
+    ``request`` is accepted (and unused) to keep the call-site stable.
+    """
     secret_key = settings.MULENPAY_SECRET_KEY
     display_name = settings.get_mulenpay_display_name()
 
     if not secret_key:
-        logger.warning('secret key is not configured', display_name=display_name)
+        logger.warning('MulenPay webhook: secret key is not configured', display_name=display_name)
         return False
 
-    signature = _extract_header(
-        request,
-        (
-            'X-MulenPay-Signature',
-            'X-Mulenpay-Signature',
-            'X-MULENPAY-SIGNATURE',
-            'X-MulenPay-Webhook-Signature',
-            'X-Mulenpay-Webhook-Signature',
-            'X-MULENPAY-WEBHOOK-SIGNATURE',
-            'X-Signature',
-            'Signature',
-            'X-MulenPay-Sign',
-            'X-Mulenpay-Sign',
-            'X-MULENPAY-SIGN',
-            'MulenPay-Signature',
-            'Mulenpay-Signature',
-            'MULENPAY-SIGNATURE',
-            'signature',
-            'sign',
-        ),
-    )
-
-    if signature:
-        normalized_signature = signature
-        if normalized_signature.lower().startswith('sha256='):
-            normalized_signature = normalized_signature.split('=', 1)[1].strip()
-
-        hmac_digest = hmac.new(secret_key.encode('utf-8'), raw_body, hashlib.sha256).digest()
-        expected_hex = hmac_digest.hex()
-        expected_base64 = base64.b64encode(hmac_digest).decode('utf-8').strip()
-        expected_urlsafe = base64.urlsafe_b64encode(hmac_digest).decode('utf-8').strip()
-
-        normalized_lower = normalized_signature.lower()
-        if hmac.compare_digest(normalized_lower, expected_hex.lower()):
-            return True
-
-        normalized_no_padding = normalized_signature.rstrip('=')
-        if hmac.compare_digest(normalized_no_padding, expected_base64.rstrip('=')):
-            return True
-        if hmac.compare_digest(normalized_no_padding, expected_urlsafe.rstrip('=')):
-            return True
-
-        logger.warning('Неверная подпись webhook', display_name=display_name)
+    try:
+        payload = json.loads(raw_body.decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        logger.warning('MulenPay webhook: cannot parse JSON body for signature check', display_name=display_name)
         return False
 
-    authorization_header = request.headers.get('Authorization')
-    if authorization_header:
-        scheme, _, value = authorization_header.partition(' ')
-        scheme_lower = scheme.lower()
-        token = value.strip() if value else scheme.strip()
+    if not isinstance(payload, dict) or not payload:
+        logger.warning('MulenPay webhook: payload is not a non-empty JSON object', display_name=display_name)
+        return False
 
-        if scheme_lower in {'bearer', 'token'}:
-            if hmac.compare_digest(token, secret_key):
-                return True
-            logger.warning('Неверный токен webhook', scheme=scheme, display_name=display_name)
-            return False
+    received_sign = payload.get('sign')
+    if not isinstance(received_sign, str) or not received_sign:
+        logger.warning('MulenPay webhook: missing sign field in body', display_name=display_name)
+        return False
 
-        if not value and hmac.compare_digest(token, secret_key):
-            return True
+    # Iterate insertion order (json.loads preserves wire order since Python 3.7),
+    # excluding the 'sign' field itself. Matches official SDK exactly.
+    data_str = ''.join(str(value) for key, value in payload.items() if key != 'sign')
+    expected = hashlib.sha1((data_str + secret_key).encode('utf-8')).hexdigest()
 
-    fallback_token = _extract_header(
-        request,
-        (
-            'X-MulenPay-Token',
-            'X-Mulenpay-Token',
-            'X-Webhook-Token',
-        ),
-    )
-    if fallback_token and hmac.compare_digest(fallback_token, secret_key):
+    if hmac.compare_digest(received_sign.lower(), expected.lower()):
         return True
 
-    logger.warning('Отсутствует подпись webhook', display_name=display_name)
+    logger.warning('MulenPay webhook: invalid signature', display_name=display_name)
     return False
 
 
@@ -177,6 +164,12 @@ async def _parse_pal24_payload(request: Request) -> dict[str, str]:
 def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRouter | None:
     router = APIRouter()
     routes_registered = False
+
+    if settings.is_apple_iap_enabled():
+        from app.webserver.apple_iap import create_apple_iap_router
+
+        router.include_router(create_apple_iap_router(bot))
+        routes_registered = True
 
     if settings.TRIBUTE_ENABLED:
         tribute_service = TributeService(bot)
@@ -351,7 +344,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return JSONResponse({'status': 'ok'})
 
                 logger.error(
-                    'CryptoBot webhook processing failed: invoice_id',
+                    'CryptoBot webhook processing failed',
                     payload=payload.get('payload', {}).get('invoice_id'),
                 )
                 return JSONResponse(
@@ -459,7 +452,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return JSONResponse({'status': 'ok'})
 
                 payment_id = webhook_data.get('object', {}).get('id', 'unknown')
-                logger.error('YooKassa webhook processing failed: payment_id', payment_id=payment_id)
+                logger.error('YooKassa webhook processing failed', payment_id=payment_id)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'processing_failed'},
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -530,7 +523,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return JSONResponse({'status': 'ok'})
 
                 order_id = payload.get('orderId') or payload.get('order_id') or 'unknown'
-                logger.error('Wata webhook processing failed: order_id payload', order_id=order_id, payload=payload)
+                logger.error('Wata webhook processing failed', order_id=order_id, payload=payload)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -594,7 +587,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return JSONResponse({'status': 'ok'})
 
                 uuid_val = payload.get('uuid', 'unknown')
-                logger.error('Heleket webhook processing failed: uuid', uuid_val=uuid_val)
+                logger.error('Heleket webhook processing failed', uuid_val=uuid_val)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -665,7 +658,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     return JSONResponse({'status': 'ok'})
 
                 bill_id = parsed_payload.get('bill_id', 'unknown')
-                logger.error('Pal24 webhook processing failed: bill_id', bill_id=bill_id)
+                logger.error('Pal24 webhook processing failed', bill_id=bill_id)
                 return JSONResponse(
                     {'status': 'error', 'reason': 'not_processed'},
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -777,7 +770,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
                 # Логируем для диагностики
                 logger.info(
-                    'CloudPayments check webhook received, body_len all_headers',
+                    'CloudPayments check webhook received',
                     raw_body_count=len(raw_body),
                     headers=dict(request.headers),
                 )
@@ -882,7 +875,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
                 # Логируем для диагностики
                 logger.info(
-                    'CloudPayments universal webhook received, body_len headers',
+                    'CloudPayments universal webhook received',
                     raw_body_count=len(raw_body),
                     headers=dict(request.headers),
                 )
@@ -928,7 +921,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 elif status_value in ('Completed', 'Authorized') and is_pay_notification:
                     # Успешная оплата (Pay notification) - есть Reason или AuthCode
                     logger.info(
-                        'CloudPayments Pay notification: invoice reason auth_code',
+                        'CloudPayments Pay notification',
                         webhook_data=webhook_data.get('invoice_id'),
                         reason=reason,
                         auth_code=auth_code,
@@ -942,7 +935,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     # Check notification или другой тип - просто разрешаем (code=0)
                     # Check приходит ДО оплаты для валидации, не зачисляем баланс
                     logger.info(
-                        'CloudPayments Check/other notification: status reason auth_code= - allowing (code=0), NOT crediting balance',
+                        'CloudPayments Check/other notification: allowing (code=0), NOT crediting balance',
                         status_value=status_value,
                         reason=reason,
                         auth_code=auth_code,
@@ -980,10 +973,9 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.FREEKASSA_WEBHOOK_PATH)
         async def freekassa_webhook(request: Request) -> Response:
-            # Use transport-layer IP as primary source; only trust proxy headers
-            # when the direct connection comes from a known proxy.
-            # This prevents X-Forwarded-For spoofing by external attackers.
-            client_ip = request.client.host if request.client else '127.0.0.1'
+            client_ip = request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or (
+                request.client.host if request.client else '127.0.0.1'
+            )
 
             # Получаем данные формы
             try:
@@ -1034,7 +1026,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 if success:
                     return Response('YES', status_code=status.HTTP_200_OK)
 
-                logger.error('Freekassa webhook processing failed: order_id intid', order_id=order_id, intid=intid)
+                logger.error('Freekassa webhook processing failed', order_id=order_id, intid=intid)
                 return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.exception('Freekassa webhook processing error', e=e)
@@ -1109,7 +1101,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 if success:
                     return Response('YES', status_code=status.HTTP_200_OK)
 
-                logger.error('KassaAI webhook processing failed: order_id intid', order_id=order_id, intid=intid)
+                logger.error('KassaAI webhook processing failed', order_id=order_id, intid=intid)
                 return Response('Error', status_code=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 logger.exception('KassaAI webhook processing error', e=e)
@@ -1241,6 +1233,465 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # PayPear webhook
+    if settings.is_paypear_enabled():
+
+        @router.get(settings.PAYPEAR_WEBHOOK_PATH)
+        async def paypear_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'paypear_webhook',
+                    'enabled': settings.is_paypear_enabled(),
+                }
+            )
+
+        @router.post(settings.PAYPEAR_WEBHOOK_PATH)
+        async def paypear_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('PayPear webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Извлекаем подпись из тела webhook
+            received_signature = payload.get('signature', '')
+
+            from app.services.paypear_service import paypear_service
+
+            client_ip = _resolve_proxied_client_ip(request)
+            if not paypear_service.verify_webhook_signature(raw_body, received_signature, client_ip=client_ip):
+                logger.warning('PayPear webhook: invalid signature and IP', client_ip=client_ip)
+                return JSONResponse({'status': False}, status_code=status.HTTP_403_FORBIDDEN)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_paypear_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'PayPear webhook processing failed',
+                        data=payload.get('object'),
+                    )
+            except Exception as e:
+                logger.exception('PayPear webhook processing error', error=e)
+            # Always return 200 — PayPear may retry on non-200
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # RollyPay webhook
+    if settings.is_rollypay_enabled():
+
+        @router.get(settings.ROLLYPAY_WEBHOOK_PATH)
+        async def rollypay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'rollypay_webhook',
+                    'enabled': settings.is_rollypay_enabled(),
+                }
+            )
+
+        @router.post(settings.ROLLYPAY_WEBHOOK_PATH)
+        async def rollypay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('RollyPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Подпись через заголовки X-Signature и X-Timestamp
+            received_signature = request.headers.get('X-Signature', '')
+            timestamp = request.headers.get('X-Timestamp', '')
+
+            from app.services.rollypay_service import rollypay_service
+
+            if not rollypay_service.verify_webhook_signature(raw_body, received_signature, timestamp):
+                logger.warning('RollyPay webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_403_FORBIDDEN)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_rollypay_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'RollyPay webhook processing failed',
+                        data=payload.get('payment_id'),
+                    )
+            except Exception as e:
+                logger.exception('RollyPay webhook processing error', error=e)
+            # Always return 200 — RollyPay retries on non-200 with exponential backoff
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Overpay webhook
+    if settings.is_overpay_enabled():
+
+        @router.get(settings.OVERPAY_WEBHOOK_PATH)
+        async def overpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'overpay_webhook',
+                    'enabled': settings.is_overpay_enabled(),
+                }
+            )
+
+        @router.post(settings.OVERPAY_WEBHOOK_PATH)
+        async def overpay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Overpay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Overpay uses mTLS for authentication — verify payment exists in DB
+            merchant_transaction_id = payload.get('merchantTransactionId')
+            if not merchant_transaction_id:
+                logger.warning('Overpay webhook: missing merchantTransactionId')
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Validate that the payment exists in our DB (basic anti-spoofing)
+            from app.database.crud.overpay import get_overpay_payment_by_order_id
+
+            db_generator = get_db()
+            try:
+                check_db = await db_generator.__anext__()
+            except StopAsyncIteration:
+                return JSONResponse({'status': False}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            try:
+                existing = await get_overpay_payment_by_order_id(check_db, merchant_transaction_id)
+                if not existing:
+                    overpay_id = payload.get('id')
+                    if overpay_id:
+                        from app.database.crud.overpay import get_overpay_payment_by_overpay_id
+
+                        existing = await get_overpay_payment_by_overpay_id(check_db, str(overpay_id))
+                    if not existing:
+                        logger.warning(
+                            'Overpay webhook: payment not found in DB',
+                            merchant_transaction_id=merchant_transaction_id,
+                        )
+                        return JSONResponse({'status': False}, status_code=status.HTTP_404_NOT_FOUND)
+            finally:
+                try:
+                    await db_generator.__anext__()
+                except StopAsyncIteration:
+                    pass
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_overpay_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'Overpay webhook processing failed',
+                        data=payload.get('id'),
+                    )
+            except Exception as e:
+                logger.exception('Overpay webhook processing error', error=e)
+            # Always return 200 — Overpay expects HTTP 200
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # AuraPay webhook
+    if settings.is_aurapay_enabled():
+
+        @router.get(settings.AURAPAY_WEBHOOK_PATH)
+        async def aurapay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'aurapay_webhook',
+                    'enabled': settings.is_aurapay_enabled(),
+                }
+            )
+
+        @router.post(settings.AURAPAY_WEBHOOK_PATH)
+        async def aurapay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('AuraPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Подпись через заголовок X-SIGNATURE
+            received_signature = request.headers.get('X-SIGNATURE', '')
+
+            from app.services.aurapay_service import aurapay_service
+
+            if not aurapay_service.verify_webhook_signature(payload, received_signature):
+                logger.warning('AuraPay webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_403_FORBIDDEN)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_aurapay_webhook',
+                )
+                if not success:
+                    logger.error(
+                        'AuraPay webhook processing failed',
+                        data=payload.get('id'),
+                    )
+            except Exception as e:
+                logger.exception('AuraPay webhook processing error', error=e)
+            # Always return 200 — AuraPay retries on non-200 (5 attempts)
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Etoplatezhi webhook
+    if settings.is_etoplatezhi_enabled():
+
+        @router.get(settings.ETOPLATEZHI_WEBHOOK_PATH)
+        async def etoplatezhi_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'etoplatezhi_webhook',
+                    'enabled': settings.is_etoplatezhi_enabled(),
+                }
+            )
+
+        @router.post(settings.ETOPLATEZHI_WEBHOOK_PATH)
+        async def etoplatezhi_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Etoplatezhi webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Подпись внутри JSON body (поле signature)
+            from app.services.etoplatezhi_service import etoplatezhi_service
+
+            if not etoplatezhi_service.verify_callback_signature(payload):
+                logger.warning('Etoplatezhi webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_etoplatezhi_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Etoplatezhi webhook processing failed',
+                        data=payload.get('payment', {}).get('id'),
+                    )
+            except Exception as e:
+                logger.exception('Etoplatezhi webhook processing error', error=e)
+            # Always return 200 — Etoplatezhi expects 200 for valid signature
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Antilopay webhook
+    if settings.is_antilopay_enabled():
+
+        @router.get(settings.ANTILOPAY_WEBHOOK_PATH)
+        async def antilopay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'antilopay_webhook',
+                    'enabled': settings.is_antilopay_enabled(),
+                }
+            )
+
+        @router.post(settings.ANTILOPAY_WEBHOOK_PATH)
+        async def antilopay_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Antilopay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # Подпись в заголовке X-Apay-Callback, верифицируется публичным ключом
+            from app.services.antilopay_service import antilopay_service
+
+            callback_signature = request.headers.get('X-Apay-Callback') or ''
+            if not antilopay_service.verify_callback_signature(raw_body, callback_signature):
+                logger.warning('Antilopay webhook: invalid signature')
+                return JSONResponse({'status': False}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_antilopay_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Antilopay webhook processing failed',
+                        data=payload.get('payment_id'),
+                    )
+            except Exception as e:
+                logger.exception('Antilopay webhook processing error', error=e)
+            # Always return 200 — Antilopay retries every 3min for 1hr on non-200
+            return JSONResponse({'status': True}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Jupiter webhook (FPGate P2P v2.1)
+    if settings.is_jupiter_enabled():
+
+        @router.get(settings.JUPITER_WEBHOOK_PATH)
+        async def jupiter_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'jupiter_webhook',
+                    'enabled': settings.is_jupiter_enabled(),
+                }
+            )
+
+        @router.post(settings.JUPITER_WEBHOOK_PATH)
+        async def jupiter_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Jupiter webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.jupiter_service import jupiter_service
+
+            if not jupiter_service.verify_callback_signature(payload):
+                logger.warning('Jupiter webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_jupiter_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Jupiter webhook processing failed',
+                        transaction_id=payload.get('transaction_id'),
+                    )
+            except Exception as e:
+                logger.exception('Jupiter webhook processing error', error=e)
+            # FPGate ожидает HTTP 200 как подтверждение приёма callback
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Lava webhook (Lava Business)
+    if settings.is_lava_enabled():
+
+        @router.get(settings.LAVA_WEBHOOK_PATH)
+        async def lava_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'lava_webhook',
+                    'enabled': settings.is_lava_enabled(),
+                }
+            )
+
+        @router.post(settings.LAVA_WEBHOOK_PATH)
+        async def lava_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Lava webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.lava_service import lava_service
+
+            received_signature = (request.headers.get('Authorization') or '').strip()
+            if not lava_service.verify_webhook_signature(raw_body, received_signature):
+                logger.warning('Lava webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_lava_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Lava webhook processing failed',
+                        order_id=payload.get('order_id'),
+                        invoice_id=payload.get('invoice_id'),
+                    )
+            except Exception as e:
+                logger.exception('Lava webhook processing error', error=e)
+            # Lava ожидает HTTP 200 как подтверждение приёма; иначе будет повтор до 5 раз раз в 150с
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # Donut webhook (Donut P2P)
+    if settings.is_donut_enabled():
+
+        @router.get(settings.DONUT_WEBHOOK_PATH)
+        async def donut_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'donut_webhook',
+                    'enabled': settings.is_donut_enabled(),
+                }
+            )
+
+        @router.post(settings.DONUT_WEBHOOK_PATH)
+        async def donut_webhook(request: Request) -> JSONResponse:
+            try:
+                raw_body = await request.body()
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('Donut webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            from app.services.donut_service import donut_service
+
+            if not donut_service.verify_callback_signature(payload):
+                logger.warning('Donut webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_donut_callback',
+                )
+                if not success:
+                    logger.error(
+                        'Donut webhook processing failed',
+                        transaction_id=payload.get('transaction_id'),
+                    )
+            except Exception as e:
+                logger.exception('Donut webhook processing error', error=e)
+            # Donut ожидает HTTP 200 как подтверждение приёма callback
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     if routes_registered:
 
         @router.get('/health/payment-webhooks')
@@ -1248,6 +1699,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             return JSONResponse(
                 {
                     'status': 'ok',
+                    'apple_iap_enabled': settings.is_apple_iap_enabled(),
                     'tribute_enabled': settings.TRIBUTE_ENABLED,
                     'mulenpay_enabled': settings.is_mulenpay_enabled(),
                     'cryptobot_enabled': settings.is_cryptobot_enabled(),
@@ -1261,6 +1713,15 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'kassa_ai_enabled': settings.is_kassa_ai_enabled(),
                     'riopay_enabled': settings.is_riopay_enabled(),
                     'severpay_enabled': settings.is_severpay_enabled(),
+                    'paypear_enabled': settings.is_paypear_enabled(),
+                    'rollypay_enabled': settings.is_rollypay_enabled(),
+                    'overpay_enabled': settings.is_overpay_enabled(),
+                    'aurapay_enabled': settings.is_aurapay_enabled(),
+                    'etoplatezhi_enabled': settings.is_etoplatezhi_enabled(),
+                    'antilopay_enabled': settings.is_antilopay_enabled(),
+                    'jupiter_enabled': settings.is_jupiter_enabled(),
+                    'donut_enabled': settings.is_donut_enabled(),
+                    'lava_enabled': settings.is_lava_enabled(),
                 }
             )
 

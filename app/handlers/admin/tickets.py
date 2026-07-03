@@ -20,6 +20,7 @@ from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
+from app.utils.photo_message import safe_edit_or_resend
 
 
 logger = structlog.get_logger(__name__)
@@ -255,14 +256,14 @@ async def view_admin_ticket(
         if ticket.user_reply_block_permanent:
             header += 'Пользователь заблокирован навсегда\n\n'
         elif ticket.user_reply_block_until:
-            header += f'⏳ Блок до: {ticket.user_reply_block_until.strftime("%d.%m.%Y %H:%M")}\n\n'
+            header += f'Блок до: {ticket.user_reply_block_until.strftime("%d.%m.%Y %H:%M")}\n\n'
 
     # Формируем блоки сообщений
     message_blocks: list[str] = []
     if ticket.messages:
         message_blocks.append(f'Сообщения ({len(ticket.messages)}):\n\n')
         for msg in ticket.messages:
-            sender = 'Пользователь' if msg.is_user_message else '️ Поддержка'
+            sender = 'Пользователь' if msg.is_user_message else 'Поддержка'
             block = f'{sender} ({msg.created_at.strftime("%d.%m %H:%M")}):\n{html.escape(msg.message_text)}\n\n'
             if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
                 block += 'Вложение: фото\n\n'
@@ -325,12 +326,12 @@ async def view_admin_ticket(
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(text='← ', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
+                types.InlineKeyboardButton(text='', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
             )
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
         if page < total_pages:
             nav_row.append(
-                types.InlineKeyboardButton(text='️', callback_data=f'admin_ticket_page_{ticket_id}_{page + 1}')
+                types.InlineKeyboardButton(text='', callback_data=f'admin_ticket_page_{ticket_id}_{page + 1}')
             )
         try:
             keyboard.inline_keyboard.insert(0, nav_row)
@@ -366,12 +367,20 @@ async def reply_to_admin_ticket(callback: types.CallbackQuery, state: FSMContext
         return
     ticket_id = int(callback.data.replace('admin_reply_ticket_', ''))
 
-    await state.update_data(ticket_id=ticket_id, reply_mode=True)
     texts = get_texts(db_user.language)
-    await callback.message.edit_text(
-        texts.t('ADMIN_TICKET_REPLY_INPUT', 'Введите ответ от поддержки:'),
-        reply_markup=get_admin_ticket_reply_cancel_keyboard(db_user.language),
-    )
+    message = callback.message
+    if not isinstance(message, types.Message):
+        # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
+        await callback.answer(
+            texts.t('MESSAGE_TOO_OLD', 'Сообщение устарело, откройте тикет в панели.'), show_alert=True
+        )
+        return
+
+    # Изменяем состояние только если сообщение доступно
+    await state.update_data(ticket_id=ticket_id, reply_mode=True)
+    reply_text = texts.t('ADMIN_TICKET_REPLY_INPUT', 'Введите ответ от поддержки:')
+    reply_markup = get_admin_ticket_reply_cancel_keyboard(db_user.language)
+    await safe_edit_or_resend(message, reply_text, reply_markup)
 
     await state.set_state(AdminTicketStates.waiting_for_reply)
     await callback.answer()
@@ -488,13 +497,13 @@ async def handle_admin_ticket_reply(message: types.Message, state: FSMContext, d
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('VIEW_TICKET', '️ Посмотреть тикет'),
+                            text=texts.t('VIEW_TICKET', 'Посмотреть тикет'),
                             callback_data=f'admin_view_ticket_{ticket_id}',
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BACK_TO_TICKETS', '← К тикетам'), callback_data='admin_tickets'
+                            text=texts.t('BACK_TO_TICKETS', 'К тикетам'), callback_data='admin_tickets'
                         )
                     ],
                 ]
@@ -691,7 +700,7 @@ async def cancel_admin_ticket_reply(callback: types.CallbackQuery, state: FSMCon
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_TICKETS', '← К тикетам'), callback_data='admin_tickets'
+                        text=texts.t('BACK_TO_TICKETS', 'К тикетам'), callback_data='admin_tickets'
                     )
                 ]
             ]
@@ -707,23 +716,31 @@ async def block_user_in_ticket(callback: types.CallbackQuery, state: FSMContext,
         return
     ticket_id = int(callback.data.replace('admin_block_user_ticket_', ''))
     texts = get_texts(db_user.language)
+    message = callback.message
+    if not isinstance(message, types.Message):
+        # None или InaccessibleMessage (например, уведомление старше 48ч) — редактировать нельзя
+        await callback.answer(
+            texts.t('MESSAGE_TOO_OLD', 'Сообщение устарело, откройте тикет в панели.'), show_alert=True
+        )
+        return
     # Save original ticket message ids to update it after blocking without reopening
     try:
-        await state.update_data(origin_chat_id=callback.message.chat.id, origin_message_id=callback.message.message_id)
-    except Exception:
-        pass
-    await callback.message.edit_text(
-        texts.t('ENTER_BLOCK_MINUTES', 'Введите количество минут для блокировки пользователя (например, 15):'),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t('CANCEL_REPLY', 'Отменить ввод'), callback_data='cancel_admin_ticket_reply'
-                    )
-                ]
-            ]
-        ),
+        await state.update_data(origin_chat_id=message.chat.id, origin_message_id=message.message_id)
+    except Exception as e:
+        logger.warning('Failed to save origin message ids for ticket block', ticket_id=ticket_id, error=e)
+    block_prompt = texts.t(
+        'ENTER_BLOCK_MINUTES', 'Введите количество минут для блокировки пользователя (например, 15):'
     )
+    block_markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('CANCEL_REPLY', 'Отменить ввод'), callback_data='cancel_admin_ticket_reply'
+                )
+            ]
+        ]
+    )
+    await safe_edit_or_resend(message, block_prompt, block_markup)
     await state.update_data(ticket_id=ticket_id)
     await state.set_state(AdminTicketStates.waiting_for_block_duration)
     await callback.answer()
@@ -833,11 +850,11 @@ async def handle_admin_block_duration_input(message: types.Message, state: FSMCo
                 if updated.user_reply_block_permanent:
                     ticket_text += 'Пользователь заблокирован навсегда для ответов в этом тикете\n'
                 elif updated.user_reply_block_until:
-                    ticket_text += f'⏳ Блок до: {updated.user_reply_block_until.strftime("%d.%m.%Y %H:%M")}\n'
+                    ticket_text += f'Блок до: {updated.user_reply_block_until.strftime("%d.%m.%Y %H:%M")}\n'
             if updated.messages:
                 ticket_text += f'Сообщения ({len(updated.messages)}):\n\n'
                 for msg in updated.messages:
-                    sender = 'Пользователь' if msg.is_user_message else '️ Поддержка'
+                    sender = 'Пользователь' if msg.is_user_message else 'Поддержка'
                     ticket_text += f'{sender} ({msg.created_at.strftime("%d.%m %H:%M")}):\n'
                     ticket_text += f'{html.escape(msg.message_text)}\n\n'
                     if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
@@ -1043,12 +1060,12 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
 
         user = getattr(ticket_with_user, 'user', None)
         if not user:
-            logger.error('User not found for ticket #', ticket_id=ticket.id)
+            logger.error('User not found for ticket', ticket_id=ticket.id)
             return
 
         if not getattr(user, 'telegram_id', None):
             logger.warning(
-                'Cannot notify ticket # user without telegram_id (username auth_type=)',
+                'Cannot notify ticket user without telegram_id',
                 ticket_id=ticket.id,
                 getattr=getattr(user, 'username', None),
                 getattr_2=getattr(user, 'auth_type', None),
@@ -1067,7 +1084,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('VIEW_TICKET', '️ Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
+                        text=texts.t('VIEW_TICKET', 'Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
                     )
                 ],
                 [
@@ -1112,7 +1129,7 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
             reply_markup=keyboard,
         )
 
-        logger.info('Ticket # reply notification sent to user', ticket_id=ticket.id, chat_id=chat_id)
+        logger.info('Ticket reply notification sent to user', ticket_id=ticket.id, chat_id=chat_id)
 
     except Exception as e:
         logger.error('Error notifying user about ticket reply', error=e)

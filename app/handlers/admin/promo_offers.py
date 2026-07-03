@@ -71,13 +71,9 @@ async def _safe_delete_message_by_id(bot, chat_id: int, message_id: int) -> None
         await bot.delete_message(chat_id, message_id)
     except TelegramBadRequest as exc:
         if 'message to delete not found' not in str(exc).lower():
-            logger.debug(
-                'Не удалось удалить сообщение администратора (,)', chat_id=chat_id, message_id=message_id, exc=exc
-            )
+            logger.debug('Не удалось удалить сообщение администратора', chat_id=chat_id, message_id=message_id, exc=exc)
     except TelegramForbiddenError:
-        logger.debug(
-            'Недостаточно прав для удаления сообщения администратора (,)', chat_id=chat_id, message_id=message_id
-        )
+        logger.debug('Недостаточно прав для удаления сообщения администратора', chat_id=chat_id, message_id=message_id)
 
 
 async def _clear_promo_offer_search_prompt(state: FSMContext, bot) -> None:
@@ -114,7 +110,7 @@ OFFER_TYPE_CONFIG = {
         'label_key': 'ADMIN_PROMO_OFFER_TEST_ACCESS',
         'default_label': 'Тестовые сервера',
         'allowed_segments': [
-            ('paid_active', '🟢 Активные платные'),
+            ('paid_active', 'Активные платные'),
             ('trial_active', 'Активные триалы'),
         ],
         'effect_type': 'test_access',
@@ -124,7 +120,7 @@ OFFER_TYPE_CONFIG = {
         'label_key': 'ADMIN_PROMO_OFFER_EXTEND',
         'default_label': 'Скидка на продление',
         'allowed_segments': [
-            ('paid_active', '🟢 Активные платные'),
+            ('paid_active', 'Активные платные'),
         ],
         'effect_type': 'percent_discount',
     },
@@ -218,13 +214,13 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
 
     rows.append(
         [
-            InlineKeyboardButton(text='️ Текст', callback_data=f'promo_offer_edit_message_{template.id}'),
-            InlineKeyboardButton(text='🪄 Кнопка', callback_data=f'promo_offer_edit_button_{template.id}'),
+            InlineKeyboardButton(text='Текст', callback_data=f'promo_offer_edit_message_{template.id}'),
+            InlineKeyboardButton(text='Кнопка', callback_data=f'promo_offer_edit_button_{template.id}'),
         ]
     )
     rows.append(
         [
-            InlineKeyboardButton(text='⏱️ Срок', callback_data=f'promo_offer_edit_valid_{template.id}'),
+            InlineKeyboardButton(text='Срок', callback_data=f'promo_offer_edit_valid_{template.id}'),
         ]
     )
 
@@ -232,13 +228,13 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
         rows[-1].append(InlineKeyboardButton(text='%', callback_data=f'promo_offer_edit_discount_{template.id}'))
         rows.append(
             [
-                InlineKeyboardButton(text='⌛ Активна', callback_data=f'promo_offer_edit_active_{template.id}'),
+                InlineKeyboardButton(text='Активна', callback_data=f'promo_offer_edit_active_{template.id}'),
             ]
         )
     else:
         rows.append(
             [
-                InlineKeyboardButton(text='⏳ Длительность', callback_data=f'promo_offer_edit_duration_{template.id}'),
+                InlineKeyboardButton(text='Длительность', callback_data=f'promo_offer_edit_duration_{template.id}'),
                 InlineKeyboardButton(text='Сквады', callback_data=f'promo_offer_edit_squads_{template.id}'),
             ]
         )
@@ -411,7 +407,7 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=f'promo_offer_logs_page_{page + 1}',
                 )
             )
@@ -457,7 +453,7 @@ def _build_user_button_label(user: User) -> str:
     status_emoji_map = {
         UserStatus.ACTIVE.value: '',
         UserStatus.BLOCKED.value: '',
-        UserStatus.DELETED.value: '️',
+        UserStatus.DELETED.value: '',
     }
     status_emoji = status_emoji_map.get(getattr(user, 'status', None), '')
 
@@ -588,7 +584,7 @@ async def _render_send_user_list(
         if current_page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=f'promo_offer_send_user_{template_id}_page_{current_page + 1}',
                 )
             )
@@ -618,7 +614,7 @@ async def _render_send_user_list(
             InlineKeyboardButton(
                 text=texts.t(
                     'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_SEGMENTS',
-                    '↩️ К выбору категории',
+                    'К выбору категории',
                 ),
                 callback_data=f'promo_offer_send_menu_{template_id}',
             )
@@ -1040,7 +1036,7 @@ async def _render_squad_selection(
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='️',
+                    text='',
                     callback_data=f'promo_offer_squad_page_{template.id}_{page + 1}',
                 )
             )
@@ -1053,7 +1049,7 @@ async def _render_squad_selection(
             callback_data=f'promo_offer_clear_squad_{template.id}_{page}',
         ),
         InlineKeyboardButton(
-            text=texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK', '↩️ Назад'),
+            text=texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK', 'Назад'),
             callback_data=f'promo_offer_squad_back_{template.id}',
         ),
     ]
@@ -1382,7 +1378,7 @@ async def process_send_user_search(
     message_id = message_info.get('message_id')
 
     if not chat_id or not message_id:
-        placeholder = await message.answer('⏳ Обновляем список пользователей...')
+        placeholder = await message.answer('Обновляем список пользователей...')
         chat_id = placeholder.chat.id
         message_id = placeholder.message_id
 
@@ -1711,7 +1707,7 @@ async def show_selected_user_details(
             if not offer.claimed_at:
                 status_label = texts.t(
                     'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS_PENDING',
-                    '⏳ Не принято',
+                    'Не принято',
                 )
             lines.append(
                 texts.t(
@@ -2114,7 +2110,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     squad_uuid, squad_name = await _resolve_template_squad(db, template)
     allowed_segments = {seg for seg, _ in config.get('allowed_segments', [])}
     if segment not in allowed_segments:
-        await callback.answer('️ Нельзя отправить это предложение выбранной категории', show_alert=True)
+        await callback.answer('Нельзя отправить это предложение выбранной категории', show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -2171,7 +2167,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
         result_keyboard_rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩️ К предложению'),
+                    text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', 'К предложению'),
                     callback_data=f'promo_offer_{refreshed.id}',
                 )
             ]
@@ -2296,7 +2292,7 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', '↩️ К предложению'),
+                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', 'К предложению'),
                 callback_data=f'promo_offer_{template.id}',
             )
         ],

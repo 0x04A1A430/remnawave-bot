@@ -42,7 +42,7 @@ _CAMPAIGNS_PAGE_SIZE = 5
 
 
 def _format_campaign_summary(campaign, texts) -> str:
-    status = '🟢 Активна' if campaign.is_active else '️Выключена'
+    status = 'Активна' if campaign.is_active else 'Выключена'
 
     if campaign.is_balance_bonus:
         bonus_text = texts.format_price(campaign.balance_bonus_kopeks)
@@ -121,7 +121,7 @@ async def _render_campaign_edit_menu(
     use_caption: bool = False,
 ):
     texts = get_texts(language)
-    text = f'️ <b>Редактирование кампании</b>\n\n{_format_campaign_summary(campaign, texts)}\nВыберите, что изменить:'
+    text = f'<b>Редактирование кампании</b>\n\n{_format_campaign_summary(campaign, texts)}\nВыберите, что изменить:'
 
     edit_kwargs = dict(
         chat_id=chat_id,
@@ -243,7 +243,7 @@ async def show_campaigns_list(
         regs = sa_inspect(campaign).dict.get('registrations', []) or []
         registrations = len(regs)
         total_balance = sum(r.balance_bonus_kopeks or 0 for r in regs)
-        status = '🟢' if campaign.is_active else ''
+        status = '' if campaign.is_active else ''
         line = (
             f'{status} <b>{html.escape(campaign.name)}</b> — <code>{html.escape(campaign.start_parameter)}</code>\n'
             f'   Регистраций: {registrations}, баланс: {texts.format_price(total_balance)}'
@@ -383,7 +383,7 @@ async def start_edit_campaign_name(
 
     await callback.message.edit_text(
         (
-            '️ <b>Изменение названия кампании</b>\n\n'
+            '<b>Изменение названия кампании</b>\n\n'
             f'Текущее название: <b>{html.escape(campaign.name)}</b>\n'
             'Введите новое название (3-100 символов):'
         ),
@@ -1183,7 +1183,7 @@ async def confirm_delete_campaign(
         return
 
     text = (
-        '️ <b>Удаление кампании</b>\n\n'
+        '<b>Удаление кампании</b>\n\n'
         f'Название: <b>{html.escape(campaign.name)}</b>\n'
         f'Параметр: <code>{html.escape(campaign.start_parameter)}</code>\n\n'
         'Вы уверены, что хотите удалить кампанию?'
@@ -1230,7 +1230,7 @@ async def start_campaign_creation(
 ):
     await state.clear()
     await callback.message.edit_text(
-        '🆕 <b>Создание рекламной кампании</b>\n\nВведите название кампании:',
+        '<b>Создание рекламной кампании</b>\n\nВведите название кампании:',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text='← Назад', callback_data='admin_campaigns')]]
         ),

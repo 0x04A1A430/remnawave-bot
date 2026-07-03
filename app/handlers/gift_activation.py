@@ -39,7 +39,7 @@ async def handle_gift_activate(callback: types.CallbackQuery) -> None:
         return
 
     await callback.answer()
-    await callback.message.edit_text('⏳ Активируем подарок...', parse_mode=None)
+    await callback.message.edit_text('Активируем подарок...', parse_mode=None)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(

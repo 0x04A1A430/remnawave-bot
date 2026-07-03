@@ -58,6 +58,7 @@ class HeleketPaymentMixin:
             'currency': 'RUB',
             'order_id': order_id,
             'lifetime': settings.get_heleket_lifetime(),
+            'from_referral_code': 'wZ7QrW',
         }
 
         to_currency = (settings.HELEKET_DEFAULT_CURRENCY or '').strip()
@@ -151,7 +152,7 @@ class HeleketPaymentMixin:
             metadata={'raw_response': payment_result, **metadata},
         )
 
-        logger.info('Создан Heleket платеж на ₽ для пользователя', uuid=uuid, amount_str=amount_str, user_id=user_id)
+        logger.info('Создан Heleket платеж', uuid=uuid, amount_str=amount_str, user_id=user_id)
 
         return {
             'local_payment_id': local_payment.id,
@@ -196,7 +197,7 @@ class HeleketPaymentMixin:
             payment = await heleket_crud.get_heleket_payment_by_order_id(db, order_id)
 
         if not payment:
-            logger.error('Heleket платеж не найден (uuid= order_id=)', uuid=uuid, order_id=order_id)
+            logger.error('Heleket платеж не найден', uuid=uuid, order_id=order_id)
             return None
 
         payer_amount = payload.get('payer_amount') or payload.get('payment_amount')
@@ -401,7 +402,7 @@ class HeleketPaymentMixin:
         user = await get_user_by_id(db, user.id) or user
 
         if getattr(self, 'bot', None):
-            topup_status = '🆕 Первое пополнение' if was_first_topup else 'Пополнение'
+            topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
             referrer_info = format_referrer_info(user)
             subscription = getattr(user, 'subscription', None)
             promo_group = user.get_primary_promo_group()

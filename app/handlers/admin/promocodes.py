@@ -82,7 +82,7 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
             'balance': '',
             'subscription_days': '',
             'trial_subscription': '',
-            'promo_group': '️',
+            'promo_group': '',
             'discount': '',
         }.get(promo.type, '')
 
@@ -95,7 +95,7 @@ async def show_promocodes_list(callback: types.CallbackQuery, db_user: User, db:
             text += f'Дней: {promo.subscription_days}\n'
         elif promo.type == PromoCodeType.PROMO_GROUP.value:
             if promo.promo_group:
-                text += f'️ Промогруппа: {html.escape(promo.promo_group.name)}\n'
+                text += f'Промогруппа: {html.escape(promo.promo_group.name)}\n'
         elif promo.type == PromoCodeType.DISCOUNT.value:
             discount_hours = promo.subscription_days
             if discount_hours > 0:
@@ -153,7 +153,7 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
         'balance': '',
         'subscription_days': '',
         'trial_subscription': '',
-        'promo_group': '️',
+        'promo_group': '',
         'discount': '',
     }.get(promo.type, '')
 
@@ -171,9 +171,9 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
         text += f'<b>Дней:</b> {promo.subscription_days}\n'
     elif promo.type == PromoCodeType.PROMO_GROUP.value:
         if promo.promo_group:
-            text += f'️ <b>Промогруппа:</b> {html.escape(promo.promo_group.name)} (приоритет: {promo.promo_group.priority})\n'
+            text += f'<b>Промогруппа:</b> {html.escape(promo.promo_group.name)} (приоритет: {promo.promo_group.priority})\n'
         elif promo.promo_group_id:
-            text += f'️ <b>Промогруппа ID:</b> {promo.promo_group_id} (не найдена)\n'
+            text += f'<b>Промогруппа ID:</b> {promo.promo_group_id} (не найдена)\n'
     elif promo.type == PromoCodeType.DISCOUNT.value:
         discount_hours = promo.subscription_days
         if discount_hours > 0:
@@ -186,21 +186,21 @@ async def show_promocode_management(callback: types.CallbackQuery, db_user: User
 
     first_purchase_only = getattr(promo, 'first_purchase_only', False)
     first_purchase_emoji = '' if first_purchase_only else ''
-    text += f'🆕 <b>Только первая покупка:</b> {first_purchase_emoji}\n'
+    text += f'<b>Только первая покупка:</b> {first_purchase_emoji}\n'
 
     text += f'<b>Создан:</b> {format_datetime(promo.created_at)}\n'
 
-    first_purchase_btn_text = '🆕 Первая покупка: ' if first_purchase_only else '🆕 Первая покупка: '
+    first_purchase_btn_text = 'Первая покупка: ' if first_purchase_only else 'Первая покупка: '
 
     keyboard = [
         [
-            types.InlineKeyboardButton(text='️ Редактировать', callback_data=f'promo_edit_{promo.id}'),
+            types.InlineKeyboardButton(text='Редактировать', callback_data=f'promo_edit_{promo.id}'),
             types.InlineKeyboardButton(text='Переключить статус', callback_data=f'promo_toggle_{promo.id}'),
         ],
         [types.InlineKeyboardButton(text=first_purchase_btn_text, callback_data=f'promo_toggle_first_{promo.id}')],
         [
             types.InlineKeyboardButton(text='Статистика', callback_data=f'promo_stats_{promo.id}'),
-            types.InlineKeyboardButton(text='️ Удалить', callback_data=f'promo_delete_{promo.id}'),
+            types.InlineKeyboardButton(text='Удалить', callback_data=f'promo_delete_{promo.id}'),
         ],
         [types.InlineKeyboardButton(text='← К списку', callback_data='admin_promo_list')],
     ]
@@ -405,7 +405,7 @@ async def select_promocode_type(callback: types.CallbackQuery, db_user: User, st
         'balance': 'Пополнение баланса',
         'days': 'Дни подписки',
         'trial': 'Тестовая подписка',
-        'group': '️ Промогруппа',
+        'group': 'Промогруппа',
         'discount': 'Одноразовая скидка',
     }
 
@@ -470,7 +470,7 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
             return
 
         keyboard = []
-        text = f'️ <b>Промокод:</b> <code>{code}</code>\n\nВыберите промогруппу для назначения:\n\n'
+        text = f'<b>Промокод:</b> <code>{code}</code>\n\nВыберите промогруппу для назначения:\n\n'
 
         for promo_group, user_count in groups_with_counts:
             text += (
@@ -511,7 +511,7 @@ async def process_promo_group_selection(
     await state.update_data(promo_group_id=promo_group_id, promo_group_name=promo_group.name)
 
     await callback.message.edit_text(
-        f'️ <b>Промокод для промогруппы</b>\n\n'
+        f'<b>Промокод для промогруппы</b>\n\n'
         f'Промогруппа: {html.escape(promo_group.name)}\n'
         f'Приоритет: {promo_group.priority}\n\n'
         f'Введите количество использований промокода (или 0 для безлимита):'
@@ -765,7 +765,7 @@ async def process_promocode_expiry(message: types.Message, db_user: User, state:
         elif promo_type in ['days', 'trial']:
             summary_text += f'<b>Дней:</b> {promocode.subscription_days}\n'
         elif promo_type == 'group' and promo_group_name:
-            summary_text += f'️ <b>Промогруппа:</b> {promo_group_name}\n'
+            summary_text += f'<b>Промогруппа:</b> {promo_group_name}\n'
 
         summary_text += f'<b>Использований:</b> {promocode.max_uses}\n'
 
@@ -839,7 +839,7 @@ async def process_discount_hours(message: types.Message, db_user: User, state: F
         summary_text += f'<b>Использований:</b> {promocode.max_uses}\n'
 
         if promocode.valid_until:
-            summary_text += f'⏳ <b>Промокод действует до:</b> {format_datetime(promocode.valid_until)}\n'
+            summary_text += f'<b>Промокод действует до:</b> {format_datetime(promocode.valid_until)}\n'
 
         await message.answer(
             summary_text,

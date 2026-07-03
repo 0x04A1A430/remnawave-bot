@@ -64,7 +64,7 @@ async def handle_connect_subscription(
                         )
                     ]
                 )
-            keyboard.append([types.InlineKeyboardButton(text='◀️ Назад', callback_data='back_to_menu')])
+            keyboard.append([types.InlineKeyboardButton(text='Назад', callback_data='back_to_menu')])
             await callback.message.edit_text(
                 '<b>Подключиться</b>\n\nВыберите подписку:',
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
@@ -210,7 +210,7 @@ async def handle_connect_subscription(
             await callback.message.edit_text(
                 texts.t(
                     'GUIDE_CONFIG_NOT_SET',
-                    '️ <b>Конфигурация не настроена</b>\n\n'
+                    '<b>Конфигурация не настроена</b>\n\n'
                     'Администратор ещё не настроил конфигурацию приложений.\n'
                     'Обратитесь к администратору.',
                 ),
@@ -293,7 +293,7 @@ async def handle_open_subscription_link(
         if redirect_link:
             happ_message += '\n\n' + texts.t(
                 'SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT',
-                '▶️ Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
+                'Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
             )
 
         happ_message += '\n\n' + texts.t(

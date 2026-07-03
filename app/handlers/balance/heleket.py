@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
+from app.keyboards.topup_amounts import get_topup_amount_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
@@ -71,7 +72,7 @@ async def start_heleket_payment(
     if markup_text:
         message_lines.extend(['', markup_text])
 
-    keyboard = get_back_keyboard(db_user.language)
+    keyboard = await get_topup_amount_keyboard('heleket', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(
         '\n'.join(filter(None, message_lines)),
@@ -303,21 +304,21 @@ async def check_heleket_payment_status(
 
     status_normalized = (payment.status or '').lower()
     status_messages = {
-        'check': texts.t('HELEKET_STATUS_CHECK', '⏳ Ожидание оплаты'),
-        'process': texts.t('HELEKET_STATUS_PROCESS', '️ Платёж обрабатывается'),
+        'check': texts.t('HELEKET_STATUS_CHECK', 'Ожидание оплаты'),
+        'process': texts.t('HELEKET_STATUS_PROCESS', 'Платёж обрабатывается'),
         'confirm_check': texts.t('HELEKET_STATUS_CONFIRM_CHECK', 'Ожидание подтверждений сети'),
-        'wrong_amount': texts.t('HELEKET_STATUS_WRONG_AMOUNT', '️ Оплачена неверная сумма'),
+        'wrong_amount': texts.t('HELEKET_STATUS_WRONG_AMOUNT', 'Оплачена неверная сумма'),
         'wrong_amount_waiting': texts.t(
             'HELEKET_STATUS_WRONG_AMOUNT_WAITING',
-            '️ Недостаточная сумма, ожидаем доплату',
+            'Недостаточная сумма, ожидаем доплату',
         ),
         'paid_over': texts.t('HELEKET_STATUS_PAID_OVER', 'Платёж зачислен (с переплатой)'),
         'paid': texts.t('HELEKET_STATUS_PAID', 'Платёж зачислен'),
         'cancel': texts.t('HELEKET_STATUS_CANCEL', 'Платёж отменён'),
         'fail': texts.t('HELEKET_STATUS_FAIL', 'Ошибка при оплате'),
         'system_fail': texts.t('HELEKET_STATUS_SYSTEM_FAIL', 'Системная ошибка Heleket'),
-        'refund_process': texts.t('HELEKET_STATUS_REFUND_PROCESS', '↩️ Возврат обрабатывается'),
-        'refund_fail': texts.t('HELEKET_STATUS_REFUND_FAIL', '️ Ошибка возврата'),
+        'refund_process': texts.t('HELEKET_STATUS_REFUND_PROCESS', 'Возврат обрабатывается'),
+        'refund_fail': texts.t('HELEKET_STATUS_REFUND_FAIL', 'Ошибка возврата'),
         'refund_paid': texts.t('HELEKET_STATUS_REFUND_PAID', 'Возврат выполнен'),
         'locked': texts.t('HELEKET_STATUS_LOCKED', 'Средства заблокированы'),
     }

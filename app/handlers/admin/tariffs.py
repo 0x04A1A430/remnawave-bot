@@ -105,9 +105,9 @@ def get_tariffs_list_keyboard(
     # Пагинация
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton(text='◀️', callback_data=f'admin_tariffs_page:{page - 1}'))
+        nav_buttons.append(InlineKeyboardButton(text='', callback_data=f'admin_tariffs_page:{page - 1}'))
     if page < total_pages - 1:
-        nav_buttons.append(InlineKeyboardButton(text='▶️', callback_data=f'admin_tariffs_page:{page + 1}'))
+        nav_buttons.append(InlineKeyboardButton(text='', callback_data=f'admin_tariffs_page:{page + 1}'))
     if nav_buttons:
         buttons.append(nav_buttons)
 
@@ -131,7 +131,7 @@ def get_tariff_view_keyboard(
     # Редактирование полей
     buttons.append(
         [
-            InlineKeyboardButton(text='️ Название', callback_data=f'admin_tariff_edit_name:{tariff.id}'),
+            InlineKeyboardButton(text='Название', callback_data=f'admin_tariff_edit_name:{tariff.id}'),
             InlineKeyboardButton(text='Описание', callback_data=f'admin_tariff_edit_desc:{tariff.id}'),
         ]
     )
@@ -147,13 +147,13 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(text='Цены', callback_data=f'admin_tariff_edit_prices:{tariff.id}'),
-                InlineKeyboardButton(text='️ Уровень', callback_data=f'admin_tariff_edit_tier:{tariff.id}'),
+                InlineKeyboardButton(text='Уровень', callback_data=f'admin_tariff_edit_tier:{tariff.id}'),
             ]
         )
     else:
         buttons.append(
             [
-                InlineKeyboardButton(text='️ Уровень', callback_data=f'admin_tariff_edit_tier:{tariff.id}'),
+                InlineKeyboardButton(text='Уровень', callback_data=f'admin_tariff_edit_tier:{tariff.id}'),
             ]
         )
     buttons.append(
@@ -221,7 +221,7 @@ def get_tariff_view_keyboard(
         buttons.append([InlineKeyboardButton(text='Активировать', callback_data=f'admin_tariff_toggle:{tariff.id}')])
 
     # Удаление
-    buttons.append([InlineKeyboardButton(text='️ Удалить', callback_data=f'admin_tariff_delete:{tariff.id}')])
+    buttons.append([InlineKeyboardButton(text='Удалить', callback_data=f'admin_tariff_delete:{tariff.id}')])
 
     # Назад к списку
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_tariffs')])
@@ -234,13 +234,13 @@ def _format_traffic_reset_mode(mode: str | None) -> str:
     mode_labels = {
         'DAY': 'Ежедневно',
         'WEEK': 'Еженедельно',
-        'MONTH': '️ Ежемесячно',
+        'MONTH': 'Ежемесячно',
         'MONTH_ROLLING': 'Скользящий месяц',
         'NO_RESET': 'Никогда',
     }
     if mode is None:
         return f'Глобальная настройка ({settings.DEFAULT_TRAFFIC_RESET_STRATEGY})'
-    return mode_labels.get(mode, f'️ Неизвестно ({mode})')
+    return mode_labels.get(mode, f'Неизвестно ({mode})')
 
 
 def _format_traffic_topup_packages(tariff: Tariff) -> str:
@@ -364,7 +364,7 @@ async def show_tariffs_list(
     # Проверяем режим продаж
     if not settings.is_tariffs_mode():
         await callback.message.edit_text(
-            '️ <b>Режим тарифов отключен</b>\n\n'
+            '<b>Режим тарифов отключен</b>\n\n'
             'Для использования тарифов установите:\n'
             '<code>SALES_MODE=tariffs</code>\n\n'
             'Текущий режим: <code>classic</code>',
@@ -1014,7 +1014,7 @@ async def start_edit_tariff_name(
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        f'️ <b>Редактирование названия</b>\n\nТекущее название: <b>{html.escape(tariff.name)}</b>\n\nВведите новое название:',
+        f'<b>Редактирование названия</b>\n\nТекущее название: <b>{html.escape(tariff.name)}</b>\n\nВведите новое название:',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1289,7 +1289,7 @@ async def start_edit_tariff_tier(
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        f'️ <b>Редактирование уровня</b>\n\n'
+        f'<b>Редактирование уровня</b>\n\n'
         f'Текущий уровень: <b>{tariff.tier_level}</b>\n\n'
         'Введите новый уровень (1-10):',
         reply_markup=InlineKeyboardMarkup(
@@ -2164,14 +2164,14 @@ async def confirm_delete_tariff(
     if active_count > 0:
         total_count = await get_tariff_subscriptions_count(db, tariff_id)
         await callback.message.edit_text(
-            f'️ <b>Удаление тарифа</b>\n\n'
+            f'<b>Удаление тарифа</b>\n\n'
             f'Невозможно удалить тариф <b>{html.escape(tariff.name)}</b>.\n\n'
-            f'️ <b>Активных подписок:</b> {active_count} (всего: {total_count})\n'
+            f'<b>Активных подписок:</b> {active_count} (всего: {total_count})\n'
             f'Сначала деактивируйте тариф и дождитесь окончания всех активных подписок, '
             f'либо переведите подписки на другой тариф.',
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='◀️ Назад к тарифу', callback_data=f'admin_tariff_view:{tariff_id}')],
+                    [InlineKeyboardButton(text='Назад к тарифу', callback_data=f'admin_tariff_view:{tariff_id}')],
                 ]
             ),
             parse_mode='HTML',
@@ -2184,11 +2184,11 @@ async def confirm_delete_tariff(
     warning = ''
     if subs_count > 0:
         warning = (
-            f'\n\n️ <b>Внимание!</b> На этом тарифе {subs_count} неактивных подписок.\nОни потеряют привязку к тарифу.'
+            f'\n\n<b>Внимание!</b> На этом тарифе {subs_count} неактивных подписок.\nОни потеряют привязку к тарифу.'
         )
 
     await callback.message.edit_text(
-        f'️ <b>Удаление тарифа</b>\n\nВы действительно хотите удалить тариф <b>{html.escape(tariff.name)}</b>?{warning}',
+        f'<b>Удаление тарифа</b>\n\nВы действительно хотите удалить тариф <b>{html.escape(tariff.name)}</b>?{warning}',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -2393,7 +2393,7 @@ async def toggle_tariff_squad(
     propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, list(current_squads))
     if propagate_result.failed_ids:
         await callback.message.answer(
-            f'️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+            f'{len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
         )
 
 
@@ -2456,7 +2456,7 @@ async def clear_tariff_squads(
     propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, [])
     if propagate_result.failed_ids:
         await callback.message.answer(
-            f'️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+            f'{len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
         )
 
 
@@ -2520,7 +2520,7 @@ async def select_all_tariff_squads(
     propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, all_uuids)
     if propagate_result.failed_ids:
         await callback.message.answer(
-            f'️ {len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
+            f'{len(propagate_result.failed_ids)} из {propagate_result.total} подписок не синхронизированы с RemnaWave',
         )
 
 
@@ -2715,7 +2715,7 @@ async def clear_tariff_promo_groups(
 TRAFFIC_RESET_MODES = [
     ('DAY', 'Ежедневно', 'Трафик сбрасывается каждый день'),
     ('WEEK', 'Еженедельно', 'Трафик сбрасывается каждую неделю'),
-    ('MONTH', '️ Ежемесячно', 'Трафик сбрасывается каждый месяц'),
+    ('MONTH', 'Ежемесячно', 'Трафик сбрасывается каждый месяц'),
     ('MONTH_ROLLING', 'Скользящий месяц', 'Трафик сбрасывается через 30 дней от первого подключения'),
     ('NO_RESET', 'Никогда', 'Трафик не сбрасывается автоматически'),
 ]

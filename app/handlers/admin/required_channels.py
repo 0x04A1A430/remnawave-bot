@@ -47,7 +47,7 @@ def _channels_keyboard(channels: list) -> InlineKeyboardMarkup:
             ]
         )
     buttons.append([InlineKeyboardButton(text='Добавить канал', callback_data='reqch:add')])
-    buttons.append([InlineKeyboardButton(text='◀️ Назад', callback_data='admin_submenu_settings')])
+    buttons.append([InlineKeyboardButton(text='Назад', callback_data='admin_submenu_settings')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -57,7 +57,7 @@ def _channel_detail_keyboard(channel_id: int, is_active: bool) -> InlineKeyboard
         inline_keyboard=[
             [InlineKeyboardButton(text=toggle_text, callback_data=f'reqch:toggle:{channel_id}')],
             [InlineKeyboardButton(text='Удалить', callback_data=f'reqch:delete:{channel_id}')],
-            [InlineKeyboardButton(text='◀️ К списку', callback_data='reqch:list')],
+            [InlineKeyboardButton(text='К списку', callback_data='reqch:list')],
         ]
     )
 

@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.info_pages import get_all_info_pages, get_info_page_by_id
 from app.database.crud.promo_group import (
     get_auto_assign_promo_groups,
     has_auto_assign_promo_groups,
@@ -16,7 +17,7 @@ from app.database.crud.promo_group import (
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import update_user
 from app.database.crud.user_message import get_random_active_message
-from app.database.models import PromoGroup, User
+from app.database.models import InfoPage, PromoGroup, User
 from app.handlers.subscription.traffic import add_traffic, handle_add_traffic
 from app.keyboards.inline import (
     get_info_menu_keyboard,
@@ -34,12 +35,14 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.support_settings_service import SupportSettingsService
 from app.services.user_cart_service import user_cart_service
+from app.utils.display_mode import is_visible_in_bot
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.pricing_utils import format_period_description
 from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
 )
+from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text
 from app.utils.timezone import format_local_datetime
 
 
@@ -55,6 +58,27 @@ def _format_rubles(amount_kopeks: int) -> str:
         formatted = f'{rubles:,.2f}'
 
     return f'{formatted.replace(",", " ")} ₽'
+
+
+def _resolve_info_page_text(values: dict | None, language: str) -> str:
+    data = values or {}
+    lang = (language or settings.DEFAULT_LANGUAGE or 'ru').split('-')[0].lower()
+    default_lang = (settings.DEFAULT_LANGUAGE or 'ru').split('-')[0].lower()
+    for candidate in (lang, default_lang, 'ru', 'en'):
+        value = data.get(candidate)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for value in data.values():
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ''
+
+
+def _resolve_info_page_title(page: InfoPage, language: str) -> str:
+    title = _resolve_info_page_text(page.title, language) or page.slug
+    if page.icon:
+        return f'{page.icon} {title}'
+    return title
 
 
 def _collect_period_discounts(group: PromoGroup) -> dict[int, int]:
@@ -126,7 +150,7 @@ def _build_group_discount_lines(group: PromoGroup, texts, language: str) -> list
         lines.append(
             texts.t(
                 'PROMO_GROUP_PERIOD_DISCOUNTS_HEADER',
-                '⏳ Скидки за длительный период:',
+                'Скидки за длительный период:',
             )
         )
 
@@ -169,7 +193,9 @@ async def show_main_menu(
     await db.commit()
 
     # Multi-tariff aware: check if user has ANY active subscription
-    has_active_subscription = any(sub.is_active for sub in (getattr(db_user, 'subscriptions', None) or []))
+    # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
+    _subs = getattr(db_user, 'subscriptions', None) or []
+    has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
     menu_text = await get_main_menu_text(db_user, texts, db)
@@ -232,7 +258,7 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
     await callback.answer(
         texts.t(
             'MENU_PROFILE_UNAVAILABLE',
-            '️ Личный кабинет пока недоступен. Попробуйте позже.',
+            'Личный кабинет пока недоступен. Попробуйте позже.',
         ),
         show_alert=True,
     )
@@ -254,13 +280,21 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
     from app.database.crud.rules import get_current_rules_content
 
     texts = get_texts(db_user.language)
+
+    if not is_visible_in_bot(settings.SERVICE_RULES_DISPLAY_MODE):
+        await callback.answer(
+            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
+            show_alert=True,
+        )
+        return
+
     rules_text = await get_current_rules_content(db, db_user.language)
 
     if not rules_text:
         rules_text = await get_rules(db_user.language)
 
     await callback.message.edit_text(
-        f'{texts.t("RULES_HEADER", "<b>Правила сервиса</b>")}\n\n{rules_text}',
+        f'{texts.t("RULES_HEADER", " <b>Правила сервиса</b>")}\n\n{rules_text}',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')]]
         ),
@@ -291,10 +325,20 @@ async def show_info_menu(
     prompt = texts.t('MENU_INFO_PROMPT', 'Выберите раздел:')
     caption = f'{header}\n\n{prompt}' if prompt else header
 
-    privacy_enabled = await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
-    public_offer_enabled = await PublicOfferService.is_offer_enabled(db, db_user.language)
-    faq_enabled = await FaqService.is_enabled(db, db_user.language)
+    privacy_enabled = is_visible_in_bot(
+        settings.PRIVACY_POLICY_DISPLAY_MODE
+    ) and await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
+    public_offer_enabled = is_visible_in_bot(
+        settings.PUBLIC_OFFER_DISPLAY_MODE
+    ) and await PublicOfferService.is_offer_enabled(db, db_user.language)
+    faq_enabled = is_visible_in_bot(settings.FAQ_DISPLAY_MODE) and await FaqService.is_enabled(db, db_user.language)
+    rules_enabled = is_visible_in_bot(settings.SERVICE_RULES_DISPLAY_MODE)
     promo_groups_available = await has_auto_assign_promo_groups(db)
+
+    bot_pages = await get_all_info_pages(db, visible_in='bot')
+    custom_pages = [
+        (page.id, _resolve_info_page_title(page, db_user.language)) for page in bot_pages if page.replaces_tab is None
+    ]
 
     await edit_or_answer_photo(
         callback=callback,
@@ -305,6 +349,8 @@ async def show_info_menu(
             show_public_offer=public_offer_enabled,
             show_faq=faq_enabled,
             show_promo_groups=promo_groups_available,
+            show_rules=rules_enabled,
+            custom_pages=custom_pages,
         ),
         parse_mode='HTML',
     )
@@ -427,7 +473,7 @@ async def show_promo_groups_info(
 
     for group in sorted_groups:
         threshold = group.auto_assign_total_spent_kopeks or 0
-        status_icon = '' if total_spent_kopeks >= threshold else ''
+        status_icon = '✅' if total_spent_kopeks >= threshold else '🔒'
         lines.append(
             texts.t(
                 'PROMO_GROUPS_INFO_LEVEL_LINE',
@@ -477,6 +523,13 @@ async def show_faq_pages(
         return
 
     texts = get_texts(db_user.language)
+
+    if not is_visible_in_bot(settings.FAQ_DISPLAY_MODE):
+        await callback.answer(
+            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
+            show_alert=True,
+        )
+        return
 
     pages = await FaqService.get_pages(db, db_user.language)
     if not pages:
@@ -534,6 +587,13 @@ async def show_faq_page(
         return
 
     texts = get_texts(db_user.language)
+
+    if not is_visible_in_bot(settings.FAQ_DISPLAY_MODE):
+        await callback.answer(
+            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
+            show_alert=True,
+        )
+        return
 
     raw_data = callback.data or ''
     parts = raw_data.split(':')
@@ -613,7 +673,7 @@ async def show_faq_page(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '← '),
+                    text=texts.t('PAGINATION_PREV', ''),
                     callback_data=f'menu_faq_page:{page.id}:{current_page - 1}',
                 )
             )
@@ -628,7 +688,7 @@ async def show_faq_page(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️→'),
+                    text=texts.t('PAGINATION_NEXT', ''),
                     callback_data=f'menu_faq_page:{page.id}:{current_page + 1}',
                 )
             )
@@ -638,7 +698,7 @@ async def show_faq_page(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('FAQ_BACK_TO_LIST', '← К списку FAQ'),
+                text=texts.t('FAQ_BACK_TO_LIST', 'К списку FAQ'),
                 callback_data='menu_faq',
             )
         ]
@@ -671,6 +731,13 @@ async def show_privacy_policy(
         return
 
     texts = get_texts(db_user.language)
+
+    if not is_visible_in_bot(settings.PRIVACY_POLICY_DISPLAY_MODE):
+        await callback.answer(
+            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
+            show_alert=True,
+        )
+        return
 
     raw_page = 1
     if callback.data and ':' in callback.data:
@@ -710,7 +777,7 @@ async def show_privacy_policy(
 
     header = texts.t(
         'PRIVACY_POLICY_HEADER',
-        '️ <b>Политика конфиденциальности</b>',
+        '<b>Политика конфиденциальности</b>',
     )
     body = pages[current_page - 1]
 
@@ -738,7 +805,7 @@ async def show_privacy_policy(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '← '),
+                    text=texts.t('PAGINATION_PREV', ''),
                     callback_data=f'menu_privacy_policy:{current_page - 1}',
                 )
             )
@@ -753,7 +820,7 @@ async def show_privacy_policy(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️→'),
+                    text=texts.t('PAGINATION_NEXT', ''),
                     callback_data=f'menu_privacy_policy:{current_page + 1}',
                 )
             )
@@ -788,6 +855,13 @@ async def show_public_offer(
         return
 
     texts = get_texts(db_user.language)
+
+    if not is_visible_in_bot(settings.PUBLIC_OFFER_DISPLAY_MODE):
+        await callback.answer(
+            texts.t('INFO_SECTION_NOT_AVAILABLE', 'Раздел временно недоступен.'),
+            show_alert=True,
+        )
+        return
 
     raw_page = 1
     if callback.data and ':' in callback.data:
@@ -855,7 +929,7 @@ async def show_public_offer(
         if current_page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_PREV', '← '),
+                    text=texts.t('PAGINATION_PREV', ''),
                     callback_data=f'menu_public_offer:{current_page - 1}',
                 )
             )
@@ -870,11 +944,108 @@ async def show_public_offer(
         if current_page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text=texts.t('PAGINATION_NEXT', '️→'),
+                    text=texts.t('PAGINATION_NEXT', ''),
                     callback_data=f'menu_public_offer:{current_page + 1}',
                 )
             )
 
+        keyboard_rows.append(nav_row)
+
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        disable_web_page_preview=settings.DISABLE_WEB_PAGE_PREVIEW,
+    )
+    await callback.answer()
+
+
+async def show_info_page(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    if db_user is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        await callback.answer(
+            texts.t('USER_NOT_FOUND_ERROR', 'Ошибка: пользователь не найден.'),
+            show_alert=True,
+        )
+        return
+
+    texts = get_texts(db_user.language)
+
+    parts = (callback.data or '').split(':')
+    page_id = None
+    requested_part = 1
+    if len(parts) >= 2:
+        try:
+            page_id = int(parts[1])
+        except ValueError:
+            page_id = None
+    if len(parts) >= 3:
+        try:
+            requested_part = int(parts[2])
+        except ValueError:
+            requested_part = 1
+
+    if not page_id:
+        await callback.answer()
+        return
+
+    page = await get_info_page_by_id(db, page_id)
+    if not page or not page.is_active or not is_visible_in_bot(page.display_mode):
+        await callback.answer(
+            texts.t('INFO_PAGE_NOT_AVAILABLE', 'Эта страница временно недоступна.'),
+            show_alert=True,
+        )
+        return
+
+    raw_content = _resolve_info_page_text(page.content, db_user.language)
+    if page.page_type == 'faq':
+        rendered = info_page_faq_to_telegram(raw_content)
+    else:
+        rendered = html_to_telegram(raw_content)
+
+    chunks = split_telegram_text(rendered, max_length=3500)
+    if not chunks:
+        await callback.answer(
+            texts.t('INFO_PAGE_EMPTY', 'Текст для этой страницы ещё не добавлен.'),
+            show_alert=True,
+        )
+        return
+
+    total_parts = len(chunks)
+    current_part = max(1, min(requested_part, total_parts))
+
+    title = _resolve_info_page_title(page, db_user.language)
+    message_text = f'<b>{html.escape(title)}</b>\n\n{chunks[current_part - 1]}'
+
+    keyboard_rows: list[list[types.InlineKeyboardButton]] = []
+
+    if total_parts > 1:
+        nav_row: list[types.InlineKeyboardButton] = []
+        if current_part > 1:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text=texts.t('PAGINATION_PREV', ''),
+                    callback_data=f'info_page:{page.id}:{current_part - 1}',
+                )
+            )
+        nav_row.append(
+            types.InlineKeyboardButton(
+                text=f'{current_part}/{total_parts}',
+                callback_data='noop',
+            )
+        )
+        if current_part < total_parts:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text=texts.t('PAGINATION_NEXT', ''),
+                    callback_data=f'info_page:{page.id}:{current_part + 1}',
+                )
+            )
         keyboard_rows.append(nav_row)
 
     keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_info')])
@@ -910,7 +1081,7 @@ async def show_language_menu(
         await callback.answer(
             texts.t(
                 'LANGUAGE_SELECTION_DISABLED',
-                '️ Выбор языка временно недоступен.',
+                'Выбор языка временно недоступен.',
             ),
             show_alert=True,
         )
@@ -952,7 +1123,7 @@ async def process_language_change(
         await callback.answer(
             texts.t(
                 'LANGUAGE_SELECTION_DISABLED',
-                '️ Выбор языка временно недоступен.',
+                'Выбор языка временно недоступен.',
             ),
             show_alert=True,
         )
@@ -1013,7 +1184,9 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     texts = get_texts(db_user.language)
 
     # Multi-tariff aware: check if user has ANY active subscription
-    has_active_subscription = any(sub.is_active for sub in (getattr(db_user, 'subscriptions', None) or []))
+    # 'limited' (traffic exhausted) subscriptions are still active for UI purposes
+    _subs = getattr(db_user, 'subscriptions', None) or []
+    has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
     menu_text = await get_main_menu_text(db_user, texts, db)
@@ -1086,12 +1259,12 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         return texts.t('SUB_STATUS_DISABLED', 'Отключена')
 
     if actual_status == 'limited':
-        return texts.t('SUB_STATUS_LIMITED', '️ Трафик исчерпан')
+        return texts.t('SUB_STATUS_LIMITED', 'Трафик исчерпан')
 
     if actual_status == 'expired':
         return texts.t(
             'SUB_STATUS_EXPIRED',
-            'Истекла\n{end_date}',
+            'Истекла\n {end_date}',
         ).format(end_date=end_date_text or '—')
 
     is_trial_subscription = getattr(subscription, 'is_trial', False)
@@ -1102,7 +1275,7 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left > 1 and end_date_text:
             return texts.t(
                 'SUB_STATUS_TRIAL_ACTIVE',
-                'Тестовая подписка\nдо {end_date} ({days} дн.)',
+                'Тестовая подписка\n до {end_date} ({days} дн.)',
             ).format(
                 end_date=end_date_text,
                 days=days_left,
@@ -1110,11 +1283,11 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left == 1:
             return texts.t(
                 'SUB_STATUS_TRIAL_TOMORROW',
-                'Тестовая подписка\n️ истекает завтра!',
+                'Тестовая подписка\n истекает завтра!',
             )
         return texts.t(
             'SUB_STATUS_TRIAL_TODAY',
-            'Тестовая подписка\n️ истекает сегодня!',
+            'Тестовая подписка\n истекает сегодня!',
         )
 
     if actual_status == 'active':
@@ -1125,7 +1298,7 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left > 7 and end_date_text:
             return texts.t(
                 'SUB_STATUS_ACTIVE_LONG',
-                'Активна\nдо {end_date} ({days} дн.)',
+                'Активна\n до {end_date} ({days} дн.)',
             ).format(
                 end_date=end_date_text,
                 days=days_left,
@@ -1133,16 +1306,16 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
         if days_left > 1:
             return texts.t(
                 'SUB_STATUS_ACTIVE_FEW_DAYS',
-                'Активна\n️ истекает через {days} дн.',
+                'Активна\n истекает через {days} дн.',
             ).format(days=days_left)
         if days_left == 1:
             return texts.t(
                 'SUB_STATUS_ACTIVE_TOMORROW',
-                'Активна\n️ истекает завтра!',
+                'Активна\n истекает завтра!',
             )
         return texts.t(
             'SUB_STATUS_ACTIVE_TODAY',
-            'Активна\n️ истекает сегодня!',
+            'Активна\n истекает сегодня!',
         )
 
     return texts.t('SUB_STATUS_UNKNOWN', 'Неизвестно')
@@ -1181,9 +1354,9 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
         actual = sub.actual_status
 
         if actual in ('active', 'trial'):
-            emoji = '🟢'
+            emoji = ''
         elif actual == 'limited':
-            emoji = '🟡'
+            emoji = ''
         else:
             emoji = ''
 
@@ -1202,7 +1375,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
 
         lines.append(f'{emoji} <b>{tariff_name}</b>{status_suffix}')
 
-    status_text = '\n' + '\n'.join(lines)
+    status_text = '\n<blockquote>' + '\n'.join(lines) + '</blockquote>'
     return status_text, ''
 
 
@@ -1220,10 +1393,8 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text and action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}')
-            elif tariff_info_block:
-                base_text = base_text + tariff_info_block
+            if action_prompt_text in base_text:
+                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
     else:
         # Single-tariff mode: legacy behavior
         tariff = None
@@ -1238,9 +1409,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
                 tariff = await get_tariff_by_id(db, subscription.tariff_id)
                 if tariff:
                     is_daily_tariff = getattr(tariff, 'is_daily', False)
-                    is_trial_sub = getattr(subscription, 'is_trial', False)
-                    if not is_trial_sub:
-                        tariff_info_block = f'\nТариф: {html.escape(tariff.name)}'
+                    tariff_info_block = f'\n Тариф: {html.escape(tariff.name)}'
             except Exception as e:
                 logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
@@ -1251,10 +1420,8 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
 
         if tariff_info_block:
             action_prompt_text = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-            if action_prompt_text and action_prompt_text in base_text:
-                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}')
-            elif tariff_info_block:
-                base_text = base_text + tariff_info_block
+            if action_prompt_text in base_text:
+                base_text = base_text.replace(action_prompt_text, f'{tariff_info_block}\n\n{action_prompt_text}')
 
     action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
 
@@ -1412,8 +1579,11 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 )
                 min_price = min_new_pricing.final_total
             missing = min_price - balance
+            # texts.format_price(..., round_kopeks=False) показывает копейки, чтобы юзер видел
+            # «не хватает 0.40 ₽» вместо обрезанного «0 ₽» от integer division.
+            missing_label = texts.format_price(missing, round_kopeks=False)
             await callback.answer(
-                texts.t('INSUFFICIENT_FUNDS_DETAILED', f'Недостаточно средств. Не хватает {missing // 100} ₽'),
+                texts.t('INSUFFICIENT_FUNDS_DETAILED', f'Недостаточно средств. Не хватает {missing_label}'),
                 show_alert=True,
             )
             return
@@ -1549,6 +1719,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_public_offer,
         F.data.startswith('menu_public_offer:'),
+    )
+
+    dp.callback_query.register(
+        show_info_page,
+        F.data.startswith('info_page:'),
     )
 
     dp.callback_query.register(show_language_menu, F.data == 'menu_language')

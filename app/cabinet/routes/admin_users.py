@@ -1,5 +1,6 @@
 """Admin routes for managing users in cabinet."""
 
+import math
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -8,6 +9,7 @@ from sqlalchemy import Integer, and_, delete as sa_delete, func, literal, or_, s
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.cabinet.utils.device_ownership import verify_hwid_belongs_to_user
 from app.config import settings
 from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.subscription import (
@@ -26,6 +28,12 @@ from app.database.crud.user import (
     get_users_statistics,
     subtract_user_balance,
 )
+from app.database.crud.user_device_alias import (
+    delete_alias,
+    get_aliases_for_user,
+    normalize_alias,
+    set_alias,
+)
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
     GuestPurchase,
@@ -43,6 +51,7 @@ from app.database.models import (
     UserStatus,
 )
 from app.services.permission_service import PermissionService
+from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import panel_datetime_to_utc
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -64,12 +73,15 @@ from ..schemas.users import (
     PeriodPriceInfo,
     RemoveReferralResponse,
     RemoveReferrerResponse,
+    RenameDeviceRequest,
+    RenameDeviceResponse,
     ResetDevicesResponse,
     ResetSubscriptionRequest,
     ResetSubscriptionResponse,
     ResetTrialRequest,
     ResetTrialResponse,
     SortByEnum,
+    SubscriptionListItem,
     SyncFromPanelRequest,
     SyncFromPanelResponse,
     SyncToPanelRequest,
@@ -119,6 +131,12 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     subscription_is_trial = False
     subscription_end_date = None
     has_subscription = False
+    tariff_id = None
+    tariff_name = None
+    traffic_used_gb = 0.0
+    traffic_limit_gb = 0
+    device_limit = 0
+    days_remaining = 0
 
     subs = getattr(user, 'subscriptions', None) or []
     subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
@@ -127,6 +145,37 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
         subscription_status = subscription.status
         subscription_is_trial = subscription.is_trial
         subscription_end_date = subscription.end_date
+        tariff_id = subscription.tariff_id
+        tariff_name = subscription.tariff.name if subscription.tariff else None
+        traffic_used_gb = subscription.traffic_used_gb or 0.0
+        traffic_limit_gb = subscription.traffic_limit_gb or 0
+        device_limit = subscription.device_limit or 0
+        if subscription.end_date:
+            delta = subscription.end_date - datetime.now(UTC)
+            days_remaining = max(0, delta.days)
+
+    # Build per-subscription list (always — bulk actions need it for any mode)
+    sub_list: list[SubscriptionListItem] = []
+    if subs:
+        for s in subs:
+            s_days = 0
+            if s.end_date:
+                s_delta = s.end_date - datetime.now(UTC)
+                s_days = max(0, s_delta.days)
+            sub_list.append(
+                SubscriptionListItem(
+                    id=s.id,
+                    tariff_id=s.tariff_id,
+                    tariff_name=s.tariff.name if s.tariff else None,
+                    status=s.status,
+                    is_trial=bool(s.is_trial),
+                    end_date=s.end_date,
+                    days_remaining=s_days,
+                    traffic_used_gb=s.traffic_used_gb or 0.0,
+                    traffic_limit_gb=s.traffic_limit_gb or 0,
+                    device_limit=s.device_limit or 0,
+                )
+            )
 
     return UserListItem(
         id=user.id,
@@ -144,6 +193,13 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
         subscription_status=subscription_status,
         subscription_is_trial=subscription_is_trial,
         subscription_end_date=subscription_end_date,
+        tariff_id=tariff_id,
+        tariff_name=tariff_name,
+        traffic_used_gb=traffic_used_gb,
+        traffic_limit_gb=traffic_limit_gb,
+        device_limit=device_limit,
+        days_remaining=days_remaining,
+        subscriptions=sub_list,
         promo_group_id=user.promo_group_id,
         promo_group_name=user.promo_group.name if user.promo_group else None,
         total_spent_kopeks=user_stats.get('total_spent', 0),
@@ -236,8 +292,9 @@ async def _sync_subscription_to_panel(
     """
     try:
         from app.config import settings
-        from app.external.remnawave_api import TrafficLimitStrategy, UserStatus as PanelUserStatus
+        from app.external.remnawave_api import UserStatus as PanelUserStatus
         from app.services.remnawave_service import RemnaWaveService
+        from app.services.subscription_service import get_traffic_reset_strategy
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
 
         service = RemnaWaveService()
@@ -256,12 +313,21 @@ async def _sync_subscription_to_panel(
         if expire_at and expire_at <= datetime.now(UTC):
             expire_at = datetime.now(UTC) + timedelta(minutes=1)
 
-        username = settings.format_remnawave_username(
+        # При multi-tariff create-path ниже приклеивается `_<remnawave_short_id>`.
+        # build_remnawave_subscription_username гарантирует, что итоговая строка
+        # ≤ REMNAWAVE_USERNAME_MAX_LENGTH (исторический баг 38-chars username).
+        username_suffix = (
+            f'_{subscription.remnawave_short_id}'
+            if (settings.is_multi_tariff_enabled() and subscription.remnawave_short_id)
+            else ''
+        )
+        username = settings.build_remnawave_subscription_username(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
             email=user.email,
             user_id=user.id,
+            suffix=username_suffix,
         )
 
         description = settings.format_remnawave_user_description(
@@ -323,7 +389,7 @@ async def _sync_subscription_to_panel(
                     'uuid': panel_uuid,
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
-                    'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
+                    'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
                     'description': description,
                 }
                 if expire_at:
@@ -346,7 +412,10 @@ async def _sync_subscription_to_panel(
                     changes['action'] = 'updated'
                     logger.info('Updated user in Remnawave panel', user_id=user.id)
                 except Exception as update_error:
-                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
+                    if (
+                        hasattr(update_error, 'status_code') and update_error.status_code == 404
+                    ) or error_code == 'A018':
                         panel_uuid = None  # Will create new
                     else:
                         raise
@@ -358,7 +427,7 @@ async def _sync_subscription_to_panel(
                     'expire_at': expire_at or (datetime.now(UTC) + timedelta(days=30)),
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
-                    'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
+                    'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
                     'telegram_id': user.telegram_id,
                     'email': user.email,
                     'description': description,
@@ -369,9 +438,8 @@ async def _sync_subscription_to_panel(
                 if ext_squad_uuid is not None:
                     create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
-                # Multi-tariff: use subscription-specific username
-                if settings.is_multi_tariff_enabled() and subscription.remnawave_short_id:
-                    create_kwargs['username'] = f'{username}_{subscription.remnawave_short_id}'
+                # multi-tariff suffix уже встроен в `username` через
+                # build_remnawave_subscription_username — больше ничего не клеим.
 
                 new_panel_user = await api.create_user(**create_kwargs)
                 subscription.remnawave_uuid = new_panel_user.uuid
@@ -416,6 +484,11 @@ async def list_users(
     search: str | None = Query(None, max_length=255),
     email: str | None = Query(None, max_length=255),
     status: UserStatusEnum | None = Query(None),
+    subscription_status: str | None = Query(None, max_length=20),
+    tariff_id: str | None = Query(None, max_length=255),
+    promo_group_id: int | None = Query(None),
+    campaign_id: int | None = Query(None),
+    partner_id: int | None = Query(None),
     sort_by: SortByEnum = Query(SortByEnum.CREATED_AT),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -442,6 +515,14 @@ async def list_users(
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
 
+    # Parse comma-separated tariff_ids
+    tariff_ids: list[int] | None = None
+    if tariff_id:
+        try:
+            tariff_ids = [int(x.strip()) for x in tariff_id.split(',') if x.strip()]
+        except ValueError:
+            tariff_ids = None
+
     users = await get_users_list(
         db=db,
         offset=offset,
@@ -449,6 +530,11 @@ async def list_users(
         search=search,
         email=email,
         status=user_status,
+        subscription_status=subscription_status,
+        tariff_ids=tariff_ids,
+        promo_group_id=promo_group_id,
+        campaign_id=campaign_id,
+        partner_id=partner_id,
         order_by_balance=order_by_balance,
         order_by_traffic=order_by_traffic,
         order_by_last_activity=order_by_last_activity,
@@ -456,7 +542,17 @@ async def list_users(
         order_by_purchase_count=order_by_purchase_count,
     )
 
-    total = await get_users_count(db=db, status=user_status, search=search, email=email)
+    total = await get_users_count(
+        db=db,
+        status=user_status,
+        search=search,
+        email=email,
+        subscription_status=subscription_status,
+        tariff_ids=tariff_ids,
+        promo_group_id=promo_group_id,
+        campaign_id=campaign_id,
+        partner_id=partner_id,
+    )
 
     # Get spending stats for all users
     user_ids = [u.id for u in users]
@@ -709,7 +805,11 @@ async def get_user_detail(
         promo_offer_discount_source=user.promo_offer_discount_source,
         promo_offer_discount_expires_at=user.promo_offer_discount_expires_at,
         recent_transactions=recent_transactions,
-        remnawave_uuid=user.remnawave_uuid,
+        remnawave_uuid=(
+            primary_sub.remnawave_uuid
+            if settings.is_multi_tariff_enabled() and primary_sub and primary_sub.remnawave_uuid
+            else user.remnawave_uuid
+        ),
     )
 
 
@@ -816,6 +916,50 @@ async def get_user_panel_info(
     except Exception as e:
         logger.error('Error getting panel info for user', user_id=user_id, error=e)
         return UserPanelInfoResponse(found=False)
+
+
+@router.get('/{user_id}/subscription-request-history')
+async def get_subscription_request_history(
+    user_id: int,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Get subscription request history from RemnaWave panel."""
+    from app.database.crud.user import get_user_by_id
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    panel_uuid = None
+    if settings.is_multi_tariff_enabled() and subscription_id:
+        from app.database.crud.subscription import get_subscription_by_id_for_user
+
+        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
+        if sub:
+            panel_uuid = sub.remnawave_uuid
+    else:
+        panel_uuid = getattr(user, 'remnawave_uuid', None)
+
+    if not panel_uuid:
+        return {'total': 0, 'records': []}
+
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+
+        service = RemnaWaveService()
+        if not service.is_configured:
+            return {'total': 0, 'records': []}
+
+        async with service.get_api_client() as api:
+            result = await api.get_subscription_request_history(panel_uuid, offset=offset, limit=limit)
+            return result
+    except Exception as e:
+        logger.error('Error getting subscription request history', user_id=user_id, error=e)
+        return {'total': 0, 'records': []}
 
 
 @router.get('/{user_id}/node-usage', response_model=UserNodeUsageResponse)
@@ -1045,6 +1189,17 @@ async def update_user_subscription(
                 detail='User already has a subscription. Enable multi-tariff mode to add more.',
             )
 
+        # Проверка: нельзя создать вторую активную подписку с тем же тарифом
+        if is_multi_tariff and request.tariff_id:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='User already has an active subscription for this tariff. Extend it instead.',
+                )
+
         from app.database.crud.subscription import create_paid_subscription
 
         days = request.days or 30
@@ -1064,16 +1219,25 @@ async def update_user_subscription(
                 if tariff.allowed_squads:
                     connected_squads = tariff.allowed_squads
 
-        new_sub = await create_paid_subscription(
-            db=db,
-            user_id=user.id,
-            duration_days=days,
-            traffic_limit_gb=traffic_limit,
-            device_limit=device_limit,
-            is_trial=is_trial,
-            tariff_id=request.tariff_id,
-            connected_squads=connected_squads,
-        )
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            new_sub = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=days,
+                traffic_limit_gb=traffic_limit,
+                device_limit=device_limit,
+                is_trial=is_trial,
+                tariff_id=request.tariff_id,
+                connected_squads=connected_squads,
+            )
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='User already has an active subscription for this tariff. Extend it instead.',
+            )
 
         # Sync to Remnawave panel
         await _sync_subscription_to_panel(db, user, new_sub)
@@ -1186,6 +1350,18 @@ async def update_user_subscription(
                 detail='Tariff not found',
             )
 
+        # Проверка: нельзя сменить тариф, если у пользователя уже есть
+        # другая активная подписка с целевым тарифом
+        if is_multi_tariff and request.tariff_id != subscription.tariff_id:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
+            if existing and existing.id != subscription.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='User already has an active subscription for the target tariff',
+                )
+
         # Preserve extra purchased devices above the old tariff's base limit
         from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
@@ -1203,12 +1379,12 @@ async def update_user_subscription(
         if tariff.allowed_squads:
             subscription.connected_squads = tariff.allowed_squads
 
-        # Convert trial subscription to paid when switching to a non-trial tariff
-        if subscription.is_trial and not tariff.is_trial_available:
-            subscription.is_trial = False
-            if subscription.end_date and subscription.end_date > datetime.now(UTC):
-                subscription.status = SubscriptionStatus.ACTIVE.value
-            logger.info('Converted trial subscription to paid', user_id=user_id, tariff_name=tariff.name)
+        # NB: changing the tariff is a *relabel*, not a purchase — we deliberately
+        # do NOT flip is_trial here. Bug #629889: flipping a 1-day trial to
+        # is_trial=False left a phantom "paid" subscription that, once its trial
+        # day expired, got picked up by try_auto_extend_expired_after_topup (which
+        # only renews is_trial=False subs) and granted a full ~30-day tariff period.
+        # A trial stays a trial across a tariff change and expires normally.
 
         # Сбрасываем докупленный трафик при смене тарифа
         from sqlalchemy import delete as sql_delete
@@ -1316,7 +1492,42 @@ async def update_user_subscription(
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
+    if request.action == 'reset':
+        # Полностью обнулить подписку «как будто пользователь её не оформлял»: снять
+        # наспамленные дни, обнулить трафик/сквады, пометить DISABLED и ОТКЛЮЧИТЬ в
+        # панели RemnaWave (не удаляя). Пользователь и его тикеты сохраняются —
+        # дальше юзер сам покупает тариф с нуля и выбирает срок.
+        from app.services.subscription_service import reset_subscription_with_panel
+
+        result = await reset_subscription_with_panel(db, user, subscription)
+
+        logger.info(
+            'Admin reset subscription for user',
+            admin_id=admin.id,
+            user_id=user_id,
+            subscription_id=subscription.id,
+            panel_disabled=result.get('panel_disabled'),
+        )
+
+        return UpdateSubscriptionResponse(
+            success=True,
+            message='Subscription reset',
+            subscription=await _build_subscription_info_async(db, subscription),
+        )
+
     if request.action == 'activate':
+        # Проверка: нельзя активировать, если у пользователя уже есть
+        # другая активная подписка с тем же тарифом
+        if is_multi_tariff and subscription.tariff_id:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            existing = await get_subscription_by_user_and_tariff(db, user.id, subscription.tariff_id)
+            if existing and existing.id != subscription.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail='Cannot activate: user already has an active subscription for this tariff',
+                )
+
         subscription.status = SubscriptionStatus.ACTIVE.value
         if subscription.end_date and subscription.end_date <= datetime.now(UTC):
             # Extend by 30 days if expired
@@ -1622,9 +1833,25 @@ async def block_user(
     admin: User = Depends(require_permission('users:block')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Block a user (shortcut for status update)."""
-    request = UpdateUserStatusRequest(status=UserStatusEnum.BLOCKED, reason=reason)
-    return await update_user_status(user_id, request, admin, db)
+    """Block a user — sets DB status AND disables panel user in RemnaWave."""
+    from app.services.user_service import UserService
+
+    user_service = UserService()
+    success = await user_service.block_user(
+        db,
+        user_id,
+        admin.id,
+        reason=reason or 'Заблокирован администратором',
+    )
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found or block failed')
+
+    return UpdateUserStatusResponse(
+        success=True,
+        old_status='active',
+        new_status='blocked',
+        message='User blocked',
+    )
 
 
 @router.post('/{user_id}/unblock', response_model=UpdateUserStatusResponse)
@@ -1633,9 +1860,20 @@ async def unblock_user(
     admin: User = Depends(require_permission('users:block')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Unblock a user (shortcut for status update)."""
-    request = UpdateUserStatusRequest(status=UserStatusEnum.ACTIVE)
-    return await update_user_status(user_id, request, admin, db)
+    """Unblock a user — sets DB status AND re-enables panel user in RemnaWave."""
+    from app.services.user_service import UserService
+
+    user_service = UserService()
+    success = await user_service.unblock_user(db, user_id, admin.id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found or unblock failed')
+
+    return UpdateUserStatusResponse(
+        success=True,
+        old_status='blocked',
+        new_status='active',
+        message='User unblocked',
+    )
 
 
 # === Restrictions Management ===
@@ -2053,6 +2291,19 @@ async def get_user_devices(
         async with service.get_api_client() as api:
             response = await api.get_user_devices_all(_dev_uuid)
 
+            # Aliases per-(user, hwid) — единый дикт на весь список устройств.
+            # Best-effort: при сбое чтения возвращаем девайсы без локальных имён,
+            # чтобы alias-таблица не превращалась в SPOF для админ-листинга.
+            try:
+                aliases = await get_aliases_for_user(db, user_id)
+            except Exception as alias_error:
+                logger.warning(
+                    'Failed to load device aliases, falling back to defaults',
+                    user_id=user_id,
+                    error=str(alias_error)[:200],
+                )
+                aliases = {}
+
             devices = []
             for d in response.get('devices', []):
                 hwid = d.get('hwid') or d.get('deviceId') or d.get('id')
@@ -2064,6 +2315,7 @@ async def get_user_devices(
                         platform=d.get('platform') or d.get('platformType') or '',
                         device_model=d.get('deviceModel') or d.get('model') or d.get('name') or '',
                         created_at=d.get('updatedAt') or d.get('lastSeen') or d.get('createdAt'),
+                        local_name=aliases.get(hwid) or None,
                     )
                 )
 
@@ -2125,6 +2377,53 @@ async def delete_user_device(
     except Exception as e:
         logger.error('Error deleting device for user', hwid=hwid, user_id=user_id, error=e)
         return DeleteDeviceResponse(success=False, message='Ошибка удаления устройства')
+
+
+@router.patch('/{user_id}/devices/{hwid}/name', response_model=RenameDeviceResponse)
+async def rename_user_device(
+    user_id: int,
+    hwid: str,
+    request: RenameDeviceRequest,
+    admin: User = Depends(require_permission('users:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> RenameDeviceResponse:
+    """Set/clear a local alias for a user's HWID device (admin override).
+
+    Alias scope: per-(user, hwid). Admin acts on behalf of the user; the
+    same value would appear in the user's own bot/cabinet view. Empty or
+    null `name` clears the alias.
+    """
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    hwid = (hwid or '').strip()
+    if not hwid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
+
+    # Best-effort hwid validation across ALL the user's panel UUIDs (multi-tariff
+    # aware). Shared with the user-facing endpoint via cabinet.utils.device_ownership.
+    if not await verify_hwid_belongs_to_user(user, hwid):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Device not found on user account',
+        )
+
+    normalized = normalize_alias(request.name)
+    if normalized:
+        saved = await set_alias(db, user_id, hwid, normalized)
+        logger.info(
+            'Admin renamed device for user',
+            admin_id=admin.id,
+            user_id=user_id,
+            hwid_prefix=hwid[:8],
+            alias_length=len(saved),
+        )
+        return RenameDeviceResponse(hwid=hwid, local_name=saved)
+
+    await delete_alias(db, user_id, hwid)
+    logger.info('Admin cleared device alias for user', admin_id=admin.id, user_id=user_id, hwid_prefix=hwid[:8])
+    return RenameDeviceResponse(hwid=hwid, local_name=None)
 
 
 @router.delete('/{user_id}/devices', response_model=ResetDevicesResponse)
@@ -2288,7 +2587,6 @@ async def reset_user_trial(
 
     Actions:
     - Delete current subscription if exists
-    - Reset has_used_trial flag to False
     - User can now activate a new trial
     """
     user = await get_user_by_id(db, user_id)
@@ -2318,32 +2616,18 @@ async def reset_user_trial(
             has_active_paid = any(is_active_paid_subscription(s) for s in subs_to_delete)
             if has_active_paid:
                 logger.info(
-                    '⏭️ Пропуск удаления: среди удаляемых есть активная оплаченная подписка',
+                    'Пропуск удаления: среди удаляемых есть активная оплаченная подписка',
                     user_id=user_id,
                 )
             else:
-                # Deactivate in Remnawave panel first
-                from app.services.subscription_service import SubscriptionService
+                # Снос триала — общий код с ботовым bulk-сбросом: удаляет панель-юзера
+                # ПЕРВЫМ (race-safe относительно синк-воскрешения), затем строки в БД и
+                # чистит устаревший single-tariff remnawave_uuid.
+                from app.database.crud.subscription import wipe_trial_subscriptions
 
-                subscription_service = SubscriptionService()
-                for sub in subs_to_delete:
-                    _sub_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
-                    if _sub_uuid:
-                        try:
-                            await subscription_service.disable_remnawave_user(_sub_uuid)
-                        except Exception as e:
-                            logger.warning('Failed to disable Remnawave during trial reset', error=e)
+                wiped = await wipe_trial_subscriptions(db, subs_to_delete)
+                subscription_deleted = wiped > 0
 
-                # Delete only target subscriptions
-                from sqlalchemy import delete
-
-                for sub in subs_to_delete:
-                    await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
-                    await db.execute(delete(Subscription).where(Subscription.id == sub.id))
-                subscription_deleted = True
-
-    # Reset trial flag
-    user.has_used_trial = False
     user.updated_at = datetime.now(UTC)
 
     await db.commit()
@@ -2473,7 +2757,7 @@ async def disable_user(
 
     if has_active_paid:
         logger.info(
-            '⏭️ Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
+            'Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
             user_id=user_id,
             remnawave_uuid=user.remnawave_uuid,
         )
@@ -2681,6 +2965,13 @@ async def get_user_sync_status(
         bot_device_limit = active_sub.device_limit or 0
         bot_squads = active_sub.connected_squads or []
 
+    # In multi-tariff mode, UUID lives on subscription, not user
+    effective_uuid = (
+        active_sub.remnawave_uuid
+        if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid
+        else user.remnawave_uuid
+    )
+
     # Panel data
     panel_found = False
     panel_status = None
@@ -2699,16 +2990,9 @@ async def get_user_sync_status(
             async with service.get_api_client() as api:
                 panel_user = None
 
-                # In multi-tariff mode, UUID lives on subscription, not user
-                sync_uuid = (
-                    active_sub.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid
-                    else user.remnawave_uuid
-                )
-
                 # Try by UUID first (works for all users including OAuth)
-                if sync_uuid:
-                    panel_user = await api.get_user_by_uuid(sync_uuid)
+                if effective_uuid:
+                    panel_user = await api.get_user_by_uuid(effective_uuid)
 
                 # Fallback: search by telegram_id
                 if not panel_user and user.telegram_id:
@@ -2800,7 +3084,7 @@ async def get_user_sync_status(
     return PanelSyncStatusResponse(
         user_id=user.id,
         telegram_id=user.telegram_id,
-        remnawave_uuid=user.remnawave_uuid,
+        remnawave_uuid=effective_uuid,
         last_sync=user.last_remnawave_sync,
         subscription_id=active_sub.id if active_sub else None,
         subscription_tariff_name=sub_tariff_name,
@@ -2878,11 +3162,37 @@ async def sync_user_from_panel(
                     # Specific subscription requested — use its UUID directly
                     panel_user = await api.get_user_by_uuid(selected_sub.remnawave_uuid)
                 elif selected_sub and not selected_sub.remnawave_uuid:
-                    # Specific subscription requested but not yet linked to panel — cannot sync
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail='This subscription is not linked to the panel yet. Sync to panel first.',
-                    )
+                    # The subscription lost its panel UUID (e.g. a spurious user.deleted
+                    # webhook wiped it). Re-link it to its live panel user by
+                    # telegram_id/email — but only UNAMBIGUOUSLY: choose a panel user that
+                    # is NOT already linked to another of this user's subscriptions, so we
+                    # never bind two subs to the same panel user (telegram_id is one-to-many
+                    # in multi-tariff). This is what makes the panel->bot repair work after
+                    # the sibling-expiry corruption.
+                    linked_uuids = {s.remnawave_uuid for s in from_subs if s.id != selected_sub.id and s.remnawave_uuid}
+                    candidates = []
+                    if user.telegram_id:
+                        candidates = list(await api.get_user_by_telegram_id(user.telegram_id) or [])
+                    if not candidates and user.email:
+                        candidates = list(await api.get_user_by_email(user.email) or [])
+                    orphans = [pu for pu in candidates if pu.uuid not in linked_uuids]
+                    if len(orphans) == 1:
+                        panel_user = orphans[0]
+                        changes['remnawave_uuid'] = {'old': None, 'new': panel_user.uuid}
+                        selected_sub.remnawave_uuid = panel_user.uuid
+                    elif len(orphans) > 1:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=(
+                                'Multiple panel users match this account; cannot safely re-link '
+                                'this subscription. Resolve manually.'
+                            ),
+                        )
+                    else:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail='This subscription is not linked to the panel and no matching panel user was found.',
+                        )
                 else:
                     # No specific subscription — iterate all subscription UUIDs
                     sub_uuids = [s.remnawave_uuid for s in from_subs if s.remnawave_uuid]
@@ -2910,14 +3220,21 @@ async def sync_user_from_panel(
                     errors=['No user found in Remnawave panel by UUID, telegram_id, or email'],
                 )
 
-            # Build panel info
+            # Build panel info. active_internal_squads is a list[dict] (see the
+            # diagnostic in get_user_sync_status / auth.py); the previous .uuid/str
+            # checks matched nothing, so panel squads were never extracted and the
+            # repair could not restore connected_squads. Handle dict (real), str and
+            # object forms defensively.
             active_squads = []
-            if hasattr(panel_user, 'active_internal_squads') and panel_user.active_internal_squads:
-                for squad in panel_user.active_internal_squads:
-                    if hasattr(squad, 'uuid'):
-                        active_squads.append(squad.uuid)
-                    elif isinstance(squad, str):
-                        active_squads.append(squad)
+            for squad in getattr(panel_user, 'active_internal_squads', None) or []:
+                if isinstance(squad, dict):
+                    squad_uuid = squad.get('uuid')
+                elif isinstance(squad, str):
+                    squad_uuid = squad
+                else:
+                    squad_uuid = getattr(squad, 'uuid', None)
+                if squad_uuid:
+                    active_squads.append(squad_uuid)
 
             panel_info = PanelUserInfo(
                 uuid=panel_user.uuid,
@@ -2927,7 +3244,7 @@ async def sync_user_from_panel(
                 expire_at=panel_datetime_to_utc(panel_user.expire_at) if panel_user.expire_at else None,
                 traffic_limit_gb=panel_user.traffic_limit_bytes / (1024**3) if panel_user.traffic_limit_bytes else 0,
                 traffic_used_gb=panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0,
-                device_limit=panel_user.hwid_device_limit or 1,
+                device_limit=coerce_panel_device_limit(panel_user.hwid_device_limit),
                 subscription_url=panel_user.subscription_url,
                 active_squads=active_squads,
             )
@@ -2998,7 +3315,7 @@ async def sync_user_from_panel(
                     sub.traffic_limit_gb = panel_traffic_limit
 
                 # Update device limit
-                panel_device_limit = panel_user.hwid_device_limit or 1
+                panel_device_limit = coerce_panel_device_limit(panel_user.hwid_device_limit)
                 if sub.device_limit != panel_device_limit:
                     changes['device_limit'] = {'old': sub.device_limit, 'new': panel_device_limit}
                     sub.device_limit = panel_device_limit
@@ -3018,6 +3335,11 @@ async def sync_user_from_panel(
                     changes['remnawave_short_uuid'] = {'old': sub.remnawave_short_uuid, 'new': panel_user.short_uuid}
                     sub.remnawave_short_uuid = panel_user.short_uuid
 
+                # Update crypto link
+                if panel_user.happ_crypto_link and sub.subscription_crypto_link != panel_user.happ_crypto_link:
+                    changes['subscription_crypto_link'] = {'old': sub.subscription_crypto_link, 'new': '***'}
+                    sub.subscription_crypto_link = panel_user.happ_crypto_link
+
             # Update traffic usage if requested
             if request.update_traffic and sync_sub:
                 panel_traffic_used = panel_user.used_traffic_bytes / (1024**3) if panel_user.used_traffic_bytes else 0
@@ -3033,14 +3355,14 @@ async def sync_user_from_panel(
                     int(panel_user.traffic_limit_bytes / (1024**3)) if panel_user.traffic_limit_bytes else 100
                 )
                 panel_expire_utc = panel_datetime_to_utc(panel_user.expire_at)
-                days_remaining = max(1, (panel_expire_utc - datetime.now(UTC)).days)
+                days_remaining = max(1, math.ceil((panel_expire_utc - datetime.now(UTC)).total_seconds() / 86400))
 
                 new_sub = await create_paid_subscription(
                     db=db,
                     user_id=user.id,
                     duration_days=days_remaining,
                     traffic_limit_gb=panel_traffic_limit,
-                    device_limit=panel_user.hwid_device_limit or 1,
+                    device_limit=coerce_panel_device_limit(panel_user.hwid_device_limit),
                     connected_squads=active_squads,
                 )
                 new_sub.remnawave_short_uuid = panel_user.short_uuid
@@ -3114,8 +3436,9 @@ async def sync_user_to_panel(
 
     try:
         from app.config import settings
-        from app.external.remnawave_api import TrafficLimitStrategy, UserStatus as PanelUserStatus
+        from app.external.remnawave_api import UserStatus as PanelUserStatus
         from app.services.remnawave_service import RemnaWaveService
+        from app.services.subscription_service import get_traffic_reset_strategy
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
 
         service = RemnaWaveService()
@@ -3146,12 +3469,20 @@ async def sync_user_to_panel(
         if expire_at and expire_at <= datetime.now(UTC):
             expire_at = datetime.now(UTC) + timedelta(minutes=1)
 
-        username = settings.format_remnawave_username(
+        # Same precaution as the per-user sync above: multi-tariff create-path
+        # appends `_<remnawave_short_id>`. Helper resрвирует место.
+        username_suffix = (
+            f'_{sub.remnawave_short_id}'
+            if (settings.is_multi_tariff_enabled() and getattr(sub, 'remnawave_short_id', None))
+            else ''
+        )
+        username = settings.build_remnawave_subscription_username(
             full_name=user.full_name,
             username=user.username,
             telegram_id=user.telegram_id,
             email=user.email,
             user_id=user.id,
+            suffix=username_suffix,
         )
 
         description = settings.format_remnawave_user_description(
@@ -3214,7 +3545,7 @@ async def sync_user_to_panel(
 
                 if request.update_traffic_limit:
                     update_kwargs['traffic_limit_bytes'] = traffic_limit_bytes
-                    update_kwargs['traffic_limit_strategy'] = TrafficLimitStrategy.MONTH
+                    update_kwargs['traffic_limit_strategy'] = get_traffic_reset_strategy(sub.tariff)
                     changes['traffic_limit_gb'] = sub.traffic_limit_gb
 
                 if request.update_squads and sub.connected_squads:
@@ -3235,7 +3566,10 @@ async def sync_user_to_panel(
                     await api.update_user(**update_kwargs)
                     action = 'updated'
                 except Exception as update_error:
-                    if hasattr(update_error, 'status_code') and update_error.status_code == 404:
+                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
+                    if (
+                        hasattr(update_error, 'status_code') and update_error.status_code == 404
+                    ) or error_code == 'A018':
                         # User not found in panel, create new
                         panel_uuid = None
                     else:
@@ -3248,7 +3582,7 @@ async def sync_user_to_panel(
                     'expire_at': expire_at or (datetime.now(UTC) + timedelta(days=30)),
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
-                    'traffic_limit_strategy': TrafficLimitStrategy.MONTH,
+                    'traffic_limit_strategy': get_traffic_reset_strategy(sub.tariff),
                     'telegram_id': user.telegram_id,
                     'email': user.email,
                     'description': description,
@@ -3260,9 +3594,8 @@ async def sync_user_to_panel(
                 if ext_squad_uuid is not None:
                     create_kwargs['external_squad_uuid'] = ext_squad_uuid
 
-                # Multi-tariff: subscription-specific username
-                if settings.is_multi_tariff_enabled() and getattr(sub, 'remnawave_short_id', None):
-                    create_kwargs['username'] = f'{username}_{sub.remnawave_short_id}'
+                # multi-tariff suffix уже встроен в `username` через
+                # build_remnawave_subscription_username — больше ничего не клеим.
 
                 new_panel_user = await api.create_user(**create_kwargs)
                 panel_uuid = new_panel_user.uuid

@@ -25,15 +25,15 @@ def sample_log_content():
     """Пример содержимого лог-файла с реферальными событиями."""
     today = datetime.now(UTC).strftime('%Y-%m-%d')
     return f"""
-{today} 10:00:00,123 - app.handlers.start - INFO - Найден реферальный код: <ABC123>
-{today} 10:00:05,456 - app.handlers.start - INFO - Реферальный код ABC123 применен для пользователя 123456789
-{today} 10:00:10,789 - app.services.referral_service - INFO - Реферальная регистрация обработана для 123456789
-{today} 10:00:15,012 - app.services.referral_service - INFO - Реферал 123456789 получил бонус
+{today} 10:00:00,123 - app.handlers.start - INFO - 🔎 Найден реферальный код: <ABC123>
+{today} 10:00:05,456 - app.handlers.start - INFO - ✅ Реферальный код ABC123 применен для пользователя 123456789
+{today} 10:00:10,789 - app.services.referral_service - INFO - ✅ Реферальная регистрация обработана для 123456789
+{today} 10:00:15,012 - app.services.referral_service - INFO - 💰 Реферал 123456789 получил бонус
 
-{today} 11:00:00,345 - app.handlers.start - INFO - Найден реферальный код: <XYZ999>
-{today} 11:00:05,678 - app.handlers.start - INFO - Реферальный код XYZ999 применен для пользователя 987654321
+{today} 11:00:00,345 - app.handlers.start - INFO - 🔎 Найден реферальный код: <XYZ999>
+{today} 11:00:05,678 - app.handlers.start - INFO - ✅ Реферальный код XYZ999 применен для пользователя 987654321
 
-{today} 12:00:00,901 - app.handlers.start - INFO - Найден реферальный код: <TEST777>
+{today} 12:00:00,901 - app.handlers.start - INFO - 🔎 Найден реферальный код: <TEST777>
 
 {today} 13:00:00,234 - unrelated module - INFO - Some other log message
 """

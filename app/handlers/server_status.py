@@ -113,7 +113,7 @@ def _build_status_message(
         [
             '',
             summary,
-            texts.t('SERVER_STATUS_UPDATED_AT', '⏱ Обновлено: {time}').format(time=updated_at),
+            texts.t('SERVER_STATUS_UPDATED_AT', 'Обновлено: {time}').format(time=updated_at),
             '',
         ]
     )
