@@ -2398,16 +2398,9 @@ def _get_subscription_status_simple(texts):
     return texts.t('SUBSCRIPTION_NONE', 'Нет активной подписки')
 
 
-def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
+def _insert_random_message(base_text: str, random_message: str) -> str:
     if not random_message:
         return base_text
-
-    prompt = action_prompt or ''
-    if prompt and prompt in base_text:
-        parts = base_text.split(prompt, 1)
-        if len(parts) == 2:
-            return f'{parts[0]}\n{random_message}\n\n{prompt}{parts[1]}'
-        return base_text.replace(prompt, f'\n{random_message}\n\n{prompt}', 1)
 
     return f'{base_text}\n\n{random_message}'
 
@@ -2439,12 +2432,10 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
         user_name=html.escape(user_name or ''), subscription_status=_get_subscription_status_simple(texts)
     )
 
-    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-
     try:
         random_message = await get_random_active_message(db)
         if random_message:
-            return _insert_random_message(base_text, random_message, action_prompt)
+            return _insert_random_message(base_text, random_message)
 
     except Exception as e:
         logger.error('Ошибка получения случайного сообщения', error=e)

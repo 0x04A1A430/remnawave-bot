@@ -1321,16 +1321,9 @@ def _get_subscription_status(user: User, texts, is_daily_tariff: bool = False) -
     return texts.t('SUB_STATUS_UNKNOWN', 'Неизвестно')
 
 
-def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
+def _insert_random_message(base_text: str, random_message: str) -> str:
     if not random_message:
         return base_text
-
-    prompt = action_prompt or ''
-    if prompt and prompt in base_text:
-        parts = base_text.split(prompt, 1)
-        if len(parts) == 2:
-            return f'{parts[0]}\n{random_message}\n\n{prompt}{parts[1]}'
-        return base_text.replace(prompt, f'\n{random_message}\n\n{prompt}', 1)
 
     return f'{base_text}\n\n{random_message}'
 
@@ -1418,8 +1411,6 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
         if tariff_info_block:
             base_text = f'{base_text}\n{tariff_info_block}'
 
-    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
-
     info_sections: list[str] = []
 
     try:
@@ -1447,12 +1438,12 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     if info_sections:
         extra_block = '\n\n'.join(section for section in info_sections if section)
         if extra_block:
-            base_text = _insert_random_message(base_text, extra_block, action_prompt)
+            base_text = _insert_random_message(base_text, extra_block)
 
     try:
         random_message = await get_random_active_message(db)
         if random_message:
-            return _insert_random_message(base_text, random_message, action_prompt)
+            return _insert_random_message(base_text, random_message)
 
     except Exception as e:
         logger.error('Ошибка получения случайного сообщения', error=e)
