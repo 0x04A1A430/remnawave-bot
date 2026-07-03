@@ -1553,6 +1553,25 @@ class Subscription(Base):
             return f'{hours} ч.'
         return f'{minutes} мин.'
 
+    def time_until_revoke_available(self, cooldown_seconds: int) -> str:
+        """Return formatted time until next revoke is available."""
+        if not self.last_revoke_at:
+            return 'доступно'
+        from app.config import settings
+        cooldown_end = self.last_revoke_at + timedelta(seconds=cooldown_seconds)
+        current_time = datetime.now(UTC)
+        if current_time >= cooldown_end:
+            return 'доступно'
+        delta = cooldown_end - current_time
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        if days > 0:
+            return f'{days} дн. {hours} ч.'
+        if hours > 0:
+            return f'{hours} ч. {minutes} мин.'
+        return f'{minutes} мин.'
+
     @property
     def traffic_used_percent(self) -> float:
         if not self.traffic_limit_gb:
@@ -3182,6 +3201,7 @@ class UserRole(Base):
     assigned_at = Column(AwareDateTime(), server_default=func.now())
     expires_at = Column(AwareDateTime(), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    revocation_source = Column(String(20), nullable=True)
 
     __table_args__ = (UniqueConstraint('user_id', 'role_id', name='uq_user_role'),)
 
