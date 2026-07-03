@@ -1243,6 +1243,19 @@ class User(Base):
         # Fallback to most recent (already ordered by created_at desc)
         return self.subscriptions[0]
 
+    def is_trial_already_used(self) -> bool:
+        """Проверяет, использовал ли пользователь пробный период."""
+        if self.has_had_paid_subscription:
+            return True
+        for sub in (getattr(self, 'subscriptions', None) or []):
+            if sub.status == SubscriptionStatus.PENDING.value and sub.is_trial:
+                continue
+            if sub.is_trial or sub.status in (
+                SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value,
+            ):
+                return True
+        return False
+
     transactions = relationship('Transaction', back_populates='user')
     referral_earnings = relationship('ReferralEarning', foreign_keys='ReferralEarning.user_id', back_populates='user')
     discount_offers = relationship('DiscountOffer', back_populates='user')
