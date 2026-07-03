@@ -15,7 +15,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('guest_purchases', sa.Column('recipient_warning', sa.String(50), nullable=True))
+    # Check if the column already exists before adding it
+    with op.get_context().autocommit_block():
+        conn = op.get_bind()
+        inspector = sa.inspect(conn)
+        columns = inspector.get_columns('guest_purchases')
+        if not any(c['name'] == 'recipient_warning' for c in columns):
+            op.add_column('guest_purchases', sa.Column('recipient_warning', sa.String(50), nullable=True))
+        else:
+            print("Column 'recipient_warning' already exists in 'guest_purchases'. Skipping addition.")
 
 
 def downgrade() -> None:
