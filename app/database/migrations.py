@@ -84,12 +84,6 @@ async def run_alembic_upgrade() -> None:
     cfg = _get_alembic_config()
     loop = asyncio.get_running_loop()
 
-    # If the database is managed but out of sync (as indicated by UndefinedColumnError),
-    # force a re-evaluation of migrations by stamping 'base' then upgrading to 'head'.
-    logger.warning('Alembic: Database is managed, forcing re-evaluation of migrations by stamping "base" then upgrading to "head"')
-    await loop.run_in_executor(None, command.stamp, cfg, 'base')
-    logger.info('Alembic: Stamped database at "base" revision to force re-evaluation')
-
     await loop.run_in_executor(None, command.upgrade, cfg, 'head')
     logger.info('Alembic миграции применены')
 
