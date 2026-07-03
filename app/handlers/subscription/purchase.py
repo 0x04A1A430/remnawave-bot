@@ -2957,28 +2957,28 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         'SUBSCRIPTION_SETTINGS_OVERVIEW',
         (
             '<b>Настройки подписки</b>\n\n'
-            '<b>Текущие параметры:</b>\n'
-            'Стран: {countries_count}\n'
-            'Трафик: {traffic_used} / {traffic_limit}\n'
-            'Устройства: {devices_used} / {devices_limit}\n\n'
-            'Выберите что хотите изменить:'
+            '📊 Израсходовано: {traffic_used} / {traffic_limit}\n'
+            '📅 Истекает: {end_date}\n'
+            '📱 Устройства: {devices_used} / {devices_limit}\n\n'
+            '⏳ До перевыпуска: {time_left}'
         ),
     )
 
     if not show_devices:
         settings_template = settings_template.replace(
-            '\n Устройства: {devices_used} / {devices_limit}',
+            '\n📱 Устройства: {devices_used} / {devices_limit}',
             '',
         )
 
     devices_limit_display = str(subscription.device_limit)
 
     settings_text = settings_template.format(
-        countries_count=len(subscription.connected_squads or []),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
         traffic_limit=texts.format_traffic(subscription.traffic_limit_gb, is_limit=True),
+        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
         devices_used=devices_used,
         devices_limit=devices_limit_display,
+        time_left=subscription.time_left_display,
     )
 
     show_countries = await _should_show_countries_management(db_user)
