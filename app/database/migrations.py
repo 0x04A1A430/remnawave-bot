@@ -84,27 +84,6 @@ async def run_alembic_upgrade() -> None:
     cfg = _get_alembic_config()
     loop = asyncio.get_running_loop()
 
-    if db_state == 'managed':
-        from alembic.script import ScriptDirectory
-        from sqlalchemy import text
-
-        script = ScriptDirectory.from_config(cfg)
-        head_revision = script.get_current_head()
-
-        from app.database.database import engine
-        async with engine.connect() as conn:
-            row = await conn.execute(text("SELECT version_num FROM alembic_version"))
-            current = row.scalar() if row else None
-
-        if current != head_revision:
-            logger.warning(
-                'БД managed, но версия не head (%s → %s) — force stamp head, '
-                'схема уже создана моделями',
-                current, head_revision,
-            )
-            await _stamp_alembic_revision('head')
-            return
-
     await loop.run_in_executor(None, command.upgrade, cfg, 'head')
     logger.info('Alembic миграции применены')
 
