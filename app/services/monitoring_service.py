@@ -341,23 +341,48 @@ class MonitoringService:
         except Exception:
             pass
 
+    async def _run_safe(self, db: AsyncSession, name: str, coro):
+        """Wrap a monitoring phase in a savepoint to isolate SQL errors.
+
+        If the phase raises, the savepoint rolls back only that phase's changes
+        and the outer transaction stays healthy for subsequent phases.
+        """
+        try:
+            async with db.begin_nested():
+                return await coro
+        except Exception:
+            logger.error('Monitoring phase failed', phase=name, exc_info=True)
+            return None
+
     async def _monitoring_cycle(self):
         async with AsyncSessionLocal() as db:
             try:
                 await self._cleanup_notification_cache()
 
-                expired_offers = await deactivate_expired_offers(db)
-                if expired_offers:
-                    logger.info('Деактивировано просроченных скидочных предложений', expired_offers=expired_offers)
+                expired_offers_result = await self._run_safe(
+                    db,
+                    'deactivate_expired_offers',
+                    deactivate_expired_offers(db),
+                )
+                if expired_offers_result:
+                    logger.info('Деактивировано просроченных скидочных предложений', expired_offers=expired_offers_result)
 
-                expired_active_discounts = await cleanup_expired_promo_offer_discounts(db)
+                expired_active_discounts = await self._run_safe(
+                    db,
+                    'cleanup_expired_promo_offer_discounts',
+                    cleanup_expired_promo_offer_discounts(db),
+                )
                 if expired_active_discounts:
                     logger.info(
                         'Сброшено активных скидок промо-предложений с истекшим сроком',
                         expired_active_discounts=expired_active_discounts,
                     )
 
-                cleaned_test_access = await promo_offer_service.cleanup_expired_test_access(db)
+                cleaned_test_access = await self._run_safe(
+                    db,
+                    'cleanup_expired_test_access',
+                    promo_offer_service.cleanup_expired_test_access(db),
+                )
                 if cleaned_test_access:
                     logger.info(
                         'Отозвано истекших тестовых доступов к сквадам', cleaned_test_access=cleaned_test_access
@@ -366,30 +391,28 @@ class MonitoringService:
                 # ВАЖНО: autopay ПЕРЕД check_expired — иначе подписки с автоплатой
                 # экспайрятся до того, как autopay успеет их продлить
                 # Продление с баланса работает всегда, если у подписки autopay_enabled=True
-                await self._process_autopayments(db)
+                await self._run_safe(db, 'autopayments', self._process_autopayments(db))
+
                 # Рекуррентные автоплатежи с карты: требуют ENABLE_AUTOPAY + YOOKASSA_RECURRENT_ENABLED
                 if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
-                    try:
+                    async def _recurrent_phase():
                         from app.services.recurrent_payment_service import process_recurrent_payments
 
                         await process_recurrent_payments(db=db, bot=self.bot)
-                    except Exception as recurrent_error:
-                        logger.error(
-                            'Ошибка рекуррентных автоплатежей',
-                            error=recurrent_error,
-                            exc_info=True,
-                        )
-                await self._check_expired_subscriptions(db)
-                await self._check_expiring_subscriptions(db)
-                await self._check_trial_expiring_soon(db)
-                await self._check_trial_channel_subscriptions(db)
-                await self._check_expired_subscription_followups(db)
-                await self._check_traffic_warnings(db)
-                await self._check_low_balance_alerts(db)
-                await self._retry_stuck_guest_purchases(db)
-                await self._cleanup_expired_refresh_tokens(db)
-                await self._cleanup_inactive_users(db)
-                await self._sync_with_remnawave(db)
+
+                    await self._run_safe(db, 'recurrent_payments', _recurrent_phase())
+
+                await self._run_safe(db, 'check_expired', self._check_expired_subscriptions(db))
+                await self._run_safe(db, 'check_expiring', self._check_expiring_subscriptions(db))
+                await self._run_safe(db, 'trial_expiring', self._check_trial_expiring_soon(db))
+                await self._run_safe(db, 'trial_channel', self._check_trial_channel_subscriptions(db))
+                await self._run_safe(db, 'expired_followups', self._check_expired_subscription_followups(db))
+                await self._run_safe(db, 'traffic_warnings', self._check_traffic_warnings(db))
+                await self._run_safe(db, 'low_balance', self._check_low_balance_alerts(db))
+                await self._run_safe(db, 'retry_stuck_purchases', self._retry_stuck_guest_purchases(db))
+                await self._run_safe(db, 'cleanup_refresh_tokens', self._cleanup_expired_refresh_tokens(db))
+                await self._run_safe(db, 'cleanup_inactive_users', self._cleanup_inactive_users(db))
+                await self._run_safe(db, 'sync_remnawave', self._sync_with_remnawave(db))
 
                 await self._log_monitoring_event(
                     db,
