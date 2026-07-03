@@ -28,6 +28,7 @@
 # Скрипты
 !install_bot.sh
 !main.py
+!entrypoint.py
 
 # Статические файлы
 !vpn_logo.png
