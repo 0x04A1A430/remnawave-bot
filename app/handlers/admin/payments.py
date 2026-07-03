@@ -256,7 +256,7 @@ def _build_list_keyboard(
         if page > 1:
             navigation_row.append(
                 InlineKeyboardButton(
-                    text='← ',
+                    text='←',
                     callback_data=f'admin_payments_page_{page - 1}',
                 )
             )
@@ -271,7 +271,7 @@ def _build_list_keyboard(
         if page < total_pages:
             navigation_row.append(
                 InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'admin_payments_page_{page + 1}',
                 )
             )

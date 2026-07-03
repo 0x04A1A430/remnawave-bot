@@ -2957,16 +2957,16 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         'SUBSCRIPTION_SETTINGS_OVERVIEW',
         (
             '<b>Настройки подписки</b>\n\n'
-            '📊 Израсходовано: {traffic_used} / {traffic_limit}\n'
-            '📅 Истекает: {end_date}\n'
-            '📱 Устройства: {devices_used} / {devices_limit}\n\n'
-            '⏳ До перевыпуска: {time_left}'
+            'Израсходовано: {traffic_used} / {traffic_limit}\n'
+            'Истекает: {end_date}\n'
+            'Устройства: {devices_used} / {devices_limit}\n\n'
+            'До перевыпуска: {time_left}'
         ),
     )
 
     if not show_devices:
         settings_template = settings_template.replace(
-            '\n📱 Устройства: {devices_used} / {devices_limit}',
+            '\nУстройства: {devices_used} / {devices_limit}',
             '',
         )
 

@@ -1270,7 +1270,7 @@
 "REFERRAL_LIST_ITEM_HEADER": "{index}.{status}<b>{name}</b>",
 "REFERRAL_LIST_ITEM_REGISTERED": "注册：{days}天前",
 "REFERRAL_LIST_ITEM_TOPUPS": "{emoji}充值：{count}",
-"REFERRAL_LIST_NEXT_PAGE": "下一页️",
+"REFERRAL_LIST_NEXT_PAGE": "→ 下一页",
 "REFERRAL_LIST_PREV_PAGE": "← 上一页",
 "REFERRAL_PROGRAM_TITLE": "<b>推荐计划</b>",
 "REFERRAL_RECENT_EARNINGS_HEADER": "<b>最近收入：</b>",

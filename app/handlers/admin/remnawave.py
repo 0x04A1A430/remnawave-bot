@@ -225,7 +225,7 @@ def _build_migration_keyboard(
         if page > 1:
             nav_buttons.append(
                 types.InlineKeyboardButton(
-                    text='← ',
+                    text='←',
                     callback_data=f'{prefix}_page_{page - 1}',
                 )
             )
@@ -241,7 +241,7 @@ def _build_migration_keyboard(
         if page < total_pages:
             nav_buttons.append(
                 types.InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'{prefix}_page_{page + 1}',
                 )
             )
