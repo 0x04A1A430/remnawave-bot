@@ -1339,12 +1339,12 @@ def get_promocode_list_keyboard(
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='', callback_data=f'admin_promo_list_page_{page - 1}'))
+            pagination_row.append(make_button(text='←', callback_data=f'admin_promo_list_page_{page - 1}'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            pagination_row.append(make_button(text='', callback_data=f'admin_promo_list_page_{page + 1}'))
+            pagination_row.append(make_button(text='→', callback_data=f'admin_promo_list_page_{page + 1}'))
 
         keyboard.append(pagination_row)
 
@@ -1472,12 +1472,12 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
         pagination_row = []
 
         if page > 1:
-            pagination_row.append(make_button(text='', callback_data=f'admin_msg_history_page_{page - 1}'))
+            pagination_row.append(make_button(text='←', callback_data=f'admin_msg_history_page_{page - 1}'))
 
         pagination_row.append(make_button(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            pagination_row.append(make_button(text='', callback_data=f'admin_msg_history_page_{page + 1}'))
+            pagination_row.append(make_button(text='→', callback_data=f'admin_msg_history_page_{page + 1}'))
 
         keyboard.append(pagination_row)
 
@@ -1774,12 +1774,12 @@ def get_monitoring_logs_navigation_keyboard(
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(make_button(text='', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(make_button(text='←', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page_info'))
 
         if current_page < total_pages:
-            nav_row.append(make_button(text='', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
+            nav_row.append(make_button(text='→', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
 
         keyboard.append(nav_row)
 
@@ -2077,12 +2077,12 @@ def get_admin_pagination_keyboard(
         row = []
 
         if current_page > 1:
-            row.append(make_button(text='', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
+            row.append(make_button(text='←', callback_data=f'{callback_prefix}_page_{current_page - 1}'))
 
         row.append(make_button(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            row.append(make_button(text='', callback_data=f'{callback_prefix}_page_{current_page + 1}'))
+            row.append(make_button(text='→', callback_data=f'{callback_prefix}_page_{current_page + 1}'))
 
         keyboard.append(row)
 

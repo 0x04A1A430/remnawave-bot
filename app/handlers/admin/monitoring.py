@@ -1562,12 +1562,12 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
         nav_row = []
 
         if current_page > 1:
-            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_mon_logs_page_{current_page - 1}'))
 
         nav_row.append(InlineKeyboardButton(text=f'{current_page}/{total_pages}', callback_data='current_page'))
 
         if current_page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
+            nav_row.append(InlineKeyboardButton(text='→', callback_data=f'admin_mon_logs_page_{current_page + 1}'))
 
         keyboard.append(nav_row)
 

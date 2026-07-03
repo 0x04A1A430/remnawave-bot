@@ -1356,7 +1356,7 @@
     "REFERRAL_LIST_ITEM_HEADER": "{index}. {status} <b>{name}</b>",
     "REFERRAL_LIST_ITEM_REGISTERED": "   ثبت‌نام: {days} روز پیش",
     "REFERRAL_LIST_ITEM_TOPUPS": "   {emoji} شارژها: {count}",
-    "REFERRAL_LIST_NEXT_PAGE": "بعدی ️",
+    "REFERRAL_LIST_NEXT_PAGE": "→ بعدی",
     "REFERRAL_LIST_PREV_PAGE": "← قبلی",
     "REFERRAL_PROGRAM_TITLE": "<b>برنامه دعوت</b>",
     "REFERRAL_RECENT_EARNINGS_HEADER": "<b>آخرین واریزها:</b>",

@@ -219,10 +219,10 @@ async def show_support_audit(callback: types.CallbackQuery, db_user: User, db: A
     nav_row = []
     if total_pages > 1:
         if page > 1:
-            nav_row.append(InlineKeyboardButton(text='← ', callback_data=f'admin_support_audit_page_{page - 1}'))
+            nav_row.append(InlineKeyboardButton(text='←', callback_data=f'admin_support_audit_page_{page - 1}'))
         nav_row.append(InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
         if page < total_pages:
-            nav_row.append(InlineKeyboardButton(text='', callback_data=f'admin_support_audit_page_{page + 1}'))
+            nav_row.append(InlineKeyboardButton(text='→', callback_data=f'admin_support_audit_page_{page + 1}'))
 
     kb_rows = []
     if nav_row:

@@ -1335,7 +1335,7 @@
   "REFERRAL_LIST_ITEM_HEADER": "{index}. {status} <b>{name}</b>",
   "REFERRAL_LIST_ITEM_REGISTERED": "   Registered: {days} days ago",
   "REFERRAL_LIST_ITEM_TOPUPS": "   {emoji} Top-ups: {count}",
-  "REFERRAL_LIST_NEXT_PAGE": "Next ️",
+  "REFERRAL_LIST_NEXT_PAGE": "→ Next",
   "REFERRAL_LIST_PREV_PAGE": "← Back",
   "REFERRAL_PROGRAM_TITLE": "<b>Referral program</b>",
   "REFERRAL_RECENT_EARNINGS_HEADER": "<b>Latest rewards:</b>",

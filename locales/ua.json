@@ -1272,7 +1272,7 @@
  "REFERRAL_LIST_ITEM_HEADER": "{index}. {status} <b>{name}</b>",
  "REFERRAL_LIST_ITEM_REGISTERED": "  Реєстрація: {days} дн. тому",
   "REFERRAL_LIST_ITEM_TOPUPS": "  {emoji} Поповнень: {count}",
- "REFERRAL_LIST_NEXT_PAGE": "Вперед ️",
+ "REFERRAL_LIST_NEXT_PAGE": "→ Вперед",
  "REFERRAL_LIST_PREV_PAGE": "← Назад",
  "REFERRAL_PROGRAM_TITLE": "<b>Реферальна програма</b>",
  "REFERRAL_RECENT_EARNINGS_HEADER": "<b>Останні нарахування:</b>",

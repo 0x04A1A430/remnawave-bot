@@ -394,7 +394,7 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='← ',
+                    text='←',
                     callback_data=f'promo_offer_logs_page_{page - 1}',
                 )
             )
@@ -407,7 +407,7 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'promo_offer_logs_page_{page + 1}',
                 )
             )
@@ -571,7 +571,7 @@ async def _render_send_user_list(
         if current_page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='← ',
+                    text='←',
                     callback_data=f'promo_offer_send_user_{template_id}_page_{current_page - 1}',
                 )
             )
@@ -584,7 +584,7 @@ async def _render_send_user_list(
         if current_page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'promo_offer_send_user_{template_id}_page_{current_page + 1}',
                 )
             )
@@ -1029,14 +1029,14 @@ async def _render_squad_selection(
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='← ',
+                    text='←',
                     callback_data=f'promo_offer_squad_page_{template.id}_{page - 1}',
                 )
             )
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'promo_offer_squad_page_{template.id}_{page + 1}',
                 )
             )

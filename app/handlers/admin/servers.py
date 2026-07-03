@@ -198,12 +198,12 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
     if total_pages > 1:
         nav_row = []
         if page > 1:
-            nav_row.append(types.InlineKeyboardButton(text='', callback_data=f'admin_servers_list_page_{page - 1}'))
+            nav_row.append(types.InlineKeyboardButton(text='←', callback_data=f'admin_servers_list_page_{page - 1}'))
 
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='current_page'))
 
         if page < total_pages:
-            nav_row.append(types.InlineKeyboardButton(text='', callback_data=f'admin_servers_list_page_{page + 1}'))
+            nav_row.append(types.InlineKeyboardButton(text='→', callback_data=f'admin_servers_list_page_{page + 1}'))
 
         keyboard.append(nav_row)
 

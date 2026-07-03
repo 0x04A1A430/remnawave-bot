@@ -326,12 +326,12 @@ async def view_admin_ticket(
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(text='', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
+                types.InlineKeyboardButton(text='←', callback_data=f'admin_ticket_page_{ticket_id}_{page - 1}')
             )
         nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
         if page < total_pages:
             nav_row.append(
-                types.InlineKeyboardButton(text='', callback_data=f'admin_ticket_page_{ticket_id}_{page + 1}')
+                types.InlineKeyboardButton(text='→', callback_data=f'admin_ticket_page_{ticket_id}_{page + 1}')
             )
         try:
             keyboard.inline_keyboard.insert(0, nav_row)
