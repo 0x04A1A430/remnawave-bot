@@ -1407,7 +1407,6 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
                 tariff = await get_tariff_by_id(db, subscription.tariff_id)
                 if tariff:
                     is_daily_tariff = getattr(tariff, 'is_daily', False)
-                    tariff_info_block = f'\n Тариф: {html.escape(tariff.name)}'
             except Exception as e:
                 logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
