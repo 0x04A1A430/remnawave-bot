@@ -578,10 +578,6 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             'SUBSCRIPTION_CONNECT_LINK_SECTION',
             '<b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
-        message += '\n\n' + texts.t(
-            'SUBSCRIPTION_CONNECT_LINK_PROMPT',
-            'Скопируйте ссылку и добавьте в ваше VPN приложение',
-        )
 
     await callback.message.edit_text(
         message,

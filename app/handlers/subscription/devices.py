@@ -1,5 +1,6 @@
 import html as html_mod
 import math
+import re
 from datetime import UTC, datetime
 
 from aiogram import types
@@ -939,7 +940,8 @@ async def show_devices_page(
                 device_info = f'{emoji_tag} {platform} - {device_model}'
 
             if len(device_info) > 35:
-                device_info = device_info[:32] + '...'
+                plain = re.sub(r'<[^>]+>', '', device_info)
+                device_info = (plain[:32] + '...') if len(plain) > 32 else plain
 
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
