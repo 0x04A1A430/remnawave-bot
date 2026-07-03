@@ -55,6 +55,12 @@ from .common import (
 )
 from .countries import _get_available_countries
 
+_PLATFORM_EMOJI = {
+    'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+    'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+    'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+}
+
 
 async def _resolve_subscription(callback, db_user, db, state=None):
     """Resolve subscription — delegates to shared resolve_subscription_from_context."""
@@ -915,6 +921,13 @@ async def show_devices_page(
             'DEVICE_MANAGEMENT_CONNECTED_HEADER',
             '<b>Подключенные устройства:</b>\n',
         )
+
+        _PLATFORM_EMOJI = {
+            'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+            'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+        }
+
         for device in pagination.items:
             local_name = (device.get('local_name') or '').strip()
             if local_name:
@@ -922,7 +935,8 @@ async def show_devices_page(
             else:
                 platform = device.get('platform', 'Unknown')
                 device_model = device.get('deviceModel', 'Unknown')
-                device_info = f'{platform} - {device_model}'
+                emoji_tag = _PLATFORM_EMOJI.get(platform, '')
+                device_info = f'{emoji_tag} {platform} - {device_model}'
 
             if len(device_info) > 35:
                 device_info = device_info[:32] + '...'
@@ -930,7 +944,7 @@ async def show_devices_page(
             devices_text += texts.t(
                 'DEVICE_MANAGEMENT_LIST_ITEM',
                 '• {device}\n',
-            ).format(device=html_mod.escape(device_info))
+            ).format(device=device_info)
 
     devices_text += texts.t(
         'DEVICE_MANAGEMENT_ACTIONS',

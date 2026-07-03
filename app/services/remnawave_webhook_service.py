@@ -1711,13 +1711,46 @@ class RemnaWaveWebhookService:
     # Device event handlers (user_hwid_devices scope)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _extract_device_name(data: dict) -> str:
-        """Extract device name from webhook payload.
+    _PLATFORM_EMOJI: dict[str, str] = {
+        'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+        'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+    }
 
+    @classmethod
+    def _extract_device_info(cls, data: dict) -> tuple[str, str]:
+        """Extract device info from webhook payload.
+
+        Returns (platform_str, tag_str) where platform_str includes emoji.
         RemnaWave sends device info in data['hwidUserDevice'] nested object.
-        Builds a composite name: "tag (platform)" or just "platform" or hwid short.
         """
+        device_obj = data.get('hwidUserDevice')
+        if not isinstance(device_obj, dict):
+            raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
+            return '', html.escape(str(raw)) if raw else ''
+
+        tag = (device_obj.get('tag') or device_obj.get('deviceName') or device_obj.get('name') or '').strip()
+        platform = (device_obj.get('platform') or '').strip()
+        hwid = (device_obj.get('hwid') or '').strip()
+
+        emoji = cls._PLATFORM_EMOJI.get(platform, '')
+        platform_display = f'{emoji} {html.escape(platform)}' if emoji else html.escape(platform)
+
+        if not tag and hwid:
+            hwid_short = hwid[:8] if len(hwid) > 8 else hwid
+            tag = html.escape(hwid_short)
+        elif tag:
+            tag = html.escape(tag)
+
+        return platform_display, tag
+
+    @classmethod
+    def _extract_device_name(cls, data: dict) -> str:
+        """Legacy helper — returns combined platform+tag string."""
+        platform_display, tag = cls._extract_device_info(data)
+        if platform_display and tag:
+            return f'{platform_display} ({tag})'
+        return platform_display or tag
         device_obj = data.get('hwidUserDevice')
         if not isinstance(device_obj, dict):
             # Fallback: top-level fields
@@ -1746,13 +1779,17 @@ class RemnaWaveWebhookService:
     async def _handle_device_added(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
-        device_name = self._extract_device_name(data)
+        platform_display, tag = self._extract_device_info(data)
+        device_name = f'{platform_display} ({tag})' if platform_display and tag else platform_display or tag
         logger.info('Webhook: device added for user', user_id=user.id, device_name=device_name or '(empty)')
         await self._notify_user(
             user,
             'WEBHOOK_DEVICE_ADDED',
-            reply_markup=self._get_subscription_keyboard(user),
-            format_kwargs={'device': device_name or '—'},
+            reply_markup=self._get_device_added_keyboard(user),
+            format_kwargs={
+                'device': tag or '—',
+                'platform': platform_display or '—',
+            },
             subscription=subscription,
         )
 
