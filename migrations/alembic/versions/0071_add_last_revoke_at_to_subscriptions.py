@@ -18,7 +18,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('subscriptions', sa.Column('last_revoke_at', sa.DateTime(timezone=True), nullable=True))
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('subscriptions')}
+    if 'last_revoke_at' not in existing_cols:
+        op.add_column('subscriptions', sa.Column('last_revoke_at', sa.DateTime(timezone=True), nullable=True))
 
 
 def downgrade() -> None:

@@ -23,11 +23,15 @@ def _generate_short_id() -> str:
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('subscriptions')}
+
     # 1. Add column as nullable first
-    op.add_column('subscriptions', sa.Column('remnawave_short_id', sa.String(16), nullable=True))
+    if 'remnawave_short_id' not in existing_cols:
+        op.add_column('subscriptions', sa.Column('remnawave_short_id', sa.String(16), nullable=True))
 
     # 2. Backfill existing rows with unique short IDs
-    conn = op.get_bind()
     rows = conn.execute(sa.text('SELECT id FROM subscriptions WHERE remnawave_short_id IS NULL')).fetchall()
     used_ids: set[str] = set()
     for (row_id,) in rows:
@@ -42,7 +46,9 @@ def upgrade() -> None:
 
     # 3. Set NOT NULL + UNIQUE
     op.alter_column('subscriptions', 'remnawave_short_id', nullable=False, server_default='')
-    op.create_unique_constraint('uq_subscriptions_remnawave_short_id', 'subscriptions', ['remnawave_short_id'])
+    existing_unique = {u['name'] for u in inspector.get_unique_constraints('subscriptions')}
+    if 'uq_subscriptions_remnawave_short_id' not in existing_unique:
+        op.create_unique_constraint('uq_subscriptions_remnawave_short_id', 'subscriptions', ['remnawave_short_id'])
 
 
 def downgrade() -> None:

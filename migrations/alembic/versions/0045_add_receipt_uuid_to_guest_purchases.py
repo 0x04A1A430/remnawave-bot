@@ -24,9 +24,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('guest_purchases', sa.Column('receipt_uuid', sa.String(255), nullable=True))
-    op.add_column('guest_purchases', sa.Column('receipt_created_at', sa.DateTime(timezone=True), nullable=True))
-    op.create_index('ix_guest_purchases_receipt_uuid', 'guest_purchases', ['receipt_uuid'])
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('guest_purchases')}
+    if 'receipt_uuid' not in existing_cols:
+        op.add_column('guest_purchases', sa.Column('receipt_uuid', sa.String(255), nullable=True))
+    if 'receipt_created_at' not in existing_cols:
+        op.add_column('guest_purchases', sa.Column('receipt_created_at', sa.DateTime(timezone=True), nullable=True))
+    existing_indexes = {idx['name'] for idx in inspector.get_indexes('guest_purchases')}
+    if 'ix_guest_purchases_receipt_uuid' not in existing_indexes:
+        op.create_index('ix_guest_purchases_receipt_uuid', 'guest_purchases', ['receipt_uuid'])
 
 
 def downgrade() -> None:

@@ -19,6 +19,9 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    if conn.execute(sa.text("SELECT to_regclass('public.news_articles')")).scalar():
+        return
     op.create_table(
         'news_articles',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),

@@ -18,10 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'users',
-        sa.Column('pending_campaign_slug', sa.String(64), nullable=True),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('users')}
+    if 'pending_campaign_slug' not in existing_cols:
+        op.add_column(
+            'users',
+            sa.Column('pending_campaign_slug', sa.String(64), nullable=True),
+        )
 
 
 def downgrade() -> None:

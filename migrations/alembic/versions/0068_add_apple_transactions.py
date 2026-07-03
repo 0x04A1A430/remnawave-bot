@@ -18,6 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    if conn.execute(sa.text("SELECT to_regclass('public.apple_transactions')")).scalar():
+        return
     op.create_table(
         'apple_transactions',
         sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),

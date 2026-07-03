@@ -18,10 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'info_pages',
-        sa.Column('page_type', sa.String(20), nullable=False, server_default='page'),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('info_pages')}
+    if 'page_type' not in existing_cols:
+        op.add_column(
+            'info_pages',
+            sa.Column('page_type', sa.String(20), nullable=False, server_default='page'),
+        )
 
 
 def downgrade() -> None:

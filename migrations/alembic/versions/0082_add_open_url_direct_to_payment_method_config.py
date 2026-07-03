@@ -31,15 +31,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'payment_method_configs',
-        sa.Column(
-            'open_url_direct',
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-        ),
-    )
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_cols = {c['name'] for c in inspector.get_columns('payment_method_configs')}
+    if 'open_url_direct' not in existing_cols:
+        op.add_column(
+            'payment_method_configs',
+            sa.Column(
+                'open_url_direct',
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            ),
+        )
 
 
 def downgrade() -> None:
