@@ -1483,6 +1483,7 @@
     "SUBSCRIPTION_LINK_STEP3": "3️⃣ لینک را وارد کنید",
     "SUBSCRIPTION_LINK_STEP4": "4️⃣ اتصال برقرار شد!",
     "SUBSCRIPTION_LINK_UNAVAILABLE": "️ لینک در دسترس نیست",
+    "SUBSCRIPTION_COPY_LINK_ALERT": "لینک اشتراک شما:\n{link}",
     "SUBSCRIPTION_LINK_USAGE_TITLE": "<b>نحوه استفاده:</b>",
     "SUBSCRIPTION_NONE": "اشتراکی ندارید",
     "SUBSCRIPTION_NOT_FOUND": "اشتراک یافت نشد",

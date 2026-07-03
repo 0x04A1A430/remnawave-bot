@@ -46,6 +46,7 @@ def make_button(
     web_app: Any = None,
     style: str | None = None,
     icon_custom_emoji_id: str | None = None,
+    copy_text: str | None = None,
 ) -> InlineKeyboardButton:
     """Create an InlineKeyboardButton with automatic custom emoji extraction.
 
@@ -54,6 +55,8 @@ def make_button(
 
     If ``icon_custom_emoji_id`` is passed explicitly, it takes precedence
     over any tag found in the text.
+
+    ``copy_text`` is the text to copy to clipboard when the button is tapped.
     """
     parsed = parse_button_label(text)
     kwargs: dict[str, Any] = {'text': parsed.text}
@@ -66,6 +69,8 @@ def make_button(
         kwargs['web_app'] = web_app
     if style is not None:
         kwargs['style'] = style
+    if copy_text is not None:
+        kwargs['copy_text'] = {'text': copy_text}
 
     final_emoji_id = icon_custom_emoji_id or parsed.icon_custom_emoji_id
     if final_emoji_id:

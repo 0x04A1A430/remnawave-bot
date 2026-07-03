@@ -1462,6 +1462,7 @@
   "SUBSCRIPTION_LINK_STEP3": "3. Find the 'Add subscription' or 'Import' option",
   "SUBSCRIPTION_LINK_STEP4": "4. Paste the copied link",
   "SUBSCRIPTION_LINK_UNAVAILABLE": "Subscription link is unavailable",
+  "SUBSCRIPTION_COPY_LINK_ALERT": "Your subscription link:\n{link}",
   "SUBSCRIPTION_LINK_USAGE_TITLE": "<b>How to use:</b>",
   "SUBSCRIPTION_NONE": "No active subscription",
   "SUBSCRIPTION_NOT_FOUND": "Subscription not found",

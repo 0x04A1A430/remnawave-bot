@@ -1198,7 +1198,7 @@ def get_subscription_keyboard(
             [
                 make_button(
                     text=texts.t('COPY_LINK_BUTTON', 'Скопировать ссылку'),
-                    callback_data=f'open_subscription_link{_sub_suffix}',
+                    copy_text=subscription_link,
                     style='primary',
                 )
             ]
