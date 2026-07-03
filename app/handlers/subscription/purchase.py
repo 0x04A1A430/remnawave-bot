@@ -55,6 +55,7 @@ from app.services.trial_activation_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
+from app.utils.device_display import format_device_label
 
 
 logger = structlog.get_logger(__name__)
@@ -500,7 +501,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         for device in devices_list[:5]:
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
-            device_info = f'{platform} - {device_model}'
+            device_info = format_device_label(platform, device_model)
 
             if len(device_info) > 35:
                 device_info = device_info[:32] + '...'

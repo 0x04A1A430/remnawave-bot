@@ -37,6 +37,7 @@ from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
+from app.utils.device_display import format_device_label
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
     apply_percentage_discount,
@@ -930,7 +931,7 @@ async def show_devices_page(
                 platform = device.get('platform', 'Unknown')
                 device_model = device.get('deviceModel', 'Unknown')
                 emoji_tag = _PLATFORM_EMOJI.get(platform, '')
-                device_info = f'{html_mod.escape(platform)} - {html_mod.escape(device_model)}'
+                device_info = html_mod.escape(format_device_label(platform, device_model))
 
             if len(device_info) > 35:
                 device_info = device_info[:32] + '...'
@@ -948,7 +949,7 @@ async def show_devices_page(
             pagination.items,
             pagination,
             db_user.language,
-            back_callback=f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings',
+            back_callback='back_to_menu',
         ),
     )
 
@@ -1263,7 +1264,7 @@ async def handle_single_device_reset(
 
                         platform = device.get('platform', 'Unknown')
                         device_model = device.get('deviceModel', 'Unknown')
-                        device_info = f'{platform} - {device_model}'
+                        device_info = format_device_label(platform, device_model)
 
                         await callback.answer(
                             texts.t(
