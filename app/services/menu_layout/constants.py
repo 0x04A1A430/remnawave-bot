@@ -87,13 +87,13 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         'connect': {
             'type': 'builtin',
             'builtin_id': 'connect',
-            'text': {'ru': 'Подключиться', 'en': 'Connect'},
+            'text': {'ru': '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться', 'en': 'Connect'},
             'action': 'subscription_connect',
             'enabled': True,
             'visibility': 'subscribers',
             'conditions': {'has_active_subscription': True, 'subscription_is_active': True},
             'dynamic_text': False,
-            'open_mode': 'callback',  # "callback" или "direct"
+            'open_mode': 'direct',  # "callback" или "direct" — при direct открывает URL из подписки
             'webapp_url': None,  # URL для Mini App при open_mode="direct"
         },
         'happ_download': {
