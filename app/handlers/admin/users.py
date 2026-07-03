@@ -112,25 +112,23 @@ USER_FILTER_CONFIGS: dict[UserFilterType, UserFilterConfig] = {
 def _get_user_status_emoji(user: User) -> str:
     """Возвращает символ статуса пользователя."""
     if user.status == UserStatus.ACTIVE.value:
-        return '🟢'
+        return ''
     if user.status == UserStatus.BLOCKED.value:
-        return '🔴'
-    return '️⚫'
+        return ''
+    return '\ufe0f'
 
 
 def _get_subscription_emoji(user: User) -> str:
     """Возвращает символ подписки пользователя."""
     subscriptions = getattr(user, 'subscriptions', None) or []
     if not subscriptions:
-        return '🔴'
-    # Check if any subscription is active
+        return ''
     active = [s for s in subscriptions if s.is_active]
     if not active:
-        return '🔻'
-    # Check if any is trial
+        return ''
     if any(s.is_trial for s in active):
-        return '🔹'
-    return '🔺'
+        return ''
+    return ''
 
 
 def _build_user_button_text(
@@ -321,24 +319,24 @@ async def show_users_list(
 
     for user in users_data['users']:
         if user.status == UserStatus.ACTIVE.value:
-            status_emoji = '🟢'
+            status_emoji = ''
         elif user.status == UserStatus.BLOCKED.value:
-            status_emoji = '🔴'
+            status_emoji = '×'
         else:
-            status_emoji = '️⚫'
+            status_emoji = '️'
 
-        subscription_emoji = '🔴'
+        subscription_emoji = ''
         subs = getattr(user, 'subscriptions', None) or []
         subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
         if subscription:
             if subscription.is_trial:
-                subscription_emoji = '🔹'
+                subscription_emoji = ''
             elif subscription.is_active:
-                subscription_emoji = '🔺'
+                subscription_emoji = '$'
             else:
-                subscription_emoji = '🔻'
+                subscription_emoji = ''
         else:
-            subscription_emoji = '🔴'
+            subscription_emoji = ''
 
         button_text = f'{status_emoji} {subscription_emoji} {user.full_name}'
 
@@ -441,18 +439,18 @@ async def show_users_ready_to_renew(
     current_time = datetime.now(UTC)
 
     for user in users_data['users']:
-        subscription = user.subscription  # Uses primary subscription (multi-tariff compatible via property)
-        status_emoji = '🟢' if user.status == UserStatus.ACTIVE.value else '🔴'
-        subscription_emoji = '🔴'
+        subscription = user.subscription
+        status_emoji = '' if user.status == UserStatus.ACTIVE.value else '×'
+        subscription_emoji = ''
         expired_days = '?'
 
         if subscription:
             if subscription.is_trial:
-                subscription_emoji = '🔹'
+                subscription_emoji = ''
             elif subscription.is_active:
-                subscription_emoji = '🔺'
+                subscription_emoji = '$'
             else:
-                subscription_emoji = '🔻'
+                subscription_emoji = ''
 
             if subscription.end_date:
                 delta = current_time - subscription.end_date
@@ -568,17 +566,17 @@ async def show_potential_customers(
     keyboard = []
 
     for user in users_data['users']:
-        subscription = user.subscription  # Uses primary subscription (multi-tariff compatible via property)
-        status_emoji = '🟢' if user.status == UserStatus.ACTIVE.value else '🔴'
-        subscription_emoji = '🔴'
+        subscription = user.subscription
+        status_emoji = '' if user.status == UserStatus.ACTIVE.value else '×'
+        subscription_emoji = ''
 
         if subscription:
             if subscription.is_trial:
-                subscription_emoji = '🔹'
+                subscription_emoji = ''
             elif subscription.is_active:
-                subscription_emoji = '🔺'
+                subscription_emoji = '$'
             else:
-                subscription_emoji = '🔻'
+                subscription_emoji = ''
 
         button_text = (
             f'{status_emoji} {subscription_emoji} {user.full_name} |  {settings.format_price(user.balance_kopeks)}'
@@ -1187,24 +1185,24 @@ async def process_user_search(message: types.Message, db_user: User, state: FSMC
 
     for user in search_results['users']:
         if user.status == UserStatus.ACTIVE.value:
-            status_emoji = '🟢'
+            status_emoji = ''
         elif user.status == UserStatus.BLOCKED.value:
-            status_emoji = '🔴'
+            status_emoji = '×'
         else:
-            status_emoji = '️⚫'
+            status_emoji = '️'
 
-        subscription_emoji = '🔴'
+        subscription_emoji = ''
         subs = getattr(user, 'subscriptions', None) or []
         subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
         if subscription:
             if subscription.is_trial:
-                subscription_emoji = '🔹'
+                subscription_emoji = ''
             elif subscription.is_active:
-                subscription_emoji = '🔺'
+                subscription_emoji = '$'
             else:
-                subscription_emoji = '🔻'
+                subscription_emoji = ''
         else:
-            subscription_emoji = '🔴'
+            subscription_emoji = ''
 
         button_text = f'{status_emoji} {subscription_emoji} {user.full_name}'
 
