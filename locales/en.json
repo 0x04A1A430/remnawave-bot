@@ -1443,7 +1443,7 @@
   "SUBSCRIPTION_EXPIRED_SECOND_WAVE": "<b>{percent}% discount on renewal{tariff_label}</b>\n\nActivate the offer to get an additional discount. It stacks with your promo group and is valid until {expires_at}.",
   "SUBSCRIPTION_EXPIRED_THIRD_WAVE": "<b>Personal {percent}% discount{tariff_label}</b>\n\nIt's been {trigger_days} days without a subscription. Come back and activate the extra discount — it stacks with your promo group and is valid until {expires_at}.",
   "SUBSCRIPTION_EXPIRING": "\n️ <b>Subscription expiring!</b>\n\nYour subscription expires in {days} days.\n\nRenew it now so you don't lose access.\n",
-  "SUBSCRIPTION_EXPIRING_PAID": "\n️ <b>Subscription{tariff_label} expires in {days_text}!</b>\n\nYour paid subscription ends on {end_date}.\n\n<b>Autopay:</b> {autopay_status}\n\n{action_text}\n",
+  "SUBSCRIPTION_EXPIRING_PAID": "\n <b>Subscription{tariff_label} expires in {days_text}!</b>\n",
   "SUBSCRIPTION_EXTEND": "Extend",
   "SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK": "<blockquote expandable><code>{crypto_link}</code></blockquote>",
   "SUBSCRIPTION_HAPP_LINK_PROMPT": "Subscription link is ready. Tap the \"Connect\" button below to open it in Happ.",
