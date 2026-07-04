@@ -7,7 +7,11 @@ from datetime import UTC, datetime
 import structlog
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InaccessibleMessage, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InaccessibleMessage,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -17,7 +21,6 @@ from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
-
 
 logger = structlog.get_logger(__name__)
 
@@ -39,21 +42,21 @@ def _build_revoke_confirm_keyboard(
 ) -> InlineKeyboardMarkup:
     """Build confirmation keyboard for revoke action."""
     texts = get_texts(language)
-    back_callback = 'my_subscriptions' if multi_tariff else 'subscription_settings'
+    back_callback = "back_to_menu" if multi_tariff else "subscription_settings"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 make_button(
-                    text=texts.t('SUBSCRIPTION_REVOKE_CONFIRM_BTN', 'Подтвердить'),
-                    callback_data='subscription_revoke_confirm',
-                    style='success',
+                    text=texts.t("SUBSCRIPTION_REVOKE_CONFIRM_BTN", "Подтвердить"),
+                    callback_data="subscription_revoke_confirm",
+                    style="success",
                 ),
             ],
             [
                 make_button(
                     text=texts.BACK,
                     callback_data=back_callback,
-                    style='danger',
+                    style="danger",
                 ),
             ],
         ]
@@ -66,14 +69,14 @@ def _build_revoke_success_keyboard(
 ) -> InlineKeyboardMarkup:
     """Build success keyboard with back button only."""
     texts = get_texts(language)
-    back_callback = 'my_subscriptions' if multi_tariff else 'menu_subscription'
+    back_callback = "my_subscriptions" if multi_tariff else "menu_subscription"
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 make_button(
-                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "← В главное меню"),
                     callback_data=back_callback,
-                    style='danger',
+                    style="danger",
                 ),
             ],
         ]
@@ -101,7 +104,7 @@ async def start_subscription_revoke(
 
     if not settings.is_subscription_revoke_enabled():
         await callback.answer(
-            texts.t('SUBSCRIPTION_REVOKE_DISABLED', 'Перевыпуск подписки недоступен'),
+            texts.t("SUBSCRIPTION_REVOKE_DISABLED", "Перевыпуск подписки недоступен"),
             show_alert=True,
         )
         return
@@ -109,7 +112,7 @@ async def start_subscription_revoke(
     subscription = db_user.subscription
     if not subscription or not subscription.is_active:
         await callback.answer(
-            texts.t('SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена'),
+            texts.t("SUBSCRIPTION_NOT_FOUND", "Подписка не найдена"),
             show_alert=True,
         )
         return
@@ -121,8 +124,8 @@ async def start_subscription_revoke(
         seconds = remaining % 60
         await callback.answer(
             texts.t(
-                'SUBSCRIPTION_REVOKE_COOLDOWN',
-                'Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
+                "SUBSCRIPTION_REVOKE_COOLDOWN",
+                "Перевыпуск будет доступен через {minutes} мин. {seconds} сек.",
             ).format(minutes=minutes, seconds=seconds),
             show_alert=True,
         )
@@ -132,18 +135,20 @@ async def start_subscription_revoke(
 
     await callback.message.edit_text(
         texts.t(
-            'SUBSCRIPTION_REVOKE_WARNING',
+            "SUBSCRIPTION_REVOKE_WARNING",
             (
-                '<b>Перевыпуск подписки</b>\n\n'
-                '<blockquote>Это действие:\n'
-                '• Сгенерирует новую ссылку подключения\n'
-                '• Сбросит все подключённые устройства\n'
-                '• Старая ссылка перестанет работать</blockquote>\n\n'
-                'Продолжить?'
+                "<b>Перевыпуск подписки</b>\n\n"
+                "<blockquote>Это действие:\n"
+                "• Сгенерирует новую ссылку подключения\n"
+                "• Сбросит все подключённые устройства\n"
+                "• Старая ссылка перестанет работать</blockquote>\n\n"
+                "Продолжить?"
             ),
         ),
-        reply_markup=_build_revoke_confirm_keyboard(db_user.language, multi_tariff=False),
-        parse_mode='HTML',
+        reply_markup=_build_revoke_confirm_keyboard(
+            db_user.language, multi_tariff=False
+        ),
+        parse_mode="HTML",
     )
 
 
@@ -163,7 +168,7 @@ async def confirm_subscription_revoke(
 
     if not settings.is_subscription_revoke_enabled():
         await callback.answer(
-            texts.t('SUBSCRIPTION_REVOKE_DISABLED', 'Перевыпуск подписки недоступен'),
+            texts.t("SUBSCRIPTION_REVOKE_DISABLED", "Перевыпуск подписки недоступен"),
             show_alert=True,
         )
         return
@@ -174,13 +179,15 @@ async def confirm_subscription_revoke(
 
     if state:
         data = await state.get_data()
-        revoke_sub_id = data.get('revoke_sub_id')
+        revoke_sub_id = data.get("revoke_sub_id")
         if revoke_sub_id is not None:
             is_multi = True
-            subscription = await get_subscription_by_id_for_user(db, revoke_sub_id, db_user.id)
+            subscription = await get_subscription_by_id_for_user(
+                db, revoke_sub_id, db_user.id
+            )
             if not subscription:
                 await callback.answer(
-                    texts.t('SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена'),
+                    texts.t("SUBSCRIPTION_NOT_FOUND", "Подписка не найдена"),
                     show_alert=True,
                 )
                 return
@@ -190,7 +197,7 @@ async def confirm_subscription_revoke(
 
     if not subscription or not subscription.is_active:
         await callback.answer(
-            texts.t('SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена'),
+            texts.t("SUBSCRIPTION_NOT_FOUND", "Подписка не найдена"),
             show_alert=True,
         )
         return
@@ -202,8 +209,8 @@ async def confirm_subscription_revoke(
         seconds = remaining % 60
         await callback.answer(
             texts.t(
-                'SUBSCRIPTION_REVOKE_COOLDOWN',
-                'Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
+                "SUBSCRIPTION_REVOKE_COOLDOWN",
+                "Перевыпуск будет доступен через {minutes} мин. {seconds} сек.",
             ).format(minutes=minutes, seconds=seconds),
             show_alert=True,
         )
@@ -218,13 +225,22 @@ async def confirm_subscription_revoke(
 
     if not new_url:
         await callback.message.edit_text(
-            texts.t('SUBSCRIPTION_REVOKE_ERROR', 'Ошибка при перевыпуске подписки. Попробуйте позже.'),
+            texts.t(
+                "SUBSCRIPTION_REVOKE_ERROR",
+                "Ошибка при перевыпуске подписки. Попробуйте позже.",
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [make_button(text=texts.BACK, callback_data='menu_subscription', style='danger')],
+                    [
+                        make_button(
+                            text=texts.BACK,
+                            callback_data="menu_subscription",
+                            style="danger",
+                        )
+                    ],
                 ]
             ),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
         return
 
@@ -233,7 +249,7 @@ async def confirm_subscription_revoke(
     await db.commit()
 
     logger.info(
-        'Subscription revoked successfully',
+        "Subscription revoked successfully",
         user_id=db_user.id,
         subscription_id=subscription.id,
         is_multi=is_multi,
@@ -245,15 +261,17 @@ async def confirm_subscription_revoke(
 
     await callback.message.edit_text(
         texts.t(
-            'SUBSCRIPTION_REVOKE_SUCCESS',
+            "SUBSCRIPTION_REVOKE_SUCCESS",
             (
-                '<b>Подписка перевыпущена!</b>\n\n'
-                '<blockquote>Новая ссылка подключения готова. Старая ссылка больше не действительна.\n'
-                'Все устройства были отключены.</blockquote>'
+                "<b>Подписка перевыпущена!</b>\n\n"
+                "<blockquote>Новая ссылка подключения готова. Старая ссылка больше не действительна.\n"
+                "Все устройства были отключены.</blockquote>"
             ),
         ),
-        reply_markup=_build_revoke_success_keyboard(db_user.language, multi_tariff=is_multi),
-        parse_mode='HTML',
+        reply_markup=_build_revoke_success_keyboard(
+            db_user.language, multi_tariff=is_multi
+        ),
+        parse_mode="HTML",
     )
 
 
@@ -278,35 +296,35 @@ async def start_multi_revoke(
 
     if not settings.is_subscription_revoke_enabled():
         await callback.answer(
-            texts.t('SUBSCRIPTION_REVOKE_DISABLED', 'Перевыпуск подписки недоступен'),
+            texts.t("SUBSCRIPTION_REVOKE_DISABLED", "Перевыпуск подписки недоступен"),
             show_alert=True,
         )
         return
 
     # Extract sub_id from callback_data
-    parts = (callback.data or '').split(':')
+    parts = (callback.data or "").split(":")
     if len(parts) < 2:
-        await callback.answer('Неверный формат', show_alert=True)
+        await callback.answer("Неверный формат", show_alert=True)
         return
 
     try:
         sub_id = int(parts[1])
     except (ValueError, TypeError):
-        await callback.answer('Неверный формат', show_alert=True)
+        await callback.answer("Неверный формат", show_alert=True)
         return
 
     # Validate ownership (IDOR protection)
     subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена'),
+            texts.t("SUBSCRIPTION_NOT_FOUND", "Подписка не найдена"),
             show_alert=True,
         )
         return
 
     if not subscription.is_active:
         await callback.answer(
-            texts.t('SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена'),
+            texts.t("SUBSCRIPTION_NOT_FOUND", "Подписка не найдена"),
             show_alert=True,
         )
         return
@@ -318,8 +336,8 @@ async def start_multi_revoke(
         seconds = remaining % 60
         await callback.answer(
             texts.t(
-                'SUBSCRIPTION_REVOKE_COOLDOWN',
-                'Перевыпуск будет доступен через {minutes} мин. {seconds} сек.',
+                "SUBSCRIPTION_REVOKE_COOLDOWN",
+                "Перевыпуск будет доступен через {minutes} мин. {seconds} сек.",
             ).format(minutes=minutes, seconds=seconds),
             show_alert=True,
         )
@@ -332,16 +350,18 @@ async def start_multi_revoke(
 
     await callback.message.edit_text(
         texts.t(
-            'SUBSCRIPTION_REVOKE_WARNING',
+            "SUBSCRIPTION_REVOKE_WARNING",
             (
-                '<b>Перевыпуск подписки</b>\n\n'
-                '<blockquote>Это действие:\n'
-                '• Сгенерирует новую ссылку подключения\n'
-                '• Сбросит все подключённые устройства\n'
-                '• Старая ссылка перестанет работать</blockquote>\n\n'
-                'Продолжить?'
+                "<b>Перевыпуск подписки</b>\n\n"
+                "<blockquote>Это действие:\n"
+                "• Сгенерирует новую ссылку подключения\n"
+                "• Сбросит все подключённые устройства\n"
+                "• Старая ссылка перестанет работать</blockquote>\n\n"
+                "Продолжить?"
             ),
         ),
-        reply_markup=_build_revoke_confirm_keyboard(db_user.language, multi_tariff=True),
-        parse_mode='HTML',
+        reply_markup=_build_revoke_confirm_keyboard(
+            db_user.language, multi_tariff=True
+        ),
+        parse_mode="HTML",
     )
