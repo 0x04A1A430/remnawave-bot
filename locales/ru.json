@@ -1817,7 +1817,7 @@
   "NO_SUBSCRIPTION_ERROR": "<tg-emoji emoji-id='5985616167740379273'>⏰</tg-emoji> У вас нет активной подписки",
   "NOT_DAILY_TARIFF_ERROR": "Эта функция доступна только для суточных тарифов",
   "PAYMENT_FAILED": "Не удалось списать средства",
-  "SUBSCRIPTION_REVOKE_CONFIRM_BTN": "✔ Подтвердить",
+  "SUBSCRIPTION_REVOKE_CONFIRM_BTN": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> Подтвердить",
   "SUBSCRIPTION_REVOKE_CONNECT_BTN": "Подключиться",
   "SUBSCRIPTION_REVOKE_ERROR": "Ошибка при перевыпуске подписки. Попробуйте позже.",
   "BUY_TARIFF_BUTTON": "Купить тариф",
