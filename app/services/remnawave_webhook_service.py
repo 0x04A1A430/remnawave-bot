@@ -2117,7 +2117,7 @@ class RemnaWaveWebhookService:
         await self._notify_user(
             user,
             "WEBHOOK_DEVICE_ADDED",
-            reply_markup=self._get_device_added_keyboard(user),
+            reply_markup=self._get_subscription_keyboard(user),
             format_kwargs={
                 "device": tag or "—",
                 "platform": platform_display or "—",
