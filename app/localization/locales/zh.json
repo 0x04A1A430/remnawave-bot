@@ -1370,7 +1370,7 @@
 "SUBSCRIPTION_EXPIRED_SECOND_WAVE": "<b>续订{tariff_label}{percent}%折扣</b>\n\n激活优惠以获得额外折扣。此折扣可与您的促销组叠加，有效期至{expires_at}。",
 "SUBSCRIPTION_EXPIRED_THIRD_WAVE": "<b>个人{percent}%折扣{tariff_label}</b>\n\n您已{trigger_days}天没有订阅。回来激活额外折扣—此折扣可与促销组叠加，有效期至{expires_at}。",
 "SUBSCRIPTION_EXPIRING": "\n️<b>订阅即将过期！</b>\n\n您的订阅将在{days}天后过期。\n\n别忘记续订，以免失去服务器访问权限。\n",
-"SUBSCRIPTION_EXPIRING_PAID": "\n️<b>订阅{tariff_label}将在{days_text}后过期！</b>\n\n您的付费订阅将于{end_date}过期。\n\n<b>自动支付：</b>{autopay_status}\n\n{action_text}\n",
+"SUBSCRIPTION_EXPIRING_PAID": "\n<b>订阅{tariff_label}将在{days_text}后过期！</b>\n",
 "SUBSCRIPTION_EXTEND": "延长订阅",
 "SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK": "<blockquoteexpandable><code>{crypto_link}</code></blockquote>",
 "SUBSCRIPTION_HAPP_LINK_PROMPT": "订阅链接已创建。点击下方的“连接”按钮以在Happ中打开。",

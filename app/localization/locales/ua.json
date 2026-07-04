@@ -1374,7 +1374,7 @@
   "SUBSCRIPTION_EXPIRED_SECOND_WAVE": "<b>Знижка {percent}% на продовження{tariff_label}</b>\n\nАктивуйте пропозицію, щоб отримати додаткову знижку. Вона сумується з вашою промогрупою та діє до {expires_at}.",
   "SUBSCRIPTION_EXPIRED_THIRD_WAVE": "<b>Індивідуальна знижка {percent}%{tariff_label}</b>\n\nМинуло {trigger_days} днів без підписки. Поверніться та активуйте додаткову знижку — вона сумується з промогрупою та діє до {expires_at}.",
   "SUBSCRIPTION_EXPIRING": "\n️ <b>Підписка закінчується!</b>\n\nВаша підписка закінчується через {days} днів.\n\nНе забудьте продовжити підписку, щоб не втратити доступ до серверів.\n",
-  "SUBSCRIPTION_EXPIRING_PAID": "\n️ <b>Підписка{tariff_label} закінчується через {days_text}!</b>\n\nВаша платна підписка закінчується {end_date}.\n\n<b>Автоплатіж:</b> {autopay_status}\n\n{action_text}\n",
+  "SUBSCRIPTION_EXPIRING_PAID": "\n <b>Підписка{tariff_label} закінчується через {days_text}!</b>\n",
   "SUBSCRIPTION_EXTEND": "Продовжити підписку",
   "SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK": "<blockquote expandable><code>{crypto_link}</code></blockquote>",
   "SUBSCRIPTION_HAPP_LINK_PROMPT": "Посилання на підписку створено. Натисніть кнопку \"Підключитися\" нижче, щоб відкрити її в Happ.",
