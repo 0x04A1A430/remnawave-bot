@@ -54,6 +54,7 @@ from app.services.trial_activation_service import (
     rollback_trial_subscription_activation,
 )
 from app.services.user_cart_service import user_cart_service
+from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
 from app.utils.device_display import format_device_label
 
@@ -1115,11 +1116,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
@@ -1127,11 +1123,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -1143,7 +1134,6 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 trial_success_text = (
                     f'{texts.TRIAL_ACTIVATED}\n\n'
                     f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", " Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
 
             trial_success_text += payment_note
@@ -1154,8 +1144,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                            make_button(
+                                text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                                 web_app=types.WebAppInfo(url=subscription_link),
                             )
                         ],
@@ -1181,8 +1171,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                            make_button(
+                                text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
                         ],
@@ -1197,8 +1187,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             elif connect_mode == 'link':
                 rows = [
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                        make_button(
+                            text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                             url=subscription_link,
                         )
                     ]
@@ -1218,8 +1208,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             elif connect_mode == 'happ_cryptolink':
                 rows = [
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                        make_button(
+                            text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                             callback_data='open_subscription_link',
                         )
                     ]
@@ -1240,8 +1230,8 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                            make_button(
+                                text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                                 callback_data='subscription_connect',
                             )
                         ],
@@ -2714,8 +2704,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                            make_button(
+                                text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                                 web_app=types.WebAppInfo(url=subscription_link),
                             )
                         ],
@@ -2741,8 +2731,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                            make_button(
+                                text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                                 web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
                         ],
@@ -2756,7 +2746,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 )
             elif connect_mode == 'link':
                 rows = [
-                    [InlineKeyboardButton(text=texts.t('CONNECT_BUTTON', 'Подключиться'), url=subscription_link)]
+                    [make_button(text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'), url=subscription_link)]
                 ]
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
@@ -2772,8 +2762,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             elif connect_mode == 'happ_cryptolink':
                 rows = [
                     [
-                        InlineKeyboardButton(
-                            text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                        make_button(
+                            text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                             callback_data='open_subscription_link',
                         )
                     ]
@@ -2793,8 +2783,8 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
-                            InlineKeyboardButton(
-                                text=texts.t('CONNECT_BUTTON', 'Подключиться'), callback_data='subscription_connect'
+                            make_button(
+                                text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'), callback_data='subscription_connect'
                             )
                         ],
                         [
@@ -3432,11 +3422,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                         'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
-                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
@@ -3444,11 +3429,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                     + texts.t(
                         'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
-                    )
-                    + '\n\n'
-                    + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
@@ -3460,7 +3440,6 @@ async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: 
                 trial_success_text = (
                     f'{texts.TRIAL_ACTIVATED}\n\n'
                     f'{subscription_import_link}\n\n'
-                    f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", " Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
 
             trial_success_text += payment_note
@@ -3529,8 +3508,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                    make_button(
+                        text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                         web_app=types.WebAppInfo(url=subscription_link),
                     )
                 ],
@@ -3549,8 +3528,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
-                        text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                    make_button(
+                        text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                     )
                 ],
@@ -3565,8 +3544,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
     if connect_mode == 'link':
         rows = [
             [
-                InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                make_button(
+                    text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                     url=subscription_link,
                 )
             ]
@@ -3586,8 +3565,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
     if connect_mode == 'happ_cryptolink':
         rows = [
             [
-                InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                make_button(
+                    text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                     callback_data='open_subscription_link',
                 )
             ]
@@ -3607,8 +3586,8 @@ def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: s
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('CONNECT_BUTTON', 'Подключиться'),
+                make_button(
+                    text=texts.t('CONNECT_BUTTON', '<tg-emoji emoji-id=\'5879585266426973039\'>🌐</tg-emoji> Подключиться'),
                     callback_data='subscription_connect',
                 )
             ],

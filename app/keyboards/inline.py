@@ -1362,7 +1362,7 @@ def get_trial_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 make_button(
-                    text=texts.t('TRIAL_ACTIVATE_BUTTON', 'Активировать'), callback_data='trial_activate'
+                    text=texts.t('TRIAL_ACTIVATE_BUTTON', 'Активировать'), callback_data='trial_activate', style='success'
                 ),
                 make_button(text=texts.BACK, style='danger', callback_data='back_to_menu'),
             ]
