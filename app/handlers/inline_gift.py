@@ -182,7 +182,17 @@ def _check_recipient(
         if raw.startswith("u:"):
             return username.lower() == raw[2:].lower()
         return True
-    return telegram_id == gift.recipient_telegram_id
+    result = telegram_id == gift.recipient_telegram_id
+    if not result:
+        logger.warning(
+            "RECIPIENT MISMATCH",
+            gift_code=gift.gift_code,
+            recipient_telegram_id=gift.recipient_telegram_id,
+            caller_telegram_id=telegram_id,
+            caller_username=username,
+            inline_message_id=gift.inline_message_id,
+        )
+    return result
 
 
 async def handle_gift_deeplink(
@@ -425,9 +435,10 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
             if gift_type == "temp_traffic":
                 from app.database.crud.subscription import (
-                    add_subscription_traffic,
+                    _lock_subscription_row,
                     get_subscription_by_user_id,
                 )
+                from app.database.models import TrafficPurchase
 
                 gb = gift.traffic_limit_gb or 0
                 existing_sub = await get_subscription_by_user_id(db, user.id)
@@ -441,7 +452,20 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     )
                     return
 
-                await add_subscription_traffic(db, existing_sub, gb)
+                await _lock_subscription_row(db, existing_sub)
+
+                new_expires_at = datetime.now(UTC) + timedelta(days=30)
+                new_purchase = TrafficPurchase(
+                    subscription_id=existing_sub.id,
+                    traffic_gb=gb,
+                    expires_at=new_expires_at,
+                )
+                db.add(new_purchase)
+
+                current_purchased = getattr(existing_sub, "purchased_traffic_gb", 0) or 0
+                existing_sub.purchased_traffic_gb = current_purchased + gb
+                existing_sub.updated_at = datetime.now(UTC)
+
                 gift.activated_count = activated + 1
                 gift.is_activated = True
                 gift.activated_at = datetime.now(UTC)
