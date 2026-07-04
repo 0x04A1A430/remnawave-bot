@@ -332,7 +332,7 @@ class Settings(BaseSettings):
 
     # Настройки перевыпуска подписки (revoke + regenerate link)
     SUBSCRIPTION_REVOKE_ENABLED: bool = True
-    SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS: int = 900  # 15 minutes
+    SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS: int = 43200  # 12 hours
 
     # Настройки простой покупки
     SIMPLE_SUBSCRIPTION_ENABLED: bool = False

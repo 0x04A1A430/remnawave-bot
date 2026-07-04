@@ -2978,6 +2978,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
         end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
         devices_used=devices_used,
         devices_limit=devices_limit_display,
+        time_left=subscription.time_until_revoke_available(settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS),
         revoke_cooldown=subscription.time_until_revoke_available(settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS),
     )
 
