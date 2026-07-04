@@ -733,10 +733,18 @@ async def handle_noop_callback(callback: types.CallbackQuery) -> None:
     )
 
 
-async def show_pending_inline_gift(message: types.Message, gift_code: str) -> None:
+async def show_pending_inline_gift(
+    message: types.Message,
+    gift_code: str,
+    telegram_id: int | None = None,
+    username: str | None = None,
+) -> None:
     """Called after new user registration when they arrived via bs_ link."""
-    telegram_id = message.from_user.id
-    username = (message.from_user.username or "").lower()
+    if telegram_id is None:
+        telegram_id = message.from_user.id
+        username = (message.from_user.username or "").lower()
+    else:
+        username = (username or "").lower()
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(
