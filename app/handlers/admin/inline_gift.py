@@ -167,7 +167,8 @@ def _parse_query(query_text: str) -> ParsedQuery:
         )
 
     if flag == "-t":
-        gb = max(1, int(args[0])) if args and args[0].isdigit() else 0
+        gb = int(args[0]) if args and args[0].lstrip('-').isdigit() else 0
+        gb = max(-999, min(999, gb))
         return ParsedQuery(
             "temp_traffic", username, target_id, 0, None, None, None, 0, 0, gb
         )
