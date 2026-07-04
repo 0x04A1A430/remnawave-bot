@@ -23,11 +23,13 @@ from app.utils.subscription_utils import (
     get_happ_cryptolink_redirect_link,
 )
 
-_PLATFORM_EMOJI = {
-    "Windows": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
-    "iOS": "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
-    "Android": "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
-}
+    _PLATFORM_EMOJI = {
+        'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        'macOS': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        'Linux': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        'iOS': "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
+        'Android': "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
+    }
 
 logger = structlog.get_logger(__name__)
 
@@ -3816,6 +3818,8 @@ def get_devices_management_keyboard(
 
     _PLATFORM_EMOJI = {
         "Windows": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        "macOS": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+        "Linux": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
         "iOS": "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
         "Android": "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
     }

@@ -58,6 +58,8 @@ from .countries import _get_available_countries
 
 _PLATFORM_EMOJI = {
     "Windows": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+    "macOS": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+    "Linux": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
     "iOS": "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
     "Android": "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
 }
@@ -1056,6 +1058,8 @@ async def show_devices_page(
 
         _PLATFORM_EMOJI = {
             "Windows": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            "macOS": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
+            "Linux": "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
             "iOS": "<tg-emoji emoji-id='5818920837645867167'>🍏</tg-emoji>",
             "Android": "<tg-emoji emoji-id='5819078828017849357'>🤖</tg-emoji>",
         }
