@@ -15,6 +15,7 @@ from app.database.crud.subscription import get_subscription_by_id_for_user
 from app.database.models import Subscription, User
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
+from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
 
 
@@ -42,15 +43,17 @@ def _build_revoke_confirm_keyboard(
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
+                make_button(
                     text=texts.t('SUBSCRIPTION_REVOKE_CONFIRM_BTN', 'Подтвердить'),
                     callback_data='subscription_revoke_confirm',
+                    style='success',
                 ),
             ],
             [
-                InlineKeyboardButton(
+                make_button(
                     text=texts.BACK,
                     callback_data=back_callback,
+                    style='danger',
                 ),
             ],
         ]
@@ -61,21 +64,16 @@ def _build_revoke_success_keyboard(
     language: str,
     multi_tariff: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Build success keyboard with connect and back buttons."""
+    """Build success keyboard with back button only."""
     texts = get_texts(language)
     back_callback = 'my_subscriptions' if multi_tariff else 'menu_subscription'
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_REVOKE_CONNECT_BTN', 'Подключиться'),
-                    callback_data='subscription_connect',
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.BACK,
+                make_button(
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', '← В главное меню'),
                     callback_data=back_callback,
+                    style='danger',
                 ),
             ],
         ]
@@ -137,10 +135,10 @@ async def start_subscription_revoke(
             'SUBSCRIPTION_REVOKE_WARNING',
             (
                 '<b>Перевыпуск подписки</b>\n\n'
-                'Это действие:\n'
+                '<blockquote>Это действие:\n'
                 '• Сгенерирует новую ссылку подключения\n'
                 '• Сбросит все подключённые устройства\n'
-                '• Старая ссылка перестанет работать\n\n'
+                '• Старая ссылка перестанет работать</blockquote>\n\n'
                 'Продолжить?'
             ),
         ),
@@ -223,7 +221,7 @@ async def confirm_subscription_revoke(
             texts.t('SUBSCRIPTION_REVOKE_ERROR', 'Ошибка при перевыпуске подписки. Попробуйте позже.'),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
+                    [make_button(text=texts.BACK, callback_data='menu_subscription', style='danger')],
                 ]
             ),
             parse_mode='HTML',
@@ -250,9 +248,8 @@ async def confirm_subscription_revoke(
             'SUBSCRIPTION_REVOKE_SUCCESS',
             (
                 '<b>Подписка перевыпущена!</b>\n\n'
-                'Новая ссылка подключения готова. '
-                'Старая ссылка больше не действительна.\n\n'
-                'Все устройства были отключены.'
+                '<blockquote>Новая ссылка подключения готова. Старая ссылка больше не действительна.\n'
+                'Все устройства были отключены.</blockquote>'
             ),
         ),
         reply_markup=_build_revoke_success_keyboard(db_user.language, multi_tariff=is_multi),
@@ -338,10 +335,10 @@ async def start_multi_revoke(
             'SUBSCRIPTION_REVOKE_WARNING',
             (
                 '<b>Перевыпуск подписки</b>\n\n'
-                'Это действие:\n'
+                '<blockquote>Это действие:\n'
                 '• Сгенерирует новую ссылку подключения\n'
                 '• Сбросит все подключённые устройства\n'
-                '• Старая ссылка перестанет работать\n\n'
+                '• Старая ссылка перестанет работать</blockquote>\n\n'
                 'Продолжить?'
             ),
         ),
