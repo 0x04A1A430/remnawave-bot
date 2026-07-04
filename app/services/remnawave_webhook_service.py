@@ -1082,9 +1082,11 @@ class RemnaWaveWebhookService:
                 return
 
         # Append "Close" button to every webhook notification keyboard
+        from app.utils.button_emoji import make_button
+
         close_text = texts.get("WEBHOOK_CLOSE_BUTTON", "Закрыть")
         close_row = [
-            InlineKeyboardButton(text=close_text, callback_data="webhook:close")
+            make_button(text=close_text, callback_data="webhook:close", style='danger')
         ]
         if reply_markup:
             reply_markup = InlineKeyboardMarkup(
