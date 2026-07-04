@@ -714,7 +714,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 discount_percent=parsed.discount_percent,
-                inline_message_id=inline_message_id or intended_sentinel,
+                inline_message_id=intended_sentinel or inline_message_id,
             )
         elif parsed.gift_type == "balance":
             if not parsed.balance_rub:
@@ -728,7 +728,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 balance_amount_kopeks=parsed.balance_rub * 100,
-                inline_message_id=inline_message_id or intended_sentinel,
+                inline_message_id=intended_sentinel or inline_message_id,
             )
         elif parsed.gift_type == "temp_traffic":
             if not parsed.temp_traffic_gb:
@@ -741,7 +741,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 days=0,
                 traffic_limit_gb=parsed.temp_traffic_gb,  # используем это поле для хранения кол-ва ГБ
                 device_limit=1,
-                inline_message_id=inline_message_id or intended_sentinel,
+                inline_message_id=intended_sentinel or inline_message_id,
             )
         else:
             has_params = (
@@ -759,7 +759,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 days=parsed.days,
                 traffic_limit_gb=parsed.traffic_gb,
                 device_limit=parsed.devices,
-                inline_message_id=inline_message_id or intended_sentinel,
+                inline_message_id=intended_sentinel or inline_message_id,
             )
 
         db.add(gift)
