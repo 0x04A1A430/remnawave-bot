@@ -342,14 +342,14 @@ class MonitoringService:
             pass
 
     async def _run_safe(self, db: AsyncSession, name: str, coro):
-        """Wrap a monitoring phase in a savepoint to isolate SQL errors.
+        """Execute a monitoring phase with error isolation.
 
-        If the phase raises, the savepoint rolls back only that phase's changes
-        and the outer transaction stays healthy for subsequent phases.
+        Each phase is responsible for its own transaction management
+        via CRUD functions. No savepoint is used since many CRUD
+        functions call commit() internally.
         """
         try:
-            async with db.begin_nested():
-                return await coro
+            return await coro
         except Exception:
             logger.error('Monitoring phase failed', phase=name, exc_info=True)
             return None
@@ -716,15 +716,6 @@ class MonitoringService:
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
                 sent_count = 0
 
-                # Batch-запрос: собираем user_id с autopay и проверяем наличие карт одним запросом
-                users_with_cards: set[int] = set()
-                if settings.ENABLE_AUTOPAY and settings.YOOKASSA_RECURRENT_ENABLED:
-                    autopay_user_ids = [s.user_id for s in expiring_subscriptions if s.autopay_enabled]
-                    if autopay_user_ids:
-                        from app.database.crud.saved_payment_method import get_user_ids_with_active_payment_methods
-
-                        users_with_cards = await get_user_ids_with_active_payment_methods(db, autopay_user_ids)
-
                 from app.utils.notification_prefs import (
                     get_subscription_expiry_days,
                     is_subscription_expiry_enabled,
@@ -758,8 +749,6 @@ class MonitoringService:
                             days=days,
                         )
                         continue
-
-                    has_saved_card = subscription.autopay_enabled and user.id in users_with_cards
 
                     should_send = True
                     for other_days in warning_days:
@@ -798,7 +787,7 @@ class MonitoringService:
 
                     if self.bot:
                         success = await self._send_subscription_expiring_notification(
-                            user, subscription, days, has_saved_card=has_saved_card
+                            user, subscription, days
                         )
                         if success:
                             await record_notification(db, user.id, subscription.id, 'expiring', days)
@@ -1803,7 +1792,7 @@ class MonitoringService:
             return False
 
     async def _send_subscription_expiring_notification(
-        self, user: User, subscription: Subscription, days: int, *, has_saved_card: bool = False
+        self, user: User, subscription: Subscription, days: int
     ) -> bool:
         try:
             from app.utils.formatters import format_days_declension
@@ -1811,66 +1800,20 @@ class MonitoringService:
             texts = get_texts(user.language)
             days_text = format_days_declension(days, user.language)
 
-            if subscription.autopay_enabled and has_saved_card:
-                autopay_status = texts.t(
-                    'AUTOPAY_STATUS_CARD_ACTIVE',
-                    'Включен — будет автоматическое списание с карты',
-                )
-                action_text = texts.t(
-                    'AUTOPAY_ACTION_CHECK_BALANCE',
-                    'Убедитесь, что на балансе достаточно средств: {balance}',
-                ).format(balance=texts.format_price(user.balance_kopeks))
-            elif subscription.autopay_enabled:
-                autopay_status = texts.t(
-                    'AUTOPAY_STATUS_NO_CARD',
-                    'Включен — подписка продлится автоматически',
-                )
-                action_text = texts.t(
-                    'AUTOPAY_ACTION_CHECK_BALANCE',
-                    'Убедитесь, что на балансе достаточно средств: {balance}',
-                ).format(balance=texts.format_price(user.balance_kopeks))
-            else:
-                autopay_status = texts.t(
-                    'AUTOPAY_STATUS_OFF',
-                    'Отключен — не забудьте продлить вручную!',
-                )
-                if settings.ENABLE_AUTOPAY:
-                    action_text = texts.t(
-                        'AUTOPAY_ACTION_ENABLE',
-                        'Включите автоплатеж или продлите подписку вручную',
-                    )
-                else:
-                    action_text = texts.t(
-                        'AUTOPAY_ACTION_RENEW',
-                        'Продлите подписку вручную',
-                    )
-
-            end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
-            # Add tariff name for multi-subscription clarity
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.t(
                 'SUBSCRIPTION_EXPIRING_PAID',
-                '\n <b>Подписка{tariff_label} истекает через {days_text}!</b>\n\n'
-                'Ваша платная подписка истекает {end_date}.\n\n'
-                '<b>Автоплатеж:</b> {autopay_status}\n\n'
-                '{action_text}\n',
+                '\n <b>Подписка{tariff_label} истекает через {days_text}!</b>\n\n',
             ).format(
                 days_text=days_text,
-                end_date=end_date,
-                autopay_status=autopay_status,
-                action_text=action_text,
                 tariff_label=tariff_label,
             )
 
             from aiogram.types import InlineKeyboardMarkup
 
             extend_callback = f'se:{subscription.id}' if settings.is_multi_tariff_enabled() else 'subscription_extend'
-            sub_btn_text = texts.t(
-                'BTN_MY_SUBSCRIPTIONS' if settings.is_multi_tariff_enabled() else 'BTN_MY_SUBSCRIPTION',
-                'Мои подписки' if settings.is_multi_tariff_enabled() else 'Моя подписка',
-            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -1878,15 +1821,9 @@ class MonitoringService:
                             text=texts.t('BTN_RENEW_SUBSCRIPTION', 'Продлить подписку'),
                             callback_data=extend_callback,
                             cabinet_path='/subscription',
+                            style='success',
                         )
                     ],
-                    [
-                        build_miniapp_or_callback_button(
-                            text=texts.t('BTN_TOPUP_BALANCE', 'Пополнить баланс'),
-                            callback_data='balance_topup',
-                        )
-                    ],
-                    [build_miniapp_or_callback_button(text=sub_btn_text, callback_data='menu_subscription')],
                 ]
             )
 
