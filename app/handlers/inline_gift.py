@@ -60,10 +60,34 @@ def _fmt_traffic(gb: int, texts) -> str:
 
 
 def _build_info_text(
-    gift_days, gift_traffic_gb, gift_devices, texts, existing_sub=None
+    gift_days, gift_traffic_gb, gift_devices, texts, existing_sub=None,
+    gift_type: str = "subscription", balance_amount_kopeks: int = 0,
+    temp_traffic_gb: int = 0,
 ) -> str:
     """Build activation preview. NULL values = no change, not shown."""
     lines = []
+
+    if gift_type == "balance":
+        rub = balance_amount_kopeks // 100
+        body = texts.t("INLINE_GIFT_BALANCE_BODY", "+{rub} ₽ на баланс").format(rub=rub)
+        return (
+            f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+            f'<b>{texts.t("INLINE_GIFT_BALANCE_HEADER", "Пополнение баланса")}</b>\n\n'
+            f"<blockquote>{body}</blockquote>\n\n"
+            f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
+        )
+
+    if gift_type == "temp_traffic":
+        sign = "+" if temp_traffic_gb >= 0 else ""
+        body = texts.t(
+            "INLINE_GIFT_TEMP_TRAFFIC_BODY", "{sign}{gb} ГБ трафика (на 30 дней)"
+        ).format(sign=sign, gb=temp_traffic_gb)
+        return (
+            f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+            f'<b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
+            f"<blockquote>{body}</blockquote>\n\n"
+            f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
+        )
 
     if existing_sub is None:
         if gift_days is not None:
@@ -231,7 +255,10 @@ async def handle_gift_deeplink(
     )
 
     text_out = _build_info_text(
-        gift.days, gift.traffic_limit_gb, gift.device_limit, texts, existing_sub
+        gift.days, gift.traffic_limit_gb, gift.device_limit, texts, existing_sub,
+        gift_type=gift.gift_type or "subscription",
+        balance_amount_kopeks=gift.balance_amount_kopeks or 0,
+        temp_traffic_gb=gift.traffic_limit_gb if gift.gift_type == "temp_traffic" else 0,
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode="HTML")
     return True
@@ -349,7 +376,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 await _update_inline_button(
                     callback.bot,
                     inline_msg_id,
-                    texts.t("INLINE_GIFT_ACTIVATED_BUTTON", "✓ Активировано"),
+                    texts.t("INLINE_GIFT_ACTIVATED_BUTTON", '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано'),
                     0,
                     1,
                 )
@@ -372,7 +399,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 success_text = texts.t(
                     "INLINE_GIFT_BALANCE_SUCCESS",
-                    "✅ <b>Баланс пополнен!</b>\n\n<blockquote>+{rub} ₽ добавлено на ваш счёт</blockquote>",
+                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Баланс пополнен!</b>\n\n<blockquote>+{rub} ₽ добавлено на ваш счёт</blockquote>',
                 ).format(rub=rub)
                 back_kb = types.InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -390,7 +417,60 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 await _update_inline_button(
                     callback.bot,
                     inline_msg_id,
-                    texts.t("INLINE_GIFT_ACTIVATED_BUTTON", "✓ Активировано"),
+                    texts.t("INLINE_GIFT_ACTIVATED_BUTTON", '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано'),
+                    0,
+                    1,
+                )
+                return
+
+            if gift_type == "temp_traffic":
+                from app.database.crud.subscription import (
+                    add_subscription_traffic,
+                    get_subscription_by_user_id,
+                )
+
+                gb = gift.traffic_limit_gb or 0
+                existing_sub = await get_subscription_by_user_id(db, user.id)
+
+                if not existing_sub:
+                    await callback.message.edit_text(
+                        texts.t(
+                            "INLINE_GIFT_NO_SUBSCRIPTION",
+                            "У вас нет активной подписки для добавления трафика.",
+                        )
+                    )
+                    return
+
+                await add_subscription_traffic(db, existing_sub, gb)
+                gift.activated_count = activated + 1
+                gift.is_activated = True
+                gift.activated_at = datetime.now(UTC)
+                gift.activated_by_user_id = user.id
+                inline_msg_id = gift.inline_message_id
+                await db.commit()
+
+                sign = "+" if gb >= 0 else ""
+                success_text = texts.t(
+                    "INLINE_GIFT_TEMP_TRAFFIC_SUCCESS",
+                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Временный трафик активирован!</b>\n\n<blockquote>{sign}{gb} ГБ трафика (на 30 дней)</blockquote>',
+                ).format(sign=sign, gb=gb)
+                back_kb = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            make_button(
+                                text=texts.t("MAIN_MENU_BUTTON", "Главное меню"),
+                                callback_data="back_to_menu",
+                            )
+                        ]
+                    ]
+                )
+                await callback.message.edit_text(
+                    success_text, parse_mode="HTML", reply_markup=back_kb
+                )
+                await _update_inline_button(
+                    callback.bot,
+                    inline_msg_id,
+                    texts.t("INLINE_GIFT_ACTIVATED_BUTTON", '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано'),
                     0,
                     1,
                 )
@@ -526,12 +606,12 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
         if changes:
             success_text = texts.t(
                 "INLINE_GIFT_SUCCESS_CHANGES",
-                "✅ <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>",
+                '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
             ).format(changes=changes)
         else:
             success_text = texts.t(
                 "INLINE_GIFT_SUCCESS",
-                "✅ <b>Подарок активирован!</b>\n\nПодписка обновлена.",
+                '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Подарок активирован!</b>\n\nПодписка обновлена.',
             )
 
         back_kb = types.InlineKeyboardMarkup(
@@ -550,7 +630,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         fully_used = new_activated >= max_act
         button_text = (
-            texts.t("INLINE_GIFT_ACTIVATED_BUTTON", "✓ Активировано")
+            texts.t("INLINE_GIFT_ACTIVATED_BUTTON", '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано')
             if fully_used
             else texts.t(
                 "INLINE_GIFT_ACTIVATE_BUTTON_N", "Активировать (осталось: {n})"
@@ -697,7 +777,10 @@ async def show_pending_inline_gift(message: types.Message, gift_code: str) -> No
     )
 
     text_out = _build_info_text(
-        gift.days, gift.traffic_limit_gb, gift.device_limit, texts, existing_sub
+        gift.days, gift.traffic_limit_gb, gift.device_limit, texts, existing_sub,
+        gift_type=gift.gift_type or "subscription",
+        balance_amount_kopeks=gift.balance_amount_kopeks or 0,
+        temp_traffic_gb=gift.traffic_limit_gb if gift.gift_type == "temp_traffic" else 0,
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode="HTML")
 
