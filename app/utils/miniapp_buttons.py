@@ -1,9 +1,11 @@
 import re
+from typing import Any
 
 from aiogram import types
 from aiogram.types import InlineKeyboardButton
 
 from app.config import settings
+from app.utils.button_emoji import parse_button_label
 from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
 
 # Юникод-диапазоны для одиночного emoji в начале строки + модификаторы (skin tone,
@@ -206,6 +208,8 @@ def build_miniapp_or_callback_button(
     display subscription details and would load indefinitely.
     """
 
+    parsed = parse_button_label(text)
+
     if settings.is_cabinet_mode():
         path = cabinet_path or CALLBACK_TO_CABINET_PATH.get(callback_data)
         if path:
@@ -228,16 +232,17 @@ def build_miniapp_or_callback_button(
                         (settings.CABINET_BUTTON_STYLE or "").strip()
                     ) or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_data))
 
-                # Emoji chain: explicit param > per-section DB
+                # Emoji chain: explicit param > per-section DB > text tag
                 resolved_emoji = (
                     icon_custom_emoji_id
                     or section_cfg.get("icon_custom_emoji_id")
+                    or parsed.icon_custom_emoji_id
                     or None
                 )
 
                 # Если есть кастом emoji — стрипаем ведущий юникод-эмодзи из текста,
                 # иначе у юзера будут две иконки слева (custom + default).
-                final_text = strip_leading_emoji(text) if resolved_emoji else text
+                final_text = strip_leading_emoji(parsed.text) if resolved_emoji else parsed.text
 
                 return InlineKeyboardButton(
                     text=final_text,
@@ -246,7 +251,10 @@ def build_miniapp_or_callback_button(
                     icon_custom_emoji_id=resolved_emoji or None,
                 )
 
-    return InlineKeyboardButton(text=text, callback_data=callback_data)
+    kwargs: dict[str, Any] = {"text": parsed.text, "callback_data": callback_data}
+    if parsed.icon_custom_emoji_id:
+        kwargs["icon_custom_emoji_id"] = parsed.icon_custom_emoji_id
+    return InlineKeyboardButton(**kwargs)
 
 
 # Префикс startapp/маршрута для диплинка на конкретный тикет в админ-кабинете.

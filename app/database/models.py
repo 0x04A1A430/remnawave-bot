@@ -3960,10 +3960,6 @@ class InlineGiftSubscription(Base):
     # Multi-activation support (for "-r N" gifts: N separate activations, one shared code)
     max_activations = Column(Integer, nullable=False, default=1, server_default="1")
     activated_count = Column(Integer, nullable=False, default=0, server_default="0")
-    # Extra squad flag: add recipient to squad 050365af-1377-469c-b625-4e88d3e0e3ae
-    add_extra_squad = Column(
-        Boolean, nullable=False, default=False, server_default="false"
-    )
     # Inline message tracking for button update
     inline_message_id = Column(String(255), nullable=True)
     inline_chat_id = Column(BigInteger, nullable=True)
