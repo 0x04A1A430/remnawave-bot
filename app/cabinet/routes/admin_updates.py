@@ -12,10 +12,9 @@ from app.services.version_service import version_service
 
 from ..dependencies import require_permission
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/updates', tags=['Cabinet Admin Updates'])
+router = APIRouter(prefix="/admin/updates", tags=["Cabinet Admin Updates"])
 
 
 # ============ Schemas ============
@@ -43,7 +42,7 @@ class ReleasesResponse(BaseModel):
 
 # ============ Cabinet releases cache ============
 
-CABINET_REPO = 'BEDOLAGA-DEV/bedolaga-cabinet'
+CABINET_REPO = "BEDOLAGA-DEV/bedolaga-cabinet"
 _cabinet_cache: dict = {}
 _cabinet_last_check: datetime | None = None
 _CACHE_TTL = 3600
@@ -52,48 +51,56 @@ _CACHE_TTL = 3600
 async def _fetch_cabinet_releases(force: bool = False) -> list[dict]:
     global _cabinet_last_check
 
-    if not force and _cabinet_cache.get('releases') and _cabinet_last_check:
+    if not force and _cabinet_cache.get("releases") and _cabinet_last_check:
         if datetime.now(UTC) - _cabinet_last_check < timedelta(seconds=_CACHE_TTL):
-            return _cabinet_cache['releases']
+            return _cabinet_cache["releases"]
 
-    url = f'https://api.github.com/repos/{CABINET_REPO}/releases'
+    url = f"https://api.github.com/repos/{CABINET_REPO}/releases"
 
     try:
         timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as response:
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.get(url) as response,
+        ):
             if response.status == 200:
                 data = await response.json()
                 releases = []
                 for item in data[:20]:
                     releases.append(
                         {
-                            'tag_name': item['tag_name'],
-                            'name': item.get('name') or item['tag_name'],
-                            'body': item.get('body') or '',
-                            'published_at': item['published_at'],
-                            'prerelease': item.get('prerelease', False),
+                            "tag_name": item["tag_name"],
+                            "name": item.get("name") or item["tag_name"],
+                            "body": item.get("body") or "",
+                            "published_at": item["published_at"],
+                            "prerelease": item.get("prerelease", False),
                         }
                     )
-                _cabinet_cache['releases'] = releases
+                _cabinet_cache["releases"] = releases
                 _cabinet_last_check = datetime.now(UTC)
-                logger.info('Fetched cabinet releases from GitHub', releases_count=len(releases))
+                logger.info(
+                    "Fetched cabinet releases from GitHub", releases_count=len(releases)
+                )
                 return releases
-            logger.warning('GitHub API returned status for cabinet releases', response_status=response.status)
-            return _cabinet_cache.get('releases', [])
+            logger.warning(
+                "GitHub API returned status for cabinet releases",
+                response_status=response.status,
+            )
+            return _cabinet_cache.get("releases", [])
     except TimeoutError:
-        logger.warning('Timeout fetching cabinet releases from GitHub')
-        return _cabinet_cache.get('releases', [])
+        logger.warning("Timeout fetching cabinet releases from GitHub")
+        return _cabinet_cache.get("releases", [])
     except Exception as e:
-        logger.error('Error fetching cabinet releases', e=e)
-        return _cabinet_cache.get('releases', [])
+        logger.error("Error fetching cabinet releases", e=e)
+        return _cabinet_cache.get("releases", [])
 
 
 # ============ Routes ============
 
 
-@router.get('/releases', response_model=ReleasesResponse)
+@router.get("/releases", response_model=ReleasesResponse)
 async def get_releases(
-    current_user: User = Depends(require_permission('updates:read')),
+    current_user: User = Depends(require_permission("updates:read")),
 ) -> ReleasesResponse:
     """Get release information for bot and cabinet."""
     # Bot releases
@@ -115,7 +122,7 @@ async def get_releases(
         current_version=version_service.current_version,
         has_updates=has_updates,
         releases=bot_releases,
-        repo_url=f'https://github.com/{version_service.repo}',
+        repo_url=f"https://github.com/{version_service.repo}",
     )
 
     # Cabinet releases
@@ -123,17 +130,17 @@ async def get_releases(
     cabinet_releases = [ReleaseItem(**r) for r in cabinet_releases_raw[:10]]
 
     # Current version = latest non-prerelease tag
-    cabinet_current = ''
+    cabinet_current = ""
     for r in cabinet_releases_raw:
-        if not r.get('prerelease', False):
-            cabinet_current = r['tag_name']
+        if not r.get("prerelease", False):
+            cabinet_current = r["tag_name"]
             break
 
     cabinet_info = ProjectReleasesInfo(
         current_version=cabinet_current,
         has_updates=False,
         releases=cabinet_releases,
-        repo_url=f'https://github.com/{CABINET_REPO}',
+        repo_url=f"https://github.com/{CABINET_REPO}",
     )
 
     return ReleasesResponse(bot=bot_info, cabinet=cabinet_info)

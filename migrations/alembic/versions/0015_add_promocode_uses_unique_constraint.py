@@ -13,8 +13,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0015'
-down_revision: Union[str, None] = '0014'
+revision: str = "0015"
+down_revision: Union[str, None] = "0014"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -29,7 +29,7 @@ def _constraint_exists(table: str, constraint_name: str) -> bool:
             "AND constraint_name = :name "
             "AND constraint_type = 'UNIQUE'"
         ),
-        {'table': table, 'name': constraint_name},
+        {"table": table, "name": constraint_name},
     )
     return result.scalar() is not None
 
@@ -45,13 +45,13 @@ def upgrade() -> None:
         )
     """)
 
-    if not _constraint_exists('promocode_uses', 'uq_promocode_uses_user_promo'):
+    if not _constraint_exists("promocode_uses", "uq_promocode_uses_user_promo"):
         op.create_unique_constraint(
-            'uq_promocode_uses_user_promo',
-            'promocode_uses',
-            ['user_id', 'promocode_id'],
+            "uq_promocode_uses_user_promo",
+            "promocode_uses",
+            ["user_id", "promocode_id"],
         )
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_promocode_uses_user_promo', 'promocode_uses', type_='unique')
+    op.drop_constraint("uq_promocode_uses_user_promo", "promocode_uses", type_="unique")

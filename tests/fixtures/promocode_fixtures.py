@@ -16,7 +16,7 @@ def sample_promo_group():
     """Sample PromoGroup object for testing"""
     return SimpleNamespace(
         id=1,
-        name='Test VIP Group',
+        name="Test VIP Group",
         priority=50,
         server_discount_percent=20,
         traffic_discount_percent=15,
@@ -35,10 +35,10 @@ def sample_user():
     return SimpleNamespace(
         id=1,
         telegram_id=123456789,
-        username='testuser',
-        full_name='Test User',
+        username="testuser",
+        full_name="Test User",
         balance_kopeks=0,
-        language='ru',
+        language="ru",
         has_had_paid_subscription=False,
         total_spent_kopeks=0,
     )
@@ -49,7 +49,7 @@ def sample_promocode_balance():
     """Balance type promocode"""
     return SimpleNamespace(
         id=1,
-        code='BALANCE100',
+        code="BALANCE100",
         type=PromoCodeType.BALANCE.value,
         balance_bonus_kopeks=10000,  # 100 rubles
         subscription_days=0,
@@ -70,7 +70,7 @@ def sample_promocode_subscription():
     """Subscription days type promocode"""
     return SimpleNamespace(
         id=2,
-        code='SUB30',
+        code="SUB30",
         type=PromoCodeType.SUBSCRIPTION_DAYS.value,
         balance_bonus_kopeks=0,
         subscription_days=30,
@@ -91,7 +91,7 @@ def sample_promocode_promo_group(sample_promo_group):
     """Promo group type promocode"""
     return SimpleNamespace(
         id=3,
-        code='VIPGROUP',
+        code="VIPGROUP",
         type=PromoCodeType.PROMO_GROUP.value,
         balance_bonus_kopeks=0,
         subscription_days=0,
@@ -112,7 +112,7 @@ def sample_promocode_invalid():
     """Invalid/expired promocode"""
     return SimpleNamespace(
         id=4,
-        code='EXPIRED',
+        code="EXPIRED",
         type=PromoCodeType.BALANCE.value,
         balance_bonus_kopeks=5000,
         subscription_days=0,

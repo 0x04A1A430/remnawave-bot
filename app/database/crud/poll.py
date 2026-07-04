@@ -13,7 +13,6 @@ from app.database.models import (
     PollResponse,
 )
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -38,7 +37,7 @@ async def create_poll(
     await db.flush()
 
     for order, question_data in enumerate(questions, start=1):
-        question_text = question_data.get('text', '').strip()
+        question_text = question_data.get("text", "").strip()
         if not question_text:
             continue
 
@@ -50,7 +49,9 @@ async def create_poll(
         db.add(question)
         await db.flush()
 
-        for option_order, option_text in enumerate(question_data.get('options', []), start=1):
+        for option_order, option_text in enumerate(
+            question_data.get("options", []), start=1
+        ):
             option_text = option_text.strip()
             if not option_text:
                 continue
@@ -64,7 +65,7 @@ async def create_poll(
     await db.commit()
     await db.refresh(
         poll,
-        attribute_names=['questions'],
+        attribute_names=["questions"],
     )
     return poll
 
@@ -72,7 +73,9 @@ async def create_poll(
 async def list_polls(db: AsyncSession) -> list[Poll]:
     result = await db.execute(
         select(Poll)
-        .options(selectinload(Poll.questions).options(selectinload(PollQuestion.options)))
+        .options(
+            selectinload(Poll.questions).options(selectinload(PollQuestion.options))
+        )
         .order_by(Poll.created_at.desc())
     )
     return result.scalars().all()
@@ -97,7 +100,7 @@ async def delete_poll(db: AsyncSession, poll_id: int) -> bool:
 
     await db.delete(poll)
     await db.commit()
-    logger.info('Удалён опрос', poll_id=poll_id)
+    logger.info("Удалён опрос", poll_id=poll_id)
     return True
 
 
@@ -237,27 +240,27 @@ async def get_poll_statistics(db: AsyncSession, poll_id: int) -> dict:
         question_entry = questions_map.setdefault(
             question_id,
             {
-                'id': question_id,
-                'text': question_text,
-                'order': question_order,
-                'options': [],
+                "id": question_id,
+                "text": question_text,
+                "order": question_order,
+                "options": [],
             },
         )
-        question_entry['options'].append(
+        question_entry["options"].append(
             {
-                'id': option_id,
-                'text': option_text,
-                'count': answer_count,
+                "id": option_id,
+                "text": option_text,
+                "count": answer_count,
             }
         )
 
-    questions = sorted(questions_map.values(), key=lambda item: item['order'])
+    questions = sorted(questions_map.values(), key=lambda item: item["order"])
 
     return {
-        'total_responses': total_responses,
-        'completed_responses': completed_responses,
-        'reward_sum_kopeks': reward_sum,
-        'questions': questions,
+        "total_responses": total_responses,
+        "completed_responses": completed_responses,
+        "reward_sum_kopeks": reward_sum,
+        "questions": questions,
     }
 
 
@@ -269,7 +272,9 @@ async def get_poll_responses_with_answers(
     offset: int,
 ) -> tuple[list[PollResponse], int]:
     total_result = await db.execute(
-        select(func.count()).select_from(PollResponse).where(PollResponse.poll_id == poll_id)
+        select(func.count())
+        .select_from(PollResponse)
+        .where(PollResponse.poll_id == poll_id)
     )
     total = int(total_result.scalar_one() or 0)
 

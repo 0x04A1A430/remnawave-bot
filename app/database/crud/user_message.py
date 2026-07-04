@@ -8,12 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User, UserMessage
 from app.utils.validators import sanitize_html, validate_html_tags
 
-
 logger = structlog.get_logger(__name__)
 
 
 async def create_user_message(
-    db: AsyncSession, message_text: str, created_by: int | None = None, is_active: bool = True, sort_order: int = 0
+    db: AsyncSession,
+    message_text: str,
+    created_by: int | None = None,
+    is_active: bool = True,
+    sort_order: int = 0,
 ) -> UserMessage:
     is_valid, error_message = validate_html_tags(message_text)
     if not is_valid:
@@ -36,11 +39,17 @@ async def create_user_message(
     await db.commit()
     await db.refresh(message)
 
-    logger.info('Создано сообщение ID пользователем', message_id=message.id, created_by=created_by)
+    logger.info(
+        "Создано сообщение ID пользователем",
+        message_id=message.id,
+        created_by=created_by,
+    )
     return message
 
 
-async def get_user_message_by_id(db: AsyncSession, message_id: int) -> UserMessage | None:
+async def get_user_message_by_id(
+    db: AsyncSession, message_id: int
+) -> UserMessage | None:
     result = await db.execute(select(UserMessage).where(UserMessage.id == message_id))
     return result.scalar_one_or_none()
 
@@ -78,7 +87,9 @@ async def get_all_user_messages(
     return result.scalars().all()
 
 
-async def get_user_messages_count(db: AsyncSession, include_inactive: bool = True) -> int:
+async def get_user_messages_count(
+    db: AsyncSession, include_inactive: bool = True
+) -> int:
     query = select(func.count(UserMessage.id))
     if not include_inactive:
         query = query.where(UserMessage.is_active == True)
@@ -116,11 +127,13 @@ async def update_user_message(
     await db.commit()
     await db.refresh(message)
 
-    logger.info('Обновлено сообщение ID', message_id=message_id)
+    logger.info("Обновлено сообщение ID", message_id=message_id)
     return message
 
 
-async def toggle_user_message_status(db: AsyncSession, message_id: int) -> UserMessage | None:
+async def toggle_user_message_status(
+    db: AsyncSession, message_id: int
+) -> UserMessage | None:
     message = await get_user_message_by_id(db, message_id)
 
     if not message:
@@ -132,8 +145,8 @@ async def toggle_user_message_status(db: AsyncSession, message_id: int) -> UserM
     await db.commit()
     await db.refresh(message)
 
-    status_text = 'активировано' if message.is_active else 'деактивировано'
-    logger.info('Сообщение ID', message_id=message_id, status_text=status_text)
+    status_text = "активировано" if message.is_active else "деактивировано"
+    logger.info("Сообщение ID", message_id=message_id, status_text=status_text)
 
     return message
 
@@ -147,7 +160,7 @@ async def delete_user_message(db: AsyncSession, message_id: int) -> bool:
     await db.delete(message)
     await db.commit()
 
-    logger.info('Удалено сообщение ID', message_id=message_id)
+    logger.info("Удалено сообщение ID", message_id=message_id)
     return True
 
 
@@ -155,11 +168,13 @@ async def get_user_messages_stats(db: AsyncSession) -> dict:
     total_result = await db.execute(select(func.count(UserMessage.id)))
     total_messages = total_result.scalar()
 
-    active_result = await db.execute(select(func.count(UserMessage.id)).where(UserMessage.is_active == True))
+    active_result = await db.execute(
+        select(func.count(UserMessage.id)).where(UserMessage.is_active == True)
+    )
     active_messages = active_result.scalar()
 
     return {
-        'total_messages': total_messages,
-        'active_messages': active_messages,
-        'inactive_messages': total_messages - active_messages,
+        "total_messages": total_messages,
+        "active_messages": active_messages,
+        "inactive_messages": total_messages - active_messages,
     }

@@ -28,19 +28,18 @@ from app.services.payment_method_config_service import _get_method_defaults
 from app.services.payment_service import PaymentService
 from app.utils.cache import RateLimitCache, cache
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/landing', tags=['Landing Pages'])
+router = APIRouter(prefix="/landing", tags=["Landing Pages"])
 
 
 # ============ Schemas ============
 
 
 class LandingFeature(BaseModel):
-    icon: str = ''
-    title: str = ''
-    description: str = ''
+    icon: str = ""
+    title: str = ""
+    description: str = ""
 
 
 class LandingTariffPeriod(BaseModel):
@@ -111,39 +110,43 @@ class LandingConfigResponse(BaseModel):
     analytics_click_goal: str | None = None
 
 
-_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
-_TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+_TELEGRAM_RE = re.compile(r"^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$")
 
 
 def _validate_contact(contact_type: str, contact_value: str) -> None:
     """Validate contact value matches the declared type format."""
-    if contact_type == 'email' and not _EMAIL_RE.match(contact_value):
-        raise ValueError('Invalid email format')
-    if contact_type == 'telegram' and not _TELEGRAM_RE.match(contact_value):
-        raise ValueError('Invalid Telegram username format')
+    if contact_type == "email" and not _EMAIL_RE.match(contact_value):
+        raise ValueError("Invalid email format")
+    if contact_type == "telegram" and not _TELEGRAM_RE.match(contact_value):
+        raise ValueError("Invalid Telegram username format")
 
 
 class PurchaseRequest(BaseModel):
     tariff_id: int
     period_days: int
-    contact_type: str = Field(pattern=r'^(email|telegram)$')
+    contact_type: str = Field(pattern=r"^(email|telegram)$")
     contact_value: str = Field(min_length=1, max_length=255)
-    payment_method: str = Field(min_length=1, max_length=50, pattern=r'^[a-z0-9_]+$')
+    payment_method: str = Field(min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
     is_gift: bool = False
-    gift_recipient_type: str | None = Field(default=None, pattern=r'^(email|telegram)$')
+    gift_recipient_type: str | None = Field(default=None, pattern=r"^(email|telegram)$")
     gift_recipient_value: str | None = Field(default=None, max_length=255)
     gift_message: str | None = Field(default=None, max_length=1000)
-    yandex_cid: str | None = Field(default=None, max_length=128, pattern=r'^[A-Za-z0-9._:-]{4,128}$')
+    yandex_cid: str | None = Field(
+        default=None, max_length=128, pattern=r"^[A-Za-z0-9._:-]{4,128}$"
+    )
     referrer: str | None = Field(default=None, max_length=500)
     subid: str | None = Field(default=None, max_length=255)
-    yclid: str | None = Field(default=None, max_length=64, pattern=r'^[0-9]{1,64}$')
+    yclid: str | None = Field(default=None, max_length=64, pattern=r"^[0-9]{1,64}$")
 
-    @model_validator(mode='after')
-    def validate_contacts(self) -> 'PurchaseRequest':
+    @model_validator(mode="after")
+    def validate_contacts(self) -> "PurchaseRequest":
         _validate_contact(self.contact_type, self.contact_value)
         if self.is_gift:
             if not self.gift_recipient_type or not self.gift_recipient_value:
-                raise ValueError('Gift recipient type and value are required for gift purchases')
+                raise ValueError(
+                    "Gift recipient type and value are required for gift purchases"
+                )
             _validate_contact(self.gift_recipient_type, self.gift_recipient_value)
         return self
 
@@ -182,9 +185,9 @@ class GiftClaimRequest(BaseModel):
 
     email: str = Field(min_length=3, max_length=255)
 
-    @model_validator(mode='after')
-    def validate_email(self) -> 'GiftClaimRequest':
-        _validate_contact('email', self.email)
+    @model_validator(mode="after")
+    def validate_email(self) -> "GiftClaimRequest":
+        _validate_contact("email", self.email)
         return self
 
 
@@ -206,14 +209,14 @@ class GiftClaimResponse(BaseModel):
 
 def _mask_contact(value: str) -> str:
     """Mask contact value to avoid leaking PII in API responses."""
-    if '@' in value and not value.startswith('@'):
+    if "@" in value and not value.startswith("@"):
         # Email: show first 2 chars + mask + domain
-        local, domain = value.rsplit('@', 1)
-        return f'{local[:2]}***@{domain}'
-    if value.startswith('@'):
+        local, domain = value.rsplit("@", 1)
+        return f"{local[:2]}***@{domain}"
+    if value.startswith("@"):
         # Telegram: show first 3 chars + mask
-        return f'{value[:3]}***'
-    return value[:3] + '***'
+        return f"{value[:3]}***"
+    return value[:3] + "***"
 
 
 _SUBSCRIPTION_URL_EXPIRY_HOURS = 24
@@ -233,7 +236,9 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
             subscription_url = purchase.subscription_url
             subscription_crypto_link = purchase.subscription_crypto_link
 
-    masked_contact = _mask_contact(purchase.contact_value) if purchase.contact_value else None
+    masked_contact = (
+        _mask_contact(purchase.contact_value) if purchase.contact_value else None
+    )
 
     recipient_contact_value = None
     gift_message = None
@@ -252,8 +257,11 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     cabinet_email = None
     cabinet_password = None
     auto_login_token = None
-    is_terminal = purchase.status in (GuestPurchaseStatus.DELIVERED.value, GuestPurchaseStatus.PENDING_ACTIVATION.value)
-    is_email_self_purchase = effective_contact_type == 'email' and not purchase.is_gift
+    is_terminal = purchase.status in (
+        GuestPurchaseStatus.DELIVERED.value,
+        GuestPurchaseStatus.PENDING_ACTIVATION.value,
+    )
+    is_email_self_purchase = effective_contact_type == "email" and not purchase.is_gift
 
     if is_terminal and is_email_self_purchase:
         cabinet_email = purchase.contact_value
@@ -270,12 +278,14 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     # For telegram gifts: indicate whether recipient is known to the bot
     recipient_in_bot: bool | None = None
     bot_link: str | None = None
-    if purchase.is_gift and effective_contact_type == 'telegram':
-        recipient_in_bot = purchase.user is not None and purchase.user.telegram_id is not None
+    if purchase.is_gift and effective_contact_type == "telegram":
+        recipient_in_bot = (
+            purchase.user is not None and purchase.user.telegram_id is not None
+        )
         if not recipient_in_bot:
             bot_username = settings.get_bot_username()
             if bot_username:
-                bot_link = f'https://t.me/{bot_username}'
+                bot_link = f"https://t.me/{bot_username}"
 
     # Transferable gift claim link. Derived from token + status only (NOT from
     # purchase.user, which stays NULL until someone claims). The buyer forwards
@@ -287,14 +297,16 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
     claim_url: str | None = None
     bot_claim_link: str | None = None
     if is_claimable:
-        cabinet_base = (settings.CABINET_URL or '').rstrip('/')
+        cabinet_base = (settings.CABINET_URL or "").rstrip("/")
         if cabinet_base:
-            claim_url = f'{cabinet_base}/buy/gift/{purchase.token}'
+            claim_url = f"{cabinet_base}/buy/gift/{purchase.token}"
         bot_username = settings.get_bot_username()
         if bot_username:
             # Telegram start params are length-limited; use a token prefix.
             # The bot handler resolves gifts by prefix (start.py:149).
-            bot_claim_link = f'https://t.me/{bot_username}?start=GIFT_{purchase.token[:12]}'
+            bot_claim_link = (
+                f"https://t.me/{bot_username}?start=GIFT_{purchase.token[:12]}"
+            )
 
     return PurchaseStatusResponse(
         status=purchase.status,
@@ -321,43 +333,51 @@ def _build_purchase_status_response(purchase: GuestPurchase) -> PurchaseStatusRe
 def _period_label(days: int) -> str:
     """Human-readable label for a period in days."""
     if days == 1:
-        return '1 day'
+        return "1 day"
     if days <= 6:
-        return f'{days} days'
+        return f"{days} days"
     if days == 7:
-        return '1 week'
+        return "1 week"
     if days == 14:
-        return '2 weeks'
+        return "2 weeks"
     if days == 30:
-        return '1 month'
+        return "1 month"
     if days == 60:
-        return '2 months'
+        return "2 months"
     if days == 90:
-        return '3 months'
+        return "3 months"
     if days == 180:
-        return '6 months'
+        return "6 months"
     if days == 365:
-        return '1 year'
+        return "1 year"
     if days == 456:
-        return '1 year + 3 mo.'
+        return "1 year + 3 mo."
 
     months = days // 30
     remainder = days % 30
     if months > 0 and remainder == 0:
-        return f'{months} mo.'
+        return f"{months} mo."
     if months > 0:
-        return f'{months} mo. + {remainder} d.'
-    return f'{days} days'
+        return f"{months} mo. + {remainder} d."
+    return f"{days} days"
 
 
 def _get_active_discount(landing: LandingPage, lang: str) -> LandingDiscountInfo | None:
     """Return discount info if currently active, else None."""
-    if not landing.discount_percent or not landing.discount_starts_at or not landing.discount_ends_at:
+    if (
+        not landing.discount_percent
+        or not landing.discount_starts_at
+        or not landing.discount_ends_at
+    ):
         return None
     now = datetime.now(UTC)
     if not (landing.discount_starts_at <= now < landing.discount_ends_at):
         return None
-    badge = resolve_locale_text(landing.discount_badge_text, lang) if landing.discount_badge_text else None
+    badge = (
+        resolve_locale_text(landing.discount_badge_text, lang)
+        if landing.discount_badge_text
+        else None
+    )
     return LandingDiscountInfo(
         percent=landing.discount_percent,
         ends_at=landing.discount_ends_at.isoformat(),
@@ -405,7 +425,9 @@ async def _load_landing_tariffs(
                 # Per-tariff override takes priority (read from landing model, not response DTO)
                 overrides = landing.discount_overrides or {}
                 tariff_override = overrides.get(str(tariff.id))
-                effective_discount = tariff_override if tariff_override is not None else discount.percent
+                effective_discount = (
+                    tariff_override if tariff_override is not None else discount.percent
+                )
                 original_price_kopeks = price
                 original_price_label = settings.format_price(price)
                 from app.services.pricing_engine import PricingEngine
@@ -450,7 +472,7 @@ async def _load_landing_tariffs(
 # (FastAPI checks routes in definition order; "purchase" would match {slug})
 
 
-@router.get('/purchase/{token}', response_model=PurchaseStatusResponse)
+@router.get("/purchase/{token}", response_model=PurchaseStatusResponse)
 async def get_purchase_status(
     token: str,
     raw_request: Request,
@@ -461,21 +483,27 @@ async def get_purchase_status(
     No authentication required.
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'purchase_status', limit=30, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, "purchase_status", limit=30, window=60, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
+        )
 
     purchase = await get_purchase_by_token(db, token)
     if purchase is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Purchase not found',
+            detail="Purchase not found",
         )
 
     response = _build_purchase_status_response(purchase)
 
     # Cleanup: null expired credentials from DB
     needs_cleanup = False
-    if purchase.delivered_at and (purchase.cabinet_password or purchase.auto_login_token):
+    if purchase.delivered_at and (
+        purchase.cabinet_password or purchase.auto_login_token
+    ):
         age = datetime.now(UTC) - purchase.delivered_at
         if age >= timedelta(hours=_SUBSCRIPTION_URL_EXPIRY_HOURS):
             needs_cleanup = True
@@ -495,7 +523,7 @@ async def get_purchase_status(
     return response
 
 
-@router.post('/activate/{token}', response_model=PurchaseStatusResponse)
+@router.post("/activate/{token}", response_model=PurchaseStatusResponse)
 async def activate_purchase(
     token: str,
     raw_request: Request,
@@ -506,8 +534,12 @@ async def activate_purchase(
     No authentication required (token is the secret).
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'activate_purchase', limit=5, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, "activate_purchase", limit=5, window=60, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
+        )
 
     try:
         purchase = await activate_guest_purchase(db, token)
@@ -517,7 +549,7 @@ async def activate_purchase(
     return _build_purchase_status_response(purchase)
 
 
-@router.get('/gift/{token}', response_model=PurchaseStatusResponse)
+@router.get("/gift/{token}", response_model=PurchaseStatusResponse)
 async def get_gift_claim(
     token: str,
     raw_request: Request,
@@ -530,17 +562,23 @@ async def get_gift_claim(
     POST claim endpoint).
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'gift_claim_status', limit=30, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, "gift_claim_status", limit=30, window=60, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
+        )
 
     purchase = await get_purchase_by_token(db, token)
     if purchase is None or not purchase.is_gift:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found"
+        )
 
     return _build_purchase_status_response(purchase)
 
 
-@router.post('/gift/{token}/claim', response_model=GiftClaimResponse)
+@router.post("/gift/{token}/claim", response_model=GiftClaimResponse)
 async def claim_gift(
     token: str,
     body: GiftClaimRequest,
@@ -556,27 +594,40 @@ async def claim_gift(
     link instead of this endpoint.
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'gift_claim', limit=5, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, "gift_claim", limit=5, window=60, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
+        )
 
     # Public endpoint: require the full 64-char token (no short-prefix matching,
     # which is reserved for the human-typed cabinet code path) to rule out
     # prefix collisions / enumeration.
     if len(token) < 64:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found"
+        )
 
     # Lock the row so concurrent claims serialize (exactly one binds).
-    result = await db.execute(select(GuestPurchase).where(GuestPurchase.token == token).with_for_update())
+    result = await db.execute(
+        select(GuestPurchase).where(GuestPurchase.token == token).with_for_update()
+    )
     purchase = result.scalars().first()
     if purchase is None or not purchase.is_gift:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gift not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Gift not found"
+        )
 
     if purchase.status not in (
         GuestPurchaseStatus.PAID.value,
         GuestPurchaseStatus.PENDING_ACTIVATION.value,
         GuestPurchaseStatus.DELIVERED.value,
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='This gift cannot be activated')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This gift cannot be activated",
+        )
 
     # Resolve the activator by email WITHOUT creating an account yet, so a
     # rejected claim (self-gift / already-claimed) never leaves an orphan account.
@@ -584,15 +635,29 @@ async def claim_gift(
 
     # Self-activation guard — only meaningful for cabinet-originated gifts where
     # the buyer is a known account (landing buyers are anonymous → inert).
-    if existing_user is not None and purchase.buyer_user_id is not None and purchase.buyer_user_id == existing_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Cannot activate your own gift')
+    if (
+        existing_user is not None
+        and purchase.buyer_user_id is not None
+        and purchase.buyer_user_id == existing_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot activate your own gift",
+        )
 
     # Ownership guard — already claimed by a different account.
-    if purchase.user_id is not None and (existing_user is None or purchase.user_id != existing_user.id):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='This gift has already been claimed')
+    if purchase.user_id is not None and (
+        existing_user is None or purchase.user_id != existing_user.id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This gift has already been claimed",
+        )
 
     # Guards passed — now create/finalize the account the gift binds to.
-    user, _is_new = await _find_or_create_user(db, 'email', body.email, purchase=purchase, tariff_id=purchase.tariff_id)
+    user, _is_new = await _find_or_create_user(
+        db, "email", body.email, purchase=purchase, tariff_id=purchase.tariff_id
+    )
 
     # Bind (if unbound) and move PAID → PENDING_ACTIVATION so activate accepts it.
     if purchase.user_id is None:
@@ -602,7 +667,9 @@ async def claim_gift(
     await db.flush()
 
     try:
-        purchase = await activate_guest_purchase(db, purchase.token, skip_notification=True)
+        purchase = await activate_guest_purchase(
+            db, purchase.token, skip_notification=True
+        )
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
@@ -617,11 +684,13 @@ async def claim_gift(
     )
 
 
-@router.get('/{slug}', response_model=LandingConfigResponse)
+@router.get("/{slug}", response_model=LandingConfigResponse)
 async def get_landing_config(
     raw_request: Request,
     slug: str = Path(max_length=100),
-    lang: str = Query(DEFAULT_LOCALE, max_length=5, description='Locale: ru, en, zh, fa'),
+    lang: str = Query(
+        DEFAULT_LOCALE, max_length=5, description="Locale: ru, en, zh, fa"
+    ),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public landing page configuration with tariffs and payment methods.
@@ -629,14 +698,18 @@ async def get_landing_config(
     No authentication required. Pass ``?lang=en`` to get localized text.
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'landing_config', limit=60, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, "landing_config", limit=60, window=60, fail_closed=True
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
+        )
 
     landing = await get_active_landing_by_slug(db, slug)
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail="Landing page not found",
         )
 
     discount = _get_active_discount(landing, lang)
@@ -648,33 +721,35 @@ async def get_landing_config(
 
     payment_methods: list[LandingPaymentMethod] = []
     for m in raw_methods:
-        method_id = m.get('method_id', '')
-        raw_sub_options = m.get('sub_options')  # dict[str, bool] | None
+        method_id = m.get("method_id", "")
+        raw_sub_options = m.get("sub_options")  # dict[str, bool] | None
 
         # Resolve sub-options: filter enabled ones and attach display names
         resolved_sub_options: list[LandingPaymentMethodSubOption] | None = None
         method_def = method_defaults.get(method_id)
-        available = method_def.get('available_sub_options') if method_def else None
+        available = method_def.get("available_sub_options") if method_def else None
         if available:
             resolved = []
             for opt in available:
-                opt_id = opt['id']
+                opt_id = opt["id"]
                 # If landing has explicit sub_options config, respect it; otherwise all enabled
                 if raw_sub_options is None or raw_sub_options.get(opt_id, True):
-                    resolved.append(LandingPaymentMethodSubOption(id=opt_id, name=opt['name']))
+                    resolved.append(
+                        LandingPaymentMethodSubOption(id=opt_id, name=opt["name"])
+                    )
             if resolved:
                 resolved_sub_options = resolved
 
         payment_methods.append(
             LandingPaymentMethod(
                 method_id=method_id,
-                display_name=m.get('display_name', ''),
-                description=m.get('description'),
-                icon_url=m.get('icon_url'),
-                sort_order=m.get('sort_order', 0),
-                min_amount_kopeks=m.get('min_amount_kopeks'),
-                max_amount_kopeks=m.get('max_amount_kopeks'),
-                currency=m.get('currency'),
+                display_name=m.get("display_name", ""),
+                description=m.get("description"),
+                icon_url=m.get("icon_url"),
+                sort_order=m.get("sort_order", 0),
+                min_amount_kopeks=m.get("min_amount_kopeks"),
+                max_amount_kopeks=m.get("max_amount_kopeks"),
+                currency=m.get("currency"),
                 sub_options=resolved_sub_options,
             )
         )
@@ -682,9 +757,9 @@ async def get_landing_config(
     # Resolve locale dicts to flat strings for the requested language
     features = [
         LandingFeature(
-            icon=f.get('icon', ''),
-            title=resolve_locale_text(f.get('title'), lang),
-            description=resolve_locale_text(f.get('description'), lang),
+            icon=f.get("icon", ""),
+            title=resolve_locale_text(f.get("title"), lang),
+            description=resolve_locale_text(f.get("description"), lang),
         )
         for f in (landing.features or [])
     ]
@@ -711,7 +786,7 @@ async def get_landing_config(
     )
 
 
-@router.post('/{slug}/purchase', response_model=PurchaseResponse)
+@router.post("/{slug}/purchase", response_model=PurchaseResponse)
 async def create_landing_purchase(
     slug: str,
     body: PurchaseRequest,
@@ -723,23 +798,25 @@ async def create_landing_purchase(
     No authentication required.
     """
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(client_ip, 'landing_purchase', limit=30, window=60, fail_closed=True):
+    if await RateLimitCache.is_ip_rate_limited(
+        client_ip, "landing_purchase", limit=30, window=60, fail_closed=True
+    ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many purchase attempts, please try again later',
+            detail="Too many purchase attempts, please try again later",
         )
 
     landing = await get_active_landing_by_slug(db, slug)
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail="Landing page not found",
         )
 
     if body.is_gift and not landing.gift_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Gift purchases are not enabled for this landing page',
+            detail="Gift purchases are not enabled for this landing page",
         )
 
     # Validate payment method is available on this landing.
@@ -749,36 +826,46 @@ async def create_landing_purchase(
     raw_methods = landing.payment_methods or []
     method_defaults = _get_method_defaults()
 
-    method_config = next((m for m in raw_methods if m.get('method_id') == body.payment_method), None)
+    method_config = next(
+        (m for m in raw_methods if m.get("method_id") == body.payment_method), None
+    )
     if method_config is None:
         # Try matching by prefix: "platega_2" → base "platega"
         # Sort by length descending so "freekassa_sbp" is checked before "freekassa"
-        sorted_methods = sorted(raw_methods, key=lambda m: len(m.get('method_id', '')), reverse=True)
+        sorted_methods = sorted(
+            raw_methods, key=lambda m: len(m.get("method_id", "")), reverse=True
+        )
         for m in sorted_methods:
-            mid = m.get('method_id', '')
-            if body.payment_method.startswith(mid + '_'):
+            mid = m.get("method_id", "")
+            if body.payment_method.startswith(mid + "_"):
                 suffix = body.payment_method[len(mid) + 1 :]
                 # Validate suffix is a known sub-option
                 method_def = method_defaults.get(mid)
-                available = (method_def.get('available_sub_options') if method_def else None) or []
-                valid_ids = {opt['id'] for opt in available}
+                available = (
+                    method_def.get("available_sub_options") if method_def else None
+                ) or []
+                valid_ids = {opt["id"] for opt in available}
                 if suffix not in valid_ids:
                     break  # invalid suffix → reject
                 # Validate suffix is enabled on this landing
-                raw_sub_options = m.get('sub_options')  # dict[str, bool] | None
-                if raw_sub_options is not None and not raw_sub_options.get(suffix, True):
+                raw_sub_options = m.get("sub_options")  # dict[str, bool] | None
+                if raw_sub_options is not None and not raw_sub_options.get(
+                    suffix, True
+                ):
                     break  # disabled sub-option → reject
                 method_config = m
                 break
     if method_config is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Payment method is not available on this landing page',
+            detail="Payment method is not available on this landing page",
         )
 
     # Validate tariff + period + calculate price
     try:
-        tariff, amount_kopeks = await validate_and_calculate(db, landing, body.tariff_id, body.period_days)
+        tariff, amount_kopeks = await validate_and_calculate(
+            db, landing, body.tariff_id, body.period_days
+        )
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
@@ -786,21 +873,21 @@ async def create_landing_purchase(
     if body.is_gift and not tariff.show_in_gift:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This tariff is not available for gift purchases',
+            detail="This tariff is not available for gift purchases",
         )
 
     # Validate amount against per-method min/max limits (before creating purchase record)
-    min_amount = method_config.get('min_amount_kopeks')
-    max_amount = method_config.get('max_amount_kopeks')
+    min_amount = method_config.get("min_amount_kopeks")
+    max_amount = method_config.get("max_amount_kopeks")
     if min_amount is not None and amount_kopeks < min_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Amount is below the minimum ({settings.format_price(min_amount)}) for this payment method',
+            detail=f"Amount is below the minimum ({settings.format_price(min_amount)}) for this payment method",
         )
     if max_amount is not None and amount_kopeks > max_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Amount exceeds the maximum ({settings.format_price(max_amount)}) for this payment method',
+            detail=f"Amount exceeds the maximum ({settings.format_price(max_amount)}) for this payment method",
         )
 
     # Create purchase record (no commit yet — wait for payment creation)
@@ -824,17 +911,19 @@ async def create_landing_purchase(
 
     # Fallback to HTTP Referer header if body did not supply one
     if not purchase.referrer:
-        http_referrer = raw_request.headers.get('referer') or raw_request.headers.get('referrer')
+        http_referrer = raw_request.headers.get("referer") or raw_request.headers.get(
+            "referrer"
+        )
         if http_referrer and len(http_referrer) <= 500:
             purchase.referrer = http_referrer
 
     # Determine return URL: per-method override → default cabinet URL
-    cabinet_base = (settings.CABINET_URL or '').rstrip('/')
-    default_return_url = f'{cabinet_base}/buy/success/{purchase.token}'
-    method_return_url = method_config.get('return_url')
+    cabinet_base = (settings.CABINET_URL or "").rstrip("/")
+    default_return_url = f"{cabinet_base}/buy/success/{purchase.token}"
+    method_return_url = method_config.get("return_url")
     if method_return_url:
         # Allow {token} placeholder in custom return URLs
-        return_url = method_return_url.replace('{token}', purchase.token)
+        return_url = method_return_url.replace("{token}", purchase.token)
     else:
         return_url = default_return_url
 
@@ -843,7 +932,7 @@ async def create_landing_purchase(
         db=db,
         amount_kopeks=amount_kopeks,
         payment_method=body.payment_method,
-        description=f'{tariff.name} — {body.period_days}d',
+        description=f"{tariff.name} — {body.period_days}d",
         purchase_token=purchase.token,
         return_url=return_url,
     )
@@ -852,20 +941,20 @@ async def create_landing_purchase(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Payment provider is unavailable, please try again later',
+            detail="Payment provider is unavailable, please try again later",
         )
 
-    payment_url = payment_result.get('payment_url')
+    payment_url = payment_result.get("payment_url")
     if not payment_url:
         await db.rollback()
         logger.error(
-            'Payment created but no payment_url returned',
+            "Payment created but no payment_url returned",
             purchase_token=purchase.token[:5],
-            provider=payment_result.get('provider'),
+            provider=payment_result.get("provider"),
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Payment provider returned an invalid response',
+            detail="Payment provider returned an invalid response",
         )
 
     await db.commit()
@@ -874,21 +963,27 @@ async def create_landing_purchase(
     # Persist Yandex CID in cache so fulfill_purchase can link it to the user later
     if body.yandex_cid and settings.YANDEX_OFFLINE_CONV_ENABLED:
         try:
-            await cache.set(f'yacid:purchase:{purchase.token}', body.yandex_cid, expire=86400)
+            await cache.set(
+                f"yacid:purchase:{purchase.token}", body.yandex_cid, expire=86400
+            )
         except Exception:
             pass
 
     # Persist yclid in cache for the yclid-keyed offline conversion upload
     if body.yclid and settings.YANDEX_OFFLINE_CONV_ENABLED:
         try:
-            await cache.set(f'yclid:purchase:{purchase.token}', body.yclid, expire=86400)
+            await cache.set(
+                f"yclid:purchase:{purchase.token}", body.yclid, expire=86400
+            )
         except Exception:
             pass
 
     # Persist subid in cache for S2S postback
     if body.subid:
         try:
-            await cache.set(f'subid:purchase:{purchase.token}', body.subid, expire=86400)
+            await cache.set(
+                f"subid:purchase:{purchase.token}", body.subid, expire=86400
+            )
         except Exception:
             pass
 

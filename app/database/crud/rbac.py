@@ -7,34 +7,33 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import AccessPolicy, AdminAuditLog, AdminRole, User, UserRole
 
-
 logger = structlog.get_logger(__name__)
 
 # Fields allowed for AdminRole.update()
 _ROLE_UPDATABLE_FIELDS = frozenset(
     {
-        'name',
-        'description',
-        'level',
-        'permissions',
-        'color',
-        'icon',
-        'is_active',
+        "name",
+        "description",
+        "level",
+        "permissions",
+        "color",
+        "icon",
+        "is_active",
     }
 )
 
 # Fields allowed for AccessPolicy.update()
 _POLICY_UPDATABLE_FIELDS = frozenset(
     {
-        'name',
-        'description',
-        'role_id',
-        'priority',
-        'effect',
-        'conditions',
-        'resource',
-        'actions',
-        'is_active',
+        "name",
+        "description",
+        "role_id",
+        "priority",
+        "effect",
+        "conditions",
+        "resource",
+        "actions",
+        "is_active",
     }
 )
 
@@ -46,7 +45,9 @@ class AdminRoleCRUD:
     """CRUD operations for admin_roles table."""
 
     @staticmethod
-    async def get_all(db: AsyncSession, *, include_inactive: bool = False) -> list[AdminRole]:
+    async def get_all(
+        db: AsyncSession, *, include_inactive: bool = False
+    ) -> list[AdminRole]:
         """Get all admin roles ordered by level descending."""
         stmt = select(AdminRole).order_by(AdminRole.level.desc())
         if not include_inactive:
@@ -90,11 +91,13 @@ class AdminRoleCRUD:
         db.add(role)
         await db.flush()
         await db.refresh(role)
-        logger.info('Created admin role', role_id=role.id, name=name, level=level)
+        logger.info("Created admin role", role_id=role.id, name=name, level=level)
         return role
 
     @staticmethod
-    async def update(db: AsyncSession, role_id: int, **kwargs: object) -> AdminRole | None:
+    async def update(
+        db: AsyncSession, role_id: int, **kwargs: object
+    ) -> AdminRole | None:
         """Update only provided fields. Rejects unknown/non-updatable keys."""
         role = await AdminRoleCRUD.get_by_id(db, role_id)
         if not role:
@@ -102,13 +105,15 @@ class AdminRoleCRUD:
 
         for key, value in kwargs.items():
             if key not in _ROLE_UPDATABLE_FIELDS:
-                logger.warning('Rejected update of non-updatable AdminRole field', field=key)
+                logger.warning(
+                    "Rejected update of non-updatable AdminRole field", field=key
+                )
                 continue
             setattr(role, key, value)
 
         await db.flush()
         await db.refresh(role)
-        logger.info('Updated admin role', role_id=role_id, fields=list(kwargs.keys()))
+        logger.info("Updated admin role", role_id=role_id, fields=list(kwargs.keys()))
         return role
 
     @staticmethod
@@ -121,7 +126,9 @@ class AdminRoleCRUD:
         if not role:
             return False
         if role.is_system:
-            logger.warning('Attempted to delete system role', role_id=role_id, name=role.name)
+            logger.warning(
+                "Attempted to delete system role", role_id=role_id, name=role.name
+            )
             return False
 
         # Explicitly delete dependent user_roles and access_policies in application layer
@@ -130,7 +137,7 @@ class AdminRoleCRUD:
         await db.execute(delete(AccessPolicy).where(AccessPolicy.role_id == role_id))
         await db.delete(role)
         await db.flush()
-        logger.info('Deleted admin role', role_id=role_id, name=role.name)
+        logger.info("Deleted admin role", role_id=role_id, name=role.name)
         return True
 
     @staticmethod
@@ -231,7 +238,7 @@ class UserRoleCRUD:
             await db.flush()
             await db.refresh(existing)
             logger.info(
-                'Reactivated user role',
+                "Reactivated user role",
                 user_role_id=existing.id,
                 user_id=user_id,
                 role_id=role_id,
@@ -248,7 +255,12 @@ class UserRoleCRUD:
         db.add(user_role)
         await db.flush()
         await db.refresh(user_role)
-        logger.info('Assigned role to user', user_role_id=user_role.id, user_id=user_id, role_id=role_id)
+        logger.info(
+            "Assigned role to user",
+            user_role_id=user_role.id,
+            user_id=user_id,
+            role_id=role_id,
+        )
         return user_role
 
     @staticmethod
@@ -266,7 +278,7 @@ class UserRoleCRUD:
         role_agg = (
             select(
                 UserRole.user_id,
-                func.array_agg(AdminRole.name).label('role_names'),
+                func.array_agg(AdminRole.name).label("role_names"),
             )
             .join(AdminRole, UserRole.role_id == AdminRole.id)
             .where(
@@ -288,7 +300,7 @@ class UserRoleCRUD:
         result = await db.execute(stmt)
         rows = result.all()
 
-        return [{'user': row[0], 'role_names': list(row[1] or [])} for row in rows]
+        return [{"user": row[0], "role_names": list(row[1] or [])} for row in rows]
 
     @staticmethod
     async def get_superadmin_count(db: AsyncSession) -> int:
@@ -317,7 +329,11 @@ class AccessPolicyCRUD:
         role_id: int | None = None,
     ) -> list[AccessPolicy]:
         """Get active policies ordered by priority descending. Optionally filter by role_id."""
-        stmt = select(AccessPolicy).where(AccessPolicy.is_active.is_(True)).order_by(AccessPolicy.priority.desc())
+        stmt = (
+            select(AccessPolicy)
+            .where(AccessPolicy.is_active.is_(True))
+            .order_by(AccessPolicy.priority.desc())
+        )
         if role_id is not None:
             stmt = stmt.where(AccessPolicy.role_id == role_id)
         result = await db.execute(stmt)
@@ -325,7 +341,9 @@ class AccessPolicyCRUD:
 
     @staticmethod
     async def get_by_id(db: AsyncSession, policy_id: int) -> AccessPolicy | None:
-        result = await db.execute(select(AccessPolicy).where(AccessPolicy.id == policy_id))
+        result = await db.execute(
+            select(AccessPolicy).where(AccessPolicy.id == policy_id)
+        )
         return result.scalar_one_or_none()
 
     @staticmethod
@@ -334,11 +352,18 @@ class AccessPolicyCRUD:
         db.add(policy)
         await db.flush()
         await db.refresh(policy)
-        logger.info('Created access policy', policy_id=policy.id, name=policy.name, effect=policy.effect)
+        logger.info(
+            "Created access policy",
+            policy_id=policy.id,
+            name=policy.name,
+            effect=policy.effect,
+        )
         return policy
 
     @staticmethod
-    async def update(db: AsyncSession, policy_id: int, **kwargs: object) -> AccessPolicy | None:
+    async def update(
+        db: AsyncSession, policy_id: int, **kwargs: object
+    ) -> AccessPolicy | None:
         """Update only provided fields. Rejects unknown/non-updatable keys."""
         policy = await AccessPolicyCRUD.get_by_id(db, policy_id)
         if not policy:
@@ -346,13 +371,17 @@ class AccessPolicyCRUD:
 
         for key, value in kwargs.items():
             if key not in _POLICY_UPDATABLE_FIELDS:
-                logger.warning('Rejected update of non-updatable AccessPolicy field', field=key)
+                logger.warning(
+                    "Rejected update of non-updatable AccessPolicy field", field=key
+                )
                 continue
             setattr(policy, key, value)
 
         await db.flush()
         await db.refresh(policy)
-        logger.info('Updated access policy', policy_id=policy_id, fields=list(kwargs.keys()))
+        logger.info(
+            "Updated access policy", policy_id=policy_id, fields=list(kwargs.keys())
+        )
         return policy
 
     @staticmethod
@@ -362,7 +391,7 @@ class AccessPolicyCRUD:
             return False
         await db.delete(policy)
         await db.flush()
-        logger.info('Deleted access policy', policy_id=policy_id, name=policy.name)
+        logger.info("Deleted access policy", policy_id=policy_id, name=policy.name)
         return True
 
     @staticmethod
@@ -414,7 +443,7 @@ class AuditLogCRUD:
         details: dict | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
-        status: str = 'success',
+        status: str = "success",
         request_method: str | None = None,
         request_path: str | None = None,
     ) -> AdminAuditLog:
@@ -434,7 +463,7 @@ class AuditLogCRUD:
         await db.flush()
         await db.refresh(entry)
         logger.debug(
-            'Audit log created',
+            "Audit log created",
             audit_id=entry.id,
             user_id=user_id,
             action=action,
@@ -465,7 +494,7 @@ class AuditLogCRUD:
         if user_id is not None:
             filters.append(AdminAuditLog.user_id == user_id)
         if action is not None:
-            filters.append(AdminAuditLog.action.ilike(f'%{action}%'))
+            filters.append(AdminAuditLog.action.ilike(f"%{action}%"))
         if resource_type is not None:
             filters.append(AdminAuditLog.resource_type == resource_type)
         if status is not None:
@@ -478,7 +507,9 @@ class AuditLogCRUD:
         where_clause = and_(*filters) if filters else True
 
         # Total count
-        count_result = await db.execute(select(func.count(AdminAuditLog.id)).where(where_clause))
+        count_result = await db.execute(
+            select(func.count(AdminAuditLog.id)).where(where_clause)
+        )
         total_count = count_result.scalar() or 0
 
         # Paginated results

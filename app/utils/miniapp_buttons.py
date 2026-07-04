@@ -6,26 +6,30 @@ from aiogram.types import InlineKeyboardButton
 from app.config import settings
 from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
 
-
 # Юникод-диапазоны для одиночного emoji в начале строки + модификаторы (skin tone,
 # variation selector, zero-width joiner-цепочки) + опциональный пробел после.
 # Используется когда у кнопки задан icon_custom_emoji_id — Telegram сам рендерит
 # кастом emoji слева, и если оставить юникод-emoji в тексте, юзер увидит дубль.
 _EMOJI_CHAR_CLASS = (
-    r'[℀-⅏'  # Letterlike (ℹ ™ ©)
-    r'←-⇿'  # Arrows
-    r'⌀-⏿'  # Misc Technical (⌚ ⌨ ⏰ etc.)
-    r'①-⓿'  # Enclosed Alphanumerics
-    r'■-⛿'  # Geometric Shapes + Misc Symbols (☀ ★ ✈ etc.)
-    r'✀-➿'  # Dingbats (✂ ✅ ✔ etc.)
-    r'⬀-⯿'  # Misc Symbols/Arrows (⬅ ⭐ etc.)
-    r'〰-〽'  # CJK swung dash etc.
-    r'㊗㊙'  # Japanese marks
-    r'\U0001F000-\U0001FFFF'  # Все supplementary planes (emoticons, pictographs, transport, supp symbols)
-    r']'
+    r"[℀-⅏"  # Letterlike (ℹ ™ ©)
+    r"←-⇿"  # Arrows
+    r"⌀-⏿"  # Misc Technical (⌚ ⌨ ⏰ etc.)
+    r"①-⓿"  # Enclosed Alphanumerics
+    r"■-⛿"  # Geometric Shapes + Misc Symbols (☀ ★ ✈ etc.)
+    r"✀-➿"  # Dingbats (✂ ✅ ✔ etc.)
+    r"⬀-⯿"  # Misc Symbols/Arrows (⬅ ⭐ etc.)
+    r"〰-〽"  # CJK swung dash etc.
+    r"㊗㊙"  # Japanese marks
+    r"\U0001F000-\U0001FFFF"  # Все supplementary planes (emoticons, pictographs, transport, supp symbols)
+    r"]"
 )
 _LEADING_EMOJI_RE = re.compile(
-    r'^' + _EMOJI_CHAR_CLASS + r'(?:[️‍\U0001F3FB-\U0001F3FF]|' + _EMOJI_CHAR_CLASS + r')*' + r'\s*'
+    r"^"
+    + _EMOJI_CHAR_CLASS
+    + r"(?:[️‍\U0001F3FB-\U0001F3FF]|"
+    + _EMOJI_CHAR_CLASS
+    + r")*"
+    + r"\s*"
 )
 
 
@@ -33,30 +37,30 @@ def strip_leading_emoji(text: str) -> str:
     """Удалить ведущий юникод-emoji + следующий пробел. Безопасно для текста без emoji."""
     if not text:
         return text
-    return _LEADING_EMOJI_RE.sub('', text, count=1)
+    return _LEADING_EMOJI_RE.sub("", text, count=1)
 
 
 # Mapping from callback_data to cabinet frontend paths.
 # Used for automatic deep-linking when explicit ``cabinet_path`` is not provided.
 # If callback_data is NOT in this mapping, the button falls back to a regular callback.
 CALLBACK_TO_CABINET_PATH: dict[str, str] = {
-    'menu_balance': '/balance',
-    'balance_topup': '/balance/top-up',
-    'menu_subscription': '/subscription',
-    'subscription': '/subscription',
-    'subscription_extend': '/subscription',
-    'subscription_upgrade': '/subscription',
-    'subscription_connect': '/subscription',
-    'subscription_resume_checkout': '/subscription',
-    'return_to_saved_cart': '/subscription',
-    'menu_buy': '/subscription',
-    'buy_traffic': '/subscription',
-    'menu_referrals': '/referral',
-    'menu_referral': '/referral',
-    'menu_promocode': '/balance',
-    'menu_support': '/support',
-    'menu_info': '/info',
-    'menu_profile': '/profile',
+    "menu_balance": "/balance",
+    "balance_topup": "/balance/top-up",
+    "menu_subscription": "/subscription",
+    "subscription": "/subscription",
+    "subscription_extend": "/subscription",
+    "subscription_upgrade": "/subscription",
+    "subscription_connect": "/subscription",
+    "subscription_resume_checkout": "/subscription",
+    "return_to_saved_cart": "/subscription",
+    "menu_buy": "/subscription",
+    "buy_traffic": "/subscription",
+    "menu_referrals": "/referral",
+    "menu_referral": "/referral",
+    "menu_promocode": "/balance",
+    "menu_support": "/support",
+    "menu_info": "/info",
+    "menu_profile": "/profile",
     # NB: ``back_to_menu`` is intentionally NOT mapped here.
     # The callback semantically means "return to the bot's main menu"
     # — every other call site in the codebase uses raw
@@ -72,23 +76,23 @@ CALLBACK_TO_CABINET_PATH: dict[str, str] = {
 # Default button styles per callback_data for cabinet mode.
 # Values: 'primary' (blue), 'success' (green), 'danger' (red), None (default).
 CALLBACK_TO_CABINET_STYLE: dict[str, str] = {
-    'menu_balance': 'primary',
-    'balance_topup': 'primary',
-    'menu_subscription': 'success',
-    'subscription': 'success',
-    'subscription_extend': 'success',
-    'subscription_upgrade': 'success',
-    'subscription_connect': 'success',
-    'subscription_resume_checkout': 'success',
-    'return_to_saved_cart': 'success',
-    'menu_buy': 'success',
-    'buy_traffic': 'success',
-    'menu_referrals': 'success',
-    'menu_referral': 'success',
-    'menu_promocode': 'primary',
-    'menu_support': 'primary',
-    'menu_info': 'primary',
-    'menu_profile': 'primary',
+    "menu_balance": "primary",
+    "balance_topup": "primary",
+    "menu_subscription": "success",
+    "subscription": "success",
+    "subscription_extend": "success",
+    "subscription_upgrade": "success",
+    "subscription_connect": "success",
+    "subscription_resume_checkout": "success",
+    "return_to_saved_cart": "success",
+    "menu_buy": "success",
+    "buy_traffic": "success",
+    "menu_referrals": "success",
+    "menu_referral": "success",
+    "menu_promocode": "primary",
+    "menu_support": "primary",
+    "menu_info": "primary",
+    "menu_profile": "primary",
     # See CALLBACK_TO_CABINET_PATH comment — back_to_menu is bot-menu only,
     # not a cabinet-routed action, so styling here is dead config.
 }
@@ -108,16 +112,16 @@ CALLBACK_TO_CABINET_STYLE: dict[str, str] = {
 # mapping lookup falls through to empty string and ``build_miniapp_or_callback_button``
 # returns a callback button.
 BUTTON_KEY_TO_CABINET_PATH: dict[str, str] = {
-    'balance': '/balance/top-up',
-    'referrals': '/referral',
-    'promocode': '/balance',
-    'connect': '/subscription',
-    'subscription': '/subscription',
-    'support': '/support',
+    "balance": "/balance/top-up",
+    "referrals": "/referral",
+    "promocode": "/balance",
+    "connect": "/subscription",
+    "subscription": "/subscription",
+    "support": "/support",
 }
 
 # Valid style values accepted by the Telegram Bot API.
-_VALID_STYLES = frozenset({'primary', 'success', 'danger'})
+_VALID_STYLES = frozenset({"primary", "success", "danger"})
 
 
 def build_main_menu_button(text: str) -> InlineKeyboardButton:
@@ -139,7 +143,7 @@ def build_main_menu_button(text: str) -> InlineKeyboardButton:
     callback even if called wrongly, AND this dedicated factory is
     what callers should reach for to express intent.
     """
-    return InlineKeyboardButton(text=text, callback_data='back_to_menu')
+    return InlineKeyboardButton(text=text, callback_data="back_to_menu")
 
 
 def _resolve_style(style: str | None) -> str | None:
@@ -149,7 +153,7 @@ def _resolve_style(style: str | None) -> str | None:
     return None
 
 
-def build_cabinet_url(path: str = '') -> str:
+def build_cabinet_url(path: str = "") -> str:
     """Join ``MINIAPP_CUSTOM_URL`` with an optional *path* segment.
 
     Handles trailing-slash normalization so that both
@@ -159,16 +163,16 @@ def build_cabinet_url(path: str = '') -> str:
     Returns an empty string when the base URL is not configured
     or when *path* is empty (no known section).
     """
-    base = (settings.MINIAPP_CUSTOM_URL or '').strip().rstrip('/')
+    base = (settings.MINIAPP_CUSTOM_URL or "").strip().rstrip("/")
     if not base:
-        return ''
+        return ""
     if not path:
-        return ''
-    if path == '/':
+        return ""
+    if path == "/":
         return base
-    if not path.startswith('/'):
-        path = f'/{path}'
-    return f'{base}{path}'
+    if not path.startswith("/"):
+        path = f"/{path}"
+    return f"{base}{path}"
 
 
 def build_miniapp_or_callback_button(
@@ -209,21 +213,27 @@ def build_miniapp_or_callback_button(
             if url:
                 # Resolve per-section config from cache
                 section = CALLBACK_TO_SECTION.get(callback_data)
-                section_cfg = get_cached_button_styles().get(section or '', {}) if section else {}
+                section_cfg = (
+                    get_cached_button_styles().get(section or "", {}) if section else {}
+                )
 
                 # Style chain: explicit param > per-section DB > global config > hardcoded default
                 # 'default' in per-section config means "no color" — do not fall through.
                 if style:
                     resolved_style = _resolve_style(style)
-                elif section_cfg.get('style'):
-                    resolved_style = _resolve_style(section_cfg['style'])
+                elif section_cfg.get("style"):
+                    resolved_style = _resolve_style(section_cfg["style"])
                 else:
-                    resolved_style = _resolve_style((settings.CABINET_BUTTON_STYLE or '').strip()) or _resolve_style(
-                        CALLBACK_TO_CABINET_STYLE.get(callback_data)
-                    )
+                    resolved_style = _resolve_style(
+                        (settings.CABINET_BUTTON_STYLE or "").strip()
+                    ) or _resolve_style(CALLBACK_TO_CABINET_STYLE.get(callback_data))
 
                 # Emoji chain: explicit param > per-section DB
-                resolved_emoji = icon_custom_emoji_id or section_cfg.get('icon_custom_emoji_id') or None
+                resolved_emoji = (
+                    icon_custom_emoji_id
+                    or section_cfg.get("icon_custom_emoji_id")
+                    or None
+                )
 
                 # Если есть кастом emoji — стрипаем ведущий юникод-эмодзи из текста,
                 # иначе у юзера будут две иконки слева (custom + default).
@@ -242,7 +252,7 @@ def build_miniapp_or_callback_button(
 # Префикс startapp/маршрута для диплинка на конкретный тикет в админ-кабинете.
 # Должен совпадать с разбором на стороне фронта (bedolaga-cabinet): start_param
 # 'admin_ticket_<id>' и маршрут '/admin/tickets/<id>'.
-ADMIN_TICKET_DEEPLINK_PREFIX = 'admin_ticket_'
+ADMIN_TICKET_DEEPLINK_PREFIX = "admin_ticket_"
 
 
 def build_miniapp_startapp_url(start_param: str) -> str:
@@ -254,10 +264,10 @@ def build_miniapp_startapp_url(start_param: str) -> str:
     BotFather → /newapp). Возвращает '' если чего-то не хватает.
     """
     bot_username = settings.get_bot_username()
-    app_name = (getattr(settings, 'MINIAPP_APP_SHORT_NAME', '') or '').strip()
+    app_name = (getattr(settings, "MINIAPP_APP_SHORT_NAME", "") or "").strip()
     if not bot_username or not app_name:
-        return ''
-    return f'https://t.me/{bot_username}/{app_name}?startapp={start_param}'
+        return ""
+    return f"https://t.me/{bot_username}/{app_name}?startapp={start_param}"
 
 
 def build_admin_ticket_cabinet_button(
@@ -281,12 +291,12 @@ def build_admin_ticket_cabinet_button(
         return None
 
     if in_group:
-        url = build_miniapp_startapp_url(f'{ADMIN_TICKET_DEEPLINK_PREFIX}{ticket_id}')
+        url = build_miniapp_startapp_url(f"{ADMIN_TICKET_DEEPLINK_PREFIX}{ticket_id}")
         if not url:
             return None
         return InlineKeyboardButton(text=text, url=url)
 
-    url = build_cabinet_url(f'/admin/tickets/{ticket_id}')
+    url = build_cabinet_url(f"/admin/tickets/{ticket_id}")
     if not url:
         return None
     return InlineKeyboardButton(text=text, web_app=types.WebAppInfo(url=url))

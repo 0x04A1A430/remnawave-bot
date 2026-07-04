@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0049'
-down_revision: str | None = '0048'
+revision: str = "0049"
+down_revision: str | None = "0048"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -26,13 +26,20 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     conn = op.get_bind()
     # --- news_categories ---
-    if not conn.execute(sa.text("SELECT to_regclass('public.news_categories')")).scalar():
+    if not conn.execute(
+        sa.text("SELECT to_regclass('public.news_categories')")
+    ).scalar():
         op.create_table(
-            'news_categories',
-            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-            sa.Column('name', sa.String(100), nullable=False),
-            sa.Column('color', sa.String(20), nullable=False, server_default='#00e5a0'),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            "news_categories",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("name", sa.String(100), nullable=False),
+            sa.Column("color", sa.String(20), nullable=False, server_default="#00e5a0"),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
         )
         op.execute(
             sa.text(
@@ -43,11 +50,16 @@ def upgrade() -> None:
     # --- news_tags ---
     if not conn.execute(sa.text("SELECT to_regclass('public.news_tags')")).scalar():
         op.create_table(
-            'news_tags',
-            sa.Column('id', sa.Integer(), primary_key=True, autoincrement=True),
-            sa.Column('name', sa.String(50), nullable=False),
-            sa.Column('color', sa.String(20), nullable=False, server_default='#94a3b8'),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            "news_tags",
+            sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+            sa.Column("name", sa.String(50), nullable=False),
+            sa.Column("color", sa.String(20), nullable=False, server_default="#94a3b8"),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
         )
         op.execute(
             sa.text(
@@ -57,38 +69,42 @@ def upgrade() -> None:
 
     # --- FK columns on news_articles ---
     inspector = sa.inspect(conn)
-    existing_cols = {c['name'] for c in inspector.get_columns('news_articles')}
-    if 'category_id' not in existing_cols:
-        op.add_column('news_articles', sa.Column('category_id', sa.Integer(), nullable=True))
-    if 'tag_id' not in existing_cols:
-        op.add_column('news_articles', sa.Column('tag_id', sa.Integer(), nullable=True))
-
-    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('news_articles')}
-    if 'fk_news_articles_category_id' not in existing_fks:
-        op.create_foreign_key(
-            'fk_news_articles_category_id',
-            'news_articles',
-            'news_categories',
-            ['category_id'],
-            ['id'],
-            ondelete='SET NULL',
+    existing_cols = {c["name"] for c in inspector.get_columns("news_articles")}
+    if "category_id" not in existing_cols:
+        op.add_column(
+            "news_articles", sa.Column("category_id", sa.Integer(), nullable=True)
         )
-    if 'fk_news_articles_tag_id' not in existing_fks:
+    if "tag_id" not in existing_cols:
+        op.add_column("news_articles", sa.Column("tag_id", sa.Integer(), nullable=True))
+
+    existing_fks = {fk["name"] for fk in inspector.get_foreign_keys("news_articles")}
+    if "fk_news_articles_category_id" not in existing_fks:
         op.create_foreign_key(
-            'fk_news_articles_tag_id',
-            'news_articles',
-            'news_tags',
-            ['tag_id'],
-            ['id'],
-            ondelete='SET NULL',
+            "fk_news_articles_category_id",
+            "news_articles",
+            "news_categories",
+            ["category_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+    if "fk_news_articles_tag_id" not in existing_fks:
+        op.create_foreign_key(
+            "fk_news_articles_tag_id",
+            "news_articles",
+            "news_tags",
+            ["tag_id"],
+            ["id"],
+            ondelete="SET NULL",
         )
 
     # --- Indexes on FK columns for efficient lookups and ON DELETE SET NULL ---
-    existing_indexes = {idx['name'] for idx in inspector.get_indexes('news_articles')}
-    if 'ix_news_articles_category_id' not in existing_indexes:
-        op.create_index('ix_news_articles_category_id', 'news_articles', ['category_id'])
-    if 'ix_news_articles_tag_id' not in existing_indexes:
-        op.create_index('ix_news_articles_tag_id', 'news_articles', ['tag_id'])
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("news_articles")}
+    if "ix_news_articles_category_id" not in existing_indexes:
+        op.create_index(
+            "ix_news_articles_category_id", "news_articles", ["category_id"]
+        )
+    if "ix_news_articles_tag_id" not in existing_indexes:
+        op.create_index("ix_news_articles_tag_id", "news_articles", ["tag_id"])
 
     # --- Backfill: seed categories from existing article data ---
     op.execute(
@@ -130,11 +146,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(sa.text('DROP INDEX IF EXISTS ix_news_articles_tag_id'))
-    op.execute(sa.text('DROP INDEX IF EXISTS ix_news_articles_category_id'))
-    op.drop_constraint('fk_news_articles_tag_id', 'news_articles', type_='foreignkey')
-    op.drop_constraint('fk_news_articles_category_id', 'news_articles', type_='foreignkey')
-    op.drop_column('news_articles', 'tag_id')
-    op.drop_column('news_articles', 'category_id')
-    op.drop_table('news_tags')
-    op.drop_table('news_categories')
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_news_articles_tag_id"))
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_news_articles_category_id"))
+    op.drop_constraint("fk_news_articles_tag_id", "news_articles", type_="foreignkey")
+    op.drop_constraint(
+        "fk_news_articles_category_id", "news_articles", type_="foreignkey"
+    )
+    op.drop_column("news_articles", "tag_id")
+    op.drop_column("news_articles", "category_id")
+    op.drop_table("news_tags")
+    op.drop_table("news_categories")

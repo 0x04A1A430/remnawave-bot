@@ -48,7 +48,6 @@ from app.services.payment_verification_service import (
     _parse_cryptobot_amount_kopeks,
 )
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -68,25 +67,25 @@ MAX_PER_PAGE: int = 100
 
 def _escape_like(value: str) -> str:
     """Escape LIKE/ILIKE wildcard characters to prevent pattern injection."""
-    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class StatusFilter(str, enum.Enum):
     """Supported status filter values."""
 
-    ALL = 'all'
-    PENDING = 'pending'
-    PAID = 'paid'
-    CANCELLED = 'cancelled'
+    ALL = "all"
+    PENDING = "pending"
+    PAID = "paid"
+    CANCELLED = "cancelled"
 
 
 class PeriodPreset(str, enum.Enum):
     """Predefined period presets."""
 
-    H24 = '24h'
-    D7 = '7d'
-    D30 = '30d'
-    ALL = 'all'
+    H24 = "24h"
+    D7 = "7d"
+    D30 = "30d"
+    ALL = "all"
 
 
 _PERIOD_DELTAS: dict[PeriodPreset, timedelta] = {
@@ -100,15 +99,15 @@ _PERIOD_DELTAS: dict[PeriodPreset, timedelta] = {
 # Sets of provider-specific statuses used for classification.
 _CANCELLED_STATUSES: frozenset[str] = frozenset(
     {
-        'cancel',
-        'canceled',
-        'cancelled',
-        'declined',
-        'error',
-        'expired',
-        'fail',
-        'failed',
-        'amount_mismatch',
+        "cancel",
+        "canceled",
+        "cancelled",
+        "declined",
+        "error",
+        "expired",
+        "fail",
+        "failed",
+        "amount_mismatch",
     }
 )
 
@@ -136,7 +135,9 @@ class SearchParams:
         """Calculate the earliest datetime to consider."""
         if self.date_from is not None:
             return self.date_from
-        return datetime.now(UTC) - _PERIOD_DELTAS.get(self.period, _PERIOD_DELTAS[PeriodPreset.H24])
+        return datetime.now(UTC) - _PERIOD_DELTAS.get(
+            self.period, _PERIOD_DELTAS[PeriodPreset.H24]
+        )
 
     @property
     def upper_bound(self) -> datetime | None:
@@ -162,12 +163,12 @@ class SearchStats:
 
 _PAID_STATUSES: frozenset[str] = frozenset(
     {
-        'completed',
-        'confirmed',
-        'paid',
-        'paid_over',
-        'succeeded',
-        'success',
+        "completed",
+        "confirmed",
+        "paid",
+        "paid_over",
+        "succeeded",
+        "success",
     }
 )
 
@@ -176,7 +177,7 @@ def _classify_status(record: PendingPayment) -> StatusFilter:
     """Classify a payment record into one of the three buckets."""
     if record.is_paid:
         return StatusFilter.PAID
-    status_lower = (record.status or '').lower()
+    status_lower = (record.status or "").lower()
     if status_lower in _PAID_STATUSES:
         return StatusFilter.PAID
     if status_lower in _CANCELLED_STATUSES:
@@ -190,20 +191,20 @@ def _classify_status(record: PendingPayment) -> StatusFilter:
 
 
 class _UserSearchKind(enum.Enum):
-    USERNAME = 'username'
-    TELEGRAM_ID = 'telegram_id'
-    EMAIL = 'email'
-    INVOICE = 'invoice'
+    USERNAME = "username"
+    TELEGRAM_ID = "telegram_id"
+    EMAIL = "email"
+    INVOICE = "invoice"
 
 
 def _detect_user_search_kind(query: str) -> _UserSearchKind:
     """Auto-detect the type of user search query."""
     stripped = query.strip()
-    if stripped.startswith('@'):
+    if stripped.startswith("@"):
         return _UserSearchKind.USERNAME
     if stripped.isdigit():
         return _UserSearchKind.TELEGRAM_ID
-    if '@' in stripped:
+    if "@" in stripped:
         return _UserSearchKind.EMAIL
     return _UserSearchKind.INVOICE
 
@@ -235,25 +236,35 @@ def _apply_user_join_filter(
     """Apply user-based search filters by joining the User table."""
     stmt = stmt.join(User, model.user_id == User.id)
     if search_kind == _UserSearchKind.USERNAME:
-        username = search_value.lstrip('@')
-        stmt = stmt.where(User.username.ilike(f'%{_escape_like(username)}%'))
+        username = search_value.lstrip("@")
+        stmt = stmt.where(User.username.ilike(f"%{_escape_like(username)}%"))
     elif search_kind == _UserSearchKind.TELEGRAM_ID:
         stmt = stmt.where(User.telegram_id == int(search_value))
     elif search_kind == _UserSearchKind.EMAIL:
-        stmt = stmt.where(User.email.ilike(f'%{_escape_like(search_value)}%'))
+        stmt = stmt.where(User.email.ilike(f"%{_escape_like(search_value)}%"))
     return stmt
 
 
-async def _search_yookassa(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_yookassa(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
-        select(YooKassaPayment).options(selectinload(YooKassaPayment.user)).order_by(desc(YooKassaPayment.created_at))
+        select(YooKassaPayment)
+        .options(selectinload(YooKassaPayment.user))
+        .order_by(desc(YooKassaPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, YooKassaPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, YooKassaPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
-            stmt = stmt.where(YooKassaPayment.yookassa_payment_id.ilike(f'%{_escape_like(params.search)}%'))
+            stmt = stmt.where(
+                YooKassaPayment.yookassa_payment_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                )
+            )
         else:
             stmt = _apply_user_join_filter(stmt, YooKassaPayment, kind, params.search)
 
@@ -268,26 +279,32 @@ async def _search_yookassa(db: AsyncSession, params: SearchParams) -> list[Pendi
             payment,
             identifier=payment.yookassa_payment_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
-            is_paid=bool(getattr(payment, 'is_paid', False)),
+            status=payment.status or "",
+            is_paid=bool(getattr(payment, "is_paid", False)),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_cryptobot(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_cryptobot(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
         select(CryptoBotPayment)
         .options(selectinload(CryptoBotPayment.user))
         .order_by(desc(CryptoBotPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, CryptoBotPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, CryptoBotPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
-            stmt = stmt.where(CryptoBotPayment.invoice_id.ilike(f'%{_escape_like(params.search)}%'))
+            stmt = stmt.where(
+                CryptoBotPayment.invoice_id.ilike(f"%{_escape_like(params.search)}%")
+            )
         else:
             stmt = _apply_user_join_filter(stmt, CryptoBotPayment, kind, params.search)
 
@@ -301,7 +318,7 @@ async def _search_cryptobot(db: AsyncSession, params: SearchParams) -> list[Pend
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -309,17 +326,25 @@ async def _search_cryptobot(db: AsyncSession, params: SearchParams) -> list[Pend
     return records
 
 
-async def _search_heleket(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(HeleketPayment).options(selectinload(HeleketPayment.user)).order_by(desc(HeleketPayment.created_at))
-    stmt = _apply_date_filter(stmt, HeleketPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_heleket(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(HeleketPayment)
+        .options(selectinload(HeleketPayment.user))
+        .order_by(desc(HeleketPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, HeleketPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             stmt = stmt.where(
                 or_(
-                    HeleketPayment.uuid.ilike(f'%{_escape_like(params.search)}%'),
-                    HeleketPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
+                    HeleketPayment.uuid.ilike(f"%{_escape_like(params.search)}%"),
+                    HeleketPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
                 )
             )
         else:
@@ -334,31 +359,43 @@ async def _search_heleket(db: AsyncSession, params: SearchParams) -> list[Pendin
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_mulenpay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_mulenpay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
-        select(MulenPayPayment).options(selectinload(MulenPayPayment.user)).order_by(desc(MulenPayPayment.created_at))
+        select(MulenPayPayment)
+        .options(selectinload(MulenPayPayment.user))
+        .order_by(desc(MulenPayPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, MulenPayPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, MulenPayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
-            conditions = [MulenPayPayment.uuid.ilike(f'%{_escape_like(params.search)}%')]
+            conditions = [
+                MulenPayPayment.uuid.ilike(f"%{_escape_like(params.search)}%")
+            ]
             # mulen_payment_id is Integer -- cast for ILIKE
             if params.search.isdigit():
-                conditions.append(MulenPayPayment.mulen_payment_id == int(params.search))
+                conditions.append(
+                    MulenPayPayment.mulen_payment_id == int(params.search)
+                )
             else:
                 conditions.append(
-                    cast(MulenPayPayment.mulen_payment_id, SAString).ilike(f'%{_escape_like(params.search)}%')
+                    cast(MulenPayPayment.mulen_payment_id, SAString).ilike(
+                        f"%{_escape_like(params.search)}%"
+                    )
                 )
             stmt = stmt.where(or_(*conditions))
         else:
@@ -373,7 +410,7 @@ async def _search_mulenpay(db: AsyncSession, params: SearchParams) -> list[Pendi
             payment,
             identifier=payment.uuid,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -382,15 +419,21 @@ async def _search_mulenpay(db: AsyncSession, params: SearchParams) -> list[Pendi
 
 
 async def _search_pal24(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(Pal24Payment).options(selectinload(Pal24Payment.user)).order_by(desc(Pal24Payment.created_at))
-    stmt = _apply_date_filter(stmt, Pal24Payment.created_at, params.cutoff, params.upper_bound)
+    stmt = (
+        select(Pal24Payment)
+        .options(selectinload(Pal24Payment.user))
+        .order_by(desc(Pal24Payment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, Pal24Payment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                Pal24Payment.bill_id.ilike(f'%{_escape_like(params.search)}%'),
-                Pal24Payment.order_id.ilike(f'%{_escape_like(params.search)}%'),
+                Pal24Payment.bill_id.ilike(f"%{_escape_like(params.search)}%"),
+                Pal24Payment.order_id.ilike(f"%{_escape_like(params.search)}%"),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -405,9 +448,9 @@ async def _search_pal24(db: AsyncSession, params: SearchParams) -> list[PendingP
             payment,
             identifier=payment.bill_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
@@ -415,15 +458,21 @@ async def _search_pal24(db: AsyncSession, params: SearchParams) -> list[PendingP
 
 
 async def _search_wata(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(WataPayment).options(selectinload(WataPayment.user)).order_by(desc(WataPayment.created_at))
-    stmt = _apply_date_filter(stmt, WataPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = (
+        select(WataPayment)
+        .options(selectinload(WataPayment.user))
+        .order_by(desc(WataPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, WataPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                WataPayment.payment_link_id.ilike(f'%{_escape_like(params.search)}%'),
-                WataPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
+                WataPayment.payment_link_id.ilike(f"%{_escape_like(params.search)}%"),
+                WataPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -438,25 +487,35 @@ async def _search_wata(db: AsyncSession, params: SearchParams) -> list[PendingPa
             payment,
             identifier=payment.payment_link_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_platega(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(PlategaPayment).options(selectinload(PlategaPayment.user)).order_by(desc(PlategaPayment.created_at))
-    stmt = _apply_date_filter(stmt, PlategaPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_platega(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(PlategaPayment)
+        .options(selectinload(PlategaPayment.user))
+        .order_by(desc(PlategaPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, PlategaPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                PlategaPayment.correlation_id.ilike(f'%{_escape_like(params.search)}%'),
-                PlategaPayment.platega_transaction_id.ilike(f'%{_escape_like(params.search)}%'),
+                PlategaPayment.correlation_id.ilike(f"%{_escape_like(params.search)}%"),
+                PlategaPayment.platega_transaction_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -466,43 +525,59 @@ async def _search_platega(db: AsyncSession, params: SearchParams) -> list[Pendin
     result = await db.execute(stmt)
     records: list[PendingPayment] = []
     for payment in result.scalars().all():
-        identifier = payment.platega_transaction_id or payment.correlation_id or str(payment.id)
+        identifier = (
+            payment.platega_transaction_id or payment.correlation_id or str(payment.id)
+        )
         record = _build_record(
             PaymentMethod.PLATEGA,
             payment,
             identifier=identifier,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_cloudpayments(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_cloudpayments(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
         select(CloudPaymentsPayment)
         .options(selectinload(CloudPaymentsPayment.user))
         .order_by(desc(CloudPaymentsPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, CloudPaymentsPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, CloudPaymentsPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
-            conditions = [CloudPaymentsPayment.invoice_id.ilike(f'%{_escape_like(params.search)}%')]
+            conditions = [
+                CloudPaymentsPayment.invoice_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                )
+            ]
             # transaction_id_cp is BigInteger -- cast for ILIKE
             if params.search.isdigit():
-                conditions.append(CloudPaymentsPayment.transaction_id_cp == int(params.search))
+                conditions.append(
+                    CloudPaymentsPayment.transaction_id_cp == int(params.search)
+                )
             else:
                 conditions.append(
-                    cast(CloudPaymentsPayment.transaction_id_cp, SAString).ilike(f'%{_escape_like(params.search)}%')
+                    cast(CloudPaymentsPayment.transaction_id_cp, SAString).ilike(
+                        f"%{_escape_like(params.search)}%"
+                    )
                 )
             stmt = stmt.where(or_(*conditions))
         else:
-            stmt = _apply_user_join_filter(stmt, CloudPaymentsPayment, kind, params.search)
+            stmt = _apply_user_join_filter(
+                stmt, CloudPaymentsPayment, kind, params.search
+            )
 
     stmt = stmt.limit(MAX_RECORDS_PER_PROVIDER)
     result = await db.execute(stmt)
@@ -513,7 +588,7 @@ async def _search_cloudpayments(db: AsyncSession, params: SearchParams) -> list[
             payment,
             identifier=payment.invoice_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -521,20 +596,26 @@ async def _search_cloudpayments(db: AsyncSession, params: SearchParams) -> list[
     return records
 
 
-async def _search_freekassa(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_freekassa(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
         select(FreekassaPayment)
         .options(selectinload(FreekassaPayment.user))
         .order_by(desc(FreekassaPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, FreekassaPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, FreekassaPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                FreekassaPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                FreekassaPayment.freekassa_order_id.ilike(f'%{_escape_like(params.search)}%'),
+                FreekassaPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                FreekassaPayment.freekassa_order_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -549,7 +630,7 @@ async def _search_freekassa(db: AsyncSession, params: SearchParams) -> list[Pend
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -557,16 +638,26 @@ async def _search_freekassa(db: AsyncSession, params: SearchParams) -> list[Pend
     return records
 
 
-async def _search_kassa_ai(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(KassaAiPayment).options(selectinload(KassaAiPayment.user)).order_by(desc(KassaAiPayment.created_at))
-    stmt = _apply_date_filter(stmt, KassaAiPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_kassa_ai(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(KassaAiPayment)
+        .options(selectinload(KassaAiPayment.user))
+        .order_by(desc(KassaAiPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, KassaAiPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                KassaAiPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                KassaAiPayment.kassa_ai_order_id.ilike(f'%{_escape_like(params.search)}%'),
+                KassaAiPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                KassaAiPayment.kassa_ai_order_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -581,7 +672,7 @@ async def _search_kassa_ai(db: AsyncSession, params: SearchParams) -> list[Pendi
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
         )
         if record:
@@ -589,16 +680,24 @@ async def _search_kassa_ai(db: AsyncSession, params: SearchParams) -> list[Pendi
     return records
 
 
-async def _search_riopay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(RioPayPayment).options(selectinload(RioPayPayment.user)).order_by(desc(RioPayPayment.created_at))
-    stmt = _apply_date_filter(stmt, RioPayPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_riopay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(RioPayPayment)
+        .options(selectinload(RioPayPayment.user))
+        .order_by(desc(RioPayPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, RioPayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                RioPayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                RioPayPayment.riopay_order_id.ilike(f'%{_escape_like(params.search)}%'),
+                RioPayPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                RioPayPayment.riopay_order_id.ilike(f"%{_escape_like(params.search)}%"),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -613,28 +712,34 @@ async def _search_riopay(db: AsyncSession, params: SearchParams) -> list[Pending
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_severpay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_severpay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
-        select(SeverPayPayment).options(selectinload(SeverPayPayment.user)).order_by(desc(SeverPayPayment.created_at))
+        select(SeverPayPayment)
+        .options(selectinload(SeverPayPayment.user))
+        .order_by(desc(SeverPayPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, SeverPayPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, SeverPayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                SeverPayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                SeverPayPayment.severpay_id.ilike(f'%{_escape_like(params.search)}%'),
-                SeverPayPayment.severpay_uid.ilike(f'%{_escape_like(params.search)}%'),
+                SeverPayPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                SeverPayPayment.severpay_id.ilike(f"%{_escape_like(params.search)}%"),
+                SeverPayPayment.severpay_uid.ilike(f"%{_escape_like(params.search)}%"),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -649,25 +754,35 @@ async def _search_severpay(db: AsyncSession, params: SearchParams) -> list[Pendi
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_overpay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(OverpayPayment).options(selectinload(OverpayPayment.user)).order_by(desc(OverpayPayment.created_at))
-    stmt = _apply_date_filter(stmt, OverpayPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_overpay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(OverpayPayment)
+        .options(selectinload(OverpayPayment.user))
+        .order_by(desc(OverpayPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, OverpayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                OverpayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                OverpayPayment.overpay_payment_id.ilike(f'%{_escape_like(params.search)}%'),
+                OverpayPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                OverpayPayment.overpay_payment_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -682,25 +797,33 @@ async def _search_overpay(db: AsyncSession, params: SearchParams) -> list[Pendin
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_paypear(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(PayPearPayment).options(selectinload(PayPearPayment.user)).order_by(desc(PayPearPayment.created_at))
-    stmt = _apply_date_filter(stmt, PayPearPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_paypear(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(PayPearPayment)
+        .options(selectinload(PayPearPayment.user))
+        .order_by(desc(PayPearPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, PayPearPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                PayPearPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                PayPearPayment.paypear_id.ilike(f'%{_escape_like(params.search)}%'),
+                PayPearPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                PayPearPayment.paypear_id.ilike(f"%{_escape_like(params.search)}%"),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -715,27 +838,35 @@ async def _search_paypear(db: AsyncSession, params: SearchParams) -> list[Pendin
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_rollypay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_rollypay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
-        select(RollyPayPayment).options(selectinload(RollyPayPayment.user)).order_by(desc(RollyPayPayment.created_at))
+        select(RollyPayPayment)
+        .options(selectinload(RollyPayPayment.user))
+        .order_by(desc(RollyPayPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, RollyPayPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, RollyPayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                RollyPayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                RollyPayPayment.rollypay_payment_id.ilike(f'%{_escape_like(params.search)}%'),
+                RollyPayPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                RollyPayPayment.rollypay_payment_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -750,25 +881,35 @@ async def _search_rollypay(db: AsyncSession, params: SearchParams) -> list[Pendi
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_aurapay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(AuraPayPayment).options(selectinload(AuraPayPayment.user)).order_by(desc(AuraPayPayment.created_at))
-    stmt = _apply_date_filter(stmt, AuraPayPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_aurapay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(AuraPayPayment)
+        .options(selectinload(AuraPayPayment.user))
+        .order_by(desc(AuraPayPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, AuraPayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                AuraPayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                AuraPayPayment.aurapay_invoice_id.ilike(f'%{_escape_like(params.search)}%'),
+                AuraPayPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                AuraPayPayment.aurapay_invoice_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -783,33 +924,41 @@ async def _search_aurapay(db: AsyncSession, params: SearchParams) -> list[Pendin
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_etoplatezhi(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_etoplatezhi(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
         select(EtoplatezhiPayment)
         .options(selectinload(EtoplatezhiPayment.user))
         .order_by(desc(EtoplatezhiPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, EtoplatezhiPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, EtoplatezhiPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                EtoplatezhiPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                EtoplatezhiPayment.etoplatezhi_payment_id.ilike(f'%{_escape_like(params.search)}%'),
+                EtoplatezhiPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                EtoplatezhiPayment.etoplatezhi_payment_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
-            stmt = _apply_user_join_filter(stmt, EtoplatezhiPayment, kind, params.search)
+            stmt = _apply_user_join_filter(
+                stmt, EtoplatezhiPayment, kind, params.search
+            )
 
     stmt = stmt.limit(MAX_RECORDS_PER_PROVIDER)
     result = await db.execute(stmt)
@@ -820,29 +969,35 @@ async def _search_etoplatezhi(db: AsyncSession, params: SearchParams) -> list[Pe
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_antilopay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+async def _search_antilopay(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
     stmt = (
         select(AntilopayPayment)
         .options(selectinload(AntilopayPayment.user))
         .order_by(desc(AntilopayPayment.created_at))
     )
-    stmt = _apply_date_filter(stmt, AntilopayPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, AntilopayPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                AntilopayPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                AntilopayPayment.antilopay_payment_id.ilike(f'%{_escape_like(params.search)}%'),
+                AntilopayPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                AntilopayPayment.antilopay_payment_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -857,25 +1012,35 @@ async def _search_antilopay(db: AsyncSession, params: SearchParams) -> list[Pend
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
     return records
 
 
-async def _search_jupiter(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(JupiterPayment).options(selectinload(JupiterPayment.user)).order_by(desc(JupiterPayment.created_at))
-    stmt = _apply_date_filter(stmt, JupiterPayment.created_at, params.cutoff, params.upper_bound)
+async def _search_jupiter(
+    db: AsyncSession, params: SearchParams
+) -> list[PendingPayment]:
+    stmt = (
+        select(JupiterPayment)
+        .options(selectinload(JupiterPayment.user))
+        .order_by(desc(JupiterPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, JupiterPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                JupiterPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                JupiterPayment.jupiter_transaction_id.ilike(f'%{_escape_like(params.search)}%'),
+                JupiterPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                JupiterPayment.jupiter_transaction_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -890,9 +1055,9 @@ async def _search_jupiter(db: AsyncSession, params: SearchParams) -> list[Pendin
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
@@ -900,15 +1065,23 @@ async def _search_jupiter(db: AsyncSession, params: SearchParams) -> list[Pendin
 
 
 async def _search_donut(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(DonutPayment).options(selectinload(DonutPayment.user)).order_by(desc(DonutPayment.created_at))
-    stmt = _apply_date_filter(stmt, DonutPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = (
+        select(DonutPayment)
+        .options(selectinload(DonutPayment.user))
+        .order_by(desc(DonutPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, DonutPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                DonutPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                DonutPayment.donut_transaction_id.ilike(f'%{_escape_like(params.search)}%'),
+                DonutPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                DonutPayment.donut_transaction_id.ilike(
+                    f"%{_escape_like(params.search)}%"
+                ),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -923,9 +1096,9 @@ async def _search_donut(db: AsyncSession, params: SearchParams) -> list[PendingP
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
@@ -933,15 +1106,21 @@ async def _search_donut(db: AsyncSession, params: SearchParams) -> list[PendingP
 
 
 async def _search_lava(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
-    stmt = select(LavaPayment).options(selectinload(LavaPayment.user)).order_by(desc(LavaPayment.created_at))
-    stmt = _apply_date_filter(stmt, LavaPayment.created_at, params.cutoff, params.upper_bound)
+    stmt = (
+        select(LavaPayment)
+        .options(selectinload(LavaPayment.user))
+        .order_by(desc(LavaPayment.created_at))
+    )
+    stmt = _apply_date_filter(
+        stmt, LavaPayment.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
             conditions = [
-                LavaPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
-                LavaPayment.lava_invoice_id.ilike(f'%{_escape_like(params.search)}%'),
+                LavaPayment.order_id.ilike(f"%{_escape_like(params.search)}%"),
+                LavaPayment.lava_invoice_id.ilike(f"%{_escape_like(params.search)}%"),
             ]
             stmt = stmt.where(or_(*conditions))
         else:
@@ -956,9 +1135,9 @@ async def _search_lava(db: AsyncSession, params: SearchParams) -> list[PendingPa
             payment,
             identifier=payment.order_id,
             amount_kopeks=payment.amount_kopeks,
-            status=payment.status or '',
+            status=payment.status or "",
             is_paid=bool(payment.is_paid),
-            expires_at=getattr(payment, 'expires_at', None),
+            expires_at=getattr(payment, "expires_at", None),
         )
         if record:
             records.append(record)
@@ -975,12 +1154,16 @@ async def _search_stars(db: AsyncSession, params: SearchParams) -> list[PendingP
         )
         .order_by(desc(Transaction.created_at))
     )
-    stmt = _apply_date_filter(stmt, Transaction.created_at, params.cutoff, params.upper_bound)
+    stmt = _apply_date_filter(
+        stmt, Transaction.created_at, params.cutoff, params.upper_bound
+    )
 
     if params.search:
         kind = _detect_user_search_kind(params.search)
         if kind == _UserSearchKind.INVOICE:
-            stmt = stmt.where(Transaction.external_id.ilike(f'%{_escape_like(params.search)}%'))
+            stmt = stmt.where(
+                Transaction.external_id.ilike(f"%{_escape_like(params.search)}%")
+            )
         else:
             stmt = _apply_user_join_filter(stmt, Transaction, kind, params.search)
 
@@ -993,7 +1176,7 @@ async def _search_stars(db: AsyncSession, params: SearchParams) -> list[PendingP
             transaction,
             identifier=transaction.external_id or str(transaction.id),
             amount_kopeks=transaction.amount_kopeks,
-            status='paid' if transaction.is_completed else 'pending',
+            status="paid" if transaction.is_completed else "pending",
             is_paid=bool(transaction.is_completed),
         )
         if record:
@@ -1065,7 +1248,9 @@ async def search_payments(
 
     # Apply status filter in Python (status classification depends on provider logic)
     if params.status_filter != StatusFilter.ALL:
-        all_records = [r for r in all_records if _classify_status(r) == params.status_filter]
+        all_records = [
+            r for r in all_records if _classify_status(r) == params.status_filter
+        ]
 
     # Sort globally by created_at desc
     all_records.sort(key=lambda r: r.created_at, reverse=True)

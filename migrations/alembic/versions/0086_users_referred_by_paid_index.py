@@ -34,31 +34,30 @@ from typing import Sequence, Union
 
 from alembic import op
 
-
-revision: str = '0086'
-down_revision: Union[str, None] = '0085'
+revision: str = "0086"
+down_revision: Union[str, None] = "0085"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-INDEX_NAME = 'ix_users_referred_by_paid'
+INDEX_NAME = "ix_users_referred_by_paid"
 
 
 def upgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    if dialect_name == 'postgresql':
+    if dialect_name == "postgresql":
         with op.get_context().autocommit_block():
             op.execute(
-                f'CREATE INDEX CONCURRENTLY IF NOT EXISTS {INDEX_NAME} '
-                'ON users (referred_by_id, has_made_first_topup)'
+                f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {INDEX_NAME} "
+                "ON users (referred_by_id, has_made_first_topup)"
             )
     else:
         op.create_index(
             INDEX_NAME,
-            'users',
-            ['referred_by_id', 'has_made_first_topup'],
+            "users",
+            ["referred_by_id", "has_made_first_topup"],
             unique=False,
         )
 
@@ -67,8 +66,8 @@ def downgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    if dialect_name == 'postgresql':
+    if dialect_name == "postgresql":
         with op.get_context().autocommit_block():
-            op.execute(f'DROP INDEX CONCURRENTLY IF EXISTS {INDEX_NAME}')
+            op.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {INDEX_NAME}")
     else:
-        op.drop_index(INDEX_NAME, table_name='users')
+        op.drop_index(INDEX_NAME, table_name="users")

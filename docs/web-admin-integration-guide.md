@@ -44,7 +44,7 @@ class WebSocketManager {
 
   connect(url: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected');
+      console.log("WebSocket already connected");
       return;
     }
 
@@ -52,9 +52,9 @@ class WebSocketManager {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log("WebSocket connected");
       this.reconnectAttempts = 0;
-      this.emit('connected', {});
+      this.emit("connected", {});
     };
 
     this.ws.onmessage = (event) => {
@@ -62,36 +62,36 @@ class WebSocketManager {
         const data = JSON.parse(event.data);
         this.handleMessage(data);
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
+        console.error("Failed to parse WebSocket message:", error);
       }
     };
 
     this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      this.emit('error', { error });
+      console.error("WebSocket error:", error);
+      this.emit("error", { error });
     };
 
     this.ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      this.emit('disconnected', {});
+      console.log("WebSocket disconnected");
+      this.emit("disconnected", {});
       this.attemptReconnect(url);
     };
 
     // Ping для keepalive каждые 30 секунд
     setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        this.ws.send(JSON.stringify({ type: "ping" }));
       }
     }, 30000);
   }
 
   private handleMessage(data: any): void {
-    if (data.type === 'pong') {
+    if (data.type === "pong") {
       return; // Игнорируем pong
     }
 
-    if (data.type === 'connection') {
-      this.emit('connection', data);
+    if (data.type === "connection") {
+      this.emit("connection", data);
       return;
     }
 
@@ -101,7 +101,7 @@ class WebSocketManager {
 
   private attemptReconnect(url: string): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnect attempts reached');
+      console.error("Max reconnect attempts reached");
       return;
     }
 
@@ -131,7 +131,7 @@ class WebSocketManager {
   private emit(event: string, data: any): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      callbacks.forEach(callback => {
+      callbacks.forEach((callback) => {
         try {
           callback(data);
         } catch (error) {
@@ -176,7 +176,7 @@ function App() {
 
     const manager = new WebSocketManager(token);
     const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8080/ws';
-    
+
     manager.connect(wsUrl);
     setWsManager(manager);
 
@@ -410,7 +410,7 @@ function NotificationCenter() {
       const notification: Notification = {
         id: `ticket-message-${payload.message_id}`,
         type: 'ticket.message_added',
-        message: payload.is_from_admin 
+        message: payload.is_from_admin
           ? `Новый ответ в тикете #${payload.ticket_id}`
           : `Новое сообщение от пользователя в тикете #${payload.ticket_id}`,
         timestamp: new Date(),
@@ -459,7 +459,7 @@ function NotificationCenter() {
 
 ```typescript
 // api/webhooks.ts
-import { apiClient } from './client';
+import { apiClient } from "./client";
 
 export interface Webhook {
   id: number;
@@ -499,7 +499,7 @@ export const webhooksApi = {
     limit?: number;
     offset?: number;
   }): Promise<{ items: Webhook[]; total: number }> => {
-    const response = await apiClient.get('/webhooks', { params });
+    const response = await apiClient.get("/webhooks", { params });
     return response.data;
   },
 
@@ -511,7 +511,7 @@ export const webhooksApi = {
 
   // Создать webhook
   create: async (data: WebhookCreateRequest): Promise<Webhook> => {
-    const response = await apiClient.post('/webhooks', data);
+    const response = await apiClient.post("/webhooks", data);
     return response.data;
   },
 
@@ -535,16 +535,18 @@ export const webhooksApi = {
     failed_deliveries: number;
     success_rate: number;
   }> => {
-    const response = await apiClient.get('/webhooks/stats');
+    const response = await apiClient.get("/webhooks/stats");
     return response.data;
   },
 
   // История доставок
   getDeliveries: async (
     webhookId: number,
-    params?: { status?: string; limit?: number; offset?: number }
+    params?: { status?: string; limit?: number; offset?: number },
   ): Promise<{ items: any[]; total: number }> => {
-    const response = await apiClient.get(`/webhooks/${webhookId}/deliveries`, { params });
+    const response = await apiClient.get(`/webhooks/${webhookId}/deliveries`, {
+      params,
+    });
     return response.data;
   },
 };
@@ -556,38 +558,39 @@ export const webhooksApi = {
 // constants/webhookEvents.ts
 export const WEBHOOK_EVENT_TYPES = [
   {
-    value: 'user.created',
-    label: 'Создание пользователя',
-    description: 'Отправляется при регистрации нового пользователя',
+    value: "user.created",
+    label: "Создание пользователя",
+    description: "Отправляется при регистрации нового пользователя",
   },
   {
-    value: 'payment.completed',
-    label: 'Завершение платежа',
-    description: 'Отправляется при успешном пополнении баланса',
+    value: "payment.completed",
+    label: "Завершение платежа",
+    description: "Отправляется при успешном пополнении баланса",
   },
   {
-    value: 'transaction.created',
-    label: 'Создание транзакции',
-    description: 'Отправляется при создании любой транзакции',
+    value: "transaction.created",
+    label: "Создание транзакции",
+    description: "Отправляется при создании любой транзакции",
   },
   {
-    value: 'ticket.created',
-    label: 'Создание тикета',
-    description: 'Отправляется при создании нового тикета поддержки',
+    value: "ticket.created",
+    label: "Создание тикета",
+    description: "Отправляется при создании нового тикета поддержки",
   },
   {
-    value: 'ticket.status_changed',
-    label: 'Изменение статуса тикета',
-    description: 'Отправляется при изменении статуса тикета',
+    value: "ticket.status_changed",
+    label: "Изменение статуса тикета",
+    description: "Отправляется при изменении статуса тикета",
   },
   {
-    value: 'ticket.message_added',
-    label: 'Новое сообщение в тикете',
-    description: 'Отправляется при добавлении нового сообщения в тикет (от пользователя или админа)',
+    value: "ticket.message_added",
+    label: "Новое сообщение в тикете",
+    description:
+      "Отправляется при добавлении нового сообщения в тикет (от пользователя или админа)",
   },
 ] as const;
 
-export type WebhookEventType = typeof WEBHOOK_EVENT_TYPES[number]['value'];
+export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number]["value"];
 ```
 
 ---
@@ -992,11 +995,11 @@ class WebSocketManager {
   // ... существующий код ...
 
   private handleError(error: Error): void {
-    console.error('WebSocket error:', error);
-    
+    console.error("WebSocket error:", error);
+
     // Уведомление пользователя
-    this.emit('error', {
-      message: 'Ошибка подключения к серверу',
+    this.emit("error", {
+      message: "Ошибка подключения к серверу",
       error: error.message,
     });
 
@@ -1007,11 +1010,11 @@ class WebSocketManager {
   }
 
   // Показ статуса подключения
-  getConnectionStatus(): 'connected' | 'disconnected' | 'connecting' {
-    if (!this.ws) return 'disconnected';
-    if (this.ws.readyState === WebSocket.OPEN) return 'connected';
-    if (this.ws.readyState === WebSocket.CONNECTING) return 'connecting';
-    return 'disconnected';
+  getConnectionStatus(): "connected" | "disconnected" | "connecting" {
+    if (!this.ws) return "disconnected";
+    if (this.ws.readyState === WebSocket.OPEN) return "connected";
+    if (this.ws.readyState === WebSocket.CONNECTING) return "connecting";
+    return "disconnected";
   }
 }
 ```
@@ -1081,6 +1084,7 @@ function ConnectionStatus() {
 ### Тестирование Webhooks
 
 1. **Создание webhook:**
+
    ```bash
    curl -X POST http://localhost:8080/webhooks \
      -H "Authorization: Bearer YOUR_TOKEN" \
@@ -1144,4 +1148,3 @@ function ConnectionStatus() {
    - Используйте анимации для плавных обновлений
    - Предоставьте возможность отключить уведомления
    - Добавьте фильтры для событий в уведомлениях
-

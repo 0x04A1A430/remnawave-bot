@@ -25,7 +25,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -42,14 +41,14 @@ def _callbacks(keyboard) -> list[str]:
 
 
 def test_autopay_button_present_for_active_subscription() -> None:
-    sub = SimpleNamespace(actual_status='active')
+    sub = SimpleNamespace(actual_status="active")
 
     keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
 
     callbacks = _callbacks(keyboard)
-    assert 'subscription_autopay' in callbacks, (
-        'Multi-tariff detail card must expose 💳 Автоплатеж; without this button '
-        'users with multiple subscriptions have no entry point to the autopay menu.'
+    assert "subscription_autopay" in callbacks, (
+        "Multi-tariff detail card must expose 💳 Автоплатеж; without this button "
+        "users with multiple subscriptions have no entry point to the autopay menu."
     )
 
 
@@ -65,33 +64,36 @@ def test_autopay_button_uses_legacy_callback_without_sub_id() -> None:
     check the way `'42' not in callback` could when the literal `42` doesn't
     appear in `subscription_autopay`."""
     sub_id = 99999937
-    sub = SimpleNamespace(actual_status='active')
+    sub = SimpleNamespace(actual_status="active")
 
     keyboard = _build_subscription_detail_keyboard(sub_id=sub_id, sub=sub)
 
     autopay_buttons = [
-        button for row in keyboard.inline_keyboard for button in row if button.callback_data == 'subscription_autopay'
+        button
+        for row in keyboard.inline_keyboard
+        for button in row
+        if button.callback_data == "subscription_autopay"
     ]
     assert len(autopay_buttons) == 1
     # Exact match — refactor to `subscription_autopay_{id}` / `apm:{id}` must fail here.
-    assert autopay_buttons[0].callback_data == 'subscription_autopay'
+    assert autopay_buttons[0].callback_data == "subscription_autopay"
     assert str(sub_id) not in autopay_buttons[0].callback_data
 
 
 def test_autopay_button_hidden_on_expired_subscription() -> None:
-    sub = SimpleNamespace(actual_status='expired')
+    sub = SimpleNamespace(actual_status="expired")
 
     keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
 
-    assert 'subscription_autopay' not in _callbacks(keyboard)
+    assert "subscription_autopay" not in _callbacks(keyboard)
 
 
 def test_autopay_button_hidden_on_disabled_subscription() -> None:
-    sub = SimpleNamespace(actual_status='disabled')
+    sub = SimpleNamespace(actual_status="disabled")
 
     keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=sub)
 
-    assert 'subscription_autopay' not in _callbacks(keyboard)
+    assert "subscription_autopay" not in _callbacks(keyboard)
 
 
 def test_autopay_button_present_when_status_unknown() -> None:
@@ -100,10 +102,10 @@ def test_autopay_button_present_when_status_unknown() -> None:
     appear under the same condition."""
     keyboard = _build_subscription_detail_keyboard(sub_id=42, sub=None)
 
-    assert 'subscription_autopay' in _callbacks(keyboard)
+    assert "subscription_autopay" in _callbacks(keyboard)
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.anyio("asyncio")
 async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -117,8 +119,8 @@ async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
     sub_id = 77
     subscription = SimpleNamespace(
         id=sub_id,
-        actual_status='active',
-        tariff=SimpleNamespace(name='X'),
+        actual_status="active",
+        tariff=SimpleNamespace(name="X"),
         traffic_limit_gb=10,
         traffic_used_gb=1.0,
         device_limit=1,
@@ -127,12 +129,16 @@ async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
         autopay_days_before=3,
     )
 
-    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=subscription))
+    monkeypatch.setattr(
+        my_subscriptions,
+        "get_subscription_by_id_for_user",
+        AsyncMock(return_value=subscription),
+    )
 
     state = SimpleNamespace(update_data=AsyncMock())
-    db_user = SimpleNamespace(id=1, language='ru')
+    db_user = SimpleNamespace(id=1, language="ru")
     callback = SimpleNamespace(
-        data=f'sm:{sub_id}',
+        data=f"sm:{sub_id}",
         answer=AsyncMock(),
         message=SimpleNamespace(edit_text=AsyncMock(), answer=AsyncMock()),
     )
@@ -148,19 +154,24 @@ async def test_show_subscription_detail_writes_active_subscription_id_to_fsm(
     state.update_data.assert_any_call(active_subscription_id=sub_id)
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.anyio("asyncio")
 async def test_show_subscription_detail_does_not_write_fsm_on_idor_miss(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When the subscription doesn't belong to the requesting user (IDOR check returns
     None), the handler must short-circuit BEFORE writing to FSM. Otherwise a malicious
-    callback with a foreign sub_id would poison the user's FSM with someone else's id."""
-    monkeypatch.setattr(my_subscriptions, 'get_subscription_by_id_for_user', AsyncMock(return_value=None))
+    callback with a foreign sub_id would poison the user's FSM with someone else's id.
+    """
+    monkeypatch.setattr(
+        my_subscriptions,
+        "get_subscription_by_id_for_user",
+        AsyncMock(return_value=None),
+    )
 
     state = SimpleNamespace(update_data=AsyncMock())
-    db_user = SimpleNamespace(id=1, language='ru')
+    db_user = SimpleNamespace(id=1, language="ru")
     callback = SimpleNamespace(
-        data='sm:999',
+        data="sm:999",
         answer=AsyncMock(),
         message=SimpleNamespace(edit_text=AsyncMock()),
     )

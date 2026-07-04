@@ -25,16 +25,15 @@ from ..schemas.info_pages import (
     ReorderRequest,
 )
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/info-pages', tags=['Cabinet Admin Info Pages'])
+router = APIRouter(prefix="/admin/info-pages", tags=["Cabinet Admin Info Pages"])
 
 
-@router.get('', response_model=list[InfoPageListItem])
+@router.get("", response_model=list[InfoPageListItem])
 async def list_all_info_pages(
-    page_type: str | None = Query(None, pattern=r'^(page|faq)$'),
-    admin: User = Depends(require_permission('info_pages:read')),
+    page_type: str | None = Query(None, pattern=r"^(page|faq)$"),
+    admin: User = Depends(require_permission("info_pages:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> list[InfoPageListItem]:
     """Get all info pages (admin view, includes inactive)."""
@@ -44,17 +43,17 @@ async def list_all_info_pages(
     except HTTPException:
         raise
     except Exception:
-        logger.exception('Failed to list info pages')
+        logger.exception("Failed to list info pages")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load info pages',
+            detail="Failed to load info pages",
         )
 
 
-@router.get('/{page_id}', response_model=InfoPageResponse)
+@router.get("/{page_id}", response_model=InfoPageResponse)
 async def get_info_page_detail(
     page_id: int,
-    admin: User = Depends(require_permission('info_pages:read')),
+    admin: User = Depends(require_permission("info_pages:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Get a single info page by ID (admin view)."""
@@ -62,15 +61,15 @@ async def get_info_page_detail(
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail="Info page not found",
         )
     return InfoPageResponse.model_validate(page)
 
 
-@router.post('', response_model=InfoPageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=InfoPageResponse, status_code=status.HTTP_201_CREATED)
 async def create_page(
     request: InfoPageCreateRequest,
-    admin: User = Depends(require_permission('info_pages:edit')),
+    admin: User = Depends(require_permission("info_pages:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Create a new info page."""
@@ -93,23 +92,23 @@ async def create_page(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An info page with this slug already exists',
+            detail="An info page with this slug already exists",
         )
     except Exception:
-        logger.exception('Failed to create info page')
+        logger.exception("Failed to create info page")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to create info page',
+            detail="Failed to create info page",
         )
 
     return InfoPageResponse.model_validate(page)
 
 
-@router.put('/{page_id}', response_model=InfoPageResponse)
+@router.put("/{page_id}", response_model=InfoPageResponse)
 async def update_page(
     page_id: int,
     request: InfoPageUpdateRequest,
-    admin: User = Depends(require_permission('info_pages:edit')),
+    admin: User = Depends(require_permission("info_pages:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Update an existing info page."""
@@ -117,13 +116,13 @@ async def update_page(
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail="Info page not found",
         )
 
     try:
         update_data = request.model_dump(exclude_unset=True)
 
-        replaces_tab = update_data.get('replaces_tab')
+        replaces_tab = update_data.get("replaces_tab")
         if replaces_tab is not None:
             await clear_replaces_tab(db, replaces_tab, exclude_page_id=page_id)
 
@@ -131,27 +130,27 @@ async def update_page(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An info page with this slug already exists',
+            detail="An info page with this slug already exists",
         )
     except Exception:
-        logger.exception('Failed to update info page', page_id=page_id)
+        logger.exception("Failed to update info page", page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to update info page',
+            detail="Failed to update info page",
         )
 
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found after update',
+            detail="Info page not found after update",
         )
     return InfoPageResponse.model_validate(page)
 
 
-@router.delete('/{page_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{page_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_page(
     page_id: int,
-    admin: User = Depends(require_permission('info_pages:edit')),
+    admin: User = Depends(require_permission("info_pages:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete an info page."""
@@ -159,40 +158,40 @@ async def remove_page(
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail="Info page not found",
         )
 
     try:
         await delete_info_page(db, page_id)
     except Exception:
-        logger.exception('Failed to delete info page', page_id=page_id)
+        logger.exception("Failed to delete info page", page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to delete info page',
+            detail="Failed to delete info page",
         )
 
 
-@router.post('/reorder', status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/reorder", status_code=status.HTTP_204_NO_CONTENT)
 async def reorder_pages(
     request: ReorderRequest,
-    admin: User = Depends(require_permission('info_pages:edit')),
+    admin: User = Depends(require_permission("info_pages:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Bulk update sort_order for info pages."""
     try:
         await reorder_info_pages(db, request.items)
     except Exception:
-        logger.exception('Failed to reorder info pages')
+        logger.exception("Failed to reorder info pages")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reorder info pages',
+            detail="Failed to reorder info pages",
         )
 
 
-@router.post('/{page_id}/toggle-active', response_model=InfoPageResponse)
+@router.post("/{page_id}/toggle-active", response_model=InfoPageResponse)
 async def toggle_active(
     page_id: int,
-    admin: User = Depends(require_permission('info_pages:edit')),
+    admin: User = Depends(require_permission("info_pages:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Toggle the active status of an info page."""
@@ -200,21 +199,21 @@ async def toggle_active(
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail="Info page not found",
         )
 
     try:
         page = await update_info_page(db, page_id, is_active=not existing.is_active)
     except Exception:
-        logger.exception('Failed to toggle info page active status', page_id=page_id)
+        logger.exception("Failed to toggle info page active status", page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle active status',
+            detail="Failed to toggle active status",
         )
 
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found after toggle',
+            detail="Info page not found after toggle",
         )
     return InfoPageResponse.model_validate(page)

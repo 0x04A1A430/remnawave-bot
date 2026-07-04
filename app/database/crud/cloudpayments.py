@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import CloudPaymentsPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -22,7 +21,7 @@ async def create_cloudpayments_payment(
     invoice_id: str,
     amount_kopeks: int,
     description: str | None = None,
-    currency: str = 'RUB',
+    currency: str = "RUB",
     payment_url: str | None = None,
     email: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -52,7 +51,7 @@ async def create_cloudpayments_payment(
         amount_kopeks=amount_kopeks,
         currency=currency,
         description=description,
-        status='pending',
+        status="pending",
         is_paid=False,
         payment_url=payment_url,
         email=email,
@@ -65,7 +64,7 @@ async def create_cloudpayments_payment(
     await db.refresh(payment)
 
     logger.debug(
-        'Created CloudPayments payment',
+        "Created CloudPayments payment",
         payment_id=payment.id,
         invoice_id=invoice_id,
         amount_kopeks=amount_kopeks,
@@ -79,7 +78,11 @@ async def get_cloudpayments_payment_by_invoice_id(
     invoice_id: str,
 ) -> CloudPaymentsPayment | None:
     """Get CloudPayments payment by invoice ID."""
-    result = await db.execute(select(CloudPaymentsPayment).where(CloudPaymentsPayment.invoice_id == invoice_id))
+    result = await db.execute(
+        select(CloudPaymentsPayment).where(
+            CloudPaymentsPayment.invoice_id == invoice_id
+        )
+    )
     return result.scalars().first()
 
 
@@ -88,7 +91,9 @@ async def get_cloudpayments_payment_by_id(
     payment_id: int,
 ) -> CloudPaymentsPayment | None:
     """Get CloudPayments payment by internal ID."""
-    result = await db.execute(select(CloudPaymentsPayment).where(CloudPaymentsPayment.id == payment_id))
+    result = await db.execute(
+        select(CloudPaymentsPayment).where(CloudPaymentsPayment.id == payment_id)
+    )
     return result.scalars().first()
 
 
@@ -97,7 +102,9 @@ async def get_cloudpayments_payment_by_id_for_update(
     payment_id: int,
 ) -> CloudPaymentsPayment | None:
     result = await db.execute(
-        select(CloudPaymentsPayment).where(CloudPaymentsPayment.id == payment_id).with_for_update()
+        select(CloudPaymentsPayment)
+        .where(CloudPaymentsPayment.id == payment_id)
+        .with_for_update()
     )
     return result.scalar_one_or_none()
 
@@ -108,7 +115,9 @@ async def get_cloudpayments_payment_by_transaction_id(
 ) -> CloudPaymentsPayment | None:
     """Get CloudPayments payment by CloudPayments transaction ID."""
     result = await db.execute(
-        select(CloudPaymentsPayment).where(CloudPaymentsPayment.transaction_id_cp == transaction_id_cp)
+        select(CloudPaymentsPayment).where(
+            CloudPaymentsPayment.transaction_id_cp == transaction_id_cp
+        )
     )
     return result.scalars().first()
 
@@ -179,7 +188,7 @@ async def mark_cloudpayments_payment_as_paid(
     if not payment:
         return None
 
-    payment.status = 'completed'
+    payment.status = "completed"
     payment.is_paid = True
     payment.paid_at = datetime.now(UTC)
 
@@ -204,7 +213,11 @@ async def mark_cloudpayments_payment_as_paid(
     await db.flush()
     await db.refresh(payment)
 
-    logger.info('Marked CloudPayments payment as paid', payment_id=payment.id, invoice_id=payment.invoice_id)
+    logger.info(
+        "Marked CloudPayments payment as paid",
+        payment_id=payment.id,
+        invoice_id=payment.invoice_id,
+    )
 
     return payment
 

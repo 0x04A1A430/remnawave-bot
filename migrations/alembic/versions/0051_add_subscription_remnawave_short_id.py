@@ -12,8 +12,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0051'
-down_revision: Union[str, None] = '0050'
+revision: str = "0051"
+down_revision: Union[str, None] = "0050"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -25,14 +25,19 @@ def _generate_short_id() -> str:
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_cols = {c['name'] for c in inspector.get_columns('subscriptions')}
+    existing_cols = {c["name"] for c in inspector.get_columns("subscriptions")}
 
     # 1. Add column as nullable first
-    if 'remnawave_short_id' not in existing_cols:
-        op.add_column('subscriptions', sa.Column('remnawave_short_id', sa.String(16), nullable=True))
+    if "remnawave_short_id" not in existing_cols:
+        op.add_column(
+            "subscriptions",
+            sa.Column("remnawave_short_id", sa.String(16), nullable=True),
+        )
 
     # 2. Backfill existing rows with unique short IDs
-    rows = conn.execute(sa.text('SELECT id FROM subscriptions WHERE remnawave_short_id IS NULL')).fetchall()
+    rows = conn.execute(
+        sa.text("SELECT id FROM subscriptions WHERE remnawave_short_id IS NULL")
+    ).fetchall()
     used_ids: set[str] = set()
     for (row_id,) in rows:
         short_id = _generate_short_id()
@@ -40,17 +45,29 @@ def upgrade() -> None:
             short_id = _generate_short_id()
         used_ids.add(short_id)
         conn.execute(
-            sa.text('UPDATE subscriptions SET remnawave_short_id = :sid WHERE id = :rid'),
-            {'sid': short_id, 'rid': row_id},
+            sa.text(
+                "UPDATE subscriptions SET remnawave_short_id = :sid WHERE id = :rid"
+            ),
+            {"sid": short_id, "rid": row_id},
         )
 
     # 3. Set NOT NULL + UNIQUE
-    op.alter_column('subscriptions', 'remnawave_short_id', nullable=False, server_default='')
-    existing_unique = {u['name'] for u in inspector.get_unique_constraints('subscriptions')}
-    if 'uq_subscriptions_remnawave_short_id' not in existing_unique:
-        op.create_unique_constraint('uq_subscriptions_remnawave_short_id', 'subscriptions', ['remnawave_short_id'])
+    op.alter_column(
+        "subscriptions", "remnawave_short_id", nullable=False, server_default=""
+    )
+    existing_unique = {
+        u["name"] for u in inspector.get_unique_constraints("subscriptions")
+    }
+    if "uq_subscriptions_remnawave_short_id" not in existing_unique:
+        op.create_unique_constraint(
+            "uq_subscriptions_remnawave_short_id",
+            "subscriptions",
+            ["remnawave_short_id"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint('uq_subscriptions_remnawave_short_id', 'subscriptions', type_='unique')
-    op.drop_column('subscriptions', 'remnawave_short_id')
+    op.drop_constraint(
+        "uq_subscriptions_remnawave_short_id", "subscriptions", type_="unique"
+    )
+    op.drop_column("subscriptions", "remnawave_short_id")

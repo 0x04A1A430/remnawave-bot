@@ -21,7 +21,6 @@ from app.utils.promo_offer import (
     get_user_active_promo_discount_percent,
 )
 
-
 logger = structlog.get_logger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()
@@ -61,10 +60,10 @@ async def resolve_subscription_from_context(
 
     if not settings.is_multi_tariff_enabled():
         sub = await get_subscription_by_user_id(db, db_user.id)
-        return sub, getattr(sub, 'id', None) if sub else None
+        return sub, getattr(sub, "id", None) if sub else None
 
     # 1. Try callback_data 'prefix:sub_id'
-    parts = (callback.data or '').split(':')
+    parts = (callback.data or "").split(":")
     if len(parts) >= 2:
         try:
             sub_id = int(parts[-1])
@@ -78,7 +77,7 @@ async def resolve_subscription_from_context(
     if state:
         try:
             data = await state.get_data()
-            fsm_sub_id = data.get('active_subscription_id')
+            fsm_sub_id = data.get("active_subscription_id")
             if fsm_sub_id:
                 sub = await get_subscription_by_id_for_user(db, fsm_sub_id, db_user.id)
                 if sub:
@@ -92,7 +91,7 @@ async def resolve_subscription_from_context(
         return active_subs[0], active_subs[0].id
 
     # 4. Cannot determine
-    await callback.answer('Выберите подписку', show_alert=True)
+    await callback.answer("Выберите подписку", show_alert=True)
     return None, None
 
 
@@ -102,7 +101,7 @@ _app_config_cache_ts: float = 0.0
 _app_config_lock = asyncio.Lock()
 
 
-_PLACEHOLDER_RE = re.compile(r'\{(\w+)\}')
+_PLACEHOLDER_RE = re.compile(r"\{(\w+)\}")
 
 
 def _format_text_with_placeholders(template: str, values: dict[str, Any]) -> str:
@@ -123,7 +122,9 @@ def _format_text_with_placeholders(template: str, values: dict[str, Any]) -> str
     try:
         return _PLACEHOLDER_RE.sub(_replace, template)
     except Exception:  # pragma: no cover - defensive logging
-        logger.warning('Failed to format template with values', template=template, values=values)
+        logger.warning(
+            "Failed to format template with values", template=template, values=values
+        )
         return template
 
 
@@ -135,10 +136,10 @@ def _apply_promo_offer_discount(user: User | None, amount: int) -> dict[str, int
     percent = _get_promo_offer_discount_percent(user)
 
     if amount <= 0 or percent <= 0:
-        return {'discounted': amount, 'discount': 0, 'percent': 0}
+        return {"discounted": amount, "discount": 0, "percent": 0}
 
     discounted, discount_value = apply_percentage_discount(amount, percent)
-    return {'discounted': discounted, 'discount': discount_value, 'percent': percent}
+    return {"discounted": discounted, "discount": discount_value, "percent": percent}
 
 
 def _get_period_hint_from_subscription(subscription: Subscription | None) -> int | None:
@@ -158,15 +159,17 @@ def _apply_discount_to_monthly_component(
     percent: int,
     months: int,
 ) -> dict[str, int]:
-    discounted_per_month, discount_per_month = apply_percentage_discount(amount_per_month, percent)
+    discounted_per_month, discount_per_month = apply_percentage_discount(
+        amount_per_month, percent
+    )
 
     return {
-        'original_per_month': amount_per_month,
-        'discounted_per_month': discounted_per_month,
-        'discount_percent': max(0, min(100, percent)),
-        'discount_per_month': discount_per_month,
-        'total': discounted_per_month * months,
-        'discount_total': discount_per_month * months,
+        "original_per_month": amount_per_month,
+        "discounted_per_month": discounted_per_month,
+        "discount_percent": max(0, min(100, percent)),
+        "discount_per_month": discount_per_month,
+        "total": discounted_per_month * months,
+        "discount_total": discount_per_month * months,
     }
 
 
@@ -174,7 +177,7 @@ def update_traffic_prices():
     from app.config import refresh_traffic_prices
 
     refresh_traffic_prices()
-    logger.info('TRAFFIC_PRICES обновлены из конфигурации')
+    logger.info("TRAFFIC_PRICES обновлены из конфигурации")
 
 
 def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
@@ -183,11 +186,11 @@ def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
 
     if traffic_gb == 0:
         if is_fixed_mode:
-            return 'Безлимитный'
-        return 'Безлимитный'
+            return "Безлимитный"
+        return "Безлимитный"
     if is_fixed_mode:
-        return f'{traffic_gb} ГБ'
-    return f'{traffic_gb} ГБ'
+        return f"{traffic_gb} ГБ"
+    return f"{traffic_gb} ГБ"
 
 
 def validate_traffic_price(gb: int) -> bool:
@@ -200,19 +203,21 @@ def validate_traffic_price(gb: int) -> bool:
     return price > 0
 
 
-def get_localized_value(values: Any, language: str, default_language: str = 'en') -> str:
+def get_localized_value(
+    values: Any, language: str, default_language: str = "en"
+) -> str:
     if not isinstance(values, dict):
-        return ''
+        return ""
 
     candidates: list[str] = []
-    normalized_language = (language or '').strip().lower()
+    normalized_language = (language or "").strip().lower()
 
     if normalized_language:
         candidates.append(normalized_language)
-        if '-' in normalized_language:
-            candidates.append(normalized_language.split('-')[0])
+        if "-" in normalized_language:
+            candidates.append(normalized_language.split("-")[0])
 
-    default_language = (default_language or '').strip().lower()
+    default_language = (default_language or "").strip().lower()
     if default_language and default_language not in candidates:
         candidates.append(default_language)
 
@@ -227,7 +232,7 @@ def get_localized_value(values: Any, language: str, default_language: str = 'en'
         if isinstance(value, str) and value.strip():
             return value
 
-    return ''
+    return ""
 
 
 def render_guide_blocks(blocks: list[dict], language: str) -> str:
@@ -237,22 +242,28 @@ def render_guide_blocks(blocks: list[dict], language: str) -> str:
     for block in blocks:
         if not isinstance(block, dict):
             continue
-        title = block.get('title', {})
-        desc = block.get('description', {})
+        title = block.get("title", {})
+        desc = block.get("description", {})
         title_text = html_mod.escape(
-            get_localized_value(title, language) if isinstance(title, dict) else str(title or '')
+            get_localized_value(title, language)
+            if isinstance(title, dict)
+            else str(title or "")
         )
-        desc_text = html_mod.escape(get_localized_value(desc, language) if isinstance(desc, dict) else str(desc or ''))
+        desc_text = html_mod.escape(
+            get_localized_value(desc, language)
+            if isinstance(desc, dict)
+            else str(desc or "")
+        )
         if title_text or desc_text:
-            step = f'<b>Шаг {step_num}'
+            step = f"<b>Шаг {step_num}"
             if title_text:
-                step += f' - {title_text}'
-            step += ':</b>'
+                step += f" - {title_text}"
+            step += ":</b>"
             if desc_text:
-                step += f'\n{desc_text}'
+                step += f"\n{desc_text}"
             parts.append(step)
             step_num += 1
-    return '\n\n'.join(parts)
+    return "\n\n".join(parts)
 
 
 def build_redirect_link(target_link: str | None, template: str | None) -> str | None:
@@ -265,15 +276,15 @@ def build_redirect_link(target_link: str | None, template: str | None) -> str | 
     if not normalized_target or not normalized_template:
         return None
 
-    encoded_target = quote(normalized_target, safe='')
+    encoded_target = quote(normalized_target, safe="")
     result = normalized_template
     replaced = False
 
     replacements = [
-        ('{subscription_link}', encoded_target),
-        ('{link}', encoded_target),
-        ('{subscription_link_raw}', normalized_target),
-        ('{link_raw}', normalized_target),
+        ("{subscription_link}", encoded_target),
+        ("{link}", encoded_target),
+        ("{subscription_link_raw}", normalized_target),
+        ("{link_raw}", normalized_target),
     ]
 
     for placeholder, replacement in replacements:
@@ -282,21 +293,21 @@ def build_redirect_link(target_link: str | None, template: str | None) -> str | 
             replaced = True
 
     if not replaced:
-        result = f'{result}{encoded_target}'
+        result = f"{result}{encoded_target}"
 
     return result
 
 
-def get_device_name(device_type: str, language: str = 'ru') -> str:
+def get_device_name(device_type: str, language: str = "ru") -> str:
     names = {
-        'ios': 'iPhone/iPad',
-        'android': 'Android',
-        'windows': 'Windows',
-        'mac': 'macOS',
-        'linux': 'Linux',
-        'tv': 'Android TV',
-        'appletv': 'Apple TV',
-        'apple_tv': 'Apple TV',
+        "ios": "iPhone/iPad",
+        "android": "Android",
+        "windows": "Windows",
+        "mac": "macOS",
+        "linux": "Linux",
+        "tv": "Android TV",
+        "appletv": "Apple TV",
+        "apple_tv": "Apple TV",
     }
 
     return names.get(device_type, device_type)
@@ -305,36 +316,36 @@ def get_device_name(device_type: str, language: str = 'ru') -> str:
 # ── Remnawave async config loader ──
 
 _PLATFORM_DISPLAY = {
-    'ios': {'name': 'iPhone/iPad', 'emoji': ''},
-    'android': {'name': 'Android', 'emoji': ''},
-    'windows': {'name': 'Windows', 'emoji': ''},
-    'macos': {'name': 'macOS', 'emoji': ''},
-    'linux': {'name': 'Linux', 'emoji': ''},
-    'androidTV': {'name': 'Android TV', 'emoji': ''},
-    'appleTV': {'name': 'Apple TV', 'emoji': ''},
+    "ios": {"name": "iPhone/iPad", "emoji": ""},
+    "android": {"name": "Android", "emoji": ""},
+    "windows": {"name": "Windows", "emoji": ""},
+    "macos": {"name": "macOS", "emoji": ""},
+    "linux": {"name": "Linux", "emoji": ""},
+    "androidTV": {"name": "Android TV", "emoji": ""},
+    "appleTV": {"name": "Apple TV", "emoji": ""},
 }
 
 # Map callback device_type keys to Remnawave platform keys
 _DEVICE_TO_PLATFORM = {
-    'ios': 'ios',
-    'android': 'android',
-    'windows': 'windows',
-    'mac': 'macos',
-    'linux': 'linux',
-    'tv': 'androidTV',
-    'appletv': 'appleTV',
-    'apple_tv': 'appleTV',
+    "ios": "ios",
+    "android": "android",
+    "windows": "windows",
+    "mac": "macos",
+    "linux": "linux",
+    "tv": "androidTV",
+    "appletv": "appleTV",
+    "apple_tv": "appleTV",
 }
 
 # Reverse: Remnawave platform key → callback device_type
 _PLATFORM_TO_DEVICE = {
-    'ios': 'ios',
-    'android': 'android',
-    'windows': 'windows',
-    'macos': 'mac',
-    'linux': 'linux',
-    'androidTV': 'tv',
-    'appleTV': 'appletv',
+    "ios": "ios",
+    "android": "android",
+    "windows": "windows",
+    "macos": "mac",
+    "linux": "linux",
+    "androidTV": "tv",
+    "appleTV": "appletv",
 }
 
 
@@ -342,10 +353,13 @@ def _get_remnawave_config_uuid() -> str | None:
     try:
         from app.services.system_settings_service import bot_configuration_service
 
-        return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
+        return bot_configuration_service.get_current_value("CABINET_REMNA_SUB_CONFIG")
     except Exception as e:
-        logger.debug('Could not read CABINET_REMNA_SUB_CONFIG from service, using settings fallback', error=e)
-        return getattr(settings, 'CABINET_REMNA_SUB_CONFIG', None)
+        logger.debug(
+            "Could not read CABINET_REMNA_SUB_CONFIG from service, using settings fallback",
+            error=e,
+        )
+        return getattr(settings, "CABINET_REMNA_SUB_CONFIG", None)
 
 
 async def load_app_config_async() -> dict[str, Any] | None:
@@ -375,13 +389,16 @@ async def load_app_config_async() -> dict[str, Any] | None:
                     config = await api.get_subscription_page_config(remnawave_uuid)
                     if config and config.config:
                         raw = dict(config.config)
-                        raw['_isRemnawave'] = True
+                        raw["_isRemnawave"] = True
                         _app_config_cache = raw
                         _app_config_cache_ts = time.monotonic()
-                        logger.debug('Loaded app config from Remnawave', remnawave_uuid=remnawave_uuid)
+                        logger.debug(
+                            "Loaded app config from Remnawave",
+                            remnawave_uuid=remnawave_uuid,
+                        )
                         return raw
             except Exception as e:
-                logger.warning('Failed to load Remnawave config', error=e)
+                logger.warning("Failed to load Remnawave config", error=e)
 
         return None
 
@@ -398,20 +415,22 @@ def invalidate_app_config_cache() -> None:
     _app_config_cache = {}
 
 
-async def get_apps_for_platform_async(device_type: str, language: str = 'ru') -> list[dict[str, Any]]:
+async def get_apps_for_platform_async(
+    device_type: str, language: str = "ru"
+) -> list[dict[str, Any]]:
     """Get apps for a device type from Remnawave config."""
     config = await load_app_config_async()
     if not config:
         return []
 
-    platforms = config.get('platforms', {})
+    platforms = config.get("platforms", {})
     if not isinstance(platforms, dict):
         return []
 
     platform_key = _DEVICE_TO_PLATFORM.get(device_type, device_type)
     platform_data = platforms.get(platform_key)
     if isinstance(platform_data, dict):
-        apps = platform_data.get('apps', [])
+        apps = platform_data.get("apps", [])
         return [normalize_app(app) for app in apps if isinstance(app, dict)]
     return []
 
@@ -420,38 +439,38 @@ def normalize_app(app: dict[str, Any]) -> dict[str, Any]:
     """Normalize Remnawave app dict to a unified format with blocks."""
 
     # Extract urlScheme from blocks if not present at root level
-    url_scheme = app.get('urlScheme', '')
+    url_scheme = app.get("urlScheme", "")
 
     if not url_scheme:
         # Try to extract from subscriptionLink button in blocks
-        blocks = app.get('blocks', [])
+        blocks = app.get("blocks", [])
         for block in blocks:
             if not isinstance(block, dict):
                 continue
-            buttons = block.get('buttons', [])
+            buttons = block.get("buttons", [])
             for btn in buttons:
                 if not isinstance(btn, dict):
                     continue
-                if btn.get('type') == 'subscriptionLink':
-                    link = btn.get('link', '') or btn.get('url', '')
-                    if '{{SUBSCRIPTION_LINK}}' in link:
-                        url_scheme = link.split('{{SUBSCRIPTION_LINK}}')[0]
+                if btn.get("type") == "subscriptionLink":
+                    link = btn.get("link", "") or btn.get("url", "")
+                    if "{{SUBSCRIPTION_LINK}}" in link:
+                        url_scheme = link.split("{{SUBSCRIPTION_LINK}}")[0]
                         break
             if url_scheme:
                 break
 
     # Validate extracted scheme contains ://
-    if url_scheme and '://' not in url_scheme:
-        url_scheme = ''
+    if url_scheme and "://" not in url_scheme:
+        url_scheme = ""
 
     return {
-        'id': app.get('id', app.get('name', 'unknown')),
-        'name': app.get('name', ''),
-        'isFeatured': app.get('featured', app.get('isFeatured', False)),
-        'urlScheme': url_scheme,
-        'isNeedBase64Encoding': app.get('isNeedBase64Encoding', False),
-        'blocks': app.get('blocks', []),
-        '_raw': app,
+        "id": app.get("id", app.get("name", "unknown")),
+        "name": app.get("name", ""),
+        "isFeatured": app.get("featured", app.get("isFeatured", False)),
+        "urlScheme": url_scheme,
+        "isNeedBase64Encoding": app.get("isNeedBase64Encoding", False),
+        "blocks": app.get("blocks", []),
+        "_raw": app,
     }
 
 
@@ -460,12 +479,12 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
 
     Returns list of {key, displayName, icon_emoji, device_type} sorted by typical order.
     """
-    platforms = config.get('platforms', {})
+    platforms = config.get("platforms", {})
     if not isinstance(platforms, dict):
         return []
 
     # Desired order
-    order = ['ios', 'android', 'windows', 'macos', 'linux', 'androidTV', 'appleTV']
+    order = ["ios", "android", "windows", "macos", "linux", "androidTV", "appleTV"]
 
     result = []
     for pk in order:
@@ -473,20 +492,20 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         pd = platforms[pk]
 
-        if not isinstance(pd, dict) or not pd.get('apps'):
+        if not isinstance(pd, dict) or not pd.get("apps"):
             continue
 
-        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': ''})
+        display = _PLATFORM_DISPLAY.get(pk, {"name": pk, "emoji": ""})
 
         # Get displayName from Remnawave or fallback
-        display_name_data = pd.get('displayName', display['name'])
+        display_name_data = pd.get("displayName", display["name"])
 
         result.append(
             {
-                'key': pk,
-                'displayName': display_name_data,
-                'icon_emoji': display['emoji'],
-                'device_type': _PLATFORM_TO_DEVICE.get(pk, pk),
+                "key": pk,
+                "displayName": display_name_data,
+                "icon_emoji": display["emoji"],
+                "device_type": _PLATFORM_TO_DEVICE.get(pk, pk),
             }
         )
 
@@ -494,16 +513,16 @@ def get_platforms_list(config: dict[str, Any]) -> list[dict[str, Any]]:
     for pk, pd in platforms.items():
         if pk in order:
             continue
-        if not isinstance(pd, dict) or not pd.get('apps'):
+        if not isinstance(pd, dict) or not pd.get("apps"):
             continue
 
-        display = _PLATFORM_DISPLAY.get(pk, {'name': pk, 'emoji': ''})
+        display = _PLATFORM_DISPLAY.get(pk, {"name": pk, "emoji": ""})
         result.append(
             {
-                'key': pk,
-                'displayName': display.get('name', pk),
-                'icon_emoji': display.get('emoji', ''),
-                'device_type': _PLATFORM_TO_DEVICE.get(pk, pk),
+                "key": pk,
+                "displayName": display.get("name", pk),
+                "icon_emoji": display.get("emoji", ""),
+                "device_type": _PLATFORM_TO_DEVICE.get(pk, pk),
             }
         )
 
@@ -520,10 +539,10 @@ def resolve_button_url(
         return url
     result = url
     if subscription_url:
-        result = result.replace('{{SUBSCRIPTION_LINK}}', subscription_url)
+        result = result.replace("{{SUBSCRIPTION_LINK}}", subscription_url)
     if crypto_link:
-        result = result.replace('{{HAPP_CRYPT3_LINK}}', crypto_link)
-        result = result.replace('{{HAPP_CRYPT4_LINK}}', crypto_link)
+        result = result.replace("{{HAPP_CRYPT3_LINK}}", crypto_link)
+        result = result.replace("{{HAPP_CRYPT4_LINK}}", crypto_link)
     return result
 
 
@@ -534,45 +553,54 @@ def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
     if not isinstance(app, dict):
         return subscription_url
 
-    scheme = str(app.get('urlScheme', '')).strip()
+    scheme = str(app.get("urlScheme", "")).strip()
     payload = subscription_url
 
-    if app.get('isNeedBase64Encoding'):
+    if app.get("isNeedBase64Encoding"):
         try:
-            payload = base64.b64encode(subscription_url.encode('utf-8')).decode('utf-8')
+            payload = base64.b64encode(subscription_url.encode("utf-8")).decode("utf-8")
         except Exception as exc:
             logger.warning(
-                'Не удалось закодировать ссылку подписки в base64 для приложения', app=app.get('id'), exc=exc
+                "Не удалось закодировать ссылку подписки в base64 для приложения",
+                app=app.get("id"),
+                exc=exc,
             )
             payload = subscription_url
 
-    scheme_link = f'{scheme}{payload}' if scheme else None
+    scheme_link = f"{scheme}{payload}" if scheme else None
 
     template = settings.get_happ_cryptolink_redirect_template()
-    redirect_link = build_redirect_link(scheme_link, template) if scheme_link and template else None
+    redirect_link = (
+        build_redirect_link(scheme_link, template) if scheme_link and template else None
+    )
 
     return redirect_link or scheme_link or subscription_url
 
 
 def get_reset_devices_confirm_keyboard(
-    language: str = 'ru', back_callback: str = 'menu_subscription'
+    language: str = "ru", back_callback: str = "menu_subscription"
 ) -> InlineKeyboardMarkup:
     get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='Да, сбросить все устройства', callback_data='confirm_reset_devices')],
-            [InlineKeyboardButton(text='Отмена', callback_data=back_callback)],
+            [
+                InlineKeyboardButton(
+                    text="Да, сбросить все устройства",
+                    callback_data="confirm_reset_devices",
+                )
+            ],
+            [InlineKeyboardButton(text="Отмена", callback_data=back_callback)],
         ]
     )
 
 
 def get_traffic_switch_keyboard(
     current_traffic_gb: int,
-    language: str = 'ru',
+    language: str = "ru",
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
     base_traffic_gb: int = None,
-    back_callback: str = 'subscription_settings',
+    back_callback: str = "subscription_settings",
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
@@ -584,15 +612,17 @@ def get_traffic_switch_keyboard(
     # Считаем по дням (как в кабинете и подтверждении)
     if subscription_end_date:
         now = datetime.now(UTC)
-        days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
+        days_left = max(
+            1, math.ceil((subscription_end_date - now).total_seconds() / 86400)
+        )
         price_multiplier = days_left / 30
-        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
+        period_text = f" (за {days_left} дн.)" if days_left > 1 else " (за 1 день)"
     else:
         price_multiplier = 1
-        period_text = ''
+        period_text = ""
 
     packages = settings.get_traffic_packages()
-    enabled_packages = [pkg for pkg in packages if pkg['enabled']]
+    enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
 
     # Используем базовый трафик для определения цены текущего пакета
     current_price_per_month = settings.get_traffic_price(base_traffic_gb)
@@ -604,8 +634,8 @@ def get_traffic_switch_keyboard(
     buttons = []
 
     for package in enabled_packages:
-        gb = package['gb']
-        price_per_month = package['price']
+        gb = package["gb"]
+        price_per_month = package["price"]
         discounted_price_per_month, _ = apply_percentage_discount(
             price_per_month,
             discount_percent,
@@ -616,40 +646,51 @@ def get_traffic_switch_keyboard(
 
         # Сравниваем с базовым трафиком (без докупленного)
         if gb == base_traffic_gb:
-            emoji = ''
-            action_text = ' (текущий)'
-            price_text = ''
+            emoji = ""
+            action_text = " (текущий)"
+            price_text = ""
         elif total_price_diff > 0:
-            emoji = '↑ '
-            action_text = ''
-            price_text = f' (+{total_price_diff // 100}₽{period_text})'
+            emoji = "↑ "
+            action_text = ""
+            price_text = f" (+{total_price_diff // 100}₽{period_text})"
             if discount_percent > 0:
-                discount_total = int((price_per_month - current_price_per_month) * price_multiplier) - total_price_diff
+                discount_total = (
+                    int((price_per_month - current_price_per_month) * price_multiplier)
+                    - total_price_diff
+                )
                 if discount_total > 0:
-                    price_text += f' (скидка {discount_percent}%: -{discount_total // 100}₽)'
+                    price_text += (
+                        f" (скидка {discount_percent}%: -{discount_total // 100}₽)"
+                    )
         elif total_price_diff < 0:
-            emoji = '↓ '
-            action_text = ''
-            price_text = ' (без возврата)'
+            emoji = "↓ "
+            action_text = ""
+            price_text = " (без возврата)"
         else:
-            emoji = ''
-            action_text = ''
-            price_text = ' (бесплатно)'
+            emoji = ""
+            action_text = ""
+            price_text = " (бесплатно)"
 
         if gb == 0:
-            traffic_text = 'Безлимит'
+            traffic_text = "Безлимит"
         else:
-            traffic_text = f'{gb} ГБ'
+            traffic_text = f"{gb} ГБ"
 
-        button_text = f'{emoji} {traffic_text}{action_text}{price_text}'
+        button_text = f"{emoji} {traffic_text}{action_text}{price_text}"
 
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'switch_traffic_{gb}')])
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=button_text, callback_data=f"switch_traffic_{gb}"
+                )
+            ]
+        )
 
-    language_code = (language or 'ru').split('-')[0].lower()
+    language_code = (language or "ru").split("-")[0].lower()
     buttons.append(
         [
             InlineKeyboardButton(
-                text='← Назад' if language_code in {'ru', 'fa'} else '← Back',
+                text="← Назад" if language_code in {"ru", "fa"} else "← Back",
                 callback_data=back_callback,
             )
         ]
@@ -659,16 +700,19 @@ def get_traffic_switch_keyboard(
 
 
 def get_confirm_switch_traffic_keyboard(
-    new_traffic_gb: int, price_difference: int, language: str = 'ru', back_callback: str = 'subscription_settings'
+    new_traffic_gb: int,
+    price_difference: int,
+    language: str = "ru",
+    back_callback: str = "subscription_settings",
 ) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='Подтвердить переключение',
-                    callback_data=f'confirm_switch_traffic_{new_traffic_gb}_{price_difference}',
+                    text="Подтвердить переключение",
+                    callback_data=f"confirm_switch_traffic_{new_traffic_gb}_{price_difference}",
                 )
             ],
-            [InlineKeyboardButton(text='Отмена', callback_data=back_callback)],
+            [InlineKeyboardButton(text="Отмена", callback_data=back_callback)],
         ]
     )

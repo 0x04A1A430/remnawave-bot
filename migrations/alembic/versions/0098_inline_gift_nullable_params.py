@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0098'
-down_revision: Union[str, None] = '0097'
+revision: str = "0098"
+down_revision: Union[str, None] = "0097"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -20,33 +20,73 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_cols = {c['name'] for c in inspector.get_columns('inline_gift_subscriptions')}
+    existing_cols = {
+        c["name"] for c in inspector.get_columns("inline_gift_subscriptions")
+    }
 
     # Make days nullable: NULL = no change, 0 = forever, N = add N days
-    if 'days' in existing_cols:
-        op.alter_column('inline_gift_subscriptions', 'days',
-                        existing_type=sa.Integer(), nullable=True, server_default=None)
+    if "days" in existing_cols:
+        op.alter_column(
+            "inline_gift_subscriptions",
+            "days",
+            existing_type=sa.Integer(),
+            nullable=True,
+            server_default=None,
+        )
     # Make traffic nullable: NULL = no change, 0 = unlimited, -1 = set unlimited, N = set N GB
-    if 'traffic_limit_gb' in existing_cols:
-        op.alter_column('inline_gift_subscriptions', 'traffic_limit_gb',
-                        existing_type=sa.Integer(), nullable=True, server_default=None)
+    if "traffic_limit_gb" in existing_cols:
+        op.alter_column(
+            "inline_gift_subscriptions",
+            "traffic_limit_gb",
+            existing_type=sa.Integer(),
+            nullable=True,
+            server_default=None,
+        )
     # Make device_limit nullable: NULL = no change
-    if 'device_limit' in existing_cols:
-        op.alter_column('inline_gift_subscriptions', 'device_limit',
-                        existing_type=sa.Integer(), nullable=True, server_default=None)
+    if "device_limit" in existing_cols:
+        op.alter_column(
+            "inline_gift_subscriptions",
+            "device_limit",
+            existing_type=sa.Integer(),
+            nullable=True,
+            server_default=None,
+        )
 
     # Fix stale -2 sentinel values written by the previous code
-    op.execute("UPDATE inline_gift_subscriptions SET traffic_limit_gb = NULL WHERE traffic_limit_gb = -2")
-    op.execute("UPDATE inline_gift_subscriptions SET device_limit = NULL WHERE device_limit = 0 AND gift_type = 'subscription'")
+    op.execute(
+        "UPDATE inline_gift_subscriptions SET traffic_limit_gb = NULL WHERE traffic_limit_gb = -2"
+    )
+    op.execute(
+        "UPDATE inline_gift_subscriptions SET device_limit = NULL WHERE device_limit = 0 AND gift_type = 'subscription'"
+    )
 
 
 def downgrade() -> None:
-    op.execute("UPDATE inline_gift_subscriptions SET traffic_limit_gb = 0 WHERE traffic_limit_gb IS NULL")
-    op.execute("UPDATE inline_gift_subscriptions SET device_limit = 1 WHERE device_limit IS NULL")
+    op.execute(
+        "UPDATE inline_gift_subscriptions SET traffic_limit_gb = 0 WHERE traffic_limit_gb IS NULL"
+    )
+    op.execute(
+        "UPDATE inline_gift_subscriptions SET device_limit = 1 WHERE device_limit IS NULL"
+    )
     op.execute("UPDATE inline_gift_subscriptions SET days = 0 WHERE days IS NULL")
-    op.alter_column('inline_gift_subscriptions', 'device_limit',
-                    existing_type=sa.Integer(), nullable=False, server_default='1')
-    op.alter_column('inline_gift_subscriptions', 'traffic_limit_gb',
-                    existing_type=sa.Integer(), nullable=False, server_default='0')
-    op.alter_column('inline_gift_subscriptions', 'days',
-                    existing_type=sa.Integer(), nullable=False, server_default='0')
+    op.alter_column(
+        "inline_gift_subscriptions",
+        "device_limit",
+        existing_type=sa.Integer(),
+        nullable=False,
+        server_default="1",
+    )
+    op.alter_column(
+        "inline_gift_subscriptions",
+        "traffic_limit_gb",
+        existing_type=sa.Integer(),
+        nullable=False,
+        server_default="0",
+    )
+    op.alter_column(
+        "inline_gift_subscriptions",
+        "days",
+        existing_type=sa.Integer(),
+        nullable=False,
+        server_default="0",
+    )

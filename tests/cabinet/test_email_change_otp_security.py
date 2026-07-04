@@ -23,7 +23,7 @@ from app.database.crud.user import verify_and_apply_email_change
 
 
 def _user() -> SimpleNamespace:
-    return SimpleNamespace(id=1, email='owner@example.com', email_verified=True)
+    return SimpleNamespace(id=1, email="owner@example.com", email_verified=True)
 
 
 def _db() -> AsyncMock:
@@ -35,20 +35,24 @@ def _db() -> AsyncMock:
 
 @pytest.mark.asyncio
 async def test_verify_blocked_and_code_not_checked_when_ip_rate_limited() -> None:
-    verify_apply = AsyncMock(return_value=(True, 'ok'))
+    verify_apply = AsyncMock(return_value=(True, "ok"))
     with ExitStack() as stack:
-        stack.enter_context(patch('app.cabinet.routes.auth.get_client_ip', return_value='1.2.3.4'))
+        stack.enter_context(
+            patch("app.cabinet.routes.auth.get_client_ip", return_value="1.2.3.4")
+        )
         # First (IP) check trips.
         stack.enter_context(
             patch(
-                'app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited',
+                "app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited",
                 AsyncMock(return_value=True),
             )
         )
-        stack.enter_context(patch('app.cabinet.routes.auth.verify_and_apply_email_change', verify_apply))
+        stack.enter_context(
+            patch("app.cabinet.routes.auth.verify_and_apply_email_change", verify_apply)
+        )
         with pytest.raises(HTTPException) as exc:
             await verify_email_change(
-                request=EmailChangeVerifyRequest(code='123456'),
+                request=EmailChangeVerifyRequest(code="123456"),
                 raw_request=MagicMock(),
                 user=_user(),
                 db=_db(),
@@ -59,22 +63,28 @@ async def test_verify_blocked_and_code_not_checked_when_ip_rate_limited() -> Non
 
 @pytest.mark.asyncio
 async def test_verify_per_account_cap_burns_pending_change() -> None:
-    verify_apply = AsyncMock(return_value=(True, 'ok'))
+    verify_apply = AsyncMock(return_value=(True, "ok"))
     clear_pending = AsyncMock(return_value=None)
     with ExitStack() as stack:
-        stack.enter_context(patch('app.cabinet.routes.auth.get_client_ip', return_value='1.2.3.4'))
+        stack.enter_context(
+            patch("app.cabinet.routes.auth.get_client_ip", return_value="1.2.3.4")
+        )
         # IP check passes, per-account check trips.
         stack.enter_context(
             patch(
-                'app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited',
+                "app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited",
                 AsyncMock(side_effect=[False, True]),
             )
         )
-        stack.enter_context(patch('app.cabinet.routes.auth.verify_and_apply_email_change', verify_apply))
-        stack.enter_context(patch('app.cabinet.routes.auth.clear_email_change_pending', clear_pending))
+        stack.enter_context(
+            patch("app.cabinet.routes.auth.verify_and_apply_email_change", verify_apply)
+        )
+        stack.enter_context(
+            patch("app.cabinet.routes.auth.clear_email_change_pending", clear_pending)
+        )
         with pytest.raises(HTTPException) as exc:
             await verify_email_change(
-                request=EmailChangeVerifyRequest(code='123456'),
+                request=EmailChangeVerifyRequest(code="123456"),
                 raw_request=MagicMock(),
                 user=_user(),
                 db=_db(),
@@ -87,18 +97,24 @@ async def test_verify_per_account_cap_burns_pending_change() -> None:
 @pytest.mark.asyncio
 async def test_request_change_rejects_unowned_admin_email() -> None:
     with ExitStack() as stack:
-        stack.enter_context(patch('app.cabinet.routes.auth.get_client_ip', return_value='1.2.3.4'))
+        stack.enter_context(
+            patch("app.cabinet.routes.auth.get_client_ip", return_value="1.2.3.4")
+        )
         stack.enter_context(
             patch(
-                'app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited',
+                "app.cabinet.routes.auth.RateLimitCache.is_ip_rate_limited",
                 AsyncMock(return_value=False),
             )
         )
         # pydantic Settings methods can't be patched on the instance — patch the class.
-        stack.enter_context(patch.object(type(settings), 'get_admin_emails', lambda self: ['admin@corp.com']))
+        stack.enter_context(
+            patch.object(
+                type(settings), "get_admin_emails", lambda self: ["admin@corp.com"]
+            )
+        )
         with pytest.raises(HTTPException) as exc:
             await request_email_change(
-                request=EmailChangeRequest(new_email='admin@corp.com'),
+                request=EmailChangeRequest(new_email="admin@corp.com"),
                 raw_request=MagicMock(),
                 user=_user(),  # owner@example.com, does NOT own admin@corp.com
                 db=_db(),
@@ -110,19 +126,21 @@ async def test_request_change_rejects_unowned_admin_email() -> None:
 async def test_verify_and_apply_rejects_wrong_code_and_applies_correct() -> None:
     pending = SimpleNamespace(
         id=1,
-        email='old@example.com',
-        email_change_new='new@example.com',
-        email_change_code='654321',
+        email="old@example.com",
+        email_change_new="new@example.com",
+        email_change_code="654321",
         email_change_expires=datetime.now(UTC) + timedelta(minutes=10),
     )
     # Wrong code -> rejected (constant-time compare), pending untouched.
-    ok, _ = await verify_and_apply_email_change(_db(), pending, '111111')
+    ok, _ = await verify_and_apply_email_change(_db(), pending, "111111")
     assert ok is False
-    assert pending.email_change_code == '654321'
+    assert pending.email_change_code == "654321"
 
     # Correct code -> applied (email available).
-    with patch('app.database.crud.user.get_user_by_email', AsyncMock(return_value=None)):
-        ok, _ = await verify_and_apply_email_change(_db(), pending, '654321')
+    with patch(
+        "app.database.crud.user.get_user_by_email", AsyncMock(return_value=None)
+    ):
+        ok, _ = await verify_and_apply_email_change(_db(), pending, "654321")
     assert ok is True
-    assert pending.email == 'new@example.com'
+    assert pending.email == "new@example.com"
     assert pending.email_verified is True

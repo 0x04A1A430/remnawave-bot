@@ -45,68 +45,82 @@ async def _resolve_subscription(callback, db_user, db, state=None):
     return await resolve_subscription_from_context(callback, db_user, db, state)
 
 
-async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+async def handle_autopay_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
         await callback.answer(
-            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', 'У вас нет активной подписки!'),
+            texts.t("SUBSCRIPTION_ACTIVE_REQUIRED", "У вас нет активной подписки!"),
             show_alert=True,
         )
         return
 
     # Суточные подписки имеют свой механизм продления, глобальный autopay не применяется
     try:
-        await db.refresh(subscription, ['tariff'])
+        await db.refresh(subscription, ["tariff"])
     except Exception:
         pass
-    if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+    if subscription.tariff and getattr(subscription.tariff, "is_daily", False):
         await callback.answer(
             texts.t(
-                'AUTOPAY_NOT_AVAILABLE_FOR_DAILY',
-                'Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.',
+                "AUTOPAY_NOT_AVAILABLE_FOR_DAILY",
+                "Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.",
             ),
             show_alert=True,
         )
         return
 
     status = (
-        texts.t('AUTOPAY_STATUS_ENABLED', 'включен')
+        texts.t("AUTOPAY_STATUS_ENABLED", "включен")
         if subscription.autopay_enabled
-        else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
+        else texts.t("AUTOPAY_STATUS_DISABLED", "выключен")
     )
     days = subscription.autopay_days_before
 
-    period_value = getattr(subscription, 'autopay_period_days', None)
+    period_value = getattr(subscription, "autopay_period_days", None)
     if period_value:
-        period_text = texts.t('AUTOPAY_PERIOD_VALUE', '{days} дн.').format(days=period_value)
+        period_text = texts.t("AUTOPAY_PERIOD_VALUE", "{days} дн.").format(
+            days=period_value
+        )
     else:
-        period_text = texts.t('AUTOPAY_PERIOD_DEFAULT_VALUE', 'по умолчанию (самый дешёвый период тарифа)')
+        period_text = texts.t(
+            "AUTOPAY_PERIOD_DEFAULT_VALUE", "по умолчанию (самый дешёвый период тарифа)"
+        )
 
     text = texts.t(
-        'AUTOPAY_MENU_TEXT',
+        "AUTOPAY_MENU_TEXT",
         (
-            '<b>Автоплатеж</b>\n\n'
-            '<b>Статус:</b> {status}\n'
-            '<b>Списание за:</b> {days} дн. до окончания\n'
-            '<b>Период продления:</b> {period}\n\n'
-            'Выберите действие:'
+            "<b>Автоплатеж</b>\n\n"
+            "<b>Статус:</b> {status}\n"
+            "<b>Списание за:</b> {days} дн. до окончания\n"
+            "<b>Период продления:</b> {period}\n\n"
+            "Выберите действие:"
         ),
     ).format(status=status, days=days, period=period_text)
 
     await callback.message.edit_text(
         text,
         reply_markup=get_autopay_keyboard(db_user.language, sub_id=sub_id),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
-async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+async def toggle_autopay(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
-    enable = callback.data.startswith('autopay_enable')
+    enable = callback.data.startswith("autopay_enable")
 
     if enable:
         # Trial subscriptions cannot use autopay
@@ -114,8 +128,8 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
             texts = get_texts(db_user.language)
             await callback.answer(
                 texts.t(
-                    'AUTOPAY_NOT_AVAILABLE_TRIAL',
-                    'Автоплатеж недоступен для пробных подписок.',
+                    "AUTOPAY_NOT_AVAILABLE_TRIAL",
+                    "Автоплатеж недоступен для пробных подписок.",
                 ),
                 show_alert=True,
             )
@@ -126,8 +140,8 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
             texts = get_texts(db_user.language)
             await callback.answer(
                 texts.t(
-                    'AUTOPAY_NOT_AVAILABLE_CLASSIC',
-                    'Автоплатеж недоступен. Для продления необходимо выбрать тариф.',
+                    "AUTOPAY_NOT_AVAILABLE_CLASSIC",
+                    "Автоплатеж недоступен. Для продления необходимо выбрать тариф.",
                 ),
                 show_alert=True,
             )
@@ -137,15 +151,15 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
     # глобальный autopay для них запрещён
     if enable:
         try:
-            await db.refresh(subscription, ['tariff'])
+            await db.refresh(subscription, ["tariff"])
         except Exception:
             pass
-        if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
+        if subscription.tariff and getattr(subscription.tariff, "is_daily", False):
             texts = get_texts(db_user.language)
             await callback.answer(
                 texts.t(
-                    'AUTOPAY_NOT_AVAILABLE_FOR_DAILY',
-                    'Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.',
+                    "AUTOPAY_NOT_AVAILABLE_FOR_DAILY",
+                    "Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.",
                 ),
                 show_alert=True,
             )
@@ -154,13 +168,19 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
     await update_subscription_autopay(db, subscription, enable)
 
     texts = get_texts(db_user.language)
-    status = texts.t('AUTOPAY_STATUS_ENABLED', 'включен') if enable else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
-    await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', 'Автоплатеж {status}!').format(status=status))
+    status = (
+        texts.t("AUTOPAY_STATUS_ENABLED", "включен")
+        if enable
+        else texts.t("AUTOPAY_STATUS_DISABLED", "выключен")
+    )
+    await callback.answer(
+        texts.t("AUTOPAY_TOGGLE_SUCCESS", "Автоплатеж {status}!").format(status=status)
+    )
 
     try:
         await handle_autopay_menu(callback, db_user, db, state)
     except TelegramBadRequest as e:
-        if 'message is not modified' in str(e):
+        if "message is not modified" in str(e):
             pass
         else:
             raise
@@ -170,32 +190,41 @@ async def show_autopay_days(callback: types.CallbackQuery, db_user: User):
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
         texts.t(
-            'AUTOPAY_SELECT_DAYS_PROMPT',
-            'Выберите за сколько дней до окончания списывать средства:',
+            "AUTOPAY_SELECT_DAYS_PROMPT",
+            "Выберите за сколько дней до окончания списывать средства:",
         ),
         reply_markup=get_autopay_days_keyboard(db_user.language),
     )
     await callback.answer()
 
 
-async def set_autopay_days(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+async def set_autopay_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
-    base_data = callback.data.split(':')[0]
-    days = int(base_data.split('_')[2])
+    base_data = callback.data.split(":")[0]
+    days = int(base_data.split("_")[2])
 
-    await update_subscription_autopay(db, subscription, subscription.autopay_enabled, days)
+    await update_subscription_autopay(
+        db, subscription, subscription.autopay_enabled, days
+    )
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('AUTOPAY_DAYS_SET', 'Установлено {days} дней!').format(days=days))
+    await callback.answer(
+        texts.t("AUTOPAY_DAYS_SET", "Установлено {days} дней!").format(days=days)
+    )
 
     await handle_autopay_menu(callback, db_user, db, state)
 
 
 def _get_subscription_renewal_periods(subscription) -> list[int]:
     """Available renewal periods for a subscription: tariff periods (preferred) or global env list."""
-    tariff = getattr(subscription, 'tariff', None)
+    tariff = getattr(subscription, "tariff", None)
     if tariff:
         periods = tariff.get_available_periods() or []
         if periods:
@@ -203,7 +232,12 @@ def _get_subscription_renewal_periods(subscription) -> list[int]:
     return sorted(settings.get_available_renewal_periods())
 
 
-async def show_autopay_period(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+async def show_autopay_period(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     """Period picker UI for autopay."""
     texts = get_texts(db_user.language)
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
@@ -211,47 +245,60 @@ async def show_autopay_period(callback: types.CallbackQuery, db_user: User, db: 
         return
 
     try:
-        await db.refresh(subscription, ['tariff'])
+        await db.refresh(subscription, ["tariff"])
     except Exception:
         pass
 
     periods = _get_subscription_renewal_periods(subscription)
-    current = getattr(subscription, 'autopay_period_days', None)
+    current = getattr(subscription, "autopay_period_days", None)
 
     await callback.message.edit_text(
         texts.t(
-            'AUTOPAY_SELECT_PERIOD_PROMPT',
-            'Выберите период, на который автоплатёж будет продлевать подписку:',
+            "AUTOPAY_SELECT_PERIOD_PROMPT",
+            "Выберите период, на который автоплатёж будет продлевать подписку:",
         ),
         reply_markup=get_autopay_period_keyboard(periods, current, db_user.language),
     )
     await callback.answer()
 
 
-async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None):
+async def set_autopay_period(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext = None,
+):
     """Handle period selection (autopay_period_<N> or autopay_period_default)."""
-    from app.database.crud.subscription import update_subscription_autopay as _update_autopay
+    from app.database.crud.subscription import (
+        update_subscription_autopay as _update_autopay,
+    )
 
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if subscription is None:
         return
 
-    raw = callback.data.split(':')[0]
-    suffix = raw[len('autopay_period_') :] if raw.startswith('autopay_period_') else ''
+    raw = callback.data.split(":")[0]
+    suffix = raw[len("autopay_period_") :] if raw.startswith("autopay_period_") else ""
     texts = get_texts(db_user.language)
 
-    if suffix == 'default':
-        await _update_autopay(db, subscription, subscription.autopay_enabled, period_days=None)
-        await callback.answer(texts.t('AUTOPAY_PERIOD_SET_DEFAULT', 'Используется период по умолчанию.'))
+    if suffix == "default":
+        await _update_autopay(
+            db, subscription, subscription.autopay_enabled, period_days=None
+        )
+        await callback.answer(
+            texts.t("AUTOPAY_PERIOD_SET_DEFAULT", "Используется период по умолчанию.")
+        )
     else:
         try:
             days = int(suffix)
         except ValueError:
-            await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+            await callback.answer(
+                texts.t("INVALID_REQUEST", "Invalid request"), show_alert=True
+            )
             return
 
         try:
-            await db.refresh(subscription, ['tariff'])
+            await db.refresh(subscription, ["tariff"])
         except Exception:
             pass
 
@@ -259,51 +306,63 @@ async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: A
         if days not in available:
             await callback.answer(
                 texts.t(
-                    'AUTOPAY_PERIOD_NOT_AVAILABLE',
-                    'Этот период недоступен для данной подписки.',
+                    "AUTOPAY_PERIOD_NOT_AVAILABLE",
+                    "Этот период недоступен для данной подписки.",
                 ),
                 show_alert=True,
             )
             return
 
-        await _update_autopay(db, subscription, subscription.autopay_enabled, period_days=days)
-        await callback.answer(texts.t('AUTOPAY_PERIOD_SET', 'Период автоплатежа: {days} дн.').format(days=days))
+        await _update_autopay(
+            db, subscription, subscription.autopay_enabled, period_days=days
+        )
+        await callback.answer(
+            texts.t("AUTOPAY_PERIOD_SET", "Период автоплатежа: {days} дн.").format(
+                days=days
+            )
+        )
 
     await handle_autopay_menu(callback, db_user, db, state)
 
 
-async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_saved_cards_list(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession
+):
     texts = get_texts(db_user.language)
     cards = await get_active_payment_methods_by_user(db, db_user.id)
 
     if not cards:
         await callback.message.edit_text(
             texts.t(
-                'SAVED_CARDS_EMPTY',
-                '<b>Привязанные карты</b>\n\nНет привязанных карт.\n'
-                'Карта привяжется автоматически при следующем пополнении баланса.',
+                "SAVED_CARDS_EMPTY",
+                "<b>Привязанные карты</b>\n\nНет привязанных карт.\n"
+                "Карта привяжется автоматически при следующем пополнении баланса.",
             ),
             reply_markup=get_saved_cards_keyboard([], db_user.language),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
     else:
         await callback.message.edit_text(
             texts.t(
-                'SAVED_CARDS_TITLE',
-                '<b>Привязанные карты</b>\n\nВыберите карту для отвязки:',
+                "SAVED_CARDS_TITLE",
+                "<b>Привязанные карты</b>\n\nВыберите карту для отвязки:",
             ),
             reply_markup=get_saved_cards_keyboard(cards, db_user.language),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
     await callback.answer()
 
 
-async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_unlink_card(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession
+):
     texts = get_texts(db_user.language)
     try:
-        card_id = int(callback.data.split('_')[-1])
+        card_id = int(callback.data.split("_")[-1])
     except (ValueError, IndexError):
-        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        await callback.answer(
+            texts.t("INVALID_REQUEST", "Invalid request"), show_alert=True
+        )
         return
 
     cards = await get_active_payment_methods_by_user(db, db_user.id)
@@ -311,50 +370,54 @@ async def handle_unlink_card(callback: types.CallbackQuery, db_user: User, db: A
 
     if not card:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', 'Не удалось отвязать карту'),
+            texts.t("SAVED_CARDS_UNLINK_ERROR", "Не удалось отвязать карту"),
             show_alert=True,
         )
         return
 
     card_label = _get_payment_method_display_name(card, db_user.language)
     text = texts.t(
-        'SAVED_CARDS_CONFIRM_UNLINK',
-        'Вы уверены, что хотите отвязать карту <b>{card}</b>?\n\n'
-        'После отвязки автоплатеж не сможет использовать эту карту.',
+        "SAVED_CARDS_CONFIRM_UNLINK",
+        "Вы уверены, что хотите отвязать карту <b>{card}</b>?\n\n"
+        "После отвязки автоплатеж не сможет использовать эту карту.",
     ).format(card=card_label)
 
     if len(cards) == 1:
         text += texts.t(
-            'SAVED_CARDS_LAST_CARD_WARNING',
-            '\n\n <b>Внимание:</b> это ваша последняя привязанная карта. '
-            'После отвязки автоплатеж не сможет списывать средства.',
+            "SAVED_CARDS_LAST_CARD_WARNING",
+            "\n\n <b>Внимание:</b> это ваша последняя привязанная карта. "
+            "После отвязки автоплатеж не сможет списывать средства.",
         )
 
     await callback.message.edit_text(
         text,
         reply_markup=get_confirm_unlink_keyboard(card_id, db_user.language),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
-async def handle_confirm_unlink(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def handle_confirm_unlink(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession
+):
     texts = get_texts(db_user.language)
     try:
-        card_id = int(callback.data.split('_')[-1])
+        card_id = int(callback.data.split("_")[-1])
     except (ValueError, IndexError):
-        await callback.answer(texts.t('INVALID_REQUEST', 'Invalid request'), show_alert=True)
+        await callback.answer(
+            texts.t("INVALID_REQUEST", "Invalid request"), show_alert=True
+        )
         return
 
     success = await deactivate_payment_method(db, card_id, db_user.id)
 
     if success:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINKED', 'Карта отвязана'),
+            texts.t("SAVED_CARDS_UNLINKED", "Карта отвязана"),
         )
     else:
         await callback.answer(
-            texts.t('SAVED_CARDS_UNLINK_ERROR', 'Не удалось отвязать карту'),
+            texts.t("SAVED_CARDS_UNLINK_ERROR", "Не удалось отвязать карту"),
             show_alert=True,
         )
         return
@@ -373,21 +436,24 @@ async def handle_subscription_config_back(
         await callback.message.edit_text(
             await _build_subscription_period_prompt(db_user, texts, db),
             reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
         await state.set_state(SubscriptionStates.selecting_period)
 
     elif current_state == SubscriptionStates.selecting_countries.state:
         if settings.is_traffic_selectable():
             await callback.message.edit_text(
-                texts.SELECT_TRAFFIC, reply_markup=get_traffic_packages_keyboard(db_user.language)
+                texts.SELECT_TRAFFIC,
+                reply_markup=get_traffic_packages_keyboard(db_user.language),
             )
             await state.set_state(SubscriptionStates.selecting_traffic)
         else:
             await callback.message.edit_text(
                 await _build_subscription_period_prompt(db_user, texts, db),
-                reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
-                parse_mode='HTML',
+                reply_markup=get_subscription_period_keyboard(
+                    db_user.language, db_user
+                ),
+                parse_mode="HTML",
             )
             await state.set_state(SubscriptionStates.selecting_period)
 
@@ -397,10 +463,11 @@ async def handle_subscription_config_back(
     elif current_state == SubscriptionStates.confirming_purchase.state:
         if settings.is_devices_selection_enabled():
             data = await state.get_data()
-            selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+            selected_devices = data.get("devices", settings.DEFAULT_DEVICE_LIMIT)
 
             await callback.message.edit_text(
-                texts.SELECT_DEVICES, reply_markup=get_devices_keyboard(selected_devices, db_user.language)
+                texts.SELECT_DEVICES,
+                reply_markup=get_devices_keyboard(selected_devices, db_user.language),
             )
             await state.set_state(SubscriptionStates.selecting_devices)
         else:
@@ -415,7 +482,9 @@ async def handle_subscription_config_back(
     await callback.answer()
 
 
-async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
+async def handle_subscription_cancel(
+    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
+):
     get_texts(db_user.language)
 
     await state.clear()
@@ -427,7 +496,7 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
     cart_sub_id = None
     if cart_data:
         try:
-            raw = cart_data.get('subscription_id')
+            raw = cart_data.get("subscription_id")
             if raw is not None:
                 cart_sub_id = int(raw)
         except (TypeError, ValueError):
@@ -437,9 +506,9 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
         await user_cart_service.delete_subscription_cart(db_user.id, cart_sub_id)
         # Clean up global key only if it still references this subscription
         global_cart = await user_cart_service.get_user_cart(db_user.id)
-        if global_cart and global_cart.get('subscription_id') is not None:
+        if global_cart and global_cart.get("subscription_id") is not None:
             try:
-                if int(global_cart['subscription_id']) == cart_sub_id:
+                if int(global_cart["subscription_id"]) == cart_sub_id:
                     await user_cart_service.delete_global_cart_only(db_user.id)
             except (TypeError, ValueError):
                 pass
@@ -451,7 +520,7 @@ async def handle_subscription_cancel(callback: types.CallbackQuery, state: FSMCo
 
     await show_main_menu(callback, db_user, db)
 
-    await callback.answer('Покупка отменена')
+    await callback.answer("Покупка отменена")
 
 
 async def _show_previous_configuration_step(
@@ -464,27 +533,32 @@ async def _show_previous_configuration_step(
     if await _should_show_countries_management(db_user):
         countries = await _get_available_countries(db_user.promo_group_id)
         data = await state.get_data()
-        selected_countries = data.get('countries', [])
+        selected_countries = data.get("countries", [])
 
         # Если страны не выбраны — автоматически предвыбираем бесплатные
         if not selected_countries:
             selected_countries = _get_preselected_free_countries(countries)
-            data['countries'] = selected_countries
+            data["countries"] = selected_countries
             await state.set_data(data)
 
         # Формируем текст с описаниями сквадов
-        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
+        selection_text = _build_countries_selection_text(
+            countries, texts.SELECT_COUNTRIES
+        )
         await callback.message.edit_text(
             selection_text,
-            reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language),
-            parse_mode='HTML',
+            reply_markup=get_countries_keyboard(
+                countries, selected_countries, db_user.language
+            ),
+            parse_mode="HTML",
         )
         await state.set_state(SubscriptionStates.selecting_countries)
         return
 
     if settings.is_traffic_selectable():
         await callback.message.edit_text(
-            texts.SELECT_TRAFFIC, reply_markup=get_traffic_packages_keyboard(db_user.language)
+            texts.SELECT_TRAFFIC,
+            reply_markup=get_traffic_packages_keyboard(db_user.language),
         )
         await state.set_state(SubscriptionStates.selecting_traffic)
         return
@@ -492,6 +566,6 @@ async def _show_previous_configuration_step(
     await callback.message.edit_text(
         await _build_subscription_period_prompt(db_user, texts, db),
         reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await state.set_state(SubscriptionStates.selecting_period)

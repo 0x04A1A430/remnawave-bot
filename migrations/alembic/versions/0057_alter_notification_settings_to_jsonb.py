@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0057'
-down_revision: Union[str, None] = '0056'
+revision: str = "0057"
+down_revision: Union[str, None] = "0056"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -24,15 +24,15 @@ def _get_column_type(table: str, column: str) -> str | None:
             "SELECT data_type FROM information_schema.columns "
             "WHERE table_name = :table AND column_name = :column"
         ),
-        {'table': table, 'column': column},
+        {"table": table, "column": column},
     )
     row = result.fetchone()
     return row[0] if row else None
 
 
 def upgrade() -> None:
-    col_type = _get_column_type('users', 'notification_settings')
-    if col_type and col_type != 'jsonb':
+    col_type = _get_column_type("users", "notification_settings")
+    if col_type and col_type != "jsonb":
         op.execute(
             sa.text(
                 "ALTER TABLE users "

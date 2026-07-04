@@ -3,11 +3,10 @@ import time
 
 import structlog
 
-
 logger = structlog.get_logger(__name__)
 
 # Только буквы, цифры, дефис, подчёркивание
-PROMO_CODE_PATTERN = re.compile(r'^[A-Za-z0-9_-]+$')
+PROMO_CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 # Лимиты
 MAX_FAILED_ATTEMPTS = 5
@@ -38,7 +37,7 @@ class PromoRateLimiter:
 
         if len(attempts) >= MAX_FAILED_ATTEMPTS:
             logger.warning(
-                'Promo brute-force: too many failed attempts within window',
+                "Promo brute-force: too many failed attempts within window",
                 user_id=user_id,
                 attempts_count=len(attempts),
                 FAILED_WINDOW_SECONDS=FAILED_WINDOW_SECONDS,

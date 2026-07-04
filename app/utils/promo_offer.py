@@ -16,7 +16,7 @@ from app.database.models import ServerSquad, SubscriptionTemporaryAccess, User
 def _escape_format_braces(text: str) -> str:
     """Escape braces so str.format treats them as literals."""
 
-    return text.replace('{', '{{').replace('}', '}}')
+    return text.replace("{", "{{").replace("}", "}}")
 
 
 def get_user_active_promo_discount_percent(user: User | None) -> int:
@@ -24,11 +24,11 @@ def get_user_active_promo_discount_percent(user: User | None) -> int:
         return 0
 
     try:
-        percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
+        percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
     except (TypeError, ValueError):
         return 0
 
-    expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+    expires_at = getattr(user, "promo_offer_discount_expires_at", None)
     if expires_at and expires_at <= datetime.now(UTC):
         return 0
 
@@ -49,11 +49,11 @@ async def consume_user_promo_offer(db: AsyncSession, user_id: int) -> bool:
     if not user:
         return False
 
-    current_percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
+    current_percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
     if current_percent <= 0:
         return False
 
-    offer_id = getattr(user, 'promo_offer_discount_source', None)
+    offer_id = getattr(user, "promo_offer_discount_source", None)
     user.promo_offer_discount_percent = 0
     user.promo_offer_discount_source = None
     user.promo_offer_discount_expires_at = None
@@ -64,7 +64,7 @@ async def consume_user_promo_offer(db: AsyncSession, user_id: int) -> bool:
             db,
             user_id=user_id,
             offer_id=offer_id,
-            action='consumed_external_payment',
+            action="consumed_external_payment",
             discount_percent=current_percent,
         )
     except Exception:
@@ -78,19 +78,19 @@ def _format_time_left(seconds_left: int, language: str) -> str:
     days, remainder_minutes = divmod(total_minutes, 60 * 24)
     hours, minutes = divmod(remainder_minutes, 60)
 
-    language_code = (language or 'ru').split('-')[0].lower()
-    if language_code == 'en':
-        day_label, hour_label, minute_label = 'd', 'h', 'm'
+    language_code = (language or "ru").split("-")[0].lower()
+    if language_code == "en":
+        day_label, hour_label, minute_label = "d", "h", "m"
     else:
-        day_label, hour_label, minute_label = 'д', 'ч', 'м'
+        day_label, hour_label, minute_label = "д", "ч", "м"
 
     parts: list[str] = []
     if days:
-        parts.append(f'{days}{day_label}')
+        parts.append(f"{days}{day_label}")
     if hours or days:
-        parts.append(f'{hours}{hour_label}')
-    parts.append(f'{minutes}{minute_label}')
-    return ' '.join(parts)
+        parts.append(f"{hours}{hour_label}")
+    parts.append(f"{minutes}{minute_label}")
+    return " ".join(parts)
 
 
 def _build_progress_bar(seconds_left: int, total_seconds: int) -> str:
@@ -112,7 +112,7 @@ async def build_promo_offer_timer_line(
     user: User,
     texts,
 ) -> str | None:
-    expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+    expires_at = getattr(user, "promo_offer_discount_expires_at", None)
     if not expires_at:
         return None
 
@@ -125,22 +125,24 @@ async def build_promo_offer_timer_line(
         return None
 
     total_seconds: int | None = None
-    source = getattr(user, 'promo_offer_discount_source', None)
+    source = getattr(user, "promo_offer_discount_source", None)
 
     try:
         offer = await get_latest_claimed_offer_for_user(db, user.id, source)
     except Exception:
         offer = None
 
-    if offer and getattr(offer, 'claimed_at', None):
+    if offer and getattr(offer, "claimed_at", None):
         total_seconds = int((expires_at - offer.claimed_at).total_seconds())
         if total_seconds <= 0:
             total_seconds = None
 
     if total_seconds is None and offer:
-        extra_data = getattr(offer, 'extra_data', None)
+        extra_data = getattr(offer, "extra_data", None)
         if isinstance(extra_data, dict):
-            raw_duration = extra_data.get('active_discount_hours') or extra_data.get('duration_hours')
+            raw_duration = extra_data.get("active_discount_hours") or extra_data.get(
+                "duration_hours"
+            )
         else:
             raw_duration = None
         try:
@@ -153,11 +155,11 @@ async def build_promo_offer_timer_line(
         total_seconds = seconds_left
 
     bar = _build_progress_bar(seconds_left, total_seconds)
-    time_left_text = _format_time_left(seconds_left, getattr(texts, 'language', 'ru'))
+    time_left_text = _format_time_left(seconds_left, getattr(texts, "language", "ru"))
 
     template = texts.t(
-        'SUBSCRIPTION_PROMO_DISCOUNT_TIMER',
-        'Discount active for {time_left}\n<code>{bar}</code>',
+        "SUBSCRIPTION_PROMO_DISCOUNT_TIMER",
+        "Discount active for {time_left}\n<code>{bar}</code>",
     )
     return template.format(bar=bar, time_left=time_left_text)
 
@@ -175,13 +177,13 @@ async def build_promo_offer_hint(
         return None
 
     base_hint = texts.t(
-        'SUBSCRIPTION_PROMO_DISCOUNT_HINT',
-        'Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.',
+        "SUBSCRIPTION_PROMO_DISCOUNT_HINT",
+        "Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.",
     ).format(percent=percent)
 
     timer_line = await build_promo_offer_timer_line(db, user, texts)
     if timer_line:
-        return f'{base_hint}\n{timer_line}'
+        return f"{base_hint}\n{timer_line}"
 
     return base_hint
 
@@ -191,11 +193,11 @@ async def build_test_access_hint(
     user: User,
     texts,
 ) -> str | None:
-    subscription = getattr(user, 'subscription', None)
+    subscription = getattr(user, "subscription", None)
     if not subscription:
         return None
 
-    subscription_id = getattr(subscription, 'id', None)
+    subscription_id = getattr(subscription, "id", None)
     if not subscription_id:
         return None
 
@@ -213,7 +215,9 @@ async def build_test_access_hint(
     )
     entries: Sequence[SubscriptionTemporaryAccess] = result.scalars().all()
 
-    active_entries = [entry for entry in entries if entry.expires_at and entry.expires_at > now]
+    active_entries = [
+        entry for entry in entries if entry.expires_at and entry.expires_at > now
+    ]
     if not active_entries:
         return None
 
@@ -225,7 +229,7 @@ async def build_test_access_hint(
     total_seconds: int | None = None
     for entry in active_entries:
         offer = entry.offer
-        claimed_at = getattr(offer, 'claimed_at', None) if offer else None
+        claimed_at = getattr(offer, "claimed_at", None) if offer else None
         if claimed_at:
             total = int((entry.expires_at - claimed_at).total_seconds())
             if total > 0 and (total_seconds is None or total > total_seconds):
@@ -235,12 +239,12 @@ async def build_test_access_hint(
         total_seconds = seconds_left
 
     bar = _build_progress_bar(seconds_left, total_seconds)
-    time_left_text = _format_time_left(seconds_left, getattr(texts, 'language', 'ru'))
+    time_left_text = _format_time_left(seconds_left, getattr(texts, "language", "ru"))
 
     unique_squad_uuids: list[str] = []
     seen_squads: set[str] = set()
     for entry in active_entries:
-        squad_uuid = getattr(entry, 'squad_uuid', None)
+        squad_uuid = getattr(entry, "squad_uuid", None)
         if squad_uuid and squad_uuid not in seen_squads:
             seen_squads.add(squad_uuid)
             unique_squad_uuids.append(squad_uuid)
@@ -253,7 +257,9 @@ async def build_test_access_hint(
             )
         )
         names_map = {
-            squad_uuid: html.escape(display_name) for squad_uuid, display_name in squads_result.all() if display_name
+            squad_uuid: html.escape(display_name)
+            for squad_uuid, display_name in squads_result.all()
+            if display_name
         }
         for squad_uuid in unique_squad_uuids:
             if squad_uuid in names_map:
@@ -262,22 +268,24 @@ async def build_test_access_hint(
                 squad_display_names.append(html.escape(squad_uuid))
 
     if squad_display_names:
-        servers_display = ', '.join(squad_display_names)
+        servers_display = ", ".join(squad_display_names)
     elif unique_squad_uuids:
-        servers_display = ', '.join(html.escape(squad_uuid) for squad_uuid in unique_squad_uuids)
+        servers_display = ", ".join(
+            html.escape(squad_uuid) for squad_uuid in unique_squad_uuids
+        )
     else:
         servers_display = str(len(active_entries))
 
     header_template = texts.t(
-        'MAIN_MENU_TEST_ACCESS_HEADER',
-        'Test servers active: {servers}',
+        "MAIN_MENU_TEST_ACCESS_HEADER",
+        "Test servers active: {servers}",
     )
     timer_template = texts.t(
-        'MAIN_MENU_TEST_ACCESS_TIMER',
-        'Access active for {time_left}\n<code>{bar}</code>',
+        "MAIN_MENU_TEST_ACCESS_TIMER",
+        "Access active for {time_left}\n<code>{bar}</code>",
     )
 
     header = header_template.format(servers=_escape_format_braces(servers_display))
     timer_line = timer_template.format(time_left=time_left_text, bar=bar)
 
-    return f'{header}\n{timer_line}'
+    return f"{header}\n{timer_line}"

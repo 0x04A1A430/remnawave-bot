@@ -95,7 +95,7 @@ Bedolaga — полнофункциональная платформа для п
 - 🔐 RBAC: роли и гранулярные права доступа
 - 📈 Детальная отчетность с возможностью визуализации Реф сети
 - 🔐 Блокировка юзеров из общего черного списка
-И многое др...
+  И многое др...
 
 </td>
 </tr>
@@ -107,33 +107,33 @@ Bedolaga — полнофункциональная платформа для п
 
 <div align="center">
 
-| | Провайдер | Методы оплаты | Валюта |
-|:---:|:---|:---|:---:|
-| ⭐ | **Telegram Stars** | Звёзды Telegram | XTR |
-| 🏦 | **YooKassa** | Карты, СБП | RUB |
-| 🏦 | **YooKassa СБП** | Система быстрых платежей | RUB |
-| 🪙 | **CryptoBot** | USDT, TON, BTC, ETH | Crypto |
-| 🪙 | **Heleket** | USDT, мульти-сеть | Crypto |
-| 💳 | **CloudPayments** | Карты, 3D-Secure | RUB |
-| 💳 | **Freekassa** | NSPK СБП, карты | RUB |
-| 💳 | **Kassa AI** | СБП, карты, SberPay | RUB |
-| 💳 | **PayPalych (Pal24)** | Карты, СБП | RUB |
-| 🤝 | **[Platega](https://t.me/ArstanPlatega)** 🔸 | Карты, СБП, крипто | RUB |
-| 💳 | **WATA** | СБП, Карты | RUB |
-| 💳 | **MulenPay** | Карты | RUB |
-| 💳 | **RioPay** | Карты | RUB |
-| 💳 | **SeverPay** | СБП, карты | RUB |
-| 🤝 | **[PayPear](https://t.me/Paymen1_Manager)** 🔸 | Карты, СБП, SberPay, T-Pay | RUB |
-| 🤝 | **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто | RUB → USDT |
-| 🤝 | **[AuraPay](https://aurapay.tech/)** 🔸 | Карты, СБП | RUB |
-| 🤝 | **[Overpay](https://overpay.pro/)** 🔸 | Карты, СБП | RUB |
-| 🦌 | **Antilopay** | Карты, СБП, SberPay (RSA подпись) | RUB |
-| 💳 | **Etoplatezhi** | Карты, СБП | RUB |
-| 🪐 | **[Jupiter](https://t.me/k_juppiter)** 🔸 | СБП через QR (FPGate P2P v2.1) | RUB |
-| 🍩 | **[Donut](https://t.me/donut_payment)** 🔸 | Карты, СБП по телефону, СБП QR (P2P) | RUB |
-| 🌋 | **Lava Business** | Карты, СБП (gate.lava.ru) | RUB |
-| 🍎 | **Apple In-App Purchase** | Покупки через iOS App Store | USD |
-| 📲 | **Tribute** | Telegram-платежи | RUB |
+|     | Провайдер                                                                                                 | Методы оплаты                        |   Валюта   |
+| :-: | :-------------------------------------------------------------------------------------------------------- | :----------------------------------- | :--------: |
+| ⭐  | **Telegram Stars**                                                                                        | Звёзды Telegram                      |    XTR     |
+| 🏦  | **YooKassa**                                                                                              | Карты, СБП                           |    RUB     |
+| 🏦  | **YooKassa СБП**                                                                                          | Система быстрых платежей             |    RUB     |
+| 🪙  | **CryptoBot**                                                                                             | USDT, TON, BTC, ETH                  |   Crypto   |
+| 🪙  | **Heleket**                                                                                               | USDT, мульти-сеть                    |   Crypto   |
+| 💳  | **CloudPayments**                                                                                         | Карты, 3D-Secure                     |    RUB     |
+| 💳  | **Freekassa**                                                                                             | NSPK СБП, карты                      |    RUB     |
+| 💳  | **Kassa AI**                                                                                              | СБП, карты, SberPay                  |    RUB     |
+| 💳  | **PayPalych (Pal24)**                                                                                     | Карты, СБП                           |    RUB     |
+| 🤝  | **[Platega](https://t.me/ArstanPlatega)** 🔸                                                              | Карты, СБП, крипто                   |    RUB     |
+| 💳  | **WATA**                                                                                                  | СБП, Карты                           |    RUB     |
+| 💳  | **MulenPay**                                                                                              | Карты                                |    RUB     |
+| 💳  | **RioPay**                                                                                                | Карты                                |    RUB     |
+| 💳  | **SeverPay**                                                                                              | СБП, карты                           |    RUB     |
+| 🤝  | **[PayPear](https://t.me/Paymen1_Manager)** 🔸                                                            | Карты, СБП, SberPay, T-Pay           |    RUB     |
+| 🤝  | **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто                   | RUB → USDT |
+| 🤝  | **[AuraPay](https://aurapay.tech/)** 🔸                                                                   | Карты, СБП                           |    RUB     |
+| 🤝  | **[Overpay](https://overpay.pro/)** 🔸                                                                    | Карты, СБП                           |    RUB     |
+| 🦌  | **Antilopay**                                                                                             | Карты, СБП, SberPay (RSA подпись)    |    RUB     |
+| 💳  | **Etoplatezhi**                                                                                           | Карты, СБП                           |    RUB     |
+| 🪐  | **[Jupiter](https://t.me/k_juppiter)** 🔸                                                                 | СБП через QR (FPGate P2P v2.1)       |    RUB     |
+| 🍩  | **[Donut](https://t.me/donut_payment)** 🔸                                                                | Карты, СБП по телефону, СБП QR (P2P) |    RUB     |
+| 🌋  | **Lava Business**                                                                                         | Карты, СБП (gate.lava.ru)            |    RUB     |
+| 🍎  | **Apple In-App Purchase**                                                                                 | Покупки через iOS App Store          |    USD     |
+| 📲  | **Tribute**                                                                                               | Telegram-платежи                     |    RUB     |
 
 </div>
 
@@ -252,16 +252,16 @@ docker compose up -d
 
 ## 🏗 Стек
 
-| | Компонент | Технология |
-|:---:|:---|:---|
-| 🐍 | Язык | Python 3.13, полностью async |
-| 🤖 | Telegram | aiogram 3.x |
-| 🗄 | База данных | PostgreSQL + SQLAlchemy 2.x + Alembic |
-| 🔴 | Кэш/очереди | Redis |
-| ⚡ | Web-сервер | FastAPI (webhook, платежи, Cabinet API) |
-| 📝 | Логирование | structlog |
-| 🐳 | Контейнеризация | Docker + Docker Compose |
-| 🧹 | Линтер | ruff |
+|     | Компонент       | Технология                              |
+| :-: | :-------------- | :-------------------------------------- |
+| 🐍  | Язык            | Python 3.13, полностью async            |
+| 🤖  | Telegram        | aiogram 3.x                             |
+|  🗄  | База данных     | PostgreSQL + SQLAlchemy 2.x + Alembic   |
+| 🔴  | Кэш/очереди     | Redis                                   |
+| ⚡  | Web-сервер      | FastAPI (webhook, платежи, Cabinet API) |
+| 📝  | Логирование     | structlog                               |
+| 🐳  | Контейнеризация | Docker + Docker Compose                 |
+| 🧹  | Линтер          | ruff                                    |
 
 ---
 
@@ -279,28 +279,28 @@ docker compose up -d
 
 Веб-кабинет на **React + TypeScript**, существенно расширяющий возможности бота:
 
-| | Возможность | Описание |
-|:---:|:---|:---|
-| 👤 | **Личный кабинет** | Подписки, баланс, устройства, реферальная программа |
-| 🔑 | **OAuth-авторизация** | Google, Yandex, Discord, VK, Telegram OIDC |
-| 🌐 | **Лендинги** | Кастомные страницы для привлечения клиентов |
-| 📊 | **Админ-панель** | Аналитика продаж, RBAC, управление контентом |
-| 🎁 | **Подарки** | Покупка и отправка подписок другим пользователям |
-| 🔍 | **Поиск платежей** | Поиск по инвойсу, клиенту с фильтрами и статистикой |
+|     | Возможность           | Описание                                            |
+| :-: | :-------------------- | :-------------------------------------------------- |
+| 👤  | **Личный кабинет**    | Подписки, баланс, устройства, реферальная программа |
+| 🔑  | **OAuth-авторизация** | Google, Yandex, Discord, VK, Telegram OIDC          |
+| 🌐  | **Лендинги**          | Кастомные страницы для привлечения клиентов         |
+| 📊  | **Админ-панель**      | Аналитика продаж, RBAC, управление контентом        |
+| 🎁  | **Подарки**           | Покупка и отправка подписок другим пользователям    |
+| 🔍  | **Поиск платежей**    | Поиск по инвойсу, клиенту с фильтрами и статистикой |
 
 ---
 
 ## 📚 Документация
 
-| | Раздел | Описание |
-|:---:|:---|:---|
-| 🚀 | [Быстрый старт](https://docs.bedolagam.ru/getting-started/quickstart) | Развёртывание за 5 минут |
-| 💳 | [Настройка платежей](https://docs.bedolagam.ru/bot/payments) | 24+ провайдера, webhook, фискализация, Apple IAP |
-| 📦 | [Подписки и тарифы](https://docs.bedolagam.ru/bot/subscriptions) | Конфигурация планов и трафика |
-| 👥 | [Реферальная программа](https://docs.bedolagam.ru/bot/referral-program) | Партнёрка и вывод средств |
-| 🖥 | [Cabinet](https://docs.bedolagam.ru/cabinet/overview) | Настройка веб-кабинета |
-| 🏷 | [Промо-система](https://docs.bedolagam.ru/bot/promo-system) | Промокоды, предложения, скидки |
-| 🔌 | [API Reference](https://docs.bedolagam.ru/api-reference/overview) | REST API для внешних интеграций |
+|     | Раздел                                                                  | Описание                                         |
+| :-: | :---------------------------------------------------------------------- | :----------------------------------------------- |
+| 🚀  | [Быстрый старт](https://docs.bedolagam.ru/getting-started/quickstart)   | Развёртывание за 5 минут                         |
+| 💳  | [Настройка платежей](https://docs.bedolagam.ru/bot/payments)            | 24+ провайдера, webhook, фискализация, Apple IAP |
+| 📦  | [Подписки и тарифы](https://docs.bedolagam.ru/bot/subscriptions)        | Конфигурация планов и трафика                    |
+| 👥  | [Реферальная программа](https://docs.bedolagam.ru/bot/referral-program) | Партнёрка и вывод средств                        |
+|  🖥  | [Cabinet](https://docs.bedolagam.ru/cabinet/overview)                   | Настройка веб-кабинета                           |
+|  🏷  | [Промо-система](https://docs.bedolagam.ru/bot/promo-system)             | Промокоды, предложения, скидки                   |
+| 🔌  | [API Reference](https://docs.bedolagam.ru/api-reference/overview)       | REST API для внешних интеграций                  |
 
 <div align="center">
 

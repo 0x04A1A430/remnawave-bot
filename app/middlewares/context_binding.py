@@ -18,10 +18,10 @@ class ContextVarsMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         ctx: dict[str, Any] = {}
-        if hasattr(event, 'from_user') and event.from_user:
-            ctx['user_id'] = event.from_user.id
-            ctx['username'] = event.from_user.username or ''
-        if hasattr(event, 'chat') and event.chat:
-            ctx['chat_id'] = event.chat.id
+        if hasattr(event, "from_user") and event.from_user:
+            ctx["user_id"] = event.from_user.id
+            ctx["username"] = event.from_user.username or ""
+        if hasattr(event, "chat") and event.chat:
+            ctx["chat_id"] = event.chat.id
         with bound_contextvars(**ctx):
             return await handler(event, data)

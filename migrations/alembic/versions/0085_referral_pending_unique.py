@@ -36,9 +36,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-
-revision: str = '0085'
-down_revision: Union[str, None] = '0084'
+revision: str = "0085"
+down_revision: Union[str, None] = "0084"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -46,8 +45,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # 1. Cleanup duplicates left from before the SELECT dedup.
     # ANSI-portable: works on both PostgreSQL and SQLite.
-    op.execute(
-        """
+    op.execute("""
         DELETE FROM referral_earnings
         WHERE reason = 'referral_registration_pending'
           AND id NOT IN (
@@ -55,24 +53,21 @@ def upgrade() -> None:
             WHERE reason = 'referral_registration_pending'
             GROUP BY user_id, referral_id
           )
-        """
-    )
+        """)
 
     # 2. Partial UNIQUE index — only enforced for registration-pending
     # rows. Other `reason` values are unaffected.
     # PostgreSQL syntax (`CREATE UNIQUE INDEX ... WHERE`) is also
     # supported by SQLite ≥ 3.8.0, which the project requires.
-    op.execute(
-        """
+    op.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS uq_referral_earnings_registration_pending
         ON referral_earnings (user_id, referral_id)
         WHERE reason = 'referral_registration_pending'
-        """
-    )
+        """)
 
 
 def downgrade() -> None:
     # Drop the index. We do NOT restore the deleted duplicates —
     # they were audit-row noise (amount_kopeks=0, reason=pending) and
     # collapsing them is the whole point.
-    op.execute('DROP INDEX IF EXISTS uq_referral_earnings_registration_pending')
+    op.execute("DROP INDEX IF EXISTS uq_referral_earnings_registration_pending")

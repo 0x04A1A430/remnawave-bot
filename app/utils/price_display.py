@@ -14,7 +14,6 @@ import structlog
 from app.config import settings
 from app.database.models import User
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -37,7 +36,9 @@ class PriceInfo:
         return self.base_price - self.final_price
 
 
-def calculate_user_price(user: User | None, base_price: int, period_days: int, category: str = 'period') -> PriceInfo:
+def calculate_user_price(
+    user: User | None, base_price: int, period_days: int, category: str = "period"
+) -> PriceInfo:
     """
     Calculate final price for a user with all applicable discounts.
 
@@ -61,7 +62,9 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
         >>> # Uses BASE_PROMO_GROUP_PERIOD_DISCOUNTS from settings
     """
     if not base_price or base_price <= 0:
-        return PriceInfo(base_price=base_price or 0, final_price=base_price or 0, discount_percent=0)
+        return PriceInfo(
+            base_price=base_price or 0, final_price=base_price or 0, discount_percent=0
+        )
 
     # Step 1: Get promo group discount
     if user:
@@ -79,7 +82,9 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
     # Apply both discounts sequentially via PricingEngine
     from app.services.pricing_engine import PricingEngine
 
-    final_price, _, _ = PricingEngine.apply_stacked_discounts(base_price, group_discount, promo_offer_discount)
+    final_price, _, _ = PricingEngine.apply_stacked_discounts(
+        base_price, group_discount, promo_offer_discount
+    )
 
     # Effective combined discount percent
     if final_price < base_price:
@@ -88,8 +93,8 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
         discount_percent = 0
 
     logger.debug(
-        'calculate_user_price',
-        telegram_id=user.telegram_id if user else 'None',
+        "calculate_user_price",
+        telegram_id=user.telegram_id if user else "None",
         base_price=base_price,
         final_price=final_price,
         group_discount=group_discount,
@@ -99,11 +104,19 @@ def calculate_user_price(user: User | None, base_price: int, period_days: int, c
         period_days=period_days,
     )
 
-    return PriceInfo(base_price=base_price, final_price=final_price, discount_percent=discount_percent)
+    return PriceInfo(
+        base_price=base_price,
+        final_price=final_price,
+        discount_percent=discount_percent,
+    )
 
 
 def format_price_button(
-    period_label: str, price_info: PriceInfo, format_price_func, emphasize: bool = False, add_exclamation: bool = True
+    period_label: str,
+    price_info: PriceInfo,
+    format_price_func,
+    emphasize: bool = False,
+    add_exclamation: bool = True,
 ) -> str:
     """
     Format a price button text with unified discount display.
@@ -133,27 +146,29 @@ def format_price_button(
     """
     # Format button text differently if final price is 0
     if price_info.final_price == 0:
-        button_text = f'{period_label}'
+        button_text = f"{period_label}"
     elif price_info.has_discount:
-        exclamation = '!' if add_exclamation else ''
+        exclamation = "!" if add_exclamation else ""
         button_text = (
-            f'{period_label} - '
-            f'{format_price_func(price_info.base_price)} '
-            f'{format_price_func(price_info.final_price)} '
-            f'(-{price_info.discount_percent}%){exclamation}'
+            f"{period_label} - "
+            f"{format_price_func(price_info.base_price)} "
+            f"{format_price_func(price_info.final_price)} "
+            f"(-{price_info.discount_percent}%){exclamation}"
         )
     else:
-        button_text = f'{period_label} - {format_price_func(price_info.final_price)}'
+        button_text = f"{period_label} - {format_price_func(price_info.final_price)}"
 
     # Add emphasis for best deals
     if emphasize:
-        button_text = f'{button_text} '
+        button_text = f"{button_text} "
 
-    logger.debug('Formatted button', button_text=button_text)
+    logger.debug("Formatted button", button_text=button_text)
     return button_text
 
 
-def format_price_text(period_label: str, price_info: PriceInfo, format_price_func) -> str:
+def format_price_text(
+    period_label: str, price_info: PriceInfo, format_price_func
+) -> str:
     """
     Format a price for message text (not button) with unified discount display.
 
@@ -176,11 +191,7 @@ def format_price_text(period_label: str, price_info: PriceInfo, format_price_fun
             "30 дней"
     """
     if price_info.final_price == 0:
-        return f'{period_label}'
+        return f"{period_label}"
     if price_info.has_discount:
-        return (
-            f'{period_label} - '
-            f'{format_price_func(price_info.base_price)} '
-            f'{format_price_func(price_info.final_price)}'
-        )
-    return f'{period_label} - {format_price_func(price_info.final_price)}'
+        return f"{period_label} - {format_price_func(price_info.base_price)} {format_price_func(price_info.final_price)}"
+    return f"{period_label} - {format_price_func(price_info.final_price)}"

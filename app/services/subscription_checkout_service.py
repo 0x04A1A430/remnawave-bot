@@ -4,15 +4,16 @@ from sqlalchemy.exc import MissingGreenlet
 from app.database.models import Subscription, User
 from app.utils.cache import UserCache
 
-
 logger = structlog.get_logger(__name__)
 
 
-_CHECKOUT_SESSION_KEY = 'subscription_checkout'
+_CHECKOUT_SESSION_KEY = "subscription_checkout"
 _CHECKOUT_TTL_SECONDS = 3600
 
 
-async def save_subscription_checkout_draft(user_id: int, data: dict, ttl: int = _CHECKOUT_TTL_SECONDS) -> bool:
+async def save_subscription_checkout_draft(
+    user_id: int, data: dict, ttl: int = _CHECKOUT_TTL_SECONDS
+) -> bool:
     """Persist subscription checkout draft data in cache."""
 
     return await UserCache.set_user_session(user_id, _CHECKOUT_SESSION_KEY, data, ttl)
@@ -53,11 +54,11 @@ def should_offer_checkout_resume(
 
     if subscription is None:
         try:
-            subscription = getattr(user, 'subscription', None)
+            subscription = getattr(user, "subscription", None)
         except MissingGreenlet as error:
             logger.warning(
-                'Не удалось лениво загрузить подписку пользователя при проверке возврата к checkout',
-                getattr=getattr(user, 'id', None),
+                "Не удалось лениво загрузить подписку пользователя при проверке возврата к checkout",
+                getattr=getattr(user, "id", None),
                 error=error,
             )
             subscription = None
@@ -65,10 +66,10 @@ def should_offer_checkout_resume(
     if subscription is None:
         return True
 
-    if getattr(subscription, 'is_trial', False):
+    if getattr(subscription, "is_trial", False):
         return True
 
-    if getattr(subscription, 'actual_status', None) == 'expired':
+    if getattr(subscription, "actual_status", None) == "expired":
         return True
 
     return False

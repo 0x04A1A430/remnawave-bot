@@ -78,8 +78,12 @@ class ExportCsvRequest(BaseModel):
     tariffs: str | None = None
     statuses: str | None = None
     nodes: str | None = None
-    total_threshold_gb: float | None = Field(None, ge=0, description='Total GB/day threshold for risk column')
-    node_threshold_gb: float | None = Field(None, ge=0, description='Per-node GB/day threshold for risk column')
+    total_threshold_gb: float | None = Field(
+        None, ge=0, description="Total GB/day threshold for risk column"
+    )
+    node_threshold_gb: float | None = Field(
+        None, ge=0, description="Per-node GB/day threshold for risk column"
+    )
 
 
 class ExportCsvResponse(BaseModel):

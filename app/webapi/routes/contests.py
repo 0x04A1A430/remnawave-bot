@@ -62,7 +62,6 @@ from app.webapi.schemas.contests import (
     StartRoundRequest,
 )
 
-
 router = APIRouter()
 
 
@@ -101,7 +100,7 @@ def _serialize_round(round_obj: ContestRound) -> ContestRoundResponse:
     return ContestRoundResponse(
         id=round_obj.id,
         template_id=round_obj.template_id,
-        template_slug=tpl.slug if tpl else '',
+        template_slug=tpl.slug if tpl else "",
         template_name=tpl.name if tpl else None,
         starts_at=round_obj.starts_at,
         ends_at=round_obj.ends_at,
@@ -157,12 +156,12 @@ def _parse_times_str(times_str: str | None) -> list[time]:
     if not times_str:
         return []
     parsed: list[time] = []
-    for part in times_str.split(','):
+    for part in times_str.split(","):
         part = part.strip()
         if not part:
             continue
         try:
-            parsed.append(datetime.strptime(part, '%H:%M').time())
+            parsed.append(datetime.strptime(part, "%H:%M").time())
         except Exception:
             continue
     return parsed
@@ -221,23 +220,25 @@ def _serialize_event(
 
 
 @router.get(
-    '/daily/templates',
+    "/daily/templates",
     response_model=ContestTemplateListResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def list_daily_templates(
-    enabled_only: bool = Query(False, description='Показывать только включенные игры'),
+    enabled_only: bool = Query(False, description="Показывать только включенные игры"),
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> ContestTemplateListResponse:
     templates = await list_templates(db, enabled_only=enabled_only)
-    return ContestTemplateListResponse(items=[_serialize_template(tpl) for tpl in templates])
+    return ContestTemplateListResponse(
+        items=[_serialize_template(tpl) for tpl in templates]
+    )
 
 
 @router.get(
-    '/daily/templates/{template_id}',
+    "/daily/templates/{template_id}",
     response_model=ContestTemplateResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def get_daily_template(
     template_id: int,
@@ -246,14 +247,14 @@ async def get_daily_template(
 ) -> ContestTemplateResponse:
     tpl = await get_template_by_id(db, template_id)
     if not tpl:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
     return _serialize_template(tpl)
 
 
 @router.patch(
-    '/daily/templates/{template_id}',
+    "/daily/templates/{template_id}",
     response_model=ContestTemplateResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def update_daily_template(
     template_id: int,
@@ -263,7 +264,7 @@ async def update_daily_template(
 ) -> ContestTemplateResponse:
     tpl = await get_template_by_id(db, template_id)
     if not tpl:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
 
     update_fields = payload.model_dump(exclude_none=True)
     if not update_fields:
@@ -274,10 +275,10 @@ async def update_daily_template(
 
 
 @router.post(
-    '/daily/templates/{template_id}/start-round',
+    "/daily/templates/{template_id}/start-round",
     response_model=ContestRoundResponse,
     status_code=status.HTTP_201_CREATED,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def start_round_now(
     template_id: int,
@@ -287,7 +288,7 @@ async def start_round_now(
 ) -> ContestRoundResponse:
     tpl = await get_template_by_id(db, template_id)
     if not tpl:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found")
 
     if not tpl.is_enabled:
         tpl = await update_template_fields(db, tpl, is_enabled=True)
@@ -296,7 +297,7 @@ async def start_round_now(
     if existing and not payload.force:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            'Active round already exists for this template. Set force=true to start a new one.',
+            "Active round already exists for this template. Set force=true to start a new one.",
         )
     if existing and payload.force:
         await finish_round(db, existing)
@@ -330,19 +331,19 @@ async def start_round_now(
 
 
 @router.get(
-    '/daily/rounds',
+    "/daily/rounds",
     response_model=ContestRoundListResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def list_rounds(
-    status_filter: str = Query('active', pattern='^(active|finished|any)$'),
+    status_filter: str = Query("active", pattern="^(active|finished|any)$"),
     template_id: int | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> ContestRoundListResponse:
-    if status_filter == 'active':
+    if status_filter == "active":
         rounds = await get_active_rounds(db)
         if template_id:
             rounds = [r for r in rounds if r.template_id == template_id]
@@ -355,9 +356,13 @@ async def list_rounds(
             offset=offset,
         )
 
-    query = select(ContestRound).options(selectinload(ContestRound.template)).order_by(ContestRound.starts_at.desc())
+    query = (
+        select(ContestRound)
+        .options(selectinload(ContestRound.template))
+        .order_by(ContestRound.starts_at.desc())
+    )
     count_query = select(func.count(ContestRound.id))
-    if status_filter != 'any':
+    if status_filter != "any":
         query = query.where(ContestRound.status == status_filter)
         count_query = count_query.where(ContestRound.status == status_filter)
     if template_id:
@@ -377,9 +382,9 @@ async def list_rounds(
 
 
 @router.get(
-    '/daily/rounds/{round_id}',
+    "/daily/rounds/{round_id}",
     response_model=ContestRoundResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def get_round(
     round_id: int,
@@ -387,18 +392,20 @@ async def get_round(
     db: AsyncSession = Depends(get_db_session),
 ) -> ContestRoundResponse:
     result = await db.execute(
-        select(ContestRound).options(selectinload(ContestRound.template)).where(ContestRound.id == round_id)
+        select(ContestRound)
+        .options(selectinload(ContestRound.template))
+        .where(ContestRound.id == round_id)
     )
     round_obj = result.scalar_one_or_none()
     if not round_obj:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Round not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Round not found")
     return _serialize_round(round_obj)
 
 
 @router.post(
-    '/daily/rounds/{round_id}/finish',
+    "/daily/rounds/{round_id}/finish",
     response_model=ContestRoundResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def finish_round_now(
     round_id: int,
@@ -406,24 +413,26 @@ async def finish_round_now(
     db: AsyncSession = Depends(get_db_session),
 ) -> ContestRoundResponse:
     result = await db.execute(
-        select(ContestRound).options(selectinload(ContestRound.template)).where(ContestRound.id == round_id)
+        select(ContestRound)
+        .options(selectinload(ContestRound.template))
+        .where(ContestRound.id == round_id)
     )
     round_obj = result.scalar_one_or_none()
     if not round_obj:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Round not found')
-    if round_obj.status != 'finished':
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Round not found")
+    if round_obj.status != "finished":
         round_obj = await finish_round(db, round_obj)
     return _serialize_round(round_obj)
 
 
 @router.get(
-    '/daily/rounds/{round_id}/attempts',
+    "/daily/rounds/{round_id}/attempts",
     response_model=ContestAttemptListResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def list_attempts(
     round_id: int,
-    winners_only: bool = Query(False, description='Вернуть только победителей'),
+    winners_only: bool = Query(False, description="Вернуть только победителей"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     _: Any = Security(require_api_token),
@@ -433,7 +442,10 @@ async def list_attempts(
     if winners_only:
         conditions.append(ContestAttempt.is_winner.is_(True))
 
-    total = await db.scalar(select(func.count(ContestAttempt.id)).where(and_(*conditions))) or 0
+    total = (
+        await db.scalar(select(func.count(ContestAttempt.id)).where(and_(*conditions)))
+        or 0
+    )
 
     query = (
         select(ContestAttempt, User)
@@ -458,9 +470,9 @@ async def list_attempts(
 
 
 @router.get(
-    '/referral',
+    "/referral",
     response_model=ReferralContestListResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def list_referral(
     contest_type: str | None = Query(None),
@@ -485,10 +497,10 @@ async def list_referral(
 
 
 @router.post(
-    '/contests/referral',
+    "/contests/referral",
     response_model=ReferralContestResponse,
     status_code=status.HTTP_201_CREATED,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def create_referral(
     payload: ReferralContestCreateRequest,
@@ -498,9 +510,13 @@ async def create_referral(
     start_at = _to_utc_naive(payload.start_at, payload.timezone)
     end_at = _to_utc_naive(payload.end_at, payload.timezone)
     if end_at <= start_at:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'end_at must be after start_at')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "end_at must be after start_at"
+        )
 
-    summary_time = _primary_time(payload.daily_summary_times, payload.daily_summary_time)
+    summary_time = _primary_time(
+        payload.daily_summary_times, payload.daily_summary_time
+    )
 
     contest = await create_referral_contest(
         db,
@@ -523,9 +539,9 @@ async def create_referral(
 
 
 @router.get(
-    '/referral/{contest_id}',
+    "/referral/{contest_id}",
     response_model=ReferralContestDetailResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def get_referral(
     contest_id: int,
@@ -535,10 +551,12 @@ async def get_referral(
 ) -> ReferralContestDetailResponse:
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
 
     total_events = await get_contest_events_count(db, contest.id)
-    leaderboard_rows = await get_contest_leaderboard(db, contest.id, limit=leaderboard_limit)
+    leaderboard_rows = await get_contest_leaderboard(
+        db, contest.id, limit=leaderboard_limit
+    )
     leaderboard = [_serialize_leaderboard_item(row) for row in leaderboard_rows]
 
     return ReferralContestDetailResponse(
@@ -549,9 +567,9 @@ async def get_referral(
 
 
 @router.patch(
-    '/referral/{contest_id}',
+    "/referral/{contest_id}",
     response_model=ReferralContestResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def update_referral(
     contest_id: int,
@@ -561,26 +579,33 @@ async def update_referral(
 ) -> ReferralContestResponse:
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
 
     fields = payload.model_dump(exclude_none=True)
 
-    if 'start_at' in fields:
-        fields['start_at'] = _to_utc_naive(fields['start_at'], fields.get('timezone') or contest.timezone)
-    if 'end_at' in fields:
-        fields['end_at'] = _to_utc_naive(fields['end_at'], fields.get('timezone') or contest.timezone)
-    if 'daily_summary_times' in fields:
-        fields['daily_summary_time'] = _primary_time(
-            fields['daily_summary_times'], fields.get('daily_summary_time') or contest.daily_summary_time
+    if "start_at" in fields:
+        fields["start_at"] = _to_utc_naive(
+            fields["start_at"], fields.get("timezone") or contest.timezone
         )
-    elif 'daily_summary_time' in fields:
+    if "end_at" in fields:
+        fields["end_at"] = _to_utc_naive(
+            fields["end_at"], fields.get("timezone") or contest.timezone
+        )
+    if "daily_summary_times" in fields:
+        fields["daily_summary_time"] = _primary_time(
+            fields["daily_summary_times"],
+            fields.get("daily_summary_time") or contest.daily_summary_time,
+        )
+    elif "daily_summary_time" in fields:
         # ensure type is time (pydantic provides time)
         pass
 
-    new_start = fields.get('start_at', contest.start_at)
-    new_end = fields.get('end_at', contest.end_at)
+    new_start = fields.get("start_at", contest.start_at)
+    new_end = fields.get("end_at", contest.end_at)
     if new_end <= new_start:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'end_at must be after start_at')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "end_at must be after start_at"
+        )
 
     if fields:
         contest = await update_referral_contest(db, contest, **fields)
@@ -589,27 +614,27 @@ async def update_referral(
 
 
 @router.post(
-    '/referral/{contest_id}/toggle',
+    "/referral/{contest_id}/toggle",
     response_model=ReferralContestResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def toggle_referral(
     contest_id: int,
-    is_active: bool = Query(..., description='Активировать или остановить конкурс'),
+    is_active: bool = Query(..., description="Активировать или остановить конкурс"),
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> ReferralContestResponse:
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
     contest = await toggle_referral_contest(db, contest, is_active)
     return _serialize_referral_contest(contest)
 
 
 @router.delete(
-    '/referral/{contest_id}',
+    "/referral/{contest_id}",
     status_code=status.HTTP_200_OK,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def delete_referral(
     contest_id: int,
@@ -618,21 +643,21 @@ async def delete_referral(
 ) -> dict[str, str]:
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
     now_utc = datetime.now(UTC)
     if contest.is_active or contest.end_at > now_utc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            'Можно удалять только завершённые конкурсы',
+            "Можно удалять только завершённые конкурсы",
         )
     await delete_referral_contest(db, contest)
-    return {'status': 'deleted'}
+    return {"status": "deleted"}
 
 
 @router.get(
-    '/referral/{contest_id}/events',
+    "/referral/{contest_id}/events",
     response_model=ReferralContestEventListResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def list_referral_events(
     contest_id: int,
@@ -643,13 +668,18 @@ async def list_referral_events(
 ) -> ReferralContestEventListResponse:
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
 
     referrer_user = aliased(User)
     referral_user = aliased(User)
 
     base_conditions = [ReferralContestEvent.contest_id == contest_id]
-    total = await db.scalar(select(func.count(ReferralContestEvent.id)).where(and_(*base_conditions))) or 0
+    total = (
+        await db.scalar(
+            select(func.count(ReferralContestEvent.id)).where(and_(*base_conditions))
+        )
+        or 0
+    )
 
     query = (
         select(ReferralContestEvent, referrer_user, referral_user)
@@ -664,7 +694,10 @@ async def list_referral_events(
     rows = result.all()
 
     return ReferralContestEventListResponse(
-        items=[_serialize_event(event, referrer, referral) for event, referrer, referral in rows],
+        items=[
+            _serialize_event(event, referrer, referral)
+            for event, referrer, referral in rows
+        ],
         total=int(total),
         limit=limit,
         offset=offset,
@@ -672,9 +705,9 @@ async def list_referral_events(
 
 
 @router.get(
-    '/referral/{contest_id}/detailed-stats',
+    "/referral/{contest_id}/detailed-stats",
     response_model=ReferralContestDetailedStatsResponse,
-    tags=['contests'],
+    tags=["contests"],
 )
 async def get_referral_detailed_stats(
     contest_id: int,
@@ -683,7 +716,7 @@ async def get_referral_detailed_stats(
 ) -> ReferralContestDetailedStatsResponse:
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Contest not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contest not found")
 
     from app.services.referral_contest_service import referral_contest_service
 

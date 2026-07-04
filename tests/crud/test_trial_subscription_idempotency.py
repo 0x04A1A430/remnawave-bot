@@ -25,7 +25,6 @@ from sqlalchemy.exc import IntegrityError
 from app.database.crud import subscription as sub_crud
 from app.database.models import SubscriptionStatus
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -39,7 +38,7 @@ def _integrity_error() -> IntegrityError:
     """
     orig = MagicMock()
     orig.constraint_name = sub_crud.UQ_TRIAL_CONSTRAINT
-    return IntegrityError('duplicate key', {}, orig)
+    return IntegrityError("duplicate key", {}, orig)
 
 
 def _sub(**kw) -> MagicMock:
@@ -71,7 +70,9 @@ def _db() -> AsyncMock:
 async def test_returns_existing_active_subscription_without_insert(monkeypatch):
     """Если у пользователя уже есть живая (active) подписка на тариф — возвращаем
     её, db.add и db.commit не вызываем."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     existing = _sub(
         id=10,
@@ -82,16 +83,18 @@ async def test_returns_existing_active_subscription_without_insert(monkeypatch):
     )
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[existing]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='abc123'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="abc123")
+    )
 
     db = _db()
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=177,
-        connected_squads=['squad-1'],
+        connected_squads=["squad-1"],
         tariff_id=1,
     )
 
@@ -104,7 +107,9 @@ async def test_returns_existing_active_subscription_without_insert(monkeypatch):
 async def test_expired_subscription_does_not_block_new_trial_single_tariff(monkeypatch):
     """В single-tariff режиме EXPIRED-подписка не блокирует создание нового триала
     (регрессия: if existing: без проверки статуса возвращал устаревшую запись)."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: False
+    )
 
     expired = _sub(
         id=99,
@@ -113,14 +118,18 @@ async def test_expired_subscription_does_not_block_new_trial_single_tariff(monke
         status=SubscriptionStatus.EXPIRED.value,
         is_trial=True,
     )
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_id', AsyncMock(return_value=expired))
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='exp-new'))
+    monkeypatch.setattr(
+        sub_crud, "get_subscription_by_user_id", AsyncMock(return_value=expired)
+    )
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="exp-new")
+    )
 
     db = _db()
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=5,
-        connected_squads=['squad-x'],
+        connected_squads=["squad-x"],
     )
 
     # Новая подписка создана, EXPIRED не вернулась
@@ -133,7 +142,9 @@ async def test_expired_subscription_does_not_block_new_trial_single_tariff(monke
 @pytest.mark.asyncio
 async def test_returns_existing_trial_subscription_without_insert(monkeypatch):
     """Статус trial тоже считается живым — возвращаем без INSERT."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     existing = _sub(
         id=11,
@@ -144,16 +155,18 @@ async def test_returns_existing_trial_subscription_without_insert(monkeypatch):
     )
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[existing]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='xyz789'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="xyz789")
+    )
 
     db = _db()
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=177,
-        connected_squads=['squad-1'],
+        connected_squads=["squad-1"],
         tariff_id=1,
     )
 
@@ -165,7 +178,9 @@ async def test_returns_existing_trial_subscription_without_insert(monkeypatch):
 @pytest.mark.asyncio
 async def test_returns_existing_limited_subscription_without_insert(monkeypatch):
     """Статус limited тоже живой (трафик кончился, время ещё есть) — возвращаем без INSERT."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     existing = _sub(
         id=12,
@@ -176,16 +191,18 @@ async def test_returns_existing_limited_subscription_without_insert(monkeypatch)
     )
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[existing]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='lim001'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="lim001")
+    )
 
     db = _db()
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=177,
-        connected_squads=['squad-1'],
+        connected_squads=["squad-1"],
         tariff_id=1,
     )
 
@@ -203,7 +220,9 @@ async def test_returns_existing_limited_subscription_without_insert(monkeypatch)
 async def test_pending_trial_is_activated_not_duplicated(monkeypatch):
     """Существующая PENDING-триальная подписка должна быть переведена в active,
     а не создана дублем — старый путь должен работать."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     pending = _sub(
         id=20,
@@ -211,11 +230,11 @@ async def test_pending_trial_is_activated_not_duplicated(monkeypatch):
         tariff_id=1,
         status=SubscriptionStatus.PENDING.value,
         is_trial=True,
-        remnawave_short_id='old-short-id',
+        remnawave_short_id="old-short-id",
     )
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[pending]),
     )
 
@@ -223,7 +242,7 @@ async def test_pending_trial_is_activated_not_duplicated(monkeypatch):
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=177,
-        connected_squads=['squad-1'],
+        connected_squads=["squad-1"],
         tariff_id=1,
     )
 
@@ -239,23 +258,35 @@ async def test_pending_trial_is_activated_not_duplicated(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_integrity_error_on_commit_returns_concurrent_subscription_multitariff(monkeypatch):
+async def test_integrity_error_on_commit_returns_concurrent_subscription_multitariff(
+    monkeypatch,
+):
     """Если commit падает с IntegrityError (гонка), делаем rollback, expunge объекта
     из сессии и возвращаем подписку, созданную конкурентным запросом (multi-tariff)."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     # При первичной проверке подписки нет — оба потока прошли проверку
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='race-id'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="race-id")
+    )
 
-    concurrent = _sub(id=30, user_id=177, tariff_id=1, status=SubscriptionStatus.ACTIVE.value, is_trial=True)
+    concurrent = _sub(
+        id=30,
+        user_id=177,
+        tariff_id=1,
+        status=SubscriptionStatus.ACTIVE.value,
+        is_trial=True,
+    )
     monkeypatch.setattr(
         sub_crud,
-        'get_subscription_by_user_and_tariff',
+        "get_subscription_by_user_and_tariff",
         AsyncMock(return_value=concurrent),
     )
 
@@ -266,7 +297,7 @@ async def test_integrity_error_on_commit_returns_concurrent_subscription_multita
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=177,
-        connected_squads=['squad-1'],
+        connected_squads=["squad-1"],
         tariff_id=1,
     )
 
@@ -282,17 +313,21 @@ async def test_integrity_error_on_commit_returns_concurrent_subscription_multita
 async def test_integrity_error_on_commit_reraises_if_no_concurrent_sub(monkeypatch):
     """Если commit падает с IntegrityError, но найти конкурентную подписку не удалось
     (нештатная ситуация) — IntegrityError пробрасывается дальше."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='err-id'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="err-id")
+    )
     monkeypatch.setattr(
         sub_crud,
-        'get_subscription_by_user_and_tariff',
+        "get_subscription_by_user_and_tariff",
         AsyncMock(return_value=None),
     )
 
@@ -303,7 +338,7 @@ async def test_integrity_error_on_commit_reraises_if_no_concurrent_sub(monkeypat
         await sub_crud.create_trial_subscription(
             db,
             user_id=177,
-            connected_squads=['squad-1'],
+            connected_squads=["squad-1"],
             tariff_id=1,
         )
 
@@ -311,26 +346,32 @@ async def test_integrity_error_on_commit_reraises_if_no_concurrent_sub(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately(monkeypatch):
+async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately(
+    monkeypatch,
+):
     """IntegrityError по постороннему constraint (не uq_subscriptions_user_tariff_active)
     должна пробрасываться немедленно — rollback выполняется, но поиск concurrent
     не запускается и подписка не возвращается."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='other-err'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="other-err")
+    )
 
     lookup = AsyncMock()
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
+    monkeypatch.setattr(sub_crud, "get_subscription_by_user_and_tariff", lookup)
 
     # orig.constraint_name содержит ДРУГОЕ имя — не наш constraint
     orig = MagicMock()
-    orig.constraint_name = 'some_other_constraint'
-    unrelated_error = IntegrityError('other violation', {}, orig)
+    orig.constraint_name = "some_other_constraint"
+    unrelated_error = IntegrityError("other violation", {}, orig)
 
     db = _db()
     db.commit.side_effect = unrelated_error
@@ -339,7 +380,7 @@ async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately
         await sub_crud.create_trial_subscription(
             db,
             user_id=177,
-            connected_squads=['squad-1'],
+            connected_squads=["squad-1"],
             tariff_id=1,
         )
 
@@ -355,17 +396,29 @@ async def test_integrity_error_from_unrelated_constraint_is_reraised_immediately
 
 
 @pytest.mark.asyncio
-async def test_integrity_error_on_commit_returns_concurrent_subscription_single_tariff(monkeypatch):
+async def test_integrity_error_on_commit_returns_concurrent_subscription_single_tariff(
+    monkeypatch,
+):
     """Та же защита от гонки в режиме без multi-tariff: используем
     get_subscription_by_user_id вместо get_subscription_by_user_and_tariff."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: False)
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='single-id'))
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: False
+    )
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="single-id")
+    )
 
-    concurrent = _sub(id=40, user_id=5, tariff_id=None, status=SubscriptionStatus.ACTIVE.value, is_trial=True)
+    concurrent = _sub(
+        id=40,
+        user_id=5,
+        tariff_id=None,
+        status=SubscriptionStatus.ACTIVE.value,
+        is_trial=True,
+    )
 
     # Первый вызов (при проверке existing) → None, второй (после rollback) → concurrent
     get_sub_mock = AsyncMock(side_effect=[None, concurrent])
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_id', get_sub_mock)
+    monkeypatch.setattr(sub_crud, "get_subscription_by_user_id", get_sub_mock)
 
     db = _db()
     db.commit.side_effect = _integrity_error()
@@ -373,7 +426,7 @@ async def test_integrity_error_on_commit_returns_concurrent_subscription_single_
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=5,
-        connected_squads=['squad-x'],
+        connected_squads=["squad-x"],
         tariff_id=None,
     )
 
@@ -389,20 +442,24 @@ async def test_integrity_error_on_commit_returns_concurrent_subscription_single_
 @pytest.mark.asyncio
 async def test_creates_new_subscription_when_no_existing(monkeypatch):
     """Когда у пользователя нет подписки — создаётся новая, db.add и db.commit вызываются."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='new-short'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="new-short")
+    )
 
     db = _db()
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=99,
-        connected_squads=['squad-new'],
+        connected_squads=["squad-new"],
         tariff_id=2,
     )
 
@@ -422,7 +479,9 @@ async def test_creates_new_subscription_when_no_existing(monkeypatch):
 @pytest.mark.asyncio
 async def test_different_tariff_subscription_does_not_block_trial_creation(monkeypatch):
     """Живая подписка на тариф 2 не мешает создать триал на тариф 1."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
 
     other_tariff_sub = _sub(
         id=50,
@@ -433,16 +492,18 @@ async def test_different_tariff_subscription_does_not_block_trial_creation(monke
     )
     monkeypatch.setattr(
         sub_crud,
-        'get_active_subscriptions_by_user_id',
+        "get_active_subscriptions_by_user_id",
         AsyncMock(return_value=[other_tariff_sub]),
     )
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(return_value='diff-tariff'))
+    monkeypatch.setattr(
+        sub_crud, "generate_unique_short_id", AsyncMock(return_value="diff-tariff")
+    )
 
     db = _db()
     result = await sub_crud.create_trial_subscription(
         db,
         user_id=177,
-        connected_squads=['squad-1'],
+        connected_squads=["squad-1"],
         tariff_id=1,  # другой тариф
     )
 

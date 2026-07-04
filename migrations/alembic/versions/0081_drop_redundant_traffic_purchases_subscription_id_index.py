@@ -17,9 +17,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-
-revision: str = '0081'
-down_revision: Union[str, None] = '0080'
+revision: str = "0081"
+down_revision: Union[str, None] = "0080"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -28,12 +27,16 @@ def upgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    if dialect_name == 'postgresql':
+    if dialect_name == "postgresql":
         with op.get_context().autocommit_block():
-            op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_traffic_purchases_subscription_id')
+            op.execute(
+                "DROP INDEX CONCURRENTLY IF EXISTS ix_traffic_purchases_subscription_id"
+            )
     else:
         try:
-            op.drop_index('ix_traffic_purchases_subscription_id', table_name='traffic_purchases')
+            op.drop_index(
+                "ix_traffic_purchases_subscription_id", table_name="traffic_purchases"
+            )
         except Exception:  # noqa: BLE001
             # SQLite/dev DB может не иметь этого индекса — норм
             pass
@@ -43,16 +46,16 @@ def downgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    if dialect_name == 'postgresql':
+    if dialect_name == "postgresql":
         with op.get_context().autocommit_block():
             op.execute(
-                'CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_traffic_purchases_subscription_id '
-                'ON traffic_purchases (subscription_id)'
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_traffic_purchases_subscription_id "
+                "ON traffic_purchases (subscription_id)"
             )
     else:
         op.create_index(
-            'ix_traffic_purchases_subscription_id',
-            'traffic_purchases',
-            ['subscription_id'],
+            "ix_traffic_purchases_subscription_id",
+            "traffic_purchases",
+            ["subscription_id"],
             unique=False,
         )

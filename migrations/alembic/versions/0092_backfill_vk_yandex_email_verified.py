@@ -3,8 +3,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0092'
-down_revision: Union[str, None] = '0091'
+revision: str = "0092"
+down_revision: Union[str, None] = "0091"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -24,8 +24,7 @@ depends_on: Union[str, Sequence[str], None] = None
 # (unlike trusted providers such as Google/Discord). Telegram users are untouched
 # (auth_type filter), and already-verified rows are skipped.
 
-_BACKFILL_SQL = sa.text(
-    """
+_BACKFILL_SQL = sa.text("""
     UPDATE users
     SET email_verified = true,
         email_verified_at = COALESCE(email_verified_at, CURRENT_TIMESTAMP),
@@ -33,8 +32,7 @@ _BACKFILL_SQL = sa.text(
     WHERE auth_type IN ('vk', 'yandex')
       AND email IS NOT NULL
       AND email_verified = false
-    """
-)
+    """)
 
 
 def upgrade() -> None:

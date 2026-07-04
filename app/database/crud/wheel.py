@@ -16,7 +16,6 @@ from app.database.models import (
     WheelSpin,
 )
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -25,7 +24,11 @@ logger = structlog.get_logger(__name__)
 
 async def get_wheel_config(db: AsyncSession) -> WheelConfig | None:
     """Получить текущую конфигурацию колеса (всегда id=1)."""
-    result = await db.execute(select(WheelConfig).options(selectinload(WheelConfig.prizes)).where(WheelConfig.id == 1))
+    result = await db.execute(
+        select(WheelConfig)
+        .options(selectinload(WheelConfig.prizes))
+        .where(WheelConfig.id == 1)
+    )
     return result.scalar_one_or_none()
 
 
@@ -39,7 +42,7 @@ async def get_or_create_wheel_config(db: AsyncSession) -> WheelConfig:
     config = WheelConfig(
         id=1,
         is_enabled=False,
-        name='Колесо удачи',
+        name="Колесо удачи",
         spin_cost_stars=10,
         spin_cost_days=1,
         spin_cost_stars_enabled=True,
@@ -47,13 +50,13 @@ async def get_or_create_wheel_config(db: AsyncSession) -> WheelConfig:
         rtp_percent=80,
         daily_spin_limit=5,
         min_subscription_days_for_day_payment=3,
-        promo_prefix='WHEEL',
+        promo_prefix="WHEEL",
         promo_validity_days=7,
     )
     db.add(config)
     await db.commit()
     await db.refresh(config)
-    logger.info('Создана дефолтная конфигурация колеса удачи')
+    logger.info("Создана дефолтная конфигурация колеса удачи")
     return config
 
 
@@ -68,14 +71,16 @@ async def update_wheel_config(db: AsyncSession, **kwargs) -> WheelConfig:
     config.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(config)
-    logger.info('Обновлена конфигурация колеса', kwargs=kwargs)
+    logger.info("Обновлена конфигурация колеса", kwargs=kwargs)
     return config
 
 
 # ==================== WHEEL PRIZES ====================
 
 
-async def get_wheel_prizes(db: AsyncSession, config_id: int = 1, active_only: bool = True) -> list[WheelPrize]:
+async def get_wheel_prizes(
+    db: AsyncSession, config_id: int = 1, active_only: bool = True
+) -> list[WheelPrize]:
     """Получить список призов колеса."""
     query = select(WheelPrize).where(WheelPrize.config_id == config_id)
 
@@ -101,8 +106,8 @@ async def create_wheel_prize(
     prize_value: int,
     display_name: str,
     prize_value_kopeks: int,
-    emoji: str = '',
-    color: str = '#3B82F6',
+    emoji: str = "",
+    color: str = "#3B82F6",
     sort_order: int = 0,
     manual_probability: float | None = None,
     is_active: bool = True,
@@ -129,11 +134,13 @@ async def create_wheel_prize(
     db.add(prize)
     await db.commit()
     await db.refresh(prize)
-    logger.info('Создан приз колеса', display_name=display_name, prize_type=prize_type)
+    logger.info("Создан приз колеса", display_name=display_name, prize_type=prize_type)
     return prize
 
 
-async def update_wheel_prize(db: AsyncSession, prize_id: int, **kwargs) -> WheelPrize | None:
+async def update_wheel_prize(
+    db: AsyncSession, prize_id: int, **kwargs
+) -> WheelPrize | None:
     """Обновить приз колеса."""
     prize = await get_wheel_prize_by_id(db, prize_id)
     if not prize:
@@ -146,7 +153,7 @@ async def update_wheel_prize(db: AsyncSession, prize_id: int, **kwargs) -> Wheel
     prize.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(prize)
-    logger.info('Обновлен приз колеса ID', prize_id=prize_id, kwargs=kwargs)
+    logger.info("Обновлен приз колеса ID", prize_id=prize_id, kwargs=kwargs)
     return prize
 
 
@@ -158,7 +165,7 @@ async def delete_wheel_prize(db: AsyncSession, prize_id: int) -> bool:
 
     await db.delete(prize)
     await db.commit()
-    logger.info('Удален приз колеса ID', prize_id=prize_id)
+    logger.info("Удален приз колеса ID", prize_id=prize_id)
     return True
 
 
@@ -170,7 +177,7 @@ async def reorder_wheel_prizes(db: AsyncSession, prize_ids: list[int]) -> bool:
             prize.sort_order = index
 
     await db.commit()
-    logger.info('Переупорядочены призы колеса', prize_ids=prize_ids)
+    logger.info("Переупорядочены призы колеса", prize_ids=prize_ids)
     return True
 
 
@@ -211,13 +218,19 @@ async def create_wheel_spin(
     db.add(spin)
     await db.commit()
     await db.refresh(spin)
-    logger.info('Создан спин колеса', user_id=user_id, prize_display_name=prize_display_name)
+    logger.info(
+        "Создан спин колеса", user_id=user_id, prize_display_name=prize_display_name
+    )
     return spin
 
 
-async def get_wheel_spin_by_charge_id(db: AsyncSession, telegram_charge_id: str) -> WheelSpin | None:
+async def get_wheel_spin_by_charge_id(
+    db: AsyncSession, telegram_charge_id: str
+) -> WheelSpin | None:
     """Найти спин по Telegram charge id (идемпотентность Stars-платежа)."""
-    result = await db.execute(select(WheelSpin).where(WheelSpin.telegram_charge_id == telegram_charge_id))
+    result = await db.execute(
+        select(WheelSpin).where(WheelSpin.telegram_charge_id == telegram_charge_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -253,7 +266,9 @@ async def get_user_spin_history(
 ) -> tuple[list[WheelSpin], int]:
     """Получить историю спинов пользователя."""
     # Общее количество
-    count_result = await db.execute(select(func.count(WheelSpin.id)).where(WheelSpin.user_id == user_id))
+    count_result = await db.execute(
+        select(func.count(WheelSpin.id)).where(WheelSpin.user_id == user_id)
+    )
     total = count_result.scalar() or 0
 
     # Спины с пагинацией (eager load prize relationship)
@@ -327,9 +342,13 @@ async def get_wheel_statistics(
     # Общие метрики
     result = await db.execute(
         select(
-            func.count(WheelSpin.id).label('total_spins'),
-            func.coalesce(func.sum(WheelSpin.payment_value_kopeks), 0).label('total_revenue'),
-            func.coalesce(func.sum(WheelSpin.prize_value_kopeks), 0).label('total_payout'),
+            func.count(WheelSpin.id).label("total_spins"),
+            func.coalesce(func.sum(WheelSpin.payment_value_kopeks), 0).label(
+                "total_revenue"
+            ),
+            func.coalesce(func.sum(WheelSpin.prize_value_kopeks), 0).label(
+                "total_payout"
+            ),
         ).where(and_(*conditions) if conditions else True)
     )
     row = result.one()
@@ -344,14 +363,15 @@ async def get_wheel_statistics(
     payment_dist = await db.execute(
         select(
             WheelSpin.payment_type,
-            func.count(WheelSpin.id).label('count'),
-            func.sum(WheelSpin.payment_value_kopeks).label('total'),
+            func.count(WheelSpin.id).label("count"),
+            func.sum(WheelSpin.payment_value_kopeks).label("total"),
         )
         .where(and_(*conditions) if conditions else True)
         .group_by(WheelSpin.payment_type)
     )
     spins_by_payment_type = {
-        row.payment_type: {'count': row.count, 'total_kopeks': row.total or 0} for row in payment_dist
+        row.payment_type: {"count": row.count, "total_kopeks": row.total or 0}
+        for row in payment_dist
     }
 
     # Распределение призов
@@ -359,18 +379,18 @@ async def get_wheel_statistics(
         select(
             WheelSpin.prize_type,
             WheelSpin.prize_display_name,
-            func.count(WheelSpin.id).label('count'),
-            func.sum(WheelSpin.prize_value_kopeks).label('total'),
+            func.count(WheelSpin.id).label("count"),
+            func.sum(WheelSpin.prize_value_kopeks).label("total"),
         )
         .where(and_(*conditions) if conditions else True)
         .group_by(WheelSpin.prize_type, WheelSpin.prize_display_name)
     )
     prizes_distribution = [
         {
-            'prize_type': row.prize_type,
-            'display_name': row.prize_display_name,
-            'count': row.count,
-            'total_kopeks': row.total or 0,
+            "prize_type": row.prize_type,
+            "display_name": row.prize_display_name,
+            "count": row.count,
+            "total_kopeks": row.total or 0,
         }
         for row in prizes_dist
     ]
@@ -386,11 +406,11 @@ async def get_wheel_statistics(
     )
     top_wins = [
         {
-            'user_id': spin.user_id,
-            'username': spin.user.username if spin.user else None,
-            'prize_display_name': spin.prize_display_name,
-            'prize_value_kopeks': spin.prize_value_kopeks,
-            'created_at': spin.created_at.isoformat() if spin.created_at else None,
+            "user_id": spin.user_id,
+            "username": spin.user.username if spin.user else None,
+            "prize_display_name": spin.prize_display_name,
+            "prize_value_kopeks": spin.prize_value_kopeks,
+            "created_at": spin.created_at.isoformat() if spin.created_at else None,
         }
         for spin in top_wins_result.scalars().all()
     ]
@@ -400,14 +420,14 @@ async def get_wheel_statistics(
     configured_rtp = config.rtp_percent if config else 80
 
     return {
-        'total_spins': total_spins,
-        'total_revenue_kopeks': total_revenue,
-        'total_payout_kopeks': total_payout,
-        'actual_rtp_percent': round(actual_rtp, 2),
-        'configured_rtp_percent': configured_rtp,
-        'spins_by_payment_type': spins_by_payment_type,
-        'prizes_distribution': prizes_distribution,
-        'top_wins': top_wins,
-        'period_from': date_from.isoformat() if date_from else None,
-        'period_to': date_to.isoformat() if date_to else None,
+        "total_spins": total_spins,
+        "total_revenue_kopeks": total_revenue,
+        "total_payout_kopeks": total_payout,
+        "actual_rtp_percent": round(actual_rtp, 2),
+        "configured_rtp_percent": configured_rtp,
+        "spins_by_payment_type": spins_by_payment_type,
+        "prizes_distribution": prizes_distribution,
+        "top_wins": top_wins,
+        "period_from": date_from.isoformat() if date_from else None,
+        "period_to": date_to.isoformat() if date_to else None,
     }

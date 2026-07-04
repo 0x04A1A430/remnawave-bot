@@ -4,8 +4,9 @@ from typing import Any
 
 from aiogram.types import InlineKeyboardButton
 
-
-_TG_EMOJI_RE = re.compile(r"<tg-emoji\s+emoji-id=['\"](\d+)['\"]>(.*?)</tg-emoji>", re.DOTALL)
+_TG_EMOJI_RE = re.compile(
+    r"<tg-emoji\s+emoji-id=['\"](\d+)['\"]>(.*?)</tg-emoji>", re.DOTALL
+)
 
 
 @dataclass
@@ -30,10 +31,10 @@ def parse_button_label(raw: str) -> ParsedButtonLabel:
 
     emoji_id = match.group(1)
     full_text = raw
-    clean_text = _TG_EMOJI_RE.sub('', full_text).strip()
+    clean_text = _TG_EMOJI_RE.sub("", full_text).strip()
     if not clean_text:
         # Fallback to the emoji character inside the tag (e.g. ◀️)
-        clean_text = match.group(2).strip() or '•'
+        clean_text = match.group(2).strip() or "•"
 
     return ParsedButtonLabel(text=clean_text, icon_custom_emoji_id=emoji_id)
 
@@ -59,21 +60,21 @@ def make_button(
     ``copy_text`` is the text to copy to clipboard when the button is tapped.
     """
     parsed = parse_button_label(text)
-    kwargs: dict[str, Any] = {'text': parsed.text}
+    kwargs: dict[str, Any] = {"text": parsed.text}
 
     if callback_data is not None:
-        kwargs['callback_data'] = callback_data
+        kwargs["callback_data"] = callback_data
     if url is not None:
-        kwargs['url'] = url
+        kwargs["url"] = url
     if web_app is not None:
-        kwargs['web_app'] = web_app
+        kwargs["web_app"] = web_app
     if style is not None:
-        kwargs['style'] = style
+        kwargs["style"] = style
     if copy_text is not None:
-        kwargs['copy_text'] = {'text': copy_text}
+        kwargs["copy_text"] = {"text": copy_text}
 
     final_emoji_id = icon_custom_emoji_id or parsed.icon_custom_emoji_id
     if final_emoji_id:
-        kwargs['icon_custom_emoji_id'] = final_emoji_id
+        kwargs["icon_custom_emoji_id"] = final_emoji_id
 
     return InlineKeyboardButton(**kwargs)

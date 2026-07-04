@@ -14,12 +14,12 @@ class EmailNotificationTemplates:
     """HTML email templates for user notifications."""
 
     def __init__(self):
-        self.service_name = settings.SMTP_FROM_NAME or 'VPN Service'
-        self.cabinet_url = getattr(settings, 'CABINET_URL', '')
+        self.service_name = settings.SMTP_FROM_NAME or "VPN Service"
+        self.cabinet_url = getattr(settings, "CABINET_URL", "")
 
     def get_template(
         self,
-        notification_type: 'NotificationType',
+        notification_type: "NotificationType",
         language: str,
         context: dict[str, Any],
     ) -> dict[str, str] | None:
@@ -75,7 +75,7 @@ class EmailNotificationTemplates:
 
         return template_func(language, context)
 
-    def _wrap_override_template(self, content: str, language: str = 'ru') -> str:
+    def _wrap_override_template(self, content: str, language: str = "ru") -> str:
         """Wrap override template content appropriately based on its structure.
 
         Three-tier detection:
@@ -89,11 +89,11 @@ class EmailNotificationTemplates:
         content_lower = content_stripped.lower()
 
         # Tier 1: Full HTML document — return as-is
-        if content_lower.startswith('<!doctype') or content_lower.startswith('<html'):
+        if content_lower.startswith("<!doctype") or content_lower.startswith("<html"):
             return content_stripped
 
         # Tier 2: Styled content — minimal wrapper without forced styling
-        if '<style' in content_lower or 'background' in content_lower:
+        if "<style" in content_lower or "background" in content_lower:
             return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -108,16 +108,16 @@ class EmailNotificationTemplates:
         # Tier 3: Simple HTML fragment — use base template for structure
         return self._get_base_template(content, language)
 
-    def _get_base_template(self, content: str, language: str = 'ru') -> str:
+    def _get_base_template(self, content: str, language: str = "ru") -> str:
         """Wrap content in base HTML template."""
         footer_texts = {
-            'ru': 'Это автоматическое сообщение. Пожалуйста, не отвечайте на это письмо.',
-            'en': 'This is an automated message. Please do not reply to this email.',
-            'zh': '这是一封自动发送的邮件，请勿回复。',
-            'ua': 'Це автоматичне повідомлення. Будь ласка, не відповідайте на цей лист.',
-            'fa': 'این یک پیام خودکار است. لطفاً به این ایمیل پاسخ ندهید.',
+            "ru": "Это автоматическое сообщение. Пожалуйста, не отвечайте на это письмо.",
+            "en": "This is an automated message. Please do not reply to this email.",
+            "zh": "这是一封自动发送的邮件，请勿回复。",
+            "ua": "Це автоматичне повідомлення. Будь ласка, не відповідайте на цей лист.",
+            "fa": "این یک پیام خودکار است. لطفاً به این ایمیل پاسخ ندهید.",
         }
-        footer_text = footer_texts.get(language, footer_texts['ru'])
+        footer_text = footer_texts.get(language, footer_texts["ru"])
 
         return f"""
 <!DOCTYPE html>
@@ -219,16 +219,16 @@ class EmailNotificationTemplates:
     def _get_cabinet_button(self, language: str) -> str:
         """Get cabinet link button HTML."""
         if not self.cabinet_url:
-            return ''
+            return ""
 
         texts = {
-            'ru': 'Открыть личный кабинет',
-            'en': 'Open Dashboard',
-            'zh': '打开控制面板',
-            'ua': 'Відкрити особистий кабінет',
-            'fa': 'باز کردن پنل کاربری',
+            "ru": "Открыть личный кабинет",
+            "en": "Open Dashboard",
+            "zh": "打开控制面板",
+            "ua": "Відкрити особистий кабінет",
+            "fa": "باز کردن پنل کاربری",
         }
-        text = texts.get(language, texts['en'])
+        text = texts.get(language, texts["en"])
 
         return f'<p style="text-align: center;"><a href="{self.cabinet_url}" class="button">{text}</a></p>'
 
@@ -236,20 +236,26 @@ class EmailNotificationTemplates:
     # Balance Templates
     # ============================================================================
 
-    def _balance_topup_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _balance_topup_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for balance top-up notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        balance = context.get(
+            "formatted_balance", f'{context.get("new_balance_rubles", 0):.2f} ₽'
+        )
 
         subjects = {
-            'ru': f'Баланс пополнен на {amount}',
-            'en': f'Balance topped up by {amount}',
-            'zh': f'余额已充值 {amount}',
-            'ua': f'Баланс поповнено на {amount}',
+            "ru": f"Баланс пополнен на {amount}",
+            "en": f"Balance topped up by {amount}",
+            "zh": f"余额已充值 {amount}",
+            "ua": f"Баланс поповнено на {amount}",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Баланс успешно пополнен!</h2>
                 <div class="highlight success">
                     <p>Сумма пополнения: <span class="amount">+{amount}</span></p>
@@ -258,7 +264,7 @@ class EmailNotificationTemplates:
                 <p>Спасибо за использование нашего сервиса!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Balance Successfully Topped Up!</h2>
                 <div class="highlight success">
                     <p>Top-up amount: <span class="amount">+{amount}</span></p>
@@ -267,7 +273,7 @@ class EmailNotificationTemplates:
                 <p>Thank you for using our service!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>充值成功！</h2>
                 <div class="highlight success">
                     <p>充值金额: <span class="amount">+{amount}</span></p>
@@ -276,7 +282,7 @@ class EmailNotificationTemplates:
                 <p>感谢使用我们的服务！</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Баланс успішно поповнено!</h2>
                 <div class="highlight success">
                     <p>Сума поповнення: <span class="amount">+{amount}</span></p>
@@ -288,24 +294,32 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _balance_change_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _balance_change_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for balance change notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        balance = context.get(
+            "formatted_balance", f'{context.get("new_balance_rubles", 0):.2f} ₽'
+        )
 
         subjects = {
-            'ru': 'Изменение баланса',
-            'en': 'Balance Changed',
-            'zh': '余额变动',
-            'ua': 'Зміна балансу',
+            "ru": "Изменение баланса",
+            "en": "Balance Changed",
+            "zh": "余额变动",
+            "ua": "Зміна балансу",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Изменение баланса</h2>
                 <div class="highlight">
                     <p>Сумма: <strong>{amount}</strong></p>
@@ -313,7 +327,7 @@ class EmailNotificationTemplates:
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Balance Changed</h2>
                 <div class="highlight">
                     <p>Amount: <strong>{amount}</strong></p>
@@ -321,7 +335,7 @@ class EmailNotificationTemplates:
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>余额变动</h2>
                 <div class="highlight">
                     <p>金额: <strong>{amount}</strong></p>
@@ -329,7 +343,7 @@ class EmailNotificationTemplates:
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Зміна балансу</h2>
                 <div class="highlight">
                     <p>Сума: <strong>{amount}</strong></p>
@@ -340,35 +354,47 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Subscription Templates
     # ============================================================================
 
-    def _subscription_expiring_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _subscription_expiring_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for subscription expiring notification."""
-        days_left = context.get('days_left', 0)
-        expires_at = context.get('expires_at', '')
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_zh = f'<p>套餐: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_ua = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
+        days_left = context.get("days_left", 0)
+        expires_at = context.get("expires_at", "")
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        tariff_suffix_ru = f" «{tariff_name}»" if tariff_name else ""
+        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ""
+        tariff_line_ru = (
+            f"<p>Тариф: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_en = (
+            f"<p>Plan: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_zh = (
+            f"<p>套餐: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_ua = (
+            f"<p>Тариф: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
 
         subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} истекает через {days_left} дн.',
-            'en': f'Subscription{tariff_suffix_en} expires in {days_left} day(s)',
-            'zh': f'订阅将在 {days_left} 天后到期',
-            'ua': f'Підписка{tariff_suffix_ru} закінчується через {days_left} дн.',
+            "ru": f"Подписка{tariff_suffix_ru} истекает через {days_left} дн.",
+            "en": f"Subscription{tariff_suffix_en} expires in {days_left} day(s)",
+            "zh": f"订阅将在 {days_left} 天后到期",
+            "ua": f"Підписка{tariff_suffix_ru} закінчується через {days_left} дн.",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Подписка скоро истекает</h2>
                 <div class="highlight warning">
                     {tariff_line_ru}
@@ -378,7 +404,7 @@ class EmailNotificationTemplates:
                 <p>Продлите подписку, чтобы не потерять доступ к сервису.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Subscription Expiring Soon</h2>
                 <div class="highlight warning">
                     {tariff_line_en}
@@ -388,7 +414,7 @@ class EmailNotificationTemplates:
                 <p>Renew your subscription to maintain access to our service.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>订阅即将到期</h2>
                 <div class="highlight warning">
                     {tariff_line_zh}
@@ -398,7 +424,7 @@ class EmailNotificationTemplates:
                 <p>请续订以保持对服务的访问。</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Підписка скоро закінчується</h2>
                 <div class="highlight warning">
                     {tariff_line_ua}
@@ -411,29 +437,41 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _subscription_expired_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _subscription_expired_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for subscription expired notification."""
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_zh = f'<p>套餐: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_ua = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        tariff_suffix_ru = f" «{tariff_name}»" if tariff_name else ""
+        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ""
+        tariff_line_ru = (
+            f"<p>Тариф: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_en = (
+            f"<p>Plan: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_zh = (
+            f"<p>套餐: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_ua = (
+            f"<p>Тариф: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
 
         subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} истекла',
-            'en': f'Subscription{tariff_suffix_en} Expired',
-            'zh': '订阅已到期',
-            'ua': f'Підписка{tariff_suffix_ru} закінчилась',
+            "ru": f"Подписка{tariff_suffix_ru} истекла",
+            "en": f"Subscription{tariff_suffix_en} Expired",
+            "zh": "订阅已到期",
+            "ua": f"Підписка{tariff_suffix_ru} закінчилась",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Подписка истекла</h2>
                 <div class="highlight danger">
                     {tariff_line_ru}
@@ -442,7 +480,7 @@ class EmailNotificationTemplates:
                 <p>Оформите новую подписку, чтобы продолжить использование сервиса.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Subscription Expired</h2>
                 <div class="highlight danger">
                     {tariff_line_en}
@@ -451,7 +489,7 @@ class EmailNotificationTemplates:
                 <p>Purchase a new subscription to continue using our service.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>订阅已到期</h2>
                 <div class="highlight danger">
                     {tariff_line_zh}
@@ -460,7 +498,7 @@ class EmailNotificationTemplates:
                 <p>请购买新订阅以继续使用我们的服务。</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Підписка закінчилась</h2>
                 <div class="highlight danger">
                     {tariff_line_ua}
@@ -472,28 +510,36 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _subscription_renewed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _subscription_renewed_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for subscription renewed notification."""
-        new_expires_at = context.get('new_expires_at', '')
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
+        new_expires_at = context.get("new_expires_at", "")
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        tariff_suffix_ru = f" «{tariff_name}»" if tariff_name else ""
+        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ""
+        tariff_line_ru = (
+            f"<p>Тариф: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_en = (
+            f"<p>Plan: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
 
         subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} продлена',
-            'en': f'Subscription{tariff_suffix_en} Renewed',
-            'zh': '订阅已续订',
-            'ua': f'Підписку{tariff_suffix_ru} продовжено',
+            "ru": f"Подписка{tariff_suffix_ru} продлена",
+            "en": f"Subscription{tariff_suffix_en} Renewed",
+            "zh": "订阅已续订",
+            "ua": f"Підписку{tariff_suffix_ru} продовжено",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Подписка успешно продлена!</h2>
                 <div class="highlight success">
                     {tariff_line_ru}
@@ -503,7 +549,7 @@ class EmailNotificationTemplates:
                 <p>Спасибо за использование нашего сервиса!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Subscription Successfully Renewed!</h2>
                 <div class="highlight success">
                     {tariff_line_en}
@@ -516,28 +562,36 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _subscription_activated_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _subscription_activated_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for subscription activated notification."""
-        expires_at = context.get('expires_at', '')
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        tariff_suffix_ru = f' «{tariff_name}»' if tariff_name else ''
-        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ''
-        tariff_line_ru = f'<p>Тариф: <strong>{tariff_name}</strong></p>' if tariff_name else ''
-        tariff_line_en = f'<p>Plan: <strong>{tariff_name}</strong></p>' if tariff_name else ''
+        expires_at = context.get("expires_at", "")
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        tariff_suffix_ru = f" «{tariff_name}»" if tariff_name else ""
+        tariff_suffix_en = f' "{tariff_name}"' if tariff_name else ""
+        tariff_line_ru = (
+            f"<p>Тариф: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
+        tariff_line_en = (
+            f"<p>Plan: <strong>{tariff_name}</strong></p>" if tariff_name else ""
+        )
 
         subjects = {
-            'ru': f'Подписка{tariff_suffix_ru} активирована',
-            'en': f'Subscription{tariff_suffix_en} Activated',
-            'zh': '订阅已激活',
-            'ua': f'Підписку{tariff_suffix_ru} активовано',
+            "ru": f"Подписка{tariff_suffix_ru} активирована",
+            "en": f"Subscription{tariff_suffix_en} Activated",
+            "zh": "订阅已激活",
+            "ua": f"Підписку{tariff_suffix_ru} активовано",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Подписка активирована!</h2>
                 <div class="highlight success">
                     {tariff_line_ru}
@@ -547,7 +601,7 @@ class EmailNotificationTemplates:
                 <p>Теперь вы можете пользоваться VPN сервисом.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Subscription Activated!</h2>
                 <div class="highlight success">
                     {tariff_line_en}
@@ -560,28 +614,34 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Autopay Templates
     # ============================================================================
 
-    def _autopay_success_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _autopay_success_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for successful autopay notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        new_expires_at = context.get('new_expires_at', '')
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        new_expires_at = context.get("new_expires_at", "")
 
         subjects = {
-            'ru': 'Автопродление выполнено',
-            'en': 'Auto-renewal Successful',
-            'zh': '自动续订成功',
-            'ua': 'Автопродовження виконано',
+            "ru": "Автопродление выполнено",
+            "en": "Auto-renewal Successful",
+            "zh": "自动续订成功",
+            "ua": "Автопродовження виконано",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Автопродление выполнено</h2>
                 <div class="highlight success">
                     <p>Ваша подписка была автоматически продлена.</p>
@@ -590,7 +650,7 @@ class EmailNotificationTemplates:
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Auto-renewal Successful</h2>
                 <div class="highlight success">
                     <p>Your subscription has been automatically renewed.</p>
@@ -602,23 +662,27 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _autopay_failed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _autopay_failed_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for failed autopay notification."""
-        reason = html.escape(context.get('reason', ''))
+        reason = html.escape(context.get("reason", ""))
 
         subjects = {
-            'ru': 'Ошибка автопродления',
-            'en': 'Auto-renewal Failed',
-            'zh': '自动续订失败',
-            'ua': 'Помилка автопродовження',
+            "ru": "Ошибка автопродления",
+            "en": "Auto-renewal Failed",
+            "zh": "自动续订失败",
+            "ua": "Помилка автопродовження",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Ошибка автопродления</h2>
                 <div class="highlight danger">
                     <p>Не удалось автоматически продлить подписку.</p>
@@ -627,7 +691,7 @@ class EmailNotificationTemplates:
                 <p>Пожалуйста, пополните баланс и продлите подписку вручную.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Auto-renewal Failed</h2>
                 <div class="highlight danger">
                     <p>Failed to automatically renew your subscription.</p>
@@ -639,24 +703,28 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _autopay_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _autopay_insufficient_funds_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for autopay insufficient funds notification."""
-        required = context.get('required_amount', '')
-        balance = context.get('current_balance', '')
+        required = context.get("required_amount", "")
+        balance = context.get("current_balance", "")
 
         subjects = {
-            'ru': 'Недостаточно средств для автопродления',
-            'en': 'Insufficient Funds for Auto-renewal',
-            'zh': '余额不足无法自动续订',
-            'ua': 'Недостатньо коштів для автопродовження',
+            "ru": "Недостаточно средств для автопродления",
+            "en": "Insufficient Funds for Auto-renewal",
+            "zh": "余额不足无法自动续订",
+            "ua": "Недостатньо коштів для автопродовження",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Недостаточно средств</h2>
                 <div class="highlight warning">
                     <p>Недостаточно средств на балансе для автопродления подписки.</p>
@@ -666,7 +734,7 @@ class EmailNotificationTemplates:
                 <p>Пополните баланс, чтобы подписка была продлена автоматически.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Insufficient Funds</h2>
                 <div class="highlight warning">
                     <p>Insufficient balance for subscription auto-renewal.</p>
@@ -679,28 +747,36 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Daily Subscription Templates
     # ============================================================================
 
-    def _daily_debit_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _daily_debit_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for daily subscription debit notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        balance = context.get(
+            "formatted_balance", f'{context.get("new_balance_rubles", 0):.2f} ₽'
+        )
 
         subjects = {
-            'ru': f'Списание за подписку: {amount}',
-            'en': f'Subscription charge: {amount}',
-            'zh': f'订阅扣费: {amount}',
-            'ua': f'Списання за підписку: {amount}',
+            "ru": f"Списание за подписку: {amount}",
+            "en": f"Subscription charge: {amount}",
+            "zh": f"订阅扣费: {amount}",
+            "ua": f"Списання за підписку: {amount}",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Ежедневное списание</h2>
                 <div class="highlight">
                     <p>С вашего баланса списано: <strong>{amount}</strong></p>
@@ -708,7 +784,7 @@ class EmailNotificationTemplates:
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Daily Charge</h2>
                 <div class="highlight">
                     <p>Charged from your balance: <strong>{amount}</strong></p>
@@ -719,21 +795,25 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _daily_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _daily_insufficient_funds_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for daily subscription insufficient funds."""
         subjects = {
-            'ru': 'Недостаточно средств для продления',
-            'en': 'Insufficient Funds',
-            'zh': '余额不足',
-            'ua': 'Недостатньо коштів',
+            "ru": "Недостаточно средств для продления",
+            "en": "Insufficient Funds",
+            "zh": "余额不足",
+            "ua": "Недостатньо коштів",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Недостаточно средств</h2>
                 <div class="highlight danger">
                     <p>На балансе недостаточно средств для продления подписки.</p>
@@ -742,7 +822,7 @@ class EmailNotificationTemplates:
                 <p>Пополните баланс, чтобы продолжить использование сервиса.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Insufficient Funds</h2>
                 <div class="highlight danger">
                     <p>Insufficient balance to continue subscription.</p>
@@ -754,28 +834,32 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _traffic_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _traffic_reset_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for traffic reset notification."""
         subjects = {
-            'ru': 'Трафик обновлён',
-            'en': 'Traffic Reset',
-            'zh': '流量已重置',
-            'ua': 'Трафік оновлено',
+            "ru": "Трафик обновлён",
+            "en": "Traffic Reset",
+            "zh": "流量已重置",
+            "ua": "Трафік оновлено",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Трафик обновлён</h2>
                 <div class="highlight success">
                     <p>Ваш трафик был сброшен. Вы можете продолжить использование VPN.</p>
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Traffic Reset</h2>
                 <div class="highlight success">
                     <p>Your traffic has been reset. You can continue using the VPN.</p>
@@ -785,8 +869,10 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
@@ -795,17 +881,17 @@ class EmailNotificationTemplates:
 
     def _ban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for ban notification."""
-        reason = html.escape(context.get('reason', ''))
+        reason = html.escape(context.get("reason", ""))
 
         subjects = {
-            'ru': 'Аккаунт заблокирован',
-            'en': 'Account Suspended',
-            'zh': '账户已被封禁',
-            'ua': 'Обліковий запис заблоковано',
+            "ru": "Аккаунт заблокирован",
+            "en": "Account Suspended",
+            "zh": "账户已被封禁",
+            "ua": "Обліковий запис заблоковано",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Аккаунт заблокирован</h2>
                 <div class="highlight danger">
                     <p>Ваш аккаунт был заблокирован.</p>
@@ -813,7 +899,7 @@ class EmailNotificationTemplates:
                 </div>
                 <p>Если вы считаете, что это ошибка, обратитесь в поддержку.</p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Account Suspended</h2>
                 <div class="highlight danger">
                     <p>Your account has been suspended.</p>
@@ -824,21 +910,23 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     def _unban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for unban notification."""
         subjects = {
-            'ru': 'Аккаунт разблокирован',
-            'en': 'Account Reactivated',
-            'zh': '账户已解封',
-            'ua': 'Обліковий запис розблоковано',
+            "ru": "Аккаунт разблокирован",
+            "en": "Account Reactivated",
+            "zh": "账户已解封",
+            "ua": "Обліковий запис розблоковано",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Аккаунт разблокирован</h2>
                 <div class="highlight success">
                     <p>Ваш аккаунт был разблокирован.</p>
@@ -846,7 +934,7 @@ class EmailNotificationTemplates:
                 </div>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Account Reactivated</h2>
                 <div class="highlight success">
                     <p>Your account has been reactivated.</p>
@@ -857,29 +945,33 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _warning_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for warning notification."""
-        message = html.escape(context.get('message', ''))
+        message = html.escape(context.get("message", ""))
 
         subjects = {
-            'ru': 'Предупреждение',
-            'en': 'Warning',
-            'zh': '警告',
-            'ua': 'Попередження',
+            "ru": "Предупреждение",
+            "en": "Warning",
+            "zh": "警告",
+            "ua": "Попередження",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Предупреждение</h2>
                 <div class="highlight warning">
                     {f'<p>{message}</p>' if message else '<p>Вы получили предупреждение от администрации.</p>'}
                 </div>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Warning</h2>
                 <div class="highlight warning">
                     {f'<p>{message}</p>' if message else '<p>You have received a warning from the administration.</p>'}
@@ -888,28 +980,34 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Referral Templates
     # ============================================================================
 
-    def _referral_bonus_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _referral_bonus_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for referral bonus notification."""
-        bonus = context.get('formatted_bonus', f'{context.get("bonus_rubles", 0):.2f} ₽')
-        referral_name = html.escape(context.get('referral_name', ''))
+        bonus = context.get(
+            "formatted_bonus", f'{context.get("bonus_rubles", 0):.2f} ₽'
+        )
+        referral_name = html.escape(context.get("referral_name", ""))
 
         subjects = {
-            'ru': f'Реферальный бонус: +{bonus}',
-            'en': f'Referral bonus: +{bonus}',
-            'zh': f'推荐奖励: +{bonus}',
-            'ua': f'Реферальний бонус: +{bonus}',
+            "ru": f"Реферальный бонус: +{bonus}",
+            "en": f"Referral bonus: +{bonus}",
+            "zh": f"推荐奖励: +{bonus}",
+            "ua": f"Реферальний бонус: +{bonus}",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Реферальный бонус!</h2>
                 <div class="highlight success">
                     <p>Вы получили реферальный бонус: <span class="amount">+{bonus}</span></p>
@@ -918,7 +1016,7 @@ class EmailNotificationTemplates:
                 <p>Продолжайте приглашать друзей и зарабатывайте больше!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Referral Bonus!</h2>
                 <div class="highlight success">
                     <p>You received a referral bonus: <span class="amount">+{bonus}</span></p>
@@ -930,23 +1028,27 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _referral_registered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _referral_registered_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for new referral registered notification."""
-        referral_name = html.escape(context.get('referral_name', ''))
+        referral_name = html.escape(context.get("referral_name", ""))
 
         subjects = {
-            'ru': 'Новый реферал зарегистрирован',
-            'en': 'New Referral Registered',
-            'zh': '新推荐用户已注册',
-            'ua': 'Новий реферал зареєстрований',
+            "ru": "Новый реферал зарегистрирован",
+            "en": "New Referral Registered",
+            "zh": "新推荐用户已注册",
+            "ua": "Новий реферал зареєстрований",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Новый реферал!</h2>
                 <div class="highlight success">
                     <p>По вашей ссылке зарегистрировался новый пользователь{f': <strong>{referral_name}</strong>' if referral_name else ''}.</p>
@@ -954,7 +1056,7 @@ class EmailNotificationTemplates:
                 <p>Вы будете получать бонусы с его пополнений!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>New Referral!</h2>
                 <div class="highlight success">
                     <p>A new user registered using your link{f': <strong>{referral_name}</strong>' if referral_name else ''}.</p>
@@ -965,28 +1067,32 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Partner Templates
     # ============================================================================
 
-    def _partner_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _partner_approved_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for partner application approved notification."""
-        commission = context.get('commission_percent', 0)
-        comment = html.escape(context.get('comment', ''))
+        commission = context.get("commission_percent", 0)
+        comment = html.escape(context.get("comment", ""))
 
         subjects = {
-            'ru': 'Заявка на партнёрство одобрена',
-            'en': 'Partner Application Approved',
-            'zh': '合作伙伴申请已批准',
-            'ua': 'Заявка на партнерство схвалена',
+            "ru": "Заявка на партнёрство одобрена",
+            "en": "Partner Application Approved",
+            "zh": "合作伙伴申请已批准",
+            "ua": "Заявка на партнерство схвалена",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Заявка на партнёрство одобрена!</h2>
                 <div class="highlight success">
                     <p>Ваша заявка на партнёрство была одобрена.</p>
@@ -996,7 +1102,7 @@ class EmailNotificationTemplates:
                 <p>Теперь вы можете приглашать пользователей и получать вознаграждение!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Partner Application Approved!</h2>
                 <div class="highlight success">
                     <p>Your partner application has been approved.</p>
@@ -1006,7 +1112,7 @@ class EmailNotificationTemplates:
                 <p>You can now invite users and earn rewards!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>合作伙伴申请已批准！</h2>
                 <div class="highlight success">
                     <p>您的合作伙伴申请已获批准。</p>
@@ -1016,7 +1122,7 @@ class EmailNotificationTemplates:
                 <p>您现在可以邀请用户并获得奖励！</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Заявка на партнерство схвалена!</h2>
                 <div class="highlight success">
                     <p>Вашу заявку на партнерство було схвалено.</p>
@@ -1029,23 +1135,27 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _partner_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _partner_rejected_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for partner application rejected notification."""
-        comment = html.escape(context.get('comment', ''))
+        comment = html.escape(context.get("comment", ""))
 
         subjects = {
-            'ru': 'Заявка на партнёрство отклонена',
-            'en': 'Partner Application Rejected',
-            'zh': '合作伙伴申请被拒绝',
-            'ua': 'Заявка на партнерство відхилена',
+            "ru": "Заявка на партнёрство отклонена",
+            "en": "Partner Application Rejected",
+            "zh": "合作伙伴申请被拒绝",
+            "ua": "Заявка на партнерство відхилена",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Заявка на партнёрство отклонена</h2>
                 <div class="highlight danger">
                     <p>К сожалению, ваша заявка на партнёрство была отклонена.</p>
@@ -1054,7 +1164,7 @@ class EmailNotificationTemplates:
                 <p>Вы можете подать новую заявку позже.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Partner Application Rejected</h2>
                 <div class="highlight danger">
                     <p>Unfortunately, your partner application has been rejected.</p>
@@ -1063,7 +1173,7 @@ class EmailNotificationTemplates:
                 <p>You can submit a new application later.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>合作伙伴申请被拒绝</h2>
                 <div class="highlight danger">
                     <p>很抱歉，您的合作伙伴申请已被拒绝。</p>
@@ -1072,7 +1182,7 @@ class EmailNotificationTemplates:
                 <p>您可以稍后提交新的申请。</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Заявка на партнерство відхилена</h2>
                 <div class="highlight danger">
                     <p>На жаль, вашу заявку на партнерство було відхилено.</p>
@@ -1084,28 +1194,34 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Withdrawal Templates
     # ============================================================================
 
-    def _withdrawal_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _withdrawal_approved_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for withdrawal approved notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        comment = html.escape(context.get('comment', ''))
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        comment = html.escape(context.get("comment", ""))
 
         subjects = {
-            'ru': f'Запрос на вывод {amount} одобрен',
-            'en': f'Withdrawal request for {amount} approved',
-            'zh': f'提现请求 {amount} 已批准',
-            'ua': f'Запит на виведення {amount} схвалено',
+            "ru": f"Запрос на вывод {amount} одобрен",
+            "en": f"Withdrawal request for {amount} approved",
+            "zh": f"提现请求 {amount} 已批准",
+            "ua": f"Запит на виведення {amount} схвалено",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Запрос на вывод одобрен!</h2>
                 <div class="highlight success">
                     <p>Ваш запрос на вывод средств одобрен.</p>
@@ -1115,7 +1231,7 @@ class EmailNotificationTemplates:
                 <p>Средства будут переведены в ближайшее время.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Withdrawal Request Approved!</h2>
                 <div class="highlight success">
                     <p>Your withdrawal request has been approved.</p>
@@ -1125,7 +1241,7 @@ class EmailNotificationTemplates:
                 <p>Funds will be transferred shortly.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>提现请求已批准！</h2>
                 <div class="highlight success">
                     <p>您的提现请求已获批准。</p>
@@ -1135,7 +1251,7 @@ class EmailNotificationTemplates:
                 <p>资金将很快转入。</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Запит на виведення схвалено!</h2>
                 <div class="highlight success">
                     <p>Ваш запит на виведення коштів було схвалено.</p>
@@ -1148,24 +1264,30 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _withdrawal_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _withdrawal_rejected_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for withdrawal rejected notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        comment = html.escape(context.get('comment', ''))
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        comment = html.escape(context.get("comment", ""))
 
         subjects = {
-            'ru': f'Запрос на вывод {amount} отклонён',
-            'en': f'Withdrawal request for {amount} rejected',
-            'zh': f'提现请求 {amount} 被拒绝',
-            'ua': f'Запит на виведення {amount} відхилено',
+            "ru": f"Запрос на вывод {amount} отклонён",
+            "en": f"Withdrawal request for {amount} rejected",
+            "zh": f"提现请求 {amount} 被拒绝",
+            "ua": f"Запит на виведення {amount} відхилено",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Запрос на вывод отклонён</h2>
                 <div class="highlight danger">
                     <p>Ваш запрос на вывод средств был отклонён.</p>
@@ -1175,7 +1297,7 @@ class EmailNotificationTemplates:
                 <p>Средства возвращены на ваш баланс.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Withdrawal Request Rejected</h2>
                 <div class="highlight danger">
                     <p>Your withdrawal request has been rejected.</p>
@@ -1185,7 +1307,7 @@ class EmailNotificationTemplates:
                 <p>Funds have been returned to your balance.</p>
                 {self._get_cabinet_button(language)}
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>提现请求被拒绝</h2>
                 <div class="highlight danger">
                     <p>您的提现请求已被拒绝。</p>
@@ -1195,7 +1317,7 @@ class EmailNotificationTemplates:
                 <p>资金已退回您的余额。</p>
                 {self._get_cabinet_button(language)}
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Запит на виведення відхилено</h2>
                 <div class="highlight danger">
                     <p>Ваш запит на виведення коштів було відхилено.</p>
@@ -1208,28 +1330,34 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Payment Templates
     # ============================================================================
 
-    def _payment_received_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _payment_received_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for payment received notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        payment_method = context.get('payment_method', '')
+        amount = context.get(
+            "formatted_amount", f'{context.get("amount_rubles", 0):.2f} ₽'
+        )
+        payment_method = context.get("payment_method", "")
 
         subjects = {
-            'ru': f'Платёж получен: {amount}',
-            'en': f'Payment received: {amount}',
-            'zh': f'收到付款: {amount}',
-            'ua': f'Платіж отримано: {amount}',
+            "ru": f"Платёж получен: {amount}",
+            "en": f"Payment received: {amount}",
+            "zh": f"收到付款: {amount}",
+            "ua": f"Платіж отримано: {amount}",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Платёж успешно обработан</h2>
                 <div class="highlight success">
                     <p>Сумма: <span class="amount">+{amount}</span></p>
@@ -1238,7 +1366,7 @@ class EmailNotificationTemplates:
                 <p>Спасибо за оплату!</p>
                 {self._get_cabinet_button(language)}
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Payment Successfully Processed</h2>
                 <div class="highlight success">
                     <p>Amount: <span class="amount">+{amount}</span></p>
@@ -1250,38 +1378,42 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Auth Email Templates
     # ============================================================================
 
-    def _email_verification_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _email_verification_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for email verification."""
-        username = html.escape(context.get('username', ''))
-        verification_url = html.escape(context.get('verification_url', '#'))
-        expire_hours = context.get('expire_hours', 24)
+        username = html.escape(context.get("username", ""))
+        verification_url = html.escape(context.get("verification_url", "#"))
+        expire_hours = context.get("expire_hours", 24)
 
         subjects = {
-            'ru': 'Подтверждение email адреса',
-            'en': 'Verify your email address',
-            'zh': '验证您的邮箱地址',
-            'ua': 'Підтвердження email адреси',
-            'fa': 'تایید آدرس ایمیل',
+            "ru": "Подтверждение email адреса",
+            "en": "Verify your email address",
+            "zh": "验证您的邮箱地址",
+            "ua": "Підтвердження email адреси",
+            "fa": "تایید آدرس ایمیل",
         }
 
         greeting = {
-            'ru': f'Здравствуйте{", " + username if username else ""}!',
-            'en': f'Hello{", " + username if username else ""}!',
-            'zh': f'您好{", " + username if username else ""}!',
-            'ua': f'Вітаємо{", " + username if username else ""}!',
-            'fa': f'سلام{" " + username if username else ""}!',
+            "ru": f'Здравствуйте{", " + username if username else ""}!',
+            "en": f'Hello{", " + username if username else ""}!',
+            "zh": f'您好{", " + username if username else ""}!',
+            "ua": f'Вітаємо{", " + username if username else ""}!',
+            "fa": f'سلام{" " + username if username else ""}!',
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>{greeting.get('ru')}</h2>
                 <p>Спасибо за регистрацию! Пожалуйста, подтвердите ваш email адрес, нажав на кнопку ниже:</p>
                 <p style="text-align: center;">
@@ -1292,7 +1424,7 @@ class EmailNotificationTemplates:
                 <p>Ссылка действительна в течение {expire_hours} часов.</p>
                 <p style="color: #666;">Если вы не создавали аккаунт, просто проигнорируйте это письмо.</p>
             """,
-            'fa': f"""
+            "fa": f"""
                 <h2>{greeting.get('fa')}</h2>
                 <p>از ثبت‌نام شما سپاسگزاریم! لطفاً با کلیک روی دکمه زیر ایمیل خود را تایید کنید:</p>
                 <p style="text-align: center;">
@@ -1303,7 +1435,7 @@ class EmailNotificationTemplates:
                 <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
                 <p style="color: #666;">اگر شما این حساب را ایجاد نکرده‌اید، این ایمیل را نادیده بگیرید.</p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>{greeting.get('en')}</h2>
                 <p>Thank you for registering! Please verify your email address by clicking the button below:</p>
                 <p style="text-align: center;">
@@ -1314,7 +1446,7 @@ class EmailNotificationTemplates:
                 <p>This link will expire in {expire_hours} hours.</p>
                 <p style="color: #666;">If you didn't create an account, you can safely ignore this email.</p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>{greeting.get('zh')}</h2>
                 <p>感谢您的注册！请点击下方按钮验证您的邮箱地址：</p>
                 <p style="text-align: center;">
@@ -1325,7 +1457,7 @@ class EmailNotificationTemplates:
                 <p>此链接将在 {expire_hours} 小时后过期。</p>
                 <p style="color: #666;">如果您没有创建账户，请忽略此邮件。</p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>{greeting.get('ua')}</h2>
                 <p>Дякуємо за реєстрацію! Будь ласка, підтвердіть вашу email адресу, натиснувши на кнопку нижче:</p>
                 <p style="text-align: center;">
@@ -1339,34 +1471,38 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _password_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _password_reset_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for password reset."""
-        username = html.escape(context.get('username', ''))
-        reset_url = html.escape(context.get('reset_url', '#'))
-        expire_hours = context.get('expire_hours', 1)
+        username = html.escape(context.get("username", ""))
+        reset_url = html.escape(context.get("reset_url", "#"))
+        expire_hours = context.get("expire_hours", 1)
 
         subjects = {
-            'ru': 'Сброс пароля',
-            'en': 'Reset your password',
-            'zh': '重置您的密码',
-            'ua': 'Скидання пароля',
-            'fa': 'بازنشانی رمز عبور',
+            "ru": "Сброс пароля",
+            "en": "Reset your password",
+            "zh": "重置您的密码",
+            "ua": "Скидання пароля",
+            "fa": "بازنشانی رمز عبور",
         }
 
         greeting = {
-            'ru': f'Здравствуйте{", " + username if username else ""}!',
-            'en': f'Hello{", " + username if username else ""}!',
-            'zh': f'您好{", " + username if username else ""}!',
-            'ua': f'Вітаємо{", " + username if username else ""}!',
-            'fa': f'سلام{" " + username if username else ""}!',
+            "ru": f'Здравствуйте{", " + username if username else ""}!',
+            "en": f'Hello{", " + username if username else ""}!',
+            "zh": f'您好{", " + username if username else ""}!',
+            "ua": f'Вітаємо{", " + username if username else ""}!',
+            "fa": f'سلام{" " + username if username else ""}!',
         }
 
         bodies = {
-            'fa': f"""
+            "fa": f"""
                 <h2>{greeting.get('fa')}</h2>
                 <p>درخواستی برای بازنشانی رمز عبور شما دریافت شد. برای تعیین رمز جدید روی دکمه زیر بزنید:</p>
                 <p style="text-align: center;">
@@ -1377,7 +1513,7 @@ class EmailNotificationTemplates:
                 <p>این لینک تا {expire_hours} ساعت معتبر است.</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">اگر شما درخواست بازنشانی رمز عبور نداده‌اید، این ایمیل را نادیده بگیرید یا با پشتیبانی تماس بگیرید.</p>
             """,
-            'ru': f"""
+            "ru": f"""
                 <h2>{greeting.get('ru')}</h2>
                 <p>Мы получили запрос на сброс вашего пароля. Нажмите на кнопку ниже, чтобы установить новый пароль:</p>
                 <p style="text-align: center;">
@@ -1388,7 +1524,7 @@ class EmailNotificationTemplates:
                 <p>Ссылка действительна в течение {expire_hours} часов.</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">Если вы не запрашивали сброс пароля, проигнорируйте это письмо или свяжитесь с поддержкой.</p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>{greeting.get('en')}</h2>
                 <p>We received a request to reset your password. Click the button below to set a new password:</p>
                 <p style="text-align: center;">
@@ -1399,7 +1535,7 @@ class EmailNotificationTemplates:
                 <p>This link will expire in {expire_hours} hour(s).</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">If you didn't request a password reset, please ignore this email or contact support.</p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>{greeting.get('zh')}</h2>
                 <p>我们收到了重置您密码的请求。点击下方按钮设置新密码：</p>
                 <p style="text-align: center;">
@@ -1410,7 +1546,7 @@ class EmailNotificationTemplates:
                 <p>此链接将在 {expire_hours} 小时后过期。</p>
                 <p class="warning" style="color: #dc3545; font-weight: bold;">如果您没有请求重置密码，请忽略此邮件或联系客服。</p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>{greeting.get('ua')}</h2>
                 <p>Ми отримали запит на скидання вашого пароля. Натисніть на кнопку нижче, щоб встановити новий пароль:</p>
                 <p style="text-align: center;">
@@ -1424,30 +1560,34 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _email_change_code_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _email_change_code_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for email change verification code."""
-        username = html.escape(context.get('username', ''))
-        code = html.escape(str(context.get('code', '')))
-        expire_minutes = context.get('expire_minutes', 10)
+        username = html.escape(context.get("username", ""))
+        code = html.escape(str(context.get("code", "")))
+        expire_minutes = context.get("expire_minutes", 10)
 
         subjects = {
-            'ru': 'Код подтверждения для смены email',
-            'en': 'Email change verification code',
-            'zh': '邮箱更换验证码',
-            'ua': 'Код підтвердження для зміни email',
-            'fa': 'کد تایید تغییر ایمیل',
+            "ru": "Код подтверждения для смены email",
+            "en": "Email change verification code",
+            "zh": "邮箱更换验证码",
+            "ua": "Код підтвердження для зміни email",
+            "fa": "کد تایید تغییر ایمیل",
         }
 
         greeting = {
-            'ru': f'Здравствуйте{", " + username if username else ""}!',
-            'en': f'Hello{", " + username if username else ""}!',
-            'zh': f'您好{", " + username if username else ""}!',
-            'ua': f'Вітаємо{", " + username if username else ""}!',
-            'fa': f'سلام{" " + username if username else ""}!',
+            "ru": f'Здравствуйте{", " + username if username else ""}!',
+            "en": f'Hello{", " + username if username else ""}!',
+            "zh": f'您好{", " + username if username else ""}!',
+            "ua": f'Вітаємо{", " + username if username else ""}!',
+            "fa": f'سلام{" " + username if username else ""}!',
         }
 
         code_box = f"""
@@ -1457,35 +1597,35 @@ class EmailNotificationTemplates:
         """
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>{greeting.get('ru')}</h2>
                 <p>Вы запросили смену email адреса. Используйте код ниже для подтверждения:</p>
                 {code_box}
                 <p>Код действителен в течение {expire_minutes} минут.</p>
                 <p style="color: #666;">Если вы не запрашивали смену email, просто проигнорируйте это письмо.</p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>{greeting.get('en')}</h2>
                 <p>You requested to change your email address. Use the code below to confirm:</p>
                 {code_box}
                 <p>This code will expire in {expire_minutes} minutes.</p>
                 <p style="color: #666;">If you didn't request an email change, you can safely ignore this email.</p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>{greeting.get('zh')}</h2>
                 <p>您请求更换邮箱地址。请使用以下验证码确认：</p>
                 {code_box}
                 <p>此验证码将在 {expire_minutes} 分钟后过期。</p>
                 <p style="color: #666;">如果您没有请求更换邮箱，请忽略此邮件。</p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>{greeting.get('ua')}</h2>
                 <p>Ви запросили зміну email адреси. Використовуйте код нижче для підтвердження:</p>
                 {code_box}
                 <p>Код дійсний протягом {expire_minutes} хвилин.</p>
                 <p style="color: #666;">Якщо ви не запитували зміну email, просто проігноруйте цей лист.</p>
             """,
-            'fa': f"""
+            "fa": f"""
                 <h2>{greeting.get('fa')}</h2>
                 <p>شما درخواست تغییر ایمیل داده‌اید. برای تایید از کد زیر استفاده کنید:</p>
                 {code_box}
@@ -1495,28 +1635,32 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
     # ============================================================================
     # Guest Purchase Templates
     # ============================================================================
 
-    def _guest_subscription_delivered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _guest_subscription_delivered_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for guest subscription delivered notification."""
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        period_days = context.get('period_days', 0)
-        cabinet_url = html.escape(context.get('cabinet_url', ''))
-        cabinet_email = html.escape(context.get('cabinet_email', ''))
-        cabinet_password = context.get('cabinet_password', '')
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        period_days = context.get("period_days", 0)
+        cabinet_url = html.escape(context.get("cabinet_url", ""))
+        cabinet_email = html.escape(context.get("cabinet_email", ""))
+        cabinet_password = context.get("cabinet_password", "")
 
         subjects = {
-            'ru': 'Ваша VPN подписка готова',
-            'en': 'Your VPN subscription is ready',
-            'zh': '您的VPN订阅已准备就绪',
-            'ua': 'Ваша VPN підписка готова',
-            'fa': 'اشتراک VPN شما آماده است',
+            "ru": "Ваша VPN подписка готова",
+            "en": "Your VPN subscription is ready",
+            "zh": "您的VPN订阅已准备就绪",
+            "ua": "Ваша VPN підписка готова",
+            "fa": "اشتراک VPN شما آماده است",
         }
 
         creds_block_ru = (
@@ -1528,7 +1672,7 @@ class EmailNotificationTemplates:
                 </div>
         """
             if cabinet_password
-            else ''
+            else ""
         )
 
         creds_block_en = (
@@ -1540,7 +1684,7 @@ class EmailNotificationTemplates:
                 </div>
         """
             if cabinet_password
-            else ''
+            else ""
         )
 
         creds_block_zh = (
@@ -1552,7 +1696,7 @@ class EmailNotificationTemplates:
                 </div>
         """
             if cabinet_password
-            else ''
+            else ""
         )
 
         creds_block_ua = (
@@ -1564,7 +1708,7 @@ class EmailNotificationTemplates:
                 </div>
         """
             if cabinet_password
-            else ''
+            else ""
         )
 
         creds_block_fa = (
@@ -1576,11 +1720,11 @@ class EmailNotificationTemplates:
                 </div>
         """
             if cabinet_password
-            else ''
+            else ""
         )
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Ваша VPN подписка готова!</h2>
                 <div class="highlight success">
                     <p>Тариф: <strong>{tariff_name}</strong></p>
@@ -1590,7 +1734,7 @@ class EmailNotificationTemplates:
                 <p>Подписка активирована в вашем личном кабинете.</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Your VPN subscription is ready!</h2>
                 <div class="highlight success">
                     <p>Plan: <strong>{tariff_name}</strong></p>
@@ -1600,7 +1744,7 @@ class EmailNotificationTemplates:
                 <p>Your subscription has been activated in your cabinet.</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>您的VPN订阅已准备就绪！</h2>
                 <div class="highlight success">
                     <p>套餐: <strong>{tariff_name}</strong></p>
@@ -1610,7 +1754,7 @@ class EmailNotificationTemplates:
                 <p>订阅已在您的个人中心激活。</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Ваша VPN підписка готова!</h2>
                 <div class="highlight success">
                     <p>Тариф: <strong>{tariff_name}</strong></p>
@@ -1620,7 +1764,7 @@ class EmailNotificationTemplates:
                 <p>Підписка активована у вашому особистому кабінеті.</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
             """,
-            'fa': f"""
+            "fa": f"""
                 <h2>اشتراک VPN شما آماده است!</h2>
                 <div class="highlight success">
                     <p>طرح: <strong>{tariff_name}</strong></p>
@@ -1633,41 +1777,53 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _guest_activation_required_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _guest_activation_required_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for guest purchase pending activation (user already has a subscription)."""
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        period_days = context.get('period_days', 0)
-        success_page_url = html.escape(context.get('success_page_url', ''))
-        gift_message = context.get('gift_message')
-        is_gift = context.get('is_gift', False)
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        period_days = context.get("period_days", 0)
+        success_page_url = html.escape(context.get("success_page_url", ""))
+        gift_message = context.get("gift_message")
+        is_gift = context.get("is_gift", False)
 
-        gift_block_ru = ''
-        gift_block_en = ''
-        gift_block_zh = ''
-        gift_block_ua = ''
-        gift_block_fa = ''
+        gift_block_ru = ""
+        gift_block_en = ""
+        gift_block_zh = ""
+        gift_block_ua = ""
+        gift_block_fa = ""
         if is_gift and gift_message:
             escaped_msg = html.escape(gift_message)
-            gift_block_ru = f'<div class="highlight"><p><em>Сообщение: {escaped_msg}</em></p></div>'
-            gift_block_en = f'<div class="highlight"><p><em>Message: {escaped_msg}</em></p></div>'
-            gift_block_zh = f'<div class="highlight"><p><em>留言: {escaped_msg}</em></p></div>'
+            gift_block_ru = (
+                f'<div class="highlight"><p><em>Сообщение: {escaped_msg}</em></p></div>'
+            )
+            gift_block_en = (
+                f'<div class="highlight"><p><em>Message: {escaped_msg}</em></p></div>'
+            )
+            gift_block_zh = (
+                f'<div class="highlight"><p><em>留言: {escaped_msg}</em></p></div>'
+            )
             gift_block_ua = f'<div class="highlight"><p><em>Повідомлення: {escaped_msg}</em></p></div>'
-            gift_block_fa = f'<div class="highlight"><p><em>پیام: {escaped_msg}</em></p></div>'
+            gift_block_fa = (
+                f'<div class="highlight"><p><em>پیام: {escaped_msg}</em></p></div>'
+            )
 
         subjects = {
-            'ru': 'Требуется активация подписки',
-            'en': 'Subscription activation required',
-            'zh': '需要激活订阅',
-            'ua': 'Потрібна активація підписки',
-            'fa': 'فعال‌سازی اشتراک لازم است',
+            "ru": "Требуется активация подписки",
+            "en": "Subscription activation required",
+            "zh": "需要激活订阅",
+            "ua": "Потрібна активація підписки",
+            "fa": "فعال‌سازی اشتراک لازم است",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Требуется активация подписки</h2>
                 {gift_block_ru}
                 <div class="highlight">
@@ -1677,7 +1833,7 @@ class EmailNotificationTemplates:
                 <p class="warning">У вас уже есть активная подписка. Активация новой заменит текущую.</p>
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">Активировать подписку</a></p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Subscription activation required</h2>
                 {gift_block_en}
                 <div class="highlight">
@@ -1687,7 +1843,7 @@ class EmailNotificationTemplates:
                 <p class="warning">You already have an active subscription. Activating will replace your current one.</p>
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">Activate subscription</a></p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>需要激活订阅</h2>
                 {gift_block_zh}
                 <div class="highlight">
@@ -1697,7 +1853,7 @@ class EmailNotificationTemplates:
                 <p class="warning">您已有活跃订阅。激活新订阅将替换当前订阅。</p>
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">激活订阅</a></p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Потрібна активація підписки</h2>
                 {gift_block_ua}
                 <div class="highlight">
@@ -1707,7 +1863,7 @@ class EmailNotificationTemplates:
                 <p class="warning">У вас вже є активна підписка. Активація нової замінить поточну.</p>
                 <p style="text-align: center;"><a href="{success_page_url}" class="button">Активувати підписку</a></p>
             """,
-            'fa': f"""
+            "fa": f"""
                 <h2>فعال‌سازی اشتراک لازم است</h2>
                 {gift_block_fa}
                 <div class="highlight">
@@ -1720,25 +1876,29 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _guest_gift_received_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _guest_gift_received_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for gift subscription received notification."""
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        period_days = context.get('period_days', 0)
-        gift_message = context.get('gift_message')
-        cabinet_password = context.get('cabinet_password')
-        cabinet_email = html.escape(context.get('cabinet_email', ''))
-        cabinet_url = html.escape(context.get('cabinet_url', ''))
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        period_days = context.get("period_days", 0)
+        gift_message = context.get("gift_message")
+        cabinet_password = context.get("cabinet_password")
+        cabinet_email = html.escape(context.get("cabinet_email", ""))
+        cabinet_url = html.escape(context.get("cabinet_url", ""))
 
         # Credentials block for gift recipients who got a new cabinet account
-        cred_block = {'ru': '', 'en': '', 'zh': '', 'ua': '', 'fa': ''}
+        cred_block = {"ru": "", "en": "", "zh": "", "ua": "", "fa": ""}
         if cabinet_password and cabinet_email:
             escaped_pw = html.escape(cabinet_password)
             cred_block = {
-                'ru': f"""
+                "ru": f"""
                     <div class="highlight">
                         <p><strong>Данные для входа в личный кабинет:</strong></p>
                         <p>Email: <code>{cabinet_email}</code></p>
@@ -1746,7 +1906,7 @@ class EmailNotificationTemplates:
                     </div>
                     <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
                 """,
-                'en': f"""
+                "en": f"""
                     <div class="highlight">
                         <p><strong>Your cabinet login credentials:</strong></p>
                         <p>Email: <code>{cabinet_email}</code></p>
@@ -1754,7 +1914,7 @@ class EmailNotificationTemplates:
                     </div>
                     <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
                 """,
-                'zh': f"""
+                "zh": f"""
                     <div class="highlight">
                         <p><strong>个人中心登录信息：</strong></p>
                         <p>邮箱: <code>{cabinet_email}</code></p>
@@ -1762,7 +1922,7 @@ class EmailNotificationTemplates:
                     </div>
                     <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
                 """,
-                'ua': f"""
+                "ua": f"""
                     <div class="highlight">
                         <p><strong>Дані для входу в особистий кабінет:</strong></p>
                         <p>Email: <code>{cabinet_email}</code></p>
@@ -1770,7 +1930,7 @@ class EmailNotificationTemplates:
                     </div>
                     <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
                 """,
-                'fa': f"""
+                "fa": f"""
                     <div class="highlight">
                         <p><strong>اطلاعات ورود به پنل کاربری:</strong></p>
                         <p>ایمیل: <code dir="ltr">{cabinet_email}</code></p>
@@ -1780,29 +1940,37 @@ class EmailNotificationTemplates:
                 """,
             }
 
-        gift_block_ru = ''
-        gift_block_en = ''
-        gift_block_zh = ''
-        gift_block_ua = ''
-        gift_block_fa = ''
+        gift_block_ru = ""
+        gift_block_en = ""
+        gift_block_zh = ""
+        gift_block_ua = ""
+        gift_block_fa = ""
         if gift_message:
             escaped_msg = html.escape(gift_message)
-            gift_block_ru = f'<div class="highlight"><p><em>Сообщение: {escaped_msg}</em></p></div>'
-            gift_block_en = f'<div class="highlight"><p><em>Message: {escaped_msg}</em></p></div>'
-            gift_block_zh = f'<div class="highlight"><p><em>留言: {escaped_msg}</em></p></div>'
+            gift_block_ru = (
+                f'<div class="highlight"><p><em>Сообщение: {escaped_msg}</em></p></div>'
+            )
+            gift_block_en = (
+                f'<div class="highlight"><p><em>Message: {escaped_msg}</em></p></div>'
+            )
+            gift_block_zh = (
+                f'<div class="highlight"><p><em>留言: {escaped_msg}</em></p></div>'
+            )
             gift_block_ua = f'<div class="highlight"><p><em>Повідомлення: {escaped_msg}</em></p></div>'
-            gift_block_fa = f'<div class="highlight"><p><em>پیام: {escaped_msg}</em></p></div>'
+            gift_block_fa = (
+                f'<div class="highlight"><p><em>پیام: {escaped_msg}</em></p></div>'
+            )
 
         subjects = {
-            'ru': 'Вам подарили VPN подписку!',
-            'en': "You've been gifted a VPN subscription!",
-            'zh': '您收到了VPN订阅礼物！',
-            'ua': 'Вам подарували VPN підписку!',
-            'fa': 'یک اشتراک VPN به شما هدیه داده شده است!',
+            "ru": "Вам подарили VPN подписку!",
+            "en": "You've been gifted a VPN subscription!",
+            "zh": "您收到了VPN订阅礼物！",
+            "ua": "Вам подарували VPN підписку!",
+            "fa": "یک اشتراک VPN به شما هدیه داده شده است!",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Вам подарили VPN подписку!</h2>
                 {gift_block_ru}
                 <div class="highlight success">
@@ -1813,7 +1981,7 @@ class EmailNotificationTemplates:
                 {cred_block['ru']}
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>You've been gifted a VPN subscription!</h2>
                 {gift_block_en}
                 <div class="highlight success">
@@ -1824,7 +1992,7 @@ class EmailNotificationTemplates:
                 {cred_block['en']}
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>您收到了VPN订阅礼物！</h2>
                 {gift_block_zh}
                 <div class="highlight success">
@@ -1835,7 +2003,7 @@ class EmailNotificationTemplates:
                 {cred_block['zh']}
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Вам подарували VPN підписку!</h2>
                 {gift_block_ua}
                 <div class="highlight success">
@@ -1846,7 +2014,7 @@ class EmailNotificationTemplates:
                 {cred_block['ua']}
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
             """,
-            'fa': f"""
+            "fa": f"""
                 <h2>یک اشتراک VPN به شما هدیه داده شده است!</h2>
                 {gift_block_fa}
                 <div class="highlight success">
@@ -1860,28 +2028,32 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
-    def _guest_cabinet_credentials_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+    def _guest_cabinet_credentials_template(
+        self, language: str, context: dict[str, Any]
+    ) -> dict[str, str]:
         """Template for cabinet login credentials email (sent separately from subscription)."""
-        cabinet_email = html.escape(context.get('cabinet_email', ''))
-        cabinet_password = html.escape(context.get('cabinet_password', ''))
-        cabinet_url = html.escape(context.get('cabinet_url', ''))
-        tariff_name = html.escape(context.get('tariff_name', ''))
-        period_days = context.get('period_days', 0)
+        cabinet_email = html.escape(context.get("cabinet_email", ""))
+        cabinet_password = html.escape(context.get("cabinet_password", ""))
+        cabinet_url = html.escape(context.get("cabinet_url", ""))
+        tariff_name = html.escape(context.get("tariff_name", ""))
+        period_days = context.get("period_days", 0)
 
         subjects = {
-            'ru': 'Данные для входа в личный кабинет',
-            'en': 'Your cabinet login credentials',
-            'zh': '您的个人中心登录信息',
-            'ua': 'Дані для входу в особистий кабінет',
-            'fa': 'اطلاعات ورود به پنل کاربری',
+            "ru": "Данные для входа в личный кабинет",
+            "en": "Your cabinet login credentials",
+            "zh": "您的个人中心登录信息",
+            "ua": "Дані для входу в особистий кабінет",
+            "fa": "اطلاعات ورود به پنل کاربری",
         }
 
         bodies = {
-            'ru': f"""
+            "ru": f"""
                 <h2>Данные для входа в личный кабинет</h2>
                 <div class="highlight success">
                     <p>Тариф: <strong>{tariff_name}</strong></p>
@@ -1894,7 +2066,7 @@ class EmailNotificationTemplates:
                 <p>Сохраните эти данные для входа. Вы можете изменить пароль в настройках кабинета.</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти в личный кабинет</a></p>
             """,
-            'en': f"""
+            "en": f"""
                 <h2>Your cabinet login credentials</h2>
                 <div class="highlight success">
                     <p>Plan: <strong>{tariff_name}</strong></p>
@@ -1907,7 +2079,7 @@ class EmailNotificationTemplates:
                 <p>Save these credentials. You can change your password in cabinet settings.</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Go to Cabinet</a></p>
             """,
-            'zh': f"""
+            "zh": f"""
                 <h2>您的个人中心登录信息</h2>
                 <div class="highlight success">
                     <p>套餐: <strong>{tariff_name}</strong></p>
@@ -1920,7 +2092,7 @@ class EmailNotificationTemplates:
                 <p>请保存这些登录信息。您可以在个人中心设置中更改密码。</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">前往个人中心</a></p>
             """,
-            'ua': f"""
+            "ua": f"""
                 <h2>Дані для входу в особистий кабінет</h2>
                 <div class="highlight success">
                     <p>Тариф: <strong>{tariff_name}</strong></p>
@@ -1933,7 +2105,7 @@ class EmailNotificationTemplates:
                 <p>Збережіть ці дані. Ви можете змінити пароль у налаштуваннях кабінету.</p>
                 <p style="text-align: center;"><a href="{cabinet_url}" class="button">Перейти до кабінету</a></p>
             """,
-            'fa': f"""
+            "fa": f"""
                 <h2>اطلاعات ورود به پنل کاربری</h2>
                 <div class="highlight success">
                     <p>طرح: <strong>{tariff_name}</strong></p>
@@ -1949,8 +2121,10 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            "subject": subjects.get(language, subjects["ru"]),
+            "body_html": self._get_base_template(
+                bodies.get(language, bodies["ru"]), language
+            ),
         }
 
 

@@ -34,6 +34,7 @@
 ### 🐛 Сообщения о багах
 
 Перед созданием issue проверьте:
+
 - [ ] Аналогичная проблема не была описана ранее
 - [ ] Вы используете актуальную версию бота
 - [ ] Проблема воспроизводится стабильно
@@ -42,20 +43,25 @@
 
 ```markdown
 ## 🐛 Описание бага
+
 Краткое описание проблемы
 
 ## 🔄 Шаги воспроизведения
+
 1. Перейти к '...'
 2. Нажать на '...'
 3. Увидеть ошибку
 
 ## ✅ Ожидаемое поведение
+
 Что должно было произойти
 
 ## ❌ Фактическое поведение
+
 Что произошло на самом деле
 
 ## 🌍 Окружение
+
 - Версия бота: [например, 1.0.0]
 - Python версия: [например, 3.11.7]
 - ОС: [например, Ubuntu 22.04]
@@ -63,7 +69,9 @@
 
 ## 📋 Логи
 ```
+
 Вставьте соответствующие логи
+
 ```
 
 ## 📷 Скриншоты
@@ -73,6 +81,7 @@
 ### 💡 Предложения функций
 
 Используйте лейбл `enhancement` и опишите:
+
 - **Проблему**, которую решает функция
 - **Предлагаемое решение**
 - **Альтернативы**, которые вы рассматривали
@@ -98,12 +107,14 @@
 ### Установка
 
 1. **Форкните и клонируйте репозиторий:**
+
 ```bash
 git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 ```
 
 2. **Создайте виртуальное окружение:**
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
@@ -112,18 +123,21 @@ venv\Scripts\activate  # Windows
 ```
 
 3. **Установите зависимости:**
+
 ```bash
 pip install -r requirements.txt
 pip install -r requirements-dev.txt  # если есть dev зависимости
 ```
 
 4. **Настройте окружение:**
+
 ```bash
 cp .env.example .env
 # Отредактируйте .env файл с вашими настройками
 ```
 
 5. **Запустите через Docker (рекомендуется):**
+
 ```bash
 docker compose up -d postgres redis
 python main.py
@@ -186,7 +200,7 @@ async def getUserSub(uid):
 from typing import Optional, List, Dict, Any
 
 async def create_subscription(
-    user_id: int, 
+    user_id: int,
     duration_days: int,
     traffic_limit_gb: Optional[int] = None
 ) -> Subscription:
@@ -242,7 +256,7 @@ logger = logging.getLogger(__name__)
 # Уровни логирования
 logger.debug("Детальная информация для отладки")
 logger.info("Общая информация о работе")
-logger.warning("Предупреждение о потенциальной проблеме") 
+logger.warning("Предупреждение о потенциальной проблеме")
 logger.error("Ошибка, которая не прерывает работу")
 logger.critical("Критическая ошибка")
 ```
@@ -277,6 +291,7 @@ git commit -m "docs(readme): обновить инструкцию по уста
 ### Pull Request процесс
 
 1. **Создайте ветку** от `dev`:
+
 ```bash
 git checkout develop
 git pull origin develop
@@ -291,18 +306,22 @@ git checkout -b feature/new-payment-method
 
 ```markdown
 ## 📝 Описание
+
 Краткое описание изменений
 
 ## 🎯 Мотивация
+
 Почему эти изменения нужны?
 
 ## 🔧 Тип изменений
+
 - [ ] Bug fix (исправление)
 - [ ] New feature (новая функция)
 - [ ] Breaking change (ломающие изменения)
 - [ ] Documentation update (обновление документации)
 
 ## ✅ Чеклист
+
 - [ ] Код соответствует стандартам проекта
 - [ ] Добавлены/обновлены тесты
 - [ ] Документация обновлена
@@ -310,7 +329,9 @@ git checkout -b feature/new-payment-method
 - [ ] Проверена совместимость с существующим API
 
 ## 🧪 Тестирование
+
 Как тестировались изменения:
+
 - [ ] Локальное тестирование
 - [ ] Тестирование с реальным Remnawave API
 - [ ] Тестирование платежных систем
@@ -347,6 +368,7 @@ def test_calculate_renewal_price():
 ### Integration тесты
 
 Тестируйте интеграцию с:
+
 - Remnawave API (с тестовыми данными)
 - Базой данных
 - Платежными системами (sandbox режим)
@@ -389,11 +411,13 @@ def test_calculate_renewal_price():
 ## 🏷 Лейблы Issues и PR
 
 ### Приоритет
+
 - `priority:high` - высокий приоритет
-- `priority:medium` - средний приоритет  
+- `priority:medium` - средний приоритет
 - `priority:low` - низкий приоритет
 
 ### Тип
+
 - `bug` - ошибка
 - `enhancement` - улучшение
 - `feature` - новая функция
@@ -401,6 +425,7 @@ def test_calculate_renewal_price():
 - `question` - вопрос
 
 ### Область
+
 - `payments` - платежные системы
 - `api` - Remnawave API
 - `database` - база данных
@@ -412,6 +437,7 @@ def test_calculate_renewal_price():
 ### Сообщения о уязвимостях
 
 Для сообщений о критических уязвимостях безопасности:
+
 - Свяжитесь с [@fringg](https://t.me/fringg) напрямую
 - Не создавайте публичные issues для уязвимостей
 - Дайте время на исправление перед публичным раскрытием

@@ -5,10 +5,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ============ Channel Types ============
 
-BroadcastChannel = Literal['telegram', 'email', 'both']
+BroadcastChannel = Literal["telegram", "email", "both"]
 
 
 # ============ Filters ============
@@ -20,7 +19,9 @@ class BroadcastFilter(BaseModel):
     key: str
     label: str
     count: int | None = None
-    group: str | None = None  # basic, subscription, traffic, registration, source, activity
+    group: str | None = (
+        None  # basic, subscription, traffic, registration, source, activity
+    )
 
 
 class TariffFilter(BaseModel):
@@ -79,20 +80,20 @@ class CustomBroadcastButton(BaseModel):
     """Custom button for broadcast message."""
 
     label: str = Field(..., min_length=1, max_length=64)
-    action_type: Literal['callback', 'url'] = 'callback'
+    action_type: Literal["callback", "url"] = "callback"
     action_value: str = Field(..., min_length=1, max_length=256)
 
-    @field_validator('action_value')
+    @field_validator("action_value")
     @classmethod
     def validate_action_value(cls, v: str, info) -> str:
-        action_type = info.data.get('action_type', 'callback')
-        if action_type == 'url':
-            if not v.startswith(('https://', 'tg://')):
-                raise ValueError('URL must start with https:// or tg://')
-        elif action_type == 'callback':
+        action_type = info.data.get("action_type", "callback")
+        if action_type == "url":
+            if not v.startswith(("https://", "tg://")):
+                raise ValueError("URL must start with https:// or tg://")
+        elif action_type == "callback":
             # Telegram API limits callback_data to 64 bytes
-            if len(v.encode('utf-8')) > 64:
-                raise ValueError('Callback data must be at most 64 bytes')
+            if len(v.encode("utf-8")) > 64:
+                raise ValueError("Callback data must be at most 64 bytes")
         return v
 
 
@@ -102,7 +103,7 @@ class CustomBroadcastButton(BaseModel):
 class BroadcastMediaRequest(BaseModel):
     """Media attachment for broadcast."""
 
-    type: str = Field(..., pattern=r'^(photo|video|document)$')
+    type: str = Field(..., pattern=r"^(photo|video|document)$")
     file_id: str
     caption: str | None = None
 
@@ -115,10 +116,12 @@ class BroadcastCreateRequest(BaseModel):
 
     target: str
     message_text: str = Field(..., min_length=1, max_length=4000)
-    selected_buttons: list[str] = Field(default_factory=lambda: ['home'])
-    custom_buttons: list[CustomBroadcastButton] = Field(default_factory=list, max_length=10)
+    selected_buttons: list[str] = Field(default_factory=lambda: ["home"])
+    custom_buttons: list[CustomBroadcastButton] = Field(
+        default_factory=list, max_length=10
+    )
     media: BroadcastMediaRequest | None = None
-    category: str = Field(default='system', pattern='^(system|news|promo)$')
+    category: str = Field(default="system", pattern="^(system|news|promo)$")
 
 
 # ============ Response ============
@@ -146,10 +149,10 @@ class BroadcastResponse(BaseModel):
     progress_percent: float = 0.0
 
     # Category for user notification preference filtering
-    category: str = 'system'  # system|news|promo
+    category: str = "system"  # system|news|promo
 
     # Email/channel fields
-    channel: str = 'telegram'  # telegram|email|both
+    channel: str = "telegram"  # telegram|email|both
     email_subject: str | None = None
     email_html_content: str | None = None
 
@@ -212,12 +215,14 @@ class CombinedBroadcastCreateRequest(BaseModel):
 
     # Telegram-specific fields
     message_text: str | None = Field(default=None, max_length=4000)
-    selected_buttons: list[str] = Field(default_factory=lambda: ['home'])
-    custom_buttons: list[CustomBroadcastButton] = Field(default_factory=list, max_length=10)
+    selected_buttons: list[str] = Field(default_factory=lambda: ["home"])
+    custom_buttons: list[CustomBroadcastButton] = Field(
+        default_factory=list, max_length=10
+    )
     media: BroadcastMediaRequest | None = None
 
     # Broadcast category for user notification preference filtering
-    category: str = Field(default='system', pattern='^(system|news|promo)$')
+    category: str = Field(default="system", pattern="^(system|news|promo)$")
 
     # Email-specific fields
     email_subject: str | None = Field(default=None, max_length=255)

@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import MulenPayPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -41,7 +40,7 @@ async def create_mulenpay_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан платеж MulenPay',
+        "Создан платеж MulenPay",
         get_mulenpay_display_name=settings.get_mulenpay_display_name(),
         mulen_payment_id=payment.mulen_payment_id,
         uuid=uuid,
@@ -52,12 +51,18 @@ async def create_mulenpay_payment(
     return payment
 
 
-async def get_mulenpay_payment_by_local_id(db: AsyncSession, payment_id: int) -> MulenPayPayment | None:
-    result = await db.execute(select(MulenPayPayment).where(MulenPayPayment.id == payment_id))
+async def get_mulenpay_payment_by_local_id(
+    db: AsyncSession, payment_id: int
+) -> MulenPayPayment | None:
+    result = await db.execute(
+        select(MulenPayPayment).where(MulenPayPayment.id == payment_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_mulenpay_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> MulenPayPayment | None:
+async def get_mulenpay_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> MulenPayPayment | None:
     result = await db.execute(
         select(MulenPayPayment)
         .where(MulenPayPayment.id == payment_id)
@@ -67,13 +72,23 @@ async def get_mulenpay_payment_by_id_for_update(db: AsyncSession, payment_id: in
     return result.scalar_one_or_none()
 
 
-async def get_mulenpay_payment_by_uuid(db: AsyncSession, uuid: str) -> MulenPayPayment | None:
-    result = await db.execute(select(MulenPayPayment).where(MulenPayPayment.uuid == uuid))
+async def get_mulenpay_payment_by_uuid(
+    db: AsyncSession, uuid: str
+) -> MulenPayPayment | None:
+    result = await db.execute(
+        select(MulenPayPayment).where(MulenPayPayment.uuid == uuid)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_mulenpay_payment_by_mulen_id(db: AsyncSession, mulen_payment_id: int) -> MulenPayPayment | None:
-    result = await db.execute(select(MulenPayPayment).where(MulenPayPayment.mulen_payment_id == mulen_payment_id))
+async def get_mulenpay_payment_by_mulen_id(
+    db: AsyncSession, mulen_payment_id: int
+) -> MulenPayPayment | None:
+    result = await db.execute(
+        select(MulenPayPayment).where(
+            MulenPayPayment.mulen_payment_id == mulen_payment_id
+        )
+    )
     return result.scalar_one_or_none()
 
 

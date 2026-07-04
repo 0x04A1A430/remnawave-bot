@@ -35,7 +35,7 @@ class SubscriptionData(BaseModel):
     days_left: int
     hours_left: int = 0
     minutes_left: int = 0
-    time_left_display: str = ''  # Human readable format like "2д 5ч" or "5ч 30м"
+    time_left_display: str = ""  # Human readable format like "2д 5ч" or "5ч 30м"
     traffic_limit_gb: int
     traffic_used_gb: float
     traffic_used_percent: float
@@ -45,7 +45,9 @@ class SubscriptionData(BaseModel):
     autopay_enabled: bool
     autopay_days_before: int
     subscription_url: str | None = None
-    hide_subscription_link: bool = False  # Скрывать ли отображение ссылки (но кнопки работают)
+    hide_subscription_link: bool = (
+        False  # Скрывать ли отображение ссылки (но кнопки работают)
+    )
     is_active: bool
     is_expired: bool
     is_limited: bool = False
@@ -87,16 +89,16 @@ class RenewalOptionResponse(BaseModel):
 class RenewalRequest(BaseModel):
     """Request to renew subscription."""
 
-    period_days: int = Field(..., ge=1, le=3650, description='Renewal period in days')
+    period_days: int = Field(..., ge=1, le=3650, description="Renewal period in days")
     subscription_id: int | None = Field(
         default=None,
-        description='ID of subscription to renew (required in multi-tariff mode)',
+        description="ID of subscription to renew (required in multi-tariff mode)",
     )
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
         max_length=128,
-        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+        pattern=r"^[A-Za-z0-9._:-]{4,128}$",
     )
 
 
@@ -123,24 +125,24 @@ class TrafficPackageResponse(BaseModel):
 class TrafficPurchaseRequest(BaseModel):
     """Request to purchase additional traffic."""
 
-    gb: int = Field(..., ge=0, le=100_000, description='GB to purchase (0 = unlimited)')
+    gb: int = Field(..., ge=0, le=100_000, description="GB to purchase (0 = unlimited)")
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
         max_length=128,
-        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+        pattern=r"^[A-Za-z0-9._:-]{4,128}$",
     )
 
 
 class DevicePurchaseRequest(BaseModel):
     """Request to purchase additional device slots."""
 
-    devices: int = Field(..., ge=1, le=100, description='Number of additional devices')
+    devices: int = Field(..., ge=1, le=100, description="Number of additional devices")
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
         max_length=128,
-        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+        pattern=r"^[A-Za-z0-9._:-]{4,128}$",
     )
 
 
@@ -148,7 +150,9 @@ class AutopayUpdateRequest(BaseModel):
     """Request to update autopay settings."""
 
     enabled: bool
-    days_before: int | None = Field(None, ge=1, le=30, description='Days before expiration to charge')
+    days_before: int | None = Field(
+        None, ge=1, le=30, description="Days before expiration to charge"
+    )
 
 
 class TrialActivateRequest(BaseModel):
@@ -161,7 +165,7 @@ class TrialActivateRequest(BaseModel):
     yandex_cid: str | None = Field(
         None,
         max_length=128,
-        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
+        pattern=r"^[A-Za-z0-9._:-]{4,128}$",
     )
 
 
@@ -185,10 +189,12 @@ class PurchaseSelectionRequest(BaseModel):
     """User's selection for subscription purchase."""
 
     period_id: str | None = Field(None, description="Period ID like 'days:30'")
-    period_days: int | None = Field(None, ge=1, le=3650, description='Period in days')
-    traffic_value: int | None = Field(None, ge=0, le=100_000, description='Traffic in GB (0 = unlimited)')
-    servers: list[str] | None = Field(default_factory=list, description='Server UUIDs')
-    devices: int | None = Field(None, ge=1, le=100, description='Device limit')
+    period_days: int | None = Field(None, ge=1, le=3650, description="Period in days")
+    traffic_value: int | None = Field(
+        None, ge=0, le=100_000, description="Traffic in GB (0 = unlimited)"
+    )
+    servers: list[str] | None = Field(default_factory=list, description="Server UUIDs")
+    devices: int | None = Field(None, ge=1, le=100, description="Device limit")
 
 
 class PurchasePreviewRequest(BaseModel):
@@ -203,8 +209,8 @@ class PurchasePreviewRequest(BaseModel):
     yandex_cid: str | None = Field(
         None,
         max_length=128,
-        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
-        description='Cached Yandex.Metrika ClientID (optional).',
+        pattern=r"^[A-Za-z0-9._:-]{4,128}$",
+        description="Cached Yandex.Metrika ClientID (optional).",
     )
 
 
@@ -214,10 +220,13 @@ class PurchasePreviewRequest(BaseModel):
 class TariffPurchaseRequest(BaseModel):
     """Request to purchase a tariff."""
 
-    tariff_id: int = Field(..., description='Tariff ID to purchase')
-    period_days: int = Field(..., ge=1, le=3650, description='Period in days')
+    tariff_id: int = Field(..., description="Tariff ID to purchase")
+    period_days: int = Field(..., ge=1, le=3650, description="Period in days")
     traffic_gb: int | None = Field(
-        None, ge=0, le=100_000, description='Custom traffic in GB (for custom_traffic_enabled tariffs)'
+        None,
+        ge=0,
+        le=100_000,
+        description="Custom traffic in GB (for custom_traffic_enabled tariffs)",
     )
     # When the user is renewing an EXISTING subscription (multi-tariff
     # mode), the frontend passes the explicit subscription_id so the
@@ -228,12 +237,12 @@ class TariffPurchaseRequest(BaseModel):
     subscription_id: int | None = Field(
         None,
         ge=1,
-        description='Existing subscription_id when renewing (multi-tariff). Resolves race with concurrent panel webhooks.',
+        description="Existing subscription_id when renewing (multi-tariff). Resolves race with concurrent panel webhooks.",
     )
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
         max_length=128,
-        pattern=r'^[A-Za-z0-9._:-]{4,128}$',
-        description='Cached Yandex.Metrika ClientID (optional).',
+        pattern=r"^[A-Za-z0-9._:-]{4,128}$",
+        description="Cached Yandex.Metrika ClientID (optional).",
     )

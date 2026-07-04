@@ -13,7 +13,7 @@
     "starts_at": "2025-12-15T09:00:00+03:00",
     "ends_at": "2025-12-15T13:00:00+03:00",
     "cooldown_hours": 4,
-    "payload": {"secret_idx": 3},
+    "payload": { "secret_idx": 3 },
     "force": true
   }
   ```

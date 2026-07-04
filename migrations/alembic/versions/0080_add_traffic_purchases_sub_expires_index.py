@@ -24,9 +24,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-
-revision: str = '0080'
-down_revision: Union[str, None] = '0079'
+revision: str = "0080"
+down_revision: Union[str, None] = "0079"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -35,18 +34,18 @@ def upgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    if dialect_name == 'postgresql':
+    if dialect_name == "postgresql":
         # CREATE INDEX CONCURRENTLY требует не быть внутри транзакции
         with op.get_context().autocommit_block():
             op.execute(
-                'CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_traffic_purchases_sub_expires '
-                'ON traffic_purchases (subscription_id, expires_at)'
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_traffic_purchases_sub_expires "
+                "ON traffic_purchases (subscription_id, expires_at)"
             )
     else:
         op.create_index(
-            'ix_traffic_purchases_sub_expires',
-            'traffic_purchases',
-            ['subscription_id', 'expires_at'],
+            "ix_traffic_purchases_sub_expires",
+            "traffic_purchases",
+            ["subscription_id", "expires_at"],
             unique=False,
         )
 
@@ -55,8 +54,12 @@ def downgrade() -> None:
     bind = op.get_bind()
     dialect_name = bind.dialect.name
 
-    if dialect_name == 'postgresql':
+    if dialect_name == "postgresql":
         with op.get_context().autocommit_block():
-            op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_traffic_purchases_sub_expires')
+            op.execute(
+                "DROP INDEX CONCURRENTLY IF EXISTS ix_traffic_purchases_sub_expires"
+            )
     else:
-        op.drop_index('ix_traffic_purchases_sub_expires', table_name='traffic_purchases')
+        op.drop_index(
+            "ix_traffic_purchases_sub_expires", table_name="traffic_purchases"
+        )

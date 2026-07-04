@@ -6,7 +6,9 @@ from sqlalchemy.orm import selectinload
 from app.database.models import PromoGroup, Subscription, User, UserPromoGroup
 
 
-def _normalize_period_discounts(period_discounts: dict[int, int] | None) -> dict[int, int]:
+def _normalize_period_discounts(
+    period_discounts: dict[int, int] | None,
+) -> dict[int, int]:
     if not period_discounts:
         return {}
 
@@ -120,7 +122,11 @@ async def create_promo_group(
     await db.flush()
 
     if should_be_default and existing_default and existing_default.id != promo_group.id:
-        await db.execute(update(PromoGroup).where(PromoGroup.id != promo_group.id).values(is_default=False))
+        await db.execute(
+            update(PromoGroup)
+            .where(PromoGroup.id != promo_group.id)
+            .values(is_default=False)
+        )
 
     await db.commit()
     await db.refresh(promo_group)
@@ -134,7 +140,7 @@ async def create_promo_group(
         promo_group.device_discount_percent,
         normalized_period_discounts,
         (auto_assign_total_spent_kopeks or 0) / 100,
-        'on' if promo_group.apply_discounts_to_addons else 'off',
+        "on" if promo_group.apply_discounts_to_addons else "off",
     )
 
     return promo_group
@@ -166,7 +172,9 @@ async def update_promo_group(
         group.device_discount_percent = max(0, min(100, device_discount_percent))
     if period_discounts is not None:
         normalized_period_discounts = _normalize_period_discounts(period_discounts)
-        group.period_discounts = normalized_period_discounts if normalized_period_discounts else None
+        group.period_discounts = (
+            normalized_period_discounts if normalized_period_discounts else None
+        )
     if auto_assign_total_spent_kopeks is not None:
         value = max(0, auto_assign_total_spent_kopeks)
         group.auto_assign_total_spent_kopeks = value if value > 0 else None
@@ -177,16 +185,27 @@ async def update_promo_group(
         if is_default:
             group.is_default = True
             await db.flush()
-            await db.execute(update(PromoGroup).where(PromoGroup.id != group.id).values(is_default=False))
+            await db.execute(
+                update(PromoGroup)
+                .where(PromoGroup.id != group.id)
+                .values(is_default=False)
+            )
         elif group.is_default:
             group.is_default = False
             await db.flush()
             replacement = await db.execute(
-                select(PromoGroup).where(PromoGroup.id != group.id).order_by(PromoGroup.id).limit(1)
+                select(PromoGroup)
+                .where(PromoGroup.id != group.id)
+                .order_by(PromoGroup.id)
+                .limit(1)
             )
             new_default = replacement.scalars().first()
             if new_default:
-                await db.execute(update(PromoGroup).where(PromoGroup.id == new_default.id).values(is_default=True))
+                await db.execute(
+                    update(PromoGroup)
+                    .where(PromoGroup.id == new_default.id)
+                    .values(is_default=True)
+                )
             else:
                 # Не допускаем состояния без базовой промогруппы
                 group.is_default = True
@@ -194,24 +213,26 @@ async def update_promo_group(
     await db.commit()
     await db.refresh(group)
 
-    logger.info('Обновлена промогруппа', group_name=group.name, group_id=group.id)
+    logger.info("Обновлена промогруппа", group_name=group.name, group_id=group.id)
     return group
 
 
 async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
     if group.is_default:
-        logger.warning('Попытка удалить базовую промогруппу запрещена')
+        logger.warning("Попытка удалить базовую промогруппу запрещена")
         return False
 
     default_group = await get_default_promo_group(db)
     if not default_group:
-        logger.error('Не найдена базовая промогруппа для reassignment')
+        logger.error("Не найдена базовая промогруппа для reassignment")
         return False
 
     # Получаем список пользователей, связанных с удаляемой промогруппой
     affected_user_ids: set[int] = set()
 
-    user_ids_result = await db.execute(select(User.id).where(User.promo_group_id == group.id))
+    user_ids_result = await db.execute(
+        select(User.id).where(User.promo_group_id == group.id)
+    )
     affected_user_ids.update(user_ids_result.scalars().all())
 
     promo_group_links_result = await db.execute(
@@ -219,7 +240,11 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
     )
     affected_user_ids.update(promo_group_links_result.scalars().all())
 
-    await db.execute(update(User).where(User.promo_group_id == group.id).values(promo_group_id=default_group.id))
+    await db.execute(
+        update(User)
+        .where(User.promo_group_id == group.id)
+        .values(promo_group_id=default_group.id)
+    )
 
     if affected_user_ids:
         existing_defaults_result = await db.execute(
@@ -234,7 +259,7 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
                 UserPromoGroup(
                     user_id=user_id,
                     promo_group_id=default_group.id,
-                    assigned_by='system',
+                    assigned_by="system",
                 )
             )
 
@@ -242,7 +267,7 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
     await db.commit()
 
     logger.info(
-        'Промогруппа удалена, пользователи переведены в дефолтную',
+        "Промогруппа удалена, пользователи переведены в дефолтную",
         group_name=group.name,
         group_id=group.id,
         default_group_name=default_group.name,
@@ -269,5 +294,7 @@ async def get_promo_group_members(
 
 
 async def count_promo_group_members(db: AsyncSession, group_id: int) -> int:
-    result = await db.execute(select(func.count(User.id)).where(User.promo_group_id == group_id))
+    result = await db.execute(
+        select(func.count(User.id)).where(User.promo_group_id == group_id)
+    )
     return result.scalar_one()

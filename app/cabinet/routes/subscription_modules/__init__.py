@@ -16,17 +16,16 @@ from .status import router as status_router
 from .tariff_switch import router as tariff_switch_router
 from .traffic import router as traffic_router
 
-
 __all__ = [
-    'autopay_router',
-    'daily_router',
-    'devices_router',
-    'multi_tariff_router',
-    'purchase_router',
-    'renewal_router',
-    'revoke_router',
-    'servers_router',
-    'status_router',
-    'tariff_switch_router',
-    'traffic_router',
+    "autopay_router",
+    "daily_router",
+    "devices_router",
+    "multi_tariff_router",
+    "purchase_router",
+    "renewal_router",
+    "revoke_router",
+    "servers_router",
+    "status_router",
+    "tariff_switch_router",
+    "traffic_router",
 ]

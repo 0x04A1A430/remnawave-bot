@@ -1,4 +1,3 @@
 from . import balance
 
-
-__all__ = ['balance']
+__all__ = ["balance"]

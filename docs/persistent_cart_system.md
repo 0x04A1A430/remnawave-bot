@@ -13,6 +13,7 @@
 Использует Redis для хранения данных корзины между сессиями пользователя.
 
 #### Основные методы:
+
 - `save_user_cart(user_id, cart_data, ttl)` - сохраняет корзину пользователя
 - `get_user_cart(user_id)` - возвращает данные корзины пользователя
 - `delete_user_cart(user_id)` - удаляет корзину пользователя
@@ -23,6 +24,7 @@
 Расположение: `app/handlers/subscription/purchase.py`
 
 #### Основные функции:
+
 - `save_cart_and_redirect_to_topup` - сохраняет текущую корзину в Redis при недостатке средств и перенаправляет к пополнению
 - `return_to_saved_cart` - восстанавливает параметры подписки из Redis и продолжает процесс оформления
 - `clear_saved_cart` - очищает сохраненную корзину
@@ -32,6 +34,7 @@
 Расположение: `app/keyboards/inline.py`
 
 #### Основные изменения:
+
 - `get_insufficient_balance_keyboard` - добавлена поддержка флага `has_saved_cart` для отображения кнопки возврата к оформлению
 - `get_insufficient_balance_keyboard_with_cart` - обновлена для использования флага `has_saved_cart`
 - `get_main_menu_keyboard` - добавлен параметр `has_saved_cart` для отображения кнопки возврата к оформлению
@@ -59,6 +62,7 @@
 ## Тестирование
 
 Тесты расположены в:
+
 - `tests/test_user_cart_service.py` - модульные тесты сервиса корзины
 - `tests/test_subscription_cart_integration.py` - интеграционные тесты
 

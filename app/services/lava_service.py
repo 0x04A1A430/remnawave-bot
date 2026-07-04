@@ -30,7 +30,6 @@ import structlog
 
 from app.config import settings
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -45,17 +44,19 @@ def _strip_url_query(url: str) -> str:
         parts = urlsplit(url)
     except ValueError:
         return url
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, '', ''))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
 class LavaAPIError(Exception):
     """Ошибка API Lava."""
 
-    def __init__(self, status_code: int, message: str, code: str | int | None = None) -> None:
+    def __init__(
+        self, status_code: int, message: str, code: str | int | None = None
+    ) -> None:
         self.status_code = status_code
         self.message = message
         self.api_code = code
-        super().__init__(f'Lava API error ({status_code}): {message}')
+        super().__init__(f"Lava API error ({status_code}): {message}")
 
 
 class LavaService:
@@ -71,19 +72,19 @@ class LavaService:
 
     @property
     def base_url(self) -> str:
-        return (settings.LAVA_BASE_URL or 'https://api.lava.ru').rstrip('/')
+        return (settings.LAVA_BASE_URL or "https://api.lava.ru").rstrip("/")
 
     @property
     def shop_id(self) -> str:
-        return settings.LAVA_SHOP_ID or ''
+        return settings.LAVA_SHOP_ID or ""
 
     @property
     def secret_key(self) -> str:
-        return settings.LAVA_SECRET_KEY or ''
+        return settings.LAVA_SECRET_KEY or ""
 
     @property
     def webhook_secret(self) -> str:
-        return settings.LAVA_WEBHOOK_SECRET or ''
+        return settings.LAVA_WEBHOOK_SECRET or ""
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -113,19 +114,31 @@ class LavaService:
             if isinstance(value, float) and value.is_integer():
                 return int(value)
             if isinstance(value, dict):
-                return {key: normalize(item) for key, item in value.items() if key != 'signature'}
+                return {
+                    key: normalize(item)
+                    for key, item in value.items()
+                    if key != "signature"
+                }
             if isinstance(value, list):
                 return [normalize(item) for item in value]
             return value
 
-        without_sig = {key: normalize(value) for key, value in payload.items() if key != 'signature'}
-        return json.dumps(without_sig, sort_keys=True, separators=(',', ':'))
+        without_sig = {
+            key: normalize(value)
+            for key, value in payload.items()
+            if key != "signature"
+        }
+        return json.dumps(without_sig, sort_keys=True, separators=(",", ":"))
 
     def _hmac_hex(self, message: str | bytes, key: str | None = None) -> str:
-        secret = (key if key is not None else self.secret_key) or ''
-        msg_bytes = message if isinstance(message, (bytes, bytearray)) else message.encode('utf-8')
+        secret = (key if key is not None else self.secret_key) or ""
+        msg_bytes = (
+            message
+            if isinstance(message, (bytes, bytearray))
+            else message.encode("utf-8")
+        )
         return hmac.new(
-            secret.encode('utf-8'),
+            secret.encode("utf-8"),
             msg=msg_bytes,
             digestmod=hashlib.sha256,
         ).hexdigest()
@@ -137,13 +150,13 @@ class LavaService:
         никаких пересортировок, порядок ключей сохраняется как в payload.
         """
         url = f'{self.base_url}/{path.lstrip("/")}'
-        body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
-        body_bytes = body.encode('utf-8')
+        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        body_bytes = body.encode("utf-8")
         signature = self._hmac_hex(body_bytes)
         headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Signature': signature,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Signature": signature,
         }
         try:
             session = await self._get_session()
@@ -152,27 +165,29 @@ class LavaService:
                     data = await response.json(content_type=None)
                 except Exception:
                     text = await response.text()
-                    data = {'_raw': text}
+                    data = {"_raw": text}
                 if not isinstance(data, dict):
-                    data = {'_raw': data}
+                    data = {"_raw": data}
                 if response.status >= 400:
                     error_msg = (
-                        data.get('error')
-                        or (data.get('data') or {}).get('error')
-                        or data.get('message')
-                        or 'Lava API HTTP error'
+                        data.get("error")
+                        or (data.get("data") or {}).get("error")
+                        or data.get("message")
+                        or "Lava API HTTP error"
                     )
                     logger.warning(
-                        'Lava API HTTP error',
+                        "Lava API HTTP error",
                         url=url,
                         status=response.status,
                         error_msg=str(error_msg),
-                        code=data.get('code'),
+                        code=data.get("code"),
                     )
-                    raise LavaAPIError(response.status, str(error_msg), data.get('code'))
+                    raise LavaAPIError(
+                        response.status, str(error_msg), data.get("code")
+                    )
                 return data
         except aiohttp.ClientError as error:
-            logger.exception('Lava API connection error', url=url, error=error)
+            logger.exception("Lava API connection error", url=url, error=error)
             raise
 
     async def create_invoice(
@@ -195,34 +210,36 @@ class LavaService:
         ``orderId`` — наш уникальный идентификатор платежа.
         """
         payload: dict[str, Any] = {
-            'sum': round(float(amount_rubles), 2),
-            'orderId': str(order_id),
-            'shopId': self.shop_id,
+            "sum": round(float(amount_rubles), 2),
+            "orderId": str(order_id),
+            "shopId": self.shop_id,
         }
         if hook_url:
-            payload['hookUrl'] = hook_url[:500]
+            payload["hookUrl"] = hook_url[:500]
         if success_url:
-            payload['successUrl'] = _strip_url_query(success_url)[:500]
+            payload["successUrl"] = _strip_url_query(success_url)[:500]
         if fail_url:
-            payload['failUrl'] = _strip_url_query(fail_url)[:500]
+            payload["failUrl"] = _strip_url_query(fail_url)[:500]
         if expire_minutes is not None:
             # Lava лимит: 1..7200 минут (5 дней)
-            payload['expire'] = max(1, min(7200, int(expire_minutes)))
+            payload["expire"] = max(1, min(7200, int(expire_minutes)))
         if comment:
-            payload['comment'] = comment[:255]
+            payload["comment"] = comment[:255]
         if custom_fields:
-            payload['customFields'] = custom_fields[:500]
+            payload["customFields"] = custom_fields[:500]
         if include_service:
-            payload['includeService'] = list(include_service)
+            payload["includeService"] = list(include_service)
         if exclude_service:
-            payload['excludeService'] = list(exclude_service)
+            payload["excludeService"] = list(exclude_service)
 
-        logger.info('Lava API invoice/create', order_id=order_id, sum=payload['sum'])
-        data = await self._post('/business/invoice/create', payload)
+        logger.info("Lava API invoice/create", order_id=order_id, sum=payload["sum"])
+        data = await self._post("/business/invoice/create", payload)
 
         # Lava возвращает {"status": "success", "data": {...}} или {"status": "error", "error": "..."}
-        if isinstance(data.get('status'), str) and data['status'].lower() == 'error':
-            raise LavaAPIError(200, str(data.get('error') or data.get('message') or 'unknown'))
+        if isinstance(data.get("status"), str) and data["status"].lower() == "error":
+            raise LavaAPIError(
+                200, str(data.get("error") or data.get("message") or "unknown")
+            )
 
         return data
 
@@ -234,23 +251,25 @@ class LavaService:
     ) -> dict[str, Any]:
         """POST /business/invoice/status — статус инвойса по orderId или invoiceId."""
         if not order_id and not invoice_id:
-            raise ValueError('Lava status: order_id or invoice_id required')
+            raise ValueError("Lava status: order_id or invoice_id required")
 
-        payload: dict[str, Any] = {'shopId': self.shop_id}
+        payload: dict[str, Any] = {"shopId": self.shop_id}
         if invoice_id:
-            payload['invoiceId'] = str(invoice_id)
+            payload["invoiceId"] = str(invoice_id)
         if order_id:
-            payload['orderId'] = str(order_id)
+            payload["orderId"] = str(order_id)
 
-        logger.info('Lava API invoice/status', order_id=order_id, invoice_id=invoice_id)
-        return await self._post('/business/invoice/status', payload)
+        logger.info("Lava API invoice/status", order_id=order_id, invoice_id=invoice_id)
+        return await self._post("/business/invoice/status", payload)
 
     async def get_services(self) -> dict[str, Any]:
         """POST /business/invoice/get-available-tariffs — доступные методы оплаты для shopId."""
-        payload: dict[str, Any] = {'shopId': self.shop_id}
-        return await self._post('/business/invoice/get-available-tariffs', payload)
+        payload: dict[str, Any] = {"shopId": self.shop_id}
+        return await self._post("/business/invoice/get-available-tariffs", payload)
 
-    def verify_webhook_signature(self, raw_body: bytes, received_signature: str) -> bool:
+    def verify_webhook_signature(
+        self, raw_body: bytes, received_signature: str
+    ) -> bool:
         """Верификация подписи webhook'а.
 
         Lava на разных shop'ах подписывает webhook'и по-разному:
@@ -262,10 +281,10 @@ class LavaService:
         """
         try:
             if not received_signature:
-                logger.warning('Lava webhook: отсутствует заголовок подписи')
+                logger.warning("Lava webhook: отсутствует заголовок подписи")
                 return False
             if not self.webhook_secret:
-                logger.error('Lava webhook: LAVA_WEBHOOK_SECRET не настроен')
+                logger.error("Lava webhook: LAVA_WEBHOOK_SECRET не настроен")
                 return False
 
             received = received_signature.strip()
@@ -281,12 +300,16 @@ class LavaService:
                 payload = json.loads(raw_body)
                 if isinstance(payload, dict):
                     canonical = self._canonical_json(payload)
-                    expected_canonical = self._hmac_hex(canonical, key=self.webhook_secret)
-                    if hmac.compare_digest(expected_canonical.lower(), received.lower()):
+                    expected_canonical = self._hmac_hex(
+                        canonical, key=self.webhook_secret
+                    )
+                    if hmac.compare_digest(
+                        expected_canonical.lower(), received.lower()
+                    ):
                         return True
             except (ValueError, TypeError) as parse_error:
                 logger.warning(
-                    'Lava webhook: невалидный JSON для альтернативной проверки',
+                    "Lava webhook: невалидный JSON для альтернативной проверки",
                     error=str(parse_error),
                     received_prefix=received[:8],
                     expected_raw_prefix=expected_raw[:8],
@@ -294,14 +317,16 @@ class LavaService:
                 return False
 
             logger.warning(
-                'Lava webhook: invalid signature',
+                "Lava webhook: invalid signature",
                 received_prefix=received[:8],
                 expected_raw_prefix=expected_raw[:8],
-                expected_canonical_prefix=expected_canonical[:8] if expected_canonical else None,
+                expected_canonical_prefix=(
+                    expected_canonical[:8] if expected_canonical else None
+                ),
             )
             return False
         except Exception as error:
-            logger.error('Lava webhook verify error', error=str(error), exc_info=True)
+            logger.error("Lava webhook verify error", error=str(error), exc_info=True)
             return False
 
 

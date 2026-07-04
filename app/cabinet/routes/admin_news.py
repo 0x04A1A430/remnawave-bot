@@ -31,10 +31,9 @@ from ..schemas.news import (
     NewsUpdateRequest,
 )
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/news', tags=['Cabinet Admin News'])
+router = APIRouter(prefix="/admin/news", tags=["Cabinet Admin News"])
 
 
 def _article_to_detail(article: NewsArticle) -> dict[str, Any]:
@@ -44,34 +43,38 @@ def _article_to_detail(article: NewsArticle) -> dict[str, Any]:
     """
     author_name: str | None = None
     if article.author:
-        author_name = article.author.first_name or article.author.username or f'#{article.author.id}'
+        author_name = (
+            article.author.first_name
+            or article.author.username
+            or f"#{article.author.id}"
+        )
 
     return {
-        'id': article.id,
-        'title': article.title,
-        'slug': article.slug,
-        'content': article.content,
-        'excerpt': article.excerpt,
-        'category': article.category,
-        'category_color': article.category_color,
-        'tag': article.tag,
-        'category_id': article.category_id,
-        'tag_id': article.tag_id,
-        'featured_image_url': article.featured_image_url,
-        'is_published': article.is_published,
-        'is_featured': article.is_featured,
-        'published_at': article.published_at,
-        'read_time_minutes': article.read_time_minutes,
-        'views_count': article.views_count,
-        'author_name': author_name,
-        'created_at': article.created_at,
-        'updated_at': article.updated_at,
+        "id": article.id,
+        "title": article.title,
+        "slug": article.slug,
+        "content": article.content,
+        "excerpt": article.excerpt,
+        "category": article.category,
+        "category_color": article.category_color,
+        "tag": article.tag,
+        "category_id": article.category_id,
+        "tag_id": article.tag_id,
+        "featured_image_url": article.featured_image_url,
+        "is_published": article.is_published,
+        "is_featured": article.is_featured,
+        "published_at": article.published_at,
+        "read_time_minutes": article.read_time_minutes,
+        "views_count": article.views_count,
+        "author_name": author_name,
+        "created_at": article.created_at,
+        "updated_at": article.updated_at,
     }
 
 
-@router.get('', response_model=NewsListResponse)
+@router.get("", response_model=NewsListResponse)
 async def list_all_news(
-    admin: User = Depends(require_permission('news:read')),
+    admin: User = Depends(require_permission("news:read")),
     db: AsyncSession = Depends(get_cabinet_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -87,17 +90,17 @@ async def list_all_news(
     except HTTPException:
         raise
     except Exception:
-        logger.exception('Failed to list all news')
+        logger.exception("Failed to list all news")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load news articles',
+            detail="Failed to load news articles",
         )
 
 
-@router.get('/{article_id}', response_model=NewsArticleResponse)
+@router.get("/{article_id}", response_model=NewsArticleResponse)
 async def get_article_detail(
     article_id: int,
-    admin: User = Depends(require_permission('news:read')),
+    admin: User = Depends(require_permission("news:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Get a single news article by ID (admin view)."""
@@ -105,16 +108,18 @@ async def get_article_detail(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail="Article not found",
         )
 
     return NewsArticleResponse(**_article_to_detail(article))
 
 
-@router.post('', response_model=NewsArticleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=NewsArticleResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_article(
     request: NewsCreateRequest,
-    admin: User = Depends(require_permission('news:create')),
+    admin: User = Depends(require_permission("news:create")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Create a new news article."""
@@ -127,7 +132,7 @@ async def create_article(
             if not cat:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f'Category with id={request.category_id} not found',
+                    detail=f"Category with id={request.category_id} not found",
                 )
             category_name = cat.name
             category_color = cat.color
@@ -139,7 +144,7 @@ async def create_article(
             if not tag_obj:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f'Tag with id={request.tag_id} not found',
+                    detail=f"Tag with id={request.tag_id} not found",
                 )
             tag_name = tag_obj.name
 
@@ -165,13 +170,13 @@ async def create_article(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An article with this slug already exists',
+            detail="An article with this slug already exists",
         )
     except Exception:
-        logger.exception('Failed to create news article')
+        logger.exception("Failed to create news article")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to create article',
+            detail="Failed to create article",
         )
 
     # Reload with author relationship
@@ -179,16 +184,16 @@ async def create_article(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reload article after creation',
+            detail="Failed to reload article after creation",
         )
     return NewsArticleResponse(**_article_to_detail(article))
 
 
-@router.put('/{article_id}', response_model=NewsArticleResponse)
+@router.put("/{article_id}", response_model=NewsArticleResponse)
 async def update_article(
     article_id: int,
     request: NewsUpdateRequest,
-    admin: User = Depends(require_permission('news:edit')),
+    admin: User = Depends(require_permission("news:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Update an existing news article."""
@@ -196,46 +201,46 @@ async def update_article(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail="Article not found",
         )
 
     try:
         update_data = request.model_dump(exclude_unset=True)
 
         # Resolve category from FK -- sync legacy string fields from the managed entity
-        if 'category_id' in update_data and update_data['category_id'] is not None:
-            cat = await get_category_by_id(db, update_data['category_id'])
+        if "category_id" in update_data and update_data["category_id"] is not None:
+            cat = await get_category_by_id(db, update_data["category_id"])
             if not cat:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=f'Category with id={update_data["category_id"]} not found',
                 )
-            update_data['category'] = cat.name
-            update_data['category_color'] = cat.color
+            update_data["category"] = cat.name
+            update_data["category_color"] = cat.color
 
         # Resolve tag from FK -- sync legacy string field from the managed entity
-        if 'tag_id' in update_data and update_data['tag_id'] is not None:
-            tag_obj = await get_tag_by_id(db, update_data['tag_id'])
+        if "tag_id" in update_data and update_data["tag_id"] is not None:
+            tag_obj = await get_tag_by_id(db, update_data["tag_id"])
             if not tag_obj:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=f'Tag with id={update_data["tag_id"]} not found',
                 )
-            update_data['tag'] = tag_obj.name
+            update_data["tag"] = tag_obj.name
 
-        if update_data.get('is_featured'):
+        if update_data.get("is_featured"):
             await unfeature_all_news(db)
         article = await update_news_article(db, article, **update_data)
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An article with this slug already exists',
+            detail="An article with this slug already exists",
         )
     except Exception:
-        logger.exception('Failed to update news article', article_id=article_id)
+        logger.exception("Failed to update news article", article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to update article',
+            detail="Failed to update article",
         )
 
     # Reload with author relationship (update used bulk UPDATE, author not populated)
@@ -243,15 +248,15 @@ async def update_article(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reload article after update',
+            detail="Failed to reload article after update",
         )
     return NewsArticleResponse(**_article_to_detail(article))
 
 
-@router.delete('/{article_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_article(
     article_id: int,
-    admin: User = Depends(require_permission('news:delete')),
+    admin: User = Depends(require_permission("news:delete")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete a news article."""
@@ -259,23 +264,23 @@ async def remove_article(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail="Article not found",
         )
 
     try:
         await delete_news_article(db, article)
     except Exception:
-        logger.exception('Failed to delete news article', article_id=article_id)
+        logger.exception("Failed to delete news article", article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to delete article',
+            detail="Failed to delete article",
         )
 
 
-@router.post('/{article_id}/publish', response_model=NewsToggleResponse)
+@router.post("/{article_id}/publish", response_model=NewsToggleResponse)
 async def toggle_publish(
     article_id: int,
-    admin: User = Depends(require_permission('news:edit')),
+    admin: User = Depends(require_permission("news:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsToggleResponse:
     """Toggle the published status of a news article."""
@@ -283,15 +288,15 @@ async def toggle_publish(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail="Article not found",
         )
 
     new_published = not article.is_published
 
-    update_kwargs: dict[str, Any] = {'is_published': new_published}
+    update_kwargs: dict[str, Any] = {"is_published": new_published}
     # Auto-set published_at on first publish
     if new_published and article.published_at is None:
-        update_kwargs['published_at'] = datetime.now(UTC)
+        update_kwargs["published_at"] = datetime.now(UTC)
 
     try:
         article = await update_news_article(db, article, **update_kwargs)
@@ -302,17 +307,17 @@ async def toggle_publish(
             published_at=article.published_at,
         )
     except Exception:
-        logger.exception('Failed to toggle publish', article_id=article_id)
+        logger.exception("Failed to toggle publish", article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle publish status',
+            detail="Failed to toggle publish status",
         )
 
 
-@router.post('/{article_id}/feature', response_model=NewsToggleResponse)
+@router.post("/{article_id}/feature", response_model=NewsToggleResponse)
 async def toggle_featured(
     article_id: int,
-    admin: User = Depends(require_permission('news:edit')),
+    admin: User = Depends(require_permission("news:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsToggleResponse:
     """Toggle the featured status of a news article."""
@@ -320,7 +325,7 @@ async def toggle_featured(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail="Article not found",
         )
 
     try:
@@ -336,8 +341,8 @@ async def toggle_featured(
             published_at=article.published_at,
         )
     except Exception:
-        logger.exception('Failed to toggle featured', article_id=article_id)
+        logger.exception("Failed to toggle featured", article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle featured status',
+            detail="Failed to toggle featured status",
         )

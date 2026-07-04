@@ -14,7 +14,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -34,7 +33,6 @@ from app.services.monitoring_service import (
     decide_autopay_fail_notification,
 )
 
-
 DEFAULTS = dict(max_notifications=2, final_reminder_hours=3, repeat_interval_hours=0)
 
 
@@ -49,27 +47,48 @@ def test_state_from_none_is_empty():
 
 
 def test_first_failure_outside_final_window_returns_first():
-    assert decide_autopay_fail_notification(AutopayFailState(), hours_left=40, now_ts=0, **DEFAULTS) == 'first'
+    assert (
+        decide_autopay_fail_notification(
+            AutopayFailState(), hours_left=40, now_ts=0, **DEFAULTS
+        )
+        == "first"
+    )
 
 
 def test_silent_between_first_and_final_when_no_repeat():
     state = AutopayFailState(count=1, last_sent_ts=0, final_sent=False)
-    assert decide_autopay_fail_notification(state, hours_left=20, now_ts=3600, **DEFAULTS) is None
+    assert (
+        decide_autopay_fail_notification(state, hours_left=20, now_ts=3600, **DEFAULTS)
+        is None
+    )
 
 
 def test_final_reminder_inside_window():
     state = AutopayFailState(count=1, last_sent_ts=0, final_sent=False)
-    assert decide_autopay_fail_notification(state, hours_left=2.5, now_ts=99999, **DEFAULTS) == 'final'
+    assert (
+        decide_autopay_fail_notification(
+            state, hours_left=2.5, now_ts=99999, **DEFAULTS
+        )
+        == "final"
+    )
 
 
 def test_max_cap_blocks_after_two():
     state = AutopayFailState(count=2, last_sent_ts=0, final_sent=True)
-    assert decide_autopay_fail_notification(state, hours_left=1, now_ts=99999, **DEFAULTS) is None
+    assert (
+        decide_autopay_fail_notification(state, hours_left=1, now_ts=99999, **DEFAULTS)
+        is None
+    )
 
 
 def test_post_expiry_blocked_when_cap_reached():
     state = AutopayFailState(count=2, last_sent_ts=0, final_sent=True)
-    assert decide_autopay_fail_notification(state, hours_left=-0.5, now_ts=99999, **DEFAULTS) is None
+    assert (
+        decide_autopay_fail_notification(
+            state, hours_left=-0.5, now_ts=99999, **DEFAULTS
+        )
+        is None
+    )
 
 
 def test_max_zero_disables_all():
@@ -88,7 +107,12 @@ def test_max_zero_disables_all():
 
 def test_late_first_failure_inside_window_sends_final_only():
     # First-ever failure happens already inside the final window → single 'final', not 'first'.
-    assert decide_autopay_fail_notification(AutopayFailState(), hours_left=2, now_ts=0, **DEFAULTS) == 'final'
+    assert (
+        decide_autopay_fail_notification(
+            AutopayFailState(), hours_left=2, now_ts=0, **DEFAULTS
+        )
+        == "final"
+    )
 
 
 def test_repeat_interval_sends_after_elapsed():
@@ -102,7 +126,7 @@ def test_repeat_interval_sends_after_elapsed():
             final_reminder_hours=3,
             repeat_interval_hours=6,
         )
-        == 'repeat'
+        == "repeat"
     )
 
 
@@ -137,18 +161,25 @@ def test_full_cycle_default_yields_exactly_two_then_silence():
         (-0.5, 145800),
     ]
     for hours_left, now_ts in ticks:
-        reason = decide_autopay_fail_notification(state, hours_left=hours_left, now_ts=now_ts, **DEFAULTS)
+        reason = decide_autopay_fail_notification(
+            state, hours_left=hours_left, now_ts=now_ts, **DEFAULTS
+        )
         if reason is not None:
             sent.append(reason)
             apply_autopay_fail_notification(state, reason, now_ts)
-    assert sent == ['first', 'final']
+    assert sent == ["first", "final"]
     assert state.count == 2
 
 
 def test_fresh_cycle_allows_notifications_again():
     """A renewal advances end_date → caller loads a FRESH state for the new cycle_token."""
     fresh = AutopayFailState()
-    assert decide_autopay_fail_notification(fresh, hours_left=40, now_ts=200000, **DEFAULTS) == 'first'
+    assert (
+        decide_autopay_fail_notification(
+            fresh, hours_left=40, now_ts=200000, **DEFAULTS
+        )
+        == "first"
+    )
 
 
 async def test_load_save_state_in_memory_roundtrip(monkeypatch):
@@ -157,13 +188,13 @@ async def test_load_save_state_in_memory_roundtrip(monkeypatch):
     from app.services import monitoring_service as ms
 
     svc = ms.MonitoringService(bot=None)
-    monkeypatch.setattr(ms.cache, 'get', AsyncMock(return_value=None))
-    monkeypatch.setattr(ms.cache, 'set', AsyncMock(return_value=True))
+    monkeypatch.setattr(ms.cache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(ms.cache, "set", AsyncMock(return_value=True))
 
     loaded = await svc._load_autopay_fail_state(subscription_id=7, cycle_token=111)
     assert loaded.count == 0
 
-    apply_autopay_fail_notification(loaded, 'first', now_ts=10.0)
+    apply_autopay_fail_notification(loaded, "first", now_ts=10.0)
     await svc._save_autopay_fail_state(7, 111, loaded, ttl_seconds=3600)
 
     again = await svc._load_autopay_fail_state(7, 111)
@@ -195,15 +226,17 @@ async def test_maybe_notify_sends_first_then_silent(monkeypatch):
     silent on an immediate second tick (no repeat configured)."""
     from app.services import monitoring_service as ms
 
-    svc = ms.MonitoringService(bot=object())  # truthy bot so the telegram branch is taken
+    svc = ms.MonitoringService(
+        bot=object()
+    )  # truthy bot so the telegram branch is taken
     sent: list[bool] = []
 
     async def fake_send(user, balance, required, *, subscription=None, is_final=False):
         sent.append(is_final)
 
-    monkeypatch.setattr(svc, '_send_autopay_failed_notification', fake_send)
-    monkeypatch.setattr(ms.cache, 'get', AsyncMock(return_value=None))
-    monkeypatch.setattr(ms.cache, 'set', AsyncMock(return_value=True))
+    monkeypatch.setattr(svc, "_send_autopay_failed_notification", fake_send)
+    monkeypatch.setattr(ms.cache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(ms.cache, "set", AsyncMock(return_value=True))
 
     now = datetime.now(UTC)
     user = SimpleNamespace(id=1, telegram_id=555, balance_kopeks=0)
@@ -227,13 +260,15 @@ async def test_maybe_notify_final_when_inside_window(monkeypatch):
     async def fake_send(user, balance, required, *, subscription=None, is_final=False):
         sent.append(is_final)
 
-    monkeypatch.setattr(svc, '_send_autopay_failed_notification', fake_send)
-    monkeypatch.setattr(ms.cache, 'get', AsyncMock(return_value=None))
-    monkeypatch.setattr(ms.cache, 'set', AsyncMock(return_value=True))
+    monkeypatch.setattr(svc, "_send_autopay_failed_notification", fake_send)
+    monkeypatch.setattr(ms.cache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(ms.cache, "set", AsyncMock(return_value=True))
 
     now = datetime.now(UTC)
     user = SimpleNamespace(id=1, telegram_id=555, balance_kopeks=0)
-    sub = SimpleNamespace(id=8, end_date=now + timedelta(hours=2))  # inside default 3h window
+    sub = SimpleNamespace(
+        id=8, end_date=now + timedelta(hours=2)
+    )  # inside default 3h window
 
     await svc._maybe_notify_autopay_failure(user, 50000, sub, now)
     assert sent == [True]
@@ -254,49 +289,65 @@ def test_final_not_starved_by_repeats_when_cap_reached():
     # (hours_left, now_ts): far failure → first; +6h still far → repeat (count hits cap=2);
     # then inside the 3h window → final must still fire despite count >= max.
     for hours_left, now_ts in [(40, 0), (34, 7 * 3600), (2, 200000)]:
-        reason = decide_autopay_fail_notification(state, hours_left=hours_left, now_ts=now_ts, **cfg)
+        reason = decide_autopay_fail_notification(
+            state, hours_left=hours_left, now_ts=now_ts, **cfg
+        )
         if reason is not None:
             sent.append(reason)
             apply_autopay_fail_notification(state, reason, now_ts)
-    assert sent == ['first', 'repeat', 'final']
+    assert sent == ["first", "repeat", "final"]
     assert state.final_sent is True
 
 
 def test_final_fires_even_if_interval_steps_past_window():
     """If the monitoring tick jumps over the final window (4h → expired), the still-unsent
-    final reminder must go out on the post-expiry tick (no lower 0-bound on hours_left)."""
+    final reminder must go out on the post-expiry tick (no lower 0-bound on hours_left).
+    """
     state = AutopayFailState()
     sent = []
     for hours_left, now_ts in [(4, 0), (-0.5, 200000)]:
-        reason = decide_autopay_fail_notification(state, hours_left=hours_left, now_ts=now_ts, **DEFAULTS)
+        reason = decide_autopay_fail_notification(
+            state, hours_left=hours_left, now_ts=now_ts, **DEFAULTS
+        )
         if reason is not None:
             sent.append(reason)
             apply_autopay_fail_notification(state, reason, now_ts)
-    assert sent == ['first', 'final']
+    assert sent == ["first", "final"]
 
 
 def test_max_one_still_delivers_final():
     """Even with max=1 the final is guaranteed (cap bounds repeats, not the final)."""
     cfg = dict(max_notifications=1, final_reminder_hours=3, repeat_interval_hours=0)
     state = AutopayFailState()
-    assert decide_autopay_fail_notification(state, hours_left=40, now_ts=0, **cfg) == 'first'
-    apply_autopay_fail_notification(state, 'first', 0)
-    assert decide_autopay_fail_notification(state, hours_left=2, now_ts=200000, **cfg) == 'final'
+    assert (
+        decide_autopay_fail_notification(state, hours_left=40, now_ts=0, **cfg)
+        == "first"
+    )
+    apply_autopay_fail_notification(state, "first", 0)
+    assert (
+        decide_autopay_fail_notification(state, hours_left=2, now_ts=200000, **cfg)
+        == "final"
+    )
 
 
 async def test_load_reads_redis_on_inmemory_miss(monkeypatch):
     """Cross-restart durability: on an in-memory miss, _load must consult Redis and
-    reconstruct the state from the stored JSON dict (this branch is otherwise uncovered)."""
+    reconstruct the state from the stored JSON dict (this branch is otherwise uncovered).
+    """
     from app.services import monitoring_service as ms
 
     svc = ms.MonitoringService(bot=None)  # empty in-memory state
-    get_mock = AsyncMock(return_value={'count': 1, 'last_sent_ts': 5.0, 'final_sent': True})
-    monkeypatch.setattr(ms.cache, 'get', get_mock)
+    get_mock = AsyncMock(
+        return_value={"count": 1, "last_sent_ts": 5.0, "final_sent": True}
+    )
+    monkeypatch.setattr(ms.cache, "get", get_mock)
 
     loaded = await svc._load_autopay_fail_state(subscription_id=7, cycle_token=111)
 
-    assert loaded.count == 1 and loaded.final_sent is True and loaded.last_sent_ts == 5.0
-    get_mock.assert_awaited_once_with('autopay_fail:7:111')
+    assert (
+        loaded.count == 1 and loaded.final_sent is True and loaded.last_sent_ts == 5.0
+    )
+    get_mock.assert_awaited_once_with("autopay_fail:7:111")
 
 
 async def test_save_persists_with_ttl_floor(monkeypatch):
@@ -306,14 +357,16 @@ async def test_save_persists_with_ttl_floor(monkeypatch):
 
     svc = ms.MonitoringService(bot=None)
     set_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(ms.cache, 'set', set_mock)
+    monkeypatch.setattr(ms.cache, "set", set_mock)
 
-    await svc._save_autopay_fail_state(7, 111, AutopayFailState(count=1, last_sent_ts=5.0), ttl_seconds=10)
+    await svc._save_autopay_fail_state(
+        7, 111, AutopayFailState(count=1, last_sent_ts=5.0), ttl_seconds=10
+    )
 
     args, kwargs = set_mock.await_args
-    assert args[0] == 'autopay_fail:7:111'
-    assert args[1] == {'count': 1, 'last_sent_ts': 5.0, 'final_sent': False}
-    assert kwargs['expire'] == 60  # floored up from 10
+    assert args[0] == "autopay_fail:7:111"
+    assert args[1] == {"count": 1, "last_sent_ts": 5.0, "final_sent": False}
+    assert kwargs["expire"] == 60  # floored up from 10
 
 
 async def test_email_only_path_uses_cause_specific_reason(monkeypatch):
@@ -327,21 +380,31 @@ async def test_email_only_path_uses_cause_specific_reason(monkeypatch):
     async def fake_notify(*, user, reason):
         reasons.append(reason)
 
-    monkeypatch.setattr(ms.notification_delivery_service, 'notify_autopay_failed', fake_notify)
-    monkeypatch.setattr(ms.cache, 'get', AsyncMock(return_value=None))
-    monkeypatch.setattr(ms.cache, 'set', AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        ms.notification_delivery_service, "notify_autopay_failed", fake_notify
+    )
+    monkeypatch.setattr(ms.cache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(ms.cache, "set", AsyncMock(return_value=True))
 
     now = datetime.now(UTC)
     user = SimpleNamespace(id=1, telegram_id=None, balance_kopeks=0)
 
     await svc._maybe_notify_autopay_failure(
-        user, 50000, SimpleNamespace(id=7, end_date=now + timedelta(hours=40)), now, cause='charge_error'
+        user,
+        50000,
+        SimpleNamespace(id=7, end_date=now + timedelta(hours=40)),
+        now,
+        cause="charge_error",
     )
     await svc._maybe_notify_autopay_failure(
-        user, 50000, SimpleNamespace(id=8, end_date=now + timedelta(hours=40)), now, cause='insufficient_balance'
+        user,
+        50000,
+        SimpleNamespace(id=8, end_date=now + timedelta(hours=40)),
+        now,
+        cause="insufficient_balance",
     )
 
-    assert reasons == ['Ошибка списания средств', 'Недостаточно средств на балансе']
+    assert reasons == ["Ошибка списания средств", "Недостаточно средств на балансе"]
 
 
 async def test_email_only_final_reminder_reason(monkeypatch):
@@ -354,9 +417,11 @@ async def test_email_only_final_reminder_reason(monkeypatch):
     async def fake_notify(*, user, reason):
         reasons.append(reason)
 
-    monkeypatch.setattr(ms.notification_delivery_service, 'notify_autopay_failed', fake_notify)
-    monkeypatch.setattr(ms.cache, 'get', AsyncMock(return_value=None))
-    monkeypatch.setattr(ms.cache, 'set', AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        ms.notification_delivery_service, "notify_autopay_failed", fake_notify
+    )
+    monkeypatch.setattr(ms.cache, "get", AsyncMock(return_value=None))
+    monkeypatch.setattr(ms.cache, "set", AsyncMock(return_value=True))
 
     now = datetime.now(UTC)
     user = SimpleNamespace(id=1, telegram_id=None, balance_kopeks=0)
@@ -366,5 +431,5 @@ async def test_email_only_final_reminder_reason(monkeypatch):
     # Same cycle (end_date unchanged) but the tick now lands inside the 3h window → 'final'.
     await svc._maybe_notify_autopay_failure(user, 50000, sub, now + timedelta(hours=38))
 
-    assert reasons[0] == 'Недостаточно средств на балансе'
-    assert reasons[1].startswith('Последнее напоминание')
+    assert reasons[0] == "Недостаточно средств на балансе"
+    assert reasons[1].startswith("Последнее напоминание")

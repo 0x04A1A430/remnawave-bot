@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class PinnedMessageMedia(BaseModel):
-    type: str = Field(pattern=r'^(photo|video)$')
+    type: str = Field(pattern=r"^(photo|video)$")
     file_id: str = Field(..., min_length=1, max_length=255)
 
 

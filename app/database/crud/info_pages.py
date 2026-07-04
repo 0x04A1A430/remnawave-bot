@@ -10,29 +10,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import InfoPage
 
-
 logger = structlog.get_logger(__name__)
 
 # Fields that can be set via update_info_page
 _ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
     {
-        'slug',
-        'title',
-        'content',
-        'page_type',
-        'is_active',
-        'sort_order',
-        'icon',
-        'replaces_tab',
-        'display_mode',
+        "slug",
+        "title",
+        "content",
+        "page_type",
+        "is_active",
+        "sort_order",
+        "icon",
+        "replaces_tab",
+        "display_mode",
     }
 )
 
 # Fields that can be explicitly set to None
 _NULLABLE_UPDATE_FIELDS: frozenset[str] = frozenset(
     {
-        'icon',
-        'replaces_tab',
+        "icon",
+        "replaces_tab",
     }
 )
 
@@ -43,12 +42,12 @@ async def create_info_page(
     slug: str,
     title: dict[str, str],
     content: dict[str, str],
-    page_type: str = 'page',
+    page_type: str = "page",
     is_active: bool = True,
     sort_order: int = 0,
     icon: str | None = None,
     replaces_tab: str | None = None,
-    display_mode: str = 'both',
+    display_mode: str = "both",
 ) -> InfoPage:
     """Create a new info page.
 
@@ -75,7 +74,7 @@ async def create_info_page(
         raise
     await db.refresh(page)
 
-    logger.info('Created info page', page_id=page.id, slug=page.slug)
+    logger.info("Created info page", page_id=page.id, slug=page.slug)
     return page
 
 
@@ -104,8 +103,8 @@ async def get_all_info_pages(
         stmt = stmt.where(InfoPage.is_active.is_(True))
     if page_type is not None:
         stmt = stmt.where(InfoPage.page_type == page_type)
-    if visible_in in ('bot', 'web'):
-        stmt = stmt.where(InfoPage.display_mode.in_((visible_in, 'both')))
+    if visible_in in ("bot", "web"):
+        stmt = stmt.where(InfoPage.display_mode.in_((visible_in, "both")))
 
     stmt = stmt.order_by(InfoPage.sort_order.asc(), InfoPage.id.asc())
     result = await db.execute(stmt)
@@ -133,9 +132,11 @@ async def update_info_page(
     if not update_data:
         return await get_info_page_by_id(db, page_id)
 
-    update_data['updated_at'] = datetime.now(UTC)
+    update_data["updated_at"] = datetime.now(UTC)
 
-    await db.execute(update(InfoPage).where(InfoPage.id == page_id).values(**update_data))
+    await db.execute(
+        update(InfoPage).where(InfoPage.id == page_id).values(**update_data)
+    )
     try:
         await db.commit()
     except IntegrityError:
@@ -145,7 +146,7 @@ async def update_info_page(
     page = await get_info_page_by_id(db, page_id)
     if page:
         logger.info(
-            'Updated info page',
+            "Updated info page",
             page_id=page_id,
             updated_fields=list(update_data.keys()),
         )
@@ -157,27 +158,29 @@ async def delete_info_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(InfoPage).where(InfoPage.id == page_id))
     await db.commit()
 
-    logger.info('Deleted info page', page_id=page_id)
+    logger.info("Deleted info page", page_id=page_id)
 
 
-async def get_tab_replacements(db: AsyncSession, *, visible_in: str | None = None) -> dict[str, str | None]:
+async def get_tab_replacements(
+    db: AsyncSession, *, visible_in: str | None = None
+) -> dict[str, str | None]:
     """Return a mapping of tab name to info page slug for active pages with replaces_tab set.
 
     Returns dict like ``{'faq': 'my-custom-faq', 'rules': None, 'privacy': None, 'offer': None}``.
     """
     result_map: dict[str, str | None] = {
-        'faq': None,
-        'rules': None,
-        'privacy': None,
-        'offer': None,
+        "faq": None,
+        "rules": None,
+        "privacy": None,
+        "offer": None,
     }
 
     stmt = select(InfoPage).where(
         InfoPage.is_active.is_(True),
         InfoPage.replaces_tab.isnot(None),
     )
-    if visible_in in ('bot', 'web'):
-        stmt = stmt.where(InfoPage.display_mode.in_((visible_in, 'both')))
+    if visible_in in ("bot", "web"):
+        stmt = stmt.where(InfoPage.display_mode.in_((visible_in, "both")))
     result = await db.execute(stmt)
     for page in result.scalars().all():
         if page.replaces_tab in result_map:
@@ -186,7 +189,9 @@ async def get_tab_replacements(db: AsyncSession, *, visible_in: str | None = Non
     return result_map
 
 
-async def clear_replaces_tab(db: AsyncSession, tab: str, *, exclude_page_id: int | None = None) -> None:
+async def clear_replaces_tab(
+    db: AsyncSession, tab: str, *, exclude_page_id: int | None = None
+) -> None:
     """Clear replaces_tab for all pages that currently replace the given tab.
 
     Optionally exclude a specific page (the one being saved).
@@ -210,13 +215,17 @@ async def reorder_info_pages(db: AsyncSession, items: list[dict]) -> None:
     Each item must have ``id`` and ``sort_order`` attributes.
     """
     for item in items:
-        page_id = item.id if hasattr(item, 'id') else item.get('id')
-        sort_order = item.sort_order if hasattr(item, 'sort_order') else item.get('sort_order')
+        page_id = item.id if hasattr(item, "id") else item.get("id")
+        sort_order = (
+            item.sort_order if hasattr(item, "sort_order") else item.get("sort_order")
+        )
         if page_id is None or sort_order is None:
             continue
         await db.execute(
-            update(InfoPage).where(InfoPage.id == page_id).values(sort_order=sort_order, updated_at=datetime.now(UTC))
+            update(InfoPage)
+            .where(InfoPage.id == page_id)
+            .values(sort_order=sort_order, updated_at=datetime.now(UTC))
         )
 
     await db.commit()
-    logger.info('Reordered info pages', count=len(items))
+    logger.info("Reordered info pages", count=len(items))

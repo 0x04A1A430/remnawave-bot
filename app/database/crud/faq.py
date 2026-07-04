@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import FaqPage, FaqSetting
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -33,15 +32,17 @@ async def set_faq_enabled(db: AsyncSession, language: str, enabled: bool) -> Faq
     await db.refresh(setting)
 
     logger.info(
-        'Статус FAQ для языка %s обновлен: %s',
+        "Статус FAQ для языка %s обновлен: %s",
         language,
-        'enabled' if setting.is_enabled else 'disabled',
+        "enabled" if setting.is_enabled else "disabled",
     )
 
     return setting
 
 
-async def upsert_faq_setting(db: AsyncSession, language: str, enabled: bool) -> FaqSetting:
+async def upsert_faq_setting(
+    db: AsyncSession, language: str, enabled: bool
+) -> FaqSetting:
     return await set_faq_enabled(db, language, enabled)
 
 
@@ -78,7 +79,9 @@ async def create_faq_page(
     is_active: bool = True,
 ) -> FaqPage:
     if display_order is None:
-        result = await db.execute(select(func.max(FaqPage.display_order)).where(FaqPage.language == language))
+        result = await db.execute(
+            select(func.max(FaqPage.display_order)).where(FaqPage.language == language)
+        )
         max_order = result.scalar() or 0
         display_order = max_order + 1
 
@@ -94,7 +97,7 @@ async def create_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info('Создана страница FAQ для языка', page_id=page.id, language=language)
+    logger.info("Создана страница FAQ для языка", page_id=page.id, language=language)
 
     return page
 
@@ -122,7 +125,7 @@ async def update_faq_page(
     await db.commit()
     await db.refresh(page)
 
-    logger.info('Страница FAQ обновлена', page_id=page.id)
+    logger.info("Страница FAQ обновлена", page_id=page.id)
 
     return page
 
@@ -130,7 +133,7 @@ async def update_faq_page(
 async def delete_faq_page(db: AsyncSession, page_id: int) -> None:
     await db.execute(delete(FaqPage).where(FaqPage.id == page_id))
     await db.commit()
-    logger.info('Страница FAQ удалена', page_id=page_id)
+    logger.info("Страница FAQ удалена", page_id=page_id)
 
 
 async def bulk_update_order(
@@ -139,6 +142,8 @@ async def bulk_update_order(
 ) -> None:
     for page_id, order in pages:
         await db.execute(
-            update(FaqPage).where(FaqPage.id == page_id).values(display_order=order, updated_at=datetime.now(UTC))
+            update(FaqPage)
+            .where(FaqPage.id == page_id)
+            .values(display_order=order, updated_at=datetime.now(UTC))
         )
     await db.commit()

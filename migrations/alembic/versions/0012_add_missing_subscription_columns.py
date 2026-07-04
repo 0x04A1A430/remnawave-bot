@@ -14,8 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0012'
-down_revision: Union[str, None] = '0011'
+revision: str = "0012"
+down_revision: Union[str, None] = "0011"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,37 +23,46 @@ depends_on: Union[str, Sequence[str], None] = None
 def _has_column(table: str, column: str) -> bool:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    return column in [c['name'] for c in inspector.get_columns(table)]
+    return column in [c["name"] for c in inspector.get_columns(table)]
 
 
 def upgrade() -> None:
-    if not _has_column('subscriptions', 'last_webhook_update_at'):
+    if not _has_column("subscriptions", "last_webhook_update_at"):
         op.add_column(
-            'subscriptions',
-            sa.Column('last_webhook_update_at', sa.DateTime(timezone=True), nullable=True),
+            "subscriptions",
+            sa.Column(
+                "last_webhook_update_at", sa.DateTime(timezone=True), nullable=True
+            ),
         )
 
-    if not _has_column('subscriptions', 'is_daily_paused'):
+    if not _has_column("subscriptions", "is_daily_paused"):
         op.add_column(
-            'subscriptions',
-            sa.Column('is_daily_paused', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+            "subscriptions",
+            sa.Column(
+                "is_daily_paused",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("false"),
+            ),
         )
 
-    if not _has_column('subscriptions', 'last_daily_charge_at'):
+    if not _has_column("subscriptions", "last_daily_charge_at"):
         op.add_column(
-            'subscriptions',
-            sa.Column('last_daily_charge_at', sa.DateTime(timezone=True), nullable=True),
+            "subscriptions",
+            sa.Column(
+                "last_daily_charge_at", sa.DateTime(timezone=True), nullable=True
+            ),
         )
 
-    if not _has_column('subscriptions', 'remnawave_short_uuid'):
+    if not _has_column("subscriptions", "remnawave_short_uuid"):
         op.add_column(
-            'subscriptions',
-            sa.Column('remnawave_short_uuid', sa.String(255), nullable=True),
+            "subscriptions",
+            sa.Column("remnawave_short_uuid", sa.String(255), nullable=True),
         )
 
 
 def downgrade() -> None:
-    op.drop_column('subscriptions', 'remnawave_short_uuid')
-    op.drop_column('subscriptions', 'last_daily_charge_at')
-    op.drop_column('subscriptions', 'is_daily_paused')
-    op.drop_column('subscriptions', 'last_webhook_update_at')
+    op.drop_column("subscriptions", "remnawave_short_uuid")
+    op.drop_column("subscriptions", "last_daily_charge_at")
+    op.drop_column("subscriptions", "is_daily_paused")
+    op.drop_column("subscriptions", "last_webhook_update_at")

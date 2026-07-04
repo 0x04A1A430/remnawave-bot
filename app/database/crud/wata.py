@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import WataPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -53,7 +52,7 @@ async def create_wata_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Wata платеж',
+        "Создан Wata платеж",
         payment_id=payment.id,
         user_id=user_id,
         amount_kopeks=amount_kopeks,
@@ -71,7 +70,9 @@ async def get_wata_payment_by_id(
     return result.scalar_one_or_none()
 
 
-async def get_wata_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> WataPayment | None:
+async def get_wata_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> WataPayment | None:
     result = await db.execute(
         select(WataPayment)
         .where(WataPayment.id == payment_id)
@@ -85,7 +86,9 @@ async def get_wata_payment_by_link_id(
     db: AsyncSession,
     payment_link_id: str,
 ) -> WataPayment | None:
-    result = await db.execute(select(WataPayment).where(WataPayment.payment_link_id == payment_link_id))
+    result = await db.execute(
+        select(WataPayment).where(WataPayment.payment_link_id == payment_link_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -93,7 +96,9 @@ async def get_wata_payment_by_order_id(
     db: AsyncSession,
     order_id: str,
 ) -> WataPayment | None:
-    result = await db.execute(select(WataPayment).where(WataPayment.order_id == order_id))
+    result = await db.execute(
+        select(WataPayment).where(WataPayment.order_id == order_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -113,32 +118,34 @@ async def update_wata_payment_status(
     update_values: dict[str, Any] = {}
 
     if status is not None:
-        update_values['status'] = status
+        update_values["status"] = status
     if is_paid is not None:
-        update_values['is_paid'] = is_paid
+        update_values["is_paid"] = is_paid
     if paid_at is not None:
-        update_values['paid_at'] = paid_at
+        update_values["paid_at"] = paid_at
     if last_status is not None:
-        update_values['last_status'] = last_status
+        update_values["last_status"] = last_status
     if url is not None:
-        update_values['url'] = url
+        update_values["url"] = url
     if metadata is not None:
-        update_values['metadata_json'] = metadata
+        update_values["metadata_json"] = metadata
     if callback_payload is not None:
-        update_values['callback_payload'] = callback_payload
+        update_values["callback_payload"] = callback_payload
     if terminal_public_id is not None:
-        update_values['terminal_public_id'] = terminal_public_id
+        update_values["terminal_public_id"] = terminal_public_id
 
     if not update_values:
         return payment
 
-    await db.execute(update(WataPayment).where(WataPayment.id == payment.id).values(**update_values))
+    await db.execute(
+        update(WataPayment).where(WataPayment.id == payment.id).values(**update_values)
+    )
 
     await db.commit()
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Wata платеж',
+        "Обновлен Wata платеж",
         payment_link_id=payment.payment_link_id,
         payment_status=payment.status,
         is_paid=payment.is_paid,
@@ -152,12 +159,18 @@ async def link_wata_payment_to_transaction(
     payment: WataPayment,
     transaction_id: int,
 ) -> WataPayment:
-    await db.execute(update(WataPayment).where(WataPayment.id == payment.id).values(transaction_id=transaction_id))
+    await db.execute(
+        update(WataPayment)
+        .where(WataPayment.id == payment.id)
+        .values(transaction_id=transaction_id)
+    )
     await db.flush()
     await db.refresh(payment)
 
     logger.info(
-        'Wata платеж привязан к транзакции', payment_link_id=payment.payment_link_id, transaction_id=transaction_id
+        "Wata платеж привязан к транзакции",
+        payment_link_id=payment.payment_link_id,
+        transaction_id=transaction_id,
     )
 
     return payment

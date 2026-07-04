@@ -4,27 +4,39 @@ from unittest.mock import AsyncMock, Mock
 from app.database.crud.subscription import create_trial_subscription
 
 
-async def test_create_trial_subscription_uses_all_available_squads_by_default(monkeypatch):
+async def test_create_trial_subscription_uses_all_available_squads_by_default(
+    monkeypatch,
+):
     db = Mock()
     db.add = Mock()
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    monkeypatch.setattr('app.database.crud.subscription.get_subscription_by_user_id', AsyncMock(return_value=None))
-    monkeypatch.setattr('app.database.crud.subscription.generate_unique_short_id', AsyncMock(return_value='abc123'))
     monkeypatch.setattr(
-        'app.database.crud.server_squad.get_available_server_squads',
+        "app.database.crud.subscription.get_subscription_by_user_id",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "app.database.crud.subscription.generate_unique_short_id",
+        AsyncMock(return_value="abc123"),
+    )
+    monkeypatch.setattr(
+        "app.database.crud.server_squad.get_available_server_squads",
         AsyncMock(
             return_value=[
-                SimpleNamespace(squad_uuid='fi-uuid'),
-                SimpleNamespace(squad_uuid='ru-uuid'),
+                SimpleNamespace(squad_uuid="fi-uuid"),
+                SimpleNamespace(squad_uuid="ru-uuid"),
             ]
         ),
     )
     get_server_ids_mock = AsyncMock(return_value=[11, 12])
     add_user_to_servers_mock = AsyncMock()
-    monkeypatch.setattr('app.database.crud.server_squad.get_server_ids_by_uuids', get_server_ids_mock)
-    monkeypatch.setattr('app.database.crud.server_squad.add_user_to_servers', add_user_to_servers_mock)
+    monkeypatch.setattr(
+        "app.database.crud.server_squad.get_server_ids_by_uuids", get_server_ids_mock
+    )
+    monkeypatch.setattr(
+        "app.database.crud.server_squad.add_user_to_servers", add_user_to_servers_mock
+    )
 
     subscription = await create_trial_subscription(
         db,
@@ -34,11 +46,11 @@ async def test_create_trial_subscription_uses_all_available_squads_by_default(mo
         device_limit=5,
     )
 
-    assert subscription.connected_squads == ['fi-uuid', 'ru-uuid']
+    assert subscription.connected_squads == ["fi-uuid", "ru-uuid"]
     db.add.assert_called_once_with(subscription)
     db.commit.assert_awaited_once()
     db.refresh.assert_awaited_once_with(subscription)
-    get_server_ids_mock.assert_awaited_once_with(db, ['fi-uuid', 'ru-uuid'])
+    get_server_ids_mock.assert_awaited_once_with(db, ["fi-uuid", "ru-uuid"])
     add_user_to_servers_mock.assert_awaited_once_with(db, [11, 12])
 
 
@@ -51,14 +63,24 @@ async def test_extend_subscription_convert_trial_false_keeps_trial(monkeypatch):
 
     from app.database.crud.subscription import extend_subscription
 
-    monkeypatch.setattr('app.database.crud.subscription._lock_subscription_row', AsyncMock())
-    monkeypatch.setattr('app.database.crud.subscription._housekeep_expired_purchases', AsyncMock())
-    monkeypatch.setattr('app.database.crud.subscription.clear_notifications', AsyncMock())
     monkeypatch.setattr(
-        'app.database.crud.tariff.get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(is_daily=False))
+        "app.database.crud.subscription._lock_subscription_row", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "app.database.crud.subscription._housekeep_expired_purchases", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "app.database.crud.subscription.clear_notifications", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "app.database.crud.tariff.get_tariff_by_id",
+        AsyncMock(return_value=SimpleNamespace(is_daily=False)),
     )
     deactivate_mock = AsyncMock(return_value=[])
-    monkeypatch.setattr('app.database.crud.subscription.deactivate_user_trial_subscriptions', deactivate_mock)
+    monkeypatch.setattr(
+        "app.database.crud.subscription.deactivate_user_trial_subscriptions",
+        deactivate_mock,
+    )
 
     db = AsyncMock()
     db.flush = AsyncMock()
@@ -67,7 +89,7 @@ async def test_extend_subscription_convert_trial_false_keeps_trial(monkeypatch):
     sub = SimpleNamespace(
         id=1,
         user_id=7,
-        status='trial',
+        status="trial",
         is_trial=True,
         start_date=now,
         end_date=now + timedelta(days=1),
@@ -80,7 +102,9 @@ async def test_extend_subscription_convert_trial_false_keeps_trial(monkeypatch):
         updated_at=now,
     )
 
-    result = await extend_subscription(db, sub, 14, tariff_id=2, convert_trial=False, commit=False)
+    result = await extend_subscription(
+        db, sub, 14, tariff_id=2, convert_trial=False, commit=False
+    )
 
     assert result.is_trial is True  # NOT converted on a free relabel
     assert result.tariff_id == 2  # the relabel still applied
@@ -93,14 +117,22 @@ async def test_extend_subscription_default_converts_trial_on_purchase(monkeypatc
 
     from app.database.crud.subscription import extend_subscription
 
-    monkeypatch.setattr('app.database.crud.subscription._lock_subscription_row', AsyncMock())
-    monkeypatch.setattr('app.database.crud.subscription._housekeep_expired_purchases', AsyncMock())
-    monkeypatch.setattr('app.database.crud.subscription.clear_notifications', AsyncMock())
     monkeypatch.setattr(
-        'app.database.crud.tariff.get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(is_daily=False))
+        "app.database.crud.subscription._lock_subscription_row", AsyncMock()
     )
     monkeypatch.setattr(
-        'app.database.crud.subscription.deactivate_user_trial_subscriptions', AsyncMock(return_value=[])
+        "app.database.crud.subscription._housekeep_expired_purchases", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "app.database.crud.subscription.clear_notifications", AsyncMock()
+    )
+    monkeypatch.setattr(
+        "app.database.crud.tariff.get_tariff_by_id",
+        AsyncMock(return_value=SimpleNamespace(is_daily=False)),
+    )
+    monkeypatch.setattr(
+        "app.database.crud.subscription.deactivate_user_trial_subscriptions",
+        AsyncMock(return_value=[]),
     )
 
     db = AsyncMock()
@@ -110,7 +142,7 @@ async def test_extend_subscription_default_converts_trial_on_purchase(monkeypatc
     sub = SimpleNamespace(
         id=1,
         user_id=7,
-        status='trial',
+        status="trial",
         is_trial=True,
         start_date=now,
         end_date=now + timedelta(days=1),
@@ -164,13 +196,17 @@ def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=Non
     async def fake_get_api_client():
         yield fake_api
 
-    fake_service = SimpleNamespace(is_configured=is_configured, get_api_client=fake_get_api_client)
-    monkeypatch.setattr('app.services.subscription_service.SubscriptionService', lambda: fake_service)
+    fake_service = SimpleNamespace(
+        is_configured=is_configured, get_api_client=fake_get_api_client
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_service.SubscriptionService", lambda: fake_service
+    )
 
     fake_settings = MagicMock()
     fake_settings.is_multi_tariff_enabled.return_value = False  # single-tariff
-    monkeypatch.setattr(crud, 'settings', fake_settings)
-    monkeypatch.setattr(crud, 'decrement_subscription_server_counts', AsyncMock())
+    monkeypatch.setattr(crud, "settings", fake_settings)
+    monkeypatch.setattr(crud, "decrement_subscription_server_counts", AsyncMock())
 
     return crud, db, fake_api
 
@@ -178,22 +214,25 @@ def _patch_reset_env(monkeypatch, *, subs, is_configured, delete_side_effect=Non
 async def test_reset_trials_deletes_panel_first_and_skips_panel_failures(monkeypatch):
     """#630055-trial: панель удаляется ПЕРВОЙ; если удалить в панели не удалось —
     строку в БД не трогаем (иначе orphan + воскрешение синком)."""
-    subs = [_trial_sub(1, 11, 'uuid-ok'), _trial_sub(2, 22, 'uuid-fail')]
+    subs = [_trial_sub(1, 11, "uuid-ok"), _trial_sub(2, 22, "uuid-fail")]
 
     def delete_side_effect(uuid):
-        if uuid == 'uuid-fail':
-            raise RuntimeError('panel 500')
+        if uuid == "uuid-fail":
+            raise RuntimeError("panel 500")
         return True
 
     crud, db, fake_api = _patch_reset_env(
-        monkeypatch, subs=subs, is_configured=True, delete_side_effect=delete_side_effect
+        monkeypatch,
+        subs=subs,
+        is_configured=True,
+        delete_side_effect=delete_side_effect,
     )
 
     count = await crud.reset_trials_for_users_without_paid_subscription(db)
 
     # Панель дёрнули для обоих.
     called = {c.args[0] for c in fake_api.delete_user.await_args_list}
-    assert called == {'uuid-ok', 'uuid-fail'}
+    assert called == {"uuid-ok", "uuid-fail"}
     # Сбросили только того, у кого панель реально удалилась.
     assert count == 1
     db.commit.assert_awaited()
@@ -201,7 +240,7 @@ async def test_reset_trials_deletes_panel_first_and_skips_panel_failures(monkeyp
 
 async def test_reset_trials_panel_not_configured_db_only(monkeypatch):
     """Панель не настроена → orphan'ить нечего, чистим только БД, без вызовов панели."""
-    subs = [_trial_sub(1, 11, 'uuid-a'), _trial_sub(2, 22, 'uuid-b')]
+    subs = [_trial_sub(1, 11, "uuid-a"), _trial_sub(2, 22, "uuid-b")]
     crud, db, fake_api = _patch_reset_env(monkeypatch, subs=subs, is_configured=False)
 
     count = await crud.reset_trials_for_users_without_paid_subscription(db)

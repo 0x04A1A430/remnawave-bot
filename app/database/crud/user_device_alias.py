@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import UserDeviceAlias
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -26,16 +25,18 @@ ALIAS_MAX_LENGTH: int = 64
 def normalize_alias(value: str | None) -> str:
     """Strip + collapse whitespace + cap length. Returns '' for empty/None input."""
     if value is None:
-        return ''
+        return ""
     # Collapse all whitespace runs to a single space — pasted line breaks etc.
-    collapsed = ' '.join(value.split())
+    collapsed = " ".join(value.split())
     return collapsed[:ALIAS_MAX_LENGTH]
 
 
 async def get_aliases_for_user(db: AsyncSession, user_id: int) -> dict[str, str]:
     """Return all device aliases for a user as a {hwid: alias} dict."""
     result = await db.execute(
-        select(UserDeviceAlias.hwid, UserDeviceAlias.alias).where(UserDeviceAlias.user_id == user_id)
+        select(UserDeviceAlias.hwid, UserDeviceAlias.alias).where(
+            UserDeviceAlias.user_id == user_id
+        )
     )
     return {row.hwid: row.alias for row in result.all()}
 
@@ -75,9 +76,11 @@ async def set_alias(
     """
     normalized = normalize_alias(alias)
     if not normalized:
-        raise ValueError('set_alias requires a non-empty alias — use delete_alias() to clear')
+        raise ValueError(
+            "set_alias requires a non-empty alias — use delete_alias() to clear"
+        )
     if not hwid:
-        raise ValueError('hwid is required')
+        raise ValueError("hwid is required")
 
     # NB: column-level `onupdate=func.now()` is ORM-only and does NOT fire on
     # Core pg_insert.on_conflict_do_update's set_={}. Touch updated_at
@@ -86,14 +89,19 @@ async def set_alias(
         pg_insert(UserDeviceAlias)
         .values(user_id=user_id, hwid=hwid, alias=normalized)
         .on_conflict_do_update(
-            index_elements=['user_id', 'hwid'],
-            set_={'alias': normalized, 'updated_at': func.now()},
+            index_elements=["user_id", "hwid"],
+            set_={"alias": normalized, "updated_at": func.now()},
         )
     )
     await db.execute(stmt)
     if commit:
         await db.commit()
-    logger.info('Device alias upserted', user_id=user_id, hwid_prefix=hwid[:8], alias_length=len(normalized))
+    logger.info(
+        "Device alias upserted",
+        user_id=user_id,
+        hwid_prefix=hwid[:8],
+        alias_length=len(normalized),
+    )
     return normalized
 
 
@@ -116,7 +124,7 @@ async def upsert_alias(
     normalized = normalize_alias(alias)
     if not normalized:
         await delete_alias(db, user_id, hwid, commit=commit)
-        return ''
+        return ""
     return await set_alias(db, user_id, hwid, normalized, commit=commit)
 
 
@@ -150,7 +158,9 @@ async def delete_alias(
     return deleted
 
 
-def attach_aliases_to_devices(devices: list[dict], aliases: dict[str, str]) -> list[dict]:
+def attach_aliases_to_devices(
+    devices: list[dict], aliases: dict[str, str]
+) -> list[dict]:
     """Mutate-and-return: enrich each device dict with a `local_name` field.
 
     Contract: mutates the input list in place AND returns it. Callers can
@@ -165,6 +175,6 @@ def attach_aliases_to_devices(devices: list[dict], aliases: dict[str, str]) -> l
     never renders a blank label.
     """
     for device in devices:
-        hwid = device.get('hwid') or ''
-        device['local_name'] = aliases.get(hwid) or None
+        hwid = device.get("hwid") or ""
+        device["local_name"] = aliases.get(hwid) or None
     return devices

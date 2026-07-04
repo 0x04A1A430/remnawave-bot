@@ -12,7 +12,6 @@ from app.database.crud import web_api_token as crud
 from app.database.models import WebApiToken
 from app.utils.security import generate_api_token, hash_api_token
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -20,31 +19,37 @@ async def ensure_default_web_api_token() -> bool:
     """Ensure the bootstrap web API token from config exists in the DB."""
     from app.database.database import AsyncSessionLocal
 
-    default_token = (settings.WEB_API_DEFAULT_TOKEN or '').strip()
+    default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
     if not default_token:
         return True
 
-    token_name = (settings.WEB_API_DEFAULT_TOKEN_NAME or 'Bootstrap Token').strip()
+    token_name = (settings.WEB_API_DEFAULT_TOKEN_NAME or "Bootstrap Token").strip()
 
     try:
         async with AsyncSessionLocal() as session:
             algorithm = settings.WEB_API_TOKEN_HASH_ALGORITHM
             hmac_secret = settings.WEB_API_TOKEN_HMAC_SECRET
-            token_hash = hash_api_token(default_token, algorithm, hmac_secret=hmac_secret)
+            token_hash = hash_api_token(
+                default_token, algorithm, hmac_secret=hmac_secret
+            )
 
-            result = await session.execute(select(WebApiToken).where(WebApiToken.token_hash == token_hash))
+            result = await session.execute(
+                select(WebApiToken).where(WebApiToken.token_hash == token_hash)
+            )
             existing = result.scalar_one_or_none()
 
             # Fallback: if HMAC enabled, try plain hash (legacy token) and rehash
             if not existing and hmac_secret:
                 plain_hash = hash_api_token(default_token, algorithm)
-                result = await session.execute(select(WebApiToken).where(WebApiToken.token_hash == plain_hash))
+                result = await session.execute(
+                    select(WebApiToken).where(WebApiToken.token_hash == plain_hash)
+                )
                 existing = result.scalar_one_or_none()
                 if existing:
                     existing.token_hash = token_hash
                     existing.updated_at = datetime.now(UTC)
                     await session.commit()
-                    logger.info('Дефолтный токен перехеширован на HMAC')
+                    logger.info("Дефолтный токен перехеширован на HMAC")
                     return True
 
             if existing:
@@ -64,20 +69,20 @@ async def ensure_default_web_api_token() -> bool:
                 return True
 
             token = WebApiToken(
-                name=token_name or 'Bootstrap Token',
+                name=token_name or "Bootstrap Token",
                 token_hash=token_hash,
                 token_prefix=default_token[:8],
-                description='Автоматически создан при миграции',
-                created_by='migration',
+                description="Автоматически создан при миграции",
+                created_by="migration",
                 is_active=True,
             )
             session.add(token)
             await session.commit()
-            logger.info('Создан дефолтный токен веб-API из конфигурации')
+            logger.info("Создан дефолтный токен веб-API из конфигурации")
             return True
 
     except Exception as error:
-        logger.error('Ошибка создания дефолтного веб-API токена', error=error)
+        logger.error("Ошибка создания дефолтного веб-API токена", error=error)
         return False
 
 
@@ -85,7 +90,7 @@ class WebApiTokenService:
     """Сервис для управления токенами административного веб-API."""
 
     def __init__(self):
-        self.algorithm = settings.WEB_API_TOKEN_HASH_ALGORITHM or 'sha256'
+        self.algorithm = settings.WEB_API_TOKEN_HASH_ALGORITHM or "sha256"
         self.hmac_secret = settings.WEB_API_TOKEN_HMAC_SECRET
 
     def hash_token(self, token: str) -> str:
@@ -95,7 +100,9 @@ class WebApiTokenService:
         """Hash without HMAC (for legacy fallback)."""
         return hash_api_token(token, self.algorithm)  # type: ignore[arg-type]
 
-    async def _load_token_with_fallback(self, db: AsyncSession, value: str) -> WebApiToken | None:
+    async def _load_token_with_fallback(
+        self, db: AsyncSession, value: str
+    ) -> WebApiToken | None:
         """Load token by hash, falling back to plain hash if HMAC is enabled.
 
         When HMAC is newly enabled, existing tokens are stored with plain
@@ -112,7 +119,9 @@ class WebApiTokenService:
                 token.token_hash = token_hash
                 token.updated_at = datetime.now(UTC)
                 await db.flush()
-                logger.info('Токен автоматически перехеширован на HMAC', token_id=token.id)
+                logger.info(
+                    "Токен автоматически перехеширован на HMAC", token_id=token.id
+                )
 
         return token
 
@@ -130,8 +139,10 @@ class WebApiTokenService:
         token = await self._load_token_with_fallback(db, normalized_value)
 
         if not token:
-            default_token = (settings.WEB_API_DEFAULT_TOKEN or '').strip()
-            if default_token and secrets.compare_digest(default_token, normalized_value):
+            default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+            if default_token and secrets.compare_digest(
+                default_token, normalized_value
+            ):
                 await ensure_default_web_api_token()
                 token = await self._load_token_with_fallback(db, default_token)
 

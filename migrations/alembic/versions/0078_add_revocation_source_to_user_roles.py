@@ -20,22 +20,21 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-
-revision: str = '0078'
-down_revision: Union[str, None] = '0077'
+revision: str = "0078"
+down_revision: Union[str, None] = "0077"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-_TABLE = 'user_roles'
-_COLUMN = 'revocation_source'
+_TABLE = "user_roles"
+_COLUMN = "revocation_source"
 
 
 def _column_exists(bind: sa.engine.Connection) -> bool:
     inspector = sa.inspect(bind)
     if not inspector.has_table(_TABLE):
         return False
-    return any(col['name'] == _COLUMN for col in inspector.get_columns(_TABLE))
+    return any(col["name"] == _COLUMN for col in inspector.get_columns(_TABLE))
 
 
 def upgrade() -> None:

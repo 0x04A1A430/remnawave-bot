@@ -45,7 +45,11 @@ def _tariff(
 
 
 def _subscription(
-    *, end_date: datetime, tariff_id: int, is_trial: bool = False, status: str = 'active'
+    *,
+    end_date: datetime,
+    tariff_id: int,
+    is_trial: bool = False,
+    status: str = "active",
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=42,
@@ -57,14 +61,14 @@ def _subscription(
         traffic_limit_gb=50,
         traffic_used_gb=12.0,
         device_limit=3,
-        connected_squads=['old-squad'],
+        connected_squads=["old-squad"],
         purchased_traffic_gb=10,
         traffic_reset_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
 def _user() -> SimpleNamespace:
-    return SimpleNamespace(id=7, username='victim', subscriptions=[])
+    return SimpleNamespace(id=7, username="victim", subscriptions=[])
 
 
 @pytest.fixture
@@ -83,18 +87,25 @@ async def test_change_tariff_preserves_remaining_period(db: AsyncMock) -> None:
     sub = _subscription(end_date=end_date, tariff_id=1)
     user = _user()
 
-    old_tariff = _tariff(tariff_id=1, name='Tariff 1', traffic_limit_gb=50, device_limit=3)
-    new_tariff = _tariff(tariff_id=2, name='Tariff 2', traffic_limit_gb=200, device_limit=5)
+    old_tariff = _tariff(
+        tariff_id=1, name="Tariff 1", traffic_limit_gb=50, device_limit=3
+    )
+    new_tariff = _tariff(
+        tariff_id=2, name="Tariff 2", traffic_limit_gb=200, device_limit=5
+    )
 
     fake_settings = MagicMock()
     fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (
-        patch.object(bulk, 'settings', fake_settings),
-        patch.object(bulk, 'get_tariff_by_id', AsyncMock(return_value=old_tariff)),
-        patch.object(bulk, '_sync_subscription_to_panel', AsyncMock(return_value={})),
-        patch('app.database.crud.transaction.create_transaction', AsyncMock(return_value=None)),
+        patch.object(bulk, "settings", fake_settings),
+        patch.object(bulk, "get_tariff_by_id", AsyncMock(return_value=old_tariff)),
+        patch.object(bulk, "_sync_subscription_to_panel", AsyncMock(return_value={})),
+        patch(
+            "app.database.crud.transaction.create_transaction",
+            AsyncMock(return_value=None),
+        ),
     ):
         result = await bulk._do_change_tariff(
             db,
@@ -120,20 +131,32 @@ async def test_change_tariff_does_not_extend_almost_expired_sub(db: AsyncMock) -
     sub = _subscription(end_date=end_date, tariff_id=1)
     user = _user()
 
-    new_tariff = _tariff(tariff_id=2, name='Tariff 2')
+    new_tariff = _tariff(tariff_id=2, name="Tariff 2")
 
     fake_settings = MagicMock()
     fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (
-        patch.object(bulk, 'settings', fake_settings),
-        patch.object(bulk, 'get_tariff_by_id', AsyncMock(return_value=_tariff(tariff_id=1, name='Tariff 1'))),
-        patch.object(bulk, '_sync_subscription_to_panel', AsyncMock(return_value={})),
-        patch('app.database.crud.transaction.create_transaction', AsyncMock(return_value=None)),
+        patch.object(bulk, "settings", fake_settings),
+        patch.object(
+            bulk,
+            "get_tariff_by_id",
+            AsyncMock(return_value=_tariff(tariff_id=1, name="Tariff 1")),
+        ),
+        patch.object(bulk, "_sync_subscription_to_panel", AsyncMock(return_value={})),
+        patch(
+            "app.database.crud.transaction.create_transaction",
+            AsyncMock(return_value=None),
+        ),
     ):
         await bulk._do_change_tariff(
-            db, user, SimpleNamespace(tariff_id=2), new_tariff, dry_run=False, sub_override=sub
+            db,
+            user,
+            SimpleNamespace(tariff_id=2),
+            new_tariff,
+            dry_run=False,
+            sub_override=sub,
         )
 
     assert sub.end_date == end_date
@@ -149,29 +172,43 @@ async def test_change_tariff_keeps_trial_a_trial(db: AsyncMock) -> None:
     A trial must stay a trial across a tariff relabel and keep its 1-day term.
     """
     end_date = datetime.now(UTC) + timedelta(days=1)
-    sub = _subscription(end_date=end_date, tariff_id=1, is_trial=True, status='trial')
+    sub = _subscription(end_date=end_date, tariff_id=1, is_trial=True, status="trial")
     user = _user()
 
     # Target is a non-trial tariff — the exact case that used to trigger conversion.
-    new_tariff = _tariff(tariff_id=2, name='Paid 30d', traffic_limit_gb=200, is_trial_available=False)
+    new_tariff = _tariff(
+        tariff_id=2, name="Paid 30d", traffic_limit_gb=200, is_trial_available=False
+    )
 
     fake_settings = MagicMock()
     fake_settings.is_multi_tariff_enabled.return_value = False
     fake_settings.RESET_TRAFFIC_ON_TARIFF_SWITCH = False
 
     with (
-        patch.object(bulk, 'settings', fake_settings),
-        patch.object(bulk, 'get_tariff_by_id', AsyncMock(return_value=_tariff(tariff_id=1, name='Trial'))),
-        patch.object(bulk, '_sync_subscription_to_panel', AsyncMock(return_value={})),
-        patch('app.database.crud.transaction.create_transaction', AsyncMock(return_value=None)),
+        patch.object(bulk, "settings", fake_settings),
+        patch.object(
+            bulk,
+            "get_tariff_by_id",
+            AsyncMock(return_value=_tariff(tariff_id=1, name="Trial")),
+        ),
+        patch.object(bulk, "_sync_subscription_to_panel", AsyncMock(return_value={})),
+        patch(
+            "app.database.crud.transaction.create_transaction",
+            AsyncMock(return_value=None),
+        ),
     ):
         await bulk._do_change_tariff(
-            db, user, SimpleNamespace(tariff_id=2), new_tariff, dry_run=False, sub_override=sub
+            db,
+            user,
+            SimpleNamespace(tariff_id=2),
+            new_tariff,
+            dry_run=False,
+            sub_override=sub,
         )
 
     # Still a trial -> auto-extend-after-topup skips it (is_trial gate), no 30-day grant.
     assert sub.is_trial is True
-    assert sub.status == 'trial'
+    assert sub.status == "trial"
     # 1-day trial term preserved, never widened to the new tariff's period.
     assert sub.end_date == end_date
     # The relabel itself still happened.

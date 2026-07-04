@@ -38,7 +38,7 @@ def _patch(monkeypatch, subs):
     acm = MagicMock()
     acm.__aenter__ = AsyncMock(return_value=db)
     acm.__aexit__ = AsyncMock(return_value=False)
-    monkeypatch.setattr(dedup, 'AsyncSessionLocal', MagicMock(return_value=acm))
+    monkeypatch.setattr(dedup, "AsyncSessionLocal", MagicMock(return_value=acm))
 
     return deleted, db
 
@@ -60,7 +60,7 @@ async def test_collapses_report_scenario(monkeypatch):
     stats = await dedup._run_dedupe()
 
     assert {s.id for s in deleted} == {2, 3, 5}
-    assert stats == {'removed_db': 3}
+    assert stats == {"removed_db": 3}
     db.commit.assert_awaited_once()
 
 
@@ -98,5 +98,5 @@ async def test_single_rows_untouched(monkeypatch):
     stats = await dedup._run_dedupe()
 
     assert deleted == []
-    assert stats == {'removed_db': 0}
+    assert stats == {"removed_db": 0}
     db.commit.assert_not_awaited()

@@ -20,16 +20,17 @@ from fastapi import APIRouter
 
 from app.config import settings
 
-
-router = APIRouter(prefix='/public', tags=['Cabinet:Public'])
+router = APIRouter(prefix="/public", tags=["Cabinet:Public"])
 
 
 def _resolved_apay_tag() -> str:
     """Return the configured apay-tag value, trimmed; empty string when unset."""
-    return (settings.ANTILOPAY_APAY_VERIFICATION_TAG or '').strip()
+    return (settings.ANTILOPAY_APAY_VERIFICATION_TAG or "").strip()
 
 
-@router.get('/site-verification', summary='Site verification tags for payment providers')
+@router.get(
+    "/site-verification", summary="Site verification tags for payment providers"
+)
 async def get_site_verification() -> dict[str, str | None]:
     """Return all configured site-verification tokens.
 
@@ -39,5 +40,6 @@ async def get_site_verification() -> dict[str, str | None]:
     apay_tag = _resolved_apay_tag()
     return {
         # Empty string is normalized to None so the frontend can skip rendering.
-        'apay_tag': apay_tag or None,
+        "apay_tag": apay_tag
+        or None,
     }

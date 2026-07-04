@@ -17,32 +17,45 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-
-revision: str = '0083'
-down_revision: Union[str, None] = '0082'
+revision: str = "0083"
+down_revision: Union[str, None] = "0082"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     conn = op.get_bind()
-    if conn.execute(sa.text("SELECT to_regclass('public.user_device_aliases')")).scalar():
+    if conn.execute(
+        sa.text("SELECT to_regclass('public.user_device_aliases')")
+    ).scalar():
         return
     op.create_table(
-        'user_device_aliases',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('hwid', sa.String(length=255), nullable=False),
-        sa.Column('alias', sa.String(length=64), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id', 'hwid', name='uq_user_device_aliases_user_hwid'),
+        "user_device_aliases",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("hwid", sa.String(length=255), nullable=False),
+        sa.Column("alias", sa.String(length=64), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("user_id", "hwid", name="uq_user_device_aliases_user_hwid"),
     )
-    op.create_index('ix_user_device_aliases_user_id', 'user_device_aliases', ['user_id'])
+    op.create_index(
+        "ix_user_device_aliases_user_id", "user_device_aliases", ["user_id"]
+    )
 
 
 def downgrade() -> None:
-    op.drop_index('ix_user_device_aliases_user_id', table_name='user_device_aliases')
-    op.drop_table('user_device_aliases')
+    op.drop_index("ix_user_device_aliases_user_id", table_name="user_device_aliases")
+    op.drop_table("user_device_aliases")

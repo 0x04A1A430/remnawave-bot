@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 class PeriodPrice(BaseModel):
     """Price for a specific period."""
 
-    days: int = Field(..., ge=1, description='Period in days')
-    price_kopeks: int = Field(..., ge=0, description='Price in kopeks')
+    days: int = Field(..., ge=1, description="Period in days")
+    price_kopeks: int = Field(..., ge=0, description="Price in kopeks")
     price_rubles: float | None = None
 
     def __init__(self, **data):
@@ -21,7 +21,7 @@ class PeriodPrice(BaseModel):
 class ServerTrafficLimit(BaseModel):
     """Traffic limit for a specific server."""
 
-    traffic_limit_gb: int = Field(0, ge=0, description='0 = use default tariff limit')
+    traffic_limit_gb: int = Field(0, ge=0, description="0 = use default tariff limit")
 
 
 class ServerInfo(BaseModel):
@@ -94,7 +94,9 @@ class TariffDetailResponse(BaseModel):
     display_order: int
     period_prices: list[PeriodPrice]
     allowed_squads: list[str]  # UUIDs
-    server_traffic_limits: dict[str, ServerTrafficLimit] = Field(default_factory=dict)  # {uuid: {traffic_limit_gb}}
+    server_traffic_limits: dict[str, ServerTrafficLimit] = Field(
+        default_factory=dict
+    )  # {uuid: {traffic_limit_gb}}
     servers: list[ServerInfo]
     promo_groups: list[PromoGroupInfo]
     subscriptions_count: int
@@ -112,7 +114,9 @@ class TariffDetailResponse(BaseModel):
     is_daily: bool = False
     daily_price_kopeks: int = 0
     # Режим сброса трафика
-    traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    traffic_reset_mode: str | None = (
+        None  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    )
     # Внешний сквад RemnaWave
     external_squad_uuid: str | None = None
     # Показывать в подарках
@@ -132,7 +136,9 @@ class ExternalSquadInfoResponse(BaseModel):
     members_count: int
 
 
-UUID_PATTERN = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+UUID_PATTERN = (
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 class TariffCreateRequest(BaseModel):
@@ -145,15 +151,15 @@ class TariffCreateRequest(BaseModel):
     traffic_topup_enabled: bool = False
     traffic_topup_packages: dict[str, int] = Field(default_factory=dict)
     max_topup_traffic_gb: int = Field(0, ge=0)
-    traffic_limit_gb: int = Field(0, ge=0, description='0 = unlimited')
+    traffic_limit_gb: int = Field(0, ge=0, description="0 = unlimited")
     device_limit: int = Field(1, ge=1)
     device_price_kopeks: int | None = Field(None, ge=0)
     max_device_limit: int | None = Field(None, ge=1)
     tier_level: int = Field(1, ge=1, le=10)
     period_prices: list[PeriodPrice] = Field(default_factory=list)
-    allowed_squads: list[str] = Field(default_factory=list, description='Server UUIDs')
+    allowed_squads: list[str] = Field(default_factory=list, description="Server UUIDs")
     server_traffic_limits: dict[str, ServerTrafficLimit] = Field(
-        default_factory=dict, description='Per-server traffic limits'
+        default_factory=dict, description="Per-server traffic limits"
     )
     promo_group_ids: list[int] = Field(default_factory=list)
     # Произвольное количество дней
@@ -170,7 +176,9 @@ class TariffCreateRequest(BaseModel):
     is_daily: bool = False
     daily_price_kopeks: int = Field(0, ge=0)
     # Режим сброса трафика
-    traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    traffic_reset_mode: str | None = (
+        None  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    )
     # Внешний сквад RemnaWave
     external_squad_uuid: str | None = Field(None, pattern=UUID_PATTERN)
     # Показывать в подарках
@@ -211,7 +219,9 @@ class TariffUpdateRequest(BaseModel):
     is_daily: bool | None = None
     daily_price_kopeks: int | None = Field(None, ge=0)
     # Режим сброса трафика
-    traffic_reset_mode: str | None = None  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    traffic_reset_mode: str | None = (
+        None  # DAY, WEEK, MONTH, MONTH_ROLLING, NO_RESET, None = глобальная настройка
+    )
     # Внешний сквад RemnaWave
     external_squad_uuid: str | None = Field(None, pattern=UUID_PATTERN)
     # Показывать в подарках
@@ -221,7 +231,9 @@ class TariffUpdateRequest(BaseModel):
 class TariffSortOrderRequest(BaseModel):
     """Request to reorder tariffs."""
 
-    tariff_ids: list[int] = Field(..., min_length=1, description='Ordered list of tariff IDs')
+    tariff_ids: list[int] = Field(
+        ..., min_length=1, description="Ordered list of tariff IDs"
+    )
 
 
 class TariffToggleResponse(BaseModel):

@@ -18,10 +18,9 @@ from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/rbac/audit-log', tags=['Admin RBAC Audit Log'])
+router = APIRouter(prefix="/admin/rbac/audit-log", tags=["Admin RBAC Audit Log"])
 
 
 # ============ Schemas ============
@@ -58,24 +57,24 @@ class AuditLogListResponse(BaseModel):
 # ============ CSV Export ============
 
 _CSV_COLUMNS = [
-    'id',
-    'user_id',
-    'action',
-    'resource_type',
-    'resource_id',
-    'status',
-    'ip_address',
-    'request_method',
-    'request_path',
-    'created_at',
-    'user_agent',
-    'details',
+    "id",
+    "user_id",
+    "action",
+    "resource_type",
+    "resource_id",
+    "status",
+    "ip_address",
+    "request_method",
+    "request_path",
+    "created_at",
+    "user_agent",
+    "details",
 ]
 
 
 def _sanitize_csv_cell(value: str) -> str:
     """Prevent CSV formula injection by prefixing dangerous leading characters."""
-    if value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
+    if value and value[0] in ("=", "+", "-", "@", "\t", "\r"):
         return f"'{value}"
     return value
 
@@ -92,15 +91,15 @@ def _logs_to_csv(logs) -> str:
                 log.id,
                 log.user_id,
                 log.action,
-                log.resource_type or '',
-                log.resource_id or '',
+                log.resource_type or "",
+                log.resource_id or "",
                 log.status,
-                log.ip_address or '',
-                log.request_method or '',
-                _sanitize_csv_cell(log.request_path or ''),
-                log.created_at.isoformat() if log.created_at else '',
-                _sanitize_csv_cell((log.user_agent or '')[:200]),
-                _sanitize_csv_cell(str(log.details) if log.details else ''),
+                log.ip_address or "",
+                log.request_method or "",
+                _sanitize_csv_cell(log.request_path or ""),
+                log.created_at.isoformat() if log.created_at else "",
+                _sanitize_csv_cell((log.user_agent or "")[:200]),
+                _sanitize_csv_cell(str(log.details) if log.details else ""),
             ]
         )
 
@@ -110,9 +109,9 @@ def _logs_to_csv(logs) -> str:
 # ============ Routes ============
 
 
-@router.get('', response_model=AuditLogListResponse)
+@router.get("", response_model=AuditLogListResponse)
 async def list_audit_logs(
-    admin: User = Depends(require_permission('audit_log:read')),
+    admin: User = Depends(require_permission("audit_log:read")),
     db: AsyncSession = Depends(get_cabinet_db),
     user_id: int | None = Query(default=None),
     action: str | None = Query(default=None),
@@ -165,9 +164,9 @@ async def list_audit_logs(
     )
 
 
-@router.get('/export')
+@router.get("/export")
 async def export_audit_logs(
-    admin: User = Depends(require_permission('audit_log:export')),
+    admin: User = Depends(require_permission("audit_log:export")),
     db: AsyncSession = Depends(get_cabinet_db),
     user_id: int | None = Query(default=None),
     action: str | None = Query(default=None),
@@ -191,11 +190,11 @@ async def export_audit_logs(
     )
 
     csv_content = _logs_to_csv(logs)
-    timestamp = datetime.now(UTC).strftime('%Y%m%d_%H%M%S')
-    filename = f'audit_log_{timestamp}.csv'
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    filename = f"audit_log_{timestamp}.csv"
 
     logger.info(
-        'Admin exported audit logs',
+        "Admin exported audit logs",
         admin_id=admin.id,
         rows=len(logs),
         filename=filename,
@@ -203,6 +202,6 @@ async def export_audit_logs(
 
     return StreamingResponse(
         iter([csv_content]),
-        media_type='text/csv',
-        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -30,7 +30,6 @@ from sqlalchemy import select
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, SubscriptionStatus
 
-
 logger = structlog.get_logger(__name__)
 
 # Lower rank = better survivor. Statuses not listed (e.g. disabled/pending) sort last.
@@ -40,7 +39,9 @@ _SURVIVOR_PRIORITY = {
     SubscriptionStatus.TRIAL.value: 2,
     SubscriptionStatus.EXPIRED.value: 3,
 }
-_REMOVABLE_STATUSES = frozenset({SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value})
+_REMOVABLE_STATUSES = frozenset(
+    {SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value}
+)
 
 
 def _survivor_key(sub: Subscription) -> tuple[int, float]:
@@ -77,8 +78,8 @@ async def _run_dedupe() -> dict[str, int]:
             await db.commit()
 
     if removed_db:
-        logger.info('Схлопнуты дубли тарифных подписок', removed_db=removed_db)
-    return {'removed_db': removed_db}
+        logger.info("Схлопнуты дубли тарифных подписок", removed_db=removed_db)
+    return {"removed_db": removed_db}
 
 
 async def dedupe_expired_tariff_subscriptions() -> dict[str, int]:
@@ -86,5 +87,5 @@ async def dedupe_expired_tariff_subscriptions() -> dict[str, int]:
     try:
         return await _run_dedupe()
     except Exception as error:
-        logger.error('dedup: cleanup pass failed', error=error)
-        return {'removed_db': 0}
+        logger.error("dedup: cleanup pass failed", error=error)
+        return {"removed_db": 0}

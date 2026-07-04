@@ -16,9 +16,9 @@ WebSocket endpoint доступен по адресу: `ws://your-api-host:port/
 Для подключения требуется токен API (передается через query параметр):
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws?token=YOUR_API_TOKEN');
+const ws = new WebSocket("ws://localhost:8080/ws?token=YOUR_API_TOKEN");
 // или
-const ws = new WebSocket('ws://localhost:8080/ws?api_key=YOUR_API_TOKEN');
+const ws = new WebSocket("ws://localhost:8080/ws?api_key=YOUR_API_TOKEN");
 ```
 
 ### Формат сообщений
@@ -52,6 +52,7 @@ const ws = new WebSocket('ws://localhost:8080/ws?api_key=YOUR_API_TOKEN');
 #### Исходящие сообщения (от клиента)
 
 **Ping для keepalive:**
+
 ```json
 {
   "type": "ping"
@@ -59,6 +60,7 @@ const ws = new WebSocket('ws://localhost:8080/ws?api_key=YOUR_API_TOKEN');
 ```
 
 Сервер ответит:
+
 ```json
 {
   "type": "pong"
@@ -154,7 +156,7 @@ def verify_webhook_signature(payload: dict, signature_header: str, secret: str) 
         payload_json.encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
-    
+
     received_signature = signature_header.replace('sha256=', '')
     return hmac.compare_digest(expected_signature, received_signature)
 ```
@@ -162,16 +164,19 @@ def verify_webhook_signature(payload: dict, signature_header: str, secret: str) 
 ### API эндпоинты
 
 #### Список webhooks
+
 ```
 GET /webhooks?event_type=user.created&is_active=true&limit=50&offset=0
 ```
 
 #### Получить webhook
+
 ```
 GET /webhooks/{webhook_id}
 ```
 
 #### Обновить webhook
+
 ```
 PATCH /webhooks/{webhook_id}
 {
@@ -181,16 +186,19 @@ PATCH /webhooks/{webhook_id}
 ```
 
 #### Удалить webhook
+
 ```
 DELETE /webhooks/{webhook_id}
 ```
 
 #### Статистика webhooks
+
 ```
 GET /webhooks/stats
 ```
 
 #### История доставок
+
 ```
 GET /webhooks/{webhook_id}/deliveries?status=failed&limit=50&offset=0
 ```
@@ -219,34 +227,34 @@ GET /webhooks/{webhook_id}/deliveries?status=failed&limit=50&offset=0
 ### JavaScript WebSocket клиент
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws?token=YOUR_TOKEN');
+const ws = new WebSocket("ws://localhost:8080/ws?token=YOUR_TOKEN");
 
 ws.onopen = () => {
-  console.log('Connected');
+  console.log("Connected");
 };
 
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  console.log('Event:', data.type, data.payload);
-  
-  if (data.type === 'user.created') {
+  console.log("Event:", data.type, data.payload);
+
+  if (data.type === "user.created") {
     // Обработка нового пользователя
     updateDashboard(data.payload);
   }
 };
 
 ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
+  console.error("WebSocket error:", error);
 };
 
 ws.onclose = () => {
-  console.log('Disconnected');
+  console.log("Disconnected");
 };
 
 // Ping для keepalive
 setInterval(() => {
   if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'ping' }));
+    ws.send(JSON.stringify({ type: "ping" }));
   }
 }, 30000);
 ```
@@ -293,7 +301,7 @@ def verify_signature(payload, signature, secret):
 ## Безопасность
 
 1. **WebSocket**: Требует валидный API токен
-2. **Webhooks**: 
+2. **Webhooks**:
    - Используйте HTTPS для webhook URL
    - Используйте secret для подписи payload
    - Проверяйте подпись на стороне получателя
@@ -304,4 +312,3 @@ def verify_signature(payload, signature, secret):
 - Проверяйте статистику webhooks через `/webhooks/stats`
 - Просматривайте историю доставок через `/webhooks/{id}/deliveries`
 - Мониторьте логи на наличие ошибок доставки
-

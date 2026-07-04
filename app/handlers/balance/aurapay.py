@@ -17,20 +17,23 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
-
 logger = structlog.get_logger(__name__)
 
 
 def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | None:
     """Проверяет ограничение на пополнение. Возвращает клавиатуру если ограничен, иначе None."""
-    if not getattr(db_user, 'restriction_topup', False):
+    if not getattr(db_user, "restriction_topup", False):
         return None
 
     keyboard = []
     support_url = settings.get_support_contact_url()
     if support_url:
-        keyboard.append([InlineKeyboardButton(text='\U0001f198 Обжаловать', url=support_url)])
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append(
+            [InlineKeyboardButton(text="\U0001f198 Обжаловать", url=support_url)]
+        )
+    keyboard.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -53,7 +56,7 @@ async def _create_aurapay_payment_and_respond(
 
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description='Пополнение баланса',
+        description="Пополнение баланса",
     )
 
     result = await payment_service.create_aurapay_payment(
@@ -61,30 +64,30 @@ async def _create_aurapay_payment_and_respond(
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
         description=description,
-        email=getattr(db_user, 'email', None),
+        email=getattr(db_user, "email", None),
         language=db_user.language,
         payment_method_type=payment_method_type,
     )
 
     if not result:
         error_text = texts.t(
-            'PAYMENT_CREATE_ERROR',
-            'Не удалось создать платёж. Попробуйте позже.',
+            "PAYMENT_CREATE_ERROR",
+            "Не удалось создать платёж. Попробуйте позже.",
         )
         if edit_message:
             await message_or_callback.edit_text(
                 error_text,
                 reply_markup=get_back_keyboard(db_user.language),
-                parse_mode='HTML',
+                parse_mode="HTML",
             )
         else:
             await message_or_callback.answer(
                 error_text,
-                parse_mode='HTML',
+                parse_mode="HTML",
             )
         return
 
-    payment_url = result.get('payment_url')
+    payment_url = result.get("payment_url")
     display_name = settings.get_aurapay_display_name()
 
     # Create keyboard with payment button
@@ -93,43 +96,47 @@ async def _create_aurapay_payment_and_respond(
             [
                 InlineKeyboardButton(
                     text=texts.t(
-                        'PAY_BUTTON',
-                        '\U0001f4b3 Оплатить {amount}\u20bd',
-                    ).format(amount=f'{amount_rub:.0f}'),
+                        "PAY_BUTTON",
+                        "\U0001f4b3 Оплатить {amount}\u20bd",
+                    ).format(amount=f"{amount_rub:.0f}"),
                     url=payment_url,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('BACK_BUTTON', '\u25c0\ufe0f Назад'),
-                    callback_data='menu_balance',
+                    text=texts.t("BACK_BUTTON", "\u25c0\ufe0f Назад"),
+                    callback_data="menu_balance",
                 )
             ],
         ]
     )
 
     response_text = texts.t(
-        'AURAPAY_PAYMENT_CREATED',
-        '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount}\u20bd</b>\n\n'
-        'Нажмите кнопку ниже для оплаты.\n'
-        'После успешной оплаты баланс будет пополнен автоматически.',
-    ).format(name=display_name, amount=f'{amount_rub:.2f}')
+        "AURAPAY_PAYMENT_CREATED",
+        "\U0001f4b3 <b>Оплата через {name}</b>\n\n"
+        "Сумма: <b>{amount}\u20bd</b>\n\n"
+        "Нажмите кнопку ниже для оплаты.\n"
+        "После успешной оплаты баланс будет пополнен автоматически.",
+    ).format(name=display_name, amount=f"{amount_rub:.2f}")
 
     if edit_message:
         await message_or_callback.edit_text(
             response_text,
             reply_markup=keyboard,
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
     else:
         await message_or_callback.answer(
             response_text,
             reply_markup=keyboard,
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
 
-    logger.info('AuraPay payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
+    logger.info(
+        "AuraPay payment created",
+        telegram_id=db_user.telegram_id,
+        amount_rub=amount_rub,
+    )
 
 
 @error_handler
@@ -147,10 +154,13 @@ async def process_aurapay_payment_amount(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, "restriction_reason", None)
+            or "Действие ограничено администратором"
+        )
         await message.answer(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
-            parse_mode='HTML',
+            f"\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}",
+            parse_mode="HTML",
             reply_markup=restriction_kb,
         )
         await state.clear()
@@ -163,27 +173,27 @@ async def process_aurapay_payment_amount(
     if amount_kopeks < min_amount:
         await message.answer(
             texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount}\u20bd',
+                "PAYMENT_AMOUNT_TOO_LOW",
+                "Минимальная сумма пополнения: {min_amount}\u20bd",
             ).format(min_amount=min_amount // 100),
             reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
         return
 
     if amount_kopeks > max_amount:
         await message.answer(
             texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount}\u20bd',
+                "PAYMENT_AMOUNT_TOO_HIGH",
+                "Максимальная сумма пополнения: {max_amount}\u20bd",
             ).format(max_amount=max_amount // 100),
             reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
         return
 
     data = await state.get_data()
-    payment_method = data.get('payment_method', 'aurapay')
+    payment_method = data.get("payment_method", "aurapay")
     # aurapay_sbp → 'sbp', aurapay_card → 'card', aurapay → None
     payment_method_type = _extract_service_type(payment_method)
 
@@ -199,12 +209,12 @@ async def process_aurapay_payment_amount(
     )
 
 
-AURAPAY_PAYMENT_METHODS = {'aurapay', 'aurapay_sbp', 'aurapay_card'}
+AURAPAY_PAYMENT_METHODS = {"aurapay", "aurapay_sbp", "aurapay_card"}
 
 AURAPAY_SERVICE_MAP: dict[str, str | None] = {
-    'aurapay': None,
-    'aurapay_sbp': 'sbp',
-    'aurapay_card': 'card',
+    "aurapay": None,
+    "aurapay_sbp": "sbp",
+    "aurapay_card": "card",
 }
 
 
@@ -223,10 +233,13 @@ async def _start_aurapay_topup_impl(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, "restriction_reason", None)
+            or "Действие ограничено администратором"
+        )
         await callback.message.edit_text(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
-            parse_mode='HTML',
+            f"\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}",
+            parse_mode="HTML",
             reply_markup=restriction_kb,
         )
         return
@@ -238,9 +251,9 @@ async def _start_aurapay_topup_impl(
     max_amount = settings.AURAPAY_MAX_AMOUNT_KOPEKS // 100
 
     # Choose display name based on sub-method
-    if payment_method == 'aurapay_sbp':
+    if payment_method == "aurapay_sbp":
         display_name = settings.get_aurapay_sbp_display_name()
-    elif payment_method == 'aurapay_card':
+    elif payment_method == "aurapay_card":
         display_name = settings.get_aurapay_card_display_name()
     else:
         display_name = settings.get_aurapay_display_name()
@@ -249,17 +262,17 @@ async def _start_aurapay_topup_impl(
 
     await callback.message.edit_text(
         texts.t(
-            'AURAPAY_ENTER_AMOUNT',
-            '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
-            'Минимум: {min_amount}\u20bd\n'
-            'Максимум: {max_amount}\u20bd',
+            "AURAPAY_ENTER_AMOUNT",
+            "\U0001f4b3 <b>Пополнение через {name}</b>\n\n"
+            "Введите сумму пополнения в рублях.\n\n"
+            "Минимум: {min_amount}\u20bd\n"
+            "Максимум: {max_amount}\u20bd",
         ).format(
             name=display_name,
             min_amount=min_amount,
-            max_amount=f'{max_amount:,}'.replace(',', ' '),
+            max_amount=f"{max_amount:,}".replace(",", " "),
         ),
-        parse_mode='HTML',
+        parse_mode="HTML",
         reply_markup=keyboard,
     )
 
@@ -271,7 +284,7 @@ async def start_aurapay_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_aurapay_topup_impl(callback, db_user, state, 'aurapay')
+    await _start_aurapay_topup_impl(callback, db_user, state, "aurapay")
 
 
 @error_handler
@@ -281,7 +294,7 @@ async def start_aurapay_sbp_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_aurapay_topup_impl(callback, db_user, state, 'aurapay_sbp')
+    await _start_aurapay_topup_impl(callback, db_user, state, "aurapay_sbp")
 
 
 @error_handler
@@ -291,4 +304,4 @@ async def start_aurapay_card_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_aurapay_topup_impl(callback, db_user, state, 'aurapay_card')
+    await _start_aurapay_topup_impl(callback, db_user, state, "aurapay_card")

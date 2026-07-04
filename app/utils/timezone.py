@@ -10,7 +10,6 @@ import structlog
 
 from app.config import settings
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -27,8 +26,12 @@ def get_local_timezone() -> ZoneInfo:
     try:
         return ZoneInfo(tz_name)
     except Exception as exc:  # pragma: no cover - defensive branch
-        logger.warning('Не удалось загрузить временную зону, используем UTC', tz_name=tz_name, exc=exc)
-        return ZoneInfo('UTC')
+        logger.warning(
+            "Не удалось загрузить временную зону, используем UTC",
+            tz_name=tz_name,
+            exc=exc,
+        )
+        return ZoneInfo("UTC")
 
 
 def panel_datetime_to_utc(dt: datetime) -> datetime:
@@ -63,8 +66,8 @@ def to_local_datetime(dt: datetime | None) -> datetime | None:
 
 def format_local_datetime(
     dt: datetime | None,
-    fmt: str = '%Y-%m-%d %H:%M:%S %Z',
-    na_placeholder: str = 'N/A',
+    fmt: str = "%Y-%m-%d %H:%M:%S %Z",
+    na_placeholder: str = "N/A",
 ) -> str:
     """Format a datetime value in the configured local timezone."""
 
@@ -78,7 +81,7 @@ def format_email_datetime(
     dt: datetime | str | None,
     *,
     fmt: str | None = None,
-    na_placeholder: str = '',
+    na_placeholder: str = "",
 ) -> str:
     """Format a datetime for email-template substitution.
 
@@ -104,7 +107,7 @@ def format_email_datetime(
     Localization to the configured ``settings.TIMEZONE`` happens
     automatically so users see local time, not UTC.
     """
-    if dt is None or dt == '':
+    if dt is None or dt == "":
         return na_placeholder
 
     chosen_fmt = fmt or _resolve_email_date_format()
@@ -119,7 +122,9 @@ def format_email_datetime(
             parsed = datetime.fromisoformat(dt)
         except ValueError:
             return dt
-        return format_local_datetime(parsed, fmt=chosen_fmt, na_placeholder=na_placeholder)
+        return format_local_datetime(
+            parsed, fmt=chosen_fmt, na_placeholder=na_placeholder
+        )
 
     return na_placeholder
 
@@ -134,7 +139,7 @@ def _resolve_email_date_format() -> str:
     sees the new format immediately on next notification, without a
     bot restart.
     """
-    value = getattr(settings, 'EMAIL_DATE_FORMAT', None)
+    value = getattr(settings, "EMAIL_DATE_FORMAT", None)
     if not isinstance(value, str) or not value.strip():
-        return '%d.%m.%Y, %H:%M'
+        return "%d.%m.%Y, %H:%M"
     return value

@@ -17,7 +17,6 @@ from aiogram import BaseMiddleware
 from aiogram.enums import ChatType
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -38,7 +37,7 @@ class ChatTypeFilterMiddleware(BaseMiddleware):
 
         if chat is not None and chat.type != ChatType.PRIVATE:
             logger.debug(
-                'Dropping non-private chat event',
+                "Dropping non-private chat event",
                 chat_id=chat.id,
                 chat_type=chat.type,
             )

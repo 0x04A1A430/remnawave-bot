@@ -4,11 +4,11 @@
 
 Мы обеспечиваем поддержку безопасности для следующих версий:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 2.x.x   | ✅ Yes            |
-| 1.x.x   | ❌ No           |
-| < 1.0   | ❌ No             |
+| Version | Supported |
+| ------- | --------- |
+| 2.x.x   | ✅ Yes    |
+| 1.x.x   | ❌ No     |
+| < 1.0   | ❌ No     |
 
 ## Reporting a Vulnerability
 
@@ -19,6 +19,7 @@
 **НЕ создавайте публичные Issues или Pull Requests**
 
 Вместо этого:
+
 1. Свяжитесь с [@fringg](https://t.me/fringg) напрямую в Telegram
 2. Укажите в сообщении "SECURITY VULNERABILITY" в начале
 3. Опишите уязвимость детально
@@ -33,20 +34,23 @@
 ### 🔍 Что считается уязвимостью безопасности
 
 **Критические уязвимости:**
+
 - SQL инъекции
-- Remote Code Execution (RCE)  
+- Remote Code Execution (RCE)
 - Обход аутентификации
 - Несанкционированный доступ к данным пользователей
 - Утечка API ключей или токенов
 - Bypass платежных проверок
 
 **Средние уязвимости:**
+
 - Cross-Site Scripting (XSS) в веб-компонентах
 - Небезопасная десериализация
 - Недостаточная валидация входных данных
 - Rate limiting bypass
 
 **Низкие уязвимости:**
+
 - Information disclosure
 - DoS атаки
 - Проблемы с логированием чувствительных данных
@@ -76,29 +80,34 @@
 ### 🛡️ Текущие меры защиты
 
 **Аутентификация и авторизация:**
+
 - Проверка админ ID через ADMIN_IDS
 - Валидация всех пользовательских данных
 - Защита от несанкционированного доступа к админ функциям
 
 **Защита API:**
+
 - Поддержка различных методов аутентификации Remnawave
 - Безопасная передача куки для защищенных панелей
 - Rate limiting для предотвращения злоупотреблений
 - Timeout для внешних запросов
 
 **Защита данных:**
+
 - Хеширование чувствительной информации
 - Безопасное хранение API ключей
 - Логирование без записи чувствительных данных
 - Регулярные бекапы с возможностью восстановления
 
 **Платежная безопасность:**
+
 - Валидация webhook подписей
 - Проверка сумм платежей
 - Защита от duplicate payments
 - Безопасная обработка платежных данных
 
 **Инфраструктурная безопасность:**
+
 - Docker контейнеризация
 - Изоляция сетевого трафика
 - Минимальные права доступа
@@ -107,6 +116,7 @@
 ### 🔒 Конфиденциальные данные
 
 **Что НЕ логируется:**
+
 - API ключи и токены
 - Пароли и секретные ключи
 - Персональные данные пользователей
@@ -114,6 +124,7 @@
 - Webhook секреты
 
 **Защита в коде:**
+
 ```python
 # ✅ Правильно
 logger.info(f"User {user_id} created subscription")
@@ -127,11 +138,13 @@ logger.debug(f"Webhook payload: {webhook_data}")
 ### 🌐 Сетевая безопасность
 
 **HTTPS обязателен:**
+
 - Все внешние API вызовы через HTTPS
 - Webhook endpoints защищены TLS
 - Проверка SSL сертификатов
 
 **Firewall конфигурация:**
+
 ```bash
 # Открыть только необходимые порты
 ufw allow 80/tcp   # HTTP (redirect to HTTPS)
@@ -142,12 +155,14 @@ ufw deny 8080/tcp  # Unified FastAPI сервер доступен только 
 ### 📊 Мониторинг безопасности
 
 **Автоматические проверки:**
+
 - Мониторинг неудачных попыток аутентификации
 - Отслеживание подозрительной активности
 - Проверка целостности платежей
 - Мониторинг состояния внешних сервисов
 
 **Алерты:**
+
 - Множественные неудачные попытки входа
 - Неожиданные изменения в конфигурации
 - Критические ошибки в платежных системах
@@ -158,6 +173,7 @@ ufw deny 8080/tcp  # Unified FastAPI сервер доступен только 
 ### 🔐 Безопасное программирование
 
 **Input Validation:**
+
 ```python
 # ✅ Правильно
 def validate_user_id(user_id: str) -> int:
@@ -168,12 +184,13 @@ def validate_user_id(user_id: str) -> int:
         raise ValueError("User ID must be positive")
     return uid
 
-# ❌ Неправильно  
+# ❌ Неправильно
 def get_user(user_id):
     return session.execute(f"SELECT * FROM users WHERE id = {user_id}")
 ```
 
 **SQL Injection Prevention:**
+
 ```python
 # ✅ Правильно - используйте SQLAlchemy ORM
 async def get_user_subscriptions(user_id: int):
@@ -190,11 +207,12 @@ async def get_user_subscriptions(user_id: int):
 ```
 
 **API Keys Management:**
+
 ```python
 # ✅ Правильно
 class Config:
     REMNAWAVE_API_KEY: str = os.getenv("REMNAWAVE_API_KEY", "")
-    
+
     def validate_required_env(self):
         if not self.REMNAWAVE_API_KEY:
             raise ValueError("REMNAWAVE_API_KEY is required")
@@ -204,6 +222,7 @@ API_KEY = "your_api_key_here"  # Никогда не хардкодьте клю
 ```
 
 **Error Handling:**
+
 ```python
 # ✅ Правильно - не раскрывайте внутреннюю информацию
 try:
@@ -231,6 +250,7 @@ except Exception as e:
 ### 📋 Environment Variables Security
 
 **Обязательные переменные:**
+
 ```env
 # Критически важные - должны быть установлены
 BOT_TOKEN=your_bot_token
@@ -243,6 +263,7 @@ CRYPTOBOT_WEBHOOK_SECRET=yet_another_secret
 ```
 
 **Генерация безопасных секретов:**
+
 ```bash
 # Генерация случайного секрета
 openssl rand -hex 32
@@ -254,6 +275,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ### 🐳 Docker Security
 
 **Dockerfile best practices:**
+
 ```dockerfile
 # Не запускайтесь под root
 RUN groupadd -r appuser && useradd -r -g appuser appuser
@@ -269,6 +291,7 @@ RUN apt-get remove --purge -y build-essential && \
 ```
 
 **docker-compose.yml security:**
+
 ```yaml
 services:
   bot:
@@ -277,12 +300,12 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '0.5'
-    
+          cpus: "0.5"
+
     # Не пробрасывайте порты наружу без необходимости
     ports:
-      - "127.0.0.1:8080:8080"  # Только localhost
-    
+      - "127.0.0.1:8080:8080" # Только localhost
+
     # Read-only root filesystem
     read_only: true
     tmpfs:
@@ -308,6 +331,7 @@ services:
 ### 📢 Уведомления о безопасности
 
 Подпишитесь на уведомления:
+
 - **Telegram**: [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)
 - **GitHub**: Watch repository для получения уведомлений о релизах
 - **RSS**: Следите за GitHub Releases
@@ -317,12 +341,14 @@ services:
 ### 📜 Соответствие стандартам
 
 **GDPR Compliance:**
+
 - Минимизация сбора данных
 - Право на удаление данных
 - Уведомление о нарушениях безопасности
 - Согласие на обработку данных
 
 **PCI DSS (для платежей):**
+
 - Не храним данные банковских карт
 - Используем сертифицированные платежные провайдеры
 - Шифрование чувствительных данных
@@ -331,12 +357,14 @@ services:
 ### 🛡️ Third-party Security
 
 **Используемые сервисы:**
+
 - **Telegram API**: Официальный API с высоким уровнем безопасности
 - **Remnawave**: VPN панель с собственными мерами безопасности
 - **YooKassa**: PCI DSS сертифицированный платежный провайдер
 - **CryptoBot**: Криптовалютные платежи с блокчейн безопасностью
 
 **Регулярные проверки:**
+
 - Мониторинг безопасности dependencies
 - Обновление библиотек и зависимостей
 - Проверка CVE для используемых компонентов
@@ -368,11 +396,13 @@ services:
 ### 📊 Отчетность
 
 **Внутренние отчеты:**
+
 - Еженедельные отчеты о безопасности
 - Ежемесячные аудиты логов
 - Квартальные обзоры политик безопасности
 
 **Внешние уведомления:**
+
 - Уведомление пользователей о критических обновлениях
 - Публикация Security Advisories при необходимости
 - Сотрудничество с исследователями безопасности

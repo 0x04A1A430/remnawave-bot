@@ -27,7 +27,6 @@ from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.timezone import format_local_datetime
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -50,23 +49,31 @@ async def show_ticket_priority_selection(
     if blocked_until:
         if blocked_until.year > 9999 - 1:
             await callback.answer(
-                texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'), show_alert=True
+                texts.t(
+                    "USER_BLOCKED_FOREVER",
+                    "Вы заблокированы для обращений в поддержку.",
+                ),
+                show_alert=True,
             )
         else:
             await callback.answer(
-                texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                    time=blocked_until.strftime('%d.%m.%Y %H:%M')
+                texts.t("USER_BLOCKED_UNTIL", "Вы заблокированы до {time}").format(
+                    time=blocked_until.strftime("%d.%m.%Y %H:%M")
                 ),
                 show_alert=True,
             )
         return
     if await TicketCRUD.user_has_active_ticket(db, db_user.id):
         await callback.answer(
-            texts.t('TICKET_ALREADY_OPEN', 'У вас уже есть незакрытый тикет. Сначала закройте его.'), show_alert=True
+            texts.t(
+                "TICKET_ALREADY_OPEN",
+                "У вас уже есть незакрытый тикет. Сначала закройте его.",
+            ),
+            show_alert=True,
         )
         return
 
-    prompt_text = texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:')
+    prompt_text = texts.t("TICKET_TITLE_INPUT", "Введите заголовок тикета:")
     cancel_kb = get_ticket_cancel_keyboard(db_user.language)
     prompt_msg = callback.message
     try:
@@ -79,12 +86,16 @@ async def show_ticket_priority_selection(
             pass
         prompt_msg = await callback.message.answer(prompt_text, reply_markup=cancel_kb)
     # Запоминаем исходное сообщение бота, чтобы далее редактировать его, а не слать новые
-    await state.update_data(prompt_chat_id=prompt_msg.chat.id, prompt_message_id=prompt_msg.message_id)
+    await state.update_data(
+        prompt_chat_id=prompt_msg.chat.id, prompt_message_id=prompt_msg.message_id
+    )
     await state.set_state(TicketStates.waiting_for_title)
     await callback.answer()
 
 
-async def handle_ticket_title_input(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
+async def handle_ticket_title_input(
+    message: types.Message, state: FSMContext, db_user: User, db: AsyncSession
+):
     # Проверяем, что пользователь в правильном состоянии
     current_state = await state.get_state()
     if current_state != TicketStates.waiting_for_title:
@@ -92,29 +103,41 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
 
     """Обработать ввод заголовка тикета"""
     if not message.text:
-        asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+        asyncio.create_task(
+            _try_delete_message_later(
+                message.bot, message.chat.id, message.message_id, 2.0
+            )
+        )
         return
     title = message.text.strip()
 
     data_prompt = await state.get_data()
-    prompt_chat_id = data_prompt.get('prompt_chat_id')
-    prompt_message_id = data_prompt.get('prompt_message_id')
+    prompt_chat_id = data_prompt.get("prompt_chat_id")
+    prompt_message_id = data_prompt.get("prompt_message_id")
     # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
-    asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+    asyncio.create_task(
+        _try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0)
+    )
     if len(title) < 5:
         texts = get_texts(db_user.language)
         text_val = texts.t(
-            'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
+            "TICKET_TITLE_TOO_SHORT",
+            "Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:",
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+        await _edit_or_send(
+            message, prompt_chat_id, prompt_message_id, text_val, db_user.language
+        )
         return
 
     if len(title) > 255:
         texts = get_texts(db_user.language)
         text_val = texts.t(
-            'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
+            "TICKET_TITLE_TOO_LONG",
+            "Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:",
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+        await _edit_or_send(
+            message, prompt_chat_id, prompt_message_id, text_val, db_user.language
+        )
         return
 
     # Глобальный блок
@@ -124,11 +147,16 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     if blocked_until:
         texts = get_texts(db_user.language)
         if blocked_until.year > 9999 - 1:
-            await message.answer(texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'))
+            await message.answer(
+                texts.t(
+                    "USER_BLOCKED_FOREVER",
+                    "Вы заблокированы для обращений в поддержку.",
+                )
+            )
         else:
             await message.answer(
-                texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                    time=blocked_until.strftime('%d.%m.%Y %H:%M')
+                texts.t("USER_BLOCKED_UNTIL", "Вы заблокированы до {time}").format(
+                    time=blocked_until.strftime("%d.%m.%Y %H:%M")
                 )
             )
         await state.clear()
@@ -137,13 +165,20 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     await state.update_data(title=title)
 
     texts = get_texts(db_user.language)
-    text_val = texts.t('TICKET_MESSAGE_INPUT', 'Опишите проблему (до 500 символов) или отправьте фото с подписью:')
-    await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+    text_val = texts.t(
+        "TICKET_MESSAGE_INPUT",
+        "Опишите проблему (до 500 символов) или отправьте фото с подписью:",
+    )
+    await _edit_or_send(
+        message, prompt_chat_id, prompt_message_id, text_val, db_user.language
+    )
 
     await state.set_state(TicketStates.waiting_for_message)
 
 
-async def handle_ticket_message_input(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
+async def handle_ticket_message_input(
+    message: types.Message, state: FSMContext, db_user: User, db: AsyncSession
+):
     # Проверяем, что пользователь в правильном состоянии
     current_state = await state.get_state()
     if current_state != TicketStates.waiting_for_message:
@@ -153,17 +188,27 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
     try:
         # Глобальный мягкий супрессор на 6 секунд после создания тикета
         try:
-            from_cache = await cache.get(cache_key('suppress_user_input', db_user.id))
+            from_cache = await cache.get(cache_key("suppress_user_input", db_user.id))
             if from_cache:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+                asyncio.create_task(
+                    _try_delete_message_later(
+                        message.bot, message.chat.id, message.message_id, 2.0
+                    )
+                )
                 return
         except Exception:
             pass
-        limited = await RateLimitCache.is_rate_limited(db_user.id, 'ticket_create_message', limit=1, window=2)
+        limited = await RateLimitCache.is_rate_limited(
+            db_user.id, "ticket_create_message", limit=1, window=2
+        )
         if limited:
             # Удаляем лишние части длинного сообщения
             try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+                asyncio.create_task(
+                    _try_delete_message_later(
+                        message.bot, message.chat.id, message.message_id, 2.0
+                    )
+                )
             except Exception:
                 pass
             return
@@ -171,11 +216,15 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         pass
     try:
         data_rl = await state.get_data()
-        last_ts = data_rl.get('rl_ts_create')
+        last_ts = data_rl.get("rl_ts_create")
         now_ts = time.time()
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+                asyncio.create_task(
+                    _try_delete_message_later(
+                        message.bot, message.chat.id, message.message_id, 2.0
+                    )
+                )
             except Exception:
                 pass
             return
@@ -185,7 +234,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
 
     """Обработать ввод сообщения тикета и создать тикет"""
     # Поддержка фото: если прислали фото с подписью — берём caption, сохраняем file_id
-    message_text = (message.text or message.caption or '').strip()
+    message_text = (message.text or message.caption or "").strip()
     # Ограничим длину текста описания тикета, чтобы избежать проблем с caption/рендером
     if len(message_text) > 500:
         message_text = message_text[:500]
@@ -193,7 +242,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
     media_file_id = None
     media_caption = None
     if message.photo:
-        media_type = 'photo'
+        media_type = "photo"
         media_file_id = message.photo[-1].file_id
         media_caption = message.caption
     # Глобальный блок
@@ -203,18 +252,22 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
     if blocked_until:
         texts = get_texts(db_user.language)
         data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
+        prompt_chat_id = data_prompt.get("prompt_chat_id")
+        prompt_message_id = data_prompt.get("prompt_message_id")
         text_msg = (
-            texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.')
+            texts.t(
+                "USER_BLOCKED_FOREVER", "Вы заблокированы для обращений в поддержку."
+            )
             if blocked_until.year > 9999 - 1
-            else texts.t('USER_BLOCKED_UNTIL', 'Вы заблокированы до {time}').format(
-                time=blocked_until.strftime('%d.%m.%Y %H:%M')
+            else texts.t("USER_BLOCKED_UNTIL", "Вы заблокированы до {time}").format(
+                time=blocked_until.strftime("%d.%m.%Y %H:%M")
             )
         )
         if prompt_chat_id and prompt_message_id:
             try:
-                await message.bot.edit_message_text(chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg)
+                await message.bot.edit_message_text(
+                    chat_id=prompt_chat_id, message_id=prompt_message_id, text=text_msg
+                )
             except TelegramBadRequest:
                 await message.answer(text_msg)
         else:
@@ -223,22 +276,27 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         return
 
     # Удалим сообщение пользователя через 2 секунды
-    asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+    asyncio.create_task(
+        _try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0)
+    )
     # Валидируем: допускаем пустой текст, если есть фото
     if (not message_text or len(message_text) < 10) and not message.photo:
         texts = get_texts(db_user.language)
         data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
+        prompt_chat_id = data_prompt.get("prompt_chat_id")
+        prompt_message_id = data_prompt.get("prompt_message_id")
         err_text = texts.t(
-            'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
+            "TICKET_MESSAGE_TOO_SHORT",
+            "Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:",
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
+        await _edit_or_send(
+            message, prompt_chat_id, prompt_message_id, err_text, db_user.language
+        )
         return
 
     data = await state.get_data()
-    title = data.get('title')
-    priority = 'normal'
+    title = data.get("title")
+    priority = "normal"
 
     try:
         ticket = await TicketCRUD.create_ticket(
@@ -253,35 +311,37 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         )
         # Включим временное подавление лишних сообщений пользователя (на случай разбиения длинного текста)
         try:
-            await cache.set(cache_key('suppress_user_input', db_user.id), True, 6)
+            await cache.set(cache_key("suppress_user_input", db_user.id), True, 6)
         except Exception:
             pass
 
         texts = get_texts(db_user.language)
         # Ограничим длину подтверждения чтобы не упереться в лимиты
-        safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
+        safe_title = html.escape(title if len(title) <= 200 else (title[:197] + "..."))
         creation_text = (
-            f'<b>Тикет #{ticket.id} создан</b>\n\n'
-            f'Заголовок: {safe_title}\n'
-            f'Статус: {ticket.status_emoji} '
+            f"<b>Тикет #{ticket.id} создан</b>\n\n"
+            f"Заголовок: {safe_title}\n"
+            f"Статус: {ticket.status_emoji} "
             f'{texts.t("TICKET_STATUS_OPEN", "Открыт")}\n'
             f'Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-            + ('Вложение: фото\n' if media_type == 'photo' else '')
+            + ("Вложение: фото\n" if media_type == "photo" else "")
         )
 
         data_prompt = await state.get_data()
-        prompt_chat_id = data_prompt.get('prompt_chat_id')
-        prompt_message_id = data_prompt.get('prompt_message_id')
+        prompt_chat_id = data_prompt.get("prompt_chat_id")
+        prompt_message_id = data_prompt.get("prompt_message_id")
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('VIEW_TICKET', 'Посмотреть тикет'), callback_data=f'view_ticket_{ticket.id}'
+                        text=texts.t("VIEW_TICKET", "Посмотреть тикет"),
+                        callback_data=f"view_ticket_{ticket.id}",
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_MENU', 'В главное меню'), callback_data='back_to_menu'
+                        text=texts.t("BACK_TO_MENU", "В главное меню"),
+                        callback_data="back_to_menu",
                     )
                 ],
             ]
@@ -293,12 +353,16 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
                     message_id=prompt_message_id,
                     text=creation_text,
                     reply_markup=keyboard,
-                    parse_mode='HTML',
+                    parse_mode="HTML",
                 )
             except TelegramBadRequest:
-                await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
+                await message.answer(
+                    creation_text, reply_markup=keyboard, parse_mode="HTML"
+                )
         else:
-            await message.answer(creation_text, reply_markup=keyboard, parse_mode='HTML')
+            await message.answer(
+                creation_text, reply_markup=keyboard, parse_mode="HTML"
+            )
 
         await state.clear()
 
@@ -306,28 +370,39 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         await notify_admins_about_new_ticket(ticket, db)
 
     except Exception as e:
-        logger.error('Error creating ticket', error=e)
+        logger.error("Error creating ticket", error=e)
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_CREATE_ERROR', 'Произошла ошибка при создании тикета. Попробуйте позже.')
+            texts.t(
+                "TICKET_CREATE_ERROR",
+                "Произошла ошибка при создании тикета. Попробуйте позже.",
+            )
         )
 
 
-async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def show_my_tickets(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession
+):
     texts = get_texts(db_user.language)
 
     # Определяем текущую страницу
     current_page = 1
-    if callback.data.startswith('my_tickets_page_'):
+    if callback.data.startswith("my_tickets_page_"):
         try:
-            current_page = int(callback.data.replace('my_tickets_page_', ''))
+            current_page = int(callback.data.replace("my_tickets_page_", ""))
         except ValueError:
             current_page = 1
 
     # Пагинация открытых тикетов из БД
     per_page = 10
     total_open = await TicketCRUD.count_user_tickets_by_statuses(
-        db, db_user.id, [TicketStatus.OPEN.value, TicketStatus.ANSWERED.value, TicketStatus.PENDING.value]
+        db,
+        db_user.id,
+        [
+            TicketStatus.OPEN.value,
+            TicketStatus.ANSWERED.value,
+            TicketStatus.PENDING.value,
+        ],
     )
     total_pages = max(1, (total_open + per_page - 1) // per_page)
     current_page = max(1, min(current_page, total_pages))
@@ -335,29 +410,44 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
     open_tickets = await TicketCRUD.get_user_tickets_by_statuses(
         db,
         db_user.id,
-        [TicketStatus.OPEN.value, TicketStatus.ANSWERED.value, TicketStatus.PENDING.value],
+        [
+            TicketStatus.OPEN.value,
+            TicketStatus.ANSWERED.value,
+            TicketStatus.PENDING.value,
+        ],
         limit=per_page,
         offset=offset,
     )
 
     # Проверка на отсутствие тикетов совсем (ни открытых, ни закрытых)
-    has_closed_any = await TicketCRUD.count_user_tickets_by_statuses(db, db_user.id, [TicketStatus.CLOSED.value]) > 0
+    has_closed_any = (
+        await TicketCRUD.count_user_tickets_by_statuses(
+            db, db_user.id, [TicketStatus.CLOSED.value]
+        )
+        > 0
+    )
     if not open_tickets and not has_closed_any:
         await callback.message.edit_text(
-            texts.t('NO_TICKETS', 'У вас пока нет тикетов.'),
+            texts.t("NO_TICKETS", "У вас пока нет тикетов."),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('CREATE_TICKET_BUTTON', 'Создать тикет'), callback_data='create_ticket'
+                            text=texts.t("CREATE_TICKET_BUTTON", "Создать тикет"),
+                            callback_data="create_ticket",
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты'), callback_data='my_tickets_closed'
+                            text=texts.t("VIEW_CLOSED_TICKETS", "Закрытые тикеты"),
+                            callback_data="my_tickets_closed",
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_support')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.BACK, callback_data="menu_support"
+                        )
+                    ],
                 ]
             ),
         )
@@ -365,57 +455,70 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
         return
 
     # Открытые с пагинацией (DB)
-    open_data = [{'id': t.id, 'title': t.title, 'status_emoji': t.status_emoji} for t in open_tickets]
+    open_data = [
+        {"id": t.id, "title": t.title, "status_emoji": t.status_emoji}
+        for t in open_tickets
+    ]
     keyboard = get_my_tickets_keyboard(
         open_data,
         current_page=current_page,
         total_pages=total_pages,
         language=db_user.language,
-        page_prefix='my_tickets_page_',
+        page_prefix="my_tickets_page_",
     )
     # Добавим кнопку перехода к закрытым
     keyboard.inline_keyboard.insert(
         0,
         [
             types.InlineKeyboardButton(
-                text=texts.t('VIEW_CLOSED_TICKETS', 'Закрытые тикеты'), callback_data='my_tickets_closed'
+                text=texts.t("VIEW_CLOSED_TICKETS", "Закрытые тикеты"),
+                callback_data="my_tickets_closed",
             )
         ],
     )
     # Всегда используем фото-рендер с логотипом (утилита сама сделает фоллбек при необходимости)
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('MY_TICKETS_TITLE', 'Ваши тикеты:'),
+        caption=texts.t("MY_TICKETS_TITLE", "Ваши тикеты:"),
         keyboard=keyboard,
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
-async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def show_my_tickets_closed(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession
+):
     texts = get_texts(db_user.language)
     # Пагинация закрытых
     current_page = 1
     data_str = callback.data
-    if data_str.startswith('my_tickets_closed_page_'):
+    if data_str.startswith("my_tickets_closed_page_"):
         try:
-            current_page = int(data_str.replace('my_tickets_closed_page_', ''))
+            current_page = int(data_str.replace("my_tickets_closed_page_", ""))
         except ValueError:
             current_page = 1
 
     per_page = 10
-    total_closed = await TicketCRUD.count_user_tickets_by_statuses(db, db_user.id, [TicketStatus.CLOSED.value])
+    total_closed = await TicketCRUD.count_user_tickets_by_statuses(
+        db, db_user.id, [TicketStatus.CLOSED.value]
+    )
     if total_closed == 0:
         await callback.message.edit_text(
-            texts.t('NO_CLOSED_TICKETS', 'Закрытых тикетов пока нет.'),
+            texts.t("NO_CLOSED_TICKETS", "Закрытых тикетов пока нет."),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BACK_TO_OPEN_TICKETS', 'Открытые тикеты'), callback_data='my_tickets'
+                            text=texts.t("BACK_TO_OPEN_TICKETS", "Открытые тикеты"),
+                            callback_data="my_tickets",
                         )
                     ],
-                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_support')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.BACK, callback_data="menu_support"
+                        )
+                    ],
                 ]
             ),
         )
@@ -427,27 +530,30 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
     tickets = await TicketCRUD.get_user_tickets_by_statuses(
         db, db_user.id, [TicketStatus.CLOSED.value], limit=per_page, offset=offset
     )
-    data = [{'id': t.id, 'title': t.title, 'status_emoji': t.status_emoji} for t in tickets]
+    data = [
+        {"id": t.id, "title": t.title, "status_emoji": t.status_emoji} for t in tickets
+    ]
     kb = get_my_tickets_keyboard(
         data,
         current_page=current_page,
         total_pages=total_pages,
         language=db_user.language,
-        page_prefix='my_tickets_closed_page_',
+        page_prefix="my_tickets_closed_page_",
     )
     kb.inline_keyboard.insert(
         0,
         [
             types.InlineKeyboardButton(
-                text=texts.t('BACK_TO_OPEN_TICKETS', 'Открытые тикеты'), callback_data='my_tickets'
+                text=texts.t("BACK_TO_OPEN_TICKETS", "Открытые тикеты"),
+                callback_data="my_tickets",
             )
         ],
     )
     await edit_or_answer_photo(
         callback=callback,
-        caption=texts.t('CLOSED_TICKETS_TITLE', 'Закрытые тикеты:'),
+        caption=texts.t("CLOSED_TICKETS_TITLE", "Закрытые тикеты:"),
         keyboard=kb,
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -465,8 +571,8 @@ def _split_long_block(block: str, max_len: int) -> list[str]:
             break
         # Ищем место для разрыва (перенос строки или пробел)
         cut_at = max_len
-        newline_pos = remaining.rfind('\n', 0, max_len)
-        space_pos = remaining.rfind(' ', 0, max_len)
+        newline_pos = remaining.rfind("\n", 0, max_len)
+        space_pos = remaining.rfind(" ", 0, max_len)
 
         if newline_pos > max_len // 2:
             cut_at = newline_pos + 1
@@ -479,7 +585,9 @@ def _split_long_block(block: str, max_len: int) -> list[str]:
     return parts
 
 
-def _split_text_into_pages(header: str, message_blocks: list[str], max_len: int = 3500) -> list[str]:
+def _split_text_into_pages(
+    header: str, message_blocks: list[str], max_len: int = 3500
+) -> list[str]:
     """Разбивает текст на страницы с учётом лимита Telegram."""
     pages: list[str] = []
     current = header
@@ -515,48 +623,53 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     data_str = callback.data
     page = 1
     ticket_id = None
-    if data_str.startswith('ticket_view_page_'):
+    if data_str.startswith("ticket_view_page_"):
         # format: ticket_view_page_{ticket_id}_{page}
         try:
-            _, _, _, tid, p = data_str.split('_')
+            _, _, _, tid, p = data_str.split("_")
             ticket_id = int(tid)
             page = max(1, int(p))
         except Exception:
             pass
     if ticket_id is None:
-        ticket_id = int(data_str.replace('view_ticket_', ''))
+        ticket_id = int(data_str.replace("view_ticket_", ""))
 
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True)
 
     if not ticket or ticket.user_id != db_user.id:
         texts = get_texts(db_user.language)
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(
+            texts.t("TICKET_NOT_FOUND", "Тикет не найден."), show_alert=True
+        )
         return
 
     texts = get_texts(db_user.language)
 
     # Формируем текст тикета
     status_text = {
-        TicketStatus.OPEN.value: texts.t('TICKET_STATUS_OPEN', 'Открыт'),
-        TicketStatus.ANSWERED.value: texts.t('TICKET_STATUS_ANSWERED', 'Отвечен'),
-        TicketStatus.CLOSED.value: texts.t('TICKET_STATUS_CLOSED', 'Закрыт'),
-        TicketStatus.PENDING.value: texts.t('TICKET_STATUS_PENDING', 'В ожидании'),
+        TicketStatus.OPEN.value: texts.t("TICKET_STATUS_OPEN", "Открыт"),
+        TicketStatus.ANSWERED.value: texts.t("TICKET_STATUS_ANSWERED", "Отвечен"),
+        TicketStatus.CLOSED.value: texts.t("TICKET_STATUS_CLOSED", "Закрыт"),
+        TicketStatus.PENDING.value: texts.t("TICKET_STATUS_PENDING", "В ожидании"),
     }.get(ticket.status, ticket.status)
 
     header = (
-        f'Тикет #{ticket.id}\n\n'
+        f"Тикет #{ticket.id}\n\n"
         f'Заголовок: {html.escape(ticket.title or "")}\n'
-        f'Статус: {ticket.status_emoji} {status_text}\n'
+        f"Статус: {ticket.status_emoji} {status_text}\n"
         f'Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
     )
     message_blocks: list[str] = []
     if ticket.messages:
-        message_blocks.append(f'Сообщения ({len(ticket.messages)}):\n\n')
+        message_blocks.append(f"Сообщения ({len(ticket.messages)}):\n\n")
         for msg in ticket.messages:
-            sender = 'Вы' if msg.is_user_message else 'Поддержка'
+            sender = "Вы" if msg.is_user_message else "Поддержка"
             block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
-            if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
-                block += 'Вложение: фото\n\n'
+            if (
+                getattr(msg, "has_media", False)
+                and getattr(msg, "media_type", None) == "photo"
+            ):
+                block += "Вложение: фото\n\n"
             message_blocks.append(block)
     pages = _split_text_into_pages(header, message_blocks, max_len=3500)
     total_pages = len(pages)
@@ -569,7 +682,8 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     )
     # Если есть вложения фото — добавим кнопку для просмотра
     has_photos = any(
-        getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo' for m in ticket.messages or []
+        getattr(m, "has_media", False) and getattr(m, "media_type", None) == "photo"
+        for m in ticket.messages or []
     )
     if has_photos:
         try:
@@ -577,8 +691,8 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
                 0,
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('TICKET_ATTACHMENTS', 'Вложения'),
-                        callback_data=f'ticket_attachments_{ticket_id}',
+                        text=texts.t("TICKET_ATTACHMENTS", "Вложения"),
+                        callback_data=f"ticket_attachments_{ticket_id}",
                     )
                 ],
             )
@@ -589,12 +703,20 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         nav_row = []
         if page > 1:
             nav_row.append(
-                types.InlineKeyboardButton(text='←', callback_data=f'ticket_view_page_{ticket_id}_{page - 1}')
+                types.InlineKeyboardButton(
+                    text="←", callback_data=f"ticket_view_page_{ticket_id}_{page - 1}"
+                )
             )
-        nav_row.append(types.InlineKeyboardButton(text=f'{page}/{total_pages}', callback_data='noop'))
+        nav_row.append(
+            types.InlineKeyboardButton(
+                text=f"{page}/{total_pages}", callback_data="noop"
+            )
+        )
         if page < total_pages:
             nav_row.append(
-                types.InlineKeyboardButton(text='→', callback_data=f'ticket_view_page_{ticket_id}_{page + 1}')
+                types.InlineKeyboardButton(
+                    text="→", callback_data=f"ticket_view_page_{ticket_id}_{page + 1}"
+                )
             )
         try:
             keyboard.inline_keyboard.insert(0, nav_row)
@@ -613,30 +735,40 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     await callback.answer()
 
 
-async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+async def send_ticket_attachments(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession
+):
     texts = get_texts(db_user.language)
     try:
-        await callback.answer(texts.t('SENDING_ATTACHMENTS', 'Отправляю вложения...'))
+        await callback.answer(texts.t("SENDING_ATTACHMENTS", "Отправляю вложения..."))
     except Exception:
         pass
     try:
-        ticket_id = int(callback.data.replace('ticket_attachments_', ''))
+        ticket_id = int(callback.data.replace("ticket_attachments_", ""))
     except ValueError:
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(
+            texts.t("TICKET_NOT_FOUND", "Тикет не найден."), show_alert=True
+        )
         return
 
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True)
     if not ticket or ticket.user_id != db_user.id:
-        await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+        await callback.answer(
+            texts.t("TICKET_NOT_FOUND", "Тикет не найден."), show_alert=True
+        )
         return
 
     photos = [
         m.media_file_id
         for m in ticket.messages
-        if getattr(m, 'has_media', False) and getattr(m, 'media_type', None) == 'photo' and m.media_file_id
+        if getattr(m, "has_media", False)
+        and getattr(m, "media_type", None) == "photo"
+        and m.media_file_id
     ]
     if not photos:
-        await callback.answer(texts.t('NO_ATTACHMENTS', 'Вложений нет.'), show_alert=True)
+        await callback.answer(
+            texts.t("NO_ATTACHMENTS", "Вложений нет."), show_alert=True
+        )
         return
 
     # Telegram ограничивает media group до 10 элементов. Отправим чанками.
@@ -647,7 +779,9 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
     for chunk in chunks:
         media = [InputMediaPhoto(media=pid) for pid in chunk]
         try:
-            messages = await callback.message.bot.send_media_group(chat_id=callback.from_user.id, media=media)
+            messages = await callback.message.bot.send_media_group(
+                chat_id=callback.from_user.id, media=media
+            )
             if messages:
                 last_group_message = messages[-1]
         except Exception:
@@ -658,36 +792,40 @@ async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, 
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('DELETE_MESSAGE', 'Удалить'),
-                            callback_data=f'user_delete_message_{last_group_message.message_id}',
+                            text=texts.t("DELETE_MESSAGE", "Удалить"),
+                            callback_data=f"user_delete_message_{last_group_message.message_id}",
                         )
                     ]
                 ]
             )
             await callback.message.bot.send_message(
-                chat_id=callback.from_user.id, text=texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'), reply_markup=kb
+                chat_id=callback.from_user.id,
+                text=texts.t("ATTACHMENTS_SENT", "Вложения отправлены."),
+                reply_markup=kb,
             )
         except Exception:
             pass
     else:
         try:
-            await callback.answer(texts.t('ATTACHMENTS_SENT', 'Вложения отправлены.'))
+            await callback.answer(texts.t("ATTACHMENTS_SENT", "Вложения отправлены."))
         except Exception:
             pass
 
 
 async def user_delete_message(callback: types.CallbackQuery):
     try:
-        msg_id = int(callback.data.replace('user_delete_message_', ''))
+        msg_id = int(callback.data.replace("user_delete_message_", ""))
     except ValueError:
-        await callback.answer('')
+        await callback.answer("")
         return
     try:
-        await callback.message.bot.delete_message(chat_id=callback.from_user.id, message_id=msg_id)
+        await callback.message.bot.delete_message(
+            chat_id=callback.from_user.id, message_id=msg_id
+        )
         await callback.message.delete()
     except Exception:
         pass
-    await callback.answer('')
+    await callback.answer("")
 
 
 async def _edit_or_send(
@@ -712,7 +850,9 @@ async def _edit_or_send(
     await message.answer(text, reply_markup=get_ticket_cancel_keyboard(language))
 
 
-async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, delay_seconds: float = 1.0):
+async def _try_delete_message_later(
+    bot: Bot, chat_id: int, message_id: int, delay_seconds: float = 1.0
+):
     try:
         await asyncio.sleep(delay_seconds)
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -721,9 +861,11 @@ async def _try_delete_message_later(bot: Bot, chat_id: int, message_id: int, del
         pass
 
 
-async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+async def reply_to_ticket(
+    callback: types.CallbackQuery, state: FSMContext, db_user: User
+):
     """Начать ответ на тикет"""
-    ticket_id = int(callback.data.replace('reply_ticket_', ''))
+    ticket_id = int(callback.data.replace("reply_ticket_", ""))
 
     await state.update_data(ticket_id=ticket_id)
 
@@ -731,7 +873,7 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
 
     try:
         await callback.message.edit_text(
-            texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+            texts.t("TICKET_REPLY_INPUT", "Введите ваш ответ:"),
             reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
         )
     except TelegramBadRequest:
@@ -740,7 +882,7 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
         except Exception:
             pass
         await callback.message.answer(
-            texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
+            texts.t("TICKET_REPLY_INPUT", "Введите ваш ответ:"),
             reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
         )
 
@@ -748,7 +890,9 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
     await callback.answer()
 
 
-async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user: User, db: AsyncSession):
+async def handle_ticket_reply(
+    message: types.Message, state: FSMContext, db_user: User, db: AsyncSession
+):
     # Проверяем, что пользователь в правильном состоянии
     current_state = await state.get_state()
     if current_state != TicketStates.waiting_for_reply:
@@ -757,11 +901,17 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     # Защита от спама: по тикету принимаем только первое сообщение в коротком окне
     try:
         data_rl = await state.get_data()
-        rl_ticket_id = data_rl.get('ticket_id') or 'reply'
-        limited = await RateLimitCache.is_rate_limited(db_user.id, f'ticket_reply_{rl_ticket_id}', limit=1, window=2)
+        rl_ticket_id = data_rl.get("ticket_id") or "reply"
+        limited = await RateLimitCache.is_rate_limited(
+            db_user.id, f"ticket_reply_{rl_ticket_id}", limit=1, window=2
+        )
         if limited:
             try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+                asyncio.create_task(
+                    _try_delete_message_later(
+                        message.bot, message.chat.id, message.message_id, 2.0
+                    )
+                )
             except Exception:
                 pass
             return
@@ -769,11 +919,15 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         pass
     try:
         data_rl = await state.get_data()
-        last_ts = data_rl.get('rl_ts_reply')
+        last_ts = data_rl.get("rl_ts_reply")
         now_ts = time.time()
         if last_ts and (now_ts - float(last_ts)) < 2:
             try:
-                asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
+                asyncio.create_task(
+                    _try_delete_message_later(
+                        message.bot, message.chat.id, message.message_id, 2.0
+                    )
+                )
             except Exception:
                 pass
             return
@@ -784,7 +938,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     """Обработать ответ на тикет"""
     # Поддержка фото для ответа пользователя
     # Ограничение ответа пользователя 500 символов
-    reply_text = (message.text or message.caption or '').strip()
+    reply_text = (message.text or message.caption or "").strip()
     # Строже режем до 400, чтобы учесть форматирование/смайлы
     if len(reply_text) > 400:
         reply_text = reply_text[:400]
@@ -792,23 +946,28 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     media_file_id = None
     media_caption = None
     if message.photo:
-        media_type = 'photo'
+        media_type = "photo"
         media_file_id = message.photo[-1].file_id
         media_caption = message.caption
 
     if len(reply_text) < 5:
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:')
+            texts.t(
+                "TICKET_REPLY_TOO_SHORT",
+                "Ответ должен содержать минимум 5 символов. Попробуйте еще раз:",
+            )
         )
         return
 
     data = await state.get_data()
-    ticket_id = data.get('ticket_id')
+    ticket_id = data.get("ticket_id")
 
     if not ticket_id:
         texts = get_texts(db_user.language)
-        await message.answer(texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'))
+        await message.answer(
+            texts.t("TICKET_REPLY_ERROR", "Ошибка: не найден ID тикета.")
+        )
         await state.clear()
         return
 
@@ -817,19 +976,21 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
             texts = get_texts(db_user.language)
-            await message.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'))
+            await message.answer(texts.t("TICKET_NOT_FOUND", "Тикет не найден."))
             await state.clear()
             return
         if ticket.status == TicketStatus.CLOSED.value:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t('TICKET_CLOSED', 'Тикет закрыт.'),
+                texts.t("TICKET_CLOSED", "Тикет закрыт."),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('CLOSE_NOTIFICATION', 'Закрыть уведомление'),
-                                callback_data=f'close_ticket_notification_{ticket.id}',
+                                text=texts.t(
+                                    "CLOSE_NOTIFICATION", "Закрыть уведомление"
+                                ),
+                                callback_data=f"close_ticket_notification_{ticket.id}",
                             )
                         ]
                     ]
@@ -842,13 +1003,15 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
             texts = get_texts(db_user.language)
             await message.answer(
-                texts.t('TICKET_CLOSED_NO_REPLY', 'Тикет закрыт, ответить невозможно.'),
+                texts.t("TICKET_CLOSED_NO_REPLY", "Тикет закрыт, ответить невозможно."),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('CLOSE_NOTIFICATION', 'Закрыть уведомление'),
-                                callback_data=f'close_ticket_notification_{ticket.id}',
+                                text=texts.t(
+                                    "CLOSE_NOTIFICATION", "Закрыть уведомление"
+                                ),
+                                callback_data=f"close_ticket_notification_{ticket.id}",
                             )
                         ]
                     ]
@@ -872,17 +1035,19 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         texts = get_texts(db_user.language)
 
         await message.answer(
-            texts.t('TICKET_REPLY_SENT', 'Ваш ответ отправлен!'),
+            texts.t("TICKET_REPLY_SENT", "Ваш ответ отправлен!"),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('VIEW_TICKET', 'Посмотреть тикет'), callback_data=f'view_ticket_{ticket_id}'
+                            text=texts.t("VIEW_TICKET", "Посмотреть тикет"),
+                            callback_data=f"view_ticket_{ticket_id}",
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BACK_TO_MENU', 'В главное меню'), callback_data='back_to_menu'
+                            text=texts.t("BACK_TO_MENU", "В главное меню"),
+                            callback_data="back_to_menu",
                         )
                     ],
                 ]
@@ -892,29 +1057,36 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         await state.clear()
 
         # Уведомить админов об ответе пользователя
-        logger.info('Attempting to notify admins about ticket reply', ticket_id=ticket_id)
+        logger.info(
+            "Attempting to notify admins about ticket reply", ticket_id=ticket_id
+        )
         await notify_admins_about_ticket_reply(
             ticket, reply_text, db, media_file_id=media_file_id, media_type=media_type
         )
 
     except Exception as e:
-        logger.error('Error adding ticket reply', error=e)
+        logger.error("Error adding ticket reply", error=e)
         texts = get_texts(db_user.language)
         await message.answer(
-            texts.t('TICKET_REPLY_ERROR', 'Произошла ошибка при отправке ответа. Попробуйте позже.')
+            texts.t(
+                "TICKET_REPLY_ERROR",
+                "Произошла ошибка при отправке ответа. Попробуйте позже.",
+            )
         )
 
 
 async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Закрыть тикет"""
-    ticket_id = int(callback.data.replace('close_ticket_', ''))
+    ticket_id = int(callback.data.replace("close_ticket_", ""))
 
     try:
         # Проверяем, что тикет принадлежит пользователю
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
+            await callback.answer(
+                texts.t("TICKET_NOT_FOUND", "Тикет не найден."), show_alert=True
+            )
             return
 
         # Запрещаем закрытие, если заблокирован для ответа? (не требуется) Закрываем тикет
@@ -922,7 +1094,9 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
 
         if success:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_CLOSED', 'Тикет закрыт.'), show_alert=True)
+            await callback.answer(
+                texts.t("TICKET_CLOSED", "Тикет закрыт."), show_alert=True
+            )
 
             # Обновляем inline-клавиатуру текущего сообщения (убираем кнопки)
             await callback.message.edit_reply_markup(
@@ -930,27 +1104,36 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
             )
         else:
             texts = get_texts(db_user.language)
-            await callback.answer(texts.t('TICKET_CLOSE_ERROR', 'Ошибка при закрытии тикета.'), show_alert=True)
+            await callback.answer(
+                texts.t("TICKET_CLOSE_ERROR", "Ошибка при закрытии тикета."),
+                show_alert=True,
+            )
 
     except Exception as e:
-        logger.error('Error closing ticket', error=e)
+        logger.error("Error closing ticket", error=e)
         texts = get_texts(db_user.language)
-        await callback.answer(texts.t('TICKET_CLOSE_ERROR', 'Ошибка при закрытии тикета.'), show_alert=True)
+        await callback.answer(
+            texts.t("TICKET_CLOSE_ERROR", "Ошибка при закрытии тикета."),
+            show_alert=True,
+        )
 
 
-async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+async def cancel_ticket_creation(
+    callback: types.CallbackQuery, state: FSMContext, db_user: User
+):
     """Отменить создание тикета"""
     await state.clear()
 
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('TICKET_CREATION_CANCELLED', 'Создание тикета отменено.'),
+        texts.t("TICKET_CREATION_CANCELLED", "Создание тикета отменено."),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('BACK_TO_SUPPORT', '← К поддержке'), callback_data='menu_support'
+                        text=texts.t("BACK_TO_SUPPORT", "← К поддержке"),
+                        callback_data="menu_support",
                     )
                 ]
             ]
@@ -959,17 +1142,24 @@ async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContex
     await callback.answer()
 
 
-async def cancel_ticket_reply(callback: types.CallbackQuery, state: FSMContext, db_user: User):
+async def cancel_ticket_reply(
+    callback: types.CallbackQuery, state: FSMContext, db_user: User
+):
     """Отменить ответ на тикет"""
     await state.clear()
 
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t('TICKET_REPLY_CANCELLED', 'Ответ отменен.'),
+        texts.t("TICKET_REPLY_CANCELLED", "Ответ отменен."),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.t('BACK_TO_TICKETS', '← К тикетам'), callback_data='my_tickets')]
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("BACK_TO_TICKETS", "← К тикетам"),
+                        callback_data="my_tickets",
+                    )
+                ]
             ]
         ),
     )
@@ -990,13 +1180,17 @@ async def close_ticket_notification(callback: types.CallbackQuery, db_user: User
     except TelegramBadRequest:
         # Message is too old to delete (>48h) — edit it instead
         try:
-            await callback.message.edit_text(texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.'))
+            await callback.message.edit_text(
+                texts.t("NOTIFICATION_CLOSED", "Уведомление закрыто.")
+            )
         except TelegramBadRequest:
             pass
-    await callback.answer(texts.t('NOTIFICATION_CLOSED', 'Уведомление закрыто.'))
+    await callback.answer(texts.t("NOTIFICATION_CLOSED", "Уведомление закрыто."))
 
 
-def _build_ticket_notification_keyboard(service: AdminNotificationService, ticket: Ticket, user: User | None):
+def _build_ticket_notification_keyboard(
+    service: AdminNotificationService, ticket: Ticket, user: User | None
+):
     """Собирает клавиатуру действий для уведомления о тикете по роли получателя.
 
     Возвращает None только для роли 'none' (посторонний в личке / строковый
@@ -1007,15 +1201,17 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
     from app.config import settings
 
     role = service.resolve_recipient_role()
-    if role == 'none':
+    if role == "none":
         return None
     # В cabinet-режиме добавляем кнопку «открыть тикет в кабинете»: web_app в личке,
     # t.me Mini App диплинк в группе (где web_app недоступен). None — если не
     # cabinet-режим / кабинет не настроен / в группе нет зарегистрированного Mini App.
     cabinet_button = build_admin_ticket_cabinet_button(
         ticket.id,
-        text=get_texts(settings.DEFAULT_LANGUAGE).t('OPEN_TICKET_IN_CABINET', 'Открыть в кабинете'),
-        in_group=(role == 'group'),
+        text=get_texts(settings.DEFAULT_LANGUAGE).t(
+            "OPEN_TICKET_IN_CABINET", "Открыть в кабинете"
+        ),
+        in_group=(role == "group"),
     )
     return get_ticket_notification_keyboard(
         ticket.id,
@@ -1023,9 +1219,9 @@ def _build_ticket_notification_keyboard(service: AdminNotificationService, ticke
         telegram_id=user.telegram_id if user else None,
         username=user.username if user else None,
         is_closed=ticket.is_closed,
-        is_user_blocked=getattr(ticket, 'is_user_reply_blocked', False),
-        is_admin=(role == 'admin'),
-        fsm_enabled=(role != 'group'),
+        is_user_blocked=getattr(ticket, "is_user_reply_blocked", False),
+        is_admin=(role == "admin"),
+        fsm_enabled=(role != "group"),
         cabinet_button=cabinet_button,
         language=settings.DEFAULT_LANGUAGE,
     )
@@ -1038,48 +1234,60 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
 
         if not settings.is_admin_notifications_enabled():
             logger.info(
-                'Admin notifications disabled. Ticket created by user', ticket_id=ticket.id, user_id=ticket.user_id
+                "Admin notifications disabled. Ticket created by user",
+                ticket_id=ticket.id,
+                user_id=ticket.user_id,
             )
             return
 
         get_texts(settings.DEFAULT_LANGUAGE)
-        title = (ticket.title or '').strip()
+        title = (ticket.title or "").strip()
         if len(title) > 60:
-            title = title[:57] + '...'
+            title = title[:57] + "..."
 
         try:
             user = await get_user_by_id(db, ticket.user_id)
         except Exception:
             user = None
-        full_name = html.escape(user.full_name or '') if user else 'Unknown'
-        telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = html.escape((user.username or 'отсутствует') if user else 'отсутствует')
+        full_name = html.escape(user.full_name or "") if user else "Unknown"
+        telegram_id_display = (
+            (user.telegram_id or user.email or f"#{user.id}") if user else "—"
+        )
+        username_display = html.escape(
+            (user.username or "отсутствует") if user else "отсутствует"
+        )
 
         # Загружаем первое сообщение для получения медиа и превью текста
         first_message = await TicketMessageCRUD.get_first_message(db, ticket.id)
         media_file_id = None
         media_type = None
-        message_preview = ''
+        message_preview = ""
         if first_message:
-            media_file_id = first_message.media_file_id if first_message.has_media else None
+            media_file_id = (
+                first_message.media_file_id if first_message.has_media else None
+            )
             media_type = first_message.media_type if first_message.has_media else None
-            msg_text = (first_message.message_text or '').strip()
+            msg_text = (first_message.message_text or "").strip()
             if msg_text:
-                message_preview = msg_text[:200] + '...' if len(msg_text) > 200 else msg_text
+                message_preview = (
+                    msg_text[:200] + "..." if len(msg_text) > 200 else msg_text
+                )
 
-        safe_title = html.escape(title) if title else '—'
+        safe_title = html.escape(title) if title else "—"
 
         notification_text = (
-            f'<b>НОВЫЙ ТИКЕТ</b>\n\n'
-            f'<b>ID:</b> <code>{ticket.id}</code>\n'
-            f'<b>Пользователь:</b> {full_name}\n'
-            f'<b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'<b>Username:</b> @{username_display}\n'
-            f'<b>Заголовок:</b> {safe_title}\n'
+            f"<b>НОВЫЙ ТИКЕТ</b>\n\n"
+            f"<b>ID:</b> <code>{ticket.id}</code>\n"
+            f"<b>Пользователь:</b> {full_name}\n"
+            f"<b>ID:</b> <code>{telegram_id_display}</code>\n"
+            f"<b>Username:</b> @{username_display}\n"
+            f"<b>Заголовок:</b> {safe_title}\n"
         )
 
         if message_preview:
-            notification_text += f'\n<b>Сообщение:</b>\n{html.escape(message_preview)}\n'
+            notification_text += (
+                f"\n<b>Сообщение:</b>\n{html.escape(message_preview)}\n"
+            )
 
         notification_text += f'\n<b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
 
@@ -1087,7 +1295,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
 
         bot = maintenance_service._bot or None
         if bot is None:
-            logger.warning('Bot instance is not available for admin notifications')
+            logger.warning("Bot instance is not available for admin notifications")
             return
 
         service = AdminNotificationService(bot)
@@ -1097,10 +1305,13 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         keyboard = _build_ticket_notification_keyboard(service, ticket, user)
 
         await service.send_ticket_event_notification(
-            notification_text, keyboard, media_file_id=media_file_id, media_type=media_type
+            notification_text,
+            keyboard,
+            media_file_id=media_file_id,
+            media_type=media_type,
         )
     except Exception as e:
-        logger.error('Error notifying admins about new ticket', error=e)
+        logger.error("Error notifying admins about new ticket", error=e)
 
 
 async def notify_admins_about_ticket_reply(
@@ -1112,44 +1323,54 @@ async def notify_admins_about_ticket_reply(
     media_type: str | None = None,
 ):
     """Уведомить админов об ответе пользователя на тикет"""
-    logger.info('notify_admins_about_ticket_reply called for ticket', ticket_id=ticket.id)
+    logger.info(
+        "notify_admins_about_ticket_reply called for ticket", ticket_id=ticket.id
+    )
     try:
         from app.config import settings
 
         if not settings.is_admin_notifications_enabled():
-            logger.info('Admin notifications disabled. Reply to ticket', ticket_id=ticket.id)
+            logger.info(
+                "Admin notifications disabled. Reply to ticket", ticket_id=ticket.id
+            )
             return
 
-        title = (ticket.title or '').strip()
+        title = (ticket.title or "").strip()
         if len(title) > 60:
-            title = title[:57] + '...'
+            title = title[:57] + "..."
 
         try:
             user = await get_user_by_id(db, ticket.user_id)
         except Exception:
             user = None
-        full_name = html.escape(user.full_name or '') if user else 'Unknown'
-        telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = html.escape((user.username or 'отсутствует') if user else 'отсутствует')
+        full_name = html.escape(user.full_name or "") if user else "Unknown"
+        telegram_id_display = (
+            (user.telegram_id or user.email or f"#{user.id}") if user else "—"
+        )
+        username_display = html.escape(
+            (user.username or "отсутствует") if user else "отсутствует"
+        )
 
-        reply_preview = reply_text[:200] + '...' if len(reply_text) > 200 else reply_text
-        safe_title = html.escape(title) if title else '—'
+        reply_preview = (
+            reply_text[:200] + "..." if len(reply_text) > 200 else reply_text
+        )
+        safe_title = html.escape(title) if title else "—"
 
         notification_text = (
-            f'<b>ОТВЕТ НА ТИКЕТ</b>\n\n'
-            f'<b>ID тикета:</b> <code>{ticket.id}</code>\n'
-            f'<b>Заголовок:</b> {safe_title}\n'
-            f'<b>Пользователь:</b> {full_name}\n'
-            f'<b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'<b>Username:</b> @{username_display}\n\n'
-            f'<b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
+            f"<b>ОТВЕТ НА ТИКЕТ</b>\n\n"
+            f"<b>ID тикета:</b> <code>{ticket.id}</code>\n"
+            f"<b>Заголовок:</b> {safe_title}\n"
+            f"<b>Пользователь:</b> {full_name}\n"
+            f"<b>ID:</b> <code>{telegram_id_display}</code>\n"
+            f"<b>Username:</b> @{username_display}\n\n"
+            f"<b>Сообщение:</b>\n{html.escape(reply_preview)}\n"
         )
 
         from app.services.maintenance_service import maintenance_service
 
         bot = maintenance_service._bot or None
         if bot is None:
-            logger.warning('Bot instance is not available for admin notifications')
+            logger.warning("Bot instance is not available for admin notifications")
             return
 
         service = AdminNotificationService(bot)
@@ -1157,50 +1378,70 @@ async def notify_admins_about_ticket_reply(
         keyboard = _build_ticket_notification_keyboard(service, ticket, user)
 
         result = await service.send_ticket_event_notification(
-            notification_text, keyboard, media_file_id=media_file_id, media_type=media_type
+            notification_text,
+            keyboard,
+            media_file_id=media_file_id,
+            media_type=media_type,
         )
-        logger.info('Ticket reply notification sent', ticket_id=ticket.id, result=result)
+        logger.info(
+            "Ticket reply notification sent", ticket_id=ticket.id, result=result
+        )
     except Exception as e:
-        logger.error('Error notifying admins about ticket reply', error=e)
+        logger.error("Error notifying admins about ticket reply", error=e)
 
 
 def register_handlers(dp: Dispatcher):
     """Регистрация обработчиков тикетов"""
 
     # Создание тикета (теперь без приоритета)
-    dp.callback_query.register(show_ticket_priority_selection, F.data == 'create_ticket')
+    dp.callback_query.register(
+        show_ticket_priority_selection, F.data == "create_ticket"
+    )
 
     dp.message.register(handle_ticket_title_input, TicketStates.waiting_for_title)
 
     dp.message.register(handle_ticket_message_input, TicketStates.waiting_for_message)
 
     # Просмотр тикетов
-    dp.callback_query.register(show_my_tickets, F.data == 'my_tickets')
-    dp.callback_query.register(show_my_tickets_closed, F.data == 'my_tickets_closed')
-    dp.callback_query.register(show_my_tickets_closed, F.data.startswith('my_tickets_closed_page_'))
+    dp.callback_query.register(show_my_tickets, F.data == "my_tickets")
+    dp.callback_query.register(show_my_tickets_closed, F.data == "my_tickets_closed")
+    dp.callback_query.register(
+        show_my_tickets_closed, F.data.startswith("my_tickets_closed_page_")
+    )
 
-    dp.callback_query.register(view_ticket, F.data.startswith('view_ticket_') | F.data.startswith('ticket_view_page_'))
+    dp.callback_query.register(
+        view_ticket,
+        F.data.startswith("view_ticket_") | F.data.startswith("ticket_view_page_"),
+    )
 
     # Вложения пользователя
-    dp.callback_query.register(send_ticket_attachments, F.data.startswith('ticket_attachments_'))
+    dp.callback_query.register(
+        send_ticket_attachments, F.data.startswith("ticket_attachments_")
+    )
 
-    dp.callback_query.register(user_delete_message, F.data.startswith('user_delete_message_'))
+    dp.callback_query.register(
+        user_delete_message, F.data.startswith("user_delete_message_")
+    )
 
     # Ответы на тикеты
-    dp.callback_query.register(reply_to_ticket, F.data.startswith('reply_ticket_'))
+    dp.callback_query.register(reply_to_ticket, F.data.startswith("reply_ticket_"))
 
     dp.message.register(handle_ticket_reply, TicketStates.waiting_for_reply)
 
     # Закрытие тикетов
-    dp.callback_query.register(close_ticket, F.data.regexp(r'^close_ticket_\d+$'))
+    dp.callback_query.register(close_ticket, F.data.regexp(r"^close_ticket_\d+$"))
 
     # Отмена операций
-    dp.callback_query.register(cancel_ticket_creation, F.data == 'cancel_ticket_creation')
+    dp.callback_query.register(
+        cancel_ticket_creation, F.data == "cancel_ticket_creation"
+    )
 
-    dp.callback_query.register(cancel_ticket_reply, F.data == 'cancel_ticket_reply')
+    dp.callback_query.register(cancel_ticket_reply, F.data == "cancel_ticket_reply")
 
     # Пагинация тикетов
-    dp.callback_query.register(show_my_tickets, F.data.startswith('my_tickets_page_'))
+    dp.callback_query.register(show_my_tickets, F.data.startswith("my_tickets_page_"))
 
     # Закрытие уведомлений
-    dp.callback_query.register(close_ticket_notification, F.data.startswith('close_ticket_notification_'))
+    dp.callback_query.register(
+        close_ticket_notification, F.data.startswith("close_ticket_notification_")
+    )

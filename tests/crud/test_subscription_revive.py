@@ -34,7 +34,9 @@ def _db() -> AsyncMock:
 
 async def test_revive_expired_starts_fresh_period(monkeypatch):
     """Истёкшую реанимируем: статус active, период с «сейчас», трафик обнулён."""
-    monkeypatch.setattr(sub_crud, 'deactivate_user_trial_subscriptions', AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        sub_crud, "deactivate_user_trial_subscriptions", AsyncMock(return_value=[])
+    )
     db = _db()
     past = datetime.now(UTC) - timedelta(days=5)
     s = _sub(
@@ -46,7 +48,7 @@ async def test_revive_expired_starts_fresh_period(monkeypatch):
         start_date=past - timedelta(days=30),
         is_trial=False,
         traffic_used_gb=44.0,
-        connected_squads=['sq'],
+        connected_squads=["sq"],
         device_limit=2,
         traffic_limit_gb=100,
     )
@@ -57,7 +59,7 @@ async def test_revive_expired_starts_fresh_period(monkeypatch):
         duration_days=30,
         traffic_limit_gb=100,
         device_limit=2,
-        connected_squads=['sq'],
+        connected_squads=["sq"],
         update_server_counters=False,
         commit=True,
     )
@@ -73,7 +75,9 @@ async def test_revive_expired_starts_fresh_period(monkeypatch):
 
 async def test_revive_alive_extends_from_end_date(monkeypatch):
     """Ещё живую продлеваем от её end_date, накопленный трафик не сбрасываем."""
-    monkeypatch.setattr(sub_crud, 'deactivate_user_trial_subscriptions', AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        sub_crud, "deactivate_user_trial_subscriptions", AsyncMock(return_value=[])
+    )
     db = _db()
     future = datetime.now(UTC) + timedelta(days=10)
     s = _sub(
@@ -85,7 +89,7 @@ async def test_revive_alive_extends_from_end_date(monkeypatch):
         start_date=datetime.now(UTC),
         is_trial=False,
         traffic_used_gb=20.0,
-        connected_squads=['sq'],
+        connected_squads=["sq"],
         device_limit=2,
         traffic_limit_gb=100,
     )
@@ -107,19 +111,29 @@ async def test_revive_alive_extends_from_end_date(monkeypatch):
 
 async def test_create_paid_subscription_revives_existing_in_multitariff(monkeypatch):
     """Мульти-тариф + есть ИСТЁКШАЯ запись тарифа → revive, без вставки дубля."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
-    existing = _sub(id=5, user_id=7, tariff_id=3, is_trial=False, status=SubscriptionStatus.EXPIRED.value)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
+    existing = _sub(
+        id=5,
+        user_id=7,
+        tariff_id=3,
+        is_trial=False,
+        status=SubscriptionStatus.EXPIRED.value,
+    )
     lookup = AsyncMock(return_value=existing)
     revive = AsyncMock(return_value=existing)
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
-    monkeypatch.setattr(sub_crud, '_revive_paid_subscription', revive)
+    monkeypatch.setattr(sub_crud, "get_subscription_by_user_and_tariff", lookup)
+    monkeypatch.setattr(sub_crud, "_revive_paid_subscription", revive)
     db = _db()
 
-    result = await sub_crud.create_paid_subscription(db, user_id=7, duration_days=30, traffic_limit_gb=100, tariff_id=3)
+    result = await sub_crud.create_paid_subscription(
+        db, user_id=7, duration_days=30, traffic_limit_gb=100, tariff_id=3
+    )
 
     assert result is existing
     lookup.assert_awaited_once()
-    assert lookup.await_args.kwargs.get('include_inactive') is True
+    assert lookup.await_args.kwargs.get("include_inactive") is True
     revive.assert_awaited_once()
     db.add.assert_not_called()  # новую подписку НЕ создавали
 
@@ -129,15 +143,25 @@ async def test_create_paid_subscription_revives_expired_trial(monkeypatch):
     (бот/гость) теперь реанимируется/конвертируется на месте, а не плодит дубль —
     та же Remnawave-ссылка. Раньше guard исключал триалы (``not _existing.is_trial``).
     """
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
-    expired_trial = _sub(id=9, user_id=7, tariff_id=3, is_trial=True, status=SubscriptionStatus.EXPIRED.value)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
+    expired_trial = _sub(
+        id=9,
+        user_id=7,
+        tariff_id=3,
+        is_trial=True,
+        status=SubscriptionStatus.EXPIRED.value,
+    )
     lookup = AsyncMock(return_value=expired_trial)
     revive = AsyncMock(return_value=expired_trial)
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
-    monkeypatch.setattr(sub_crud, '_revive_paid_subscription', revive)
+    monkeypatch.setattr(sub_crud, "get_subscription_by_user_and_tariff", lookup)
+    monkeypatch.setattr(sub_crud, "_revive_paid_subscription", revive)
     db = _db()
 
-    result = await sub_crud.create_paid_subscription(db, user_id=7, duration_days=30, traffic_limit_gb=100, tariff_id=3)
+    result = await sub_crud.create_paid_subscription(
+        db, user_id=7, duration_days=30, traffic_limit_gb=100, tariff_id=3
+    )
 
     assert result is expired_trial
     revive.assert_awaited_once()  # истёкший триал теперь уходит в revive
@@ -147,7 +171,9 @@ async def test_create_paid_subscription_revives_expired_trial(monkeypatch):
 async def test_revive_expired_trial_converts_to_paid(monkeypatch):
     """Реанимация истёкшего ТРИАЛА: снимаем триальный флаг, обнуляем трафик,
     стартуем свежий платный период — конвертация trial→paid в той же записи."""
-    monkeypatch.setattr(sub_crud, 'deactivate_user_trial_subscriptions', AsyncMock(return_value=[]))
+    monkeypatch.setattr(
+        sub_crud, "deactivate_user_trial_subscriptions", AsyncMock(return_value=[])
+    )
     db = _db()
     past = datetime.now(UTC) - timedelta(days=2)
     s = _sub(
@@ -159,7 +185,7 @@ async def test_revive_expired_trial_converts_to_paid(monkeypatch):
         start_date=past - timedelta(days=3),
         is_trial=True,
         traffic_used_gb=12.0,
-        connected_squads=['sq'],
+        connected_squads=["sq"],
         device_limit=1,
         traffic_limit_gb=50,
     )
@@ -170,7 +196,7 @@ async def test_revive_expired_trial_converts_to_paid(monkeypatch):
         duration_days=30,
         traffic_limit_gb=100,
         device_limit=2,
-        connected_squads=['sq'],
+        connected_squads=["sq"],
         update_server_counters=False,
         commit=True,
     )
@@ -184,35 +210,59 @@ async def test_revive_expired_trial_converts_to_paid(monkeypatch):
 
 async def test_create_paid_subscription_does_not_revive_active(monkeypatch):
     """Активную (не истёкшую) НЕ реанимируем — падаем в обычное создание/IntegrityError."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
-    active = _sub(id=5, user_id=7, tariff_id=3, is_trial=False, status=SubscriptionStatus.ACTIVE.value)
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', AsyncMock(return_value=active))
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
+    active = _sub(
+        id=5,
+        user_id=7,
+        tariff_id=3,
+        is_trial=False,
+        status=SubscriptionStatus.ACTIVE.value,
+    )
+    monkeypatch.setattr(
+        sub_crud, "get_subscription_by_user_and_tariff", AsyncMock(return_value=active)
+    )
     revive = AsyncMock(return_value=active)
-    monkeypatch.setattr(sub_crud, '_revive_paid_subscription', revive)
+    monkeypatch.setattr(sub_crud, "_revive_paid_subscription", revive)
     # short-circuit тяжёлый путь создания сразу после guard
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(side_effect=RuntimeError('reached create')))
+    monkeypatch.setattr(
+        sub_crud,
+        "generate_unique_short_id",
+        AsyncMock(side_effect=RuntimeError("reached create")),
+    )
     db = _db()
 
     try:
-        await sub_crud.create_paid_subscription(db, user_id=7, duration_days=30, traffic_limit_gb=100, tariff_id=3)
+        await sub_crud.create_paid_subscription(
+            db, user_id=7, duration_days=30, traffic_limit_gb=100, tariff_id=3
+        )
     except RuntimeError as e:
-        assert str(e) == 'reached create'  # дошли до создания, не реанимировали
+        assert str(e) == "reached create"  # дошли до создания, не реанимировали
 
     revive.assert_not_awaited()  # active не реанимируется
 
 
 async def test_create_paid_subscription_skips_revive_without_tariff(monkeypatch):
     """Классический режим (tariff_id=None) — lookup тарифа не дёргаем, создаём как раньше."""
-    monkeypatch.setattr(type(sub_crud.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(
+        type(sub_crud.settings), "is_multi_tariff_enabled", lambda self: True
+    )
     lookup = AsyncMock(return_value=None)
-    monkeypatch.setattr(sub_crud, 'get_subscription_by_user_and_tariff', lookup)
+    monkeypatch.setattr(sub_crud, "get_subscription_by_user_and_tariff", lookup)
     # short-circuit тяжёлый путь создания сразу после guard
-    monkeypatch.setattr(sub_crud, 'generate_unique_short_id', AsyncMock(side_effect=RuntimeError('reached create')))
+    monkeypatch.setattr(
+        sub_crud,
+        "generate_unique_short_id",
+        AsyncMock(side_effect=RuntimeError("reached create")),
+    )
     db = _db()
 
     try:
-        await sub_crud.create_paid_subscription(db, user_id=7, duration_days=30, tariff_id=None)
+        await sub_crud.create_paid_subscription(
+            db, user_id=7, duration_days=30, tariff_id=None
+        )
     except RuntimeError as e:
-        assert str(e) == 'reached create'  # дошли до создания, не до revive
+        assert str(e) == "reached create"  # дошли до создания, не до revive
 
     lookup.assert_not_awaited()  # без tariff_id поиск тарифа не запускается

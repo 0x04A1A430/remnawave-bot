@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -21,14 +20,16 @@ from app.services.payment_service import PaymentService
 
 @pytest.fixture
 def anyio_backend() -> str:
-    return 'asyncio'
+    return "asyncio"
 
 
 class DummySession:
     async def commit(self) -> None:  # pragma: no cover - no custom logic required
         return None
 
-    async def refresh(self, *_: Any) -> None:  # pragma: no cover - no custom logic required
+    async def refresh(
+        self, *_: Any
+    ) -> None:  # pragma: no cover - no custom logic required
         return None
 
 
@@ -48,10 +49,10 @@ class StubPlategaService:
     ) -> None:
         self.is_configured = configured
         self.response = response or {
-            'transactionId': 'trx-001',
-            'redirect': 'https://platega.example/pay',
-            'status': 'PENDING',
-            'expiresIn': 900,
+            "transactionId": "trx-001",
+            "redirect": "https://platega.example/pay",
+            "status": "PENDING",
+            "expiresIn": 900,
         }
         self.transaction_payload = transaction_payload
         self.calls: list[dict[str, Any]] = []
@@ -64,7 +65,7 @@ class StubPlategaService:
         return self.response
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any] | None:
-        self.calls.append({'transaction_lookup': transaction_id})
+        self.calls.append({"transaction_lookup": transaction_id})
         return self.transaction_payload
 
 
@@ -82,7 +83,7 @@ def _make_service(stub: StubPlategaService | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio('asyncio')
+@pytest.mark.anyio("asyncio")
 async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPlategaService()
     service = _make_service(stub)
@@ -90,64 +91,68 @@ async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -
 
     captured_args: dict[str, Any] = {}
 
-    async def fake_create_platega_payment(*args: Any, **kwargs: Any) -> DummyLocalPayment:
+    async def fake_create_platega_payment(
+        *args: Any, **kwargs: Any
+    ) -> DummyLocalPayment:
         if args:
-            captured_args['db_arg'] = args[0]
+            captured_args["db_arg"] = args[0]
         captured_args.update(kwargs)
         return DummyLocalPayment(payment_id=777)
 
     monkeypatch.setattr(
         payment_service_module,
-        'create_platega_payment',
+        "create_platega_payment",
         fake_create_platega_payment,
         raising=False,
     )
-    monkeypatch.setattr(settings, 'PLATEGA_MIN_AMOUNT_KOPEKS', 10_000, raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_MAX_AMOUNT_KOPEKS', 500_000, raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_CURRENCY', 'RUB', raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_RETURN_URL', 'https://return', raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_FAILED_URL', 'https://failed', raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_MIN_AMOUNT_KOPEKS", 10_000, raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_MAX_AMOUNT_KOPEKS", 500_000, raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_CURRENCY", "RUB", raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_RETURN_URL", "https://return", raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_FAILED_URL", "https://failed", raising=False)
 
     result = await service.create_platega_payment(
         db=db,
         user_id=42,
         amount_kopeks=50_000,
-        description='Пополнение счёта',
-        language='ru',
+        description="Пополнение счёта",
+        language="ru",
         payment_method_code=10,
     )
 
     assert result is not None
-    assert result['local_payment_id'] == 777
-    assert result['transaction_id'] == 'trx-001'
-    assert result['redirect_url'] == 'https://platega.example/pay'
-    assert result['status'] == 'PENDING'
-    assert 'correlation_id' in result and len(result['correlation_id']) == 32
-    assert captured_args['user_id'] == 42
-    assert captured_args['amount_kopeks'] == 50_000
-    assert captured_args['payment_method_code'] == 10
-    assert captured_args['metadata']['selected_method'] == 10
-    assert stub.calls and stub.calls[0]['payment_method'] == 10
-    assert stub.calls[0]['amount'] == pytest.approx(500.0)
-    assert stub.calls[0]['currency'] == 'RUB'
-    assert captured_args['metadata']['language'] == 'ru'
+    assert result["local_payment_id"] == 777
+    assert result["transaction_id"] == "trx-001"
+    assert result["redirect_url"] == "https://platega.example/pay"
+    assert result["status"] == "PENDING"
+    assert "correlation_id" in result and len(result["correlation_id"]) == 32
+    assert captured_args["user_id"] == 42
+    assert captured_args["amount_kopeks"] == 50_000
+    assert captured_args["payment_method_code"] == 10
+    assert captured_args["metadata"]["selected_method"] == 10
+    assert stub.calls and stub.calls[0]["payment_method"] == 10
+    assert stub.calls[0]["amount"] == pytest.approx(500.0)
+    assert stub.calls[0]["currency"] == "RUB"
+    assert captured_args["metadata"]["language"] == "ru"
 
 
-@pytest.mark.anyio('asyncio')
-async def test_create_platega_payment_respects_limits_and_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.anyio("asyncio")
+async def test_create_platega_payment_respects_limits_and_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stub = StubPlategaService()
     service = _make_service(stub)
     db = DummySession()
 
-    monkeypatch.setattr(settings, 'PLATEGA_MIN_AMOUNT_KOPEKS', 20_000, raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_MAX_AMOUNT_KOPEKS', 40_000, raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_MIN_AMOUNT_KOPEKS", 20_000, raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_MAX_AMOUNT_KOPEKS", 40_000, raising=False)
 
     too_low = await service.create_platega_payment(
         db=db,
         user_id=1,
         amount_kopeks=10_000,
-        description='Пополнение',
-        language='ru',
+        description="Пополнение",
+        language="ru",
         payment_method_code=2,
     )
     assert too_low is None
@@ -156,8 +161,8 @@ async def test_create_platega_payment_respects_limits_and_configuration(monkeypa
         db=db,
         user_id=1,
         amount_kopeks=100_000,
-        description='Пополнение',
-        language='ru',
+        description="Пополнение",
+        language="ru",
         payment_method_code=2,
     )
     assert too_high is None
@@ -167,49 +172,53 @@ async def test_create_platega_payment_respects_limits_and_configuration(monkeypa
         db=db,
         user_id=1,
         amount_kopeks=30_000,
-        description='Пополнение',
-        language='ru',
+        description="Пополнение",
+        language="ru",
         payment_method_code=2,
     )
     assert result is None
 
 
-@pytest.mark.anyio('asyncio')
-async def test_create_platega_payment_handles_service_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.anyio("asyncio")
+async def test_create_platega_payment_handles_service_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     stub = StubPlategaService()
-    stub.raise_error = RuntimeError('network down')
+    stub.raise_error = RuntimeError("network down")
     service = _make_service(stub)
     db = DummySession()
 
     async def fake_create_platega_payment(*_: Any, **__: Any) -> DummyLocalPayment:
-        pytest.fail('local payment must not be created when Platega call fails')
+        pytest.fail("local payment must not be created when Platega call fails")
 
     monkeypatch.setattr(
         payment_service_module,
-        'create_platega_payment',
+        "create_platega_payment",
         fake_create_platega_payment,
         raising=False,
     )
-    monkeypatch.setattr(settings, 'PLATEGA_MIN_AMOUNT_KOPEKS', 1_000, raising=False)
-    monkeypatch.setattr(settings, 'PLATEGA_MAX_AMOUNT_KOPEKS', 1_000_000, raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_MIN_AMOUNT_KOPEKS", 1_000, raising=False)
+    monkeypatch.setattr(settings, "PLATEGA_MAX_AMOUNT_KOPEKS", 1_000_000, raising=False)
 
     result = await service.create_platega_payment(
         db=db,
         user_id=5,
         amount_kopeks=25_000,
-        description='Пополнение',
-        language='ru',
+        description="Пополнение",
+        language="ru",
         payment_method_code=13,
     )
     assert result is None
-    assert stub.calls and 'payment_method' in stub.calls[0]
+    assert stub.calls and "payment_method" in stub.calls[0]
 
 
-def test_get_platega_active_methods_parses_and_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_platega_active_methods_parses_and_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         settings,
-        'PLATEGA_ACTIVE_METHODS',
-        ' 2,10, 11 ;12,13,13,invalid ',
+        "PLATEGA_ACTIVE_METHODS",
+        " 2,10, 11 ;12,13,13,invalid ",
         raising=False,
     )
 
@@ -218,8 +227,10 @@ def test_get_platega_active_methods_parses_and_filters(monkeypatch: pytest.Monke
     assert methods == [2, 10, 11, 12, 13]
 
 
-def test_get_platega_active_methods_returns_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, 'PLATEGA_ACTIVE_METHODS', '', raising=False)
+def test_get_platega_active_methods_returns_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "PLATEGA_ACTIVE_METHODS", "", raising=False)
 
     methods = settings.get_platega_active_methods()
 
@@ -227,7 +238,7 @@ def test_get_platega_active_methods_returns_default(monkeypatch: pytest.MonkeyPa
 
 
 def test_platega_method_display_helpers() -> None:
-    assert settings.get_platega_method_display_name(10) == 'Банковские карты (RUB)'
-    assert settings.get_platega_method_display_title(10) == '💳 Карты (RUB)'
-    assert settings.get_platega_method_display_name(999) == 'Метод 999'
-    assert settings.get_platega_method_display_title(999) == 'Platega 999'
+    assert settings.get_platega_method_display_name(10) == "Банковские карты (RUB)"
+    assert settings.get_platega_method_display_title(10) == "💳 Карты (RUB)"
+    assert settings.get_platega_method_display_name(999) == "Метод 999"
+    assert settings.get_platega_method_display_title(999) == "Platega 999"

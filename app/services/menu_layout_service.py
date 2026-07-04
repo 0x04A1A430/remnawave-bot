@@ -27,15 +27,14 @@ from app.services.menu_layout import (
     MenuLayoutStatsService,
 )
 
-
 __all__ = [
-    'AVAILABLE_CALLBACKS',
-    'BUILTIN_BUTTONS_INFO',
-    'DEFAULT_MENU_CONFIG',
-    'DYNAMIC_PLACEHOLDERS',
-    'MENU_LAYOUT_CONFIG_KEY',
-    'MenuContext',
-    'MenuLayoutHistoryService',
-    'MenuLayoutService',
-    'MenuLayoutStatsService',
+    "AVAILABLE_CALLBACKS",
+    "BUILTIN_BUTTONS_INFO",
+    "DEFAULT_MENU_CONFIG",
+    "DYNAMIC_PLACEHOLDERS",
+    "MENU_LAYOUT_CONFIG_KEY",
+    "MenuContext",
+    "MenuLayoutHistoryService",
+    "MenuLayoutService",
+    "MenuLayoutStatsService",
 ]

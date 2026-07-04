@@ -23,7 +23,6 @@ from app.states import ContestStates
 from app.utils.decorators import auth_required, error_handler
 from app.utils.button_emoji import make_button
 
-
 logger = structlog.get_logger(__name__)
 
 # Rate limiting storage
@@ -33,9 +32,11 @@ _rate_limits: dict = {}
 _attempt_service = ContestAttemptService()
 
 
-def _check_rate_limit(user_id: int, action: str, limit: int = 1, window_seconds: int = 5) -> bool:
+def _check_rate_limit(
+    user_id: int, action: str, limit: int = 1, window_seconds: int = 5
+) -> bool:
     """Check if user exceeds rate limit for contest actions."""
-    key = f'{user_id}_{action}'
+    key = f"{user_id}_{action}"
     now = datetime.now(UTC).timestamp()
 
     if key not in _rate_limits:
@@ -56,8 +57,8 @@ def _validate_callback_data(data: str) -> list | None:
     if not data or not isinstance(data, str):
         return None
 
-    parts = data.split('_')
-    if len(parts) < 2 or parts[0] != 'contest':
+    parts = data.split("_")
+    if len(parts) < 2 or parts[0] != "contest":
         return None
 
     for part in parts:
@@ -81,7 +82,10 @@ async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
     """Reply that user is not eligible to play."""
     texts = get_texts(language)
     await callback.answer(
-        texts.t('CONTEST_NOT_ELIGIBLE', 'Игры доступны только с активной или триальной подпиской.'),
+        texts.t(
+            "CONTEST_NOT_ELIGIBLE",
+            "Игры доступны только с активной или триальной подпиской.",
+        ),
         show_alert=True,
     )
 
@@ -89,13 +93,15 @@ async def _reply_not_eligible(callback: types.CallbackQuery, language: str):
 # ---------- Handlers ----------
 
 
-async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, types.InlineKeyboardMarkup] | None:
+async def _build_contests_menu_view(
+    db: AsyncSession, db_user
+) -> tuple[str, types.InlineKeyboardMarkup] | None:
     """Build the contests menu (text, keyboard). Returns None if the user is not eligible."""
     texts = get_texts(db_user.language)
 
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
     # For eligibility: pick best non-daily subscription (most days left)
-    non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+    non_daily = [s for s in active_subs if not getattr(s, "is_daily_tariff", False)]
     eligible = non_daily or active_subs
     subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
     if not _user_allowed(subscription):
@@ -108,7 +114,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
     for rnd in active_rounds:
         if not rnd.template or not rnd.template.is_enabled:
             continue
-        tpl_slug = rnd.template.slug if rnd.template else ''
+        tpl_slug = rnd.template.slug if rnd.template else ""
         if tpl_slug not in unique_templates:
             unique_templates[tpl_slug] = rnd
 
@@ -118,8 +124,8 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{title}',
-                    callback_data=f'contest_play_{tpl_slug}_{rnd.id}',
+                    text=f"{title}",
+                    callback_data=f"contest_play_{tpl_slug}_{rnd.id}",
                 )
             ]
         )
@@ -128,21 +134,23 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CONTEST_EMPTY', 'Сейчас игр нет'),
-                    callback_data='noop',
+                    text=texts.t("CONTEST_EMPTY", "Сейчас игр нет"),
+                    callback_data="noop",
                 )
             ]
         )
 
-    buttons.append([make_button(text=texts.BACK, callback_data='back_to_menu')])
+    buttons.append([make_button(text=texts.BACK, callback_data="back_to_menu")])
 
     return (
-        texts.t('CONTEST_MENU_TITLE', '<b>Игры/Конкурсы</b>\nВыберите игру:'),
+        texts.t("CONTEST_MENU_TITLE", "<b>Игры/Конкурсы</b>\nВыберите игру:"),
         types.InlineKeyboardMarkup(inline_keyboard=buttons),
     )
 
 
-async def open_contests_menu_message(message: types.Message, db_user, db: AsyncSession) -> None:
+async def open_contests_menu_message(
+    message: types.Message, db_user, db: AsyncSession
+) -> None:
     """Send the contests menu as a fresh message — entry point for the
     ``/contests`` command and the ``/start contests`` deep link (the channel
     announcement button opens the bot here, where the menu actually works)."""
@@ -152,7 +160,10 @@ async def open_contests_menu_message(message: types.Message, db_user, db: AsyncS
     texts = get_texts(db_user.language)
     if view is None:
         await message.answer(
-            texts.t('CONTEST_NOT_ELIGIBLE', 'Игры доступны только с активной или триальной подпиской.')
+            texts.t(
+                "CONTEST_NOT_ELIGIBLE",
+                "Игры доступны только с активной или триальной подпиской.",
+            )
         )
         return
     text, keyboard = view
@@ -175,10 +186,10 @@ async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSe
     # clicker to open the bot instead — answerCallbackQuery accepts a
     # t.me/{bot}?start=... link, which lands on the cmd_start contests handler.
     chat = callback.message.chat if callback.message else None
-    if chat is not None and chat.type != 'private':
+    if chat is not None and chat.type != "private":
         bot_username = settings.get_bot_username()
         if bot_username:
-            await callback.answer(url=f'https://t.me/{bot_username}?start=contests')
+            await callback.answer(url=f"https://t.me/{bot_username}?start=contests")
             return
 
     view = await _build_contests_menu_view(db, db_user)
@@ -192,13 +203,15 @@ async def show_contests_menu(callback: types.CallbackQuery, db_user, db: AsyncSe
 
 @auth_required
 @error_handler
-async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user, db: AsyncSession):
+async def play_contest(
+    callback: types.CallbackQuery, state: FSMContext, db_user, db: AsyncSession
+):
     """Start playing a specific contest."""
     texts = get_texts(db_user.language)
 
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
     # For eligibility: pick best non-daily subscription (most days left)
-    non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+    non_daily = [s for s in active_subs if not getattr(s, "is_daily_tariff", False)]
     eligible = non_daily or active_subs
     subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
     if not _user_allowed(subscription):
@@ -206,24 +219,24 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
         return
 
     # Rate limit check
-    if not _check_rate_limit(db_user.id, 'contest_play', limit=2, window_seconds=10):
+    if not _check_rate_limit(db_user.id, "contest_play", limit=2, window_seconds=10):
         await callback.answer(
-            texts.t('CONTEST_TOO_FAST', 'Слишком быстро! Подождите.'),
+            texts.t("CONTEST_TOO_FAST", "Слишком быстро! Подождите."),
             show_alert=True,
         )
         return
 
     # Validate callback data
     parts = _validate_callback_data(callback.data)
-    if not parts or len(parts) < 4 or parts[1] != 'play':
-        await callback.answer('Некорректные данные', show_alert=True)
+    if not parts or len(parts) < 4 or parts[1] != "play":
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     round_id_str = parts[-1]
     try:
         round_id = int(round_id_str)
     except ValueError:
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     # Get round with template
@@ -233,14 +246,14 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
 
         if not round_obj:
             await callback.answer(
-                texts.t('CONTEST_ROUND_FINISHED', 'Раунд завершён или недоступен.'),
+                texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён или недоступен."),
                 show_alert=True,
             )
             return
 
         if not round_obj.template or not round_obj.template.is_enabled:
             await callback.answer(
-                texts.t('CONTEST_DISABLED', 'Игра отключена.'),
+                texts.t("CONTEST_DISABLED", "Игра отключена."),
                 show_alert=True,
             )
             return
@@ -249,7 +262,9 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
         attempt = await get_attempt(db2, round_id, db_user.id)
         if attempt:
             await callback.answer(
-                texts.t('CONTEST_ALREADY_PLAYED', 'У вас уже была попытка в этом раунде.'),
+                texts.t(
+                    "CONTEST_ALREADY_PLAYED", "У вас уже была попытка в этом раунде."
+                ),
                 show_alert=True,
             )
             return
@@ -260,7 +275,7 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
 
         if not strategy:
             await callback.answer(
-                texts.t('CONTEST_UNKNOWN', 'Тип конкурса не поддерживается.'),
+                texts.t("CONTEST_UNKNOWN", "Тип конкурса не поддерживается."),
                 show_alert=True,
             )
             return
@@ -291,37 +306,37 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
     texts = get_texts(db_user.language)
 
     # Rate limit check
-    if not _check_rate_limit(db_user.id, 'contest_pick', limit=1, window_seconds=3):
+    if not _check_rate_limit(db_user.id, "contest_pick", limit=1, window_seconds=3):
         await callback.answer(
-            texts.t('CONTEST_TOO_FAST', 'Слишком быстро! Подождите.'),
+            texts.t("CONTEST_TOO_FAST", "Слишком быстро! Подождите."),
             show_alert=True,
         )
         return
 
     # Validate callback data
     parts = _validate_callback_data(callback.data)
-    if not parts or len(parts) < 4 or parts[1] != 'pick':
-        await callback.answer('Некорректные данные', show_alert=True)
+    if not parts or len(parts) < 4 or parts[1] != "pick":
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     round_id_str = parts[2]
-    pick = '_'.join(parts[3:])
+    pick = "_".join(parts[3:])
 
     try:
         round_id = int(round_id_str)
     except ValueError:
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     # Re-check subscription
     active_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
     # For eligibility: pick best non-daily subscription (most days left)
-    non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
+    non_daily = [s for s in active_subs if not getattr(s, "is_daily_tariff", False)]
     eligible = non_daily or active_subs
     subscription = max(eligible, key=lambda s: s.days_left) if eligible else None
     if not _user_allowed(subscription):
         await callback.answer(
-            texts.t('CONTEST_NOT_ELIGIBLE', 'Игра недоступна без активной подписки.'),
+            texts.t("CONTEST_NOT_ELIGIBLE", "Игра недоступна без активной подписки."),
             show_alert=True,
         )
         return
@@ -332,7 +347,7 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
 
         if not round_obj:
             await callback.answer(
-                texts.t('CONTEST_ROUND_FINISHED', 'Раунд завершён.'),
+                texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён."),
                 show_alert=True,
             )
             return
@@ -351,12 +366,14 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
 
 @auth_required
 @error_handler
-async def handle_text_answer(message: types.Message, state: FSMContext, db_user, db: AsyncSession):
+async def handle_text_answer(
+    message: types.Message, state: FSMContext, db_user, db: AsyncSession
+):
     """Handle text answer in contest games."""
     texts = get_texts(db_user.language)
 
     data = await state.get_data()
-    round_id = data.get('contest_round_id')
+    round_id = data.get("contest_round_id")
     if not round_id:
         await state.clear()
         return
@@ -367,14 +384,14 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
 
         if not round_obj:
             await message.answer(
-                texts.t('CONTEST_ROUND_FINISHED', 'Раунд завершён.'),
+                texts.t("CONTEST_ROUND_FINISHED", "Раунд завершён."),
                 reply_markup=get_back_keyboard(db_user.language),
             )
             await state.clear()
             return
 
         # Process attempt using service
-        text_answer = (message.text or '').strip()
+        text_answer = (message.text or "").strip()
         result = await _attempt_service.process_text_attempt(
             db=db2,
             round_obj=round_obj,
@@ -393,8 +410,8 @@ async def handle_text_answer(message: types.Message, state: FSMContext, db_user,
 
 def register_handlers(dp: Dispatcher):
     """Register contest handlers."""
-    dp.callback_query.register(show_contests_menu, F.data == 'contests_menu')
-    dp.callback_query.register(play_contest, F.data.startswith('contest_play_'))
-    dp.callback_query.register(handle_pick, F.data.startswith('contest_pick_'))
+    dp.callback_query.register(show_contests_menu, F.data == "contests_menu")
+    dp.callback_query.register(play_contest, F.data.startswith("contest_play_"))
+    dp.callback_query.register(handle_pick, F.data.startswith("contest_pick_"))
     dp.message.register(handle_text_answer, ContestStates.waiting_for_answer)
-    dp.message.register(cmd_contests, Command('contests'))
+    dp.message.register(cmd_contests, Command("contests"))

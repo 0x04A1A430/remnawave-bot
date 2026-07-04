@@ -22,8 +22,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0089'
-down_revision: Union[str, None] = '0088'
+revision: str = "0089"
+down_revision: Union[str, None] = "0088"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -31,19 +31,22 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_cols = {c['name'] for c in inspector.get_columns('wheel_spins')}
-    if 'telegram_charge_id' not in existing_cols:
-        op.add_column('wheel_spins', sa.Column('telegram_charge_id', sa.String(length=255), nullable=True))
-    existing_indexes = {idx['name'] for idx in inspector.get_indexes('wheel_spins')}
-    if 'uq_wheel_spins_telegram_charge_id' not in existing_indexes:
+    existing_cols = {c["name"] for c in inspector.get_columns("wheel_spins")}
+    if "telegram_charge_id" not in existing_cols:
+        op.add_column(
+            "wheel_spins",
+            sa.Column("telegram_charge_id", sa.String(length=255), nullable=True),
+        )
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("wheel_spins")}
+    if "uq_wheel_spins_telegram_charge_id" not in existing_indexes:
         op.create_index(
-            'uq_wheel_spins_telegram_charge_id',
-            'wheel_spins',
-            ['telegram_charge_id'],
+            "uq_wheel_spins_telegram_charge_id",
+            "wheel_spins",
+            ["telegram_charge_id"],
             unique=True,
         )
 
 
 def downgrade() -> None:
-    op.drop_index('uq_wheel_spins_telegram_charge_id', table_name='wheel_spins')
-    op.drop_column('wheel_spins', 'telegram_charge_id')
+    op.drop_index("uq_wheel_spins_telegram_charge_id", table_name="wheel_spins")
+    op.drop_column("wheel_spins", "telegram_charge_id")
