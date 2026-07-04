@@ -9,10 +9,9 @@ import structlog
 
 from app.config import settings
 
-
 logger = structlog.get_logger(__name__)
 
-API_BASE_URL = 'https://app.aurapay.tech'
+API_BASE_URL = "https://app.aurapay.tech"
 
 
 class AuraPayAPIError(Exception):
@@ -21,7 +20,7 @@ class AuraPayAPIError(Exception):
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
         self.message = message
-        super().__init__(f'AuraPay API error ({status_code}): {message}')
+        super().__init__(f"AuraPay API error ({status_code}): {message}")
 
 
 class AuraPayService:
@@ -32,15 +31,15 @@ class AuraPayService:
 
     @property
     def api_key(self) -> str:
-        return settings.AURAPAY_API_KEY or ''
+        return settings.AURAPAY_API_KEY or ""
 
     @property
     def shop_id(self) -> str:
-        return settings.AURAPAY_SHOP_ID or ''
+        return settings.AURAPAY_SHOP_ID or ""
 
     @property
     def secret_key(self) -> str:
-        return settings.AURAPAY_SECRET_KEY or ''
+        return settings.AURAPAY_SECRET_KEY or ""
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Возвращает переиспользуемую HTTP-сессию."""
@@ -59,9 +58,9 @@ class AuraPayService:
     def _build_headers(self) -> dict[str, str]:
         """Строит заголовки запроса с X-ApiKey и X-ShopId."""
         return {
-            'Content-Type': 'application/json',
-            'X-ApiKey': self.api_key,
-            'X-ShopId': self.shop_id,
+            "Content-Type": "application/json",
+            "X-ApiKey": self.api_key,
+            "X-ShopId": self.shop_id,
         }
 
     async def create_invoice(
@@ -69,7 +68,7 @@ class AuraPayService:
         *,
         amount: float,
         order_id: str,
-        comment: str = '',
+        comment: str = "",
         service: str | None = None,
         success_url: str | None = None,
         fail_url: str | None = None,
@@ -82,27 +81,27 @@ class AuraPayService:
         POST /invoice/create
         """
         payload: dict[str, Any] = {
-            'amount': amount,
-            'order_id': order_id,
+            "amount": amount,
+            "order_id": order_id,
         }
 
         if comment:
-            payload['comment'] = comment
+            payload["comment"] = comment
         if service:
-            payload['service'] = service
+            payload["service"] = service
         if success_url:
-            payload['success_url'] = success_url
+            payload["success_url"] = success_url
         if fail_url:
-            payload['fail_url'] = fail_url
+            payload["fail_url"] = fail_url
         if callback_url:
-            payload['callback_url'] = callback_url
+            payload["callback_url"] = callback_url
         if custom_fields:
-            payload['custom_fields'] = custom_fields
+            payload["custom_fields"] = custom_fields
         if lifetime is not None:
-            payload['lifetime'] = lifetime
+            payload["lifetime"] = lifetime
 
         logger.info(
-            'AuraPay API create_invoice',
+            "AuraPay API create_invoice",
             order_id=order_id,
             amount=amount,
             service=service,
@@ -111,7 +110,7 @@ class AuraPayService:
         try:
             session = await self._get_session()
             async with session.post(
-                f'{API_BASE_URL}/invoice/create',
+                f"{API_BASE_URL}/invoice/create",
                 json=payload,
                 headers=self._build_headers(),
             ) as response:
@@ -119,16 +118,16 @@ class AuraPayService:
 
                 if response.status == 200:
                     logger.info(
-                        'AuraPay API invoice created',
+                        "AuraPay API invoice created",
                         order_id=order_id,
-                        invoice_id=data.get('id'),
-                        status=data.get('status'),
+                        invoice_id=data.get("id"),
+                        status=data.get("status"),
                     )
                     return data
 
-                error_msg = data.get('message') or data.get('error') or str(data)
+                error_msg = data.get("message") or data.get("error") or str(data)
                 logger.error(
-                    'AuraPay create_invoice error',
+                    "AuraPay create_invoice error",
                     status_code=response.status,
                     error_msg=error_msg,
                     response_data=data,
@@ -136,7 +135,7 @@ class AuraPayService:
                 raise AuraPayAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:
-            logger.exception('AuraPay API connection error', error=e)
+            logger.exception("AuraPay API connection error", error=e)
             raise
 
     async def get_invoice_status(
@@ -150,20 +149,22 @@ class AuraPayService:
         POST /invoice/status
         """
         if not order_id and not invoice_id:
-            raise ValueError('Either order_id or invoice_id must be provided')
+            raise ValueError("Either order_id or invoice_id must be provided")
 
         payload: dict[str, str] = {}
         if order_id:
-            payload['order_id'] = order_id
+            payload["order_id"] = order_id
         if invoice_id:
-            payload['id'] = invoice_id
+            payload["id"] = invoice_id
 
-        logger.info('AuraPay get_invoice_status', order_id=order_id, invoice_id=invoice_id)
+        logger.info(
+            "AuraPay get_invoice_status", order_id=order_id, invoice_id=invoice_id
+        )
 
         try:
             session = await self._get_session()
             async with session.post(
-                f'{API_BASE_URL}/invoice/status',
+                f"{API_BASE_URL}/invoice/status",
                 json=payload,
                 headers=self._build_headers(),
             ) as response:
@@ -172,19 +173,21 @@ class AuraPayService:
                 if response.status == 200:
                     return data
 
-                error_msg = data.get('message') or data.get('error') or str(data)
+                error_msg = data.get("message") or data.get("error") or str(data)
                 logger.error(
-                    'AuraPay get_invoice_status error',
+                    "AuraPay get_invoice_status error",
                     status_code=response.status,
                     error_msg=error_msg,
                 )
                 raise AuraPayAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:
-            logger.exception('AuraPay API connection error', error=e)
+            logger.exception("AuraPay API connection error", error=e)
             raise
 
-    def verify_webhook_signature(self, payload: dict[str, Any], received_signature: str) -> bool:
+    def verify_webhook_signature(
+        self, payload: dict[str, Any], received_signature: str
+    ) -> bool:
         """Верификация подписи webhook AuraPay через HMAC-SHA256.
 
         Algorithm: sort JSON keys alphabetically, concatenate all VALUES
@@ -193,23 +196,26 @@ class AuraPayService:
         """
         try:
             if not received_signature:
-                logger.warning('AuraPay webhook: отсутствует X-SIGNATURE')
+                logger.warning("AuraPay webhook: отсутствует X-SIGNATURE")
                 return False
 
             # Сортируем ключи по алфавиту и конкатенируем значения
             # None → '' (PHP implode() converts null to empty string, not "None")
             sorted_keys = sorted(payload.keys())
-            concatenated_values = ''.join(str(payload[key]) if payload[key] is not None else '' for key in sorted_keys)
+            concatenated_values = "".join(
+                str(payload[key]) if payload[key] is not None else ""
+                for key in sorted_keys
+            )
 
             expected = hmac.new(
-                self.secret_key.encode('utf-8'),
-                concatenated_values.encode('utf-8'),
+                self.secret_key.encode("utf-8"),
+                concatenated_values.encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
 
             return hmac.compare_digest(expected, received_signature)
         except Exception as e:
-            logger.error('AuraPay webhook verify error', error=e)
+            logger.error("AuraPay webhook verify error", error=e)
             return False
 
 

@@ -10,7 +10,7 @@ class NewsMediaUploadResponse(BaseModel):
 
     url: str
     thumbnail_url: str | None = None
-    media_type: Literal['image', 'video']
+    media_type: Literal["image", "video"]
     filename: str
     size_bytes: int
     width: int | None = None

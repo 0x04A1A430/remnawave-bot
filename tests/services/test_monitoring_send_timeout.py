@@ -24,8 +24,8 @@ def _service(bot) -> MonitoringService:
 
 async def test_text_send_times_out_and_skips(monkeypatch):
     # Settings fields are patched on the instance (pydantic).
-    monkeypatch.setattr(settings, 'MONITORING_NOTIFICATION_SEND_TIMEOUT', 0.05)
-    monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', False)  # take the text-only path
+    monkeypatch.setattr(settings, "MONITORING_NOTIFICATION_SEND_TIMEOUT", 0.05)
+    monkeypatch.setattr(settings, "ENABLE_LOGO_MODE", False)  # take the text-only path
 
     bot = MagicMock()
     bot.send_message = _hang
@@ -33,20 +33,27 @@ async def test_text_send_times_out_and_skips(monkeypatch):
     svc = _service(bot)
 
     result = await asyncio.wait_for(
-        svc._send_message_with_logo(chat_id=123, text='hi'),
+        svc._send_message_with_logo(chat_id=123, text="hi"),
         timeout=5,  # the inner 0.05s timeout must fire well before this guard
     )
     assert result is None
 
 
 async def test_photo_send_times_out_and_skips(monkeypatch):
-    monkeypatch.setattr(settings, 'MONITORING_NOTIFICATION_SEND_TIMEOUT', 0.05)
-    monkeypatch.setattr(settings, 'ENABLE_LOGO_MODE', True)
+    monkeypatch.setattr(settings, "MONITORING_NOTIFICATION_SEND_TIMEOUT", 0.05)
+    monkeypatch.setattr(settings, "ENABLE_LOGO_MODE", True)
 
     # Force the logo branch: pretend the logo file exists and caption fits.
-    monkeypatch.setattr('app.services.monitoring_service.LOGO_PATH', MagicMock(exists=lambda: True))
-    monkeypatch.setattr('app.services.monitoring_service.caption_exceeds_telegram_limit', lambda _text: False)
-    monkeypatch.setattr('app.utils.message_patch.get_logo_media', lambda: 'file_id_stub')
+    monkeypatch.setattr(
+        "app.services.monitoring_service.LOGO_PATH", MagicMock(exists=lambda: True)
+    )
+    monkeypatch.setattr(
+        "app.services.monitoring_service.caption_exceeds_telegram_limit",
+        lambda _text: False,
+    )
+    monkeypatch.setattr(
+        "app.utils.message_patch.get_logo_media", lambda: "file_id_stub"
+    )
 
     bot = MagicMock()
     bot.send_photo = _hang
@@ -55,7 +62,7 @@ async def test_photo_send_times_out_and_skips(monkeypatch):
     svc = _service(bot)
 
     result = await asyncio.wait_for(
-        svc._send_message_with_logo(chat_id=123, text='hi'),
+        svc._send_message_with_logo(chat_id=123, text="hi"),
         timeout=5,
     )
     assert result is None

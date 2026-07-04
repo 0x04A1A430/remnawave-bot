@@ -54,18 +54,20 @@ async def test_new_email_user_is_created_with_referral_code() -> None:
 
     with (
         patch(
-            'app.services.guest_purchase_service._get_or_create_default_promo_group',
+            "app.services.guest_purchase_service._get_or_create_default_promo_group",
             AsyncMock(return_value=promo_group),
         ),
         patch(
-            'app.services.guest_purchase_service.create_unique_referral_code',
-            AsyncMock(return_value='NEWREF01'),
+            "app.services.guest_purchase_service.create_unique_referral_code",
+            AsyncMock(return_value="NEWREF01"),
         ),
     ):
-        user, is_new = await _find_or_create_user(db, 'email', 'foo@example.com')
+        user, is_new = await _find_or_create_user(db, "email", "foo@example.com")
 
     assert is_new is True
-    assert user.referral_code == 'NEWREF01', 'new guest email user must be persisted with a generated referral_code'
+    assert (
+        user.referral_code == "NEWREF01"
+    ), "new guest email user must be persisted with a generated referral_code"
     # The user must have been added to the session, not just constructed and dropped.
     db.add.assert_called_once_with(user)
 
@@ -83,18 +85,22 @@ async def test_new_telegram_user_is_created_with_referral_code() -> None:
 
     with (
         patch(
-            'app.services.guest_purchase_service._get_or_create_default_promo_group',
+            "app.services.guest_purchase_service._get_or_create_default_promo_group",
             AsyncMock(return_value=promo_group),
         ),
         patch(
-            'app.services.guest_purchase_service.create_unique_referral_code',
-            AsyncMock(return_value='TGREF002'),
+            "app.services.guest_purchase_service.create_unique_referral_code",
+            AsyncMock(return_value="TGREF002"),
         ),
     ):
         # pre_resolved_telegram_id avoids the Bot API call branch.
-        user, _is_new = await _find_or_create_user(db, 'telegram', 'valid_username', pre_resolved_telegram_id=12345)
+        user, _is_new = await _find_or_create_user(
+            db, "telegram", "valid_username", pre_resolved_telegram_id=12345
+        )
 
-    assert user.referral_code == 'TGREF002', 'new guest telegram user must be persisted with a generated referral_code'
+    assert (
+        user.referral_code == "TGREF002"
+    ), "new guest telegram user must be persisted with a generated referral_code"
     db.add.assert_called_once_with(user)
 
 
@@ -104,7 +110,7 @@ async def test_existing_email_user_without_referral_code_is_backfilled() -> None
     healed when they come back through the guest-purchase path."""
     legacy_user = SimpleNamespace(
         id=7,
-        password_hash='already-set',
+        password_hash="already-set",
         email_verified=True,
         email_verified_at=object(),
         promo_group_id=1,
@@ -116,17 +122,17 @@ async def test_existing_email_user_without_referral_code_is_backfilled() -> None
 
     with (
         patch(
-            'app.services.guest_purchase_service.create_unique_referral_code',
-            AsyncMock(return_value='HEALED01'),
+            "app.services.guest_purchase_service.create_unique_referral_code",
+            AsyncMock(return_value="HEALED01"),
         ),
     ):
-        user, is_new = await _find_or_create_user(db, 'email', 'legacy@example.com')
+        user, is_new = await _find_or_create_user(db, "email", "legacy@example.com")
 
     assert user is legacy_user
     assert is_new is False
-    assert legacy_user.referral_code == 'HEALED01', (
-        'legacy guest email user with NULL referral_code must be backfilled, not left broken'
-    )
+    assert (
+        legacy_user.referral_code == "HEALED01"
+    ), "legacy guest email user with NULL referral_code must be backfilled, not left broken"
 
 
 @pytest.mark.asyncio
@@ -135,19 +141,22 @@ async def test_existing_email_user_with_referral_code_is_not_overwritten() -> No
     or overwrite it — that would break outstanding referral links."""
     existing_user = SimpleNamespace(
         id=9,
-        password_hash='already-set',
+        password_hash="already-set",
         email_verified=True,
         email_verified_at=object(),
         promo_group_id=1,
-        referral_code='ORIGINAL',
+        referral_code="ORIGINAL",
     )
 
     db = AsyncMock()
     db.execute = AsyncMock(return_value=_single_result(existing_user))
 
-    create_code_mock = AsyncMock(return_value='SHOULD-NOT-BE-USED')
-    with patch('app.services.guest_purchase_service.create_unique_referral_code', create_code_mock):
-        user, _ = await _find_or_create_user(db, 'email', 'existing@example.com')
+    create_code_mock = AsyncMock(return_value="SHOULD-NOT-BE-USED")
+    with patch(
+        "app.services.guest_purchase_service.create_unique_referral_code",
+        create_code_mock,
+    ):
+        user, _ = await _find_or_create_user(db, "email", "existing@example.com")
 
-    assert user.referral_code == 'ORIGINAL'
+    assert user.referral_code == "ORIGINAL"
     create_code_mock.assert_not_called()

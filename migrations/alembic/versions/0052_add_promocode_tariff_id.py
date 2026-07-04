@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0052'
-down_revision: Union[str, None] = '0051'
+revision: str = "0052"
+down_revision: Union[str, None] = "0051"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -20,25 +20,25 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_cols = {c['name'] for c in inspector.get_columns('promocodes')}
-    if 'tariff_id' not in existing_cols:
-        op.add_column('promocodes', sa.Column('tariff_id', sa.Integer(), nullable=True))
-    existing_indexes = {idx['name'] for idx in inspector.get_indexes('promocodes')}
-    if 'ix_promocodes_tariff_id' not in existing_indexes:
-        op.create_index('ix_promocodes_tariff_id', 'promocodes', ['tariff_id'])
-    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('promocodes')}
-    if 'fk_promocodes_tariff_id' not in existing_fks:
+    existing_cols = {c["name"] for c in inspector.get_columns("promocodes")}
+    if "tariff_id" not in existing_cols:
+        op.add_column("promocodes", sa.Column("tariff_id", sa.Integer(), nullable=True))
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("promocodes")}
+    if "ix_promocodes_tariff_id" not in existing_indexes:
+        op.create_index("ix_promocodes_tariff_id", "promocodes", ["tariff_id"])
+    existing_fks = {fk["name"] for fk in inspector.get_foreign_keys("promocodes")}
+    if "fk_promocodes_tariff_id" not in existing_fks:
         op.create_foreign_key(
-            'fk_promocodes_tariff_id',
-            'promocodes',
-            'tariffs',
-            ['tariff_id'],
-            ['id'],
-            ondelete='SET NULL',
+            "fk_promocodes_tariff_id",
+            "promocodes",
+            "tariffs",
+            ["tariff_id"],
+            ["id"],
+            ondelete="SET NULL",
         )
 
 
 def downgrade() -> None:
-    op.drop_constraint('fk_promocodes_tariff_id', 'promocodes', type_='foreignkey')
-    op.drop_index('ix_promocodes_tariff_id', table_name='promocodes')
-    op.drop_column('promocodes', 'tariff_id')
+    op.drop_constraint("fk_promocodes_tariff_id", "promocodes", type_="foreignkey")
+    op.drop_index("ix_promocodes_tariff_id", table_name="promocodes")
+    op.drop_column("promocodes", "tariff_id")

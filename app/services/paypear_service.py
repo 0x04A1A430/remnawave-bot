@@ -11,10 +11,9 @@ import structlog
 
 from app.config import settings
 
-
 logger = structlog.get_logger(__name__)
 
-API_BASE_URL = 'https://api.paypear.ru/v1'
+API_BASE_URL = "https://api.paypear.ru/v1"
 
 
 class PayPearAPIError(Exception):
@@ -23,7 +22,7 @@ class PayPearAPIError(Exception):
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
         self.message = message
-        super().__init__(f'PayPear API error ({status_code}): {message}')
+        super().__init__(f"PayPear API error ({status_code}): {message}")
 
 
 class PayPearService:
@@ -34,17 +33,17 @@ class PayPearService:
 
     @property
     def shop_id(self) -> str:
-        return settings.PAYPEAR_SHOP_ID or ''
+        return settings.PAYPEAR_SHOP_ID or ""
 
     @property
     def secret_key(self) -> str:
-        return settings.PAYPEAR_SECRET_KEY or ''
+        return settings.PAYPEAR_SECRET_KEY or ""
 
     def _basic_auth_header(self) -> str:
         """Генерирует HTTP Basic Auth заголовок."""
-        credentials = f'{self.shop_id}:{self.secret_key}'
-        encoded = b64encode(credentials.encode('utf-8')).decode('utf-8')
-        return f'Basic {encoded}'
+        credentials = f"{self.shop_id}:{self.secret_key}"
+        encoded = b64encode(credentials.encode("utf-8")).decode("utf-8")
+        return f"Basic {encoded}"
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Возвращает переиспользуемую HTTP-сессию."""
@@ -65,9 +64,9 @@ class PayPearService:
         *,
         order_id: str,
         amount_rubles: float,
-        currency: str = 'RUB',
-        payment_method_type: str = 'sbp',
-        description: str = '',
+        currency: str = "RUB",
+        payment_method_type: str = "sbp",
+        description: str = "",
         return_url: str | None = None,
         webhook_url: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -79,30 +78,30 @@ class PayPearService:
         idempotence_key = str(uuid.uuid4())
 
         payload: dict[str, Any] = {
-            'amount': {
-                'value': f'{amount_rubles:.2f}',
-                'currency': currency,
+            "amount": {
+                "value": f"{amount_rubles:.2f}",
+                "currency": currency,
             },
-            'order_id': order_id,
-            'payment_method_data': {
-                'type': payment_method_type,
+            "order_id": order_id,
+            "payment_method_data": {
+                "type": payment_method_type,
             },
         }
 
         if description:
-            payload['description'] = description
+            payload["description"] = description
         if return_url:
-            payload['confirmation'] = {
-                'type': 'redirect',
-                'return_url': return_url,
+            payload["confirmation"] = {
+                "type": "redirect",
+                "return_url": return_url,
             }
         if webhook_url:
-            payload['webhook_url'] = webhook_url
+            payload["webhook_url"] = webhook_url
         if metadata:
-            payload['metadata'] = metadata
+            payload["metadata"] = metadata
 
         logger.info(
-            'PayPear API create_payment',
+            "PayPear API create_payment",
             order_id=order_id,
             amount_rubles=amount_rubles,
             currency=currency,
@@ -112,28 +111,28 @@ class PayPearService:
         try:
             session = await self._get_session()
             async with session.post(
-                f'{API_BASE_URL}/payment/',
+                f"{API_BASE_URL}/payment/",
                 json=payload,
                 headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': self._basic_auth_header(),
-                    'Idempotence-Key': idempotence_key,
+                    "Content-Type": "application/json",
+                    "Authorization": self._basic_auth_header(),
+                    "Idempotence-Key": idempotence_key,
                 },
             ) as response:
                 data = await response.json(content_type=None)
 
-                if response.status == 200 and data.get('success') is True:
-                    result = data.get('result', {})
+                if response.status == 200 and data.get("success") is True:
+                    result = data.get("result", {})
                     logger.info(
-                        'PayPear API payment created',
+                        "PayPear API payment created",
                         order_id=order_id,
-                        paypear_id=result.get('id'),
+                        paypear_id=result.get("id"),
                     )
                     return result
 
-                error_msg = data.get('message') or data.get('error') or str(data)
+                error_msg = data.get("message") or data.get("error") or str(data)
                 logger.error(
-                    'PayPear create_payment error',
+                    "PayPear create_payment error",
                     status_code=response.status,
                     error_msg=error_msg,
                     response_data=data,
@@ -141,7 +140,7 @@ class PayPearService:
                 raise PayPearAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:
-            logger.exception('PayPear API connection error', error=e)
+            logger.exception("PayPear API connection error", error=e)
             raise
 
     async def get_payment(self, payment_id: str) -> dict[str, Any]:
@@ -149,31 +148,31 @@ class PayPearService:
         Получает информацию о платеже по ID.
         GET /v1/payment/{id}/
         """
-        logger.info('PayPear get_payment', payment_id=payment_id)
+        logger.info("PayPear get_payment", payment_id=payment_id)
 
         try:
             session = await self._get_session()
             async with session.get(
-                f'{API_BASE_URL}/payment/{payment_id}/',
+                f"{API_BASE_URL}/payment/{payment_id}/",
                 headers={
-                    'Authorization': self._basic_auth_header(),
+                    "Authorization": self._basic_auth_header(),
                 },
             ) as response:
                 data = await response.json(content_type=None)
 
-                if response.status == 200 and data.get('success') is True:
-                    return data.get('result', {})
+                if response.status == 200 and data.get("success") is True:
+                    return data.get("result", {})
 
-                error_msg = data.get('message') or data.get('error') or str(data)
+                error_msg = data.get("message") or data.get("error") or str(data)
                 logger.error(
-                    'PayPear get_payment error',
+                    "PayPear get_payment error",
                     status_code=response.status,
                     error_msg=error_msg,
                 )
                 raise PayPearAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:
-            logger.exception('PayPear API connection error', error=e)
+            logger.exception("PayPear API connection error", error=e)
             raise
 
     async def get_payment_by_order_id(self, order_id: str) -> dict[str, Any]:
@@ -181,37 +180,39 @@ class PayPearService:
         Получает информацию о платеже по order_id.
         GET /v1/payment/order/{order_id}/
         """
-        logger.info('PayPear get_payment_by_order_id', order_id=order_id)
+        logger.info("PayPear get_payment_by_order_id", order_id=order_id)
 
         try:
             session = await self._get_session()
             async with session.get(
-                f'{API_BASE_URL}/payment/order/{order_id}/',
+                f"{API_BASE_URL}/payment/order/{order_id}/",
                 headers={
-                    'Authorization': self._basic_auth_header(),
+                    "Authorization": self._basic_auth_header(),
                 },
             ) as response:
                 data = await response.json(content_type=None)
 
-                if response.status == 200 and data.get('success') is True:
-                    return data.get('result', {})
+                if response.status == 200 and data.get("success") is True:
+                    return data.get("result", {})
 
-                error_msg = data.get('message') or data.get('error') or str(data)
+                error_msg = data.get("message") or data.get("error") or str(data)
                 logger.error(
-                    'PayPear get_payment_by_order_id error',
+                    "PayPear get_payment_by_order_id error",
                     status_code=response.status,
                     error_msg=error_msg,
                 )
                 raise PayPearAPIError(response.status, error_msg)
 
         except aiohttp.ClientError as e:
-            logger.exception('PayPear API connection error', error=e)
+            logger.exception("PayPear API connection error", error=e)
             raise
 
     # PayPear documented webhook source IPs
-    WEBHOOK_ALLOWED_IPS: set[str] = {'158.160.85.101'}
+    WEBHOOK_ALLOWED_IPS: set[str] = {"158.160.85.101"}
 
-    def verify_webhook_signature(self, raw_body: bytes, received_signature: str, client_ip: str | None = None) -> bool:
+    def verify_webhook_signature(
+        self, raw_body: bytes, received_signature: str, client_ip: str | None = None
+    ) -> bool:
         """Верификация webhook PayPear.
 
         PayPear documentation does not specify the exact signature algorithm, so we try
@@ -227,23 +228,36 @@ class PayPearService:
         if received_signature and self.secret_key:
             try:
                 payload = json_mod.loads(raw_body)
-                payload_without_sig = {k: v for k, v in payload.items() if k != 'signature'}
+                payload_without_sig = {
+                    k: v for k, v in payload.items() if k != "signature"
+                }
                 for body_to_sign in (
-                    json_mod.dumps(payload_without_sig, separators=(',', ':'), sort_keys=True).encode('utf-8'),
-                    json_mod.dumps(payload_without_sig, separators=(',', ':')).encode('utf-8'),
+                    json_mod.dumps(
+                        payload_without_sig, separators=(",", ":"), sort_keys=True
+                    ).encode("utf-8"),
+                    json_mod.dumps(payload_without_sig, separators=(",", ":")).encode(
+                        "utf-8"
+                    ),
                 ):
-                    expected = hmac.new(self.secret_key.encode('utf-8'), body_to_sign, hashlib.sha256).hexdigest()
+                    expected = hmac.new(
+                        self.secret_key.encode("utf-8"), body_to_sign, hashlib.sha256
+                    ).hexdigest()
                     if hmac.compare_digest(expected, received_signature):
                         return True
-                logger.debug('PayPear signature mismatch, falling back to IP check')
+                logger.debug("PayPear signature mismatch, falling back to IP check")
             except Exception as e:
-                logger.debug('PayPear signature verify error, falling back to IP check', error=e)
+                logger.debug(
+                    "PayPear signature verify error, falling back to IP check", error=e
+                )
 
         # Fallback: documented source-IP allowlist (client_ip resolved non-spoofably upstream).
         if client_ip and client_ip in self.WEBHOOK_ALLOWED_IPS:
             return True
 
-        logger.warning('PayPear webhook: signature mismatch and IP not in allowlist', client_ip=client_ip)
+        logger.warning(
+            "PayPear webhook: signature mismatch and IP not in allowlist",
+            client_ip=client_ip,
+        )
         return False
 
 

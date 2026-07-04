@@ -7,11 +7,10 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
 
-
 logger = structlog.get_logger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_ALEMBIC_INI = _PROJECT_ROOT / 'alembic.ini'
+_ALEMBIC_INI = _PROJECT_ROOT / "alembic.ini"
 
 
 def _get_alembic_config() -> Config:
@@ -19,7 +18,7 @@ def _get_alembic_config() -> Config:
     from app.config import settings
 
     cfg = Config(str(_ALEMBIC_INI))
-    cfg.set_main_option('sqlalchemy.url', settings.get_database_url())
+    cfg.set_main_option("sqlalchemy.url", settings.get_database_url())
     return cfg
 
 
@@ -33,14 +32,18 @@ async def _detect_db_state() -> str:
     from app.database.database import engine
 
     async with engine.connect() as conn:
-        has_alembic = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('alembic_version'))
+        has_alembic = await conn.run_sync(
+            lambda sync_conn: inspect(sync_conn).has_table("alembic_version")
+        )
         if has_alembic:
-            return 'managed'
-        has_users = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table('users'))
-        return 'legacy' if has_users else 'fresh'
+            return "managed"
+        has_users = await conn.run_sync(
+            lambda sync_conn: inspect(sync_conn).has_table("users")
+        )
+        return "legacy" if has_users else "fresh"
 
 
-_INITIAL_REVISION = '0001'
+_INITIAL_REVISION = "0001"
 
 
 async def _bootstrap_fresh_db() -> None:
@@ -59,7 +62,7 @@ async def _bootstrap_fresh_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    logger.info('Свежая БД: все таблицы созданы из моделей')
+    logger.info("Свежая БД: все таблицы созданы из моделей")
 
 
 async def run_alembic_upgrade() -> None:
@@ -68,29 +71,29 @@ async def run_alembic_upgrade() -> None:
 
     db_state = await _detect_db_state()
 
-    if db_state == 'fresh':
-        logger.warning('Обнаружена пустая БД — создание схемы из моделей + stamp head')
+    if db_state == "fresh":
+        logger.warning("Обнаружена пустая БД — создание схемы из моделей + stamp head")
         await _bootstrap_fresh_db()
-        await _stamp_alembic_revision('head')
+        await _stamp_alembic_revision("head")
         return
 
-    if db_state == 'legacy':
+    if db_state == "legacy":
         logger.warning(
-            'Обнаружена существующая БД без alembic_version — автоматический stamp head (схема уже создана моделями)'
+            "Обнаружена существующая БД без alembic_version — автоматический stamp head (схема уже создана моделями)"
         )
-        await _stamp_alembic_revision('head')
+        await _stamp_alembic_revision("head")
         return
 
     cfg = _get_alembic_config()
     loop = asyncio.get_running_loop()
 
-    await loop.run_in_executor(None, command.upgrade, cfg, 'head')
-    logger.info('Alembic миграции применены')
+    await loop.run_in_executor(None, command.upgrade, cfg, "head")
+    logger.info("Alembic миграции применены")
 
 
 async def stamp_alembic_head() -> None:
     """Stamp the DB as being at head without running migrations (for existing DBs)."""
-    await _stamp_alembic_revision('head')
+    await _stamp_alembic_revision("head")
 
 
 async def _stamp_alembic_revision(revision: str) -> None:
@@ -100,4 +103,4 @@ async def _stamp_alembic_revision(revision: str) -> None:
     cfg = _get_alembic_config()
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, command.stamp, cfg, revision)
-    logger.info('Alembic: база отмечена как актуальная', revision=revision)
+    logger.info("Alembic: база отмечена как актуальная", revision=revision)

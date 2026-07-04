@@ -7,7 +7,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
       POSTGRES_USER: ${POSTGRES_USER:-remnawave_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
-      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -16,8 +16,8 @@ services:
     healthcheck:
       test:
         [
-          'CMD-SHELL',
-          'pg_isready -U ${POSTGRES_USER:-remnawave_user} -d ${POSTGRES_DB:-remnawave_bot}',
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-remnawave_user} -d ${POSTGRES_DB:-remnawave_bot}",
         ]
       interval: 30s
       timeout: 5s
@@ -35,7 +35,7 @@ services:
       - bot_network
       - remnawave-network # Подключаем к сети панели
     healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -52,17 +52,17 @@ services:
     env_file:
       - .env
     environment:
-      FORCE_COLOR: '1'
-      DOCKER_ENV: 'true'
-      DATABASE_MODE: 'auto'
-      POSTGRES_HOST: 'postgres'
-      POSTGRES_PORT: '5432'
-      POSTGRES_DB: '${POSTGRES_DB:-remnawave_bot}'
-      POSTGRES_USER: '${POSTGRES_USER:-remnawave_user}'
-      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD:-secure_password_123}'
-      REDIS_URL: 'redis://redis:6379/0'
-      TZ: 'Europe/Moscow'
-      LOCALES_PATH: '${LOCALES_PATH:-/app/locales}'
+      FORCE_COLOR: "1"
+      DOCKER_ENV: "true"
+      DATABASE_MODE: "auto"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "${POSTGRES_DB:-remnawave_bot}"
+      POSTGRES_USER: "${POSTGRES_USER:-remnawave_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-secure_password_123}"
+      REDIS_URL: "redis://redis:6379/0"
+      TZ: "Europe/Moscow"
+      LOCALES_PATH: "${LOCALES_PATH:-/app/locales}"
     volumes:
       - ./logs:/app/logs:rw
       - ./data:/app/data:rw
@@ -72,14 +72,14 @@ services:
       - ./uploads:/app/uploads:rw
       - ./vpn_logo.png:/app/vpn_logo.png:ro
     ports:
-      - '${WEB_API_PORT:-8080}:8080'
+      - "${WEB_API_PORT:-8080}:8080"
     networks:
       - bot_network
       - remnawave-network # Подключаем к сети панели
     healthcheck:
       test:
         [
-          'CMD-SHELL',
+          "CMD-SHELL",
           'python -c "import requests, os; requests.get(''http://localhost:8080/health'', headers={''X-API-Key'': os.environ.get(''WEB_API_DEFAULT_TOKEN'')}, timeout=5) or exit(1)"',
         ]
       interval: 60s
@@ -96,10 +96,10 @@ volumes:
 networks:
   bot_network:
     driver: bridge
-#    ipam:
-#      config:
-#        - subnet: 172.20.0.0/16
-#          gateway: 172.20.0.1
+    #    ipam:
+    #      config:
+    #        - subnet: 172.20.0.0/16
+    #          gateway: 172.20.0.1
     driver_opts:
       com.docker.network.driver.mtu: 1350
 

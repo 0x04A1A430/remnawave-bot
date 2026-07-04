@@ -16,7 +16,6 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import PinnedMessage, User, UserStatus
 from app.utils.validators import sanitize_html, validate_html_tags
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -39,13 +38,15 @@ async def set_active_pinned_message(
     send_before_menu: bool | None = None,
     send_on_every_start: bool | None = None,
 ) -> PinnedMessage:
-    sanitized_content = sanitize_html(content or '')
+    sanitized_content = sanitize_html(content or "")
     is_valid, error_message = validate_html_tags(sanitized_content)
     if not is_valid:
         raise ValueError(error_message)
 
-    if media_type not in {None, 'photo', 'video'}:
-        raise ValueError('Поддерживаются только фото или видео в закрепленном сообщении')
+    if media_type not in {None, "photo", "video"}:
+        raise ValueError(
+            "Поддерживаются только фото или видео в закрепленном сообщении"
+        )
 
     if created_by is not None:
         creator_id = await db.scalar(select(User.id).where(User.id == created_by))
@@ -54,7 +55,11 @@ async def set_active_pinned_message(
 
     previous_active = await get_active_pinned_message(db)
 
-    await db.execute(update(PinnedMessage).where(PinnedMessage.is_active.is_(True)).values(is_active=False))
+    await db.execute(
+        update(PinnedMessage)
+        .where(PinnedMessage.is_active.is_(True))
+        .values(is_active=False)
+    )
 
     pinned_message = PinnedMessage(
         content=sanitized_content,
@@ -63,12 +68,14 @@ async def set_active_pinned_message(
         is_active=True,
         created_by=creator_id,
         send_before_menu=(
-            send_before_menu if send_before_menu is not None else getattr(previous_active, 'send_before_menu', True)
+            send_before_menu
+            if send_before_menu is not None
+            else getattr(previous_active, "send_before_menu", True)
         ),
         send_on_every_start=(
             send_on_every_start
             if send_on_every_start is not None
-            else getattr(previous_active, 'send_on_every_start', True)
+            else getattr(previous_active, "send_on_every_start", True)
         ),
     )
 
@@ -76,7 +83,9 @@ async def set_active_pinned_message(
     await db.commit()
     await db.refresh(pinned_message)
 
-    logger.info('Создано новое закрепленное сообщение', pinned_message_id=pinned_message.id)
+    logger.info(
+        "Создано новое закрепленное сообщение", pinned_message_id=pinned_message.id
+    )
     return pinned_message
 
 
@@ -89,7 +98,9 @@ async def deactivate_active_pinned_message(db: AsyncSession) -> PinnedMessage | 
     pinned_message.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(pinned_message)
-    logger.info('Деактивировано закрепленное сообщение', pinned_message_id=pinned_message.id)
+    logger.info(
+        "Деактивировано закрепленное сообщение", pinned_message_id=pinned_message.id
+    )
     return pinned_message
 
 
@@ -104,7 +115,7 @@ async def deliver_pinned_message_to_user(
         return False
 
     if not pinned_message.send_on_every_start:
-        last_pinned_id = getattr(user, 'last_pinned_message_id', None)
+        last_pinned_id = getattr(user, "last_pinned_message_id", None)
         if last_pinned_id == pinned_message.id:
             return False
 
@@ -114,7 +125,9 @@ async def deliver_pinned_message_to_user(
 
     success = await _send_and_pin_message(bot, user.telegram_id, pinned_message)
     if success:
-        await _mark_pinned_delivery(user_id=getattr(user, 'id', None), pinned_message_id=pinned_message.id)
+        await _mark_pinned_delivery(
+            user_id=getattr(user, "id", None), pinned_message_id=pinned_message.id
+        )
     return success
 
 
@@ -175,11 +188,15 @@ async def broadcast_pinned_message(
                     break
                 except TelegramRetryAfter as retry_error:
                     delay = min(retry_error.retry_after + 1, 30)
-                    logger.warning('RetryAfter for user , waiting seconds', telegram_id=telegram_id, delay=delay)
+                    logger.warning(
+                        "RetryAfter for user , waiting seconds",
+                        telegram_id=telegram_id,
+                        delay=delay,
+                    )
                     await asyncio.sleep(delay)
                 except Exception as send_error:
                     logger.error(
-                        'Ошибка отправки закрепленного сообщения пользователю',
+                        "Ошибка отправки закрепленного сообщения пользователю",
                         telegram_id=telegram_id,
                         send_error=send_error,
                     )
@@ -253,7 +270,11 @@ async def unpin_active_pinned_message(
                 else:
                     failed_count += 1
             except Exception as error:
-                logger.error('Ошибка открепления сообщения у пользователя', telegram_id=telegram_id, error=error)
+                logger.error(
+                    "Ошибка открепления сообщения у пользователя",
+                    telegram_id=telegram_id,
+                    error=error,
+                )
                 failed_count += 1
 
     for i in range(0, len(recipient_telegram_ids), 40):
@@ -289,7 +310,9 @@ async def _mark_pinned_delivery(
         await session.commit()
 
 
-async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMessage) -> bool:
+async def _send_and_pin_message(
+    bot: Bot, chat_id: int, pinned_message: PinnedMessage
+) -> bool:
     try:
         await bot.unpin_all_chat_messages(chat_id=chat_id)
     except TelegramBadRequest:
@@ -304,27 +327,27 @@ async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMe
             pass
 
     try:
-        if pinned_message.media_type == 'photo' and pinned_message.media_file_id:
+        if pinned_message.media_type == "photo" and pinned_message.media_file_id:
             sent_message = await bot.send_photo(
                 chat_id=chat_id,
                 photo=pinned_message.media_file_id,
                 caption=pinned_message.content or None,
-                parse_mode='HTML' if pinned_message.content else None,
+                parse_mode="HTML" if pinned_message.content else None,
                 disable_notification=True,
             )
-        elif pinned_message.media_type == 'video' and pinned_message.media_file_id:
+        elif pinned_message.media_type == "video" and pinned_message.media_file_id:
             sent_message = await bot.send_video(
                 chat_id=chat_id,
                 video=pinned_message.media_file_id,
                 caption=pinned_message.content or None,
-                parse_mode='HTML' if pinned_message.content else None,
+                parse_mode="HTML" if pinned_message.content else None,
                 disable_notification=True,
             )
         else:
             sent_message = await bot.send_message(
                 chat_id=chat_id,
                 text=pinned_message.content,
-                parse_mode='HTML',
+                parse_mode="HTML",
                 disable_web_page_preview=True,
                 disable_notification=True,
             )
@@ -340,9 +363,17 @@ async def _send_and_pin_message(bot: Bot, chat_id: int, pinned_message: PinnedMe
         await asyncio.sleep(min(e.retry_after + 1, 30))
         raise  # Propagate to caller's retry loop
     except TelegramBadRequest as error:
-        logger.warning('Некорректный запрос при отправке закрепленного сообщения в чат', chat_id=chat_id, error=error)
+        logger.warning(
+            "Некорректный запрос при отправке закрепленного сообщения в чат",
+            chat_id=chat_id,
+            error=error,
+        )
     except Exception as error:
-        logger.error('Не удалось отправить закрепленное сообщение пользователю', chat_id=chat_id, error=error)
+        logger.error(
+            "Не удалось отправить закрепленное сообщение пользователю",
+            chat_id=chat_id,
+            error=error,
+        )
 
     return False
 
@@ -356,7 +387,7 @@ async def _unpin_message_for_user(bot: Bot, chat_id: int, max_retries: int = 3) 
             if attempt < max_retries - 1:
                 delay = min(e.retry_after + 1, 30)
                 logger.warning(
-                    'RetryAfter при откреплении для , ожидание сек (попытка /)',
+                    "RetryAfter при откреплении для , ожидание сек (попытка /)",
                     chat_id=chat_id,
                     delay=delay,
                     attempt=attempt + 1,
@@ -365,7 +396,7 @@ async def _unpin_message_for_user(bot: Bot, chat_id: int, max_retries: int = 3) 
                 await asyncio.sleep(delay)
             else:
                 logger.warning(
-                    'Не удалось открепить сообщение у после попыток (flood control)',
+                    "Не удалось открепить сообщение у после попыток (flood control)",
                     chat_id=chat_id,
                     max_retries=max_retries,
                 )
@@ -375,6 +406,10 @@ async def _unpin_message_for_user(bot: Bot, chat_id: int, max_retries: int = 3) 
         except TelegramBadRequest:
             return False
         except Exception as error:
-            logger.error('Не удалось открепить сообщение у пользователя', chat_id=chat_id, error=error)
+            logger.error(
+                "Не удалось открепить сообщение у пользователя",
+                chat_id=chat_id,
+                error=error,
+            )
             return False
     return False

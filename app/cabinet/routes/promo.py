@@ -21,10 +21,9 @@ from app.services.promo_offer_service import promo_offer_service
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/promo', tags=['Cabinet Promo'])
+router = APIRouter(prefix="/promo", tags=["Cabinet Promo"])
 
 
 # ============ Schemas ============
@@ -106,7 +105,7 @@ class LoyaltyTiersResponse(BaseModel):
 # ============ Routes ============
 
 
-@router.get('/offers', response_model=list[PromoOfferInfo])
+@router.get("/offers", response_model=list[PromoOfferInfo])
 async def get_promo_offers(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -129,9 +128,9 @@ async def get_promo_offers(
     return [
         PromoOfferInfo(
             id=offer.id,
-            notification_type=offer.notification_type or '',
+            notification_type=offer.notification_type or "",
             discount_percent=offer.discount_percent,
-            effect_type=offer.effect_type or 'percent_discount',
+            effect_type=offer.effect_type or "percent_discount",
             expires_at=offer.expires_at,
             is_active=offer.is_active and offer.claimed_at is None,
             is_claimed=offer.claimed_at is not None,
@@ -142,7 +141,7 @@ async def get_promo_offers(
     ]
 
 
-@router.get('/active-discount', response_model=ActiveDiscountInfo)
+@router.get("/active-discount", response_model=ActiveDiscountInfo)
 async def get_active_discount(
     user: User = Depends(get_current_cabinet_user),
 ):
@@ -162,22 +161,26 @@ async def get_active_discount(
     )
 
 
-@router.get('/group-discounts', response_model=PromoGroupDiscounts)
+@router.get("/group-discounts", response_model=PromoGroupDiscounts)
 async def get_promo_group_discounts(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's promo group discounts."""
-    await db.refresh(user, ['promo_group', 'user_promo_groups'])
+    await db.refresh(user, ["promo_group", "user_promo_groups"])
 
-    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
+    promo_group = (
+        user.get_primary_promo_group()
+        if hasattr(user, "get_primary_promo_group")
+        else None
+    )
 
     if not promo_group:
         return PromoGroupDiscounts()
 
     # Get period discounts
     period_discounts = {}
-    raw_period_discounts = getattr(promo_group, 'period_discounts', None)
+    raw_period_discounts = getattr(promo_group, "period_discounts", None)
     if isinstance(raw_period_discounts, dict):
         for key, value in raw_period_discounts.items():
             try:
@@ -194,7 +197,7 @@ async def get_promo_group_discounts(
     )
 
 
-@router.get('/loyalty-tiers', response_model=LoyaltyTiersResponse)
+@router.get("/loyalty-tiers", response_model=LoyaltyTiersResponse)
 async def get_loyalty_tiers(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -228,7 +231,7 @@ async def get_loyalty_tiers(
 
         # Get period discounts
         period_discounts = {}
-        raw_period_discounts = getattr(group, 'period_discounts', None)
+        raw_period_discounts = getattr(group, "period_discounts", None)
         if isinstance(raw_period_discounts, dict):
             for key, value in raw_period_discounts.items():
                 try:
@@ -274,7 +277,7 @@ async def get_loyalty_tiers(
     )
 
 
-@router.post('/claim', response_model=ClaimOfferResponse)
+@router.post("/claim", response_model=ClaimOfferResponse)
 async def claim_promo_offer(
     request: ClaimOfferRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -286,7 +289,7 @@ async def claim_promo_offer(
     if not offer or offer.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Offer not found',
+            detail="Offer not found",
         )
 
     now = datetime.now(UTC)
@@ -294,7 +297,7 @@ async def claim_promo_offer(
     if offer.claimed_at is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This offer has already been claimed',
+            detail="This offer has already been claimed",
         )
 
     if not offer.is_active or offer.expires_at <= now:
@@ -302,39 +305,41 @@ async def claim_promo_offer(
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This offer has expired',
+            detail="This offer has expired",
         )
 
-    effect_type = (offer.effect_type or 'percent_discount').lower()
+    effect_type = (offer.effect_type or "percent_discount").lower()
 
     # Handle test access offers
-    if effect_type == 'test_access':
-        await db.refresh(user, ['subscriptions'])
-        success, newly_added, expires_at, error_code = await promo_offer_service.grant_test_access(
-            db,
-            user,
-            offer,
+    if effect_type == "test_access":
+        await db.refresh(user, ["subscriptions"])
+        success, newly_added, expires_at, error_code = (
+            await promo_offer_service.grant_test_access(
+                db,
+                user,
+                offer,
+            )
         )
 
         if not success:
             error_messages = {
-                'subscription_missing': 'Active subscription required for this offer',
-                'squads_missing': 'Could not determine servers for test access',
-                'already_connected': 'These servers are already connected',
-                'remnawave_sync_failed': 'Failed to connect servers. Please try again later',
+                "subscription_missing": "Active subscription required for this offer",
+                "squads_missing": "Could not determine servers for test access",
+                "already_connected": "These servers are already connected",
+                "remnawave_sync_failed": "Failed to connect servers. Please try again later",
             }
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_messages.get(error_code, 'Failed to activate offer'),
+                detail=error_messages.get(error_code, "Failed to activate offer"),
             )
 
         await mark_offer_claimed(
             db,
             offer,
             details={
-                'context': 'test_access_claim',
-                'new_squads': newly_added,
-                'expires_at': expires_at.isoformat() if expires_at else None,
+                "context": "test_access_claim",
+                "new_squads": newly_added,
+                "expires_at": expires_at.isoformat() if expires_at else None,
             },
         )
 
@@ -349,7 +354,7 @@ async def claim_promo_offer(
     if discount_percent <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid offer',
+            detail="Invalid offer",
         )
 
     user.promo_offer_discount_percent = discount_percent
@@ -358,10 +363,10 @@ async def claim_promo_offer(
 
     # Calculate expiration
     extra_data = offer.extra_data or {}
-    raw_duration = extra_data.get('active_discount_hours')
-    template_id = extra_data.get('template_id')
+    raw_duration = extra_data.get("active_discount_hours")
+    template_id = extra_data.get("template_id")
 
-    if raw_duration in (None, '') and template_id:
+    if raw_duration in (None, "") and template_id:
         try:
             template = await get_promo_offer_template_by_id(db, int(template_id))
         except (ValueError, TypeError):
@@ -385,26 +390,28 @@ async def claim_promo_offer(
         db,
         offer,
         details={
-            'context': 'discount_claim',
-            'discount_percent': discount_percent,
-            'discount_expires_at': discount_expires_at.isoformat() if discount_expires_at else None,
+            "context": "discount_claim",
+            "discount_percent": discount_percent,
+            "discount_expires_at": (
+                discount_expires_at.isoformat() if discount_expires_at else None
+            ),
         },
     )
     await db.refresh(user)
 
-    expires_text = ''
+    expires_text = ""
     if discount_expires_at:
         expires_text = f' Valid until {discount_expires_at.strftime("%Y-%m-%d %H:%M")}'
 
     return ClaimOfferResponse(
         success=True,
-        message=f'Discount of {discount_percent}% activated!{expires_text}',
+        message=f"Discount of {discount_percent}% activated!{expires_text}",
         discount_percent=discount_percent,
         expires_at=discount_expires_at,
     )
 
 
-@router.delete('/active-discount')
+@router.delete("/active-discount")
 async def clear_active_discount(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -417,4 +424,4 @@ async def clear_active_discount(
 
     await db.commit()
 
-    return {'message': 'Active discount cleared'}
+    return {"message": "Active discount cleared"}

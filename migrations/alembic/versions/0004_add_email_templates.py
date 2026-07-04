@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '0004'
-down_revision: Union[str, None] = '0003'
+revision: str = "0004"
+down_revision: Union[str, None] = "0003"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -26,25 +26,41 @@ def _has_table(table: str) -> bool:
 
 
 def upgrade() -> None:
-    if _has_table('email_templates'):
+    if _has_table("email_templates"):
         return
 
     op.create_table(
-        'email_templates',
-        sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('notification_type', sa.String(100), nullable=False),
-        sa.Column('language', sa.String(10), nullable=False),
-        sa.Column('subject', sa.String(500), nullable=False),
-        sa.Column('body_html', sa.Text(), nullable=False),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('true')),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('notification_type', 'language', name='uq_email_templates_type_lang'),
+        "email_templates",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("notification_type", sa.String(100), nullable=False),
+        sa.Column("language", sa.String(10), nullable=False),
+        sa.Column("subject", sa.String(500), nullable=False),
+        sa.Column("body_html", sa.Text(), nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "notification_type", "language", name="uq_email_templates_type_lang"
+        ),
     )
-    op.create_index('ix_email_templates_notification_type', 'email_templates', ['notification_type'])
+    op.create_index(
+        "ix_email_templates_notification_type", "email_templates", ["notification_type"]
+    )
 
 
 def downgrade() -> None:
-    op.drop_index('ix_email_templates_notification_type', table_name='email_templates')
-    op.drop_table('email_templates')
+    op.drop_index("ix_email_templates_notification_type", table_name="email_templates")
+    op.drop_table("email_templates")

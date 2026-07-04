@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import EtoplatezhiPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -18,7 +17,7 @@ async def create_etoplatezhi_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = 'RUB',
+    currency: str = "RUB",
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -38,19 +37,23 @@ async def create_etoplatezhi_payment(
         etoplatezhi_payment_id=etoplatezhi_payment_id,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status='pending',
+        status="pending",
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info('Создан платеж Etoplatezhi', order_id=order_id, user_id=user_id)
+    logger.info("Создан платеж Etoplatezhi", order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_etoplatezhi_payment_by_order_id(db: AsyncSession, order_id: str) -> EtoplatezhiPayment | None:
+async def get_etoplatezhi_payment_by_order_id(
+    db: AsyncSession, order_id: str
+) -> EtoplatezhiPayment | None:
     """Получает платеж по order_id (internal)."""
-    result = await db.execute(select(EtoplatezhiPayment).where(EtoplatezhiPayment.order_id == order_id))
+    result = await db.execute(
+        select(EtoplatezhiPayment).where(EtoplatezhiPayment.order_id == order_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -59,18 +62,26 @@ async def get_etoplatezhi_payment_by_invoice_id(
 ) -> EtoplatezhiPayment | None:
     """Получает платеж по ID от Etoplatezhi."""
     result = await db.execute(
-        select(EtoplatezhiPayment).where(EtoplatezhiPayment.etoplatezhi_payment_id == etoplatezhi_payment_id)
+        select(EtoplatezhiPayment).where(
+            EtoplatezhiPayment.etoplatezhi_payment_id == etoplatezhi_payment_id
+        )
     )
     return result.scalar_one_or_none()
 
 
-async def get_etoplatezhi_payment_by_id(db: AsyncSession, payment_id: int) -> EtoplatezhiPayment | None:
+async def get_etoplatezhi_payment_by_id(
+    db: AsyncSession, payment_id: int
+) -> EtoplatezhiPayment | None:
     """Получает платеж по ID."""
-    result = await db.execute(select(EtoplatezhiPayment).where(EtoplatezhiPayment.id == payment_id))
+    result = await db.execute(
+        select(EtoplatezhiPayment).where(EtoplatezhiPayment.id == payment_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_etoplatezhi_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> EtoplatezhiPayment | None:
+async def get_etoplatezhi_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> EtoplatezhiPayment | None:
     """Получает платеж по ID с блокировкой FOR UPDATE."""
     result = await db.execute(
         select(EtoplatezhiPayment)
@@ -112,7 +123,7 @@ async def update_etoplatezhi_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        'Обновлен статус платежа Etoplatezhi',
+        "Обновлен статус платежа Etoplatezhi",
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -120,12 +131,14 @@ async def update_etoplatezhi_payment_status(
     return payment
 
 
-async def get_pending_etoplatezhi_payments(db: AsyncSession, user_id: int) -> list[EtoplatezhiPayment]:
+async def get_pending_etoplatezhi_payments(
+    db: AsyncSession, user_id: int
+) -> list[EtoplatezhiPayment]:
     """Получает незавершенные платежи пользователя."""
     result = await db.execute(
         select(EtoplatezhiPayment).where(
             EtoplatezhiPayment.user_id == user_id,
-            EtoplatezhiPayment.status == 'pending',
+            EtoplatezhiPayment.status == "pending",
             EtoplatezhiPayment.is_paid == False,
         )
     )
@@ -139,7 +152,7 @@ async def get_expired_pending_etoplatezhi_payments(
     now = datetime.now(UTC)
     result = await db.execute(
         select(EtoplatezhiPayment).where(
-            EtoplatezhiPayment.status == 'pending',
+            EtoplatezhiPayment.status == "pending",
             EtoplatezhiPayment.is_paid == False,
             EtoplatezhiPayment.expires_at < now,
         )

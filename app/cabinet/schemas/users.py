@@ -10,31 +10,31 @@ from pydantic import BaseModel, Field
 class UserStatusEnum(StrEnum):
     """User status enum."""
 
-    ACTIVE = 'active'
-    BLOCKED = 'blocked'
-    DELETED = 'deleted'
+    ACTIVE = "active"
+    BLOCKED = "blocked"
+    DELETED = "deleted"
 
 
 class SubscriptionStatusEnum(StrEnum):
     """Subscription status enum."""
 
-    TRIAL = 'trial'
-    ACTIVE = 'active'
-    EXPIRED = 'expired'
-    DISABLED = 'disabled'
-    LIMITED = 'limited'
-    PENDING = 'pending'
+    TRIAL = "trial"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    DISABLED = "disabled"
+    LIMITED = "limited"
+    PENDING = "pending"
 
 
 class SortByEnum(StrEnum):
     """Sort options for users list."""
 
-    CREATED_AT = 'created_at'
-    BALANCE = 'balance'
-    TRAFFIC = 'traffic'
-    LAST_ACTIVITY = 'last_activity'
-    TOTAL_SPENT = 'total_spent'
-    PURCHASE_COUNT = 'purchase_count'
+    CREATED_AT = "created_at"
+    BALANCE = "balance"
+    TRAFFIC = "traffic"
+    LAST_ACTIVITY = "last_activity"
+    TOTAL_SPENT = "total_spent"
+    PURCHASE_COUNT = "purchase_count"
 
 
 # === User Subscription Info ===
@@ -270,7 +270,7 @@ class UserNodeUsageItem(BaseModel):
 
     node_uuid: str
     node_name: str
-    country_code: str = ''
+    country_code: str = ""
     total_bytes: int
     daily_bytes: list[int] = []
 
@@ -290,10 +290,15 @@ class UpdateBalanceRequest(BaseModel):
     """Request to update user balance."""
 
     amount_kopeks: int = Field(
-        ..., ge=-2_000_000_000, le=2_000_000_000, description='Amount in kopeks (positive to add, negative to subtract)'
+        ...,
+        ge=-2_000_000_000,
+        le=2_000_000_000,
+        description="Amount in kopeks (positive to add, negative to subtract)",
     )
-    description: str = Field(default='Admin balance adjustment', max_length=500)
-    create_transaction: bool = Field(default=True, description='Create transaction record')
+    description: str = Field(default="Admin balance adjustment", max_length=500)
+    create_transaction: bool = Field(
+        default=True, description="Create transaction record"
+    )
 
 
 class UpdateBalanceResponse(BaseModel):
@@ -311,39 +316,47 @@ class UpdateSubscriptionRequest(BaseModel):
     action: str = Field(
         ...,
         description=(
-            'Action: extend, shorten, set_end_date, change_tariff, set_traffic, '
-            'toggle_autopay, cancel, reset (zero out the subscription, keep user+tickets)'
+            "Action: extend, shorten, set_end_date, change_tariff, set_traffic, "
+            "toggle_autopay, cancel, reset (zero out the subscription, keep user+tickets)"
         ),
     )
 
     # Target subscription (required in multi-tariff mode for non-create actions)
-    subscription_id: int | None = Field(None, description='Subscription ID to target (multi-tariff)')
+    subscription_id: int | None = Field(
+        None, description="Subscription ID to target (multi-tariff)"
+    )
 
     # For extend action
-    days: int | None = Field(None, ge=1, le=3650, description='Days to extend')
+    days: int | None = Field(None, ge=1, le=3650, description="Days to extend")
 
     # For set_end_date action
-    end_date: datetime | None = Field(None, description='New end date')
+    end_date: datetime | None = Field(None, description="New end date")
 
     # For change_tariff action
-    tariff_id: int | None = Field(None, description='New tariff ID')
+    tariff_id: int | None = Field(None, description="New tariff ID")
 
     # For set_traffic action
-    traffic_limit_gb: int | None = Field(None, ge=0, description='New traffic limit in GB')
-    traffic_used_gb: float | None = Field(None, ge=0, description='Set traffic used in GB')
+    traffic_limit_gb: int | None = Field(
+        None, ge=0, description="New traffic limit in GB"
+    )
+    traffic_used_gb: float | None = Field(
+        None, ge=0, description="Set traffic used in GB"
+    )
 
     # For toggle_autopay
-    autopay_enabled: bool | None = Field(None, description='Enable/disable autopay')
+    autopay_enabled: bool | None = Field(None, description="Enable/disable autopay")
 
     # For add_traffic action
-    traffic_gb: int | None = Field(None, ge=1, description='Traffic GB to add')
+    traffic_gb: int | None = Field(None, ge=1, description="Traffic GB to add")
 
     # For remove_traffic action
-    traffic_purchase_id: int | None = Field(None, description='Traffic purchase ID to remove')
+    traffic_purchase_id: int | None = Field(
+        None, description="Traffic purchase ID to remove"
+    )
 
     # For create new subscription
-    is_trial: bool | None = Field(None, description='Is trial subscription')
-    device_limit: int | None = Field(None, ge=1, description='Device limit')
+    is_trial: bool | None = Field(None, description="Is trial subscription")
+    device_limit: int | None = Field(None, ge=1, description="Device limit")
 
 
 class UpdateSubscriptionResponse(BaseModel):
@@ -358,7 +371,9 @@ class UpdateUserStatusRequest(BaseModel):
     """Request to update user status."""
 
     status: UserStatusEnum
-    reason: str | None = Field(None, max_length=500, description='Reason for status change')
+    reason: str | None = Field(
+        None, max_length=500, description="Reason for status change"
+    )
 
 
 class UpdateUserStatusResponse(BaseModel):
@@ -373,9 +388,13 @@ class UpdateUserStatusResponse(BaseModel):
 class UpdateRestrictionsRequest(BaseModel):
     """Request to update user restrictions."""
 
-    restriction_topup: bool | None = Field(None, description='Block balance top-up')
-    restriction_subscription: bool | None = Field(None, description='Block subscription purchase/renewal')
-    restriction_reason: str | None = Field(None, max_length=500, description='Reason for restrictions')
+    restriction_topup: bool | None = Field(None, description="Block balance top-up")
+    restriction_subscription: bool | None = Field(
+        None, description="Block subscription purchase/renewal"
+    )
+    restriction_reason: str | None = Field(
+        None, max_length=500, description="Reason for restrictions"
+    )
 
 
 class UpdateRestrictionsResponse(BaseModel):
@@ -391,7 +410,9 @@ class UpdateRestrictionsResponse(BaseModel):
 class UpdatePromoGroupRequest(BaseModel):
     """Request to update user promo group."""
 
-    promo_group_id: int | None = Field(None, description='New promo group ID (null to remove)')
+    promo_group_id: int | None = Field(
+        None, description="New promo group ID (null to remove)"
+    )
 
 
 class UpdatePromoGroupResponse(BaseModel):
@@ -408,7 +429,7 @@ class UpdateReferralCommissionRequest(BaseModel):
     """Request to update user referral commission percent."""
 
     commission_percent: int | None = Field(
-        None, ge=0, le=100, description='Referral commission percent (null for default)'
+        None, ge=0, le=100, description="Referral commission percent (null for default)"
     )
 
 
@@ -424,7 +445,7 @@ class UpdateReferralCommissionResponse(BaseModel):
 class AssignReferrerRequest(BaseModel):
     """Request to manually assign a referrer to a user."""
 
-    referrer_id: int = Field(..., gt=0, description='ID of the referrer user')
+    referrer_id: int = Field(..., gt=0, description="ID of the referrer user")
 
 
 class AssignReferrerResponse(BaseModel):
@@ -456,8 +477,8 @@ class DeviceInfo(BaseModel):
     """Individual device info."""
 
     hwid: str
-    platform: str = ''
-    device_model: str = ''
+    platform: str = ""
+    device_model: str = ""
     created_at: str | None = None
     # User-set local alias (per `user_device_aliases`). None when the user
     # hasn't renamed this device — clients fall back to platform/device_model.
@@ -504,8 +525,10 @@ class ResetDevicesResponse(BaseModel):
 class DeleteUserRequest(BaseModel):
     """Request to delete user."""
 
-    soft_delete: bool = Field(default=True, description='Soft delete (mark as deleted) or hard delete')
-    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
+    soft_delete: bool = Field(
+        default=True, description="Soft delete (mark as deleted) or hard delete"
+    )
+    reason: str | None = Field(None, max_length=500, description="Reason for deletion")
 
 
 class DeleteUserResponse(BaseModel):
@@ -554,7 +577,8 @@ class UserSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=255)
     search_by: list[str] = Field(
-        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'], description='Fields to search in'
+        default=["telegram_id", "username", "first_name", "last_name", "email"],
+        description="Fields to search in",
     )
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -643,10 +667,13 @@ class PanelUserInfo(BaseModel):
 class SyncFromPanelRequest(BaseModel):
     """Request to sync user from panel."""
 
-    update_subscription: bool = Field(default=True, description='Update subscription data')
-    update_traffic: bool = Field(default=True, description='Update traffic usage')
+    update_subscription: bool = Field(
+        default=True, description="Update subscription data"
+    )
+    update_traffic: bool = Field(default=True, description="Update traffic usage")
     create_if_missing: bool = Field(
-        default=False, description='Create subscription if user exists in panel but not in bot'
+        default=False,
+        description="Create subscription if user exists in panel but not in bot",
     )
 
 
@@ -663,11 +690,19 @@ class SyncFromPanelResponse(BaseModel):
 class SyncToPanelRequest(BaseModel):
     """Request to sync user to panel."""
 
-    create_if_missing: bool = Field(default=True, description='Create user in panel if not exists')
-    update_status: bool = Field(default=True, description='Update user status in panel')
-    update_traffic_limit: bool = Field(default=True, description='Update traffic limit in panel')
-    update_expire_date: bool = Field(default=True, description='Update expire date in panel')
-    update_squads: bool = Field(default=True, description='Update connected squads in panel')
+    create_if_missing: bool = Field(
+        default=True, description="Create user in panel if not exists"
+    )
+    update_status: bool = Field(default=True, description="Update user status in panel")
+    update_traffic_limit: bool = Field(
+        default=True, description="Update traffic limit in panel"
+    )
+    update_expire_date: bool = Field(
+        default=True, description="Update expire date in panel"
+    )
+    update_squads: bool = Field(
+        default=True, description="Update connected squads in panel"
+    )
 
 
 class SyncToPanelResponse(BaseModel):
@@ -675,7 +710,7 @@ class SyncToPanelResponse(BaseModel):
 
     success: bool
     message: str
-    action: str = ''  # created, updated, no_changes
+    action: str = ""  # created, updated, no_changes
     panel_uuid: str | None = None
     changes: dict[str, Any] = {}
     errors: list[str] = []
@@ -721,8 +756,10 @@ class PanelSyncStatusResponse(BaseModel):
 class FullDeleteUserRequest(BaseModel):
     """Request for full user deletion (bot + panel)."""
 
-    delete_from_panel: bool = Field(default=True, description='Also delete user from Remnawave panel')
-    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
+    delete_from_panel: bool = Field(
+        default=True, description="Also delete user from Remnawave panel"
+    )
+    reason: str | None = Field(None, max_length=500, description="Reason for deletion")
 
 
 class FullDeleteUserResponse(BaseModel):
@@ -738,7 +775,9 @@ class FullDeleteUserResponse(BaseModel):
 class ResetTrialRequest(BaseModel):
     """Request to reset user trial."""
 
-    reason: str | None = Field(None, max_length=500, description='Reason for trial reset')
+    reason: str | None = Field(
+        None, max_length=500, description="Reason for trial reset"
+    )
 
 
 class ResetTrialResponse(BaseModel):
@@ -753,8 +792,12 @@ class ResetTrialResponse(BaseModel):
 class ResetSubscriptionRequest(BaseModel):
     """Request to reset user subscription."""
 
-    deactivate_in_panel: bool = Field(default=True, description='Also deactivate in Remnawave panel')
-    reason: str | None = Field(None, max_length=500, description='Reason for subscription reset')
+    deactivate_in_panel: bool = Field(
+        default=True, description="Also deactivate in Remnawave panel"
+    )
+    reason: str | None = Field(
+        None, max_length=500, description="Reason for subscription reset"
+    )
 
 
 class ResetSubscriptionResponse(BaseModel):
@@ -770,7 +813,7 @@ class ResetSubscriptionResponse(BaseModel):
 class DisableUserRequest(BaseModel):
     """Request to disable user."""
 
-    reason: str | None = Field(None, max_length=500, description='Reason for disabling')
+    reason: str | None = Field(None, max_length=500, description="Reason for disabling")
 
 
 class DisableUserResponse(BaseModel):

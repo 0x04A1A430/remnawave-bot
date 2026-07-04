@@ -68,7 +68,7 @@ class UserCreateRequest(BaseModel):
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
-    language: str = 'ru'
+    language: str = "ru"
     referred_by_id: int | None = None
     promo_group_id: int | None = None
 
@@ -87,7 +87,7 @@ class UserUpdateRequest(BaseModel):
 
 class BalanceUpdateRequest(BaseModel):
     amount_kopeks: int = Field(..., ge=-100_000_000, le=100_000_000)
-    description: str | None = Field(default='Корректировка через веб-API')
+    description: str | None = Field(default="Корректировка через веб-API")
     create_transaction: bool = True
 
 
@@ -103,5 +103,5 @@ class UserSubscriptionCreateRequest(BaseModel):
     replace_existing: bool = False
     subscription_id: int | None = Field(
         default=None,
-        description='ID of existing subscription to replace (required in multi-tariff mode when replace_existing=true)',
+        description="ID of existing subscription to replace (required in multi-tariff mode when replace_existing=true)",
     )

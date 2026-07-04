@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0048'
-down_revision: str | None = '0047'
+revision: str = "0048"
+down_revision: str | None = "0047"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -24,12 +24,12 @@ def upgrade() -> None:
     with op.get_context().autocommit_block():
         op.execute(
             sa.text(
-                'CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_users_username_lower '
-                'ON users (lower(username))'
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_users_username_lower "
+                "ON users (lower(username))"
             )
         )
 
 
 def downgrade() -> None:
     with op.get_context().autocommit_block():
-        op.execute(sa.text('DROP INDEX CONCURRENTLY IF EXISTS ix_users_username_lower'))
+        op.execute(sa.text("DROP INDEX CONCURRENTLY IF EXISTS ix_users_username_lower"))

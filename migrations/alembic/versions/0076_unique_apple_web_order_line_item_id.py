@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0076'
-down_revision: Union[str, None] = '0075'
+revision: str = "0076"
+down_revision: Union[str, None] = "0075"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -21,79 +21,95 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    web_order_duplicates = bind.execute(
-        sa.text(
-            """
+    web_order_duplicates = bind.execute(sa.text("""
             SELECT web_order_line_item_id, COUNT(*) AS count
             FROM apple_transactions
             WHERE web_order_line_item_id IS NOT NULL
             GROUP BY web_order_line_item_id
             HAVING COUNT(*) > 1
             LIMIT 5
-            """
-        )
-    ).mappings().all()
+            """)).mappings().all()
     if web_order_duplicates:
-        sample = ', '.join(f'{row["web_order_line_item_id"]} ({row["count"]})' for row in web_order_duplicates)
+        sample = ", ".join(
+            f'{row["web_order_line_item_id"]} ({row["count"]})'
+            for row in web_order_duplicates
+        )
         raise RuntimeError(
-            'Cannot create unique Apple IAP web_order_line_item_id index; '
-            f'duplicate values exist: {sample}'
+            "Cannot create unique Apple IAP web_order_line_item_id index; "
+            f"duplicate values exist: {sample}"
         )
 
-    payload_hash_duplicates = bind.execute(
-        sa.text(
-            """
+    payload_hash_duplicates = bind.execute(sa.text("""
             SELECT payload_hash, COUNT(*) AS count
             FROM apple_notifications
             GROUP BY payload_hash
             HAVING COUNT(*) > 1
             LIMIT 5
-            """
-        )
-    ).mappings().all()
+            """)).mappings().all()
     if payload_hash_duplicates:
-        sample = ', '.join(f'{row["payload_hash"]} ({row["count"]})' for row in payload_hash_duplicates)
+        sample = ", ".join(
+            f'{row["payload_hash"]} ({row["count"]})' for row in payload_hash_duplicates
+        )
         raise RuntimeError(
-            'Cannot create unique Apple IAP notification payload_hash index; '
-            f'duplicate values exist: {sample}'
+            "Cannot create unique Apple IAP notification payload_hash index; "
+            f"duplicate values exist: {sample}"
         )
 
-    existing_at_indexes = {idx['name'] for idx in inspector.get_indexes('apple_transactions')}
-    existing_an_indexes = {idx['name'] for idx in inspector.get_indexes('apple_notifications')}
+    existing_at_indexes = {
+        idx["name"] for idx in inspector.get_indexes("apple_transactions")
+    }
+    existing_an_indexes = {
+        idx["name"] for idx in inspector.get_indexes("apple_notifications")
+    }
 
-    if 'ix_apple_transactions_web_order_line_item_id' in existing_at_indexes:
-        op.drop_index('ix_apple_transactions_web_order_line_item_id', table_name='apple_transactions')
+    if "ix_apple_transactions_web_order_line_item_id" in existing_at_indexes:
+        op.drop_index(
+            "ix_apple_transactions_web_order_line_item_id",
+            table_name="apple_transactions",
+        )
     op.create_index(
-        'ix_apple_transactions_web_order_line_item_id',
-        'apple_transactions',
-        ['web_order_line_item_id'],
+        "ix_apple_transactions_web_order_line_item_id",
+        "apple_transactions",
+        ["web_order_line_item_id"],
         unique=True,
     )
-    if 'ix_apple_transactions_signed_transaction_hash' not in existing_at_indexes:
+    if "ix_apple_transactions_signed_transaction_hash" not in existing_at_indexes:
         op.create_index(
-            'ix_apple_transactions_signed_transaction_hash',
-            'apple_transactions',
-            ['signed_transaction_hash'],
+            "ix_apple_transactions_signed_transaction_hash",
+            "apple_transactions",
+            ["signed_transaction_hash"],
         )
-    if 'ix_apple_notifications_payload_hash' not in existing_an_indexes:
+    if "ix_apple_notifications_payload_hash" not in existing_an_indexes:
         op.create_index(
-            'ix_apple_notifications_payload_hash',
-            'apple_notifications',
-            ['payload_hash'],
+            "ix_apple_notifications_payload_hash",
+            "apple_notifications",
+            ["payload_hash"],
             unique=True,
         )
-    if 'ix_apple_notifications_status_received_at' not in existing_an_indexes:
+    if "ix_apple_notifications_status_received_at" not in existing_an_indexes:
         op.create_index(
-            'ix_apple_notifications_status_received_at',
-            'apple_notifications',
-            ['status', 'received_at'],
+            "ix_apple_notifications_status_received_at",
+            "apple_notifications",
+            ["status", "received_at"],
             postgresql_where=sa.text("status IN ('received','failed')"),
         )
 
 
 def downgrade() -> None:
-    op.drop_index('ix_apple_notifications_status_received_at', table_name='apple_notifications')
-    op.drop_index('ix_apple_notifications_payload_hash', table_name='apple_notifications')
-    op.drop_index('ix_apple_transactions_signed_transaction_hash', table_name='apple_transactions')
-    op.drop_index('ix_apple_transactions_web_order_line_item_id', table_name='apple_transactions')
-    op.create_index('ix_apple_transactions_web_order_line_item_id', 'apple_transactions', ['web_order_line_item_id'])
+    op.drop_index(
+        "ix_apple_notifications_status_received_at", table_name="apple_notifications"
+    )
+    op.drop_index(
+        "ix_apple_notifications_payload_hash", table_name="apple_notifications"
+    )
+    op.drop_index(
+        "ix_apple_transactions_signed_transaction_hash", table_name="apple_transactions"
+    )
+    op.drop_index(
+        "ix_apple_transactions_web_order_line_item_id", table_name="apple_transactions"
+    )
+    op.create_index(
+        "ix_apple_transactions_web_order_line_item_id",
+        "apple_transactions",
+        ["web_order_line_item_id"],
+    )

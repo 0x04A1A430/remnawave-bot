@@ -2,9 +2,8 @@
 name: Feat Bedolage
 about: Создать запрос на фичу «Бедолаге»
 title: "[FEAT] Заголовок"
-labels: ''
-assignees: ''
-
+labels: ""
+assignees: ""
 ---
 
 ## Описание / Конфигурация

@@ -12,7 +12,6 @@ import structlog
 
 from app.config import settings
 
-
 logger = structlog.get_logger(__name__)
 
 # WATA API rejects expirationDateTime <= now + 10 minutes (exclusive lower bound).
@@ -34,7 +33,7 @@ class WataService:
         access_token: str | None = None,
         request_timeout: int | None = None,
     ) -> None:
-        self.base_url = (base_url or settings.WATA_BASE_URL or '').rstrip('/')
+        self.base_url = (base_url or settings.WATA_BASE_URL or "").rstrip("/")
         self.access_token = access_token or settings.WATA_ACCESS_TOKEN
         self.request_timeout = request_timeout or int(settings.WATA_REQUEST_TIMEOUT)
 
@@ -47,10 +46,10 @@ class WataService:
 
     def _build_headers(self) -> dict[str, str]:
         if not self.access_token:
-            raise WataAPIError('WATA access token is not configured')
+            raise WataAPIError("WATA access token is not configured")
         return {
-            'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json',
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
         }
 
     _MAX_RETRIES = 2
@@ -60,16 +59,18 @@ class WataService:
     _MAX_RETRY_DELAY = 3.0
 
     @staticmethod
-    def _parse_retry_after(response: aiohttp.ClientResponse, response_text: str) -> float:
+    def _parse_retry_after(
+        response: aiohttp.ClientResponse, response_text: str
+    ) -> float:
         """Extract retry delay from Retry-After header or response body."""
-        retry_after = response.headers.get('Retry-After')
+        retry_after = response.headers.get("Retry-After")
         if retry_after:
             try:
                 return float(retry_after)
             except (ValueError, TypeError):
                 pass
 
-        match = re.search(r'[Rr]etry after (\d+)', response_text)
+        match = re.search(r"[Rr]etry after (\d+)", response_text)
         if match:
             return float(match.group(1))
 
@@ -84,7 +85,7 @@ class WataService:
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if not self.is_configured:
-            raise WataAPIError('WATA service is not configured')
+            raise WataAPIError("WATA service is not configured")
 
         url = self._build_url(path)
         timeout = aiohttp.ClientTimeout(total=self.request_timeout)
@@ -109,7 +110,7 @@ class WataService:
                         if attempt < self._MAX_RETRIES:
                             sleep_for = min(retry_after, self._MAX_RETRY_DELAY)
                             logger.warning(
-                                'WATA API rate limited (429) — retrying',
+                                "WATA API rate limited (429) — retrying",
                                 method=method,
                                 path=path,
                                 attempt=attempt + 1,
@@ -119,13 +120,25 @@ class WataService:
                             )
                             await asyncio.sleep(sleep_for)
                             continue
-                        logger.warning('WATA API rate limited (429) — retries exhausted', method=method, path=path)
-                        last_error = WataAPIError(f'WATA API rate limited on {method} {path}')
+                        logger.warning(
+                            "WATA API rate limited (429) — retries exhausted",
+                            method=method,
+                            path=path,
+                        )
+                        last_error = WataAPIError(
+                            f"WATA API rate limited on {method} {path}"
+                        )
                         break
 
                     if response.status >= 400:
-                        logger.error('WATA API error', response_status=response.status, response_text=response_text)
-                        raise WataAPIError(f'WATA API returned status {response.status}: {response_text}')
+                        logger.error(
+                            "WATA API error",
+                            response_status=response.status,
+                            response_text=response_text,
+                        )
+                        raise WataAPIError(
+                            f"WATA API returned status {response.status}: {response_text}"
+                        )
 
                     if not response_text:
                         return {}
@@ -133,15 +146,15 @@ class WataService:
                     try:
                         data = await response.json()
                     except aiohttp.ContentTypeError as error:
-                        logger.error('WATA API returned non-JSON response', error=error)
-                        raise WataAPIError('WATA API returned invalid JSON') from error
+                        logger.error("WATA API returned non-JSON response", error=error)
+                        raise WataAPIError("WATA API returned invalid JSON") from error
 
                     return data
             except aiohttp.ClientError as error:
-                logger.error('Error communicating with WATA API', error=error)
-                raise WataAPIError('Failed to communicate with WATA API') from error
+                logger.error("Error communicating with WATA API", error=error)
+                raise WataAPIError("Failed to communicate with WATA API") from error
 
-        raise last_error or WataAPIError('WATA API request failed')
+        raise last_error or WataAPIError("WATA API request failed")
 
     @staticmethod
     def _amount_from_kopeks(amount_kopeks: int) -> float:
@@ -153,20 +166,20 @@ class WataService:
             aware = value.replace(tzinfo=UTC)
         else:
             aware = value.astimezone(UTC)
-        return aware.isoformat().replace('+00:00', 'Z')
+        return aware.isoformat().replace("+00:00", "Z")
 
     @staticmethod
     def _parse_datetime(raw: str | None) -> datetime | None:
         if not raw:
             return None
         try:
-            normalized = raw.replace('Z', '+00:00')
+            normalized = raw.replace("Z", "+00:00")
             parsed = datetime.fromisoformat(normalized)
             if parsed.tzinfo is None:
                 return parsed.replace(tzinfo=UTC)
             return parsed.astimezone(UTC)
         except (ValueError, TypeError):
-            logger.debug('Failed to parse WATA datetime', raw=raw)
+            logger.debug("Failed to parse WATA datetime", raw=raw)
             return None
 
     async def create_payment_link(
@@ -184,20 +197,22 @@ class WataService:
         arbitrary_amount_prompts: list[int] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            'amount': self._amount_from_kopeks(amount_kopeks),
-            'currency': currency,
-            'description': description,
-            'orderId': order_id,
+            "amount": self._amount_from_kopeks(amount_kopeks),
+            "currency": currency,
+            "description": description,
+            "orderId": order_id,
         }
 
         payment_type = link_type or settings.WATA_PAYMENT_TYPE
         if payment_type:
-            payload['type'] = payment_type
+            payload["type"] = payment_type
 
         if success_url or settings.WATA_SUCCESS_REDIRECT_URL:
-            payload['successRedirectUrl'] = success_url or settings.WATA_SUCCESS_REDIRECT_URL
+            payload["successRedirectUrl"] = (
+                success_url or settings.WATA_SUCCESS_REDIRECT_URL
+            )
         if fail_url or settings.WATA_FAIL_REDIRECT_URL:
-            payload['failRedirectUrl'] = fail_url or settings.WATA_FAIL_REDIRECT_URL
+            payload["failRedirectUrl"] = fail_url or settings.WATA_FAIL_REDIRECT_URL
 
         if expiration_minutes is None:
             ttl = settings.WATA_LINK_TTL_MINUTES
@@ -208,27 +223,27 @@ class WataService:
             # Принудительный минимум 15 минут, чтобы не попасть на границу.
             safe_minutes = max(expiration_minutes, _MIN_EXPIRATION_MINUTES)
             expiration_time = datetime.now(UTC) + timedelta(minutes=safe_minutes)
-            payload['expirationDateTime'] = self._format_datetime(expiration_time)
+            payload["expirationDateTime"] = self._format_datetime(expiration_time)
 
         if allow_arbitrary_amount:
-            payload['isArbitraryAmountAllowed'] = True
+            payload["isArbitraryAmountAllowed"] = True
             if arbitrary_amount_prompts:
-                payload['arbitraryAmountPrompts'] = arbitrary_amount_prompts
+                payload["arbitraryAmountPrompts"] = arbitrary_amount_prompts
 
         logger.info(
-            'Создаем WATA платежную ссылку: order_id amount',
+            "Создаем WATA платежную ссылку: order_id amount",
             order_id=order_id,
-            payload=payload['amount'],
+            payload=payload["amount"],
             currency=currency,
         )
 
-        response = await self._request('POST', '/links', json=payload)
-        logger.debug('WATA create link response', response=response)
+        response = await self._request("POST", "/links", json=payload)
+        logger.debug("WATA create link response", response=response)
         return response
 
     async def get_payment_link(self, payment_link_id: str) -> dict[str, Any]:
-        logger.debug('Запрашиваем WATA ссылку', payment_link_id=payment_link_id)
-        return await self._request('GET', f'/links/{payment_link_id}')
+        logger.debug("Запрашиваем WATA ссылку", payment_link_id=payment_link_id)
+        return await self._request("GET", f"/links/{payment_link_id}")
 
     async def search_transactions(
         self,
@@ -239,21 +254,23 @@ class WataService:
         limit: int = 5,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {
-            'skipCount': 0,
-            'maxResultCount': max(1, min(limit, 1000)),
+            "skipCount": 0,
+            "maxResultCount": max(1, min(limit, 1000)),
         }
         if order_id:
-            params['orderId'] = order_id
+            params["orderId"] = order_id
         if status:
-            params['statuses'] = status
+            params["statuses"] = status
         if payment_link_id:
-            params['paymentLinkId'] = payment_link_id
+            params["paymentLinkId"] = payment_link_id
 
         logger.debug(
-            'Ищем WATA транзакции: order_id payment_link_id', order_id=order_id, payment_link_id=payment_link_id
+            "Ищем WATA транзакции: order_id payment_link_id",
+            order_id=order_id,
+            payment_link_id=payment_link_id,
         )
-        return await self._request('GET', '/transactions', params=params)
+        return await self._request("GET", "/transactions", params=params)
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
-        logger.debug('Получаем WATA транзакцию', transaction_id=transaction_id)
-        return await self._request('GET', f'/transactions/{transaction_id}')
+        logger.debug("Получаем WATA транзакцию", transaction_id=transaction_id)
+        return await self._request("GET", f"/transactions/{transaction_id}")

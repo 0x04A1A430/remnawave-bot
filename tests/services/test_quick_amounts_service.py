@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -22,7 +21,11 @@ def test_normalize_none_returns_none():
 
 
 def test_normalize_sorts_and_dedupes():
-    assert normalize_quick_amounts([50000, 10000, 50000, 30000]) == [10000, 30000, 50000]
+    assert normalize_quick_amounts([50000, 10000, 50000, 30000]) == [
+        10000,
+        30000,
+        50000,
+    ]
 
 
 def test_normalize_empty_list_returns_none():
@@ -31,12 +34,12 @@ def test_normalize_empty_list_returns_none():
 
 def test_normalize_rejects_non_list():
     with pytest.raises(ValueError):
-        normalize_quick_amounts('10000')
+        normalize_quick_amounts("10000")
 
 
 def test_normalize_rejects_non_int_items():
     with pytest.raises(ValueError):
-        normalize_quick_amounts([10000, '30000'])
+        normalize_quick_amounts([10000, "30000"])
     with pytest.raises(ValueError):
         normalize_quick_amounts([True])
 

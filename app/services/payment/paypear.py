@@ -15,15 +15,14 @@ from app.services.paypear_service import paypear_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
-
 # Маппинг статусов PayPear -> internal
 PAYPEAR_STATUS_MAP: dict[str, tuple[str, bool]] = {
-    'NEW': ('pending', False),
-    'PROCESS': ('processing', False),
-    'CONFIRMED': ('success', True),
-    'CANCELED': ('canceled', False),
-    'REFUNDED': ('refunded', False),
-    'EXPIRED': ('expired', False),
+    "NEW": ("pending", False),
+    "PROCESS": ("processing", False),
+    "CONFIRMED": ("success", True),
+    "CANCELED": ("canceled", False),
+    "REFUNDED": ("refunded", False),
+    "EXPIRED": ("expired", False),
 }
 
 
@@ -36,9 +35,9 @@ class PayPearPaymentMixin:
         *,
         user_id: int | None,
         amount_kopeks: int,
-        description: str = 'Пополнение баланса',
+        description: str = "Пополнение баланса",
         email: str | None = None,
-        language: str = 'ru',
+        language: str = "ru",
         return_url: str | None = None,
     ) -> dict[str, Any] | None:
         """
@@ -48,13 +47,13 @@ class PayPearPaymentMixin:
             Словарь с данными платежа или None при ошибке
         """
         if not settings.is_paypear_enabled():
-            logger.error('PayPear не настроен')
+            logger.error("PayPear не настроен")
             return None
 
         # Валидация лимитов
         if amount_kopeks < settings.PAYPEAR_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'PayPear: сумма меньше минимальной',
+                "PayPear: сумма меньше минимальной",
                 amount_kopeks=amount_kopeks,
                 PAYPEAR_MIN_AMOUNT_KOPEKS=settings.PAYPEAR_MIN_AMOUNT_KOPEKS,
             )
@@ -62,33 +61,33 @@ class PayPearPaymentMixin:
 
         if amount_kopeks > settings.PAYPEAR_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'PayPear: сумма больше максимальной',
+                "PayPear: сумма больше максимальной",
                 amount_kopeks=amount_kopeks,
                 PAYPEAR_MAX_AMOUNT_KOPEKS=settings.PAYPEAR_MAX_AMOUNT_KOPEKS,
             )
             return None
 
         # Получаем telegram_id пользователя для order_id
-        payment_module = import_module('app.services.payment_service')
+        payment_module = import_module("app.services.payment_service")
         if user_id is not None:
             user = await payment_module.get_user_by_id(db, user_id)
             tg_id = user.telegram_id if user else user_id
         else:
             user = None
-            tg_id = 'guest'
+            tg_id = "guest"
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
-        order_id = f'pp{tg_id}_{uuid.uuid4().hex[:6]}'
+        order_id = f"pp{tg_id}_{uuid.uuid4().hex[:6]}"
         amount_rubles = amount_kopeks / 100
         currency = settings.PAYPEAR_CURRENCY
 
         # Метаданные
         metadata = {
-            'user_id': user_id,
-            'amount_kopeks': amount_kopeks,
-            'description': description,
-            'language': language,
-            'type': 'balance_topup',
+            "user_id": user_id,
+            "amount_kopeks": amount_kopeks,
+            "description": description,
+            "language": language,
+            "type": "balance_topup",
         }
 
         try:
@@ -105,38 +104,38 @@ class PayPearPaymentMixin:
                 metadata=metadata,
             )
 
-            confirmation = result.get('confirmation', {})
+            confirmation = result.get("confirmation", {})
             payment_url = (
-                (confirmation.get('confirmation_url') or confirmation.get('url'))
+                (confirmation.get("confirmation_url") or confirmation.get("url"))
                 if isinstance(confirmation, dict)
                 else None
             )
-            paypear_id = result.get('id')
+            paypear_id = result.get("id")
 
             if not payment_url:
-                logger.error('PayPear API не вернул confirmation_url', result=result)
+                logger.error("PayPear API не вернул confirmation_url", result=result)
                 return None
 
             # PayPear может добавить комиссию к сумме — сохраняем фактическую сумму
             # для корректной проверки в webhook (amount включает комиссию)
-            api_amount = result.get('amount', {})
-            if isinstance(api_amount, dict) and api_amount.get('value') is not None:
-                charged_kopeks = round(float(api_amount['value']) * 100)
-                metadata['paypear_charged_kopeks'] = charged_kopeks
+            api_amount = result.get("amount", {})
+            if isinstance(api_amount, dict) and api_amount.get("value") is not None:
+                charged_kopeks = round(float(api_amount["value"]) * 100)
+                metadata["paypear_charged_kopeks"] = charged_kopeks
 
             logger.info(
-                'PayPear API: создан платеж',
+                "PayPear API: создан платеж",
                 order_id=order_id,
                 paypear_id=paypear_id,
                 payment_url=payment_url,
-                charged_kopeks=metadata.get('paypear_charged_kopeks'),
+                charged_kopeks=metadata.get("paypear_charged_kopeks"),
             )
 
             # Срок действия — 30 минут по умолчанию
             expires_at = datetime.now(UTC) + timedelta(minutes=30)
 
             # Сохраняем в БД
-            paypear_crud = import_module('app.database.crud.paypear')
+            paypear_crud = import_module("app.database.crud.paypear")
             local_payment = await paypear_crud.create_paypear_payment(
                 db=db,
                 user_id=user_id,
@@ -152,7 +151,7 @@ class PayPearPaymentMixin:
             )
 
             logger.info(
-                'PayPear: создан платеж',
+                "PayPear: создан платеж",
                 order_id=order_id,
                 user_id=user_id,
                 amount_rubles=amount_rubles,
@@ -160,18 +159,18 @@ class PayPearPaymentMixin:
             )
 
             return {
-                'order_id': order_id,
-                'paypear_id': paypear_id,
-                'amount_kopeks': amount_kopeks,
-                'amount_rubles': amount_rubles,
-                'currency': currency,
-                'payment_url': payment_url,
-                'expires_at': expires_at.isoformat(),
-                'local_payment_id': local_payment.id,
+                "order_id": order_id,
+                "paypear_id": paypear_id,
+                "amount_kopeks": amount_kopeks,
+                "amount_rubles": amount_rubles,
+                "currency": currency,
+                "payment_url": payment_url,
+                "expires_at": expires_at.isoformat(),
+                "local_payment_id": local_payment.id,
             }
 
         except Exception as e:
-            logger.exception('PayPear: ошибка создания платежа', error=e)
+            logger.exception("PayPear: ошибка создания платежа", error=e)
             return None
 
     async def process_paypear_webhook(
@@ -192,81 +191,95 @@ class PayPearPaymentMixin:
             True если платеж успешно обработан
         """
         try:
-            event = payload.get('event')
-            obj = payload.get('object', {})
-            paypear_id = obj.get('id')
-            order_id = obj.get('order_id')
-            paypear_status = obj.get('status')
+            event = payload.get("event")
+            obj = payload.get("object", {})
+            paypear_id = obj.get("id")
+            order_id = obj.get("order_id")
+            paypear_status = obj.get("status")
 
             if not paypear_id or not paypear_status:
-                logger.warning('PayPear webhook: отсутствуют обязательные поля', payload=payload)
+                logger.warning(
+                    "PayPear webhook: отсутствуют обязательные поля", payload=payload
+                )
                 return False
 
             # Определяем is_paid по event
-            is_confirmed = event == 'payment.confirmed'
+            is_confirmed = event == "payment.confirmed"
 
             # Ищем платеж по order_id (наш) или paypear_id
-            paypear_crud = import_module('app.database.crud.paypear')
+            paypear_crud = import_module("app.database.crud.paypear")
             payment = None
             if order_id:
-                payment = await paypear_crud.get_paypear_payment_by_order_id(db, order_id)
+                payment = await paypear_crud.get_paypear_payment_by_order_id(
+                    db, order_id
+                )
             if not payment and paypear_id:
-                payment = await paypear_crud.get_paypear_payment_by_paypear_id(db, paypear_id)
+                payment = await paypear_crud.get_paypear_payment_by_paypear_id(
+                    db, paypear_id
+                )
 
             if not payment:
                 logger.warning(
-                    'PayPear webhook: платеж не найден',
+                    "PayPear webhook: платеж не найден",
                     order_id=order_id,
                     paypear_id=paypear_id,
                 )
                 return False
 
             # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
-            locked = await paypear_crud.get_paypear_payment_by_id_for_update(db, payment.id)
+            locked = await paypear_crud.get_paypear_payment_by_id_for_update(
+                db, payment.id
+            )
             if not locked:
-                logger.error('PayPear: не удалось заблокировать платёж', payment_id=payment.id)
+                logger.error(
+                    "PayPear: не удалось заблокировать платёж", payment_id=payment.id
+                )
                 return False
             payment = locked
 
             # Проверка дублирования (re-check from locked row)
             if payment.is_paid:
-                logger.info('PayPear webhook: платеж уже обработан', order_id=payment.order_id)
+                logger.info(
+                    "PayPear webhook: платеж уже обработан", order_id=payment.order_id
+                )
                 return True
 
             # Маппинг статуса
-            status_info = PAYPEAR_STATUS_MAP.get(paypear_status, ('pending', False))
+            status_info = PAYPEAR_STATUS_MAP.get(paypear_status, ("pending", False))
             internal_status, is_paid = status_info
 
             # Если event = payment.confirmed, принудительно считаем оплаченным
             if is_confirmed:
                 is_paid = True
-                internal_status = 'success'
+                internal_status = "success"
 
             callback_payload = {
-                'paypear_id': paypear_id,
-                'order_id': order_id,
-                'status': paypear_status,
-                'event': event,
-                'amount': obj.get('amount'),
+                "paypear_id": paypear_id,
+                "order_id": order_id,
+                "status": paypear_status,
+                "event": event,
+                "amount": obj.get("amount"),
             }
 
             # Проверка суммы ДО обновления статуса
             # PayPear добавляет комиссию к amount — сравниваем с сохранённой суммой
             # (paypear_charged_kopeks), а не с исходной суммой пополнения
             if is_paid:
-                amount_info = obj.get('amount', {})
+                amount_info = obj.get("amount", {})
                 if isinstance(amount_info, dict):
-                    amount_value = amount_info.get('value')
+                    amount_value = amount_info.get("value")
                 else:
                     amount_value = amount_info
 
                 if amount_value is not None:
                     received_kopeks = round(float(amount_value) * 100)
-                    payment_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
-                    expected_kopeks = payment_metadata.get('paypear_charged_kopeks', payment.amount_kopeks)
+                    payment_metadata = dict(getattr(payment, "metadata_json", {}) or {})
+                    expected_kopeks = payment_metadata.get(
+                        "paypear_charged_kopeks", payment.amount_kopeks
+                    )
                     if abs(received_kopeks - expected_kopeks) > 1:
                         logger.error(
-                            'PayPear amount mismatch',
+                            "PayPear amount mismatch",
                             expected_kopeks=expected_kopeks,
                             received_kopeks=received_kopeks,
                             original_amount_kopeks=payment.amount_kopeks,
@@ -275,7 +288,7 @@ class PayPearPaymentMixin:
                         await paypear_crud.update_paypear_payment_status(
                             db=db,
                             payment=payment,
-                            status='amount_mismatch',
+                            status="amount_mismatch",
                             is_paid=False,
                             paypear_id=paypear_id,
                             callback_payload=callback_payload,
@@ -292,7 +305,9 @@ class PayPearPaymentMixin:
                 payment.callback_payload = callback_payload
                 payment.updated_at = datetime.now(UTC)
                 await db.flush()
-                return await self._finalize_paypear_payment(db, payment, paypear_id=paypear_id, trigger='webhook')
+                return await self._finalize_paypear_payment(
+                    db, payment, paypear_id=paypear_id, trigger="webhook"
+                )
 
             # Для не-success статусов можно безопасно коммитить
             payment = await paypear_crud.update_paypear_payment_status(
@@ -307,7 +322,7 @@ class PayPearPaymentMixin:
             return True
 
         except Exception as e:
-            logger.exception('PayPear webhook: ошибка обработки', error=e)
+            logger.exception("PayPear webhook: ошибка обработки", error=e)
             return False
 
     async def _finalize_paypear_payment(
@@ -322,13 +337,13 @@ class PayPearPaymentMixin:
 
         FOR UPDATE lock must be acquired by the caller before invoking this method.
         """
-        payment_module = import_module('app.services.payment_service')
-        paypear_crud = import_module('app.database.crud.paypear')
+        payment_module = import_module("app.services.payment_service")
+        paypear_crud = import_module("app.database.crud.paypear")
 
         # FOR UPDATE lock already acquired by caller — just check idempotency
         if payment.transaction_id:
             logger.info(
-                'PayPear платеж уже связан с транзакцией',
+                "PayPear платеж уже связан с транзакцией",
                 order_id=payment.order_id,
                 transaction_id=payment.transaction_id,
                 trigger=trigger,
@@ -336,7 +351,7 @@ class PayPearPaymentMixin:
             return True
 
         # Read fresh metadata AFTER lock to avoid stale data
-        metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        metadata = dict(getattr(payment, "metadata_json", {}) or {})
 
         # --- Guest purchase flow ---
         from app.services.payment.common import try_fulfill_guest_purchase
@@ -346,32 +361,32 @@ class PayPearPaymentMixin:
             metadata=metadata,
             payment_amount_kopeks=payment.amount_kopeks,
             provider_payment_id=str(paypear_id) if paypear_id else payment.order_id,
-            provider_name='paypear',
+            provider_name="paypear",
         )
         if guest_result is not None:
             return True
 
         # Ensure paid fields are set (idempotent — caller may have already set them)
         if not payment.is_paid:
-            payment.status = 'success'
+            payment.status = "success"
             payment.is_paid = True
             payment.paid_at = datetime.now(UTC)
             payment.updated_at = datetime.now(UTC)
 
-        balance_already_credited = bool(metadata.get('balance_credited'))
+        balance_already_credited = bool(metadata.get("balance_credited"))
 
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
-            logger.error('Пользователь не найден для PayPear', user_id=payment.user_id)
+            logger.error("Пользователь не найден для PayPear", user_id=payment.user_id)
             return False
 
         # Загружаем промогруппы в асинхронном контексте
-        await db.refresh(user, attribute_names=['promo_group', 'user_promo_groups'])
-        for user_promo_group in getattr(user, 'user_promo_groups', []):
-            await db.refresh(user_promo_group, attribute_names=['promo_group'])
+        await db.refresh(user, attribute_names=["promo_group", "user_promo_groups"])
+        for user_promo_group in getattr(user, "user_promo_groups", []):
+            await db.refresh(user_promo_group, attribute_names=["promo_group"])
 
         promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, 'subscription', None)
+        subscription = getattr(user, "subscription", None)
         referrer_info = format_referrer_info(user)
 
         transaction_external_id = str(paypear_id) if paypear_id else payment.order_id
@@ -386,7 +401,7 @@ class PayPearPaymentMixin:
             )
 
         display_name = settings.get_paypear_display_name()
-        description = f'Пополнение через {display_name}'
+        description = f"Пополнение через {display_name}"
 
         transaction = existing_transaction
         created_transaction = False
@@ -401,17 +416,21 @@ class PayPearPaymentMixin:
                 payment_method=PaymentMethod.PAYPEAR,
                 external_id=transaction_external_id,
                 is_completed=True,
-                created_at=getattr(payment, 'created_at', None),
+                created_at=getattr(payment, "created_at", None),
                 commit=False,
             )
             created_transaction = True
 
-        await paypear_crud.link_paypear_payment_to_transaction(db, payment=payment, transaction_id=transaction.id)
+        await paypear_crud.link_paypear_payment_to_transaction(
+            db, payment=payment, transaction_id=transaction.id
+        )
 
         should_credit_balance = created_transaction or not balance_already_credited
 
         if not should_credit_balance:
-            logger.info('PayPear платеж уже зачислил баланс ранее', order_id=payment.order_id)
+            logger.info(
+                "PayPear платеж уже зачислил баланс ранее", order_id=payment.order_id
+            )
             return True
 
         # Lock user row to prevent concurrent balance race conditions
@@ -440,7 +459,11 @@ class PayPearPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        topup_status = '\U0001f195 Первое пополнение' if was_first_topup else '\U0001f504 Пополнение'
+        topup_status = (
+            "\U0001f195 Первое пополнение"
+            if was_first_topup
+            else "\U0001f504 Пополнение"
+        )
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -449,19 +472,27 @@ class PayPearPaymentMixin:
                 db,
                 user.id,
                 payment.amount_kopeks,
-                getattr(self, 'bot', None),
+                getattr(self, "bot", None),
             )
         except Exception as error:
-            logger.error('Ошибка обработки реферального пополнения PayPear', error=error)
+            logger.error(
+                "Ошибка обработки реферального пополнения PayPear", error=error
+            )
 
-        if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
+        if (
+            was_first_topup
+            and not user.has_made_first_topup
+            and not user.referred_by_id
+        ):
             user.has_made_first_topup = True
             await db.commit()
             await db.refresh(user)
 
-        if getattr(self, 'bot', None):
+        if getattr(self, "bot", None):
             try:
-                from app.services.admin_notification_service import AdminNotificationService
+                from app.services.admin_notification_service import (
+                    AdminNotificationService,
+                )
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -475,49 +506,53 @@ class PayPearPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки админ уведомления PayPear', error=error)
+                logger.error("Ошибка отправки админ уведомления PayPear", error=error)
 
-        if getattr(self, 'bot', None) and user.telegram_id:
+        if getattr(self, "bot", None) and user.telegram_id:
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        '\u2705 <b>Пополнение успешно!</b>\n\n'
-                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
+                        "\u2705 <b>Пополнение успешно!</b>\n\n"
+                        f"\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
+                        f"\U0001f4b3 Способ: {display_name}\n"
+                        f"\U0001f194 Транзакция: {transaction.id}\n\n"
+                        "Баланс пополнен автоматически!"
                     ),
-                    parse_mode='HTML',
+                    parse_mode="HTML",
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки уведомления пользователю PayPear', error=error)
+                logger.error(
+                    "Ошибка отправки уведомления пользователю PayPear", error=error
+                )
 
         try:
             from app.services.payment.common import send_cart_notification_after_topup
 
-            await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
+            await send_cart_notification_after_topup(
+                user, payment.amount_kopeks, db, getattr(self, "bot", None)
+            )
         except Exception as error:
             logger.error(
-                'Ошибка при работе с сохраненной корзиной для пользователя',
+                "Ошибка при работе с сохраненной корзиной для пользователя",
                 user_id=payment.user_id,
                 error=error,
                 exc_info=True,
             )
 
-        metadata['balance_change'] = {
-            'old_balance': old_balance,
-            'new_balance': user.balance_kopeks,
-            'credited_at': datetime.now(UTC).isoformat(),
+        metadata["balance_change"] = {
+            "old_balance": old_balance,
+            "new_balance": user.balance_kopeks,
+            "credited_at": datetime.now(UTC).isoformat(),
         }
-        metadata['balance_credited'] = True
+        metadata["balance_credited"] = True
         payment.metadata_json = metadata
         await db.commit()
 
         logger.info(
-            'Обработан PayPear платеж',
+            "Обработан PayPear платеж",
             order_id=payment.order_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -532,41 +567,51 @@ class PayPearPaymentMixin:
     ) -> dict[str, Any] | None:
         """Проверяет статус платежа через API."""
         try:
-            paypear_crud = import_module('app.database.crud.paypear')
+            paypear_crud = import_module("app.database.crud.paypear")
             payment = await paypear_crud.get_paypear_payment_by_order_id(db, order_id)
             if not payment:
-                logger.warning('PayPear payment not found', order_id=order_id)
+                logger.warning("PayPear payment not found", order_id=order_id)
                 return None
 
             if payment.is_paid:
                 return {
-                    'payment': payment,
-                    'status': 'success',
-                    'is_paid': True,
+                    "payment": payment,
+                    "status": "success",
+                    "is_paid": True,
                 }
 
             # Проверяем через API по paypear_id
             if payment.paypear_id:
                 try:
                     order_data = await paypear_service.get_payment(payment.paypear_id)
-                    paypear_status = order_data.get('status')
+                    paypear_status = order_data.get("status")
 
                     if paypear_status:
-                        status_info = PAYPEAR_STATUS_MAP.get(paypear_status, ('pending', False))
+                        status_info = PAYPEAR_STATUS_MAP.get(
+                            paypear_status, ("pending", False)
+                        )
                         internal_status, is_paid = status_info
 
                         if is_paid:
                             # Проверка суммы — сравниваем с paypear_charged_kopeks
                             # (amount включает комиссию PayPear)
-                            amount_info = order_data.get('amount', {})
-                            api_amount = amount_info.get('value') if isinstance(amount_info, dict) else amount_info
+                            amount_info = order_data.get("amount", {})
+                            api_amount = (
+                                amount_info.get("value")
+                                if isinstance(amount_info, dict)
+                                else amount_info
+                            )
                             if api_amount is not None:
                                 received_kopeks = round(float(api_amount) * 100)
-                                payment_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
-                                expected_kopeks = payment_metadata.get('paypear_charged_kopeks', payment.amount_kopeks)
+                                payment_metadata = dict(
+                                    getattr(payment, "metadata_json", {}) or {}
+                                )
+                                expected_kopeks = payment_metadata.get(
+                                    "paypear_charged_kopeks", payment.amount_kopeks
+                                )
                                 if abs(received_kopeks - expected_kopeks) > 1:
                                     logger.error(
-                                        'PayPear amount mismatch (API check)',
+                                        "PayPear amount mismatch (API check)",
                                         expected_kopeks=expected_kopeks,
                                         received_kopeks=received_kopeks,
                                         original_amount_kopeks=payment.amount_kopeks,
@@ -575,44 +620,57 @@ class PayPearPaymentMixin:
                                     await paypear_crud.update_paypear_payment_status(
                                         db=db,
                                         payment=payment,
-                                        status='amount_mismatch',
+                                        status="amount_mismatch",
                                         is_paid=False,
                                         paypear_id=payment.paypear_id,
                                         callback_payload={
-                                            'check_source': 'api',
-                                            'paypear_order_data': order_data,
+                                            "check_source": "api",
+                                            "paypear_order_data": order_data,
                                         },
                                     )
                                     return {
-                                        'payment': payment,
-                                        'status': 'amount_mismatch',
-                                        'is_paid': False,
+                                        "payment": payment,
+                                        "status": "amount_mismatch",
+                                        "is_paid": False,
                                     }
 
                             # Acquire FOR UPDATE lock before finalization
-                            locked = await paypear_crud.get_paypear_payment_by_id_for_update(db, payment.id)
+                            locked = (
+                                await paypear_crud.get_paypear_payment_by_id_for_update(
+                                    db, payment.id
+                                )
+                            )
                             if not locked:
-                                logger.error('PayPear: не удалось заблокировать платёж', payment_id=payment.id)
+                                logger.error(
+                                    "PayPear: не удалось заблокировать платёж",
+                                    payment_id=payment.id,
+                                )
                                 return None
                             payment = locked
 
                             if payment.is_paid:
-                                logger.info('PayPear платеж уже обработан (api_check)', order_id=payment.order_id)
+                                logger.info(
+                                    "PayPear платеж уже обработан (api_check)",
+                                    order_id=payment.order_id,
+                                )
                                 return {
-                                    'payment': payment,
-                                    'status': 'success',
-                                    'is_paid': True,
+                                    "payment": payment,
+                                    "status": "success",
+                                    "is_paid": True,
                                 }
 
-                            logger.info('PayPear payment confirmed via API', order_id=payment.order_id)
+                            logger.info(
+                                "PayPear payment confirmed via API",
+                                order_id=payment.order_id,
+                            )
 
                             # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
-                            payment.status = 'success'
+                            payment.status = "success"
                             payment.is_paid = True
                             payment.paid_at = datetime.now(UTC)
                             payment.callback_payload = {
-                                'check_source': 'api',
-                                'paypear_order_data': order_data,
+                                "check_source": "api",
+                                "paypear_order_data": order_data,
                             }
                             payment.updated_at = datetime.now(UTC)
                             await db.flush()
@@ -621,7 +679,7 @@ class PayPearPaymentMixin:
                                 db,
                                 payment,
                                 paypear_id=payment.paypear_id,
-                                trigger='api_check',
+                                trigger="api_check",
                             )
                         elif internal_status != payment.status:
                             # Обновляем статус если изменился
@@ -632,14 +690,16 @@ class PayPearPaymentMixin:
                             )
 
                 except Exception as e:
-                    logger.error('Error checking PayPear payment status via API', error=e)
+                    logger.error(
+                        "Error checking PayPear payment status via API", error=e
+                    )
 
             return {
-                'payment': payment,
-                'status': payment.status or 'pending',
-                'is_paid': payment.is_paid,
+                "payment": payment,
+                "status": payment.status or "pending",
+                "is_paid": payment.is_paid,
             }
 
         except Exception as e:
-            logger.exception('PayPear: ошибка проверки статуса', error=e)
+            logger.exception("PayPear: ошибка проверки статуса", error=e)
             return None

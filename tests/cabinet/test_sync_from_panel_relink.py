@@ -22,19 +22,19 @@ from app.cabinet.schemas.users import SyncFromPanelRequest
 from app.database.models import SubscriptionStatus
 
 
-def _panel_user(uuid: str, squads=('sq1', 'sq2')):
+def _panel_user(uuid: str, squads=("sq1", "sq2")):
     return SimpleNamespace(
         uuid=uuid,
-        short_uuid=f'short-{uuid}',
-        username='u',
-        status=SimpleNamespace(value='ACTIVE'),
+        short_uuid=f"short-{uuid}",
+        username="u",
+        status=SimpleNamespace(value="ACTIVE"),
         expire_at=datetime.now(UTC) + timedelta(days=900),
         traffic_limit_bytes=61 * 1024**3,
         used_traffic_bytes=0,
         hwid_device_limit=100,
-        subscription_url=f'https://panel/{uuid}',
+        subscription_url=f"https://panel/{uuid}",
         happ_crypto_link=None,
-        active_internal_squads=[{'uuid': s} for s in squads],
+        active_internal_squads=[{"uuid": s} for s in squads],
     )
 
 
@@ -69,12 +69,21 @@ def _service(api):
 async def _call(user, sub_id, api):
     db = AsyncMock()
     with (
-        patch.object(type(au.settings), 'is_multi_tariff_enabled', MagicMock(return_value=True)),
-        patch.object(au, 'get_user_by_id', AsyncMock(return_value=user)),
-        patch('app.services.remnawave_service.RemnaWaveService', return_value=_service(api)),
+        patch.object(
+            type(au.settings), "is_multi_tariff_enabled", MagicMock(return_value=True)
+        ),
+        patch.object(au, "get_user_by_id", AsyncMock(return_value=user)),
+        patch(
+            "app.services.remnawave_service.RemnaWaveService",
+            return_value=_service(api),
+        ),
     ):
         return await au.sync_user_from_panel(
-            user_id=user.id, subscription_id=sub_id, request=SyncFromPanelRequest(), admin=MagicMock(), db=db
+            user_id=user.id,
+            subscription_id=sub_id,
+            request=SyncFromPanelRequest(),
+            admin=MagicMock(),
+            db=db,
         )
 
 
@@ -90,7 +99,7 @@ async def test_relinks_uuid_wiped_sub_and_restores_status_and_squads():
         last_remnawave_sync=None,
         updated_at=None,
     )
-    panel = _panel_user('44bd15ff', squads=('sq1', 'sq2'))
+    panel = _panel_user("44bd15ff", squads=("sq1", "sq2"))
     api = MagicMock()
     api.get_user_by_uuid = AsyncMock(return_value=None)
     api.get_user_by_telegram_id = AsyncMock(return_value=[panel])
@@ -99,17 +108,20 @@ async def test_relinks_uuid_wiped_sub_and_restores_status_and_squads():
     resp = await _call(user, 84, api)
 
     assert resp.success is True
-    assert sub.remnawave_uuid == '44bd15ff'  # re-linked to the live panel user
+    assert sub.remnawave_uuid == "44bd15ff"  # re-linked to the live panel user
     assert sub.status == SubscriptionStatus.ACTIVE.value  # restored from panel ACTIVE
-    assert sub.connected_squads == ['sq1', 'sq2']  # squads restored (dict extraction fixed)
-    assert sub.subscription_url == 'https://panel/44bd15ff'
+    assert sub.connected_squads == [
+        "sq1",
+        "sq2",
+    ]  # squads restored (dict extraction fixed)
+    assert sub.subscription_url == "https://panel/44bd15ff"
 
 
 @pytest.mark.asyncio
 async def test_does_not_steal_panel_user_already_linked_to_sibling():
     wiped = _wiped_sub(84)
     sibling = _wiped_sub(85)
-    sibling.remnawave_uuid = 'SIBLING-UUID'  # already linked
+    sibling.remnawave_uuid = "SIBLING-UUID"  # already linked
     user = SimpleNamespace(
         id=7,
         telegram_id=123,
@@ -119,8 +131,8 @@ async def test_does_not_steal_panel_user_already_linked_to_sibling():
         last_remnawave_sync=None,
         updated_at=None,
     )
-    own_panel = _panel_user('OWN-UUID')
-    sibling_panel = _panel_user('SIBLING-UUID')
+    own_panel = _panel_user("OWN-UUID")
+    sibling_panel = _panel_user("SIBLING-UUID")
     api = MagicMock()
     api.get_user_by_uuid = AsyncMock(return_value=None)
     api.get_user_by_telegram_id = AsyncMock(return_value=[own_panel, sibling_panel])
@@ -129,7 +141,9 @@ async def test_does_not_steal_panel_user_already_linked_to_sibling():
     resp = await _call(user, 84, api)
 
     assert resp.success is True
-    assert wiped.remnawave_uuid == 'OWN-UUID'  # picked the orphan, not the sibling's panel user
+    assert (
+        wiped.remnawave_uuid == "OWN-UUID"
+    )  # picked the orphan, not the sibling's panel user
 
 
 @pytest.mark.asyncio
@@ -146,7 +160,9 @@ async def test_ambiguous_orphans_refuse_to_relink():
     )
     api = MagicMock()
     api.get_user_by_uuid = AsyncMock(return_value=None)
-    api.get_user_by_telegram_id = AsyncMock(return_value=[_panel_user('A'), _panel_user('B')])
+    api.get_user_by_telegram_id = AsyncMock(
+        return_value=[_panel_user("A"), _panel_user("B")]
+    )
     api.get_user_by_email = AsyncMock(return_value=[])
 
     with pytest.raises(HTTPException) as exc:

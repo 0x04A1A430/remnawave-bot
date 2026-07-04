@@ -18,12 +18,15 @@ from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
 
 from ..dependencies import get_cabinet_db, require_permission
-from ..schemas.tickets import TicketMediaItem, TicketMessageResponse, _validate_media_bundle
-
+from ..schemas.tickets import (
+    TicketMediaItem,
+    TicketMessageResponse,
+    _validate_media_bundle,
+)
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/tickets', tags=['Cabinet Admin Tickets'])
+router = APIRouter(prefix="/admin/tickets", tags=["Cabinet Admin Tickets"])
 
 
 # Admin-specific schemas
@@ -90,32 +93,40 @@ class AdminTicketListResponse(BaseModel):
 class AdminReplyRequest(BaseModel):
     """Admin reply to ticket."""
 
-    message: str = Field(default='', max_length=4000, description='Reply message')
-    media_type: str | None = Field(None, description='Media type: photo, video, or document')
-    media_file_id: str | None = Field(None, max_length=255, description='Telegram file_id from media upload')
-    media_caption: str | None = Field(None, max_length=1000, description='Caption for media')
-    media_items: list[TicketMediaItem] | None = Field(None, description='Multi-media gallery attachments')
+    message: str = Field(default="", max_length=4000, description="Reply message")
+    media_type: str | None = Field(
+        None, description="Media type: photo, video, or document"
+    )
+    media_file_id: str | None = Field(
+        None, max_length=255, description="Telegram file_id from media upload"
+    )
+    media_caption: str | None = Field(
+        None, max_length=1000, description="Caption for media"
+    )
+    media_items: list[TicketMediaItem] | None = Field(
+        None, description="Multi-media gallery attachments"
+    )
 
-    @model_validator(mode='after')
-    def validate_media_fields(self) -> 'AdminReplyRequest':
+    @model_validator(mode="after")
+    def validate_media_fields(self) -> "AdminReplyRequest":
         _validate_media_bundle(self.media_type, self.media_file_id, self.media_items)
         has_text = bool(self.message.strip())
         has_media = bool(self.media_file_id) or bool(self.media_items)
         if not has_text and not has_media:
-            raise ValueError('message or media is required')
+            raise ValueError("message or media is required")
         return self
 
 
 class AdminStatusUpdateRequest(BaseModel):
     """Update ticket status."""
 
-    status: str = Field(..., description='New status: open, answered, pending, closed')
+    status: str = Field(..., description="New status: open, answered, pending, closed")
 
 
 class AdminPriorityUpdateRequest(BaseModel):
     """Update ticket priority."""
 
-    priority: str = Field(..., description='New priority: low, normal, high, urgent')
+    priority: str = Field(..., description="New priority: low, normal, high, urgent")
 
 
 class AdminStatsResponse(BaseModel):
@@ -145,20 +156,30 @@ class TicketSettingsUpdateRequest(BaseModel):
     """Update ticket settings."""
 
     sla_enabled: bool | None = None
-    sla_minutes: int | None = Field(None, ge=1, le=1440, description='SLA time in minutes (1-1440)')
-    sla_check_interval_seconds: int | None = Field(None, ge=30, le=600, description='Check interval (30-600 seconds)')
-    sla_reminder_cooldown_minutes: int | None = Field(
-        None, ge=1, le=120, description='Reminder cooldown (1-120 minutes)'
+    sla_minutes: int | None = Field(
+        None, ge=1, le=1440, description="SLA time in minutes (1-1440)"
     )
-    support_system_mode: str | None = Field(None, description='Support mode: tickets, contact, both')
+    sla_check_interval_seconds: int | None = Field(
+        None, ge=30, le=600, description="Check interval (30-600 seconds)"
+    )
+    sla_reminder_cooldown_minutes: int | None = Field(
+        None, ge=1, le=120, description="Reminder cooldown (1-120 minutes)"
+    )
+    support_system_mode: str | None = Field(
+        None, description="Support mode: tickets, contact, both"
+    )
     # Cabinet notifications settings
-    cabinet_user_notifications_enabled: bool | None = Field(None, description='Enable user notifications in cabinet')
-    cabinet_admin_notifications_enabled: bool | None = Field(None, description='Enable admin notifications in cabinet')
+    cabinet_user_notifications_enabled: bool | None = Field(
+        None, description="Enable user notifications in cabinet"
+    )
+    cabinet_admin_notifications_enabled: bool | None = Field(
+        None, description="Enable admin notifications in cabinet"
+    )
 
 
 def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
     """Convert TicketMessage to response."""
-    raw_items = getattr(message, 'media_items', None) or None
+    raw_items = getattr(message, "media_items", None) or None
     items = None
     if raw_items:
         try:
@@ -166,16 +187,20 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
             for it in items:
                 it.token = make_media_token(it.file_id)
         except (TypeError, KeyError, ValueError) as exc:
-            logger.warning('Failed to parse media_items', message_id=message.id, error=str(exc))
+            logger.warning(
+                "Failed to parse media_items", message_id=message.id, error=str(exc)
+            )
             items = None
     return TicketMessageResponse(
         id=message.id,
-        message_text=message.message_text or '',
+        message_text=message.message_text or "",
         is_from_admin=message.is_from_admin,
         has_media=bool(message.media_file_id) or bool(items),
         media_type=message.media_type,
         media_file_id=message.media_file_id,
-        media_token=make_media_token(message.media_file_id) if message.media_file_id else None,
+        media_token=(
+            make_media_token(message.media_file_id) if message.media_file_id else None
+        ),
         media_caption=message.media_caption,
         media_items=items,
         created_at=message.created_at,
@@ -194,7 +219,9 @@ def _user_to_info(user: User) -> AdminTicketUserInfo:
     )
 
 
-def _ticket_to_admin_response(ticket: Ticket, include_messages: bool = False) -> AdminTicketResponse:
+def _ticket_to_admin_response(
+    ticket: Ticket, include_messages: bool = False
+) -> AdminTicketResponse:
     """Convert Ticket to admin response."""
     last_message = None
     messages_count = len(ticket.messages) if ticket.messages else 0
@@ -204,14 +231,14 @@ def _ticket_to_admin_response(ticket: Ticket, include_messages: bool = False) ->
         last_message = _message_to_response(last_msg)
 
     user_info = None
-    if hasattr(ticket, 'user') and ticket.user:
+    if hasattr(ticket, "user") and ticket.user:
         user_info = _user_to_info(ticket.user)
 
     return AdminTicketResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or f"Ticket #{ticket.id}",
         status=ticket.status,
-        priority=ticket.priority or 'normal',
+        priority=ticket.priority or "normal",
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
@@ -221,9 +248,9 @@ def _ticket_to_admin_response(ticket: Ticket, include_messages: bool = False) ->
     )
 
 
-@router.get('/stats', response_model=AdminStatsResponse)
+@router.get("/stats", response_model=AdminStatsResponse)
 async def get_ticket_stats(
-    admin: User = Depends(require_permission('tickets:read')),
+    admin: User = Depends(require_permission("tickets:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket statistics."""
@@ -233,22 +260,24 @@ async def get_ticket_stats(
 
     # Count by status
     statuses = {}
-    for status_name in ['open', 'pending', 'answered', 'closed']:
-        result = await db.execute(select(func.count()).select_from(Ticket).where(Ticket.status == status_name))
+    for status_name in ["open", "pending", "answered", "closed"]:
+        result = await db.execute(
+            select(func.count()).select_from(Ticket).where(Ticket.status == status_name)
+        )
         statuses[status_name] = result.scalar() or 0
 
     return AdminStatsResponse(
         total=total,
-        open=statuses.get('open', 0),
-        pending=statuses.get('pending', 0),
-        answered=statuses.get('answered', 0),
-        closed=statuses.get('closed', 0),
+        open=statuses.get("open", 0),
+        pending=statuses.get("pending", 0),
+        answered=statuses.get("answered", 0),
+        closed=statuses.get("closed", 0),
     )
 
 
-@router.get('/settings', response_model=TicketSettingsResponse)
+@router.get("/settings", response_model=TicketSettingsResponse)
 async def get_ticket_settings(
-    admin: User = Depends(require_permission('tickets:settings')),
+    admin: User = Depends(require_permission("tickets:settings")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket system settings."""
@@ -265,10 +294,10 @@ async def get_ticket_settings(
     )
 
 
-@router.patch('/settings', response_model=TicketSettingsResponse)
+@router.patch("/settings", response_model=TicketSettingsResponse)
 async def update_ticket_settings(
     request: TicketSettingsUpdateRequest,
-    admin: User = Depends(require_permission('tickets:settings')),
+    admin: User = Depends(require_permission("tickets:settings")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update ticket system settings."""
@@ -280,10 +309,10 @@ async def update_ticket_settings(
     # Validate support_system_mode
     if request.support_system_mode is not None:
         mode = request.support_system_mode.strip().lower()
-        if mode not in {'tickets', 'contact', 'both'}:
+        if mode not in {"tickets", "contact", "both"}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid support_system_mode. Must be: tickets, contact, or both',
+                detail="Invalid support_system_mode. Must be: tickets, contact, or both",
             )
 
     # Update in-memory settings
@@ -292,35 +321,51 @@ async def update_ticket_settings(
     if request.sla_minutes is not None:
         settings.SUPPORT_TICKET_SLA_MINUTES = request.sla_minutes
     if request.sla_check_interval_seconds is not None:
-        settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS = request.sla_check_interval_seconds
+        settings.SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS = (
+            request.sla_check_interval_seconds
+        )
     if request.sla_reminder_cooldown_minutes is not None:
-        settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = request.sla_reminder_cooldown_minutes
+        settings.SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES = (
+            request.sla_reminder_cooldown_minutes
+        )
     if request.support_system_mode is not None:
-        SupportSettingsService.set_system_mode(request.support_system_mode.strip().lower())
+        SupportSettingsService.set_system_mode(
+            request.support_system_mode.strip().lower()
+        )
 
     # Update cabinet notification settings
     if request.cabinet_user_notifications_enabled is not None:
-        SupportSettingsService.set_cabinet_user_notifications_enabled(request.cabinet_user_notifications_enabled)
+        SupportSettingsService.set_cabinet_user_notifications_enabled(
+            request.cabinet_user_notifications_enabled
+        )
     if request.cabinet_admin_notifications_enabled is not None:
-        SupportSettingsService.set_cabinet_admin_notifications_enabled(request.cabinet_admin_notifications_enabled)
+        SupportSettingsService.set_cabinet_admin_notifications_enabled(
+            request.cabinet_admin_notifications_enabled
+        )
 
     # Try to persist to .env file
     try:
-        env_file = Path('.env')
+        env_file = Path(".env")
         if await asyncio.to_thread(env_file.exists):
             lines = (await asyncio.to_thread(env_file.read_text)).splitlines()
             updates = {}
 
             if request.sla_enabled is not None:
-                updates['SUPPORT_TICKET_SLA_ENABLED'] = str(request.sla_enabled).lower()
+                updates["SUPPORT_TICKET_SLA_ENABLED"] = str(request.sla_enabled).lower()
             if request.sla_minutes is not None:
-                updates['SUPPORT_TICKET_SLA_MINUTES'] = str(request.sla_minutes)
+                updates["SUPPORT_TICKET_SLA_MINUTES"] = str(request.sla_minutes)
             if request.sla_check_interval_seconds is not None:
-                updates['SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS'] = str(request.sla_check_interval_seconds)
+                updates["SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS"] = str(
+                    request.sla_check_interval_seconds
+                )
             if request.sla_reminder_cooldown_minutes is not None:
-                updates['SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES'] = str(request.sla_reminder_cooldown_minutes)
+                updates["SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES"] = str(
+                    request.sla_reminder_cooldown_minutes
+                )
             if request.support_system_mode is not None:
-                updates['SUPPORT_SYSTEM_MODE'] = request.support_system_mode.strip().lower()
+                updates["SUPPORT_SYSTEM_MODE"] = (
+                    request.support_system_mode.strip().lower()
+                )
 
             new_lines = []
             updated_keys = set()
@@ -328,8 +373,8 @@ async def update_ticket_settings(
             for line in lines:
                 updated = False
                 for key, value in updates.items():
-                    if line.startswith(f'{key}='):
-                        new_lines.append(f'{key}={value}')
+                    if line.startswith(f"{key}="):
+                        new_lines.append(f"{key}={value}")
                         updated_keys.add(key)
                         updated = True
                         break
@@ -339,12 +384,12 @@ async def update_ticket_settings(
             # Add any keys that weren't found
             for key, value in updates.items():
                 if key not in updated_keys:
-                    new_lines.append(f'{key}={value}')
+                    new_lines.append(f"{key}={value}")
 
-            await asyncio.to_thread(env_file.write_text, '\n'.join(new_lines) + '\n')
-            logger.info('Updated ticket settings in .env file')
+            await asyncio.to_thread(env_file.write_text, "\n".join(new_lines) + "\n")
+            logger.info("Updated ticket settings in .env file")
     except Exception as e:
-        logger.warning('Failed to update .env file', error=e)
+        logger.warning("Failed to update .env file", error=e)
 
     return TicketSettingsResponse(
         sla_enabled=settings.SUPPORT_TICKET_SLA_ENABLED,
@@ -357,19 +402,25 @@ async def update_ticket_settings(
     )
 
 
-@router.get('', response_model=AdminTicketListResponse)
+@router.get("", response_model=AdminTicketListResponse)
 async def get_all_tickets(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
-    status_filter: str | None = Query(None, alias='status', description='Filter by status'),
-    priority_filter: str | None = Query(None, alias='priority', description='Filter by priority'),
-    user_id: int | None = Query(None, description='Filter by user ID'),
-    admin: User = Depends(require_permission('tickets:read')),
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    status_filter: str | None = Query(
+        None, alias="status", description="Filter by status"
+    ),
+    priority_filter: str | None = Query(
+        None, alias="priority", description="Filter by priority"
+    ),
+    user_id: int | None = Query(None, description="Filter by user ID"),
+    admin: User = Depends(require_permission("tickets:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get all tickets for admin."""
     # Base query with user relationship
-    query = select(Ticket).options(selectinload(Ticket.messages), selectinload(Ticket.user))
+    query = select(Ticket).options(
+        selectinload(Ticket.messages), selectinload(Ticket.user)
+    )
 
     # Build count query
     count_query = select(func.count()).select_from(Ticket)
@@ -410,15 +461,17 @@ async def get_all_tickets(
     )
 
 
-@router.get('/{ticket_id}', response_model=AdminTicketDetailResponse)
+@router.get("/{ticket_id}", response_model=AdminTicketDetailResponse)
 async def get_ticket_detail(
     ticket_id: int,
-    admin: User = Depends(require_permission('tickets:read')),
+    admin: User = Depends(require_permission("tickets:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket with all messages for admin."""
     query = (
-        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(selectinload(Ticket.messages), selectinload(Ticket.user))
     )
 
     result = await db.execute(query)
@@ -427,7 +480,7 @@ async def get_ticket_detail(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail="Ticket not found",
         )
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
@@ -439,33 +492,37 @@ async def get_ticket_detail(
 
     return AdminTicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or f"Ticket #{ticket.id}",
         status=ticket.status,
-        priority=ticket.priority or 'normal',
+        priority=ticket.priority or "normal",
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
+        is_reply_blocked=(
+            ticket.is_reply_blocked if hasattr(ticket, "is_reply_blocked") else False
+        ),
         user=user_info,
         messages=messages_response,
     )
 
 
-@router.post('/{ticket_id}/reply', response_model=TicketMessageResponse)
+@router.post("/{ticket_id}/reply", response_model=TicketMessageResponse)
 async def reply_to_ticket(
     ticket_id: int,
     request: AdminReplyRequest,
-    admin: User = Depends(require_permission('tickets:reply')),
+    admin: User = Depends(require_permission("tickets:reply")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reply to a ticket as admin."""
     # Get ticket
-    ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False, load_user=True)
+    ticket = await TicketCRUD.get_ticket_by_id(
+        db, ticket_id, load_messages=False, load_user=True
+    )
 
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail="Ticket not found",
         )
 
     # Resolve media payload: prefer media_items, fall back to legacy single-media fields
@@ -496,7 +553,7 @@ async def reply_to_ticket(
     db.add(message)
 
     # Update ticket status to answered
-    ticket.status = 'answered'
+    ticket.status = "answered"
     ticket.updated_at = datetime.now(UTC)
 
     await db.commit()
@@ -512,35 +569,39 @@ async def reply_to_ticket(
 
             await notify_user_about_ticket_reply(bot, ticket, request.message, db)
         except Exception as e:
-            logger.warning('Failed to notify user about ticket reply', error=e)
+            logger.warning("Failed to notify user about ticket reply", error=e)
         finally:
             await bot.session.close()
     except Exception as e:
-        logger.warning('Failed to send Telegram notification', error=e)
+        logger.warning("Failed to send Telegram notification", error=e)
 
     # Уведомить пользователя в кабинете
     try:
-        notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(
-            db, ticket, request.message
+        notification = (
+            await TicketNotificationCRUD.create_user_notification_for_admin_reply(
+                db, ticket, request.message
+            )
         )
         if notification:
             # Отправить WebSocket уведомление
-            await notify_user_ticket_reply(ticket.user_id, ticket.id, (request.message or '')[:100])
+            await notify_user_ticket_reply(
+                ticket.user_id, ticket.id, (request.message or "")[:100]
+            )
     except Exception as e:
-        logger.warning('Failed to create cabinet notification for admin reply', error=e)
+        logger.warning("Failed to create cabinet notification for admin reply", error=e)
 
     return _message_to_response(message)
 
 
-@router.post('/{ticket_id}/status', response_model=AdminTicketDetailResponse)
+@router.post("/{ticket_id}/status", response_model=AdminTicketDetailResponse)
 async def update_ticket_status(
     ticket_id: int,
     request: AdminStatusUpdateRequest,
-    admin: User = Depends(require_permission('tickets:close')),
+    admin: User = Depends(require_permission("tickets:close")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update ticket status."""
-    allowed_statuses = {'open', 'pending', 'answered', 'closed'}
+    allowed_statuses = {"open", "pending", "answered", "closed"}
     if request.status not in allowed_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -548,7 +609,9 @@ async def update_ticket_status(
         )
 
     query = (
-        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(selectinload(Ticket.messages), selectinload(Ticket.user))
     )
 
     result = await db.execute(query)
@@ -557,12 +620,12 @@ async def update_ticket_status(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail="Ticket not found",
         )
 
     ticket.status = request.status
     ticket.updated_at = datetime.now(UTC)
-    if request.status == 'closed':
+    if request.status == "closed":
         ticket.closed_at = datetime.now(UTC)
     else:
         ticket.closed_at = None
@@ -579,27 +642,29 @@ async def update_ticket_status(
 
     return AdminTicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or f"Ticket #{ticket.id}",
         status=ticket.status,
-        priority=ticket.priority or 'normal',
+        priority=ticket.priority or "normal",
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
+        is_reply_blocked=(
+            ticket.is_reply_blocked if hasattr(ticket, "is_reply_blocked") else False
+        ),
         user=user_info,
         messages=messages_response,
     )
 
 
-@router.post('/{ticket_id}/priority', response_model=AdminTicketDetailResponse)
+@router.post("/{ticket_id}/priority", response_model=AdminTicketDetailResponse)
 async def update_ticket_priority(
     ticket_id: int,
     request: AdminPriorityUpdateRequest,
-    admin: User = Depends(require_permission('tickets:close')),
+    admin: User = Depends(require_permission("tickets:close")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update ticket priority."""
-    allowed_priorities = {'low', 'normal', 'high', 'urgent'}
+    allowed_priorities = {"low", "normal", "high", "urgent"}
     if request.priority not in allowed_priorities:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -607,7 +672,9 @@ async def update_ticket_priority(
         )
 
     query = (
-        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(selectinload(Ticket.messages), selectinload(Ticket.user))
     )
 
     result = await db.execute(query)
@@ -616,7 +683,7 @@ async def update_ticket_priority(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail="Ticket not found",
         )
 
     ticket.priority = request.priority
@@ -634,13 +701,15 @@ async def update_ticket_priority(
 
     return AdminTicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or f"Ticket #{ticket.id}",
         status=ticket.status,
-        priority=ticket.priority or 'normal',
+        priority=ticket.priority or "normal",
         created_at=ticket.created_at,
         updated_at=ticket.updated_at or ticket.created_at,
         closed_at=ticket.closed_at,
-        is_reply_blocked=ticket.is_reply_blocked if hasattr(ticket, 'is_reply_blocked') else False,
+        is_reply_blocked=(
+            ticket.is_reply_blocked if hasattr(ticket, "is_reply_blocked") else False
+        ),
         user=user_info,
         messages=messages_response,
     )

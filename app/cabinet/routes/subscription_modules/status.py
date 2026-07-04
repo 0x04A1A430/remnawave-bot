@@ -31,17 +31,18 @@ from ...schemas.subscription import (
 )
 from .helpers import _subscription_to_response, resolve_subscription
 
-
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
 
-@router.get('/info', response_model=SubscriptionStatusResponse)
+@router.get("/info", response_model=SubscriptionStatusResponse)
 async def get_subscription(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None, description="Subscription ID for multi-tariff"
+    ),
 ):
     """Get current user's subscription details."""
     # Reload user from current session to get fresh data
@@ -71,10 +72,15 @@ async def get_subscription(
     servers: list[ServerInfo] = []
     connected_squads = subscription.connected_squads or []
     if connected_squads:
-        result = await db.execute(select(ServerSquad).where(ServerSquad.squad_uuid.in_(connected_squads)))
+        result = await db.execute(
+            select(ServerSquad).where(ServerSquad.squad_uuid.in_(connected_squads))
+        )
         server_squads = result.scalars().all()
         servers = [
-            ServerInfo(uuid=sq.squad_uuid, name=sq.display_name, country_code=sq.country_code) for sq in server_squads
+            ServerInfo(
+                uuid=sq.squad_uuid, name=sq.display_name, country_code=sq.country_code
+            )
+            for sq in server_squads
         ]
 
     # Fetch traffic purchases (monthly packages)
@@ -94,37 +100,51 @@ async def get_subscription(
     for purchase in purchases:
         time_remaining = purchase.expires_at - now
         days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
-        total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
+        total_duration_seconds = (
+            purchase.expires_at - purchase.created_at
+        ).total_seconds()
         elapsed_seconds = (now - purchase.created_at).total_seconds()
         progress_percent = min(
-            100.0, max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0)
+            100.0,
+            max(
+                0.0,
+                (
+                    (elapsed_seconds / total_duration_seconds * 100)
+                    if total_duration_seconds > 0
+                    else 0
+                ),
+            ),
         )
 
         traffic_purchases_data.append(
             {
-                'id': purchase.id,
-                'traffic_gb': purchase.traffic_gb,
-                'expires_at': purchase.expires_at,
-                'created_at': purchase.created_at,
-                'days_remaining': days_remaining,
-                'progress_percent': round(progress_percent, 1),
+                "id": purchase.id,
+                "traffic_gb": purchase.traffic_gb,
+                "expires_at": purchase.expires_at,
+                "created_at": purchase.created_at,
+                "days_remaining": days_remaining,
+                "progress_percent": round(progress_percent, 1),
             }
         )
 
     subscription_data = _subscription_to_response(
         subscription, servers, tariff_name, traffic_purchases_data, user=fresh_user
     )
-    return SubscriptionStatusResponse(has_subscription=True, subscription=subscription_data)
+    return SubscriptionStatusResponse(
+        has_subscription=True, subscription=subscription_data
+    )
 
 
 # ============ Connection Link ============
 
 
-@router.get('/connection-link')
+@router.get("/connection-link")
 async def get_connection_link(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None, description="Subscription ID for multi-tariff"
+    ),
 ) -> dict[str, Any]:
     """Get subscription connection link and instructions."""
     from app.utils.subscription_utils import (
@@ -138,38 +158,44 @@ async def get_connection_link(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
+            detail="No subscription found",
         )
 
     subscription_url = subscription.subscription_url
     if not subscription_url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Subscription link not yet generated',
+            detail="Subscription link not yet generated",
         )
 
     display_link = get_display_subscription_link(subscription)
-    happ_redirect = get_happ_cryptolink_redirect_link(subscription_url) if settings.is_happ_cryptolink_mode() else None
+    happ_redirect = (
+        get_happ_cryptolink_redirect_link(subscription_url)
+        if settings.is_happ_cryptolink_mode()
+        else None
+    )
     happ_scheme_link = (
-        convert_subscription_link_to_happ_scheme(subscription_url) if settings.is_happ_cryptolink_mode() else None
+        convert_subscription_link_to_happ_scheme(subscription_url)
+        if settings.is_happ_cryptolink_mode()
+        else None
     )
 
     connect_mode = settings.CONNECT_BUTTON_MODE
     hide_subscription_link = settings.should_hide_subscription_link()
 
     return {
-        'subscription_url': subscription_url if not hide_subscription_link else None,
-        'display_link': display_link if not hide_subscription_link else None,
-        'happ_redirect_link': happ_redirect,
-        'happ_scheme_link': happ_scheme_link,
-        'connect_mode': connect_mode,
-        'hide_link': hide_subscription_link,
-        'instructions': {
-            'steps': [
-                'Copy the subscription link',
-                'Open your VPN application',
+        "subscription_url": subscription_url if not hide_subscription_link else None,
+        "display_link": display_link if not hide_subscription_link else None,
+        "happ_redirect_link": happ_redirect,
+        "happ_scheme_link": happ_scheme_link,
+        "connect_mode": connect_mode,
+        "hide_link": hide_subscription_link,
+        "instructions": {
+            "steps": [
+                "Copy the subscription link",
+                "Open your VPN application",
                 "Find 'Add subscription' or 'Import' option",
-                'Paste the copied link',
+                "Paste the copied link",
             ]
         },
     }
@@ -178,40 +204,40 @@ async def get_connection_link(
 # ============ hApp Downloads ============
 
 
-@router.get('/happ-downloads')
+@router.get("/happ-downloads")
 async def get_happ_downloads(
     user: User = Depends(get_current_cabinet_user),
 ) -> dict[str, Any]:
     """Get hApp download links for different platforms."""
     platforms = {
-        'ios': {
-            'name': 'iOS (iPhone/iPad)',
-            'icon': '',
-            'link': settings.get_happ_download_link('ios'),
+        "ios": {
+            "name": "iOS (iPhone/iPad)",
+            "icon": "",
+            "link": settings.get_happ_download_link("ios"),
         },
-        'android': {
-            'name': 'Android',
-            'icon': '',
-            'link': settings.get_happ_download_link('android'),
+        "android": {
+            "name": "Android",
+            "icon": "",
+            "link": settings.get_happ_download_link("android"),
         },
-        'macos': {
-            'name': 'macOS',
-            'icon': '',
-            'link': settings.get_happ_download_link('macos'),
+        "macos": {
+            "name": "macOS",
+            "icon": "",
+            "link": settings.get_happ_download_link("macos"),
         },
-        'windows': {
-            'name': 'Windows',
-            'icon': '',
-            'link': settings.get_happ_download_link('windows'),
+        "windows": {
+            "name": "Windows",
+            "icon": "",
+            "link": settings.get_happ_download_link("windows"),
         },
     }
 
     # Filter out platforms without links
-    available_platforms = {k: v for k, v in platforms.items() if v['link']}
+    available_platforms = {k: v for k, v in platforms.items() if v["link"]}
 
     return {
-        'platforms': available_platforms,
-        'happ_enabled': bool(available_platforms),
+        "platforms": available_platforms,
+        "happ_enabled": bool(available_platforms),
     }
 
 
@@ -221,7 +247,7 @@ async def get_happ_downloads(
 def _get_remnawave_config_uuid() -> str | None:
     """Get RemnaWave config UUID from system settings or env."""
     try:
-        return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
+        return bot_configuration_service.get_current_value("CABINET_REMNA_SUB_CONFIG")
     except Exception:
         return settings.CABINET_REMNA_SUB_CONFIG
 
@@ -237,30 +263,34 @@ def _extract_scheme_from_buttons(buttons: list[dict[str, Any]]) -> tuple[str, bo
     for btn in buttons:
         if not isinstance(btn, dict):
             continue
-        link = btn.get('link', '') or btn.get('url', '') or btn.get('buttonLink', '')
+        link = btn.get("link", "") or btn.get("url", "") or btn.get("buttonLink", "")
         if not link:
             continue
         link_upper = link.upper()
 
         # Check for {{HAPP_CRYPT4_LINK}} -- uses crypto link as payload
-        if '{{HAPP_CRYPT4_LINK}}' in link_upper or 'HAPP_CRYPT4_LINK' in link_upper:
-            scheme = re.sub(r'\{\{HAPP_CRYPT4_LINK\}\}', '', link, flags=re.IGNORECASE)
-            if scheme and '://' in scheme:
+        if "{{HAPP_CRYPT4_LINK}}" in link_upper or "HAPP_CRYPT4_LINK" in link_upper:
+            scheme = re.sub(r"\{\{HAPP_CRYPT4_LINK\}\}", "", link, flags=re.IGNORECASE)
+            if scheme and "://" in scheme:
                 return scheme, True
 
         # Check for {{SUBSCRIPTION_LINK}} -- uses plain subscription_url as payload
-        if '{{SUBSCRIPTION_LINK}}' in link_upper or 'SUBSCRIPTION_LINK' in link_upper:
-            scheme = re.sub(r'\{\{SUBSCRIPTION_LINK\}\}', '', link, flags=re.IGNORECASE)
-            if scheme and '://' in scheme:
+        if "{{SUBSCRIPTION_LINK}}" in link_upper or "SUBSCRIPTION_LINK" in link_upper:
+            scheme = re.sub(r"\{\{SUBSCRIPTION_LINK\}\}", "", link, flags=re.IGNORECASE)
+            if scheme and "://" in scheme:
                 return scheme, False
 
         # Also check for type="subscriptionLink" buttons with custom schemes
-        btn_type = btn.get('type', '')
-        if btn_type == 'subscriptionLink' and '://' in link and not link.startswith('http'):
-            scheme = link.split('{{')[0] if '{{' in link else link
-            if scheme and '://' in scheme:
+        btn_type = btn.get("type", "")
+        if (
+            btn_type == "subscriptionLink"
+            and "://" in link
+            and not link.startswith("http")
+        ):
+            scheme = link.split("{{")[0] if "{{" in link else link
+            if scheme and "://" in scheme:
                 return scheme, False
-    return '', False
+    return "", False
 
 
 def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
@@ -272,23 +302,23 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
         so subscription_crypto_link should be used as the deep link payload.
     """
     # 1. Check urlScheme field (cabinet format stores usesCryptoLink alongside)
-    scheme = str(app.get('urlScheme', '')).strip()
+    scheme = str(app.get("urlScheme", "")).strip()
     if scheme:
-        uses_crypto = bool(app.get('usesCryptoLink', False))
+        uses_crypto = bool(app.get("usesCryptoLink", False))
         return scheme, uses_crypto
 
     # 2. Extract from buttons in blocks (RemnaWave format)
-    blocks = app.get('blocks', [])
+    blocks = app.get("blocks", [])
     for block in blocks:
         if not isinstance(block, dict):
             continue
-        buttons = block.get('buttons', [])
+        buttons = block.get("buttons", [])
         scheme, uses_crypto = _extract_scheme_from_buttons(buttons)
         if scheme:
             return scheme, uses_crypto
 
     # 3. Check buttons directly in app (alternative structure)
-    direct_buttons = app.get('buttons', [])
+    direct_buttons = app.get("buttons", [])
     if direct_buttons:
         scheme, uses_crypto = _extract_scheme_from_buttons(direct_buttons)
         if scheme:
@@ -296,13 +326,13 @@ def _get_url_scheme_for_app(app: dict[str, Any]) -> tuple[str, bool]:
 
     # No scheme found
     logger.debug(
-        '_get_url_scheme_for_app: No scheme found for app has blocks: has buttons: has urlScheme',
-        get=app.get('name'),
-        get_2=bool(app.get('blocks')),
-        get_3=bool(app.get('buttons')),
-        get_4=bool(app.get('urlScheme')),
+        "_get_url_scheme_for_app: No scheme found for app has blocks: has buttons: has urlScheme",
+        get=app.get("name"),
+        get_2=bool(app.get("blocks")),
+        get_3=bool(app.get("buttons")),
+        get_4=bool(app.get("urlScheme")),
     )
-    return '', False
+    return "", False
 
 
 async def _load_app_config_async() -> dict[str, Any] | None:
@@ -318,18 +348,23 @@ async def _load_app_config_async() -> dict[str, Any] | None:
             async with service.get_api_client() as api:
                 config = await api.get_subscription_page_config(remnawave_uuid)
                 if config and config.config:
-                    logger.debug('Loaded app config from RemnaWave', remnawave_uuid=remnawave_uuid)
+                    logger.debug(
+                        "Loaded app config from RemnaWave",
+                        remnawave_uuid=remnawave_uuid,
+                    )
                     raw = dict(config.config)
-                    raw['_isRemnawave'] = True
+                    raw["_isRemnawave"] = True
                     return raw
         except Exception as e:
-            logger.warning('Failed to load RemnaWave config', error=e)
+            logger.warning("Failed to load RemnaWave config", error=e)
 
     return None
 
 
 def _create_deep_link(
-    app: dict[str, Any], subscription_url: str, subscription_crypto_link: str | None = None
+    app: dict[str, Any],
+    subscription_url: str,
+    subscription_crypto_link: str | None = None,
 ) -> str | None:
     """Create deep link for app with subscription URL.
 
@@ -348,32 +383,36 @@ def _create_deep_link(
 
     scheme, uses_crypto = _get_url_scheme_for_app(app)
     if not scheme:
-        logger.debug('_create_deep_link: no urlScheme for app', get=app.get('name', 'unknown'))
+        logger.debug(
+            "_create_deep_link: no urlScheme for app", get=app.get("name", "unknown")
+        )
         return None
 
     # Pick the correct payload based on which template the app uses
     if uses_crypto:
         if not subscription_crypto_link:
             logger.debug(
-                '_create_deep_link: app requires crypto link but none available', get=app.get('name', 'unknown')
+                "_create_deep_link: app requires crypto link but none available",
+                get=app.get("name", "unknown"),
             )
             return None
         payload = subscription_crypto_link
     else:
         if not subscription_url:
             logger.debug(
-                '_create_deep_link: app requires subscription_url but none available', get=app.get('name', 'unknown')
+                "_create_deep_link: app requires subscription_url but none available",
+                get=app.get("name", "unknown"),
             )
             return None
         payload = subscription_url
 
-    if app.get('isNeedBase64Encoding'):
+    if app.get("isNeedBase64Encoding"):
         try:
-            payload = base64.b64encode(payload.encode('utf-8')).decode('utf-8')
+            payload = base64.b64encode(payload.encode("utf-8")).decode("utf-8")
         except Exception as e:
-            logger.warning('Failed to encode payload to base64', error=e)
+            logger.warning("Failed to encode payload to base64", error=e)
 
-    return f'{scheme}{payload}'
+    return f"{scheme}{payload}"
 
 
 def _resolve_button_url(
@@ -392,18 +431,20 @@ def _resolve_button_url(
         return url
     result = url
     if subscription_url:
-        result = result.replace('{{SUBSCRIPTION_LINK}}', subscription_url)
+        result = result.replace("{{SUBSCRIPTION_LINK}}", subscription_url)
     if subscription_crypto_link:
-        result = result.replace('{{HAPP_CRYPT3_LINK}}', subscription_crypto_link)
-        result = result.replace('{{HAPP_CRYPT4_LINK}}', subscription_crypto_link)
+        result = result.replace("{{HAPP_CRYPT3_LINK}}", subscription_crypto_link)
+        result = result.replace("{{HAPP_CRYPT4_LINK}}", subscription_crypto_link)
     return result
 
 
-@router.get('/app-config')
+@router.get("/app-config")
 async def get_app_config(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None, description="Subscription ID for multi-tariff"
+    ),
 ) -> dict[str, Any]:
     """Get app configuration for connection with deep links."""
     subscription = await resolve_subscription(db, user, subscription_id)
@@ -419,25 +460,25 @@ async def get_app_config(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='App configuration not set up.',
+            detail="App configuration not set up.",
         )
 
-    config.pop('_isRemnawave', None)
+    config.pop("_isRemnawave", None)
     hide_link = settings.should_hide_subscription_link()
 
     # Build platformNames from displayName of each platform
     platform_names: dict[str, Any] = {}
-    for pk, pd in config.get('platforms', {}).items():
-        if isinstance(pd, dict) and 'displayName' in pd:
-            platform_names[pk] = pd['displayName']
+    for pk, pd in config.get("platforms", {}).items():
+        if isinstance(pd, dict) and "displayName" in pd:
+            platform_names[pk] = pd["displayName"]
     fallback_names = {
-        'ios': {'en': 'iPhone/iPad'},
-        'android': {'en': 'Android'},
-        'macos': {'en': 'macOS'},
-        'windows': {'en': 'Windows'},
-        'linux': {'en': 'Linux'},
-        'androidTV': {'en': 'Android TV'},
-        'appleTV': {'en': 'Apple TV'},
+        "ios": {"en": "iPhone/iPad"},
+        "android": {"en": "Android"},
+        "macos": {"en": "macOS"},
+        "windows": {"en": "Windows"},
+        "linux": {"en": "Linux"},
+        "androidTV": {"en": "Android TV"},
+        "appleTV": {"en": "Apple TV"},
     }
     for k, v in fallback_names.items():
         if k not in platform_names:
@@ -445,10 +486,10 @@ async def get_app_config(
 
     # Serve original blocks/svgLibrary enriched with deep links and resolved URLs.
     platforms: dict[str, Any] = {}
-    for platform_key, platform_data in config.get('platforms', {}).items():
+    for platform_key, platform_data in config.get("platforms", {}).items():
         if not isinstance(platform_data, dict):
             continue
-        apps = platform_data.get('apps', [])
+        apps = platform_data.get("apps", [])
         if not isinstance(apps, list):
             continue
 
@@ -460,20 +501,22 @@ async def get_app_config(
             # Generate deep link
             deep_link = None
             if subscription_url or subscription_crypto_link:
-                deep_link = _create_deep_link(app, subscription_url, subscription_crypto_link)
-            app['deepLink'] = deep_link
+                deep_link = _create_deep_link(
+                    app, subscription_url, subscription_crypto_link
+                )
+            app["deepLink"] = deep_link
 
             # Resolve templates only for subscriptionLink and copyButton (not external)
-            for block in app.get('blocks', []):
+            for block in app.get("blocks", []):
                 if not isinstance(block, dict):
                     continue
-                for btn in block.get('buttons', []):
+                for btn in block.get("buttons", []):
                     if not isinstance(btn, dict):
                         continue
-                    btn_type = btn.get('type', '')
-                    if btn_type in ('subscriptionLink', 'copyButton'):
-                        url = btn.get('url', '') or btn.get('link', '')
-                        if url and '{{' in url:
+                    btn_type = btn.get("type", "")
+                    if btn_type in ("subscriptionLink", "copyButton"):
+                        url = btn.get("url", "") or btn.get("link", "")
+                        if url and "{{" in url:
                             resolved = _resolve_button_url(
                                 url,
                                 subscription_url,
@@ -481,27 +524,27 @@ async def get_app_config(
                             )
                             # Only set resolvedUrl if ALL templates were resolved;
                             # otherwise let the frontend fall through to deepLink/subscriptionUrl
-                            if '{{' not in resolved:
-                                btn['resolvedUrl'] = resolved
+                            if "{{" not in resolved:
+                                btn["resolvedUrl"] = resolved
 
             enriched_apps.append(app)
 
         if enriched_apps:
-            platform_output = {k: v for k, v in platform_data.items() if k != 'apps'}
-            platform_output['apps'] = enriched_apps
+            platform_output = {k: v for k, v in platform_data.items() if k != "apps"}
+            platform_output["apps"] = enriched_apps
             platforms[platform_key] = platform_output
 
     return {
-        'isRemnawave': True,
-        'platforms': platforms,
-        'svgLibrary': config.get('svgLibrary', {}),
-        'baseTranslations': config.get('baseTranslations'),
-        'baseSettings': config.get('baseSettings'),
-        'uiConfig': config.get('uiConfig', {}),
-        'platformNames': platform_names,
-        'hasSubscription': bool(subscription_url or subscription_crypto_link),
-        'subscriptionUrl': subscription_url,
-        'subscriptionCryptoLink': subscription_crypto_link,
-        'hideLink': hide_link,
-        'branding': config.get('brandingSettings', {}),
+        "isRemnawave": True,
+        "platforms": platforms,
+        "svgLibrary": config.get("svgLibrary", {}),
+        "baseTranslations": config.get("baseTranslations"),
+        "baseSettings": config.get("baseSettings"),
+        "uiConfig": config.get("uiConfig", {}),
+        "platformNames": platform_names,
+        "hasSubscription": bool(subscription_url or subscription_crypto_link),
+        "subscriptionUrl": subscription_url,
+        "subscriptionCryptoLink": subscription_crypto_link,
+        "hideLink": hide_link,
+        "branding": config.get("brandingSettings", {}),
     }

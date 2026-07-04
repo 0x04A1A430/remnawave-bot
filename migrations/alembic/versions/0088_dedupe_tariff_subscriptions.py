@@ -17,8 +17,8 @@ Create Date: 2026-06-02
 
 from typing import Sequence, Union
 
-revision: str = '0088'
-down_revision: Union[str, None] = '0087'
+revision: str = "0088"
+down_revision: Union[str, None] = "0087"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

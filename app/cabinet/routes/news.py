@@ -23,12 +23,11 @@ from ..schemas.news import (
     NewsListResponse,
 )
 
-
 logger = structlog.get_logger(__name__)
 
 # Slug constraint: alphanumeric, hyphens, underscores, max 500 chars
 _SLUG_MAX_LENGTH: int = 500
-_SLUG_PATTERN: str = r'^[a-zA-Z0-9_-]+$'
+_SLUG_PATTERN: str = r"^[a-zA-Z0-9_-]+$"
 
 # --- View counter deduplication ---
 # In-memory TTL cache to prevent a single user from inflating view counts.
@@ -59,10 +58,12 @@ def _should_count_view(user_id: int, article_id: int) -> bool:
     return True
 
 
-router = APIRouter(prefix='/news', tags=['Cabinet News'])
+router = APIRouter(prefix="/news", tags=["Cabinet News"])
 
 
-def _article_to_response(article: NewsArticle, *, include_content: bool = True) -> dict[str, Any]:
+def _article_to_response(
+    article: NewsArticle, *, include_content: bool = True
+) -> dict[str, Any]:
     """Convert NewsArticle ORM instance to response dict.
 
     ``author_name`` is only resolved when ``include_content=True`` (single-article
@@ -71,35 +72,39 @@ def _article_to_response(article: NewsArticle, *, include_content: bool = True) 
     ``MissingGreenlet`` in async context.
     """
     data: dict[str, Any] = {
-        'id': article.id,
-        'title': article.title,
-        'slug': article.slug,
-        'excerpt': article.excerpt,
-        'category': article.category,
-        'category_color': article.category_color,
-        'tag': article.tag,
-        'featured_image_url': article.featured_image_url,
-        'is_published': article.is_published,
-        'is_featured': article.is_featured,
-        'published_at': article.published_at,
-        'read_time_minutes': article.read_time_minutes,
-        'views_count': article.views_count,
+        "id": article.id,
+        "title": article.title,
+        "slug": article.slug,
+        "excerpt": article.excerpt,
+        "category": article.category,
+        "category_color": article.category_color,
+        "tag": article.tag,
+        "featured_image_url": article.featured_image_url,
+        "is_published": article.is_published,
+        "is_featured": article.is_featured,
+        "published_at": article.published_at,
+        "read_time_minutes": article.read_time_minutes,
+        "views_count": article.views_count,
     }
 
     if include_content:
         author_name: str | None = None
         if article.author:
-            author_name = article.author.first_name or article.author.username or f'#{article.author.id}'
-        data['content'] = article.content
-        data['author_name'] = author_name
-        data['created_at'] = article.created_at
-        data['updated_at'] = article.updated_at
+            author_name = (
+                article.author.first_name
+                or article.author.username
+                or f"#{article.author.id}"
+            )
+        data["content"] = article.content
+        data["author_name"] = author_name
+        data["created_at"] = article.created_at
+        data["updated_at"] = article.updated_at
 
     return data
 
 
 # NOTE: /categories MUST be declared before /{slug} to avoid route conflict
-@router.get('/categories', response_model=list[str])
+@router.get("/categories", response_model=list[str])
 async def list_categories(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -108,14 +113,14 @@ async def list_categories(
     try:
         return await get_news_categories(db)
     except Exception:
-        logger.exception('Failed to get news categories')
+        logger.exception("Failed to get news categories")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load categories',
+            detail="Failed to load categories",
         )
 
 
-@router.get('', response_model=NewsListResponse)
+@router.get("", response_model=NewsListResponse)
 async def list_published_news(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -129,24 +134,29 @@ async def list_published_news(
     queries run sequentially.
     """
     try:
-        articles = await get_published_news(db, category=category, limit=limit, offset=offset)
+        articles = await get_published_news(
+            db, category=category, limit=limit, offset=offset
+        )
         total = await get_published_news_count(db, category=category)
         categories = await get_news_categories(db)
 
-        items = [NewsArticleListItem(**_article_to_response(a, include_content=False)) for a in articles]
+        items = [
+            NewsArticleListItem(**_article_to_response(a, include_content=False))
+            for a in articles
+        ]
 
         return NewsListResponse(items=items, total=total, categories=categories)
     except HTTPException:
         raise
     except Exception:
-        logger.exception('Failed to list published news')
+        logger.exception("Failed to list published news")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load news',
+            detail="Failed to load news",
         )
 
 
-@router.get('/{slug}', response_model=NewsArticleResponse)
+@router.get("/{slug}", response_model=NewsArticleResponse)
 async def get_article_by_slug(
     slug: str = Path(..., max_length=_SLUG_MAX_LENGTH, pattern=_SLUG_PATTERN),
     user: User = Depends(get_current_cabinet_user),
@@ -158,7 +168,7 @@ async def get_article_by_slug(
     if not article or not article.is_published:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail="Article not found",
         )
 
     # Build response dict while session attributes are still loaded.
@@ -170,8 +180,8 @@ async def get_article_by_slug(
     if _should_count_view(user.id, article.id):
         try:
             new_count = await increment_views(db, article.id)
-            response_data['views_count'] = new_count
+            response_data["views_count"] = new_count
         except Exception:
-            logger.warning('Failed to increment views', article_id=article.id)
+            logger.warning("Failed to increment views", article_id=article.id)
 
     return NewsArticleResponse(**response_data)

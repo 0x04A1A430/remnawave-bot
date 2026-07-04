@@ -442,20 +442,20 @@ Important copy rule:
 
 ## Error Handling Matrix
 
-| Situation | Finish StoreKit Transaction | User Message | Retry |
-| --- | --- | --- | --- |
-| `.success(.verified)` and backend `success=true` | Yes | Success | No |
-| `.success(.verified)` and backend `success=false` | No | Completing purchase pending | Yes |
-| Backend `401`/`403` | No | Sign in again to complete purchase | Yes after auth |
-| Backend `429` | No | Too many attempts, retry later | Yes with backoff |
-| Backend `400` | No | Purchase cannot be completed, contact support | Manual/support |
-| Backend `5xx` | No | Completing purchase pending | Yes |
-| Network timeout/offline | No | Completing purchase pending | Yes |
-| `.success(.unverified)` | No | Purchase could not be verified by device | No automatic backend delivery |
-| `.pending` | No | Waiting for approval | StoreKit update |
-| `.userCancelled` | No | None or cancelled | No |
-| Unknown product ID | No | Product unavailable | No automatic backend delivery |
-| Account token mismatch | No | Sign in with the purchasing account | Retry only under matching user |
+| Situation                                         | Finish StoreKit Transaction | User Message                                  | Retry                          |
+| ------------------------------------------------- | --------------------------- | --------------------------------------------- | ------------------------------ |
+| `.success(.verified)` and backend `success=true`  | Yes                         | Success                                       | No                             |
+| `.success(.verified)` and backend `success=false` | No                          | Completing purchase pending                   | Yes                            |
+| Backend `401`/`403`                               | No                          | Sign in again to complete purchase            | Yes after auth                 |
+| Backend `429`                                     | No                          | Too many attempts, retry later                | Yes with backoff               |
+| Backend `400`                                     | No                          | Purchase cannot be completed, contact support | Manual/support                 |
+| Backend `5xx`                                     | No                          | Completing purchase pending                   | Yes                            |
+| Network timeout/offline                           | No                          | Completing purchase pending                   | Yes                            |
+| `.success(.unverified)`                           | No                          | Purchase could not be verified by device      | No automatic backend delivery  |
+| `.pending`                                        | No                          | Waiting for approval                          | StoreKit update                |
+| `.userCancelled`                                  | No                          | None or cancelled                             | No                             |
+| Unknown product ID                                | No                          | Product unavailable                           | No automatic backend delivery  |
+| Account token mismatch                            | No                          | Sign in with the purchasing account           | Retry only under matching user |
 
 ## Backend Balance Refresh
 

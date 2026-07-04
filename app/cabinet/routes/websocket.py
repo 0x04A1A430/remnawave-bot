@@ -13,7 +13,6 @@ from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 
-
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
@@ -42,7 +41,7 @@ class CabinetConnectionManager:
                 self._admin_connections[user_id].add(websocket)
 
         logger.debug(
-            'Cabinet WS connected: user_id is_admin total_users',
+            "Cabinet WS connected: user_id is_admin total_users",
             user_id=user_id,
             is_admin=is_admin,
             user_connections_count=len(self._user_connections),
@@ -61,7 +60,7 @@ class CabinetConnectionManager:
                 if not self._admin_connections[user_id]:
                     del self._admin_connections[user_id]
 
-        logger.debug('Cabinet WS disconnected: user_id', user_id=user_id)
+        logger.debug("Cabinet WS disconnected: user_id", user_id=user_id)
 
     async def send_to_user(self, user_id: int, message: dict) -> None:
         """Отправить сообщение конкретному пользователю."""
@@ -79,7 +78,7 @@ class CabinetConnectionManager:
             try:
                 await ws.send_text(data)
             except Exception as e:
-                logger.warning('Failed to send to user', user_id=user_id, e=e)
+                logger.warning("Failed to send to user", user_id=user_id, e=e)
                 disconnected.add(ws)
 
         # Cleanup disconnected
@@ -95,7 +94,10 @@ class CabinetConnectionManager:
             if not self._admin_connections:
                 return
             # Create a snapshot: list of (user_id, list of websockets)
-            admin_snapshot = [(user_id, list(connections)) for user_id, connections in self._admin_connections.items()]
+            admin_snapshot = [
+                (user_id, list(connections))
+                for user_id, connections in self._admin_connections.items()
+            ]
 
         data = json.dumps(message, default=str, ensure_ascii=False)
         disconnected_by_user: dict[int, set[WebSocket]] = {}
@@ -105,7 +107,7 @@ class CabinetConnectionManager:
                 try:
                     await ws.send_text(data)
                 except Exception as e:
-                    logger.warning('Failed to send to admin', user_id=user_id, e=e)
+                    logger.warning("Failed to send to admin", user_id=user_id, e=e)
                     if user_id not in disconnected_by_user:
                         disconnected_by_user[user_id] = set()
                     disconnected_by_user[user_id].add(ws)
@@ -132,61 +134,66 @@ async def verify_cabinet_ws_token(token: str) -> tuple[int | None, bool]:
     if not token:
         return None, False
 
-    payload = get_token_payload(token, expected_type='access')
+    payload = get_token_payload(token, expected_type="access")
     if not payload:
         return None, False
 
     try:
-        user_id = int(payload.get('sub'))
+        user_id = int(payload.get("sub"))
     except (TypeError, ValueError):
         return None, False
 
     try:
         async with AsyncSessionLocal() as db:
             user = await get_user_by_id(db, user_id)
-            if not user or user.status != 'active':
+            if not user or user.status != "active":
                 return None, False
 
             is_admin = settings.is_admin(
-                telegram_id=user.telegram_id, email=user.email if user.email_verified else None
+                telegram_id=user.telegram_id,
+                email=user.email if user.email_verified else None,
             )
             return user_id, is_admin
     except (TimeoutError, OSError, ConnectionRefusedError) as e:
-        logger.error('Database connection error in WS token verification', e=str(e)[:200])
+        logger.error(
+            "Database connection error in WS token verification", e=str(e)[:200]
+        )
         return None, False
 
 
-@router.websocket('/ws')
+@router.websocket("/ws")
 async def cabinet_websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint для real-time уведомлений кабинета."""
-    client_host = websocket.client.host if websocket.client else 'unknown'
+    client_host = websocket.client.host if websocket.client else "unknown"
 
     # Получаем токен из query params
-    token = websocket.query_params.get('token')
+    token = websocket.query_params.get("token")
 
     if not token:
-        logger.debug('Cabinet WS: No token from', client_host=client_host)
+        logger.debug("Cabinet WS: No token from", client_host=client_host)
         # Принимаем и сразу закрываем с кодом ошибки
         await websocket.accept()
-        await websocket.close(code=1008, reason='Unauthorized: No token')
+        await websocket.close(code=1008, reason="Unauthorized: No token")
         return
 
     # Верифицируем токен
     user_id, is_admin = await verify_cabinet_ws_token(token)
 
     if not user_id:
-        logger.debug('Cabinet WS: Invalid token from', client_host=client_host)
+        logger.debug("Cabinet WS: Invalid token from", client_host=client_host)
         # Принимаем и сразу закрываем с кодом ошибки
         await websocket.accept()
-        await websocket.close(code=1008, reason='Unauthorized: Invalid token')
+        await websocket.close(code=1008, reason="Unauthorized: Invalid token")
         return
 
     # Принимаем соединение
     try:
         await websocket.accept()
-        logger.debug('Cabinet WS accepted: user_id is_admin', user_id=user_id, is_admin=is_admin)
+        logger.debug(
+            "Cabinet WS accepted: user_id is_admin", user_id=user_id, is_admin=is_admin
+        )
     except Exception as e:
-        logger.error('Cabinet WS: Failed to accept from', client_host=client_host, e=e)
+        logger.error("Cabinet WS: Failed to accept from", client_host=client_host, e=e)
         return
 
     # Регистрируем подключение
@@ -196,9 +203,9 @@ async def cabinet_websocket_endpoint(websocket: WebSocket):
         # Приветственное сообщение
         await websocket.send_json(
             {
-                'type': 'connected',
-                'user_id': user_id,
-                'is_admin': is_admin,
+                "type": "connected",
+                "user_id": user_id,
+                "is_admin": is_admin,
             }
         )
 
@@ -209,21 +216,21 @@ async def cabinet_websocket_endpoint(websocket: WebSocket):
                 message = json.loads(data)
 
                 # Ping/pong для keepalive
-                if message.get('type') == 'ping':
-                    await websocket.send_json({'type': 'pong'})
+                if message.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
 
             except json.JSONDecodeError:
-                logger.warning('Cabinet WS: Invalid JSON from user', user_id=user_id)
+                logger.warning("Cabinet WS: Invalid JSON from user", user_id=user_id)
             except WebSocketDisconnect:
                 break
             except Exception as e:
-                logger.exception('Cabinet WS error for user', user_id=user_id, e=e)
+                logger.exception("Cabinet WS error for user", user_id=user_id, e=e)
                 break
 
     except WebSocketDisconnect:
-        logger.debug('Cabinet WS disconnected: user_id', user_id=user_id)
+        logger.debug("Cabinet WS disconnected: user_id", user_id=user_id)
     except Exception as e:
-        logger.exception('Cabinet WS error', e=e)
+        logger.exception("Cabinet WS error", e=e)
     finally:
         await cabinet_ws_manager.disconnect(websocket, user_id)
 
@@ -234,9 +241,9 @@ async def notify_user_ticket_reply(user_id: int, ticket_id: int, message: str) -
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'ticket.admin_reply',
-            'ticket_id': ticket_id,
-            'message': message,
+            "type": "ticket.admin_reply",
+            "ticket_id": ticket_id,
+            "message": message,
         },
     )
 
@@ -245,22 +252,24 @@ async def notify_admins_new_ticket(ticket_id: int, title: str, user_id: int) -> 
     """Уведомить админов о новом тикете."""
     await cabinet_ws_manager.send_to_admins(
         {
-            'type': 'ticket.new',
-            'ticket_id': ticket_id,
-            'title': title,
-            'user_id': user_id,
+            "type": "ticket.new",
+            "ticket_id": ticket_id,
+            "title": title,
+            "user_id": user_id,
         }
     )
 
 
-async def notify_admins_ticket_reply(ticket_id: int, message: str, user_id: int) -> None:
+async def notify_admins_ticket_reply(
+    ticket_id: int, message: str, user_id: int
+) -> None:
     """Уведомить админов об ответе пользователя."""
     await cabinet_ws_manager.send_to_admins(
         {
-            'type': 'ticket.user_reply',
-            'ticket_id': ticket_id,
-            'message': message,
-            'user_id': user_id,
+            "type": "ticket.user_reply",
+            "ticket_id": ticket_id,
+            "message": message,
+            "user_id": user_id,
         }
     )
 
@@ -274,18 +283,18 @@ async def notify_user_balance_topup(
     user_id: int,
     amount_kopeks: int,
     new_balance_kopeks: int,
-    description: str = '',
+    description: str = "",
 ) -> None:
     """Уведомить пользователя о пополнении баланса."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'balance.topup',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_balance_kopeks': new_balance_kopeks,
-            'new_balance_rubles': new_balance_kopeks / 100,
-            'description': description,
+            "type": "balance.topup",
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
+            "new_balance_kopeks": new_balance_kopeks,
+            "new_balance_rubles": new_balance_kopeks / 100,
+            "description": description,
         },
     )
 
@@ -294,18 +303,18 @@ async def notify_user_balance_change(
     user_id: int,
     amount_kopeks: int,
     new_balance_kopeks: int,
-    description: str = '',
+    description: str = "",
 ) -> None:
     """Уведомить пользователя об изменении баланса."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'balance.change',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_balance_kopeks': new_balance_kopeks,
-            'new_balance_rubles': new_balance_kopeks / 100,
-            'description': description,
+            "type": "balance.change",
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
+            "new_balance_kopeks": new_balance_kopeks,
+            "new_balance_rubles": new_balance_kopeks / 100,
+            "description": description,
         },
     )
 
@@ -318,17 +327,17 @@ async def notify_user_balance_change(
 async def notify_user_subscription_activated(
     user_id: int,
     subscription_id: int | None = None,
-    expires_at: str = '',
-    tariff_name: str = '',
+    expires_at: str = "",
+    tariff_name: str = "",
 ) -> None:
     """Уведомить пользователя об активации подписки."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.activated',
-            'subscription_id': subscription_id,
-            'expires_at': expires_at,
-            'tariff_name': tariff_name,
+            "type": "subscription.activated",
+            "subscription_id": subscription_id,
+            "expires_at": expires_at,
+            "tariff_name": tariff_name,
         },
     )
 
@@ -342,9 +351,9 @@ async def notify_user_subscription_expiring(
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.expiring',
-            'days_left': days_left,
-            'expires_at': expires_at,
+            "type": "subscription.expiring",
+            "days_left": days_left,
+            "expires_at": expires_at,
         },
     )
 
@@ -354,7 +363,7 @@ async def notify_user_subscription_expired(user_id: int) -> None:
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.expired',
+            "type": "subscription.expired",
         },
     )
 
@@ -362,18 +371,18 @@ async def notify_user_subscription_expired(user_id: int) -> None:
 async def notify_user_subscription_renewed(
     user_id: int,
     subscription_id: int | None = None,
-    new_expires_at: str = '',
+    new_expires_at: str = "",
     amount_kopeks: int = 0,
 ) -> None:
     """Уведомить пользователя о продлении подписки."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.renewed',
-            'subscription_id': subscription_id,
-            'new_expires_at': new_expires_at,
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
+            "type": "subscription.renewed",
+            "subscription_id": subscription_id,
+            "new_expires_at": new_expires_at,
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
         },
     )
 
@@ -388,11 +397,11 @@ async def notify_user_devices_purchased(
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.devices_purchased',
-            'devices_added': devices_added,
-            'new_device_limit': new_device_limit,
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
+            "type": "subscription.devices_purchased",
+            "devices_added": devices_added,
+            "new_device_limit": new_device_limit,
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
         },
     )
 
@@ -407,11 +416,11 @@ async def notify_user_traffic_purchased(
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.traffic_purchased',
-            'traffic_gb_added': traffic_gb_added,
-            'new_traffic_limit_gb': new_traffic_limit_gb,
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
+            "type": "subscription.traffic_purchased",
+            "traffic_gb_added": traffic_gb_added,
+            "new_traffic_limit_gb": new_traffic_limit_gb,
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
         },
     )
 
@@ -430,24 +439,24 @@ async def notify_user_autopay_success(
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'autopay.success',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_expires_at': new_expires_at,
+            "type": "autopay.success",
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
+            "new_expires_at": new_expires_at,
         },
     )
 
 
 async def notify_user_autopay_failed(
     user_id: int,
-    reason: str = '',
+    reason: str = "",
 ) -> None:
     """Уведомить пользователя о неудачном автопродлении."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'autopay.failed',
-            'reason': reason,
+            "type": "autopay.failed",
+            "reason": reason,
         },
     )
 
@@ -461,11 +470,11 @@ async def notify_user_autopay_insufficient_funds(
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'autopay.insufficient_funds',
-            'required_kopeks': required_kopeks,
-            'required_rubles': required_kopeks / 100,
-            'balance_kopeks': balance_kopeks,
-            'balance_rubles': balance_kopeks / 100,
+            "type": "autopay.insufficient_funds",
+            "required_kopeks": required_kopeks,
+            "required_rubles": required_kopeks / 100,
+            "balance_kopeks": balance_kopeks,
+            "balance_rubles": balance_kopeks / 100,
         },
     )
 
@@ -475,13 +484,13 @@ async def notify_user_autopay_insufficient_funds(
 # ============================================================================
 
 
-async def notify_user_ban(user_id: int, reason: str = '') -> None:
+async def notify_user_ban(user_id: int, reason: str = "") -> None:
     """Уведомить пользователя о блокировке."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'account.banned',
-            'reason': reason,
+            "type": "account.banned",
+            "reason": reason,
         },
     )
 
@@ -491,7 +500,7 @@ async def notify_user_unban(user_id: int) -> None:
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'account.unbanned',
+            "type": "account.unbanned",
         },
     )
 
@@ -501,8 +510,8 @@ async def notify_user_warning(user_id: int, message: str) -> None:
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'account.warning',
-            'message': message,
+            "type": "account.warning",
+            "message": message,
         },
     )
 
@@ -515,30 +524,30 @@ async def notify_user_warning(user_id: int, message: str) -> None:
 async def notify_user_referral_bonus(
     user_id: int,
     bonus_kopeks: int,
-    referral_name: str = '',
+    referral_name: str = "",
 ) -> None:
     """Уведомить пользователя о реферальном бонусе."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'referral.bonus',
-            'bonus_kopeks': bonus_kopeks,
-            'bonus_rubles': bonus_kopeks / 100,
-            'referral_name': referral_name,
+            "type": "referral.bonus",
+            "bonus_kopeks": bonus_kopeks,
+            "bonus_rubles": bonus_kopeks / 100,
+            "referral_name": referral_name,
         },
     )
 
 
 async def notify_user_referral_registered(
     user_id: int,
-    referral_name: str = '',
+    referral_name: str = "",
 ) -> None:
     """Уведомить пользователя о регистрации нового реферала."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'referral.registered',
-            'referral_name': referral_name,
+            "type": "referral.registered",
+            "referral_name": referral_name,
         },
     )
 
@@ -557,11 +566,11 @@ async def notify_user_daily_debit(
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.daily_debit',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'new_balance_kopeks': new_balance_kopeks,
-            'new_balance_rubles': new_balance_kopeks / 100,
+            "type": "subscription.daily_debit",
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
+            "new_balance_kopeks": new_balance_kopeks,
+            "new_balance_rubles": new_balance_kopeks / 100,
         },
     )
 
@@ -571,7 +580,7 @@ async def notify_user_traffic_reset(user_id: int) -> None:
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'subscription.traffic_reset',
+            "type": "subscription.traffic_reset",
         },
     )
 
@@ -579,15 +588,15 @@ async def notify_user_traffic_reset(user_id: int) -> None:
 async def notify_user_payment_received(
     user_id: int,
     amount_kopeks: int,
-    payment_method: str = '',
+    payment_method: str = "",
 ) -> None:
     """Уведомить о полученном платеже."""
     await cabinet_ws_manager.send_to_user(
         user_id,
         {
-            'type': 'payment.received',
-            'amount_kopeks': amount_kopeks,
-            'amount_rubles': amount_kopeks / 100,
-            'payment_method': payment_method,
+            "type": "payment.received",
+            "amount_kopeks": amount_kopeks,
+            "amount_rubles": amount_kopeks / 100,
+            "payment_method": payment_method,
         },
     )

@@ -23,10 +23,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.guest_purchase_service import GuestPurchaseError, validate_and_calculate
+from app.services.guest_purchase_service import (
+    GuestPurchaseError,
+    validate_and_calculate,
+)
 
 
-def _daily_tariff(tariff_id: int = 1, daily_price_kopeks: int = 5000) -> SimpleNamespace:
+def _daily_tariff(
+    tariff_id: int = 1, daily_price_kopeks: int = 5000
+) -> SimpleNamespace:
     """A stub daily tariff mirroring the real model's daily-aware helpers."""
 
     def get_price_for_period(days: int) -> int | None:
@@ -76,13 +81,15 @@ async def test_daily_tariff_one_day_is_priced_from_daily_price() -> None:
     db = AsyncMock()
 
     with patch(
-        'app.services.guest_purchase_service.get_tariff_by_id',
+        "app.services.guest_purchase_service.get_tariff_by_id",
         AsyncMock(return_value=tariff),
     ):
-        resolved, price = await validate_and_calculate(db, _landing(), tariff_id=1, period_days=1)
+        resolved, price = await validate_and_calculate(
+            db, _landing(), tariff_id=1, period_days=1
+        )
 
     assert resolved is tariff
-    assert price == 5000, 'daily tariff must surface its real daily price, not 0'
+    assert price == 5000, "daily tariff must surface its real daily price, not 0"
 
 
 @pytest.mark.asyncio
@@ -93,7 +100,7 @@ async def test_daily_tariff_rejects_non_daily_period() -> None:
     db = AsyncMock()
 
     with patch(
-        'app.services.guest_purchase_service.get_tariff_by_id',
+        "app.services.guest_purchase_service.get_tariff_by_id",
         AsyncMock(return_value=tariff),
     ):
         with pytest.raises(GuestPurchaseError):

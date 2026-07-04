@@ -15,22 +15,21 @@ from app.utils.display_mode import is_visible_in_web
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/info', tags=['Cabinet Info'])
+router = APIRouter(prefix="/info", tags=["Cabinet Info"])
 
 _LANGUAGE_META: dict[str, tuple[str, str]] = {
-    'ru': ('Русский', ''),
-    'en': ('English', ''),
-    'ua': ('Українська', ''),
-    'zh': ('中文', ''),
-    'fa': ('فارسی', ''),
+    "ru": ("Русский", ""),
+    "en": ("English", ""),
+    "ua": ("Українська", ""),
+    "zh": ("中文", ""),
+    "fa": ("فارسی", ""),
 }
 
 
 def _normalize_language_code(value: str | None) -> str:
-    return (value or '').strip().lower().split('-', 1)[0]
+    return (value or "").strip().lower().split("-", 1)[0]
 
 
 def _get_available_language_codes() -> list[str]:
@@ -107,9 +106,9 @@ class InfoVisibilityResponse(BaseModel):
 # ============ Routes ============
 
 
-@router.get('/faq', response_model=list[FaqPageResponse])
+@router.get("/faq", response_model=list[FaqPageResponse])
 async def get_faq_pages(
-    language: str = Query('ru', min_length=2, max_length=10),
+    language: str = Query("ru", min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of FAQ pages."""
@@ -127,24 +126,24 @@ async def get_faq_pages(
         FaqPageResponse(
             id=page.id,
             title=page.title,
-            content=page.content or '',
+            content=page.content or "",
             order=page.display_order or 0,
         )
         for page in pages
     ]
 
 
-@router.get('/faq/{page_id}', response_model=FaqPageResponse)
+@router.get("/faq/{page_id}", response_model=FaqPageResponse)
 async def get_faq_page(
     page_id: int,
-    language: str = Query('ru', min_length=2, max_length=10),
+    language: str = Query("ru", min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get a specific FAQ page by ID."""
     if not is_visible_in_web(settings.FAQ_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ is not available',
+            detail="FAQ is not available",
         )
     requested_lang = FaqService.normalize_language(language)
     page = await FaqService.get_page(
@@ -158,29 +157,29 @@ async def get_faq_page(
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ page not found',
+            detail="FAQ page not found",
         )
 
     return FaqPageResponse(
         id=page.id,
         title=page.title,
-        content=page.content or '',
+        content=page.content or "",
         order=page.display_order or 0,
     )
 
 
-@router.get('/rules', response_model=RulesResponse)
+@router.get("/rules", response_model=RulesResponse)
 async def get_rules(
-    language: str = Query('ru', min_length=2, max_length=10),
+    language: str = Query("ru", min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get service rules - uses same function as bot."""
     if not is_visible_in_web(settings.SERVICE_RULES_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Rules are not available',
+            detail="Rules are not available",
         )
-    requested_lang = language.split('-', maxsplit=1)[0].lower()
+    requested_lang = language.split("-", maxsplit=1)[0].lower()
 
     # Use the same function as bot to ensure consistent content
     content = await get_current_rules_content(db, requested_lang)
@@ -194,16 +193,16 @@ async def get_rules(
     return RulesResponse(content=content, updated_at=updated_at)
 
 
-@router.get('/privacy-policy', response_model=PrivacyPolicyResponse)
+@router.get("/privacy-policy", response_model=PrivacyPolicyResponse)
 async def get_privacy_policy(
-    language: str = Query('ru', min_length=2, max_length=10),
+    language: str = Query("ru", min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get privacy policy."""
     if not is_visible_in_web(settings.PRIVACY_POLICY_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Privacy policy is not available',
+            detail="Privacy policy is not available",
         )
     requested_lang = PrivacyPolicyService.normalize_language(language)
     policy = await PrivacyPolicyService.get_policy(db, requested_lang, fallback=True)
@@ -222,16 +221,16 @@ async def get_privacy_policy(
     )
 
 
-@router.get('/public-offer', response_model=PublicOfferResponse)
+@router.get("/public-offer", response_model=PublicOfferResponse)
 async def get_public_offer(
-    language: str = Query('ru', min_length=2, max_length=10),
+    language: str = Query("ru", min_length=2, max_length=10),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public offer."""
     if not is_visible_in_web(settings.PUBLIC_OFFER_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Public offer is not available',
+            detail="Public offer is not available",
         )
     requested_lang = PublicOfferService.normalize_language(language)
     offer = await PublicOfferService.get_offer(db, requested_lang, fallback=True)
@@ -250,53 +249,57 @@ async def get_public_offer(
     )
 
 
-@router.get('/service', response_model=ServiceInfoResponse)
+@router.get("/service", response_model=ServiceInfoResponse)
 async def get_service_info():
     """Get general service information."""
     return ServiceInfoResponse(
-        name=getattr(settings, 'SERVICE_NAME', None) or getattr(settings, 'BOT_NAME', 'VPN Service'),
-        description=getattr(settings, 'SERVICE_DESCRIPTION', None),
-        support_email=getattr(settings, 'SUPPORT_EMAIL', None),
-        support_telegram=getattr(settings, 'SUPPORT_USERNAME', None) or getattr(settings, 'SUPPORT_TELEGRAM', None),
-        website=getattr(settings, 'WEBSITE_URL', None),
+        name=getattr(settings, "SERVICE_NAME", None)
+        or getattr(settings, "BOT_NAME", "VPN Service"),
+        description=getattr(settings, "SERVICE_DESCRIPTION", None),
+        support_email=getattr(settings, "SUPPORT_EMAIL", None),
+        support_telegram=getattr(settings, "SUPPORT_USERNAME", None)
+        or getattr(settings, "SUPPORT_TELEGRAM", None),
+        website=getattr(settings, "WEBSITE_URL", None),
     )
 
 
-@router.get('/languages')
+@router.get("/languages")
 async def get_available_languages():
     """Get list of available languages."""
     codes = _get_available_language_codes()
-    default_language = _normalize_language_code(getattr(settings, 'DEFAULT_LANGUAGE', 'ru') or 'ru')
+    default_language = _normalize_language_code(
+        getattr(settings, "DEFAULT_LANGUAGE", "ru") or "ru"
+    )
 
     return {
-        'languages': [
+        "languages": [
             {
-                'code': code,
-                'name': _LANGUAGE_META.get(code, (code.upper(), ''))[0],
-                'flag': _LANGUAGE_META.get(code, (code.upper(), ''))[1],
+                "code": code,
+                "name": _LANGUAGE_META.get(code, (code.upper(), ""))[0],
+                "flag": _LANGUAGE_META.get(code, (code.upper(), ""))[1],
             }
             for code in codes
         ],
-        'default': default_language,
+        "default": default_language,
     }
 
 
-@router.get('/user/language')
+@router.get("/user/language")
 async def get_user_language(
     user: User = Depends(get_current_cabinet_user),
 ):
     """Get current user's language."""
-    return {'language': user.language or 'ru'}
+    return {"language": user.language or "ru"}
 
 
-@router.patch('/user/language')
+@router.patch("/user/language")
 async def update_user_language(
     request: dict[str, str],
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user's language preference."""
-    requested_language = _normalize_language_code(request.get('language', 'ru'))
+    requested_language = _normalize_language_code(request.get("language", "ru"))
     available_languages = _get_available_language_codes()
     if requested_language not in available_languages:
         raise HTTPException(
@@ -308,28 +311,30 @@ async def update_user_language(
     await db.commit()
     await db.refresh(user)
 
-    return {'language': user.language}
+    return {"language": user.language}
 
 
-@router.get('/support-config', response_model=SupportConfigResponse)
+@router.get("/support-config", response_model=SupportConfigResponse)
 async def get_support_config():
     """Get support/tickets configuration for cabinet."""
     # Use SUPPORT_SYSTEM_MODE setting (configurable from admin panel)
-    support_mode = settings.get_support_system_mode()  # returns: tickets, contact, or both
+    support_mode = (
+        settings.get_support_system_mode()
+    )  # returns: tickets, contact, or both
 
     # Map support mode to support type for frontend
     # - "tickets" mode -> tickets only, no contact
     # - "contact" mode -> contact only (profile), no tickets
     # - "both" mode -> tickets enabled, contact available as fallback
-    if support_mode == 'tickets':
+    if support_mode == "tickets":
         tickets_enabled = True
-        support_type = 'tickets'
-    elif support_mode == 'contact':
+        support_type = "tickets"
+    elif support_mode == "contact":
         tickets_enabled = False
-        support_type = 'profile'
+        support_type = "profile"
     else:  # both
         tickets_enabled = True
-        support_type = 'both'
+        support_type = "both"
 
     return SupportConfigResponse(
         tickets_enabled=tickets_enabled,
@@ -339,7 +344,7 @@ async def get_support_config():
     )
 
 
-@router.get('/visibility', response_model=InfoVisibilityResponse)
+@router.get("/visibility", response_model=InfoVisibilityResponse)
 async def get_info_visibility():
     return InfoVisibilityResponse(
         faq=is_visible_in_web(settings.FAQ_DISPLAY_MODE),

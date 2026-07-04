@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Pal24Payment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -51,7 +50,7 @@ async def create_pal24_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Pal24 платеж',
+        "Создан Pal24 платеж",
         payment_id=payment.id,
         user_id=user_id,
         amount_kopeks=amount_kopeks,
@@ -61,12 +60,16 @@ async def create_pal24_payment(
     return payment
 
 
-async def get_pal24_payment_by_id(db: AsyncSession, payment_id: int) -> Pal24Payment | None:
+async def get_pal24_payment_by_id(
+    db: AsyncSession, payment_id: int
+) -> Pal24Payment | None:
     result = await db.execute(select(Pal24Payment).where(Pal24Payment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_pal24_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> Pal24Payment | None:
+async def get_pal24_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> Pal24Payment | None:
     result = await db.execute(
         select(Pal24Payment)
         .where(Pal24Payment.id == payment_id)
@@ -76,13 +79,21 @@ async def get_pal24_payment_by_id_for_update(db: AsyncSession, payment_id: int) 
     return result.scalar_one_or_none()
 
 
-async def get_pal24_payment_by_bill_id(db: AsyncSession, bill_id: str) -> Pal24Payment | None:
-    result = await db.execute(select(Pal24Payment).where(Pal24Payment.bill_id == bill_id))
+async def get_pal24_payment_by_bill_id(
+    db: AsyncSession, bill_id: str
+) -> Pal24Payment | None:
+    result = await db.execute(
+        select(Pal24Payment).where(Pal24Payment.bill_id == bill_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_pal24_payment_by_order_id(db: AsyncSession, order_id: str) -> Pal24Payment | None:
-    result = await db.execute(select(Pal24Payment).where(Pal24Payment.order_id == order_id))
+async def get_pal24_payment_by_order_id(
+    db: AsyncSession, order_id: str
+) -> Pal24Payment | None:
+    result = await db.execute(
+        select(Pal24Payment).where(Pal24Payment.order_id == order_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -104,41 +115,45 @@ async def update_pal24_payment_status(
     metadata: dict[str, Any] | None = None,
 ) -> Pal24Payment:
     update_values: dict[str, Any] = {
-        'status': status,
+        "status": status,
     }
 
     if is_active is not None:
-        update_values['is_active'] = is_active
+        update_values["is_active"] = is_active
     if is_paid is not None:
-        update_values['is_paid'] = is_paid
+        update_values["is_paid"] = is_paid
     if paid_at is not None:
-        update_values['paid_at'] = paid_at
+        update_values["paid_at"] = paid_at
     if payment_id is not None:
-        update_values['payment_id'] = payment_id
+        update_values["payment_id"] = payment_id
     if payment_status is not None:
-        update_values['payment_status'] = payment_status
+        update_values["payment_status"] = payment_status
     if payment_method is not None:
-        update_values['payment_method'] = payment_method
+        update_values["payment_method"] = payment_method
     if balance_amount is not None:
-        update_values['balance_amount'] = balance_amount
+        update_values["balance_amount"] = balance_amount
     if balance_currency is not None:
-        update_values['balance_currency'] = balance_currency
+        update_values["balance_currency"] = balance_currency
     if payer_account is not None:
-        update_values['payer_account'] = payer_account
+        update_values["payer_account"] = payer_account
     if callback_payload is not None:
-        update_values['callback_payload'] = callback_payload
+        update_values["callback_payload"] = callback_payload
     if metadata is not None:
-        update_values['metadata_json'] = metadata
+        update_values["metadata_json"] = metadata
 
-    update_values['last_status'] = status
+    update_values["last_status"] = status
 
-    await db.execute(update(Pal24Payment).where(Pal24Payment.id == payment.id).values(**update_values))
+    await db.execute(
+        update(Pal24Payment)
+        .where(Pal24Payment.id == payment.id)
+        .values(**update_values)
+    )
 
     await db.commit()
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Pal24 платеж',
+        "Обновлен Pal24 платеж",
         bill_id=payment.bill_id,
         payment_status=payment.status,
         is_paid=payment.is_paid,
@@ -152,8 +167,16 @@ async def link_pal24_payment_to_transaction(
     payment: Pal24Payment,
     transaction_id: int,
 ) -> Pal24Payment:
-    await db.execute(update(Pal24Payment).where(Pal24Payment.id == payment.id).values(transaction_id=transaction_id))
+    await db.execute(
+        update(Pal24Payment)
+        .where(Pal24Payment.id == payment.id)
+        .values(transaction_id=transaction_id)
+    )
     await db.flush()
     await db.refresh(payment)
-    logger.info('Pal24 платеж привязан к транзакции', bill_id=payment.bill_id, transaction_id=transaction_id)
+    logger.info(
+        "Pal24 платеж привязан к транзакции",
+        bill_id=payment.bill_id,
+        transaction_id=transaction_id,
+    )
     return payment

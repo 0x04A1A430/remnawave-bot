@@ -65,34 +65,42 @@ def _create_timezone_timestamper() -> structlog.types.Processor:
     try:
         tz = ZoneInfo(settings.TIMEZONE)
     except Exception:
-        tz = ZoneInfo('UTC')
+        tz = ZoneInfo("UTC")
 
     from datetime import datetime
 
-    def timestamper(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    def timestamper(
+        logger: Any, method_name: str, event_dict: dict[str, Any]
+    ) -> dict[str, Any]:
         dt = datetime.now(tz=tz)
-        event_dict['timestamp'] = dt.strftime('%Y-%m-%d %H:%M:%S')
+        event_dict["timestamp"] = dt.strftime("%Y-%m-%d %H:%M:%S")
         return event_dict
 
     return timestamper
 
 
-def _clean_logger_name(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _clean_logger_name(
+    logger: Any, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """Strip __main__ logger name — it's redundant noise in startup logs."""
-    if event_dict.get('logger') == '__main__':
-        del event_dict['logger']
+    if event_dict.get("logger") == "__main__":
+        del event_dict["logger"]
     return event_dict
 
 
-def _prefix_logger_name(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _prefix_logger_name(
+    logger: Any, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """Move logger name before event text: [module.name] event text."""
-    logger_name = event_dict.pop('logger', None)
+    logger_name = event_dict.pop("logger", None)
     if logger_name:
-        event_dict['event'] = f'[{logger_name}] {event_dict.get("event", "")}'
+        event_dict["event"] = f'[{logger_name}] {event_dict.get("event", "")}'
     return event_dict
 
 
-def _auto_capture_exc_info(logger: Any, method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def _auto_capture_exc_info(
+    logger: Any, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
     """Auto-populate event_dict['exc_info'] so tracebacks render in files/console.
 
     Without this, callers must pass ``exc_info=True`` at every ``logger.error``
@@ -105,11 +113,11 @@ def _auto_capture_exc_info(logger: Any, method_name: str, event_dict: dict[str, 
     Result: ``logger.error('msg', error=e)`` inside any ``except`` block now
     renders the full traceback to files, console, and Telegram automatically.
     """
-    exc_info = event_dict.get('exc_info')
+    exc_info = event_dict.get("exc_info")
     if exc_info is True:
         current = sys.exc_info()
         if current[1] is not None:
-            event_dict['exc_info'] = current
+            event_dict["exc_info"] = current
         return event_dict
 
     if exc_info:
@@ -117,16 +125,20 @@ def _auto_capture_exc_info(logger: Any, method_name: str, event_dict: dict[str, 
 
     # Only auto-capture from sys.exc_info() for error/critical levels.
     # For warning/info inside except blocks, callers must pass exc_info=True explicitly.
-    if method_name in ('error', 'critical', 'exception'):
+    if method_name in ("error", "critical", "exception"):
         current = sys.exc_info()
         if current[1] is not None:
-            event_dict['exc_info'] = current
+            event_dict["exc_info"] = current
             return event_dict
 
-    for key in ('error', 'exc', 'exception', 'e', 'err'):
+    for key in ("error", "exc", "exception", "e", "err"):
         candidate = event_dict.get(key)
         if isinstance(candidate, BaseException) and candidate.__traceback__ is not None:
-            event_dict['exc_info'] = (type(candidate), candidate, candidate.__traceback__)
+            event_dict["exc_info"] = (
+                type(candidate),
+                candidate,
+                candidate.__traceback__,
+            )
             return event_dict
 
     return event_dict
@@ -178,7 +190,9 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
         + [
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(_resolve_log_level(settings.LOG_LEVEL)),
+        wrapper_class=structlog.make_filtering_bound_logger(
+            _resolve_log_level(settings.LOG_LEVEL)
+        ),
         logger_factory=structlog.stdlib.LoggerFactory(),
         # NOTE: cache is safe because LOG_LEVEL is set once at startup.
         # If dynamic level changes are ever added, switch to False.
@@ -204,20 +218,22 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     # Rich tracebacks with conservative limits to avoid 5000-line dumps.
     use_colors = settings.LOG_COLORS
     console_renderer_kwargs: dict[str, Any] = {
-        'colors': use_colors,
-        'pad_event_to': 0,
-        'pad_level': False,
+        "colors": use_colors,
+        "pad_event_to": 0,
+        "pad_level": False,
     }
     if use_colors:
-        console_renderer_kwargs['exception_formatter'] = structlog.dev.RichTracebackFormatter(
-            show_locals=False,
-            max_frames=20,
-            extra_lines=1,
-            width=120,
-            suppress=['aiogram', 'aiohttp'],
+        console_renderer_kwargs["exception_formatter"] = (
+            structlog.dev.RichTracebackFormatter(
+                show_locals=False,
+                max_frames=20,
+                extra_lines=1,
+                width=120,
+                suppress=["aiogram", "aiohttp"],
+            )
         )
     else:
-        console_renderer_kwargs['exception_formatter'] = structlog.dev.plain_traceback
+        console_renderer_kwargs["exception_formatter"] = structlog.dev.plain_traceback
 
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
@@ -236,15 +252,15 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
 def _configure_noisy_loggers() -> None:
     """Suppress noisy third-party loggers."""
     for name, level in {
-        'aiohttp.access': logging.ERROR,
-        'aiohttp.client': logging.WARNING,
-        'aiohttp.internal': logging.WARNING,
-        'app.external.remnawave_api': logging.WARNING,
-        'aiogram': logging.WARNING,
-        'uvicorn.access': logging.ERROR,
-        'uvicorn.error': logging.WARNING,
-        'uvicorn.protocols.websockets.websockets_impl': logging.WARNING,
-        'websockets.server': logging.WARNING,
-        'websockets': logging.WARNING,
+        "aiohttp.access": logging.ERROR,
+        "aiohttp.client": logging.WARNING,
+        "aiohttp.internal": logging.WARNING,
+        "app.external.remnawave_api": logging.WARNING,
+        "aiogram": logging.WARNING,
+        "uvicorn.access": logging.ERROR,
+        "uvicorn.error": logging.WARNING,
+        "uvicorn.protocols.websockets.websockets_impl": logging.WARNING,
+        "websockets.server": logging.WARNING,
+        "websockets": logging.WARNING,
     }.items():
         logging.getLogger(name).setLevel(level)

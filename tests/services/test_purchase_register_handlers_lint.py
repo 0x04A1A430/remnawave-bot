@@ -20,8 +20,13 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
-PURCHASE_PATH = Path(__file__).resolve().parents[2] / 'app' / 'handlers' / 'subscription' / 'purchase.py'
+PURCHASE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "app"
+    / "handlers"
+    / "subscription"
+    / "purchase.py"
+)
 
 
 def _module_level_imports(tree: ast.Module) -> set[str]:
@@ -33,7 +38,7 @@ def _module_level_imports(tree: ast.Module) -> set[str]:
                 names.add(alias.asname or alias.name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                names.add(alias.asname or (alias.name.split('.')[0]))
+                names.add(alias.asname or (alias.name.split(".")[0]))
     return names
 
 
@@ -46,21 +51,26 @@ def _function_local_bindings(func: ast.FunctionDef) -> set[str]:
                 bound.add(alias.asname or alias.name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                bound.add(alias.asname or (alias.name.split('.')[0]))
+                bound.add(alias.asname or (alias.name.split(".")[0]))
         elif isinstance(node, ast.Assign):
             for t in node.targets:
                 if isinstance(t, ast.Name):
                     bound.add(t.id)
-        elif isinstance(node, (ast.AugAssign, ast.AnnAssign)) and isinstance(node.target, ast.Name):
+        elif isinstance(node, (ast.AugAssign, ast.AnnAssign)) and isinstance(
+            node.target, ast.Name
+        ):
             bound.add(node.target.id)
     return bound
 
 
 def _find_function(tree: ast.Module, name: str) -> ast.FunctionDef:
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == name
+        ):
             return node  # type: ignore[return-value]
-    raise AssertionError(f'function {name!r} not found at module top-level')
+    raise AssertionError(f"function {name!r} not found at module top-level")
 
 
 def test_register_handlers_does_not_shadow_module_imports() -> None:
@@ -70,11 +80,11 @@ def test_register_handlers_does_not_shadow_module_imports() -> None:
     treated as local — including references that appear BEFORE the local
     binding — which raises UnboundLocalError at first call.
     """
-    source = PURCHASE_PATH.read_text(encoding='utf-8')
+    source = PURCHASE_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     module_names = _module_level_imports(tree)
-    register = _find_function(tree, 'register_handlers')
+    register = _find_function(tree, "register_handlers")
     locals_inside = _function_local_bindings(register)
 
     # Names that are BOTH imported at module level AND re-bound in the function.
@@ -84,25 +94,25 @@ def test_register_handlers_does_not_shadow_module_imports() -> None:
     # the local import. We allow them only if they're not in `module_names`.
     # (i.e. truly lazy — not duplicating a module-level import.)
     assert not shadows, (
-        f'register_handlers re-binds names already imported at module level: {sorted(shadows)}.\n'
-        'This silently turns every reference (including earlier ones) into a local — '
-        'the next call raises UnboundLocalError. Move the local import to module scope, '
-        'or rename the local binding.'
+        f"register_handlers re-binds names already imported at module level: {sorted(shadows)}.\n"
+        "This silently turns every reference (including earlier ones) into a local — "
+        "the next call raises UnboundLocalError. Move the local import to module scope, "
+        "or rename the local binding."
     )
 
 
 def test_subscription_states_is_module_level_only() -> None:
     """Explicit narrow guard for the exact 2026-05-16 incident."""
-    source = PURCHASE_PATH.read_text(encoding='utf-8')
+    source = PURCHASE_PATH.read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     # Must be imported at module level.
-    assert 'SubscriptionStates' in _module_level_imports(tree), (
-        'SubscriptionStates expected at module level for register_handlers references'
-    )
+    assert "SubscriptionStates" in _module_level_imports(
+        tree
+    ), "SubscriptionStates expected at module level for register_handlers references"
 
     # Must NOT be re-bound inside register_handlers.
-    register = _find_function(tree, 'register_handlers')
-    assert 'SubscriptionStates' not in _function_local_bindings(register), (
-        'SubscriptionStates re-imported inside register_handlers — UnboundLocalError will hit at startup'
-    )
+    register = _find_function(tree, "register_handlers")
+    assert "SubscriptionStates" not in _function_local_bindings(
+        register
+    ), "SubscriptionStates re-imported inside register_handlers — UnboundLocalError will hit at startup"

@@ -12,14 +12,14 @@ def is_registration_process(event: TelegramObject, current_state: str | None) ->
     ]
 
     registration_callbacks = [
-        'rules_accept',
-        'rules_decline',
-        'privacy_policy_accept',
-        'privacy_policy_decline',
-        'referral_skip',
+        "rules_accept",
+        "rules_decline",
+        "privacy_policy_accept",
+        "privacy_policy_decline",
+        "referral_skip",
     ]
 
-    language_select_prefix = 'language_select:'
+    language_select_prefix = "language_select:"
 
     if current_state in registration_states:
         return True
@@ -27,7 +27,10 @@ def is_registration_process(event: TelegramObject, current_state: str | None) ->
     if (
         isinstance(event, CallbackQuery)
         and event.data
-        and (event.data in registration_callbacks or event.data.startswith(language_select_prefix))
+        and (
+            event.data in registration_callbacks
+            or event.data.startswith(language_select_prefix)
+        )
     ):
         return True
 

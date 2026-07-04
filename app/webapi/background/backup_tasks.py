@@ -11,7 +11,7 @@ from app.services.backup_service import backup_service
 @dataclass(slots=True)
 class BackupTaskState:
     task_id: str
-    status: str = 'queued'
+    status: str = "queued"
     message: str | None = None
     file_path: str | None = None
     created_by: int | None = None
@@ -35,17 +35,19 @@ class BackupTaskManager:
         return state
 
     async def _run_task(self, state: BackupTaskState) -> None:
-        state.status = 'running'
+        state.status = "running"
         state.updated_at = datetime.now(UTC)
 
         try:
-            success, message, file_path = await backup_service.create_backup(created_by=state.created_by)
+            success, message, file_path = await backup_service.create_backup(
+                created_by=state.created_by
+            )
             state.message = message
             state.file_path = file_path
-            state.status = 'completed' if success else 'failed'
+            state.status = "completed" if success else "failed"
         except Exception as exc:
-            state.status = 'failed'
-            state.message = f'Unexpected error: {exc}'
+            state.status = "failed"
+            state.message = f"Unexpected error: {exc}"
         finally:
             state.updated_at = datetime.now(UTC)
 
@@ -58,7 +60,7 @@ class BackupTaskManager:
             states = list(self._tasks.values())
 
         if active_only:
-            return [state for state in states if state.status in {'queued', 'running'}]
+            return [state for state in states if state.status in {"queued", "running"}]
 
         return states
 

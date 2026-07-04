@@ -68,7 +68,6 @@ from app.database.models import (
 )
 from app.external.remnawave_api import RemnaWaveAPI
 
-
 logger = structlog.get_logger(__name__)
 
 # OAuth-поля, которые можно перенести между аккаунтами (источник — OAUTH_PROVIDER_COLUMNS)
@@ -103,9 +102,9 @@ def compute_auth_methods(user: User) -> list[str]:
     """Вычисляет список методов авторизации пользователя."""
     methods: list[str] = []
     if user.telegram_id:
-        methods.append('telegram')
+        methods.append("telegram")
     if user.email and user.password_hash:
-        methods.append('email')
+        methods.append("email")
     for provider, column in OAUTH_PROVIDER_COLUMNS.items():
         if getattr(user, column, None):
             methods.append(provider)
@@ -120,30 +119,30 @@ def _build_subscription_preview(sub: Subscription | None) -> dict[str, Any] | No
     if sub.tariff:
         tariff_name = sub.tariff.name
     return {
-        'status': sub.status,
-        'is_trial': sub.is_trial,
-        'end_date': sub.end_date,
-        'traffic_limit_gb': sub.traffic_limit_gb,
-        'traffic_used_gb': sub.traffic_used_gb,
-        'device_limit': sub.device_limit,
-        'tariff_name': tariff_name,
-        'autopay_enabled': sub.autopay_enabled,
+        "status": sub.status,
+        "is_trial": sub.is_trial,
+        "end_date": sub.end_date,
+        "traffic_limit_gb": sub.traffic_limit_gb,
+        "traffic_used_gb": sub.traffic_used_gb,
+        "device_limit": sub.device_limit,
+        "tariff_name": tariff_name,
+        "autopay_enabled": sub.autopay_enabled,
     }
 
 
 def _build_user_preview(user: User) -> dict[str, Any]:
     """Формирует превью данных пользователя для предварительного просмотра мержа."""
-    subs = getattr(user, 'subscriptions', None) or []
+    subs = getattr(user, "subscriptions", None) or []
     return {
-        'id': user.id,
-        'username': user.username,
-        'first_name': user.first_name,
-        'email': user.email,
-        'auth_methods': compute_auth_methods(user),
-        'balance_kopeks': user.balance_kopeks,
-        'subscription': _build_subscription_preview(subs[0] if subs else None),
-        'subscriptions_count': len(subs),
-        'created_at': user.created_at,
+        "id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "email": user.email,
+        "auth_methods": compute_auth_methods(user),
+        "balance_kopeks": user.balance_kopeks,
+        "subscription": _build_subscription_preview(subs[0] if subs else None),
+        "subscriptions_count": len(subs),
+        "created_at": user.created_at,
     }
 
 
@@ -166,19 +165,19 @@ async def get_merge_preview(
         ValueError: Если один из пользователей не найден или совпадают.
     """
     if primary_user_id == secondary_user_id:
-        raise ValueError('primary_user_id и secondary_user_id не могут совпадать')
+        raise ValueError("primary_user_id и secondary_user_id не могут совпадать")
 
     primary = await get_user_by_id(db, primary_user_id)
     secondary = await get_user_by_id(db, secondary_user_id)
 
     if not primary:
-        raise ValueError(f'Основной пользователь (id={primary_user_id}) не найден')
+        raise ValueError(f"Основной пользователь (id={primary_user_id}) не найден")
     if not secondary:
-        raise ValueError(f'Вторичный пользователь (id={secondary_user_id}) не найден')
+        raise ValueError(f"Вторичный пользователь (id={secondary_user_id}) не найден")
 
     return {
-        'primary': _build_user_preview(primary),
-        'secondary': _build_user_preview(secondary),
+        "primary": _build_user_preview(primary),
+        "secondary": _build_user_preview(secondary),
     }
 
 
@@ -186,20 +185,22 @@ async def get_merge_preview(
 async def _get_remnawave_api() -> AsyncIterator[RemnaWaveAPI]:
     """Создаёт экземпляр RemnaWave API клиента (паттерн из RemnaWaveService)."""
     auth_params = settings.get_remnawave_auth_params()
-    base_url = (auth_params.get('base_url') or '').strip()
-    api_key = (auth_params.get('api_key') or '').strip()
+    base_url = (auth_params.get("base_url") or "").strip()
+    api_key = (auth_params.get("api_key") or "").strip()
 
     if not base_url or not api_key:
-        raise RuntimeError('RemnaWave API не настроен (REMNAWAVE_API_URL / REMNAWAVE_API_KEY)')
+        raise RuntimeError(
+            "RemnaWave API не настроен (REMNAWAVE_API_URL / REMNAWAVE_API_KEY)"
+        )
 
     api = RemnaWaveAPI(
         base_url=base_url,
         api_key=api_key,
-        secret_key=auth_params.get('secret_key'),
-        username=auth_params.get('username'),
-        password=auth_params.get('password'),
-        caddy_token=auth_params.get('caddy_token'),
-        auth_type=auth_params.get('auth_type') or 'api_key',
+        secret_key=auth_params.get("secret_key"),
+        username=auth_params.get("username"),
+        password=auth_params.get("password"),
+        caddy_token=auth_params.get("caddy_token"),
+        auth_type=auth_params.get("auth_type") or "api_key",
     )
     async with api:
         yield api
@@ -212,22 +213,22 @@ async def _delete_remnawave_user_with_fallback(remnawave_uuid: str) -> None:
             deleted = await api.delete_user(remnawave_uuid)
             if deleted:
                 logger.info(
-                    'RemnaWave пользователь удалён при мерже',
+                    "RemnaWave пользователь удалён при мерже",
                     remnawave_uuid=remnawave_uuid,
                 )
             else:
                 logger.warning(
-                    'RemnaWave delete_user вернул False, пробуем disable',
+                    "RemnaWave delete_user вернул False, пробуем disable",
                     remnawave_uuid=remnawave_uuid,
                 )
                 await api.disable_user(remnawave_uuid)
                 logger.info(
-                    'RemnaWave пользователь деактивирован как fallback при мерже',
+                    "RemnaWave пользователь деактивирован как fallback при мерже",
                     remnawave_uuid=remnawave_uuid,
                 )
     except Exception:
         logger.warning(
-            'Не удалось удалить RemnaWave пользователя, пробуем disable',
+            "Не удалось удалить RemnaWave пользователя, пробуем disable",
             remnawave_uuid=remnawave_uuid,
             exc_info=True,
         )
@@ -235,12 +236,12 @@ async def _delete_remnawave_user_with_fallback(remnawave_uuid: str) -> None:
             async with _get_remnawave_api() as api:
                 await api.disable_user(remnawave_uuid)
                 logger.info(
-                    'RemnaWave пользователь деактивирован как fallback при мерже',
+                    "RemnaWave пользователь деактивирован как fallback при мерже",
                     remnawave_uuid=remnawave_uuid,
                 )
         except Exception:
             logger.error(
-                'Не удалось ни удалить, ни деактивировать RemnaWave пользователя',
+                "Не удалось ни удалить, ни деактивировать RemnaWave пользователя",
                 remnawave_uuid=remnawave_uuid,
                 exc_info=True,
             )
@@ -272,7 +273,7 @@ async def _sync_transferred_subscriptions_to_panel(
     Failures are logged per-subscription but never propagate — panel desync is
     non-fatal and can be fixed by a manual resync later.
     """
-    subs_with_uuid = [s for s in transferred_subs if getattr(s, 'remnawave_uuid', None)]
+    subs_with_uuid = [s for s in transferred_subs if getattr(s, "remnawave_uuid", None)]
     if not subs_with_uuid:
         return
 
@@ -280,7 +281,7 @@ async def _sync_transferred_subscriptions_to_panel(
         full_name=primary.full_name,
         username=primary.username,
         telegram_id=primary.telegram_id,
-        email=getattr(primary, 'email', None),
+        email=getattr(primary, "email", None),
         user_id=primary.id,
     )
 
@@ -292,17 +293,17 @@ async def _sync_transferred_subscriptions_to_panel(
                         uuid=sub.remnawave_uuid,
                         description=new_description,
                         telegram_id=primary.telegram_id,
-                        email=getattr(primary, 'email', None),
+                        email=getattr(primary, "email", None),
                     )
                     logger.info(
-                        'Synced transferred subscription description to panel',
+                        "Synced transferred subscription description to panel",
                         subscription_id=sub.id,
                         remnawave_uuid=sub.remnawave_uuid,
                         primary_user_id=primary.id,
                     )
                 except Exception:
                     logger.warning(
-                        'Failed to sync transferred subscription to panel',
+                        "Failed to sync transferred subscription to panel",
                         subscription_id=sub.id,
                         remnawave_uuid=sub.remnawave_uuid,
                         primary_user_id=primary.id,
@@ -310,7 +311,7 @@ async def _sync_transferred_subscriptions_to_panel(
                     )
     except Exception:
         logger.warning(
-            'Failed to connect to RemnaWave API for post-merge sync',
+            "Failed to connect to RemnaWave API for post-merge sync",
             primary_user_id=primary.id,
             subscription_count=len(subs_with_uuid),
             exc_info=True,
@@ -321,7 +322,7 @@ async def _handle_subscription_merge(
     db: AsyncSession,
     primary: User,
     secondary: User,
-    keep_subscription_from: Literal['primary', 'secondary'],
+    keep_subscription_from: Literal["primary", "secondary"],
     deferred_remnawave_deletions: list[str],
 ) -> None:
     """Обрабатывает мерж подписок между двумя аккаунтами.
@@ -335,26 +336,26 @@ async def _handle_subscription_merge(
     # Multi-tariff mode: transfer ALL subscriptions from secondary to primary
     # Handles uq_subscriptions_user_tariff_active: (user_id, tariff_id) WHERE status IN ('active','trial')
     if settings.is_multi_tariff_enabled():
-        secondary_subs = list(getattr(secondary, 'subscriptions', None) or [])
-        primary_subs = list(getattr(primary, 'subscriptions', None) or [])
+        secondary_subs = list(getattr(secondary, "subscriptions", None) or [])
+        primary_subs = list(getattr(primary, "subscriptions", None) or [])
         secondary_legacy_uuid = secondary.remnawave_uuid
 
         # Build set of primary's active tariff_ids for conflict detection
         primary_active_tariff_ids: set[int] = set()
         for ps in primary_subs:
-            if ps.tariff_id is not None and ps.status in ('active', 'trial'):
+            if ps.tariff_id is not None and ps.status in ("active", "trial"):
                 primary_active_tariff_ids.add(ps.tariff_id)
 
         transferred: list[Subscription] = []
         if secondary_subs:
             for sub in secondary_subs:
-                sub_tariff_id = getattr(sub, 'tariff_id', None)
-                sub_remnawave_uuid = getattr(sub, 'remnawave_uuid', None)
+                sub_tariff_id = getattr(sub, "tariff_id", None)
+                sub_remnawave_uuid = getattr(sub, "remnawave_uuid", None)
 
                 # Check for tariff conflict: primary already has active sub for the same tariff
                 if (
                     sub_tariff_id is not None
-                    and sub.status in ('active', 'trial')
+                    and sub.status in ("active", "trial")
                     and sub_tariff_id in primary_active_tariff_ids
                 ):
                     # Resolve conflict: keep the subscription with the later end_date
@@ -362,28 +363,33 @@ async def _handle_subscription_merge(
                         (
                             ps
                             for ps in primary_subs
-                            if ps.tariff_id == sub_tariff_id and ps.status in ('active', 'trial')
+                            if ps.tariff_id == sub_tariff_id
+                            and ps.status in ("active", "trial")
                         ),
                         None,
                     )
                     if primary_conflict:
-                        primary_end = getattr(primary_conflict, 'end_date', None)
-                        secondary_end = getattr(sub, 'end_date', None)
+                        primary_end = getattr(primary_conflict, "end_date", None)
+                        secondary_end = getattr(sub, "end_date", None)
                         # None end_date = lifetime/unlimited → always wins over a finite date
-                        secondary_wins = (secondary_end is None and primary_end is not None) or (
-                            secondary_end is not None and primary_end is not None and secondary_end > primary_end
+                        secondary_wins = (
+                            secondary_end is None and primary_end is not None
+                        ) or (
+                            secondary_end is not None
+                            and primary_end is not None
+                            and secondary_end > primary_end
                         )
                         if secondary_wins:
                             # Secondary sub is better — expire primary's, transfer secondary's
                             logger.info(
-                                'Tariff conflict resolved: secondary sub wins, expiring primary sub',
+                                "Tariff conflict resolved: secondary sub wins, expiring primary sub",
                                 tariff_id=sub_tariff_id,
                                 primary_sub_id=primary_conflict.id,
                                 primary_end=str(primary_end),
                                 secondary_sub_id=sub.id,
                                 secondary_end=str(secondary_end),
                             )
-                            primary_conflict.status = 'expired'
+                            primary_conflict.status = "expired"
                             primary_conflict.autopay_enabled = False
                             await db.flush()
                             sub.user_id = primary.id
@@ -391,12 +397,12 @@ async def _handle_subscription_merge(
                         else:
                             # Primary sub is equal or better — expire secondary's, then transfer it as expired
                             logger.info(
-                                'Tariff conflict resolved: primary sub kept, expiring secondary sub before transfer',
+                                "Tariff conflict resolved: primary sub kept, expiring secondary sub before transfer",
                                 tariff_id=sub_tariff_id,
                                 primary_sub_id=primary_conflict.id,
                                 secondary_sub_id=sub.id,
                             )
-                            sub.status = 'expired'
+                            sub.status = "expired"
                             sub.autopay_enabled = False
                             sub.user_id = primary.id
                             transferred.append(sub)
@@ -405,16 +411,20 @@ async def _handle_subscription_merge(
                 sub.user_id = primary.id
                 transferred.append(sub)
                 logger.info(
-                    'Transferred subscription during account merge',
+                    "Transferred subscription during account merge",
                     subscription_id=sub.id,
                     tariff_id=sub_tariff_id,
                     from_user=secondary.id,
                     to_user=primary.id,
                     remnawave_uuid=sub_remnawave_uuid,
                 )
-                if sub_remnawave_uuid and secondary_legacy_uuid and sub_remnawave_uuid == secondary_legacy_uuid:
+                if (
+                    sub_remnawave_uuid
+                    and secondary_legacy_uuid
+                    and sub_remnawave_uuid == secondary_legacy_uuid
+                ):
                     logger.warning(
-                        'Transferred subscription remnawave_uuid matches secondary legacy uuid — manual panel review required',
+                        "Transferred subscription remnawave_uuid matches secondary legacy uuid — manual panel review required",
                         subscription_id=sub.id,
                         remnawave_uuid=sub_remnawave_uuid,
                         secondary_user_id=secondary.id,
@@ -422,7 +432,7 @@ async def _handle_subscription_merge(
                     )
             await db.flush()
             logger.info(
-                'Мерж подписок (multi-tariff): перенесено подписок secondary на primary',
+                "Мерж подписок (multi-tariff): перенесено подписок secondary на primary",
                 count=len(transferred),
                 primary_id=primary.id,
                 secondary_id=secondary.id,
@@ -436,8 +446,8 @@ async def _handle_subscription_merge(
         return
 
     # Legacy single-subscription mode
-    primary_subs = getattr(primary, 'subscriptions', None) or []
-    secondary_subs = getattr(secondary, 'subscriptions', None) or []
+    primary_subs = getattr(primary, "subscriptions", None) or []
+    secondary_subs = getattr(secondary, "subscriptions", None) or []
     primary_sub = primary_subs[0] if primary_subs else None
     secondary_sub = secondary_subs[0] if secondary_subs else None
     has_primary_sub = primary_sub is not None
@@ -446,7 +456,7 @@ async def _handle_subscription_merge(
     # Ни у кого нет подписки — ничего не делаем
     if not has_primary_sub and not has_secondary_sub:
         logger.info(
-            'Мерж подписок: ни у кого нет подписки',
+            "Мерж подписок: ни у кого нет подписки",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -458,7 +468,7 @@ async def _handle_subscription_merge(
             deferred_remnawave_deletions.append(secondary.remnawave_uuid)
             secondary.remnawave_uuid = None
         logger.info(
-            'Мерж подписок: оставлена подписка primary, secondary не имел подписки',
+            "Мерж подписок: оставлена подписка primary, secondary не имел подписки",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -476,7 +486,7 @@ async def _handle_subscription_merge(
             primary.remnawave_uuid = uuid_to_transfer
         await db.flush()
         logger.info(
-            'Мерж подписок: перенесена подписка secondary на primary',
+            "Мерж подписок: перенесена подписка secondary на primary",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -486,13 +496,17 @@ async def _handle_subscription_merge(
     assert primary_sub is not None
     assert secondary_sub is not None
 
-    if keep_subscription_from == 'secondary':
+    if keep_subscription_from == "secondary":
         # Удаляем подписку primary из RemnaWave
         if primary.remnawave_uuid:
             deferred_remnawave_deletions.append(primary.remnawave_uuid)
             primary.remnawave_uuid = None
         # Явно удаляем subscription_servers перед подпиской (CASCADE настроен, но делаем явно для ясности)
-        await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == primary_sub.id))
+        await db.execute(
+            delete(SubscriptionServer).where(
+                SubscriptionServer.subscription_id == primary_sub.id
+            )
+        )
         # Удаляем запись подписки primary
         await db.delete(primary_sub)
         await db.flush()
@@ -507,7 +521,7 @@ async def _handle_subscription_merge(
         # Flush сразу — гарантируем, что DELETE предшествует UPDATE (unique constraint на subscription.user_id)
         await db.flush()
         logger.info(
-            'Мерж подписок: оставлена подписка secondary, подписка primary удалена',
+            "Мерж подписок: оставлена подписка secondary, подписка primary удалена",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -518,12 +532,16 @@ async def _handle_subscription_merge(
             deferred_remnawave_deletions.append(secondary.remnawave_uuid)
             secondary.remnawave_uuid = None
         # Явно удаляем subscription_servers перед подпиской (CASCADE настроен, но делаем явно для ясности)
-        await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == secondary_sub.id))
+        await db.execute(
+            delete(SubscriptionServer).where(
+                SubscriptionServer.subscription_id == secondary_sub.id
+            )
+        )
         # Удаляем запись подписки secondary
         await db.delete(secondary_sub)
         await db.flush()
         logger.info(
-            'Мерж подписок: оставлена подписка primary, подписка secondary удалена',
+            "Мерж подписок: оставлена подписка primary, подписка secondary удалена",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -533,7 +551,7 @@ async def execute_merge(
     db: AsyncSession,
     primary_user_id: int,
     secondary_user_id: int,
-    keep_subscription_from: Literal['primary', 'secondary'] = 'primary',
+    keep_subscription_from: Literal["primary", "secondary"] = "primary",
     provider: str | None = None,
     provider_id: str | None = None,
     deferred_remnawave_deletions: list[str] | None = None,
@@ -556,26 +574,26 @@ async def execute_merge(
     Raises:
         ValueError: Если пользователь не найден, совпадают ID, или secondary уже удалён.
     """
-    if keep_subscription_from not in ('primary', 'secondary'):
+    if keep_subscription_from not in ("primary", "secondary"):
         raise ValueError("keep_subscription_from должен быть 'primary' или 'secondary'")
 
     if primary_user_id == secondary_user_id:
-        raise ValueError('primary_user_id и secondary_user_id не могут совпадать')
+        raise ValueError("primary_user_id и secondary_user_id не могут совпадать")
 
     primary = await get_user_by_id(db, primary_user_id)
     secondary = await get_user_by_id(db, secondary_user_id)
 
     if not primary:
-        raise ValueError(f'Основной пользователь (id={primary_user_id}) не найден')
+        raise ValueError(f"Основной пользователь (id={primary_user_id}) не найден")
     if primary.status == UserStatus.DELETED.value:
-        raise ValueError(f'Основной пользователь (id={primary_user_id}) удалён')
+        raise ValueError(f"Основной пользователь (id={primary_user_id}) удалён")
     if not secondary:
-        raise ValueError(f'Вторичный пользователь (id={secondary_user_id}) не найден')
+        raise ValueError(f"Вторичный пользователь (id={secondary_user_id}) не найден")
     if secondary.status == UserStatus.DELETED.value:
-        raise ValueError(f'Вторичный пользователь (id={secondary_user_id}) уже удалён')
+        raise ValueError(f"Вторичный пользователь (id={secondary_user_id}) уже удалён")
 
     logger.info(
-        'Начинаем мерж аккаунтов',
+        "Начинаем мерж аккаунтов",
         primary_id=primary.id,
         secondary_id=secondary.id,
         keep_subscription_from=keep_subscription_from,
@@ -600,7 +618,7 @@ async def execute_merge(
         for field, value in oauth_transfers:
             setattr(primary, field, value)
             logger.info(
-                'Перенесён OAuth ID',
+                "Перенесён OAuth ID",
                 field=field,
                 primary_id=primary.id,
                 secondary_id=secondary.id,
@@ -613,7 +631,7 @@ async def execute_merge(
         await db.flush()
         primary.telegram_id = transferred_tg_id
         logger.info(
-            'Перенесён telegram_id',
+            "Перенесён telegram_id",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -635,7 +653,7 @@ async def execute_merge(
         primary.email_verified_at = transferred_verified_at
         primary.password_hash = transferred_password_hash
         logger.info(
-            'Перенесены email и пароль',
+            "Перенесены email и пароль",
             primary_id=primary.id,
             secondary_id=secondary.id,
         )
@@ -655,7 +673,7 @@ async def execute_merge(
         primary.balance_kopeks += transferred_kopeks
         secondary.balance_kopeks = 0
         logger.info(
-            'Перенесён баланс',
+            "Перенесён баланс",
             primary_id=primary.id,
             secondary_id=secondary.id,
             transferred_kopeks=transferred_kopeks,
@@ -677,7 +695,9 @@ async def execute_merge(
 
     # 4c. Суммируем использованные промокоды
     if secondary.used_promocodes:
-        primary.used_promocodes = (primary.used_promocodes or 0) + secondary.used_promocodes
+        primary.used_promocodes = (
+            primary.used_promocodes or 0
+        ) + secondary.used_promocodes
 
     # Удаления пользователей из RemnaWave откладываем: внешний вызов нельзя
     # откатить вместе с БД. Если caller передал список — он выполнит удаления
@@ -687,18 +707,30 @@ async def execute_merge(
     )
 
     # 5. Мерж подписок
-    await _handle_subscription_merge(db, primary, secondary, keep_subscription_from, pending_remnawave_deletions)
+    await _handle_subscription_merge(
+        db, primary, secondary, keep_subscription_from, pending_remnawave_deletions
+    )
 
     # 6. Переназначение транзакций
-    await db.execute(update(Transaction).where(Transaction.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(Transaction)
+        .where(Transaction.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 7. Переназначение всех платёжных таблиц
     for payment_model in _PAYMENT_MODELS:
-        await db.execute(update(payment_model).where(payment_model.user_id == secondary.id).values(user_id=primary.id))
+        await db.execute(
+            update(payment_model)
+            .where(payment_model.user_id == secondary.id)
+            .values(user_id=primary.id)
+        )
 
     # 7b. Переназначение saved_payment_methods (FK без ondelete)
     await db.execute(
-        update(SavedPaymentMethod).where(SavedPaymentMethod.user_id == secondary.id).values(user_id=primary.id)
+        update(SavedPaymentMethod)
+        .where(SavedPaymentMethod.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
 
     # 8. Переназначение referral_earnings
@@ -706,8 +738,14 @@ async def execute_merge(
     await db.execute(
         delete(ReferralEarning).where(
             or_(
-                and_(ReferralEarning.user_id == secondary.id, ReferralEarning.referral_id == primary.id),
-                and_(ReferralEarning.user_id == primary.id, ReferralEarning.referral_id == secondary.id),
+                and_(
+                    ReferralEarning.user_id == secondary.id,
+                    ReferralEarning.referral_id == primary.id,
+                ),
+                and_(
+                    ReferralEarning.user_id == primary.id,
+                    ReferralEarning.referral_id == secondary.id,
+                ),
             )
         )
     )
@@ -716,7 +754,7 @@ async def execute_merge(
     # (user_id, referral_id) WHERE reason='referral_registration_pending'. Если оба
     # аккаунта приглашены одним реферером (или пригласили одного человека), перенос
     # создаёт дубликат → сначала удаляем коллизии, как в секциях 10c/10h.
-    reg_pending = ReferralEarning.reason == 'referral_registration_pending'
+    reg_pending = ReferralEarning.reason == "referral_registration_pending"
     # (i) перенос user_id: убрать pending-строки secondary, дублирующие primary по referral_id
     primary_pending_referral_ids = select(ReferralEarning.referral_id).where(
         ReferralEarning.user_id == primary.id, reg_pending
@@ -728,7 +766,11 @@ async def execute_merge(
             ReferralEarning.referral_id.in_(primary_pending_referral_ids),
         )
     )
-    await db.execute(update(ReferralEarning).where(ReferralEarning.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(ReferralEarning)
+        .where(ReferralEarning.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
     # (ii) перенос referral_id: убрать pending-строки secondary, дублирующие primary по user_id
     primary_pending_user_ids = select(ReferralEarning.user_id).where(
         ReferralEarning.referral_id == primary.id, reg_pending
@@ -741,12 +783,16 @@ async def execute_merge(
         )
     )
     await db.execute(
-        update(ReferralEarning).where(ReferralEarning.referral_id == secondary.id).values(referral_id=primary.id)
+        update(ReferralEarning)
+        .where(ReferralEarning.referral_id == secondary.id)
+        .values(referral_id=primary.id)
     )
 
     # 9. Переназначение реферальной цепочки (исключая self-referral)
     await db.execute(
-        update(User).where(User.referred_by_id == secondary.id, User.id != primary.id).values(referred_by_id=primary.id)
+        update(User)
+        .where(User.referred_by_id == secondary.id, User.id != primary.id)
+        .values(referred_by_id=primary.id)
     )
     # Если primary был приглашён secondary — очищаем (нельзя ссылаться на самого себя)
     if primary.referred_by_id == secondary.id:
@@ -759,46 +805,74 @@ async def execute_merge(
 
     # 10. Переназначение withdrawal_requests
     await db.execute(
-        update(WithdrawalRequest).where(WithdrawalRequest.user_id == secondary.id).values(user_id=primary.id)
+        update(WithdrawalRequest)
+        .where(WithdrawalRequest.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
     # processed_by — админский FK, обнуляем (не переносим на primary, чтобы не искажать аудит)
     await db.execute(
-        update(WithdrawalRequest).where(WithdrawalRequest.processed_by == secondary.id).values(processed_by=None)
+        update(WithdrawalRequest)
+        .where(WithdrawalRequest.processed_by == secondary.id)
+        .values(processed_by=None)
     )
 
     # 10a. Переназначение subscription_conversions, subscription_events, discount_offers
     await db.execute(
-        update(SubscriptionConversion).where(SubscriptionConversion.user_id == secondary.id).values(user_id=primary.id)
+        update(SubscriptionConversion)
+        .where(SubscriptionConversion.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
     await db.execute(
-        update(SubscriptionEvent).where(SubscriptionEvent.user_id == secondary.id).values(user_id=primary.id)
+        update(SubscriptionEvent)
+        .where(SubscriptionEvent.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
-    await db.execute(update(DiscountOffer).where(DiscountOffer.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(DiscountOffer)
+        .where(DiscountOffer.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10b. Переназначение user_promo_groups (composite PK: user_id + promo_group_id)
     # Сначала удаляем дубликаты членства в группах, затем переназначаем оставшиеся
-    primary_group_ids = select(UserPromoGroup.promo_group_id).where(UserPromoGroup.user_id == primary.id)
+    primary_group_ids = select(UserPromoGroup.promo_group_id).where(
+        UserPromoGroup.user_id == primary.id
+    )
     await db.execute(
         delete(UserPromoGroup).where(
             UserPromoGroup.user_id == secondary.id,
             UserPromoGroup.promo_group_id.in_(primary_group_ids),
         )
     )
-    await db.execute(update(UserPromoGroup).where(UserPromoGroup.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(UserPromoGroup)
+        .where(UserPromoGroup.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10c. Переназначение poll_responses (unique: poll_id + user_id)
     # Сначала удаляем дубликаты ответов на опросы, затем переназначаем оставшиеся
-    primary_poll_ids = select(PollResponse.poll_id).where(PollResponse.user_id == primary.id)
+    primary_poll_ids = select(PollResponse.poll_id).where(
+        PollResponse.user_id == primary.id
+    )
     await db.execute(
         delete(PollResponse).where(
             PollResponse.user_id == secondary.id,
             PollResponse.poll_id.in_(primary_poll_ids),
         )
     )
-    await db.execute(update(PollResponse).where(PollResponse.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(PollResponse)
+        .where(PollResponse.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10d. Переназначение promo_offer_logs (без unique constraint — простое переназначение)
-    await db.execute(update(PromoOfferLog).where(PromoOfferLog.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(PromoOfferLog)
+        .where(PromoOfferLog.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10e. Переназначение advertising_campaign_registrations (unique: campaign_id + user_id)
     primary_campaign_ids = select(AdvertisingCampaignRegistration.campaign_id).where(
@@ -817,27 +891,43 @@ async def execute_merge(
     )
 
     # 10f. Переназначение contest_attempts (unique: round_id + user_id)
-    primary_round_ids = select(ContestAttempt.round_id).where(ContestAttempt.user_id == primary.id)
+    primary_round_ids = select(ContestAttempt.round_id).where(
+        ContestAttempt.user_id == primary.id
+    )
     await db.execute(
         delete(ContestAttempt).where(
             ContestAttempt.user_id == secondary.id,
             ContestAttempt.round_id.in_(primary_round_ids),
         )
     )
-    await db.execute(update(ContestAttempt).where(ContestAttempt.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(ContestAttempt)
+        .where(ContestAttempt.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10g. Удаляем роли secondary (НЕ переносим — предотвращает эскалацию привилегий через мерж)
     await db.execute(delete(UserRole).where(UserRole.user_id == secondary.id))
     # assigned_by — админский FK, обнуляем (не переносим на primary, чтобы не искажать аудит)
-    await db.execute(update(UserRole).where(UserRole.assigned_by == secondary.id).values(assigned_by=None))
+    await db.execute(
+        update(UserRole)
+        .where(UserRole.assigned_by == secondary.id)
+        .values(assigned_by=None)
+    )
 
     # 10h. Переназначение referral_contest_events (unique: contest_id + referral_id)
     # Удаляем cross-referral события между участниками мержа
     await db.execute(
         delete(ReferralContestEvent).where(
             or_(
-                and_(ReferralContestEvent.referrer_id == secondary.id, ReferralContestEvent.referral_id == primary.id),
-                and_(ReferralContestEvent.referrer_id == primary.id, ReferralContestEvent.referral_id == secondary.id),
+                and_(
+                    ReferralContestEvent.referrer_id == secondary.id,
+                    ReferralContestEvent.referral_id == primary.id,
+                ),
+                and_(
+                    ReferralContestEvent.referrer_id == primary.id,
+                    ReferralContestEvent.referral_id == secondary.id,
+                ),
             )
         )
     )
@@ -863,33 +953,55 @@ async def execute_merge(
     )
 
     # 10i. Переназначение promocode_uses (unique constraint: user_id + promocode_id)
-    primary_promo_ids = select(PromoCodeUse.promocode_id).where(PromoCodeUse.user_id == primary.id)
+    primary_promo_ids = select(PromoCodeUse.promocode_id).where(
+        PromoCodeUse.user_id == primary.id
+    )
     await db.execute(
         delete(PromoCodeUse).where(
             PromoCodeUse.user_id == secondary.id,
             PromoCodeUse.promocode_id.in_(primary_promo_ids),
         )
     )
-    await db.execute(update(PromoCodeUse).where(PromoCodeUse.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(PromoCodeUse)
+        .where(PromoCodeUse.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10j. Переназначение partner_applications
     await db.execute(
-        update(PartnerApplication).where(PartnerApplication.user_id == secondary.id).values(user_id=primary.id)
+        update(PartnerApplication)
+        .where(PartnerApplication.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
     # processed_by — админский FK, обнуляем
     await db.execute(
-        update(PartnerApplication).where(PartnerApplication.processed_by == secondary.id).values(processed_by=None)
+        update(PartnerApplication)
+        .where(PartnerApplication.processed_by == secondary.id)
+        .values(processed_by=None)
     )
 
     # 10k. Переназначение tickets, ticket_messages, ticket_notifications
-    await db.execute(update(Ticket).where(Ticket.user_id == secondary.id).values(user_id=primary.id))
-    await db.execute(update(TicketMessage).where(TicketMessage.user_id == secondary.id).values(user_id=primary.id))
     await db.execute(
-        update(TicketNotification).where(TicketNotification.user_id == secondary.id).values(user_id=primary.id)
+        update(Ticket).where(Ticket.user_id == secondary.id).values(user_id=primary.id)
+    )
+    await db.execute(
+        update(TicketMessage)
+        .where(TicketMessage.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
+    await db.execute(
+        update(TicketNotification)
+        .where(TicketNotification.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
 
     # 10l. Переназначение wheel_spins
-    await db.execute(update(WheelSpin).where(WheelSpin.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(WheelSpin)
+        .where(WheelSpin.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10m. Обновление FK ссылок в advertising_campaigns
     # partner_user_id — владение (переназначаем)
@@ -900,51 +1012,113 @@ async def execute_merge(
     )
     # created_by — админский FK, обнуляем
     await db.execute(
-        update(AdvertisingCampaign).where(AdvertisingCampaign.created_by == secondary.id).values(created_by=None)
+        update(AdvertisingCampaign)
+        .where(AdvertisingCampaign.created_by == secondary.id)
+        .values(created_by=None)
     )
 
     # 10n. Переназначение sent_notifications
     await db.execute(
-        update(SentNotification).where(SentNotification.user_id == secondary.id).values(user_id=primary.id)
+        update(SentNotification)
+        .where(SentNotification.user_id == secondary.id)
+        .values(user_id=primary.id)
     )
 
     # 10o. Переназначение button_click_logs
-    await db.execute(update(ButtonClickLog).where(ButtonClickLog.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(ButtonClickLog)
+        .where(ButtonClickLog.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10p. Переназначение support_audit_logs
     # actor_user_id — кто действовал (админский FK), обнуляем
     await db.execute(
-        update(SupportAuditLog).where(SupportAuditLog.actor_user_id == secondary.id).values(actor_user_id=None)
+        update(SupportAuditLog)
+        .where(SupportAuditLog.actor_user_id == secondary.id)
+        .values(actor_user_id=None)
     )
     # target_user_id — над кем действовали (пользовательский FK), переназначаем
     await db.execute(
-        update(SupportAuditLog).where(SupportAuditLog.target_user_id == secondary.id).values(target_user_id=primary.id)
+        update(SupportAuditLog)
+        .where(SupportAuditLog.target_user_id == secondary.id)
+        .values(target_user_id=primary.id)
     )
 
     # 10q. Переназначение admin_audit_log
-    await db.execute(update(AdminAuditLog).where(AdminAuditLog.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(AdminAuditLog)
+        .where(AdminAuditLog.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 10r. Обнуление created_by / admin_id FK ссылок в админских таблицах
     # (не переносим на primary — сохраняем целостность аудита; AdminAuditLog.user_id не nullable, переназначаем)
-    await db.execute(update(PromoCode).where(PromoCode.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(ReferralContest).where(ReferralContest.created_by == secondary.id).values(created_by=None))
     await db.execute(
-        update(PromoOfferTemplate).where(PromoOfferTemplate.created_by == secondary.id).values(created_by=None)
+        update(PromoCode)
+        .where(PromoCode.created_by == secondary.id)
+        .values(created_by=None)
     )
-    await db.execute(update(BroadcastHistory).where(BroadcastHistory.admin_id == secondary.id).values(admin_id=None))
-    await db.execute(update(Poll).where(Poll.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(UserMessage).where(UserMessage.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(WelcomeText).where(WelcomeText.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(PinnedMessage).where(PinnedMessage.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(AdminRole).where(AdminRole.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(AccessPolicy).where(AccessPolicy.created_by == secondary.id).values(created_by=None))
-    await db.execute(update(NewsArticle).where(NewsArticle.created_by == secondary.id).values(created_by=None))
+    await db.execute(
+        update(ReferralContest)
+        .where(ReferralContest.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(PromoOfferTemplate)
+        .where(PromoOfferTemplate.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(BroadcastHistory)
+        .where(BroadcastHistory.admin_id == secondary.id)
+        .values(admin_id=None)
+    )
+    await db.execute(
+        update(Poll).where(Poll.created_by == secondary.id).values(created_by=None)
+    )
+    await db.execute(
+        update(UserMessage)
+        .where(UserMessage.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(WelcomeText)
+        .where(WelcomeText.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(PinnedMessage)
+        .where(PinnedMessage.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(AdminRole)
+        .where(AdminRole.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(AccessPolicy)
+        .where(AccessPolicy.created_by == secondary.id)
+        .values(created_by=None)
+    )
+    await db.execute(
+        update(NewsArticle)
+        .where(NewsArticle.created_by == secondary.id)
+        .values(created_by=None)
+    )
 
     # 10s. Переназначение guest_purchases (оба FK — buyer_user_id и user_id)
     await db.execute(
-        update(GuestPurchase).where(GuestPurchase.buyer_user_id == secondary.id).values(buyer_user_id=primary.id)
+        update(GuestPurchase)
+        .where(GuestPurchase.buyer_user_id == secondary.id)
+        .values(buyer_user_id=primary.id)
     )
-    await db.execute(update(GuestPurchase).where(GuestPurchase.user_id == secondary.id).values(user_id=primary.id))
+    await db.execute(
+        update(GuestPurchase)
+        .where(GuestPurchase.user_id == secondary.id)
+        .values(user_id=primary.id)
+    )
 
     # 11. Инвалидация refresh-токенов обоих пользователей (после мержа будет создан новый)
     now = datetime.now(UTC)
@@ -963,17 +1137,20 @@ async def execute_merge(
     if secondary_priority > primary_priority:
         primary.partner_status = secondary.partner_status
         logger.info(
-            'Перенесён partner_status',
+            "Перенесён partner_status",
             primary_id=primary.id,
             secondary_id=secondary.id,
             new_status=primary.partner_status,
         )
 
     # 13. Перенос referral_commission_percent
-    if secondary.referral_commission_percent is not None and primary.referral_commission_percent is None:
+    if (
+        secondary.referral_commission_percent is not None
+        and primary.referral_commission_percent is None
+    ):
         primary.referral_commission_percent = secondary.referral_commission_percent
         logger.info(
-            'Перенесён referral_commission_percent',
+            "Перенесён referral_commission_percent",
             primary_id=primary.id,
             secondary_id=secondary.id,
             value=primary.referral_commission_percent,
@@ -1004,7 +1181,7 @@ async def execute_merge(
     secondary.updated_at = now
 
     logger.info(
-        'Мерж аккаунтов завершён',
+        "Мерж аккаунтов завершён",
         primary_id=primary.id,
         secondary_id=secondary.id,
         provider=provider,

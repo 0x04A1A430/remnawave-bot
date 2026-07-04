@@ -14,7 +14,7 @@ from app.services.referral_diagnostics_service import ReferralDiagnosticsService
 @pytest.fixture
 def temp_log_file():
     """Создаёт временный лог-файл для тестов."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
         yield Path(f.name)
     # Cleanup
     Path(f.name).unlink(missing_ok=True)
@@ -23,7 +23,7 @@ def temp_log_file():
 @pytest.fixture
 def sample_log_content():
     """Пример содержимого лог-файла с реферальными событиями."""
-    today = datetime.now(UTC).strftime('%Y-%m-%d')
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     return f"""
 {today} 10:00:00,123 - app.handlers.start - INFO - 🔎 Найден реферальный код: <ABC123>
 {today} 10:00:05,456 - app.handlers.start - INFO - ✅ Реферальный код ABC123 применен для пользователя 123456789
@@ -53,14 +53,14 @@ async def test_parse_logs_basic(temp_log_file, sample_log_content):
     events = await service._parse_logs(today, tomorrow)
 
     # Проверяем что нашлись все события
-    assert len(events) >= 6, f'Expected at least 6 events, found {len(events)}'
+    assert len(events) >= 6, f"Expected at least 6 events, found {len(events)}"
 
     # Проверяем типы событий
     event_types = [e.event_type for e in events]
-    assert 'code_found' in event_types
-    assert 'code_applied' in event_types
-    assert 'registration_processed' in event_types
-    assert 'bonus_given' in event_types
+    assert "code_found" in event_types
+    assert "code_applied" in event_types
+    assert "registration_processed" in event_types
+    assert "bonus_given" in event_types
 
 
 @pytest.mark.asyncio
@@ -84,19 +84,19 @@ async def test_analyze_period_with_issues(temp_log_file, sample_log_content):
     # Проверяем статистику
     # Примечание: code_found не имеет telegram_id, поэтому total_link_clicks будет 0
     # Это нормально - мы считаем только события с telegram_id
-    assert report.total_codes_applied >= 1, 'Should have applied codes'
+    assert report.total_codes_applied >= 1, "Should have applied codes"
 
     # Проверяем что нашлись проблемные случаи
     # (987654321 применил код, но не завершил регистрацию)
-    assert 987654321 in report.users_applied_no_registration, (
-        f'Expected 987654321 in problems, got: {report.users_applied_no_registration}'
-    )
+    assert (
+        987654321 in report.users_applied_no_registration
+    ), f"Expected 987654321 in problems, got: {report.users_applied_no_registration}"
 
 
 @pytest.mark.asyncio
 async def test_empty_log_file(temp_log_file):
     """Тест работы с пустым лог-файлом."""
-    temp_log_file.write_text('')
+    temp_log_file.write_text("")
 
     service = ReferralDiagnosticsService(log_path=str(temp_log_file))
 
@@ -119,7 +119,7 @@ async def test_empty_log_file(temp_log_file):
 @pytest.mark.asyncio
 async def test_nonexistent_log_file():
     """Тест работы с несуществующим лог-файлом."""
-    service = ReferralDiagnosticsService(log_path='/nonexistent/path/to/log.log')
+    service = ReferralDiagnosticsService(log_path="/nonexistent/path/to/log.log")
 
     today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)

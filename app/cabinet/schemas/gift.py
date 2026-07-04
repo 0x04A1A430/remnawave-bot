@@ -44,7 +44,7 @@ class GiftConfigResponse(BaseModel):
     tariffs: list[GiftConfigTariff] = []
     payment_methods: list[GiftConfigPaymentMethod] = []
     balance_kopeks: int = 0
-    currency_symbol: str = '\u20bd'
+    currency_symbol: str = "\u20bd"
     promo_group_name: str | None = None
     active_discount_percent: int | None = None
     active_discount_expires_at: datetime | None = None
@@ -53,16 +53,16 @@ class GiftConfigResponse(BaseModel):
 class GiftPurchaseRequest(BaseModel):
     tariff_id: int = Field(gt=0)
     period_days: int = Field(gt=0, le=3650)
-    recipient_type: str | None = Field(default=None, pattern=r'^(email|telegram)$')
+    recipient_type: str | None = Field(default=None, pattern=r"^(email|telegram)$")
     recipient_value: str | None = Field(default=None, max_length=255)
     gift_message: str | None = Field(default=None, max_length=1000)
-    payment_mode: str = Field(pattern=r'^(balance|gateway)$')
+    payment_mode: str = Field(pattern=r"^(balance|gateway)$")
     payment_method: str | None = Field(default=None, max_length=50)
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_payment(self) -> GiftPurchaseRequest:
-        if self.payment_mode == 'gateway' and not self.payment_method:
-            raise ValueError('payment_method is required for gateway mode')
+        if self.payment_mode == "gateway" and not self.payment_method:
+            raise ValueError("payment_method is required for gateway mode")
         return self
 
 

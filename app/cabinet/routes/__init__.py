@@ -4,7 +4,10 @@ from fastapi import APIRouter
 
 from app.cabinet.apple_iap import apple_iap_only_router, router as apple_iap_router
 
-from .account_linking import merge_router as merge_router, router as account_linking_router
+from .account_linking import (
+    merge_router as merge_router,
+    router as account_linking_router,
+)
 from .admin_apps import router as admin_apps_router
 from .admin_audit_log import router as admin_audit_log_router
 from .admin_ban_system import router as admin_ban_system_router
@@ -29,7 +32,10 @@ from .admin_payments import router as admin_payments_router
 from .admin_pinned_messages import router as admin_pinned_messages_router
 from .admin_policies import router as admin_policies_router
 from .admin_promo_offers import router as admin_promo_offers_router
-from .admin_promocodes import promo_groups_router as admin_promo_groups_router, router as admin_promocodes_router
+from .admin_promocodes import (
+    promo_groups_router as admin_promo_groups_router,
+    router as admin_promocodes_router,
+)
 from .admin_referral_network import router as admin_referral_network_router
 from .admin_remnawave import router as admin_remnawave_router
 from .admin_roles import router as admin_roles_router
@@ -63,7 +69,9 @@ from .promocode import router as promocode_router
 from .referral import router as referral_router
 from .site_verification import router as site_verification_router
 from .subscription import router as subscription_router
-from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
+from .subscription_modules.multi_tariff import (
+    router as multi_tariff_subscription_router,
+)
 from .ticket_notifications import (
     admin_router as admin_ticket_notifications_router,
     router as ticket_notifications_router,
@@ -73,9 +81,8 @@ from .websocket import router as websocket_router
 from .wheel import router as wheel_router
 from .withdrawal import router as withdrawal_router
 
-
 # Main cabinet router
-router = APIRouter(prefix='/cabinet', tags=['Cabinet'], redirect_slashes=False)
+router = APIRouter(prefix="/cabinet", tags=["Cabinet"], redirect_slashes=False)
 
 # Public (unauthenticated) endpoints used by payment-provider crawlers.
 # Final path becomes `/cabinet/public/site-verification`. Has its own
@@ -166,4 +173,4 @@ router.include_router(admin_overpay_certificate_router)
 # WebSocket route
 router.include_router(websocket_router)
 
-__all__ = ['router']
+__all__ = ["router"]

@@ -20,26 +20,32 @@ class TributePaymentMixin:
     ) -> str:
         """Формирует URL оплаты для Tribute и логирует результат."""
         if not settings.TRIBUTE_ENABLED:
-            raise ValueError('Tribute payments are disabled')
+            raise ValueError("Tribute payments are disabled")
 
         try:
             # Сохраняем полезную информацию для метрик и отладки.
             payment_data = {
-                'amount': amount_kopeks,
-                'currency': 'RUB',
-                'description': description,
-                'user_id': user_id,
-                'callback_url': f'{settings.WEBHOOK_URL}/tribute/callback',
+                "amount": amount_kopeks,
+                "currency": "RUB",
+                "description": description,
+                "user_id": user_id,
+                "callback_url": f"{settings.WEBHOOK_URL}/tribute/callback",
             }
             del payment_data  # данные пока не отправляются вовне, но оставляем структуру для будущего API.
 
-            payment_url = f'https://tribute.ru/pay?amount={amount_kopeks}&user={user_id}'
+            payment_url = (
+                f"https://tribute.ru/pay?amount={amount_kopeks}&user={user_id}"
+            )
 
-            logger.info('Создан Tribute платеж', amount_kopeks=amount_kopeks / 100, user_id=user_id)
+            logger.info(
+                "Создан Tribute платеж",
+                amount_kopeks=amount_kopeks / 100,
+                user_id=user_id,
+            )
             return payment_url
 
         except Exception as error:
-            logger.error('Ошибка создания Tribute платежа', error=error)
+            logger.error("Ошибка создания Tribute платежа", error=error)
             raise
 
     def verify_tribute_webhook(self, data: dict[str, object], signature: str) -> bool:
@@ -58,5 +64,5 @@ class TributePaymentMixin:
             return hmac.compare_digest(signature, expected_signature)
 
         except Exception as error:
-            logger.error('Ошибка проверки Tribute webhook', error=error)
+            logger.error("Ошибка проверки Tribute webhook", error=error)
             return False

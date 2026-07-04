@@ -15,17 +15,22 @@ from app.database.crud.news_categories import (
 from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
-from ..schemas.news_categories import NewsCategoryCreate, NewsCategoryResponse, NewsCategoryUpdate
-
+from ..schemas.news_categories import (
+    NewsCategoryCreate,
+    NewsCategoryResponse,
+    NewsCategoryUpdate,
+)
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/news/categories', tags=['Cabinet Admin News Categories'])
+router = APIRouter(
+    prefix="/admin/news/categories", tags=["Cabinet Admin News Categories"]
+)
 
 
-@router.get('', response_model=list[NewsCategoryResponse])
+@router.get("", response_model=list[NewsCategoryResponse])
 async def list_categories(
-    admin: User = Depends(require_permission('news:read')),
+    admin: User = Depends(require_permission("news:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> list[NewsCategoryResponse]:
     """Get all news categories."""
@@ -33,10 +38,12 @@ async def list_categories(
     return [NewsCategoryResponse.model_validate(c) for c in categories]
 
 
-@router.post('', response_model=NewsCategoryResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=NewsCategoryResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_new_category(
     request: NewsCategoryCreate,
-    admin: User = Depends(require_permission('news:create')),
+    admin: User = Depends(require_permission("news:create")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsCategoryResponse:
     """Create a new news category."""
@@ -45,16 +52,16 @@ async def create_new_category(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Category already exists',
+            detail="Category already exists",
         )
     return NewsCategoryResponse.model_validate(category)
 
 
-@router.put('/{category_id}', response_model=NewsCategoryResponse)
+@router.put("/{category_id}", response_model=NewsCategoryResponse)
 async def update_existing_category(
     category_id: int,
     request: NewsCategoryUpdate,
-    admin: User = Depends(require_permission('news:edit')),
+    admin: User = Depends(require_permission("news:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsCategoryResponse:
     """Update an existing news category."""
@@ -62,22 +69,24 @@ async def update_existing_category(
     if not category:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Category not found',
+            detail="Category not found",
         )
     try:
-        category = await update_category(db, category, **request.model_dump(exclude_unset=True))
+        category = await update_category(
+            db, category, **request.model_dump(exclude_unset=True)
+        )
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Category name already exists',
+            detail="Category name already exists",
         )
     return NewsCategoryResponse.model_validate(category)
 
 
-@router.delete('/{category_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_category(
     category_id: int,
-    admin: User = Depends(require_permission('news:delete')),
+    admin: User = Depends(require_permission("news:delete")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete a news category. Articles using it will have category_id set to NULL."""
@@ -85,6 +94,6 @@ async def remove_category(
     if not category:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Category not found',
+            detail="Category not found",
         )
     await delete_category(db, category)

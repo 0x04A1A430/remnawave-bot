@@ -28,16 +28,16 @@ target_metadata = Base.metadata
 
 # URL also set in app/database/migrations.py for programmatic usage;
 # this line is needed for CLI invocation (make migrate, make migration).
-config.set_main_option('sqlalchemy.url', settings.get_database_url())
+config.set_main_option("sqlalchemy.url", settings.get_database_url())
 
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option('sqlalchemy.url')
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={'paramstyle': 'named'},
+        dialect_opts={"paramstyle": "named"},
     )
 
     with context.begin_transaction():
@@ -58,7 +58,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
-        prefix='sqlalchemy.',
+        prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 

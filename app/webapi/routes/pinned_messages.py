@@ -29,7 +29,6 @@ from ..schemas.pinned_messages import (
     PinnedMessageUpdateRequest,
 )
 
-
 router = APIRouter()
 
 
@@ -53,7 +52,7 @@ def _get_bot() -> Bot:
     return create_bot()
 
 
-@router.get('', response_model=PinnedMessageListResponse)
+@router.get("", response_model=PinnedMessageListResponse)
 async def list_pinned_messages(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -81,7 +80,7 @@ async def list_pinned_messages(
     )
 
 
-@router.get('/active', response_model=Optional[PinnedMessageResponse])
+@router.get("/active", response_model=Optional[PinnedMessageResponse])
 async def get_active_message(
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -93,25 +92,32 @@ async def get_active_message(
     return _serialize_pinned_message(msg)
 
 
-@router.get('/{message_id}', response_model=PinnedMessageResponse)
+@router.get("/{message_id}", response_model=PinnedMessageResponse)
 async def get_pinned_message(
     message_id: int,
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PinnedMessageResponse:
     """Получить закреплённое сообщение по ID."""
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == message_id)
+    )
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
     return _serialize_pinned_message(msg)
 
 
-@router.post('', response_model=PinnedMessageBroadcastResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=PinnedMessageBroadcastResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_pinned_message(
     payload: PinnedMessageCreateRequest,
     broadcast: bool = Query(
-        False, description='Разослать сообщение всем пользователям (по умолчанию False — только при /start)'
+        False,
+        description="Разослать сообщение всем пользователям (по умолчанию False — только при /start)",
     ),
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -125,7 +131,9 @@ async def create_pinned_message(
     """
     content = payload.content.strip()
     if not content and not payload.media:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Either content or media must be provided')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Either content or media must be provided"
+        )
 
     media_type = payload.media.type if payload.media else None
     media_file_id = payload.media.file_id if payload.media else None
@@ -156,7 +164,7 @@ async def create_pinned_message(
     )
 
 
-@router.patch('/{message_id}', response_model=PinnedMessageResponse)
+@router.patch("/{message_id}", response_model=PinnedMessageResponse)
 async def update_pinned_message(
     message_id: int,
     payload: PinnedMessageUpdateRequest,
@@ -169,10 +177,12 @@ async def update_pinned_message(
     Можно обновить контент, медиа и настройки показа.
     Не делает рассылку — для рассылки используйте POST /pinned-messages/{id}/broadcast.
     """
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == message_id)
+    )
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
 
     if payload.content is not None:
         from app.utils.validators import sanitize_html, validate_html_tags
@@ -184,8 +194,11 @@ async def update_pinned_message(
         msg.content = sanitized
 
     if payload.media is not None:
-        if payload.media.type not in ('photo', 'video'):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Only photo or video media types are supported')
+        if payload.media.type not in ("photo", "video"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Only photo or video media types are supported",
+            )
         msg.media_type = payload.media.type
         msg.media_file_id = payload.media.file_id
 
@@ -202,7 +215,7 @@ async def update_pinned_message(
     return _serialize_pinned_message(msg)
 
 
-@router.patch('/{message_id}/settings', response_model=PinnedMessageResponse)
+@router.patch("/{message_id}/settings", response_model=PinnedMessageResponse)
 async def update_pinned_message_settings(
     message_id: int,
     payload: PinnedMessageSettingsRequest,
@@ -215,10 +228,12 @@ async def update_pinned_message_settings(
     - send_before_menu: показывать до или после меню
     - send_on_every_start: показывать при каждом /start или только один раз
     """
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == message_id)
+    )
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
 
     if payload.send_before_menu is not None:
         msg.send_before_menu = payload.send_before_menu
@@ -233,11 +248,12 @@ async def update_pinned_message_settings(
     return _serialize_pinned_message(msg)
 
 
-@router.post('/{message_id}/activate', response_model=PinnedMessageBroadcastResponse)
+@router.post("/{message_id}/activate", response_model=PinnedMessageBroadcastResponse)
 async def activate_pinned_message(
     message_id: int,
     broadcast: bool = Query(
-        False, description='Разослать сообщение всем пользователям (по умолчанию False — только при /start)'
+        False,
+        description="Разослать сообщение всем пользователям (по умолчанию False — только при /start)",
     ),
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -249,10 +265,12 @@ async def activate_pinned_message(
     - broadcast=False (по умолчанию): пользователи увидят при следующем /start
     - broadcast=True: рассылает сообщение всем активным пользователям сразу
     """
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == message_id)
+    )
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
 
     # Деактивируем все активные
     await db.execute(
@@ -280,7 +298,7 @@ async def activate_pinned_message(
     )
 
 
-@router.post('/{message_id}/broadcast', response_model=PinnedMessageBroadcastResponse)
+@router.post("/{message_id}/broadcast", response_model=PinnedMessageBroadcastResponse)
 async def broadcast_message(
     message_id: int,
     token: Any = Depends(require_api_token),
@@ -291,10 +309,12 @@ async def broadcast_message(
 
     Работает для любого сообщения, независимо от его статуса активности.
     """
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == message_id)
+    )
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
 
     sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
@@ -305,7 +325,7 @@ async def broadcast_message(
     )
 
 
-@router.post('/active/deactivate', response_model=Optional[PinnedMessageResponse])
+@router.post("/active/deactivate", response_model=Optional[PinnedMessageResponse])
 async def deactivate_active_message(
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -321,7 +341,7 @@ async def deactivate_active_message(
     return _serialize_pinned_message(msg)
 
 
-@router.post('/active/unpin', response_model=PinnedMessageUnpinResponse)
+@router.post("/active/unpin", response_model=PinnedMessageUnpinResponse)
 async def unpin_active_message(
     token: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -331,7 +351,9 @@ async def unpin_active_message(
 
     Удаляет закреплённое сообщение из чатов всех активных пользователей.
     """
-    unpinned_count, failed_count, was_active = await unpin_active_pinned_message(_get_bot(), db)
+    unpinned_count, failed_count, was_active = await unpin_active_pinned_message(
+        _get_bot(), db
+    )
     return PinnedMessageUnpinResponse(
         unpinned_count=unpinned_count,
         failed_count=failed_count,
@@ -339,7 +361,9 @@ async def unpin_active_message(
     )
 
 
-@router.delete('/{message_id}', status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{message_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def delete_pinned_message(
     message_id: int,
     token: Any = Depends(require_api_token),
@@ -351,10 +375,12 @@ async def delete_pinned_message(
     Если сообщение активно, сначала будет деактивировано.
     Не открепляет сообщение у пользователей — для этого используйте /active/unpin.
     """
-    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
+    result = await db.execute(
+        select(PinnedMessage).where(PinnedMessage.id == message_id)
+    )
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
 
     await db.delete(msg)
     await db.commit()

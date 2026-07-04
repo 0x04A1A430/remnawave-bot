@@ -26,7 +26,6 @@ from ..schemas.webhooks import (
     WebhookUpdateRequest,
 )
 
-
 router = APIRouter()
 
 
@@ -63,7 +62,7 @@ def _serialize_delivery(delivery: WebhookDelivery) -> WebhookDeliveryResponse:
     )
 
 
-@router.get('', response_model=WebhookListResponse)
+@router.get("", response_model=WebhookListResponse)
 async def list_webhooks_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -89,24 +88,41 @@ async def list_webhooks_endpoint(
     )
 
 
-@router.get('/stats', response_model=WebhookStatsResponse)
+@router.get("/stats", response_model=WebhookStatsResponse)
 async def get_webhook_stats(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> WebhookStatsResponse:
     """Статистика по webhooks."""
     total_webhooks = await db.scalar(select(func.count(Webhook.id))) or 0
-    active_webhooks = await db.scalar(select(func.count(Webhook.id)).where(Webhook.is_active == True)) or 0
+    active_webhooks = (
+        await db.scalar(select(func.count(Webhook.id)).where(Webhook.is_active == True))
+        or 0
+    )
 
     total_deliveries = await db.scalar(select(func.count(WebhookDelivery.id))) or 0
     successful_deliveries = (
-        await db.scalar(select(func.count(WebhookDelivery.id)).where(WebhookDelivery.status == 'success')) or 0
+        await db.scalar(
+            select(func.count(WebhookDelivery.id)).where(
+                WebhookDelivery.status == "success"
+            )
+        )
+        or 0
     )
     failed_deliveries = (
-        await db.scalar(select(func.count(WebhookDelivery.id)).where(WebhookDelivery.status == 'failed')) or 0
+        await db.scalar(
+            select(func.count(WebhookDelivery.id)).where(
+                WebhookDelivery.status == "failed"
+            )
+        )
+        or 0
     )
 
-    success_rate = (successful_deliveries / total_deliveries * 100) if total_deliveries > 0 else 0.0
+    success_rate = (
+        (successful_deliveries / total_deliveries * 100)
+        if total_deliveries > 0
+        else 0.0
+    )
 
     return WebhookStatsResponse(
         total_webhooks=int(total_webhooks),
@@ -118,7 +134,7 @@ async def get_webhook_stats(
     )
 
 
-@router.get('/{webhook_id}', response_model=WebhookResponse)
+@router.get("/{webhook_id}", response_model=WebhookResponse)
 async def get_webhook(
     webhook_id: int,
     _: Any = Security(require_api_token),
@@ -127,11 +143,11 @@ async def get_webhook(
     """Получить webhook по ID."""
     webhook = await get_webhook_by_id(db, webhook_id)
     if not webhook:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Webhook not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Webhook not found")
     return _serialize_webhook(webhook)
 
 
-@router.post('', response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
 async def create_webhook_endpoint(
     payload: WebhookCreateRequest,
     _: Any = Security(require_api_token),
@@ -149,7 +165,7 @@ async def create_webhook_endpoint(
     return _serialize_webhook(webhook)
 
 
-@router.patch('/{webhook_id}', response_model=WebhookResponse)
+@router.patch("/{webhook_id}", response_model=WebhookResponse)
 async def update_webhook_endpoint(
     webhook_id: int,
     payload: WebhookUpdateRequest,
@@ -159,7 +175,7 @@ async def update_webhook_endpoint(
     """Обновить webhook."""
     webhook = await get_webhook_by_id(db, webhook_id)
     if not webhook:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Webhook not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Webhook not found")
 
     webhook = await update_webhook(
         db,
@@ -173,7 +189,7 @@ async def update_webhook_endpoint(
     return _serialize_webhook(webhook)
 
 
-@router.delete('/{webhook_id}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_webhook_endpoint(
     webhook_id: int,
     _: Any = Security(require_api_token),
@@ -182,25 +198,25 @@ async def delete_webhook_endpoint(
     """Удалить webhook."""
     webhook = await get_webhook_by_id(db, webhook_id)
     if not webhook:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Webhook not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Webhook not found")
 
     await delete_webhook(db, webhook)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get('/{webhook_id}/deliveries', response_model=WebhookDeliveryListResponse)
+@router.get("/{webhook_id}/deliveries", response_model=WebhookDeliveryListResponse)
 async def list_webhook_deliveries(
     webhook_id: int,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    status_filter: str | None = Query(default=None, alias='status'),
+    status_filter: str | None = Query(default=None, alias="status"),
 ) -> WebhookDeliveryListResponse:
     """Список доставок webhook."""
     webhook = await get_webhook_by_id(db, webhook_id)
     if not webhook:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Webhook not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Webhook not found")
 
     query = select(WebhookDelivery).where(WebhookDelivery.webhook_id == webhook_id)
 
@@ -212,7 +228,9 @@ async def list_webhook_deliveries(
     total = await db.scalar(count_query) or 0
 
     # Получение данных
-    query = query.order_by(WebhookDelivery.created_at.desc()).offset(offset).limit(limit)
+    query = (
+        query.order_by(WebhookDelivery.created_at.desc()).offset(offset).limit(limit)
+    )
     result = await db.execute(query)
     deliveries = result.scalars().all()
 

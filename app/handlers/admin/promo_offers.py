@@ -10,7 +10,12 @@ import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -47,7 +52,6 @@ from app.utils.formatters import format_datetime, format_duration
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.subscription_utils import get_display_subscription_link
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -60,27 +64,36 @@ async def _safe_delete_message(message: Message) -> None:
     try:
         await message.delete()
     except TelegramBadRequest as exc:
-        if 'message to delete not found' not in str(exc).lower():
-            logger.debug('Не удалось удалить сообщение администратора', exc=exc)
+        if "message to delete not found" not in str(exc).lower():
+            logger.debug("Не удалось удалить сообщение администратора", exc=exc)
     except TelegramForbiddenError:
-        logger.debug('Недостаточно прав для удаления сообщения администратора')
+        logger.debug("Недостаточно прав для удаления сообщения администратора")
 
 
 async def _safe_delete_message_by_id(bot, chat_id: int, message_id: int) -> None:
     try:
         await bot.delete_message(chat_id, message_id)
     except TelegramBadRequest as exc:
-        if 'message to delete not found' not in str(exc).lower():
-            logger.debug('Не удалось удалить сообщение администратора', chat_id=chat_id, message_id=message_id, exc=exc)
+        if "message to delete not found" not in str(exc).lower():
+            logger.debug(
+                "Не удалось удалить сообщение администратора",
+                chat_id=chat_id,
+                message_id=message_id,
+                exc=exc,
+            )
     except TelegramForbiddenError:
-        logger.debug('Недостаточно прав для удаления сообщения администратора', chat_id=chat_id, message_id=message_id)
+        logger.debug(
+            "Недостаточно прав для удаления сообщения администратора",
+            chat_id=chat_id,
+            message_id=message_id,
+        )
 
 
 async def _clear_promo_offer_search_prompt(state: FSMContext, bot) -> None:
     data = await state.get_data()
-    prompt_info = data.get('promo_offer_user_search_prompt') or {}
-    chat_id = prompt_info.get('chat_id')
-    message_id = prompt_info.get('message_id')
+    prompt_info = data.get("promo_offer_user_search_prompt") or {}
+    chat_id = prompt_info.get("chat_id")
+    message_id = prompt_info.get("message_id")
 
     if chat_id and message_id:
         await _safe_delete_message_by_id(bot, chat_id, message_id)
@@ -90,50 +103,50 @@ async def _clear_promo_offer_search_prompt(state: FSMContext, bot) -> None:
 
 
 ACTION_LABEL_KEYS = {
-    'claimed': 'ADMIN_PROMO_OFFER_LOGS_ACTION_CLAIMED',
-    'consumed': 'ADMIN_PROMO_OFFER_LOGS_ACTION_CONSUMED',
-    'disabled': 'ADMIN_PROMO_OFFER_LOGS_ACTION_DISABLED',
+    "claimed": "ADMIN_PROMO_OFFER_LOGS_ACTION_CLAIMED",
+    "consumed": "ADMIN_PROMO_OFFER_LOGS_ACTION_CONSUMED",
+    "disabled": "ADMIN_PROMO_OFFER_LOGS_ACTION_DISABLED",
 }
 
 
 REASON_LABEL_KEYS = {
-    'manual_charge': 'ADMIN_PROMO_OFFER_LOGS_REASON_MANUAL',
-    'autopay_consumed': 'ADMIN_PROMO_OFFER_LOGS_REASON_AUTOPAY',
-    'offer_expired': 'ADMIN_PROMO_OFFER_LOGS_REASON_EXPIRED',
-    'test_access_expired': 'ADMIN_PROMO_OFFER_LOGS_REASON_TEST_EXPIRED',
+    "manual_charge": "ADMIN_PROMO_OFFER_LOGS_REASON_MANUAL",
+    "autopay_consumed": "ADMIN_PROMO_OFFER_LOGS_REASON_AUTOPAY",
+    "offer_expired": "ADMIN_PROMO_OFFER_LOGS_REASON_EXPIRED",
+    "test_access_expired": "ADMIN_PROMO_OFFER_LOGS_REASON_TEST_EXPIRED",
 }
 
 
 OFFER_TYPE_CONFIG = {
-    'test_access': {
-        'icon': '',
-        'label_key': 'ADMIN_PROMO_OFFER_TEST_ACCESS',
-        'default_label': 'Тестовые сервера',
-        'allowed_segments': [
-            ('paid_active', 'Активные платные'),
-            ('trial_active', 'Активные триалы'),
+    "test_access": {
+        "icon": "",
+        "label_key": "ADMIN_PROMO_OFFER_TEST_ACCESS",
+        "default_label": "Тестовые сервера",
+        "allowed_segments": [
+            ("paid_active", "Активные платные"),
+            ("trial_active", "Активные триалы"),
         ],
-        'effect_type': 'test_access',
+        "effect_type": "test_access",
     },
-    'extend_discount': {
-        'icon': '',
-        'label_key': 'ADMIN_PROMO_OFFER_EXTEND',
-        'default_label': 'Скидка на продление',
-        'allowed_segments': [
-            ('paid_active', 'Активные платные'),
+    "extend_discount": {
+        "icon": "",
+        "label_key": "ADMIN_PROMO_OFFER_EXTEND",
+        "default_label": "Скидка на продление",
+        "allowed_segments": [
+            ("paid_active", "Активные платные"),
         ],
-        'effect_type': 'percent_discount',
+        "effect_type": "percent_discount",
     },
-    'purchase_discount': {
-        'icon': '',
-        'label_key': 'ADMIN_PROMO_OFFER_PURCHASE',
-        'default_label': 'Скидка на покупку',
-        'allowed_segments': [
-            ('paid_expired', 'Истёкшие платные'),
-            ('trial_expired', 'Истёкшие триалы'),
-            ('trial_active', 'Активные триалы'),
+    "purchase_discount": {
+        "icon": "",
+        "label_key": "ADMIN_PROMO_OFFER_PURCHASE",
+        "default_label": "Скидка на покупку",
+        "allowed_segments": [
+            ("paid_expired", "Истёкшие платные"),
+            ("trial_expired", "Истёкшие триалы"),
+            ("trial_active", "Активные триалы"),
         ],
-        'effect_type': 'percent_discount',
+        "effect_type": "percent_discount",
     },
 }
 
@@ -145,21 +158,23 @@ def _render_template_text(
     server_name: str | None = None,
 ) -> str:
     replacements = {
-        'discount_percent': template.discount_percent,
-        'valid_hours': template.valid_hours,
-        'test_duration_hours': template.test_duration_hours or 0,
-        'active_discount_hours': template.active_discount_hours or template.valid_hours,
+        "discount_percent": template.discount_percent,
+        "valid_hours": template.valid_hours,
+        "test_duration_hours": template.test_duration_hours or 0,
+        "active_discount_hours": template.active_discount_hours or template.valid_hours,
     }
 
     if server_name is not None:
-        replacements.setdefault('server_name', server_name)
+        replacements.setdefault("server_name", server_name)
     else:
         # Prevent KeyError if template expects server_name
-        replacements.setdefault('server_name', '???')
+        replacements.setdefault("server_name", "???")
     try:
         return template.message_text.format(**replacements)
     except Exception:  # pragma: no cover - fallback for invalid placeholders
-        logger.warning('Не удалось форматировать текст промо-предложения', template_id=template.id)
+        logger.warning(
+            "Не удалось форматировать текст промо-предложения", template_id=template.id
+        )
         return template.message_text
 
 
@@ -167,7 +182,7 @@ async def _resolve_template_squad(
     db: AsyncSession,
     template: PromoOfferTemplate,
 ) -> tuple[str | None, str | None]:
-    if template.offer_type != 'test_access':
+    if template.offer_type != "test_access":
         return None, None
 
     squads = template.test_squad_uuids or []
@@ -180,73 +195,107 @@ async def _resolve_template_squad(
     return squad_uuid, server_name
 
 
-def _build_templates_keyboard(templates: Sequence[PromoOfferTemplate], language: str) -> InlineKeyboardMarkup:
+def _build_templates_keyboard(
+    templates: Sequence[PromoOfferTemplate], language: str
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     rows: list[list[InlineKeyboardButton]] = []
     for template in templates:
         config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
-        icon = config.get('icon', '')
-        label = texts.t(config.get('label_key', ''), config.get('default_label', template.offer_type))
+        icon = config.get("icon", "")
+        label = texts.t(
+            config.get("label_key", ""),
+            config.get("default_label", template.offer_type),
+        )
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f'{icon} {label}',
-                    callback_data=f'promo_offer_{template.id}',
+                    text=f"{icon} {label}",
+                    callback_data=f"promo_offer_{template.id}",
                 )
             ]
         )
     rows.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_LOGS', 'Лог операций'),
-                callback_data='promo_offer_logs_page_1',
+                text=texts.t("ADMIN_PROMO_OFFER_LOGS", "Лог операций"),
+                callback_data="promo_offer_logs_page_1",
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_submenu_communications')])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=texts.BACK, callback_data="admin_submenu_communications"
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) -> InlineKeyboardMarkup:
+def _build_offer_detail_keyboard(
+    template: PromoOfferTemplate, language: str
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     OFFER_TYPE_CONFIG.get(template.offer_type, {})
     rows: list[list[InlineKeyboardButton]] = []
 
     rows.append(
         [
-            InlineKeyboardButton(text='Текст', callback_data=f'promo_offer_edit_message_{template.id}'),
-            InlineKeyboardButton(text='Кнопка', callback_data=f'promo_offer_edit_button_{template.id}'),
+            InlineKeyboardButton(
+                text="Текст", callback_data=f"promo_offer_edit_message_{template.id}"
+            ),
+            InlineKeyboardButton(
+                text="Кнопка", callback_data=f"promo_offer_edit_button_{template.id}"
+            ),
         ]
     )
     rows.append(
         [
-            InlineKeyboardButton(text='Срок', callback_data=f'promo_offer_edit_valid_{template.id}'),
+            InlineKeyboardButton(
+                text="Срок", callback_data=f"promo_offer_edit_valid_{template.id}"
+            ),
         ]
     )
 
-    if template.offer_type != 'test_access':
-        rows[-1].append(InlineKeyboardButton(text='%', callback_data=f'promo_offer_edit_discount_{template.id}'))
+    if template.offer_type != "test_access":
+        rows[-1].append(
+            InlineKeyboardButton(
+                text="%", callback_data=f"promo_offer_edit_discount_{template.id}"
+            )
+        )
         rows.append(
             [
-                InlineKeyboardButton(text='Активна', callback_data=f'promo_offer_edit_active_{template.id}'),
+                InlineKeyboardButton(
+                    text="Активна",
+                    callback_data=f"promo_offer_edit_active_{template.id}",
+                ),
             ]
         )
     else:
         rows.append(
             [
-                InlineKeyboardButton(text='Длительность', callback_data=f'promo_offer_edit_duration_{template.id}'),
-                InlineKeyboardButton(text='Сквады', callback_data=f'promo_offer_edit_squads_{template.id}'),
+                InlineKeyboardButton(
+                    text="Длительность",
+                    callback_data=f"promo_offer_edit_duration_{template.id}",
+                ),
+                InlineKeyboardButton(
+                    text="Сквады",
+                    callback_data=f"promo_offer_edit_squads_{template.id}",
+                ),
             ]
         )
 
     rows.append(
         [
-            InlineKeyboardButton(text='Отправить', callback_data=f'promo_offer_send_menu_{template.id}'),
+            InlineKeyboardButton(
+                text="Отправить", callback_data=f"promo_offer_send_menu_{template.id}"
+            ),
         ]
     )
     rows.append(
         [
-            InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers'),
+            InlineKeyboardButton(text=texts.BACK, callback_data="admin_promo_offers"),
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -254,18 +303,20 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
 
 def _format_offer_remaining(offer, texts) -> str:
     if not offer.expires_at:
-        return texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY', 'без срока')
+        return texts.t("ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY", "без срока")
 
     remaining_seconds = int((offer.expires_at - datetime.now(UTC)).total_seconds())
     if remaining_seconds <= 0:
-        return texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_TIME_LEFT_EXPIRED', 'истекло')
+        return texts.t("ADMIN_PROMO_OFFER_SEND_USER_OFFER_TIME_LEFT_EXPIRED", "истекло")
 
     return format_duration(remaining_seconds)
 
 
-def _extract_offer_active_hours(offer, template: PromoOfferTemplate | None) -> int | None:
+def _extract_offer_active_hours(
+    offer, template: PromoOfferTemplate | None
+) -> int | None:
     extra = offer.extra_data or {}
-    active_hours = extra.get('active_discount_hours')
+    active_hours = extra.get("active_discount_hours")
     if active_hours:
         try:
             return int(active_hours)
@@ -275,13 +326,17 @@ def _extract_offer_active_hours(offer, template: PromoOfferTemplate | None) -> i
     if template and template.active_discount_hours:
         return template.active_discount_hours
 
-    if template and template.offer_type == 'test_access' and template.test_duration_hours:
+    if (
+        template
+        and template.offer_type == "test_access"
+        and template.test_duration_hours
+    ):
         return template.test_duration_hours
 
     return None
 
 
-_TEMPLATE_ID_PATTERN = re.compile(r'promo_template_(?P<template_id>\d+)$')
+_TEMPLATE_ID_PATTERN = re.compile(r"promo_template_(?P<template_id>\d+)$")
 
 
 def _extract_template_id_from_notification(notification_type: str | None) -> int | None:
@@ -293,7 +348,7 @@ def _extract_template_id_from_notification(notification_type: str | None) -> int
         return None
 
     try:
-        return int(match.group('template_id'))
+        return int(match.group("template_id"))
     except (TypeError, ValueError):
         return None
 
@@ -303,90 +358,112 @@ def _format_promo_offer_log_entry(
     index: int,
     texts,
 ) -> str:
-    timestamp = entry.created_at.strftime('%d.%m.%Y %H:%M') if entry.created_at else '-'
-    action_key = ACTION_LABEL_KEYS.get(entry.action, '')
+    timestamp = entry.created_at.strftime("%d.%m.%Y %H:%M") if entry.created_at else "-"
+    action_key = ACTION_LABEL_KEYS.get(entry.action, "")
     action_label = texts.get(action_key, entry.action.title())
-    lines = [f'{index}. <b>{timestamp}</b> — {action_label}']
+    lines = [f"{index}. <b>{timestamp}</b> — {action_label}"]
 
     user = entry.user
     if user:
         if user.username:
-            username = f'@{user.username}'
+            username = f"@{user.username}"
         elif user.telegram_id:
-            username = f'ID{user.telegram_id}'
+            username = f"ID{user.telegram_id}"
         elif user.email:
-            username = f'{user.email}'
+            username = f"{user.email}"
         else:
-            username = f'User#{user.id}'
-        label = f'{username} (#{user.id})'
+            username = f"User#{user.id}"
+        label = f"{username} (#{user.id})"
     elif entry.user_id:
-        label = f'ID{entry.user_id}'
+        label = f"ID{entry.user_id}"
     else:
-        label = texts.get('ADMIN_PROMO_OFFER_LOGS_UNKNOWN_USER', 'Неизвестный пользователь')
+        label = texts.get(
+            "ADMIN_PROMO_OFFER_LOGS_UNKNOWN_USER", "Неизвестный пользователь"
+        )
 
-    lines.append(texts.get('ADMIN_PROMO_OFFER_LOGS_USER', '{user}').format(user=html.escape(label)))
+    lines.append(
+        texts.get("ADMIN_PROMO_OFFER_LOGS_USER", "{user}").format(
+            user=html.escape(label)
+        )
+    )
 
     if entry.percent:
-        lines.append(texts.get('ADMIN_PROMO_OFFER_LOGS_PERCENT', 'Скидка: {percent}%').format(percent=entry.percent))
+        lines.append(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_PERCENT", "Скидка: {percent}%").format(
+                percent=entry.percent
+            )
+        )
 
-    effect_type = (entry.effect_type or '').lower()
+    effect_type = (entry.effect_type or "").lower()
     if effect_type:
-        if effect_type == 'test_access':
-            effect_label = texts.get('ADMIN_PROMO_OFFER_LOGS_EFFECT_TEST', 'Тестовый доступ')
+        if effect_type == "test_access":
+            effect_label = texts.get(
+                "ADMIN_PROMO_OFFER_LOGS_EFFECT_TEST", "Тестовый доступ"
+            )
         else:
-            effect_label = texts.get('ADMIN_PROMO_OFFER_LOGS_EFFECT_DISCOUNT', 'Скидка')
+            effect_label = texts.get("ADMIN_PROMO_OFFER_LOGS_EFFECT_DISCOUNT", "Скидка")
         lines.append(effect_label)
 
     if entry.source:
         lines.append(
-            texts.get('ADMIN_PROMO_OFFER_LOGS_SOURCE', 'Источник: {source}').format(source=html.escape(entry.source))
+            texts.get("ADMIN_PROMO_OFFER_LOGS_SOURCE", "Источник: {source}").format(
+                source=html.escape(entry.source)
+            )
         )
 
-    details: dict[str, object] = entry.details if isinstance(entry.details, dict) else {}
-    reason_key = details.get('reason')
+    details: dict[str, object] = (
+        entry.details if isinstance(entry.details, dict) else {}
+    )
+    reason_key = details.get("reason")
     if reason_key:
-        reason_label = texts.get(REASON_LABEL_KEYS.get(reason_key, ''), '')
+        reason_label = texts.get(REASON_LABEL_KEYS.get(reason_key, ""), "")
         if not reason_label:
             reason_label = texts.get(
-                'ADMIN_PROMO_OFFER_LOGS_REASON_GENERIC',
-                'Действие: {reason}',
+                "ADMIN_PROMO_OFFER_LOGS_REASON_GENERIC",
+                "Действие: {reason}",
             ).format(reason=html.escape(str(reason_key)))
         lines.append(reason_label)
 
-    description = details.get('description')
+    description = details.get("description")
     if description:
         lines.append(
-            texts.get('ADMIN_PROMO_OFFER_LOGS_DESCRIPTION', '{description}').format(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_DESCRIPTION", "{description}").format(
                 description=html.escape(str(description))
             )
         )
 
-    amount = details.get('amount_kopeks')
+    amount = details.get("amount_kopeks")
     if isinstance(amount, int):
         lines.append(
-            texts.get('ADMIN_PROMO_OFFER_LOGS_AMOUNT', 'Сумма: {amount}').format(amount=texts.format_price(amount))
+            texts.get("ADMIN_PROMO_OFFER_LOGS_AMOUNT", "Сумма: {amount}").format(
+                amount=texts.format_price(amount)
+            )
         )
 
-    squad_uuid = details.get('squad_uuid')
+    squad_uuid = details.get("squad_uuid")
     if squad_uuid:
         lines.append(
-            texts.get('ADMIN_PROMO_OFFER_LOGS_SQUAD', 'Сквад: {squad}').format(squad=html.escape(str(squad_uuid)))
+            texts.get("ADMIN_PROMO_OFFER_LOGS_SQUAD", "Сквад: {squad}").format(
+                squad=html.escape(str(squad_uuid))
+            )
         )
 
-    new_squads = details.get('new_squads')
+    new_squads = details.get("new_squads")
     if isinstance(new_squads, (list, tuple)):
         filtered = [html.escape(str(item)) for item in new_squads if item]
         if filtered:
             lines.append(
-                texts.get('ADMIN_PROMO_OFFER_LOGS_NEW_SQUADS', 'Новые сквады: {squads}').format(
-                    squads=', '.join(filtered)
-                )
+                texts.get(
+                    "ADMIN_PROMO_OFFER_LOGS_NEW_SQUADS", "Новые сквады: {squads}"
+                ).format(squads=", ".join(filtered))
             )
 
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
-def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKeyboardMarkup:
+def _build_logs_keyboard(
+    page: int, total_pages: int, language: str
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     rows: list[list[InlineKeyboardButton]] = []
     if total_pages > 1:
@@ -394,32 +471,36 @@ def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKe
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='←',
-                    callback_data=f'promo_offer_logs_page_{page - 1}',
+                    text="←",
+                    callback_data=f"promo_offer_logs_page_{page - 1}",
                 )
             )
         nav_row.append(
             InlineKeyboardButton(
-                text=f'{page}/{total_pages}',
-                callback_data=f'promo_offer_logs_page_{page}',
+                text=f"{page}/{total_pages}",
+                callback_data=f"promo_offer_logs_page_{page}",
             )
         )
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='→',
-                    callback_data=f'promo_offer_logs_page_{page + 1}',
+                    text="→",
+                    callback_data=f"promo_offer_logs_page_{page + 1}",
                 )
             )
         rows.append(nav_row)
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_promo_offers')])
+    rows.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data="admin_promo_offers")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineKeyboardMarkup:
+def _build_send_keyboard(
+    template: PromoOfferTemplate, language: str
+) -> InlineKeyboardMarkup:
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
-    segments = config.get('allowed_segments', [])
+    segments = config.get("allowed_segments", [])
     texts = get_texts(language)
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -428,7 +509,7 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=f'promo_offer_send_{template.id}_{segment}',
+                    callback_data=f"promo_offer_send_{template.id}_{segment}",
                 )
             ]
         )
@@ -437,64 +518,70 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
         [
             InlineKeyboardButton(
                 text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER',
-                    'Отправка пользователю',
+                    "ADMIN_PROMO_OFFER_SEND_USER",
+                    "Отправка пользователю",
                 ),
-                callback_data=f'promo_offer_send_user_{template.id}_page_1',
+                callback_data=f"promo_offer_send_user_{template.id}_page_1",
             )
         ]
     )
 
-    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template.id}')])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text=texts.BACK, callback_data=f"promo_offer_{template.id}"
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _build_user_button_label(user: User) -> str:
     status_emoji_map = {
-        UserStatus.ACTIVE.value: '',
-        UserStatus.BLOCKED.value: '×',
-        UserStatus.DELETED.value: '️',
+        UserStatus.ACTIVE.value: "",
+        UserStatus.BLOCKED.value: "×",
+        UserStatus.DELETED.value: "️",
     }
-    status_emoji = status_emoji_map.get(getattr(user, 'status', None), '')
+    status_emoji = status_emoji_map.get(getattr(user, "status", None), "")
 
-    subscription = getattr(user, 'subscription', None)
+    subscription = getattr(user, "subscription", None)
     if subscription:
         if subscription.is_trial:
-            subscription_emoji = ''
+            subscription_emoji = ""
         elif subscription.is_active:
-            subscription_emoji = '$'
+            subscription_emoji = "$"
         else:
-            subscription_emoji = ''
+            subscription_emoji = ""
     else:
-        subscription_emoji = ''
+        subscription_emoji = ""
 
-    name = (user.full_name or user.username or '').strip()
+    name = (user.full_name or user.username or "").strip()
     if not name:
         if user.telegram_id:
-            name = f'ID {user.telegram_id}'
+            name = f"ID {user.telegram_id}"
         elif user.email:
-            name = user.email.split('@')[0][:15]
+            name = user.email.split("@")[0][:15]
         else:
-            name = f'User#{user.id}'
+            name = f"User#{user.id}"
 
     if len(name) > 20:
-        name = name[:17] + '...'
+        name = name[:17] + "..."
 
     # Build identifier: telegram_id, email, or internal id
     if user.telegram_id:
-        identifier = f'{user.telegram_id}'
+        identifier = f"{user.telegram_id}"
     elif user.email:
-        identifier = f'{user.email[:20]}'
+        identifier = f"{user.email[:20]}"
     else:
-        identifier = f'#{user.id}'
+        identifier = f"#{user.id}"
 
     parts = [status_emoji, subscription_emoji, name, identifier]
 
-    balance = getattr(user, 'balance_kopeks', 0)
+    balance = getattr(user, "balance_kopeks", 0)
     if balance:
-        parts.append(f'{settings.format_price(balance)}')
+        parts.append(f"{settings.format_price(balance)}")
 
-    return ' '.join(parts)
+    return " ".join(parts)
 
 
 async def _render_send_user_list(
@@ -518,40 +605,46 @@ async def _render_send_user_list(
     else:
         result = await user_service.get_users_page(db, page=page, limit=limit)
 
-    total_pages = max(1, int(result.get('total_pages') or 1))
-    current_page = max(1, min(total_pages, int(result.get('current_page') or page or 1)))
+    total_pages = max(1, int(result.get("total_pages") or 1))
+    current_page = max(
+        1, min(total_pages, int(result.get("current_page") or page or 1))
+    )
 
     if current_page != page:
         if query:
-            result = await user_service.search_users(db, query, page=current_page, limit=limit)
+            result = await user_service.search_users(
+                db, query, page=current_page, limit=limit
+            )
         else:
-            result = await user_service.get_users_page(db, page=current_page, limit=limit)
+            result = await user_service.get_users_page(
+                db, page=current_page, limit=limit
+            )
 
-    users: Sequence[User] = result.get('users', [])
+    users: Sequence[User] = result.get("users", [])
 
     lines = [
-        texts.t('ADMIN_PROMO_OFFER_SEND_USER_TITLE', '<b>Отправка пользователю</b>'),
-        '',
+        texts.t("ADMIN_PROMO_OFFER_SEND_USER_TITLE", "<b>Отправка пользователю</b>"),
+        "",
         texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_HINT',
-            'Выберите пользователя для отправки промопредложения.',
+            "ADMIN_PROMO_OFFER_SEND_USER_HINT",
+            "Выберите пользователя для отправки промопредложения.",
         ),
     ]
 
     if query:
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_SEARCH_QUERY',
-                'Поиск: <b>{query}</b>',
+                "ADMIN_PROMO_OFFER_SEND_USER_SEARCH_QUERY",
+                "Поиск: <b>{query}</b>",
             ).format(query=html.escape(query))
         )
 
     if not users:
-        lines.append('')
+        lines.append("")
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_EMPTY',
-                'Подходящие пользователи не найдены. Измените запрос поиска.',
+                "ADMIN_PROMO_OFFER_SEND_USER_EMPTY",
+                "Подходящие пользователи не найдены. Измените запрос поиска.",
             )
         )
 
@@ -561,7 +654,7 @@ async def _render_send_user_list(
             [
                 InlineKeyboardButton(
                     text=_build_user_button_label(user),
-                    callback_data=f'promo_offer_send_user_select_{template_id}_{user.id}',
+                    callback_data=f"promo_offer_send_user_select_{template_id}_{user.id}",
                 )
             ]
         )
@@ -571,21 +664,21 @@ async def _render_send_user_list(
         if current_page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='←',
-                    callback_data=f'promo_offer_send_user_{template_id}_page_{current_page - 1}',
+                    text="←",
+                    callback_data=f"promo_offer_send_user_{template_id}_page_{current_page - 1}",
                 )
             )
         nav_row.append(
             InlineKeyboardButton(
-                text=f'{current_page}/{total_pages}',
-                callback_data=f'promo_offer_send_user_{template_id}_page_{current_page}',
+                text=f"{current_page}/{total_pages}",
+                callback_data=f"promo_offer_send_user_{template_id}_page_{current_page}",
             )
         )
         if current_page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='→',
-                    callback_data=f'promo_offer_send_user_{template_id}_page_{current_page + 1}',
+                    text="→",
+                    callback_data=f"promo_offer_send_user_{template_id}_page_{current_page + 1}",
                 )
             )
         keyboard_rows.append(nav_row)
@@ -593,8 +686,8 @@ async def _render_send_user_list(
     keyboard_rows.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_SEND_USER_SEARCH', 'Поиск'),
-                callback_data=f'promo_offer_send_user_search_{template_id}',
+                text=texts.t("ADMIN_PROMO_OFFER_SEND_USER_SEARCH", "Поиск"),
+                callback_data=f"promo_offer_send_user_search_{template_id}",
             )
         ]
     )
@@ -603,8 +696,8 @@ async def _render_send_user_list(
         keyboard_rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFER_SEND_USER_RESET', 'Сбросить поиск'),
-                    callback_data=f'promo_offer_send_user_reset_{template_id}',
+                    text=texts.t("ADMIN_PROMO_OFFER_SEND_USER_RESET", "Сбросить поиск"),
+                    callback_data=f"promo_offer_send_user_reset_{template_id}",
                 )
             ]
         )
@@ -613,17 +706,23 @@ async def _render_send_user_list(
         [
             InlineKeyboardButton(
                 text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_SEGMENTS',
-                    'К выбору категории',
+                    "ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_SEGMENTS",
+                    "К выбору категории",
                 ),
-                callback_data=f'promo_offer_send_menu_{template_id}',
+                callback_data=f"promo_offer_send_menu_{template_id}",
             )
         ]
     )
-    keyboard_rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}')])
+    keyboard_rows.append(
+        [
+            InlineKeyboardButton(
+                text=texts.BACK, callback_data=f"promo_offer_{template_id}"
+            )
+        ]
+    )
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    text = '\n'.join(lines)
+    text = "\n".join(lines)
 
     current_message_id = message_id
     try:
@@ -632,11 +731,11 @@ async def _render_send_user_list(
             chat_id=chat_id,
             message_id=message_id,
             reply_markup=markup,
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
     except TelegramBadRequest as exc:
         error_text = str(exc).lower()
-        if 'message is not modified' in error_text:
+        if "message is not modified" in error_text:
             await bot.edit_message_reply_markup(
                 chat_id=chat_id,
                 message_id=message_id,
@@ -647,16 +746,16 @@ async def _render_send_user_list(
                 chat_id=chat_id,
                 text=text,
                 reply_markup=markup,
-                parse_mode='HTML',
+                parse_mode="HTML",
             )
             current_message_id = sent_message.message_id
 
     await state.update_data(
-        promo_offer_user_message={'chat_id': chat_id, 'message_id': current_message_id},
+        promo_offer_user_message={"chat_id": chat_id, "message_id": current_message_id},
         promo_offer_user_filter={
-            'template_id': template_id,
-            'page': current_page,
-            'query': query,
+            "template_id": template_id,
+            "page": current_page,
+            "query": query,
         },
     )
 
@@ -670,23 +769,29 @@ def _describe_offer(
 ) -> str:
     texts = get_texts(language)
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
-    label = texts.t(config.get('label_key', ''), config.get('default_label', template.offer_type))
-    icon = config.get('icon', '')
+    label = texts.t(
+        config.get("label_key", ""), config.get("default_label", template.offer_type)
+    )
+    icon = config.get("icon", "")
 
-    lines = [f'{icon} <b>{html.escape(template.name)}</b>', '']
-    lines.append(texts.t('ADMIN_PROMO_OFFER_TYPE', 'Тип: {label}').format(label=label))
-    lines.append(texts.t('ADMIN_PROMO_OFFER_VALID', 'Срок действия: {hours} ч').format(hours=template.valid_hours))
+    lines = [f"{icon} <b>{html.escape(template.name)}</b>", ""]
+    lines.append(texts.t("ADMIN_PROMO_OFFER_TYPE", "Тип: {label}").format(label=label))
+    lines.append(
+        texts.t("ADMIN_PROMO_OFFER_VALID", "Срок действия: {hours} ч").format(
+            hours=template.valid_hours
+        )
+    )
 
-    if template.offer_type != 'test_access':
+    if template.offer_type != "test_access":
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_DISCOUNT',
-                'Доп. скидка: {percent}% (суммируется с промогруппой)',
+                "ADMIN_PROMO_OFFER_DISCOUNT",
+                "Доп. скидка: {percent}% (суммируется с промогруппой)",
             ).format(percent=template.discount_percent)
         )
         stack_note = texts.t(
-            'ADMIN_PROMO_OFFER_STACKABLE_NOTE',
-            'Скидка применяется один раз и добавляется к промогруппе.',
+            "ADMIN_PROMO_OFFER_STACKABLE_NOTE",
+            "Скидка применяется один раз и добавляется к промогруппе.",
         )
         if stack_note:
             lines.append(stack_note)
@@ -694,36 +799,50 @@ def _describe_offer(
         if active_hours > 0:
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_ACTIVE_DURATION',
-                    'Скидка после активации действует {hours} ч.',
+                    "ADMIN_PROMO_OFFER_ACTIVE_DURATION",
+                    "Скидка после активации действует {hours} ч.",
                 ).format(hours=active_hours)
             )
     else:
         duration = template.test_duration_hours or 0
-        lines.append(texts.t('ADMIN_PROMO_OFFER_TEST_DURATION', 'Доступ: {hours} ч').format(hours=duration))
+        lines.append(
+            texts.t("ADMIN_PROMO_OFFER_TEST_DURATION", "Доступ: {hours} ч").format(
+                hours=duration
+            )
+        )
         squads = template.test_squad_uuids or []
         if server_name:
-            lines.append(texts.t('ADMIN_PROMO_OFFER_TEST_SQUAD_NAME', 'Сервер: {name}').format(name=server_name))
+            lines.append(
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUAD_NAME", "Сервер: {name}").format(
+                    name=server_name
+                )
+            )
         elif squads:
             lines.append(
-                texts.t('ADMIN_PROMO_OFFER_TEST_SQUADS', 'Сквады: {squads}').format(
-                    squads=', '.join(str(item) for item in squads)
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS", "Сквады: {squads}").format(
+                    squads=", ".join(str(item) for item in squads)
                 )
             )
         elif server_uuid:
-            lines.append(texts.t('ADMIN_PROMO_OFFER_TEST_SQUADS', 'Сквады: {squads}').format(squads=server_uuid))
+            lines.append(
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS", "Сквады: {squads}").format(
+                    squads=server_uuid
+                )
+            )
         else:
-            lines.append(texts.t('ADMIN_PROMO_OFFER_TEST_SQUADS_EMPTY', 'Сквады: не указаны'))
+            lines.append(
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS_EMPTY", "Сквады: не указаны")
+            )
 
-    allowed_segments = config.get('allowed_segments', [])
+    allowed_segments = config.get("allowed_segments", [])
     if allowed_segments:
         segment_labels = [label for _, label in allowed_segments]
-        lines.append('')
-        lines.append(texts.t('ADMIN_PROMO_OFFER_ALLOWED', 'Доступные категории:'))
+        lines.append("")
+        lines.append(texts.t("ADMIN_PROMO_OFFER_ALLOWED", "Доступные категории:"))
         lines.extend(segment_labels)
 
-    lines.append('')
-    lines.append(texts.t('ADMIN_PROMO_OFFER_PREVIEW', 'Предпросмотр:'))
+    lines.append("")
+    lines.append(texts.t("ADMIN_PROMO_OFFER_PREVIEW", "Предпросмотр:"))
     lines.append(
         _render_template_text(
             template,
@@ -732,36 +851,43 @@ def _describe_offer(
         )
     )
 
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
 
 @admin_required
 @error_handler
-async def show_promo_offers_menu(callback: CallbackQuery, db_user: User, db: AsyncSession):
+async def show_promo_offers_menu(
+    callback: CallbackQuery, db_user: User, db: AsyncSession
+):
     await ensure_default_templates(db, created_by=db_user.id)
     templates = await list_promo_offer_templates(db)
     texts = get_texts(db_user.language)
-    header = texts.t('ADMIN_PROMO_OFFERS_TITLE', '<b>Промо-предложения</b>\n\nВыберите предложение для настройки:')
+    header = texts.t(
+        "ADMIN_PROMO_OFFERS_TITLE",
+        "<b>Промо-предложения</b>\n\nВыберите предложение для настройки:",
+    )
     await callback.message.edit_text(
         header,
         reply_markup=_build_templates_keyboard(templates, db_user.language),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
 @admin_required
 @error_handler
-async def show_promo_offer_details(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def show_promo_offer_details(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        template_id = int(callback.data.split('_')[-1])
+        template_id = int(callback.data.split("_")[-1])
     except (ValueError, AttributeError):
-        await callback.answer('Неверный идентификатор', show_alert=True)
+        await callback.answer("Неверный идентификатор", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await state.update_data(selected_promo_offer=template.id)
@@ -775,17 +901,19 @@ async def show_promo_offer_details(callback: CallbackQuery, db_user: User, db: A
     await callback.message.edit_text(
         description,
         reply_markup=_build_offer_detail_keyboard(template, db_user.language),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
 @admin_required
 @error_handler
-async def show_promo_offer_logs(callback: CallbackQuery, db_user: User, db: AsyncSession):
+async def show_promo_offer_logs(
+    callback: CallbackQuery, db_user: User, db: AsyncSession
+):
     try:
-        if '_page_' in callback.data:
-            page = int(callback.data.split('_page_')[-1])
+        if "_page_" in callback.data:
+            page = int(callback.data.split("_page_")[-1])
         else:
             page = 1
     except (ValueError, AttributeError):
@@ -805,31 +933,31 @@ async def show_promo_offer_logs(callback: CallbackQuery, db_user: User, db: Asyn
 
     texts = get_texts(db_user.language)
     header = texts.t(
-        'ADMIN_PROMO_OFFER_LOGS_TITLE',
-        '<b>Лог операций промо-предложений</b>',
+        "ADMIN_PROMO_OFFER_LOGS_TITLE",
+        "<b>Лог операций промо-предложений</b>",
     )
 
     if logs:
         message_lines = [
             header,
             texts.get(
-                'ADMIN_PROMO_OFFER_LOGS_PAGINATION',
-                'Страница {page}/{total}',
+                "ADMIN_PROMO_OFFER_LOGS_PAGINATION",
+                "Страница {page}/{total}",
             ).format(page=page, total=total_pages),
-            '',
+            "",
         ]
         for index, entry in enumerate(logs, start=offset + 1):
             message_lines.append(_format_promo_offer_log_entry(entry, index, texts))
-            message_lines.append('')
-        message_text = '\n'.join(message_lines).rstrip()
+            message_lines.append("")
+        message_text = "\n".join(message_lines).rstrip()
     else:
-        message_text = '\n'.join(
+        message_text = "\n".join(
             [
                 header,
-                '',
+                "",
                 texts.get(
-                    'ADMIN_PROMO_OFFER_LOGS_EMPTY_BODY',
-                    'Записей пока нет.',
+                    "ADMIN_PROMO_OFFER_LOGS_EMPTY_BODY",
+                    "Записей пока нет.",
                 ),
             ]
         )
@@ -838,12 +966,14 @@ async def show_promo_offer_logs(callback: CallbackQuery, db_user: User, db: Asyn
     await callback.message.edit_text(
         message_text,
         reply_markup=keyboard,
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
-async def _prompt_edit(callback: CallbackQuery, state: FSMContext, template_id: int, prompt: str, new_state):
+async def _prompt_edit(
+    callback: CallbackQuery, state: FSMContext, template_id: int, prompt: str, new_state
+):
     await state.update_data(
         selected_promo_offer=template_id,
         promo_edit_message_id=callback.message.message_id,
@@ -856,48 +986,76 @@ async def _prompt_edit(callback: CallbackQuery, state: FSMContext, template_id: 
 
 @admin_required
 @error_handler
-async def prompt_edit_message(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
-    texts = get_texts(db_user.language)
-    prompt = texts.t('ADMIN_PROMO_OFFER_PROMPT_MESSAGE', 'Введите новый текст предложения:')
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_message)
-
-
-@admin_required
-@error_handler
-async def prompt_edit_button(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
-    texts = get_texts(db_user.language)
-    prompt = texts.t('ADMIN_PROMO_OFFER_PROMPT_BUTTON', 'Введите новый текст кнопки:')
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_button)
-
-
-@admin_required
-@error_handler
-async def prompt_edit_valid(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
-    texts = get_texts(db_user.language)
-    prompt = texts.t('ADMIN_PROMO_OFFER_PROMPT_VALID', 'Укажите срок действия (в часах):')
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_valid_hours)
-
-
-@admin_required
-@error_handler
-async def prompt_edit_discount(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
-    texts = get_texts(db_user.language)
-    prompt = texts.t('ADMIN_PROMO_OFFER_PROMPT_DISCOUNT', 'Введите размер скидки в процентах:')
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_discount)
-
-
-@admin_required
-@error_handler
-async def prompt_edit_active_duration(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
+async def prompt_edit_message(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
     texts = get_texts(db_user.language)
     prompt = texts.t(
-        'ADMIN_PROMO_OFFER_PROMPT_ACTIVE_DURATION',
-        'Введите срок действия активированной скидки (в часах):',
+        "ADMIN_PROMO_OFFER_PROMPT_MESSAGE", "Введите новый текст предложения:"
+    )
+    await _prompt_edit(
+        callback, state, template_id, prompt, AdminStates.editing_promo_offer_message
+    )
+
+
+@admin_required
+@error_handler
+async def prompt_edit_button(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
+    texts = get_texts(db_user.language)
+    prompt = texts.t("ADMIN_PROMO_OFFER_PROMPT_BUTTON", "Введите новый текст кнопки:")
+    await _prompt_edit(
+        callback, state, template_id, prompt, AdminStates.editing_promo_offer_button
+    )
+
+
+@admin_required
+@error_handler
+async def prompt_edit_valid(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
+    texts = get_texts(db_user.language)
+    prompt = texts.t(
+        "ADMIN_PROMO_OFFER_PROMPT_VALID", "Укажите срок действия (в часах):"
+    )
+    await _prompt_edit(
+        callback,
+        state,
+        template_id,
+        prompt,
+        AdminStates.editing_promo_offer_valid_hours,
+    )
+
+
+@admin_required
+@error_handler
+async def prompt_edit_discount(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
+    texts = get_texts(db_user.language)
+    prompt = texts.t(
+        "ADMIN_PROMO_OFFER_PROMPT_DISCOUNT", "Введите размер скидки в процентах:"
+    )
+    await _prompt_edit(
+        callback, state, template_id, prompt, AdminStates.editing_promo_offer_discount
+    )
+
+
+@admin_required
+@error_handler
+async def prompt_edit_active_duration(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
+    texts = get_texts(db_user.language)
+    prompt = texts.t(
+        "ADMIN_PROMO_OFFER_PROMPT_ACTIVE_DURATION",
+        "Введите срок действия активированной скидки (в часах):",
     )
     await _prompt_edit(
         callback,
@@ -910,20 +1068,33 @@ async def prompt_edit_active_duration(callback: CallbackQuery, db_user: User, db
 
 @admin_required
 @error_handler
-async def prompt_edit_duration(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
+async def prompt_edit_duration(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
     texts = get_texts(db_user.language)
-    prompt = texts.t('ADMIN_PROMO_OFFER_PROMPT_DURATION', 'Введите длительность тестового доступа (в часах):')
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_test_duration)
+    prompt = texts.t(
+        "ADMIN_PROMO_OFFER_PROMPT_DURATION",
+        "Введите длительность тестового доступа (в часах):",
+    )
+    await _prompt_edit(
+        callback,
+        state,
+        template_id,
+        prompt,
+        AdminStates.editing_promo_offer_test_duration,
+    )
 
 
 @admin_required
 @error_handler
-async def prompt_edit_squads(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split('_')[-1])
+async def prompt_edit_squads(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
+    template_id = int(callback.data.split("_")[-1])
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await state.update_data(
@@ -954,10 +1125,17 @@ async def _render_squad_selection(
 
     if total_count == 0:
         await callback.message.edit_text(
-            texts.t('ADMIN_PROMO_OFFER_NO_SQUADS_AVAILABLE', 'Доступные серверы не найдены.'),
+            texts.t(
+                "ADMIN_PROMO_OFFER_NO_SQUADS_AVAILABLE", "Доступные серверы не найдены."
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_squad_back_{template.id}')]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.BACK,
+                            callback_data=f"promo_offer_squad_back_{template.id}",
+                        )
+                    ]
                 ]
             ),
         )
@@ -969,57 +1147,63 @@ async def _render_squad_selection(
 
     selected_server_name = None
     if selected_uuid:
-        selected_server = next((srv for srv in squads if srv.squad_uuid == selected_uuid), None)
+        selected_server = next(
+            (srv for srv in squads if srv.squad_uuid == selected_uuid), None
+        )
         if not selected_server:
             selected_server = await get_server_squad_by_uuid(db, selected_uuid)
         if selected_server:
             selected_server_name = html.escape(selected_server.display_name)
 
-    header = texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_TITLE', '<b>Выберите сквад</b>')
+    header = texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_TITLE", "<b>Выберите сквад</b>")
     if selected_server_name:
         current = texts.t(
-            'ADMIN_PROMO_OFFER_SELECTED_SQUAD',
-            'Текущий сквад: {name}',
+            "ADMIN_PROMO_OFFER_SELECTED_SQUAD",
+            "Текущий сквад: {name}",
         ).format(name=selected_server_name)
     elif selected_uuid:
         current = texts.t(
-            'ADMIN_PROMO_OFFER_SELECTED_SQUAD_UUID',
-            'Текущий сквад: {uuid}',
+            "ADMIN_PROMO_OFFER_SELECTED_SQUAD_UUID",
+            "Текущий сквад: {uuid}",
         ).format(uuid=selected_uuid)
     else:
         current = texts.t(
-            'ADMIN_PROMO_OFFER_SELECTED_SQUAD_EMPTY',
-            'Текущий сквад: не выбран',
+            "ADMIN_PROMO_OFFER_SELECTED_SQUAD_EMPTY",
+            "Текущий сквад: не выбран",
         )
 
     hint = texts.t(
-        'ADMIN_PROMO_OFFER_SELECT_SQUAD_HINT',
-        'Выберите сервер для тестового доступа из списка ниже.',
+        "ADMIN_PROMO_OFFER_SELECT_SQUAD_HINT",
+        "Выберите сервер для тестового доступа из списка ниже.",
     )
 
     total_pages = (total_count + SQUADS_PAGE_LIMIT - 1) // SQUADS_PAGE_LIMIT or 1
     page = max(1, min(page, total_pages))
 
-    lines = [header, '', current, '', hint]
+    lines = [header, "", current, "", hint]
     if total_pages > 1:
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SELECT_SQUAD_PAGE',
-                'Страница {page}/{total}',
+                "ADMIN_PROMO_OFFER_SELECT_SQUAD_PAGE",
+                "Страница {page}/{total}",
             ).format(page=page, total=total_pages)
         )
 
-    text = '\n'.join(lines)
+    text = "\n".join(lines)
 
     keyboard_rows: list[list[InlineKeyboardButton]] = []
     for server in squads:
-        emoji = '' if server.squad_uuid == selected_uuid else ('' if server.is_available else '')
-        label = f'{emoji} {server.display_name}'
+        emoji = (
+            ""
+            if server.squad_uuid == selected_uuid
+            else ("" if server.is_available else "")
+        )
+        label = f"{emoji} {server.display_name}"
         keyboard_rows.append(
             [
                 InlineKeyboardButton(
                     text=label,
-                    callback_data=f'promo_offer_select_squad_{template.id}_{server.id}_{page}',
+                    callback_data=f"promo_offer_select_squad_{template.id}_{server.id}_{page}",
                 )
             ]
         )
@@ -1029,15 +1213,15 @@ async def _render_squad_selection(
         if page > 1:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='←',
-                    callback_data=f'promo_offer_squad_page_{template.id}_{page - 1}',
+                    text="←",
+                    callback_data=f"promo_offer_squad_page_{template.id}_{page - 1}",
                 )
             )
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='→',
-                    callback_data=f'promo_offer_squad_page_{template.id}_{page + 1}',
+                    text="→",
+                    callback_data=f"promo_offer_squad_page_{template.id}_{page + 1}",
                 )
             )
         if nav_row:
@@ -1045,12 +1229,12 @@ async def _render_squad_selection(
 
     action_row = [
         InlineKeyboardButton(
-            text=texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEAR', 'Очистить'),
-            callback_data=f'promo_offer_clear_squad_{template.id}_{page}',
+            text=texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEAR", "Очистить"),
+            callback_data=f"promo_offer_clear_squad_{template.id}_{page}",
         ),
         InlineKeyboardButton(
-            text=texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK', 'Назад'),
-            callback_data=f'promo_offer_squad_back_{template.id}',
+            text=texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK", "Назад"),
+            callback_data=f"promo_offer_squad_back_{template.id}",
         ),
     ]
     keyboard_rows.append(action_row)
@@ -1058,7 +1242,7 @@ async def _render_squad_selection(
     await callback.message.edit_text(
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
 
 
@@ -1078,7 +1262,7 @@ async def _render_offer_details(
     await callback.message.edit_text(
         description,
         reply_markup=_build_offer_detail_keyboard(template, language),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
 
 
@@ -1090,59 +1274,59 @@ async def _handle_edit_field(
     field: str,
 ):
     data = await state.get_data()
-    template_id = data.get('selected_promo_offer')
+    template_id = data.get("selected_promo_offer")
     if not template_id:
         await _safe_delete_message(message)
-        await message.answer('Не удалось определить предложение. Повторите действие.')
+        await message.answer("Не удалось определить предложение. Повторите действие.")
         await state.clear()
         return
 
     template = await get_promo_offer_template_by_id(db, int(template_id))
     if not template:
         await _safe_delete_message(message)
-        await message.answer('Предложение не найдено.')
+        await message.answer("Предложение не найдено.")
         await state.clear()
         return
 
     value = message.text.strip()
     try:
-        if field == 'message_text':
+        if field == "message_text":
             await update_promo_offer_template(db, template, message_text=value)
-        elif field == 'button_text':
+        elif field == "button_text":
             await update_promo_offer_template(db, template, button_text=value)
-        elif field == 'valid_hours':
+        elif field == "valid_hours":
             hours = max(1, int(value))
             await update_promo_offer_template(db, template, valid_hours=hours)
-        elif field == 'discount_percent':
+        elif field == "discount_percent":
             percent = max(0, min(100, int(value)))
             await update_promo_offer_template(db, template, discount_percent=percent)
-        elif field == 'active_discount_hours':
+        elif field == "active_discount_hours":
             hours = max(1, int(value))
             await update_promo_offer_template(db, template, active_discount_hours=hours)
-        elif field == 'test_duration_hours':
+        elif field == "test_duration_hours":
             hours = max(1, int(value))
             await update_promo_offer_template(db, template, test_duration_hours=hours)
-        elif field == 'test_squad_uuids':
-            if value.lower() in {'clear', 'очистить'}:
+        elif field == "test_squad_uuids":
+            if value.lower() in {"clear", "очистить"}:
                 squads: list[str] = []
             else:
-                squads = [item for item in re.split(r'[\s,]+', value) if item]
+                squads = [item for item in re.split(r"[\s,]+", value) if item]
             await update_promo_offer_template(db, template, test_squad_uuids=squads)
         else:
-            raise ValueError('Unsupported field')
+            raise ValueError("Unsupported field")
     except ValueError:
         await _safe_delete_message(message)
-        await message.answer('Некорректное значение. Попробуйте снова.')
+        await message.answer("Некорректное значение. Попробуйте снова.")
         return
 
-    edit_message_id = data.get('promo_edit_message_id')
-    edit_chat_id = data.get('promo_edit_chat_id', message.chat.id)
+    edit_message_id = data.get("promo_edit_message_id")
+    edit_chat_id = data.get("promo_edit_chat_id", message.chat.id)
 
     await state.clear()
     updated_template = await get_promo_offer_template_by_id(db, template.id)
     if not updated_template:
         await _safe_delete_message(message)
-        await message.answer('Предложение не найдено после обновления.')
+        await message.answer("Предложение не найдено после обновления.")
         return
 
     squad_uuid, squad_name = await _resolve_template_squad(db, updated_template)
@@ -1161,21 +1345,29 @@ async def _handle_edit_field(
                 chat_id=edit_chat_id,
                 message_id=edit_message_id,
                 reply_markup=reply_markup,
-                parse_mode='HTML',
+                parse_mode="HTML",
             )
         except TelegramBadRequest as exc:
             error_text = str(exc).lower()
-            if 'there is no text in the message to edit' in error_text:
-                logger.debug('Сообщение промо без текста, пересылаем обновлённую версию')
+            if "there is no text in the message to edit" in error_text:
+                logger.debug(
+                    "Сообщение промо без текста, пересылаем обновлённую версию"
+                )
                 try:
-                    await message.bot.delete_message(chat_id=edit_chat_id, message_id=edit_message_id)
+                    await message.bot.delete_message(
+                        chat_id=edit_chat_id, message_id=edit_message_id
+                    )
                 except TelegramBadRequest:
-                    logger.debug('Не удалось удалить сообщение промо без текста')
+                    logger.debug("Не удалось удалить сообщение промо без текста")
             else:
-                logger.warning('Не удалось обновить сообщение редактирования промо', exc=exc)
-            await message.answer(description, reply_markup=reply_markup, parse_mode='HTML')
+                logger.warning(
+                    "Не удалось обновить сообщение редактирования промо", exc=exc
+                )
+            await message.answer(
+                description, reply_markup=reply_markup, parse_mode="HTML"
+            )
     else:
-        await message.answer(description, reply_markup=reply_markup, parse_mode='HTML')
+        await message.answer(description, reply_markup=reply_markup, parse_mode="HTML")
 
     await _safe_delete_message(message)
 
@@ -1183,44 +1375,52 @@ async def _handle_edit_field(
 @admin_required
 @error_handler
 async def show_send_segments(callback: CallbackQuery, db_user: User, db: AsyncSession):
-    template_id = int(callback.data.split('_')[-1])
+    template_id = int(callback.data.split("_")[-1])
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
-    await callback.message.edit_reply_markup(reply_markup=_build_send_keyboard(template, db_user.language))
+    await callback.message.edit_reply_markup(
+        reply_markup=_build_send_keyboard(template, db_user.language)
+    )
     await callback.answer()
 
 
 @admin_required
 @error_handler
-async def show_send_user_list(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def show_send_user_list(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        prefix = 'promo_offer_send_user_'
+        prefix = "promo_offer_send_user_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         payload = callback.data[len(prefix) :]
-        template_id_str, page_label, page_str = payload.split('_', 2)
-        if page_label != 'page':
-            raise ValueError('invalid payload')
+        template_id_str, page_label, page_str = payload.split("_", 2)
+        if page_label != "page":
+            raise ValueError("invalid payload")
         template_id = int(template_id_str)
         page = int(page_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     page = max(page, 1)
 
     await state.set_state(AdminStates.selecting_promo_offer_user)
     data = await state.get_data()
-    filter_data = data.get('promo_offer_user_filter') or {}
-    query = filter_data.get('query') if filter_data.get('template_id') == template_id else None
+    filter_data = data.get("promo_offer_user_filter") or {}
+    query = (
+        filter_data.get("query")
+        if filter_data.get("template_id") == template_id
+        else None
+    )
 
     await _render_send_user_list(
         bot=callback.bot,
@@ -1238,16 +1438,18 @@ async def show_send_user_list(callback: CallbackQuery, db_user: User, db: AsyncS
 
 @admin_required
 @error_handler
-async def prompt_send_user_search(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def prompt_send_user_search(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        template_id = int(callback.data.split('_')[-1])
+        template_id = int(callback.data.split("_")[-1])
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await _clear_promo_offer_search_prompt(state, callback.bot)
@@ -1257,14 +1459,14 @@ async def prompt_send_user_search(callback: CallbackQuery, db_user: User, db: As
     texts = get_texts(db_user.language)
     prompt_message = await callback.message.answer(
         texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_SEARCH_PROMPT',
-            'Введите имя, username или ID пользователя для поиска:',
+            "ADMIN_PROMO_OFFER_SEND_USER_SEARCH_PROMPT",
+            "Введите имя, username или ID пользователя для поиска:",
         )
     )
     await state.update_data(
         promo_offer_user_search_prompt={
-            'chat_id': prompt_message.chat.id,
-            'message_id': prompt_message.message_id,
+            "chat_id": prompt_message.chat.id,
+            "message_id": prompt_message.message_id,
         }
     )
     await callback.answer()
@@ -1272,16 +1474,18 @@ async def prompt_send_user_search(callback: CallbackQuery, db_user: User, db: As
 
 @admin_required
 @error_handler
-async def reset_send_user_search(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def reset_send_user_search(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        template_id = int(callback.data.split('_')[-1])
+        template_id = int(callback.data.split("_")[-1])
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await _clear_promo_offer_search_prompt(state, callback.bot)
@@ -1302,24 +1506,26 @@ async def reset_send_user_search(callback: CallbackQuery, db_user: User, db: Asy
 
 @admin_required
 @error_handler
-async def back_to_user_list(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def back_to_user_list(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        template_id = int(callback.data.split('_')[-1])
+        template_id = int(callback.data.split("_")[-1])
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await _clear_promo_offer_search_prompt(state, callback.bot)
     data = await state.get_data()
-    filter_data = data.get('promo_offer_user_filter') or {}
-    if filter_data.get('template_id') == template_id:
-        page = int(filter_data.get('page') or 1)
-        query = filter_data.get('query')
+    filter_data = data.get("promo_offer_user_filter") or {}
+    if filter_data.get("template_id") == template_id:
+        page = int(filter_data.get("page") or 1)
+        query = filter_data.get("query")
     else:
         page = 1
         query = None
@@ -1347,38 +1553,38 @@ async def process_send_user_search(
     state: FSMContext,
     db: AsyncSession,
 ):
-    query = (message.text or '').strip()
+    query = (message.text or "").strip()
     if not query:
-        await message.answer('Введите корректный запрос для поиска')
+        await message.answer("Введите корректный запрос для поиска")
         return
 
     data = await state.get_data()
-    template_id = data.get('promo_offer_user_search_template')
+    template_id = data.get("promo_offer_user_search_template")
     if not template_id:
-        await message.answer('Не удалось определить промопредложение')
+        await message.answer("Не удалось определить промопредложение")
         await _safe_delete_message(message)
         return
 
     try:
         template_id = int(template_id)
     except (TypeError, ValueError):
-        await message.answer('Некорректные данные поиска')
+        await message.answer("Некорректные данные поиска")
         await _safe_delete_message(message)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await message.answer('Предложение не найдено')
+        await message.answer("Предложение не найдено")
         await _safe_delete_message(message)
         return
 
     await _clear_promo_offer_search_prompt(state, message.bot)
-    message_info = data.get('promo_offer_user_message') or {}
-    chat_id = message_info.get('chat_id')
-    message_id = message_info.get('message_id')
+    message_info = data.get("promo_offer_user_message") or {}
+    chat_id = message_info.get("chat_id")
+    message_id = message_info.get("message_id")
 
     if not chat_id or not message_id:
-        placeholder = await message.answer('Обновляем список пользователей...')
+        placeholder = await message.answer("Обновляем список пользователей...")
         chat_id = placeholder.chat.id
         message_id = placeholder.message_id
 
@@ -1411,25 +1617,25 @@ async def show_selected_user_details(
     state: FSMContext,
 ):
     try:
-        prefix = 'promo_offer_send_user_select_'
+        prefix = "promo_offer_send_user_select_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         payload = callback.data[len(prefix) :]
-        template_id_str, user_id_str = payload.split('_', 1)
+        template_id_str, user_id_str = payload.split("_", 1)
         template_id = int(template_id_str)
         user_id = int(user_id_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     user = await get_user_by_id(db, user_id)
     if not user:
-        await callback.answer('Пользователь не найден', show_alert=True)
+        await callback.answer("Пользователь не найден", show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -1439,62 +1645,76 @@ async def show_selected_user_details(
         UserStatus.DELETED.value: texts.ADMIN_USER_STATUS_DELETED,
     }
 
-    name = html.escape(user.full_name or user.username or str(user.telegram_id or user.id))
+    name = html.escape(
+        user.full_name or user.username or str(user.telegram_id or user.id)
+    )
     username = html.escape(user.username) if user.username else None
-    balance = getattr(user, 'balance_kopeks', 0)
+    balance = getattr(user, "balance_kopeks", 0)
 
     lines = [
-        texts.t('ADMIN_PROMO_OFFER_SEND_USER_PROFILE', '<b>{name}</b>').format(name=name),
-        texts.t('ADMIN_PROMO_OFFER_SEND_USER_TELEGRAM', '<code>{telegram_id}</code>').format(
-            telegram_id=user.telegram_id or '—'
+        texts.t("ADMIN_PROMO_OFFER_SEND_USER_PROFILE", "<b>{name}</b>").format(
+            name=name
         ),
+        texts.t(
+            "ADMIN_PROMO_OFFER_SEND_USER_TELEGRAM", "<code>{telegram_id}</code>"
+        ).format(telegram_id=user.telegram_id or "—"),
     ]
 
     if username:
-        lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_USERNAME', '@{username}').format(username=username))
+        lines.append(
+            texts.t("ADMIN_PROMO_OFFER_SEND_USER_USERNAME", "@{username}").format(
+                username=username
+            )
+        )
 
     status_label = status_map.get(user.status, texts.ADMIN_USER_STATUS_UNKNOWN)
-    lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_STATUS', 'Статус: {status}').format(status=status_label))
+    lines.append(
+        texts.t("ADMIN_PROMO_OFFER_SEND_USER_STATUS", "Статус: {status}").format(
+            status=status_label
+        )
+    )
 
     if balance:
         lines.append(
-            texts.t('ADMIN_PROMO_OFFER_SEND_USER_BALANCE', 'Баланс: {amount}').format(
+            texts.t("ADMIN_PROMO_OFFER_SEND_USER_BALANCE", "Баланс: {amount}").format(
                 amount=settings.format_price(balance)
             )
         )
 
-    subscription = getattr(user, 'subscription', None)
-    subscriptions_list = getattr(user, 'subscriptions', None) or []
+    subscription = getattr(user, "subscription", None)
+    subscriptions_list = getattr(user, "subscriptions", None) or []
     if settings.is_multi_tariff_enabled() and subscriptions_list:
-        lines.append('')
-        lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION', '<b>Подписки</b>'))
+        lines.append("")
+        lines.append(
+            texts.t("ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION", "<b>Подписки</b>")
+        )
         for sub in subscriptions_list:
-            tariff_name = sub.tariff.name if sub.tariff else f'#{sub.id}'
-            lines.append(f'<b>{tariff_name}</b>')
+            tariff_name = sub.tariff.name if sub.tariff else f"#{sub.id}"
+            lines.append(f"<b>{tariff_name}</b>")
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_STATUS',
-                    'Статус: {status}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_STATUS",
+                    "Статус: {status}",
                 ).format(status=sub.status_display)
             )
             end_date_text = (
                 format_datetime(sub.end_date)
                 if sub.end_date
                 else texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END_UNKNOWN',
-                    'не указано',
+                    "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END_UNKNOWN",
+                    "не указано",
                 )
             )
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END',
-                    'Истекает: {date}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END",
+                    "Истекает: {date}",
                 ).format(date=end_date_text)
             )
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_TRAFFIC',
-                    'Трафик: {used}/{limit} ГБ',
+                    "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_TRAFFIC",
+                    "Трафик: {used}/{limit} ГБ",
                 ).format(
                     used=sub.traffic_used_gb or 0,
                     limit=sub.traffic_limit_gb or 0,
@@ -1504,37 +1724,39 @@ async def show_selected_user_details(
             if connected:
                 lines.append(
                     texts.t(
-                        'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_SQUADS',
-                        'Подключено сквадов: {count}',
+                        "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_SQUADS",
+                        "Подключено сквадов: {count}",
                     ).format(count=len(connected))
                 )
     elif subscription:
-        lines.append('')
-        lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION', '<b>Подписка</b>'))
+        lines.append("")
+        lines.append(
+            texts.t("ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION", "<b>Подписка</b>")
+        )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_STATUS',
-                'Статус: {status}',
+                "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_STATUS",
+                "Статус: {status}",
             ).format(status=subscription.status_display)
         )
         end_date_text = (
             format_datetime(subscription.end_date)
             if subscription.end_date
             else texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END_UNKNOWN',
-                'не указано',
+                "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END_UNKNOWN",
+                "не указано",
             )
         )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END',
-                'Истекает: {date}',
+                "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_END",
+                "Истекает: {date}",
             ).format(date=end_date_text)
         )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_TRAFFIC',
-                'Трафик: {used}/{limit} ГБ',
+                "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_TRAFFIC",
+                "Трафик: {used}/{limit} ГБ",
             ).format(
                 used=subscription.traffic_used_gb or 0,
                 limit=subscription.traffic_limit_gb or 0,
@@ -1544,92 +1766,96 @@ async def show_selected_user_details(
         if connected:
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_SQUADS',
-                    'Подключено сквадов: {count}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_SUBSCRIPTION_SQUADS",
+                    "Подключено сквадов: {count}",
                 ).format(count=len(connected))
             )
     else:
-        lines.append('')
-        lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_NO_SUBSCRIPTION', 'Подписка отсутствует'))
+        lines.append("")
+        lines.append(
+            texts.t(
+                "ADMIN_PROMO_OFFER_SEND_USER_NO_SUBSCRIPTION", "Подписка отсутствует"
+            )
+        )
 
     now = datetime.now(UTC)
     percent = 0
     try:
-        percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0)
+        percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
     except (TypeError, ValueError):
         percent = 0
-    expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
+    expires_at = getattr(user, "promo_offer_discount_expires_at", None)
     if percent > 0 and (not expires_at or expires_at > now):
         discount_line = texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT',
-            'Активная скидка: {percent}%',
+            "ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT",
+            "Активная скидка: {percent}%",
         ).format(percent=percent)
         if expires_at:
             date_text = format_datetime(expires_at)
             remaining_seconds = int((expires_at - now).total_seconds())
             if remaining_seconds > 0:
                 discount_line += texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_LEFT',
-                    ' (до {date}, осталось {time})',
+                    "ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_LEFT",
+                    " (до {date}, осталось {time})",
                 ).format(date=date_text, time=format_duration(remaining_seconds))
             else:
                 discount_line += texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_UNTIL',
-                    ' (до {date})',
+                    "ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_UNTIL",
+                    " (до {date})",
                 ).format(date=date_text)
-        source = getattr(user, 'promo_offer_discount_source', None)
+        source = getattr(user, "promo_offer_discount_source", None)
         if source:
             discount_line += texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_SOURCE',
-                ' — источник: {source}',
+                "ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_SOURCE",
+                " — источник: {source}",
             ).format(source=html.escape(str(source)))
     else:
         discount_line = texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_NONE',
-            'Активная скидка отсутствует',
+            "ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_DISCOUNT_NONE",
+            "Активная скидка отсутствует",
         )
-    lines.append('')
+    lines.append("")
     lines.append(discount_line)
 
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
     offer_label = texts.t(
-        config.get('label_key', ''),
-        config.get('default_label', template.offer_type),
+        config.get("label_key", ""),
+        config.get("default_label", template.offer_type),
     )
-    lines.append('')
+    lines.append("")
     lines.append(
         texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_HEADER',
-            '<b>Выбранное предложение</b>',
+            "ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_HEADER",
+            "<b>Выбранное предложение</b>",
         )
     )
     lines.append(
         texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_TYPE',
-            'Тип: {label}',
+            "ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_TYPE",
+            "Тип: {label}",
         ).format(label=offer_label)
     )
     lines.append(
         texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_VALID',
-            'Действует: {hours} ч.',
+            "ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_VALID",
+            "Действует: {hours} ч.",
         ).format(hours=template.valid_hours)
     )
 
-    if template.offer_type == 'test_access':
+    if template.offer_type == "test_access":
         duration_hours = template.test_duration_hours or 0
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_TEST_DURATION',
-                'Тестовый доступ: {hours} ч.',
+                "ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_TEST_DURATION",
+                "Тестовый доступ: {hours} ч.",
             ).format(hours=duration_hours)
         )
     else:
         if template.discount_percent:
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_DISCOUNT',
-                    'Скидка: {percent}%',
+                    "ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_DISCOUNT",
+                    "Скидка: {percent}%",
                 ).format(percent=template.discount_percent)
             )
 
@@ -1637,95 +1863,107 @@ async def show_selected_user_details(
         if active_hours:
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_ACTIVE_DURATION',
-                    'После активации действует {hours} ч.',
+                    "ADMIN_PROMO_OFFER_SEND_USER_TEMPLATE_ACTIVE_DURATION",
+                    "После активации действует {hours} ч.",
                 ).format(hours=active_hours)
             )
 
     active_offers = await list_discount_offers(db, user_id=user.id, is_active=True)
     if active_offers:
-        lines.append('')
-        lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_OFFERS', 'Активные предложения:'))
+        lines.append("")
+        lines.append(
+            texts.t(
+                "ADMIN_PROMO_OFFER_SEND_USER_ACTIVE_OFFERS", "Активные предложения:"
+            )
+        )
 
         template_map: dict[int, PromoOfferTemplate] = {template.id: template}
         template_ids_to_load: set[int] = set()
 
         for offer in active_offers:
-            offer_template_id = _extract_template_id_from_notification(offer.notification_type)
+            offer_template_id = _extract_template_id_from_notification(
+                offer.notification_type
+            )
             if offer_template_id and offer_template_id not in template_map:
                 template_ids_to_load.add(offer_template_id)
 
         if template_ids_to_load:
             templates_result = await db.execute(
-                select(PromoOfferTemplate).where(PromoOfferTemplate.id.in_(template_ids_to_load))
+                select(PromoOfferTemplate).where(
+                    PromoOfferTemplate.id.in_(template_ids_to_load)
+                )
             )
             for offer_template in templates_result.scalars():
                 template_map[offer_template.id] = offer_template
 
         for offer in active_offers[:5]:
             parts: list[str] = []
-            if offer.effect_type == 'test_access':
-                parts.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_TEST', 'Тестовый доступ'))
+            if offer.effect_type == "test_access":
+                parts.append(
+                    texts.t("ADMIN_PROMO_OFFER_SEND_USER_OFFER_TEST", "Тестовый доступ")
+                )
             if offer.discount_percent:
                 parts.append(
                     texts.t(
-                        'ADMIN_PROMO_OFFER_SEND_USER_OFFER_PERCENT',
-                        'Скидка {percent}%',
+                        "ADMIN_PROMO_OFFER_SEND_USER_OFFER_PERCENT",
+                        "Скидка {percent}%",
                     ).format(percent=offer.discount_percent)
                 )
             if offer.bonus_amount_kopeks:
                 parts.append(
                     texts.t(
-                        'ADMIN_PROMO_OFFER_SEND_USER_OFFER_BONUS',
-                        'Бонус {amount}',
+                        "ADMIN_PROMO_OFFER_SEND_USER_OFFER_BONUS",
+                        "Бонус {amount}",
                     ).format(amount=settings.format_price(offer.bonus_amount_kopeks))
                 )
-            description = ', '.join(parts) or offer.effect_type
+            description = ", ".join(parts) or offer.effect_type
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_OFFER_ITEM_HEADER',
-                    '• {description}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_OFFER_ITEM_HEADER",
+                    "• {description}",
                 ).format(description=description)
             )
 
             expires_text = (
                 format_datetime(offer.expires_at)
                 if offer.expires_at
-                else texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY', 'без срока')
+                else texts.t("ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY", "без срока")
             )
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_OFFER_EXPIRES',
-                    '  Истекает: {expires}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_OFFER_EXPIRES",
+                    "  Истекает: {expires}",
                 ).format(expires=expires_text)
             )
 
             status_label = texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS_ACCEPTED',
-                'Принято',
+                "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS_ACCEPTED",
+                "Принято",
             )
             if not offer.claimed_at:
                 status_label = texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS_PENDING',
-                    'Не принято',
+                    "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS_PENDING",
+                    "Не принято",
                 )
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS',
-                    '  Статус: {status}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATUS",
+                    "  Статус: {status}",
                 ).format(status=status_label)
             )
 
             time_left = _format_offer_remaining(offer, texts)
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_OFFER_TIME_LEFT',
-                    '  Осталось: {time}',
+                    "ADMIN_PROMO_OFFER_SEND_USER_OFFER_TIME_LEFT",
+                    "  Осталось: {time}",
                 ).format(time=time_left)
             )
 
             offer_template = None
-            offer_template_id = _extract_template_id_from_notification(offer.notification_type)
+            offer_template_id = _extract_template_id_from_notification(
+                offer.notification_type
+            )
             if offer_template_id:
                 offer_template = template_map.get(offer_template_id)
 
@@ -1733,30 +1971,32 @@ async def show_selected_user_details(
             if active_hours:
                 lines.append(
                     texts.t(
-                        'ADMIN_PROMO_OFFER_SEND_USER_OFFER_ACTIVE_DURATION',
-                        '  После активации: {duration}',
+                        "ADMIN_PROMO_OFFER_SEND_USER_OFFER_ACTIVE_DURATION",
+                        "  После активации: {duration}",
                     ).format(duration=format_duration(active_hours * 3600))
                 )
 
             if offer.expires_at and offer.created_at:
-                total_seconds = int((offer.expires_at - offer.created_at).total_seconds())
+                total_seconds = int(
+                    (offer.expires_at - offer.created_at).total_seconds()
+                )
                 if total_seconds > 0:
                     lines.append(
                         texts.t(
-                            'ADMIN_PROMO_OFFER_SEND_USER_OFFER_TOTAL_DURATION',
-                            '  Всего действует: {duration}',
+                            "ADMIN_PROMO_OFFER_SEND_USER_OFFER_TOTAL_DURATION",
+                            "  Всего действует: {duration}",
                         ).format(duration=format_duration(total_seconds))
                     )
 
-            lines.append('')
-        if lines[-1] == '':
+            lines.append("")
+        if lines[-1] == "":
             lines.pop()
     else:
-        lines.append('')
+        lines.append("")
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_NO_ACTIVE_OFFERS',
-                'Активных предложений нет',
+                "ADMIN_PROMO_OFFER_SEND_USER_NO_ACTIVE_OFFERS",
+                "Активных предложений нет",
             )
         )
 
@@ -1770,7 +2010,7 @@ async def show_selected_user_details(
         ),
     ).where(
         DiscountOffer.user_id == user.id,
-        DiscountOffer.notification_type == f'promo_template_{template.id}',
+        DiscountOffer.notification_type == f"promo_template_{template.id}",
     )
     stats_result = await db.execute(stats_stmt)
     total_offers, accepted_offers = stats_result.one()
@@ -1779,35 +2019,35 @@ async def show_selected_user_details(
     pending_offers = max(total_offers - accepted_offers, 0)
 
     if total_offers > 0:
-        lines.append('')
+        lines.append("")
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_HEADER',
-                'Статистика предложений',
+                "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_HEADER",
+                "Статистика предложений",
             )
         )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_TOTAL',
-                'Всего отправлено: {count}',
+                "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_TOTAL",
+                "Всего отправлено: {count}",
             ).format(count=total_offers)
         )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_ACCEPTED',
-                'Принято: {count}',
+                "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_ACCEPTED",
+                "Принято: {count}",
             ).format(count=accepted_offers)
         )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_PENDING',
-                'Не принято: {count}',
+                "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_PENDING",
+                "Не принято: {count}",
             ).format(count=pending_offers)
         )
         lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_ACTIVE',
-                'Активно сейчас: {count}',
+                "ADMIN_PROMO_OFFER_SEND_USER_OFFER_STATS_ACTIVE",
+                "Активно сейчас: {count}",
             ).format(count=len(active_offers))
         )
 
@@ -1842,19 +2082,23 @@ async def show_selected_user_details(
         accesses = []
 
     if accesses:
-        lines.append('')
-        lines.append(texts.t('ADMIN_PROMO_OFFER_SEND_USER_TEST_ACCESS', 'Активные тестовые доступы:'))
+        lines.append("")
+        lines.append(
+            texts.t(
+                "ADMIN_PROMO_OFFER_SEND_USER_TEST_ACCESS", "Активные тестовые доступы:"
+            )
+        )
         for entry in accesses[:5]:
-            squad_label = html.escape(entry.squad_uuid or '—')
+            squad_label = html.escape(entry.squad_uuid or "—")
             expires_text = (
                 format_datetime(entry.expires_at)
                 if entry.expires_at
-                else texts.t('ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY', 'без срока')
+                else texts.t("ADMIN_PROMO_OFFER_SEND_USER_OFFER_NO_EXPIRY", "без срока")
             )
             lines.append(
                 texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_TEST_ACCESS_ITEM',
-                    '• {squad} (до {expires})',
+                    "ADMIN_PROMO_OFFER_SEND_USER_TEST_ACCESS_ITEM",
+                    "• {squad} (до {expires})",
                 ).format(squad=squad_label, expires=expires_text)
             )
 
@@ -1862,36 +2106,40 @@ async def show_selected_user_details(
         [
             InlineKeyboardButton(
                 text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_SEND_BUTTON',
-                    'Отправить предложение',
+                    "ADMIN_PROMO_OFFER_SEND_USER_SEND_BUTTON",
+                    "Отправить предложение",
                 ),
-                callback_data=f'promo_offer_send_user_confirm_{template_id}_{user.id}',
+                callback_data=f"promo_offer_send_user_confirm_{template_id}_{user.id}",
             )
         ],
         [
             InlineKeyboardButton(
                 text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
-                    '← К списку пользователей',
+                    "ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST",
+                    "← К списку пользователей",
                 ),
-                callback_data=f'promo_offer_send_user_back_{template_id}',
+                callback_data=f"promo_offer_send_user_back_{template_id}",
             )
         ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data=f'promo_offer_{template_id}')],
+        [
+            InlineKeyboardButton(
+                text=texts.BACK, callback_data=f"promo_offer_{template_id}"
+            )
+        ],
     ]
 
     await callback.message.edit_text(
-        '\n'.join(lines),
+        "\n".join(lines),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
 
     await state.set_state(AdminStates.selecting_promo_offer_user)
     await state.update_data(
         promo_offer_selected_user=user.id,
         promo_offer_user_message={
-            'chat_id': callback.message.chat.id,
-            'message_id': callback.message.message_id,
+            "chat_id": callback.message.chat.id,
+            "message_id": callback.message.message_id,
         },
     )
     await callback.answer()
@@ -1899,23 +2147,25 @@ async def show_selected_user_details(
 
 def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardButton]]:
     if settings.is_multi_tariff_enabled():
-        subs = getattr(user, 'subscriptions', None) or []
+        subs = getattr(user, "subscriptions", None) or []
         subscription = next((s for s in subs if s.subscription_url), None)
     else:
-        subscription = getattr(user, 'subscription', None)
+        subscription = getattr(user, "subscription", None)
     if not subscription:
         return []
 
-    button_text = texts.t('CONNECT_BUTTON', 'Подключиться')
+    button_text = texts.t("CONNECT_BUTTON", "Подключиться")
     subscription_link = get_display_subscription_link(subscription)
     connect_mode = settings.CONNECT_BUTTON_MODE
 
     def _fallback_button() -> InlineKeyboardButton:
-        return InlineKeyboardButton(text=button_text, callback_data='subscription_connect')
+        return InlineKeyboardButton(
+            text=button_text, callback_data="subscription_connect"
+        )
 
     rows: list[list[InlineKeyboardButton]] = []
 
-    if connect_mode == 'miniapp_subscription':
+    if connect_mode == "miniapp_subscription":
         if subscription_link:
             rows.append(
                 [
@@ -1927,7 +2177,7 @@ def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardBut
             )
         else:
             rows.append([_fallback_button()])
-    elif connect_mode == 'miniapp_custom':
+    elif connect_mode == "miniapp_custom":
         if settings.MINIAPP_CUSTOM_URL:
             rows.append(
                 [
@@ -1939,14 +2189,20 @@ def _build_connect_button_rows(user: User, texts) -> list[list[InlineKeyboardBut
             )
         else:
             rows.append([_fallback_button()])
-    elif connect_mode == 'link':
+    elif connect_mode == "link":
         if subscription_link:
             rows.append([InlineKeyboardButton(text=button_text, url=subscription_link)])
         else:
             rows.append([_fallback_button()])
-    elif connect_mode == 'happ_cryptolink':
+    elif connect_mode == "happ_cryptolink":
         if subscription_link:
-            rows.append([InlineKeyboardButton(text=button_text, callback_data='open_subscription_link')])
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=button_text, callback_data="open_subscription_link"
+                    )
+                ]
+            )
         else:
             rows.append([_fallback_button()])
     else:
@@ -1981,7 +2237,9 @@ async def _send_offer_to_users(
         """Отправляет одно предложение с семафором ограничения"""
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
-            logger.debug('Пропуск email-пользователя при рассылке промо', user_id=user.id)
+            logger.debug(
+                "Пропуск email-пользователя при рассылке промо", user_id=user.id
+            )
             return False
 
         async with semaphore:
@@ -1989,10 +2247,14 @@ async def _send_offer_to_users(
                 # Используем отдельную сессию для изоляции транзакции
                 async with AsyncSessionLocal() as new_db:
                     if settings.is_multi_tariff_enabled():
-                        _user_subs = getattr(user, 'subscriptions', None) or []
+                        _user_subs = getattr(user, "subscriptions", None) or []
                         _active_subs = [s for s in _user_subs if s.is_active]
                         if _active_subs:
-                            _non_daily = [s for s in _active_subs if not getattr(s, 'is_daily_tariff', False)]
+                            _non_daily = [
+                                s
+                                for s in _active_subs
+                                if not getattr(s, "is_daily_tariff", False)
+                            ]
                             _eligible = _non_daily or _active_subs
                             _best = max(_eligible, key=lambda s: s.days_left)
                             _offer_sub_id = _best.id
@@ -2001,23 +2263,23 @@ async def _send_offer_to_users(
                         else:
                             _offer_sub_id = None
                     else:
-                        _offer_sub = getattr(user, 'subscription', None)
+                        _offer_sub = getattr(user, "subscription", None)
                         _offer_sub_id = _offer_sub.id if _offer_sub else None
                     offer_record = await upsert_discount_offer(
                         new_db,
                         user_id=user.id,
                         subscription_id=_offer_sub_id,
-                        notification_type=f'promo_template_{template.id}',
+                        notification_type=f"promo_template_{template.id}",
                         discount_percent=template.discount_percent,
                         bonus_amount_kopeks=0,
                         valid_hours=template.valid_hours,
                         effect_type=effect_type,
                         extra_data={
-                            'template_id': template.id,
-                            'offer_type': template.offer_type,
-                            'test_duration_hours': template.test_duration_hours,
-                            'test_squad_uuids': template.test_squad_uuids,
-                            'active_discount_hours': template.active_discount_hours,
+                            "template_id": template.id,
+                            "offer_type": template.offer_type,
+                            "test_duration_hours": template.test_duration_hours,
+                            "test_squad_uuids": template.test_squad_uuids,
+                            "active_discount_hours": template.active_discount_hours,
                         },
                     )
 
@@ -2026,7 +2288,7 @@ async def _send_offer_to_users(
                         [
                             build_miniapp_or_callback_button(
                                 text=template.button_text,
-                                callback_data=f'claim_discount_{offer_record.id}',
+                                callback_data=f"claim_discount_{offer_record.id}",
                             )
                         ]
                     ]
@@ -2034,8 +2296,8 @@ async def _send_offer_to_users(
                     keyboard_rows.append(
                         [
                             InlineKeyboardButton(
-                                text=user_texts.t('PROMO_OFFER_CLOSE', 'Закрыть'),
-                                callback_data='promo_offer_close',
+                                text=user_texts.t("PROMO_OFFER_CLOSE", "Закрыть"),
+                                callback_data="promo_offer_close",
                             )
                         ]
                     )
@@ -2051,17 +2313,21 @@ async def _send_offer_to_users(
                         chat_id=user.telegram_id,
                         text=message_text,
                         reply_markup=keyboard,
-                        parse_mode='HTML',
+                        parse_mode="HTML",
                     )
                     return True
             except (TelegramForbiddenError, TelegramBadRequest) as exc:
                 logger.warning(
-                    'Не удалось отправить предложение пользователю', telegram_id=user.telegram_id or user.id, exc=exc
+                    "Не удалось отправить предложение пользователю",
+                    telegram_id=user.telegram_id or user.id,
+                    exc=exc,
                 )
                 return False
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.error(
-                    'Ошибка рассылки промо предложения пользователю', telegram_id=user.telegram_id or user.id, exc=exc
+                    "Ошибка рассылки промо предложения пользователю",
+                    telegram_id=user.telegram_id or user.id,
+                    exc=exc,
                 )
                 return False
 
@@ -2089,58 +2355,70 @@ async def _send_offer_to_users(
 
 @admin_required
 @error_handler
-async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: AsyncSession):
+async def send_offer_to_segment(
+    callback: CallbackQuery, db_user: User, db: AsyncSession
+):
     try:
-        prefix = 'promo_offer_send_'
+        prefix = "promo_offer_send_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         data = callback.data[len(prefix) :]
-        template_id_str, segment = data.split('_', 1)
+        template_id_str, segment = data.split("_", 1)
         template_id = int(template_id_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
     squad_uuid, squad_name = await _resolve_template_squad(db, template)
-    allowed_segments = {seg for seg, _ in config.get('allowed_segments', [])}
+    allowed_segments = {seg for seg, _ in config.get("allowed_segments", [])}
     if segment not in allowed_segments:
-        await callback.answer('Нельзя отправить это предложение выбранной категории', show_alert=True)
+        await callback.answer(
+            "Нельзя отправить это предложение выбранной категории", show_alert=True
+        )
         return
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('ADMIN_PROMO_OFFER_SENDING', 'Начинаем рассылку...'), show_alert=True)
+    await callback.answer(
+        texts.t("ADMIN_PROMO_OFFER_SENDING", "Начинаем рассылку..."), show_alert=True
+    )
 
     users = await get_users_for_promo_segment(db, segment)
     initial_count = len(users)
 
-    if template.offer_type == 'test_access' and squad_uuid:
+    if template.offer_type == "test_access" and squad_uuid:
         filtered_users: list[User] = []
         for user in users:
             if settings.is_multi_tariff_enabled():
                 all_squads: set[str] = set()
-                for s in getattr(user, 'subscriptions', None) or []:
+                for s in getattr(user, "subscriptions", None) or []:
                     all_squads.update(s.connected_squads or [])
                 connected = all_squads
             else:
-                subscription = getattr(user, 'subscription', None)
-                connected = set(subscription.connected_squads or []) if subscription else set()
+                subscription = getattr(user, "subscription", None)
+                connected = (
+                    set(subscription.connected_squads or []) if subscription else set()
+                )
             if squad_uuid in connected:
                 continue
             filtered_users.append(user)
         users = filtered_users
 
     if not users:
-        await callback.message.answer(texts.t('ADMIN_PROMO_OFFER_NO_USERS', 'Подходящих пользователей не найдено.'))
+        await callback.message.answer(
+            texts.t(
+                "ADMIN_PROMO_OFFER_NO_USERS", "Подходящих пользователей не найдено."
+            )
+        )
         return
 
     skipped = initial_count - len(users)
-    effect_type = config.get('effect_type', 'percent_discount')
+    effect_type = config.get("effect_type", "percent_discount")
     sent, failed = await _send_offer_to_users(
         callback.bot,
         template,
@@ -2152,13 +2430,13 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     )
 
     summary = texts.t(
-        'ADMIN_PROMO_OFFER_RESULT',
-        'Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}',
+        "ADMIN_PROMO_OFFER_RESULT",
+        "Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}",
     ).format(sent=sent, failed=failed)
     if skipped > 0:
-        summary += '\n' + texts.t(
-            'ADMIN_PROMO_OFFER_SKIPPED',
-            'Пропущено: {skipped} (уже есть доступ)',
+        summary += "\n" + texts.t(
+            "ADMIN_PROMO_OFFER_SKIPPED",
+            "Пропущено: {skipped} (уже есть доступ)",
         ).format(skipped=skipped)
     refreshed = await get_promo_offer_template_by_id(db, template.id)
     result_keyboard_rows: list[list[InlineKeyboardButton]] = []
@@ -2167,8 +2445,8 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
         result_keyboard_rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', 'К предложению'),
-                    callback_data=f'promo_offer_{refreshed.id}',
+                    text=texts.t("ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE", "К предложению"),
+                    callback_data=f"promo_offer_{refreshed.id}",
                 )
             ]
         )
@@ -2176,8 +2454,8 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     result_keyboard_rows.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_LIST', '← К промопредложениям'),
-                callback_data='admin_promo_offers',
+                text=texts.t("ADMIN_PROMO_OFFER_BACK_TO_LIST", "← К промопредложениям"),
+                callback_data="admin_promo_offers",
             )
         ]
     )
@@ -2185,46 +2463,50 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     await callback.message.edit_text(
         summary,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=result_keyboard_rows),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
 
 
 @admin_required
 @error_handler
-async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def send_offer_to_user(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        prefix = 'promo_offer_send_user_confirm_'
+        prefix = "promo_offer_send_user_confirm_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         payload = callback.data[len(prefix) :]
-        template_id_str, user_id_str = payload.split('_', 1)
+        template_id_str, user_id_str = payload.split("_", 1)
         template_id = int(template_id_str)
         user_id = int(user_id_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     user = await get_user_by_id(db, user_id)
     if not user:
-        await callback.answer('Пользователь не найден', show_alert=True)
+        await callback.answer("Пользователь не найден", show_alert=True)
         return
 
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
     squad_uuid, squad_name = await _resolve_template_squad(db, template)
-    effect_type = config.get('effect_type', 'percent_discount')
+    effect_type = config.get("effect_type", "percent_discount")
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('ADMIN_PROMO_OFFER_SENDING', 'Начинаем рассылку...'), show_alert=True)
+    await callback.answer(
+        texts.t("ADMIN_PROMO_OFFER_SENDING", "Начинаем рассылку..."), show_alert=True
+    )
 
     users_to_send: list[User] = [user]
     skipped = 0
-    if template.offer_type == 'test_access' and squad_uuid:
-        subscription = getattr(user, 'subscription', None)
+    if template.offer_type == "test_access" and squad_uuid:
+        subscription = getattr(user, "subscription", None)
         connected = set(subscription.connected_squads or []) if subscription else set()
         if squad_uuid in connected:
             users_to_send = []
@@ -2243,31 +2525,33 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
             effect_type=effect_type,
         )
 
-    display_name = html.escape(user.full_name or user.username or str(user.telegram_id or user.id))
+    display_name = html.escape(
+        user.full_name or user.username or str(user.telegram_id or user.id)
+    )
     summary_lines = [
         texts.t(
-            'ADMIN_PROMO_OFFER_SEND_USER_SUMMARY_TITLE',
-            'Отправка пользователю {name}',
+            "ADMIN_PROMO_OFFER_SEND_USER_SUMMARY_TITLE",
+            "Отправка пользователю {name}",
         ).format(name=display_name),
         texts.t(
-            'ADMIN_PROMO_OFFER_RESULT',
-            'Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}',
+            "ADMIN_PROMO_OFFER_RESULT",
+            "Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}",
         ).format(sent=sent, failed=failed),
     ]
 
     if skipped:
         summary_lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_SKIPPED',
-                'Пропущено: {skipped} (уже есть доступ)',
+                "ADMIN_PROMO_OFFER_SEND_USER_SKIPPED",
+                "Пропущено: {skipped} (уже есть доступ)",
             ).format(skipped=skipped)
         )
 
     if not users_to_send and not skipped:
         summary_lines.append(
             texts.t(
-                'ADMIN_PROMO_OFFER_SEND_USER_EMPTY_RESULT',
-                'Отправка не выполнена',
+                "ADMIN_PROMO_OFFER_SEND_USER_EMPTY_RESULT",
+                "Отправка не выполнена",
             )
         )
 
@@ -2275,87 +2559,101 @@ async def send_offer_to_user(callback: CallbackQuery, db_user: User, db: AsyncSe
         [
             InlineKeyboardButton(
                 text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_PROFILE',
-                    'К профилю пользователя',
+                    "ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_PROFILE",
+                    "К профилю пользователя",
                 ),
-                callback_data=f'promo_offer_send_user_select_{template.id}_{user.id}',
+                callback_data=f"promo_offer_send_user_select_{template.id}_{user.id}",
             )
         ],
         [
             InlineKeyboardButton(
                 text=texts.t(
-                    'ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST',
-                    '← К списку пользователей',
+                    "ADMIN_PROMO_OFFER_SEND_USER_BACK_TO_LIST",
+                    "← К списку пользователей",
                 ),
-                callback_data=f'promo_offer_send_user_back_{template.id}',
+                callback_data=f"promo_offer_send_user_back_{template.id}",
             )
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE', 'К предложению'),
-                callback_data=f'promo_offer_{template.id}',
+                text=texts.t("ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE", "К предложению"),
+                callback_data=f"promo_offer_{template.id}",
             )
         ],
     ]
 
     await callback.message.edit_text(
-        '\n'.join(summary_lines),
+        "\n".join(summary_lines),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
 
     await state.set_state(AdminStates.selecting_promo_offer_user)
     await state.update_data(
         promo_offer_selected_user=user.id,
         promo_offer_user_message={
-            'chat_id': callback.message.chat.id,
-            'message_id': callback.message.message_id,
+            "chat_id": callback.message.chat.id,
+            "message_id": callback.message.message_id,
         },
     )
 
 
-async def process_edit_message_text(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, 'message_text')
+async def process_edit_message_text(
+    message: Message, state: FSMContext, db: AsyncSession, db_user: User
+):
+    await _handle_edit_field(message, state, db, db_user, "message_text")
 
 
-async def process_edit_button_text(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, 'button_text')
+async def process_edit_button_text(
+    message: Message, state: FSMContext, db: AsyncSession, db_user: User
+):
+    await _handle_edit_field(message, state, db, db_user, "button_text")
 
 
-async def process_edit_valid_hours(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, 'valid_hours')
+async def process_edit_valid_hours(
+    message: Message, state: FSMContext, db: AsyncSession, db_user: User
+):
+    await _handle_edit_field(message, state, db, db_user, "valid_hours")
 
 
-async def process_edit_active_duration_hours(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, 'active_discount_hours')
+async def process_edit_active_duration_hours(
+    message: Message, state: FSMContext, db: AsyncSession, db_user: User
+):
+    await _handle_edit_field(message, state, db, db_user, "active_discount_hours")
 
 
-async def process_edit_discount_percent(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, 'discount_percent')
+async def process_edit_discount_percent(
+    message: Message, state: FSMContext, db: AsyncSession, db_user: User
+):
+    await _handle_edit_field(message, state, db, db_user, "discount_percent")
 
 
-async def process_edit_test_duration(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, 'test_duration_hours')
+async def process_edit_test_duration(
+    message: Message, state: FSMContext, db: AsyncSession, db_user: User
+):
+    await _handle_edit_field(message, state, db, db_user, "test_duration_hours")
 
 
 @admin_required
 @error_handler
-async def paginate_squad_selection(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def paginate_squad_selection(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        prefix = 'promo_offer_squad_page_'
+        prefix = "promo_offer_squad_page_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         payload = callback.data[len(prefix) :]
-        template_id_str, page_str = payload.split('_', 1)
+        template_id_str, page_str = payload.split("_", 1)
         template_id = int(template_id_str)
         page = int(page_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await state.update_data(selected_promo_offer=template.id)
@@ -2365,68 +2663,78 @@ async def paginate_squad_selection(callback: CallbackQuery, db_user: User, db: A
 
 @admin_required
 @error_handler
-async def select_squad_for_template(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def select_squad_for_template(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        prefix = 'promo_offer_select_squad_'
+        prefix = "promo_offer_select_squad_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         payload = callback.data[len(prefix) :]
-        template_id_str, server_id_str, page_str = payload.split('_', 2)
+        template_id_str, server_id_str, page_str = payload.split("_", 2)
         template_id = int(template_id_str)
         server_id = int(server_id_str)
         page = int(page_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     server = await get_server_squad_by_id(db, server_id)
     if not server:
         await callback.answer(
             get_texts(db_user.language).t(
-                'ADMIN_PROMO_OFFER_SELECT_SQUAD_NOT_FOUND',
-                'Сервер не найден',
+                "ADMIN_PROMO_OFFER_SELECT_SQUAD_NOT_FOUND",
+                "Сервер не найден",
             ),
             show_alert=True,
         )
         return
 
-    await update_promo_offer_template(db, template, test_squad_uuids=[server.squad_uuid])
+    await update_promo_offer_template(
+        db, template, test_squad_uuids=[server.squad_uuid]
+    )
     updated = await get_promo_offer_template_by_id(db, template.id)
     if updated:
         await state.update_data(selected_promo_offer=updated.id)
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_UPDATED', 'Сквад обновлён'))
+    await callback.answer(
+        texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_UPDATED", "Сквад обновлён")
+    )
 
     if updated:
         await _render_offer_details(callback, updated, db_user.language, db)
     else:
-        await _render_squad_selection(callback, template, db, db_user.language, page=page)
+        await _render_squad_selection(
+            callback, template, db, db_user.language, page=page
+        )
 
 
 @admin_required
 @error_handler
-async def clear_squad_for_template(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def clear_squad_for_template(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        prefix = 'promo_offer_clear_squad_'
+        prefix = "promo_offer_clear_squad_"
         if not callback.data.startswith(prefix):
-            raise ValueError('invalid prefix')
+            raise ValueError("invalid prefix")
         payload = callback.data[len(prefix) :]
-        template_id_str, page_str = payload.split('_', 1)
+        template_id_str, page_str = payload.split("_", 1)
         template_id = int(template_id_str)
         page = int(page_str)
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await update_promo_offer_template(db, template, test_squad_uuids=[])
@@ -2435,26 +2743,34 @@ async def clear_squad_for_template(callback: CallbackQuery, db_user: User, db: A
         await state.update_data(selected_promo_offer=updated.id)
 
     texts = get_texts(db_user.language)
-    await callback.answer(texts.t('ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEARED', 'Сквад очищен'))
+    await callback.answer(
+        texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEARED", "Сквад очищен")
+    )
 
     if updated:
-        await _render_squad_selection(callback, updated, db, db_user.language, page=page)
+        await _render_squad_selection(
+            callback, updated, db, db_user.language, page=page
+        )
     else:
-        await _render_squad_selection(callback, template, db, db_user.language, page=page)
+        await _render_squad_selection(
+            callback, template, db, db_user.language, page=page
+        )
 
 
 @admin_required
 @error_handler
-async def back_to_offer_from_squads(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+async def back_to_offer_from_squads(
+    callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
+):
     try:
-        template_id = int(callback.data.split('_')[-1])
+        template_id = int(callback.data.split("_")[-1])
     except (ValueError, AttributeError):
-        await callback.answer('Некорректные данные', show_alert=True)
+        await callback.answer("Некорректные данные", show_alert=True)
         return
 
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        await callback.answer('Предложение не найдено', show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     await state.update_data(selected_promo_offer=template.id)
@@ -2463,33 +2779,90 @@ async def back_to_offer_from_squads(callback: CallbackQuery, db_user: User, db: 
 
 
 def register_handlers(dp: Dispatcher):
-    dp.callback_query.register(show_promo_offers_menu, F.data == 'admin_promo_offers')
-    dp.callback_query.register(prompt_edit_message, F.data.startswith('promo_offer_edit_message_'))
-    dp.callback_query.register(prompt_edit_button, F.data.startswith('promo_offer_edit_button_'))
-    dp.callback_query.register(prompt_edit_valid, F.data.startswith('promo_offer_edit_valid_'))
-    dp.callback_query.register(prompt_edit_discount, F.data.startswith('promo_offer_edit_discount_'))
-    dp.callback_query.register(prompt_edit_active_duration, F.data.startswith('promo_offer_edit_active_'))
-    dp.callback_query.register(prompt_edit_duration, F.data.startswith('promo_offer_edit_duration_'))
-    dp.callback_query.register(prompt_edit_squads, F.data.startswith('promo_offer_edit_squads_'))
-    dp.callback_query.register(paginate_squad_selection, F.data.startswith('promo_offer_squad_page_'))
-    dp.callback_query.register(select_squad_for_template, F.data.startswith('promo_offer_select_squad_'))
-    dp.callback_query.register(clear_squad_for_template, F.data.startswith('promo_offer_clear_squad_'))
-    dp.callback_query.register(back_to_offer_from_squads, F.data.startswith('promo_offer_squad_back_'))
-    dp.callback_query.register(show_send_user_list, F.data.regexp(r'^promo_offer_send_user_\d+_page_\d+$'))
-    dp.callback_query.register(show_selected_user_details, F.data.startswith('promo_offer_send_user_select_'))
-    dp.callback_query.register(prompt_send_user_search, F.data.startswith('promo_offer_send_user_search_'))
-    dp.callback_query.register(reset_send_user_search, F.data.startswith('promo_offer_send_user_reset_'))
-    dp.callback_query.register(back_to_user_list, F.data.startswith('promo_offer_send_user_back_'))
-    dp.callback_query.register(show_send_segments, F.data.startswith('promo_offer_send_menu_'))
-    dp.callback_query.register(send_offer_to_user, F.data.startswith('promo_offer_send_user_confirm_'))
-    dp.callback_query.register(send_offer_to_segment, F.data.startswith('promo_offer_send_'))
-    dp.callback_query.register(show_promo_offer_logs, F.data.regexp(r'^promo_offer_logs_page_\d+$'))
-    dp.callback_query.register(show_promo_offer_details, F.data.startswith('promo_offer_'))
+    dp.callback_query.register(show_promo_offers_menu, F.data == "admin_promo_offers")
+    dp.callback_query.register(
+        prompt_edit_message, F.data.startswith("promo_offer_edit_message_")
+    )
+    dp.callback_query.register(
+        prompt_edit_button, F.data.startswith("promo_offer_edit_button_")
+    )
+    dp.callback_query.register(
+        prompt_edit_valid, F.data.startswith("promo_offer_edit_valid_")
+    )
+    dp.callback_query.register(
+        prompt_edit_discount, F.data.startswith("promo_offer_edit_discount_")
+    )
+    dp.callback_query.register(
+        prompt_edit_active_duration, F.data.startswith("promo_offer_edit_active_")
+    )
+    dp.callback_query.register(
+        prompt_edit_duration, F.data.startswith("promo_offer_edit_duration_")
+    )
+    dp.callback_query.register(
+        prompt_edit_squads, F.data.startswith("promo_offer_edit_squads_")
+    )
+    dp.callback_query.register(
+        paginate_squad_selection, F.data.startswith("promo_offer_squad_page_")
+    )
+    dp.callback_query.register(
+        select_squad_for_template, F.data.startswith("promo_offer_select_squad_")
+    )
+    dp.callback_query.register(
+        clear_squad_for_template, F.data.startswith("promo_offer_clear_squad_")
+    )
+    dp.callback_query.register(
+        back_to_offer_from_squads, F.data.startswith("promo_offer_squad_back_")
+    )
+    dp.callback_query.register(
+        show_send_user_list, F.data.regexp(r"^promo_offer_send_user_\d+_page_\d+$")
+    )
+    dp.callback_query.register(
+        show_selected_user_details, F.data.startswith("promo_offer_send_user_select_")
+    )
+    dp.callback_query.register(
+        prompt_send_user_search, F.data.startswith("promo_offer_send_user_search_")
+    )
+    dp.callback_query.register(
+        reset_send_user_search, F.data.startswith("promo_offer_send_user_reset_")
+    )
+    dp.callback_query.register(
+        back_to_user_list, F.data.startswith("promo_offer_send_user_back_")
+    )
+    dp.callback_query.register(
+        show_send_segments, F.data.startswith("promo_offer_send_menu_")
+    )
+    dp.callback_query.register(
+        send_offer_to_user, F.data.startswith("promo_offer_send_user_confirm_")
+    )
+    dp.callback_query.register(
+        send_offer_to_segment, F.data.startswith("promo_offer_send_")
+    )
+    dp.callback_query.register(
+        show_promo_offer_logs, F.data.regexp(r"^promo_offer_logs_page_\d+$")
+    )
+    dp.callback_query.register(
+        show_promo_offer_details, F.data.startswith("promo_offer_")
+    )
 
-    dp.message.register(process_edit_message_text, AdminStates.editing_promo_offer_message)
-    dp.message.register(process_edit_button_text, AdminStates.editing_promo_offer_button)
-    dp.message.register(process_edit_valid_hours, AdminStates.editing_promo_offer_valid_hours)
-    dp.message.register(process_edit_active_duration_hours, AdminStates.editing_promo_offer_active_duration)
-    dp.message.register(process_edit_discount_percent, AdminStates.editing_promo_offer_discount)
-    dp.message.register(process_edit_test_duration, AdminStates.editing_promo_offer_test_duration)
-    dp.message.register(process_send_user_search, AdminStates.searching_promo_offer_user)
+    dp.message.register(
+        process_edit_message_text, AdminStates.editing_promo_offer_message
+    )
+    dp.message.register(
+        process_edit_button_text, AdminStates.editing_promo_offer_button
+    )
+    dp.message.register(
+        process_edit_valid_hours, AdminStates.editing_promo_offer_valid_hours
+    )
+    dp.message.register(
+        process_edit_active_duration_hours,
+        AdminStates.editing_promo_offer_active_duration,
+    )
+    dp.message.register(
+        process_edit_discount_percent, AdminStates.editing_promo_offer_discount
+    )
+    dp.message.register(
+        process_edit_test_duration, AdminStates.editing_promo_offer_test_duration
+    )
+    dp.message.register(
+        process_send_user_search, AdminStates.searching_promo_offer_user
+    )

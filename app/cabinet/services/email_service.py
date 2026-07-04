@@ -10,7 +10,6 @@ import structlog
 
 from app.config import settings
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -68,10 +67,13 @@ class EmailService:
 
         # Only attempt login if credentials are provided AND server supports AUTH
         if self.user and self.password:
-            if smtp.has_extn('auth'):
+            if smtp.has_extn("auth"):
                 smtp.login(self.user, self.password)
             else:
-                logger.debug('SMTP server does not support AUTH, skipping authentication', host=self.host)
+                logger.debug(
+                    "SMTP server does not support AUTH, skipping authentication",
+                    host=self.host,
+                )
 
         return smtp
 
@@ -95,41 +97,48 @@ class EmailService:
             True if email was sent successfully, False otherwise
         """
         if not self.is_configured():
-            logger.warning('SMTP is not configured, cannot send email')
+            logger.warning("SMTP is not configured, cannot send email")
             return False
 
         sender_email = self.from_email
-        if not sender_email or '@' not in sender_email:
-            logger.error('Invalid or missing SMTP from_email, cannot send email', from_email=sender_email)
+        if not sender_email or "@" not in sender_email:
+            logger.error(
+                "Invalid or missing SMTP from_email, cannot send email",
+                from_email=sender_email,
+            )
             return False
 
         # Defensive: strip newlines to prevent header injection
-        to_email = to_email.strip().replace('\n', '').replace('\r', '')
-        subject = subject.replace('\n', '').replace('\r', '')
+        to_email = to_email.strip().replace("\n", "").replace("\r", "")
+        subject = subject.replace("\n", "").replace("\r", "")
 
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            safe_from_name = self.from_name.replace('\n', '').replace('\r', '') if self.from_name else ''
-            safe_from_email = sender_email.replace('\n', '').replace('\r', '')
-            msg['From'] = formataddr((safe_from_name, safe_from_email))
-            msg['To'] = to_email
-            msg['Date'] = formatdate(localtime=False)
-            msg['Message-ID'] = make_msgid(domain=safe_from_email.split('@')[-1])
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            safe_from_name = (
+                self.from_name.replace("\n", "").replace("\r", "")
+                if self.from_name
+                else ""
+            )
+            safe_from_email = sender_email.replace("\n", "").replace("\r", "")
+            msg["From"] = formataddr((safe_from_name, safe_from_email))
+            msg["To"] = to_email
+            msg["Date"] = formatdate(localtime=False)
+            msg["Message-ID"] = make_msgid(domain=safe_from_email.split("@")[-1])
 
             # Plain text version
             if body_text is None:
                 # Simple HTML to text conversion
                 import re
 
-                body_text = re.sub(r'<[^>]+>', '', body_html)
-                body_text = body_text.replace('&nbsp;', ' ')
-                body_text = body_text.replace('&amp;', '&')
-                body_text = body_text.replace('&lt;', '<')
-                body_text = body_text.replace('&gt;', '>')
+                body_text = re.sub(r"<[^>]+>", "", body_html)
+                body_text = body_text.replace("&nbsp;", " ")
+                body_text = body_text.replace("&amp;", "&")
+                body_text = body_text.replace("&lt;", "<")
+                body_text = body_text.replace("&gt;", ">")
 
-            part1 = MIMEText(body_text, 'plain', 'utf-8')
-            part2 = MIMEText(body_html, 'html', 'utf-8')
+            part1 = MIMEText(body_text, "plain", "utf-8")
+            part2 = MIMEText(body_html, "html", "utf-8")
 
             msg.attach(part1)
             msg.attach(part2)
@@ -137,11 +146,11 @@ class EmailService:
             with self._get_smtp_connection() as smtp:
                 smtp.sendmail(safe_from_email, to_email, msg.as_string())
 
-            logger.info('Email sent successfully to', to_email=to_email)
+            logger.info("Email sent successfully to", to_email=to_email)
             return True
 
         except Exception as e:
-            logger.error('Failed to send email to', to_email=to_email, error=e)
+            logger.error("Failed to send email to", to_email=to_email, error=e)
             return False
 
     def _render_default_template(
@@ -165,10 +174,12 @@ class EmailService:
         from .email_templates import EmailNotificationTemplates
 
         try:
-            template = EmailNotificationTemplates().get_template(NotificationType(notification_type), language, context)
+            template = EmailNotificationTemplates().get_template(
+                NotificationType(notification_type), language, context
+            )
         except Exception as e:
             logger.error(
-                'Не удалось отрендерить дефолтный email шаблон',
+                "Не удалось отрендерить дефолтный email шаблон",
                 notification_type=notification_type,
                 language=language,
                 error=e,
@@ -176,7 +187,7 @@ class EmailService:
             return None
         if not template:
             return None
-        return (template['subject'], template['body_html'])
+        return (template["subject"], template["body_html"])
 
     def send_verification_email(
         self,
@@ -184,7 +195,7 @@ class EmailService:
         verification_token: str,
         verification_url: str,
         username: str | None = None,
-        language: str = 'ru',
+        language: str = "ru",
         custom_subject: str | None = None,
         custom_body_html: str | None = None,
     ) -> bool:
@@ -207,12 +218,12 @@ class EmailService:
             return self.send_email(to_email, custom_subject, custom_body_html)
 
         rendered = self._render_default_template(
-            'email_verification',
+            "email_verification",
             language,
             {
-                'username': username or '',
-                'verification_url': f'{verification_url}?token={verification_token}',
-                'expire_hours': settings.get_cabinet_email_verification_expire_hours(),
+                "username": username or "",
+                "verification_url": f"{verification_url}?token={verification_token}",
+                "expire_hours": settings.get_cabinet_email_verification_expire_hours(),
             },
         )
         if not rendered:
@@ -225,7 +236,7 @@ class EmailService:
         reset_token: str,
         reset_url: str,
         username: str | None = None,
-        language: str = 'ru',
+        language: str = "ru",
         custom_subject: str | None = None,
         custom_body_html: str | None = None,
     ) -> bool:
@@ -248,12 +259,12 @@ class EmailService:
             return self.send_email(to_email, custom_subject, custom_body_html)
 
         rendered = self._render_default_template(
-            'password_reset',
+            "password_reset",
             language,
             {
-                'username': username or '',
-                'reset_url': f'{reset_url}?token={reset_token}',
-                'expire_hours': settings.get_cabinet_password_reset_expire_hours(),
+                "username": username or "",
+                "reset_url": f"{reset_url}?token={reset_token}",
+                "expire_hours": settings.get_cabinet_password_reset_expire_hours(),
             },
         )
         if not rendered:
@@ -265,7 +276,7 @@ class EmailService:
         to_email: str,
         code: str,
         username: str | None = None,
-        language: str = 'ru',
+        language: str = "ru",
         custom_subject: str | None = None,
         custom_body_html: str | None = None,
     ) -> bool:
@@ -287,12 +298,12 @@ class EmailService:
             return self.send_email(to_email, custom_subject, custom_body_html)
 
         rendered = self._render_default_template(
-            'email_change_code',
+            "email_change_code",
             language,
             {
-                'username': username or '',
-                'code': code,
-                'expire_minutes': settings.get_cabinet_email_change_code_expire_minutes(),
+                "username": username or "",
+                "code": code,
+                "expire_minutes": settings.get_cabinet_email_change_code_expire_minutes(),
             },
         )
         if not rendered:

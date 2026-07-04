@@ -95,11 +95,11 @@ async def delete_token(db: AsyncSession, token: WebApiToken) -> None:
 
 
 __all__ = [
-    'create_token',
-    'delete_token',
-    'get_token_by_hash',
-    'get_token_by_id',
-    'list_tokens',
-    'set_tokens_active_status',
-    'update_token',
+    "create_token",
+    "delete_token",
+    "get_token_by_hash",
+    "get_token_by_id",
+    "list_tokens",
+    "set_tokens_active_status",
+    "update_token",
 ]

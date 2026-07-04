@@ -12,14 +12,14 @@ class MonitoringLogEntry(BaseModel):
     """Запись лога мониторинга."""
 
     id: int
-    event_type: str = Field(..., description='Тип события мониторинга')
-    message: str = Field(..., description='Краткое описание события')
+    event_type: str = Field(..., description="Тип события мониторинга")
+    message: str = Field(..., description="Краткое описание события")
     data: dict[str, Any] | None = Field(
         default=None,
-        description='Дополнительные данные события',
+        description="Дополнительные данные события",
     )
-    is_success: bool = Field(..., description='Флаг успешности выполнения операции')
-    created_at: datetime = Field(..., description='Дата и время создания записи')
+    is_success: bool = Field(..., description="Флаг успешности выполнения операции")
+    created_at: datetime = Field(..., description="Дата и время создания записи")
 
 
 class MonitoringLogListResponse(BaseModel):
@@ -69,23 +69,25 @@ class SupportAuditActionsResponse(BaseModel):
 class SystemLogPreviewResponse(BaseModel):
     """Ответ с превью системного лог-файла бота."""
 
-    path: str = Field(..., description='Абсолютный путь до лог-файла')
-    exists: bool = Field(..., description='Флаг наличия лог-файла')
+    path: str = Field(..., description="Абсолютный путь до лог-файла")
+    exists: bool = Field(..., description="Флаг наличия лог-файла")
     updated_at: datetime | None = Field(
         default=None,
-        description='Дата и время последнего изменения лог-файла',
+        description="Дата и время последнего изменения лог-файла",
     )
-    size_bytes: int = Field(..., ge=0, description='Размер лог-файла в байтах')
-    size_chars: int = Field(..., ge=0, description='Количество символов в лог-файле')
+    size_bytes: int = Field(..., ge=0, description="Размер лог-файла в байтах")
+    size_chars: int = Field(..., ge=0, description="Количество символов в лог-файле")
     preview: str = Field(
-        default='',
-        description='Фрагмент содержимого лог-файла, возвращаемый для предпросмотра',
+        default="",
+        description="Фрагмент содержимого лог-файла, возвращаемый для предпросмотра",
     )
-    preview_chars: int = Field(..., ge=0, description='Размер предпросмотра в символах')
-    preview_truncated: bool = Field(..., description='Флаг усечения предпросмотра относительно полного файла')
+    preview_chars: int = Field(..., ge=0, description="Размер предпросмотра в символах")
+    preview_truncated: bool = Field(
+        ..., description="Флаг усечения предпросмотра относительно полного файла"
+    )
     download_url: str | None = Field(
         default=None,
-        description='Относительный путь до endpoint для скачивания лог-файла',
+        description="Относительный путь до endpoint для скачивания лог-файла",
     )
 
 

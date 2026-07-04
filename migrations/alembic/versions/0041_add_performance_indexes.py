@@ -10,8 +10,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = '0041'
-down_revision: Union[str, None] = '0040'
+revision: str = "0041"
+down_revision: Union[str, None] = "0040"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -31,9 +31,9 @@ def upgrade() -> None:
         # Fixes sequential scan in _fetch_campaign_registrations which filters by user_id
         # and uses ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at)
         op.create_index(
-            'ix_campaign_reg_user_created',
-            'advertising_campaign_registrations',
-            ['user_id', 'created_at'],
+            "ix_campaign_reg_user_created",
+            "advertising_campaign_registrations",
+            ["user_id", "created_at"],
             if_not_exists=True,
             postgresql_concurrently=True,
         )
@@ -42,9 +42,9 @@ def upgrade() -> None:
         # Enables index-only scans for aggregation queries in referral network stats:
         # _fetch_personal_spent, _fetch_branch_revenue, _fetch_campaign_stats
         op.create_index(
-            'ix_transactions_user_type_completed_amount',
-            'transactions',
-            ['user_id', 'type', 'is_completed', 'amount_kopeks'],
+            "ix_transactions_user_type_completed_amount",
+            "transactions",
+            ["user_id", "type", "is_completed", "amount_kopeks"],
             if_not_exists=True,
             postgresql_concurrently=True,
         )
@@ -52,5 +52,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     with op.get_context().autocommit_block():
-        op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_transactions_user_type_completed_amount')
-        op.execute('DROP INDEX CONCURRENTLY IF EXISTS ix_campaign_reg_user_created')
+        op.execute(
+            "DROP INDEX CONCURRENTLY IF EXISTS ix_transactions_user_type_completed_amount"
+        )
+        op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_campaign_reg_user_created")

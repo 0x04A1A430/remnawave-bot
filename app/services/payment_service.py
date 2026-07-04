@@ -49,7 +49,6 @@ from app.services.wata_service import WataService
 from app.services.yookassa_service import YooKassaService
 from app.utils.currency_converter import currency_converter
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -57,132 +56,132 @@ logger = structlog.get_logger(__name__)
 
 
 async def create_yookassa_payment(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
+    yk_crud = import_module("app.database.crud.yookassa")
     return await yk_crud.create_yookassa_payment(*args, **kwargs)
 
 
 async def update_yookassa_payment_status(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
+    yk_crud = import_module("app.database.crud.yookassa")
     return await yk_crud.update_yookassa_payment_status(*args, **kwargs)
 
 
 async def link_yookassa_payment_to_transaction(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
+    yk_crud = import_module("app.database.crud.yookassa")
     return await yk_crud.link_yookassa_payment_to_transaction(*args, **kwargs)
 
 
 async def get_yookassa_payment_by_id(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
+    yk_crud = import_module("app.database.crud.yookassa")
     return await yk_crud.get_yookassa_payment_by_id(*args, **kwargs)
 
 
 async def get_yookassa_payment_by_local_id(*args, **kwargs):
-    yk_crud = import_module('app.database.crud.yookassa')
+    yk_crud = import_module("app.database.crud.yookassa")
     return await yk_crud.get_yookassa_payment_by_local_id(*args, **kwargs)
 
 
 async def create_transaction(*args, **kwargs):
-    transaction_crud = import_module('app.database.crud.transaction')
+    transaction_crud = import_module("app.database.crud.transaction")
     return await transaction_crud.create_transaction(*args, **kwargs)
 
 
 async def get_transaction_by_external_id(*args, **kwargs):
-    transaction_crud = import_module('app.database.crud.transaction')
+    transaction_crud = import_module("app.database.crud.transaction")
     return await transaction_crud.get_transaction_by_external_id(*args, **kwargs)
 
 
 async def add_user_balance(*args, **kwargs):
-    user_crud = import_module('app.database.crud.user')
+    user_crud = import_module("app.database.crud.user")
     return await user_crud.add_user_balance(*args, **kwargs)
 
 
 async def get_user_by_id(*args, **kwargs):
-    user_crud = import_module('app.database.crud.user')
+    user_crud = import_module("app.database.crud.user")
     return await user_crud.get_user_by_id(*args, **kwargs)
 
 
 async def get_user_by_telegram_id(*args, **kwargs):
-    user_crud = import_module('app.database.crud.user')
+    user_crud = import_module("app.database.crud.user")
     return await user_crud.get_user_by_telegram_id(*args, **kwargs)
 
 
 async def create_mulenpay_payment(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.create_mulenpay_payment(*args, **kwargs)
 
 
 async def get_mulenpay_payment_by_uuid(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.get_mulenpay_payment_by_uuid(*args, **kwargs)
 
 
 async def get_mulenpay_payment_by_mulen_id(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.get_mulenpay_payment_by_mulen_id(*args, **kwargs)
 
 
 async def get_mulenpay_payment_by_local_id(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.get_mulenpay_payment_by_local_id(*args, **kwargs)
 
 
 async def update_mulenpay_payment_status(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.update_mulenpay_payment_status(*args, **kwargs)
 
 
 async def update_mulenpay_payment_metadata(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.update_mulenpay_payment_metadata(*args, **kwargs)
 
 
 async def link_mulenpay_payment_to_transaction(*args, **kwargs):
-    mulenpay_crud = import_module('app.database.crud.mulenpay')
+    mulenpay_crud = import_module("app.database.crud.mulenpay")
     return await mulenpay_crud.link_mulenpay_payment_to_transaction(*args, **kwargs)
 
 
 async def create_pal24_payment(*args, **kwargs):
-    pal_crud = import_module('app.database.crud.pal24')
+    pal_crud = import_module("app.database.crud.pal24")
     return await pal_crud.create_pal24_payment(*args, **kwargs)
 
 
 async def get_pal24_payment_by_bill_id(*args, **kwargs):
-    pal_crud = import_module('app.database.crud.pal24')
+    pal_crud = import_module("app.database.crud.pal24")
     return await pal_crud.get_pal24_payment_by_bill_id(*args, **kwargs)
 
 
 async def get_pal24_payment_by_order_id(*args, **kwargs):
-    pal_crud = import_module('app.database.crud.pal24')
+    pal_crud = import_module("app.database.crud.pal24")
     return await pal_crud.get_pal24_payment_by_order_id(*args, **kwargs)
 
 
 async def get_pal24_payment_by_id(*args, **kwargs):
-    pal_crud = import_module('app.database.crud.pal24')
+    pal_crud = import_module("app.database.crud.pal24")
     return await pal_crud.get_pal24_payment_by_id(*args, **kwargs)
 
 
 async def update_pal24_payment_status(*args, **kwargs):
-    pal_crud = import_module('app.database.crud.pal24')
+    pal_crud = import_module("app.database.crud.pal24")
     return await pal_crud.update_pal24_payment_status(*args, **kwargs)
 
 
 async def link_pal24_payment_to_transaction(*args, **kwargs):
-    pal_crud = import_module('app.database.crud.pal24')
+    pal_crud = import_module("app.database.crud.pal24")
     return await pal_crud.link_pal24_payment_to_transaction(*args, **kwargs)
 
 
 async def create_wata_payment(*args, **kwargs):
-    wata_crud = import_module('app.database.crud.wata')
+    wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.create_wata_payment(*args, **kwargs)
 
 
 async def get_wata_payment_by_link_id(*args, **kwargs):
-    wata_crud = import_module('app.database.crud.wata')
+    wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.get_wata_payment_by_link_id(*args, **kwargs)
 
 
 async def get_wata_payment_by_id(*args, **kwargs):
-    wata_crud = import_module('app.database.crud.wata')
+    wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.get_wata_payment_by_id(*args, **kwargs)
 
 
@@ -192,187 +191,189 @@ async def get_wata_payment_by_local_id(*args, **kwargs):
 
 
 async def get_wata_payment_by_order_id(*args, **kwargs):
-    wata_crud = import_module('app.database.crud.wata')
+    wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.get_wata_payment_by_order_id(*args, **kwargs)
 
 
 async def update_wata_payment_status(*args, **kwargs):
-    wata_crud = import_module('app.database.crud.wata')
+    wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.update_wata_payment_status(*args, **kwargs)
 
 
 async def link_wata_payment_to_transaction(*args, **kwargs):
-    wata_crud = import_module('app.database.crud.wata')
+    wata_crud = import_module("app.database.crud.wata")
     return await wata_crud.link_wata_payment_to_transaction(*args, **kwargs)
 
 
 async def create_platega_payment(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.create_platega_payment(*args, **kwargs)
 
 
 async def get_platega_payment_by_id(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.get_platega_payment_by_id(*args, **kwargs)
 
 
 async def get_platega_payment_by_id_for_update(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.get_platega_payment_by_id_for_update(*args, **kwargs)
 
 
 async def get_platega_payment_by_transaction_id(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.get_platega_payment_by_transaction_id(*args, **kwargs)
 
 
 async def get_platega_payment_by_correlation_id(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.get_platega_payment_by_correlation_id(*args, **kwargs)
 
 
 async def update_platega_payment(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.update_platega_payment(*args, **kwargs)
 
 
 async def link_platega_payment_to_transaction(*args, **kwargs):
-    platega_crud = import_module('app.database.crud.platega')
+    platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.link_platega_payment_to_transaction(*args, **kwargs)
 
 
 async def create_cryptobot_payment(*args, **kwargs):
-    crypto_crud = import_module('app.database.crud.cryptobot')
+    crypto_crud = import_module("app.database.crud.cryptobot")
     return await crypto_crud.create_cryptobot_payment(*args, **kwargs)
 
 
 async def get_cryptobot_payment_by_invoice_id(*args, **kwargs):
-    crypto_crud = import_module('app.database.crud.cryptobot')
+    crypto_crud = import_module("app.database.crud.cryptobot")
     return await crypto_crud.get_cryptobot_payment_by_invoice_id(*args, **kwargs)
 
 
 async def update_cryptobot_payment_status(*args, **kwargs):
-    crypto_crud = import_module('app.database.crud.cryptobot')
+    crypto_crud = import_module("app.database.crud.cryptobot")
     return await crypto_crud.update_cryptobot_payment_status(*args, **kwargs)
 
 
 async def link_cryptobot_payment_to_transaction(*args, **kwargs):
-    crypto_crud = import_module('app.database.crud.cryptobot')
+    crypto_crud = import_module("app.database.crud.cryptobot")
     return await crypto_crud.link_cryptobot_payment_to_transaction(*args, **kwargs)
 
 
 async def create_heleket_payment(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
+    heleket_crud = import_module("app.database.crud.heleket")
     return await heleket_crud.create_heleket_payment(*args, **kwargs)
 
 
 async def get_heleket_payment_by_uuid(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
+    heleket_crud = import_module("app.database.crud.heleket")
     return await heleket_crud.get_heleket_payment_by_uuid(*args, **kwargs)
 
 
 async def get_heleket_payment_by_id(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
+    heleket_crud = import_module("app.database.crud.heleket")
     return await heleket_crud.get_heleket_payment_by_id(*args, **kwargs)
 
 
 async def update_heleket_payment(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
+    heleket_crud = import_module("app.database.crud.heleket")
     return await heleket_crud.update_heleket_payment(*args, **kwargs)
 
 
 async def link_heleket_payment_to_transaction(*args, **kwargs):
-    heleket_crud = import_module('app.database.crud.heleket')
+    heleket_crud = import_module("app.database.crud.heleket")
     return await heleket_crud.link_heleket_payment_to_transaction(*args, **kwargs)
 
 
 async def create_cloudpayments_payment(*args, **kwargs):
-    cloudpayments_crud = import_module('app.database.crud.cloudpayments')
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
     return await cloudpayments_crud.create_cloudpayments_payment(*args, **kwargs)
 
 
 async def get_cloudpayments_payment_by_invoice_id(*args, **kwargs):
-    cloudpayments_crud = import_module('app.database.crud.cloudpayments')
-    return await cloudpayments_crud.get_cloudpayments_payment_by_invoice_id(*args, **kwargs)
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
+    return await cloudpayments_crud.get_cloudpayments_payment_by_invoice_id(
+        *args, **kwargs
+    )
 
 
 async def get_cloudpayments_payment_by_id(*args, **kwargs):
-    cloudpayments_crud = import_module('app.database.crud.cloudpayments')
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
     return await cloudpayments_crud.get_cloudpayments_payment_by_id(*args, **kwargs)
 
 
 async def update_cloudpayments_payment(*args, **kwargs):
-    cloudpayments_crud = import_module('app.database.crud.cloudpayments')
+    cloudpayments_crud = import_module("app.database.crud.cloudpayments")
     return await cloudpayments_crud.update_cloudpayments_payment(*args, **kwargs)
 
 
 async def create_severpay_payment(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.create_severpay_payment(*args, **kwargs)
 
 
 async def get_severpay_payment_by_order_id(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.get_severpay_payment_by_order_id(*args, **kwargs)
 
 
 async def get_severpay_payment_by_severpay_id(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.get_severpay_payment_by_severpay_id(*args, **kwargs)
 
 
 async def get_severpay_payment_by_id(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.get_severpay_payment_by_id(*args, **kwargs)
 
 
 async def get_severpay_payment_by_id_for_update(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.get_severpay_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_severpay_payment_status(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.update_severpay_payment_status(*args, **kwargs)
 
 
 async def link_severpay_payment_to_transaction(*args, **kwargs):
-    severpay_crud = import_module('app.database.crud.severpay')
+    severpay_crud = import_module("app.database.crud.severpay")
     return await severpay_crud.link_severpay_payment_to_transaction(*args, **kwargs)
 
 
 async def create_paypear_payment(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.create_paypear_payment(*args, **kwargs)
 
 
 async def get_paypear_payment_by_order_id(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.get_paypear_payment_by_order_id(*args, **kwargs)
 
 
 async def get_paypear_payment_by_paypear_id(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.get_paypear_payment_by_paypear_id(*args, **kwargs)
 
 
 async def get_paypear_payment_by_id(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.get_paypear_payment_by_id(*args, **kwargs)
 
 
 async def get_paypear_payment_by_id_for_update(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.get_paypear_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_paypear_payment_status(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.update_paypear_payment_status(*args, **kwargs)
 
 
 async def link_paypear_payment_to_transaction(*args, **kwargs):
-    paypear_crud = import_module('app.database.crud.paypear')
+    paypear_crud = import_module("app.database.crud.paypear")
     return await paypear_crud.link_paypear_payment_to_transaction(*args, **kwargs)
 
 
@@ -380,37 +381,37 @@ async def link_paypear_payment_to_transaction(*args, **kwargs):
 
 
 async def create_rollypay_payment(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.create_rollypay_payment(*args, **kwargs)
 
 
 async def get_rollypay_payment_by_order_id(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.get_rollypay_payment_by_order_id(*args, **kwargs)
 
 
 async def get_rollypay_payment_by_rollypay_id(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.get_rollypay_payment_by_rollypay_id(*args, **kwargs)
 
 
 async def get_rollypay_payment_by_id(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.get_rollypay_payment_by_id(*args, **kwargs)
 
 
 async def get_rollypay_payment_by_id_for_update(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.get_rollypay_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_rollypay_payment_status(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.update_rollypay_payment_status(*args, **kwargs)
 
 
 async def link_rollypay_payment_to_transaction(*args, **kwargs):
-    rollypay_crud = import_module('app.database.crud.rollypay')
+    rollypay_crud = import_module("app.database.crud.rollypay")
     return await rollypay_crud.link_rollypay_payment_to_transaction(*args, **kwargs)
 
 
@@ -418,254 +419,258 @@ async def link_rollypay_payment_to_transaction(*args, **kwargs):
 
 
 async def create_overpay_payment(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.create_overpay_payment(*args, **kwargs)
 
 
 async def get_overpay_payment_by_order_id(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.get_overpay_payment_by_order_id(*args, **kwargs)
 
 
 async def get_overpay_payment_by_overpay_id(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.get_overpay_payment_by_overpay_id(*args, **kwargs)
 
 
 async def get_overpay_payment_by_id(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.get_overpay_payment_by_id(*args, **kwargs)
 
 
 async def get_overpay_payment_by_id_for_update(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.get_overpay_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_overpay_payment_status(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.update_overpay_payment_status(*args, **kwargs)
 
 
 async def link_overpay_payment_to_transaction(*args, **kwargs):
-    overpay_crud = import_module('app.database.crud.overpay')
+    overpay_crud = import_module("app.database.crud.overpay")
     return await overpay_crud.link_overpay_payment_to_transaction(*args, **kwargs)
 
 
 async def create_aurapay_payment(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.create_aurapay_payment(*args, **kwargs)
 
 
 async def get_aurapay_payment_by_order_id(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.get_aurapay_payment_by_order_id(*args, **kwargs)
 
 
 async def get_aurapay_payment_by_invoice_id(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.get_aurapay_payment_by_invoice_id(*args, **kwargs)
 
 
 async def get_aurapay_payment_by_id(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.get_aurapay_payment_by_id(*args, **kwargs)
 
 
 async def get_aurapay_payment_by_id_for_update(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.get_aurapay_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_aurapay_payment_status(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.update_aurapay_payment_status(*args, **kwargs)
 
 
 async def link_aurapay_payment_to_transaction(*args, **kwargs):
-    aurapay_crud = import_module('app.database.crud.aurapay')
+    aurapay_crud = import_module("app.database.crud.aurapay")
     return await aurapay_crud.link_aurapay_payment_to_transaction(*args, **kwargs)
 
 
 async def create_etoplatezhi_payment(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
     return await etoplatezhi_crud.create_etoplatezhi_payment(*args, **kwargs)
 
 
 async def get_etoplatezhi_payment_by_order_id(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
     return await etoplatezhi_crud.get_etoplatezhi_payment_by_order_id(*args, **kwargs)
 
 
 async def get_etoplatezhi_payment_by_invoice_id(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
     return await etoplatezhi_crud.get_etoplatezhi_payment_by_invoice_id(*args, **kwargs)
 
 
 async def get_etoplatezhi_payment_by_id(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
     return await etoplatezhi_crud.get_etoplatezhi_payment_by_id(*args, **kwargs)
 
 
 async def get_etoplatezhi_payment_by_id_for_update(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
-    return await etoplatezhi_crud.get_etoplatezhi_payment_by_id_for_update(*args, **kwargs)
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
+    return await etoplatezhi_crud.get_etoplatezhi_payment_by_id_for_update(
+        *args, **kwargs
+    )
 
 
 async def update_etoplatezhi_payment_status(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
     return await etoplatezhi_crud.update_etoplatezhi_payment_status(*args, **kwargs)
 
 
 async def link_etoplatezhi_payment_to_transaction(*args, **kwargs):
-    etoplatezhi_crud = import_module('app.database.crud.etoplatezhi')
-    return await etoplatezhi_crud.link_etoplatezhi_payment_to_transaction(*args, **kwargs)
+    etoplatezhi_crud = import_module("app.database.crud.etoplatezhi")
+    return await etoplatezhi_crud.link_etoplatezhi_payment_to_transaction(
+        *args, **kwargs
+    )
 
 
 async def create_antilopay_payment(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.create_antilopay_payment(*args, **kwargs)
 
 
 async def get_antilopay_payment_by_order_id(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.get_antilopay_payment_by_order_id(*args, **kwargs)
 
 
 async def get_antilopay_payment_by_invoice_id(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.get_antilopay_payment_by_invoice_id(*args, **kwargs)
 
 
 async def get_antilopay_payment_by_id(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.get_antilopay_payment_by_id(*args, **kwargs)
 
 
 async def get_antilopay_payment_by_id_for_update(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.get_antilopay_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_antilopay_payment_status(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.update_antilopay_payment_status(*args, **kwargs)
 
 
 async def link_antilopay_payment_to_transaction(*args, **kwargs):
-    antilopay_crud = import_module('app.database.crud.antilopay')
+    antilopay_crud = import_module("app.database.crud.antilopay")
     return await antilopay_crud.link_antilopay_payment_to_transaction(*args, **kwargs)
 
 
 async def create_jupiter_payment(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.create_jupiter_payment(*args, **kwargs)
 
 
 async def get_jupiter_payment_by_order_id(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.get_jupiter_payment_by_order_id(*args, **kwargs)
 
 
 async def get_jupiter_payment_by_invoice_id(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.get_jupiter_payment_by_invoice_id(*args, **kwargs)
 
 
 async def get_jupiter_payment_by_id(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.get_jupiter_payment_by_id(*args, **kwargs)
 
 
 async def get_jupiter_payment_by_id_for_update(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.get_jupiter_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_jupiter_payment_status(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.update_jupiter_payment_status(*args, **kwargs)
 
 
 async def link_jupiter_payment_to_transaction(*args, **kwargs):
-    jupiter_crud = import_module('app.database.crud.jupiter')
+    jupiter_crud = import_module("app.database.crud.jupiter")
     return await jupiter_crud.link_jupiter_payment_to_transaction(*args, **kwargs)
 
 
 async def create_donut_payment(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.create_donut_payment(*args, **kwargs)
 
 
 async def get_donut_payment_by_order_id(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.get_donut_payment_by_order_id(*args, **kwargs)
 
 
 async def get_donut_payment_by_invoice_id(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.get_donut_payment_by_invoice_id(*args, **kwargs)
 
 
 async def get_donut_payment_by_id(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.get_donut_payment_by_id(*args, **kwargs)
 
 
 async def get_donut_payment_by_id_for_update(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.get_donut_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_donut_payment_status(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.update_donut_payment_status(*args, **kwargs)
 
 
 async def link_donut_payment_to_transaction(*args, **kwargs):
-    donut_crud = import_module('app.database.crud.donut')
+    donut_crud = import_module("app.database.crud.donut")
     return await donut_crud.link_donut_payment_to_transaction(*args, **kwargs)
 
 
 async def create_lava_payment(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.create_lava_payment(*args, **kwargs)
 
 
 async def get_lava_payment_by_order_id(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.get_lava_payment_by_order_id(*args, **kwargs)
 
 
 async def get_lava_payment_by_invoice_id(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.get_lava_payment_by_invoice_id(*args, **kwargs)
 
 
 async def get_lava_payment_by_id(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.get_lava_payment_by_id(*args, **kwargs)
 
 
 async def get_lava_payment_by_id_for_update(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.get_lava_payment_by_id_for_update(*args, **kwargs)
 
 
 async def update_lava_payment_status(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.update_lava_payment_status(*args, **kwargs)
 
 
 async def link_lava_payment_to_transaction(*args, **kwargs):
-    lava_crud = import_module('app.database.crud.lava')
+    lava_crud = import_module("app.database.crud.lava")
     return await lava_crud.link_lava_payment_to_transaction(*args, **kwargs)
 
 
 # Mapping from model_name to getter function name for providers
 # where it differs from the standard get_{model_name}_payment_by_id pattern.
 _GETTER_OVERRIDES: dict[str, str] = {
-    'mulenpay': 'get_mulenpay_payment_by_local_id',
+    "mulenpay": "get_mulenpay_payment_by_local_id",
 }
 
 
@@ -686,7 +691,7 @@ def _split_guest_payment_method(payment_method: str) -> tuple[str, str | None]:
         base = member.value
         if payment_method == base:
             return base, None
-        if payment_method.startswith(f'{base}_'):
+        if payment_method.startswith(f"{base}_"):
             return base, payment_method[len(base) + 1 :] or None
     return payment_method, None
 
@@ -723,20 +728,32 @@ class PaymentService(
         # Бот нужен для отправки уведомлений и создания звёздных инвойсов.
         self.bot = bot
         # Ниже инициализируем службы-обёртки только если соответствующий провайдер включён.
-        self.yookassa_service = YooKassaService() if settings.is_yookassa_enabled() else None
+        self.yookassa_service = (
+            YooKassaService() if settings.is_yookassa_enabled() else None
+        )
         self.stars_service = TelegramStarsService(bot) if bot else None
-        self.cryptobot_service = CryptoBotService() if settings.is_cryptobot_enabled() else None
-        self.heleket_service = HeleketService() if settings.is_heleket_enabled() else None
-        self.mulenpay_service = MulenPayService() if settings.is_mulenpay_enabled() else None
+        self.cryptobot_service = (
+            CryptoBotService() if settings.is_cryptobot_enabled() else None
+        )
+        self.heleket_service = (
+            HeleketService() if settings.is_heleket_enabled() else None
+        )
+        self.mulenpay_service = (
+            MulenPayService() if settings.is_mulenpay_enabled() else None
+        )
         self.pal24_service = Pal24Service() if settings.is_pal24_enabled() else None
-        self.platega_service = PlategaService() if settings.is_platega_enabled() else None
+        self.platega_service = (
+            PlategaService() if settings.is_platega_enabled() else None
+        )
         self.wata_service = WataService() if settings.is_wata_enabled() else None
-        self.cloudpayments_service = CloudPaymentsService() if settings.is_cloudpayments_enabled() else None
+        self.cloudpayments_service = (
+            CloudPaymentsService() if settings.is_cloudpayments_enabled() else None
+        )
         self.nalogo_service = NaloGoService() if settings.is_nalogo_enabled() else None
 
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
-            'PaymentService инициализирован',
+            "PaymentService инициализирован",
             yookassa_service=bool(self.yookassa_service),
             stars_service=bool(self.stars_service),
             cryptobot_service=bool(self.cryptobot_service),
@@ -790,32 +807,38 @@ class PaymentService(
         the creation call fails.
         """
         guest_metadata: dict[str, Any] = {
-            'purpose': 'guest_purchase',
-            'purchase_token': purchase_token,
-            'source': 'landing',
+            "purpose": "guest_purchase",
+            "purchase_token": purchase_token,
+            "source": "landing",
         }
 
         async def _patch_guest_metadata(local_payment_id: int, model_name: str) -> None:
             """Merge guest_metadata into the local payment record's metadata_json."""
             try:
-                crud_module = import_module(f'app.database.crud.{model_name}')
-                getter_name = _GETTER_OVERRIDES.get(model_name, f'get_{model_name}_payment_by_id')
+                crud_module = import_module(f"app.database.crud.{model_name}")
+                getter_name = _GETTER_OVERRIDES.get(
+                    model_name, f"get_{model_name}_payment_by_id"
+                )
                 getter = getattr(crud_module, getter_name, None)
                 if getter is None:
                     logger.warning(
-                        'No getter found for patching guest metadata', model_name=model_name, getter_name=getter_name
+                        "No getter found for patching guest metadata",
+                        model_name=model_name,
+                        getter_name=getter_name,
                     )
                     return
                 payment_record = await getter(db, local_payment_id)
                 if payment_record is None:
                     return
-                existing_meta = dict(getattr(payment_record, 'metadata_json', None) or {})
+                existing_meta = dict(
+                    getattr(payment_record, "metadata_json", None) or {}
+                )
                 existing_meta.update(guest_metadata)
                 payment_record.metadata_json = existing_meta
                 await db.commit()
             except Exception as patch_error:
                 logger.warning(
-                    'Failed to patch guest metadata into payment record',
+                    "Failed to patch guest metadata into payment record",
                     model_name=model_name,
                     local_payment_id=local_payment_id,
                     error=patch_error,
@@ -828,14 +851,14 @@ class PaymentService(
         _base, _option = _split_guest_payment_method(payment_method)
 
         # --- YooKassa (card / sbp) -------------------------------------------
-        if payment_method in ('yookassa', 'yookassa_card', 'yookassa_sbp'):
+        if payment_method in ("yookassa", "yookassa_card", "yookassa_sbp"):
             if self.yookassa_service is None:
-                logger.warning('YooKassa is not enabled, cannot create guest payment')
+                logger.warning("YooKassa is not enabled, cannot create guest payment")
                 return None
 
-            option = 'sbp' if payment_method == 'yookassa_sbp' else 'card'
+            option = "sbp" if payment_method == "yookassa_sbp" else "card"
 
-            if option == 'sbp':
+            if option == "sbp":
                 result = await self.create_yookassa_sbp_payment(
                     db=db,
                     user_id=None,
@@ -856,23 +879,26 @@ class PaymentService(
 
             if result:
                 return {
-                    'payment_url': result.get('confirmation_url'),
-                    'payment_id': result.get('yookassa_payment_id'),
-                    'provider': 'yookassa',
+                    "payment_url": result.get("confirmation_url"),
+                    "payment_id": result.get("yookassa_payment_id"),
+                    "provider": "yookassa",
                 }
             return None
 
         # --- CryptoBot --------------------------------------------------------
-        if payment_method == 'cryptobot':
+        if payment_method == "cryptobot":
             if self.cryptobot_service is None:
-                logger.warning('CryptoBot is not enabled, cannot create guest payment')
+                logger.warning("CryptoBot is not enabled, cannot create guest payment")
                 return None
 
             amount_rubles = amount_kopeks / 100
             try:
                 amount_usd = await currency_converter.rub_to_usd(amount_rubles)
             except Exception as conv_error:
-                logger.error('Currency conversion failed for CryptoBot guest payment', error=conv_error)
+                logger.error(
+                    "Currency conversion failed for CryptoBot guest payment",
+                    error=conv_error,
+                )
                 return None
 
             # Encode guest metadata into the payload string (CryptoBot uses payload, not metadata dict)
@@ -882,24 +908,26 @@ class PaymentService(
                 db=db,
                 user_id=None,
                 amount_usd=amount_usd,
-                asset='USDT',
+                asset="USDT",
                 description=description,
                 payload=payload_str,
             )
             if result:
                 # CryptoBot stores guest_metadata in the payload field (no metadata_json column)
-                payment_url = result.get('bot_invoice_url') or result.get('mini_app_invoice_url')
+                payment_url = result.get("bot_invoice_url") or result.get(
+                    "mini_app_invoice_url"
+                )
                 return {
-                    'payment_url': payment_url,
-                    'payment_id': result.get('invoice_id'),
-                    'provider': 'cryptobot',
+                    "payment_url": payment_url,
+                    "payment_id": result.get("invoice_id"),
+                    "provider": "cryptobot",
                 }
             return None
 
         # --- Heleket ----------------------------------------------------------
-        if payment_method == 'heleket':
+        if payment_method == "heleket":
             if self.heleket_service is None:
-                logger.warning('Heleket is not enabled, cannot create guest payment')
+                logger.warning("Heleket is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_heleket_payment(
@@ -910,18 +938,18 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'heleket')
+                await _patch_guest_metadata(result["local_payment_id"], "heleket")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('uuid'),
-                    'provider': 'heleket',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("uuid"),
+                    "provider": "heleket",
                 }
             return None
 
         # --- MulenPay ---------------------------------------------------------
-        if payment_method == 'mulenpay':
+        if payment_method == "mulenpay":
             if self.mulenpay_service is None:
-                logger.warning('MulenPay is not enabled, cannot create guest payment')
+                logger.warning("MulenPay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_mulenpay_payment(
@@ -931,22 +959,24 @@ class PaymentService(
                 description=description,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'mulenpay')
+                await _patch_guest_metadata(result["local_payment_id"], "mulenpay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('uuid'),
-                    'provider': 'mulenpay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("uuid"),
+                    "provider": "mulenpay",
                 }
             return None
 
         # --- Pal24 (PayPalych) ------------------------------------------------
-        if payment_method in ('pal24', 'pal24_sbp', 'pal24_card'):
+        if payment_method in ("pal24", "pal24_sbp", "pal24_card"):
             if self.pal24_service is None:
-                logger.warning('Pal24 is not enabled, cannot create guest payment')
+                logger.warning("Pal24 is not enabled, cannot create guest payment")
                 return None
 
             pal24_method = (
-                'sbp' if payment_method == 'pal24_sbp' else ('card' if payment_method == 'pal24_card' else None)
+                "sbp"
+                if payment_method == "pal24_sbp"
+                else ("card" if payment_method == "pal24_card" else None)
             )
 
             result = await self.create_pal24_payment(
@@ -958,24 +988,25 @@ class PaymentService(
                 payment_method=pal24_method,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'pal24')
+                await _patch_guest_metadata(result["local_payment_id"], "pal24")
                 return {
-                    'payment_url': result.get('payment_url') or result.get('primary_url'),
-                    'payment_id': result.get('bill_id'),
-                    'provider': 'pal24',
+                    "payment_url": result.get("payment_url")
+                    or result.get("primary_url"),
+                    "payment_id": result.get("bill_id"),
+                    "provider": "pal24",
                 }
             return None
 
         # --- Platega ----------------------------------------------------------
-        if payment_method.startswith('platega'):
+        if payment_method.startswith("platega"):
             if self.platega_service is None:
-                logger.warning('Platega is not enabled, cannot create guest payment')
+                logger.warning("Platega is not enabled, cannot create guest payment")
                 return None
 
             # Extract method code: "platega_2" -> 2, "platega" -> first active method
             method_code: int | None = None
-            if '_' in payment_method:
-                suffix = payment_method.split('_', 1)[1]
+            if "_" in payment_method:
+                suffix = payment_method.split("_", 1)[1]
                 try:
                     method_code = int(suffix)
                 except ValueError:
@@ -995,18 +1026,18 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'platega')
+                await _patch_guest_metadata(result["local_payment_id"], "platega")
                 return {
-                    'payment_url': result.get('redirect_url'),
-                    'payment_id': result.get('correlation_id'),
-                    'provider': 'platega',
+                    "payment_url": result.get("redirect_url"),
+                    "payment_id": result.get("correlation_id"),
+                    "provider": "platega",
                 }
             return None
 
         # --- WATA -------------------------------------------------------------
-        if payment_method == 'wata':
+        if payment_method == "wata":
             if self.wata_service is None:
-                logger.warning('WATA is not enabled, cannot create guest payment')
+                logger.warning("WATA is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_wata_payment(
@@ -1017,18 +1048,20 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'wata')
+                await _patch_guest_metadata(result["local_payment_id"], "wata")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('payment_link_id'),
-                    'provider': 'wata',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("payment_link_id"),
+                    "provider": "wata",
                 }
             return None
 
         # --- CloudPayments ----------------------------------------------------
-        if payment_method == 'cloudpayments':
+        if payment_method == "cloudpayments":
             if self.cloudpayments_service is None:
-                logger.warning('CloudPayments is not enabled, cannot create guest payment')
+                logger.warning(
+                    "CloudPayments is not enabled, cannot create guest payment"
+                )
                 return None
 
             result = await self.create_cloudpayments_payment(
@@ -1039,18 +1072,18 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['payment_id'], 'cloudpayments')
+                await _patch_guest_metadata(result["payment_id"], "cloudpayments")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('invoice_id'),
-                    'provider': 'cloudpayments',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("invoice_id"),
+                    "provider": "cloudpayments",
                 }
             return None
 
         # --- Freekassa --------------------------------------------------------
-        if payment_method in ('freekassa', 'freekassa_sbp', 'freekassa_card'):
+        if payment_method in ("freekassa", "freekassa_sbp", "freekassa_card"):
             if not settings.is_freekassa_enabled():
-                logger.warning('Freekassa is not enabled, cannot create guest payment')
+                logger.warning("Freekassa is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_freekassa_payment(
@@ -1061,24 +1094,29 @@ class PaymentService(
                 payment_method=payment_method,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'freekassa')
+                await _patch_guest_metadata(result["local_payment_id"], "freekassa")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': 'freekassa',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": "freekassa",
                 }
             return None
 
         # --- KassaAI ----------------------------------------------------------
-        if payment_method in ('kassa_ai', 'kassa_ai_sbp', 'kassa_ai_card', 'kassa_ai_sberpay'):
+        if payment_method in (
+            "kassa_ai",
+            "kassa_ai_sbp",
+            "kassa_ai_card",
+            "kassa_ai_sberpay",
+        ):
             if not settings.is_kassa_ai_enabled():
-                logger.warning('KassaAI is not enabled, cannot create guest payment')
+                logger.warning("KassaAI is not enabled, cannot create guest payment")
                 return None
 
             from app.services.kassa_ai_service import KASSA_AI_SUB_METHODS
 
             sub = KASSA_AI_SUB_METHODS.get(payment_method)
-            ps_id = sub['payment_system_id'] if sub else None
+            ps_id = sub["payment_system_id"] if sub else None
 
             result = await self.create_kassa_ai_payment(
                 db=db,
@@ -1089,18 +1127,18 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'kassa_ai')
+                await _patch_guest_metadata(result["local_payment_id"], "kassa_ai")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': payment_method,
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": payment_method,
                 }
             return None
 
         # --- RioPay -----------------------------------------------------------
-        if _base == 'riopay':
+        if _base == "riopay":
             if not settings.is_riopay_enabled():
-                logger.warning('RioPay is not enabled, cannot create guest payment')
+                logger.warning("RioPay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_riopay_payment(
@@ -1112,18 +1150,19 @@ class PaymentService(
                 fail_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'riopay')
+                await _patch_guest_metadata(result["local_payment_id"], "riopay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('riopay_order_id') or result.get('order_id'),
-                    'provider': 'riopay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("riopay_order_id")
+                    or result.get("order_id"),
+                    "provider": "riopay",
                 }
             return None
 
         # --- SeverPay ---------------------------------------------------------
-        if _base == 'severpay':
+        if _base == "severpay":
             if not settings.is_severpay_enabled():
-                logger.warning('SeverPay is not enabled, cannot create guest payment')
+                logger.warning("SeverPay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_severpay_payment(
@@ -1134,18 +1173,18 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'severpay')
+                await _patch_guest_metadata(result["local_payment_id"], "severpay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('severpay_id') or result.get('order_id'),
-                    'provider': 'severpay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("severpay_id") or result.get("order_id"),
+                    "provider": "severpay",
                 }
             return None
 
         # --- PayPear ----------------------------------------------------------
-        if _base == 'paypear':
+        if _base == "paypear":
             if not settings.is_paypear_enabled():
-                logger.warning('PayPear is not enabled, cannot create guest payment')
+                logger.warning("PayPear is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_paypear_payment(
@@ -1156,18 +1195,18 @@ class PaymentService(
                 return_url=return_url,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'paypear')
+                await _patch_guest_metadata(result["local_payment_id"], "paypear")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('paypear_id') or result.get('order_id'),
-                    'provider': 'paypear',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("paypear_id") or result.get("order_id"),
+                    "provider": "paypear",
                 }
             return None
 
         # --- RollyPay ---------------------------------------------------------
-        if _base == 'rollypay':
+        if _base == "rollypay":
             if not settings.is_rollypay_enabled():
-                logger.warning('RollyPay is not enabled, cannot create guest payment')
+                logger.warning("RollyPay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_rollypay_payment(
@@ -1179,18 +1218,19 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'rollypay')
+                await _patch_guest_metadata(result["local_payment_id"], "rollypay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('rollypay_payment_id') or result.get('order_id'),
-                    'provider': 'rollypay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("rollypay_payment_id")
+                    or result.get("order_id"),
+                    "provider": "rollypay",
                 }
             return None
 
         # --- Overpay ----------------------------------------------------------
-        if _base == 'overpay':
+        if _base == "overpay":
             if not settings.is_overpay_enabled():
-                logger.warning('Overpay is not enabled, cannot create guest payment')
+                logger.warning("Overpay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_overpay_payment(
@@ -1202,18 +1242,19 @@ class PaymentService(
                 option=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'overpay')
+                await _patch_guest_metadata(result["local_payment_id"], "overpay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('overpay_payment_id') or result.get('order_id'),
-                    'provider': 'overpay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("overpay_payment_id")
+                    or result.get("order_id"),
+                    "provider": "overpay",
                 }
             return None
 
         # --- AuraPay ----------------------------------------------------------
-        if _base == 'aurapay':
+        if _base == "aurapay":
             if not settings.is_aurapay_enabled():
-                logger.warning('AuraPay is not enabled, cannot create guest payment')
+                logger.warning("AuraPay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_aurapay_payment(
@@ -1225,18 +1266,21 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'aurapay')
+                await _patch_guest_metadata(result["local_payment_id"], "aurapay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('aurapay_invoice_id') or result.get('order_id'),
-                    'provider': 'aurapay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("aurapay_invoice_id")
+                    or result.get("order_id"),
+                    "provider": "aurapay",
                 }
             return None
 
         # --- Etoplatezhi ------------------------------------------------------
-        if _base == 'etoplatezhi':
+        if _base == "etoplatezhi":
             if not settings.is_etoplatezhi_enabled():
-                logger.warning('Etoplatezhi is not enabled, cannot create guest payment')
+                logger.warning(
+                    "Etoplatezhi is not enabled, cannot create guest payment"
+                )
                 return None
 
             result = await self.create_etoplatezhi_payment(
@@ -1248,18 +1292,18 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'etoplatezhi')
+                await _patch_guest_metadata(result["local_payment_id"], "etoplatezhi")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': 'etoplatezhi',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": "etoplatezhi",
                 }
             return None
 
         # --- Antilopay --------------------------------------------------------
-        if _base == 'antilopay':
+        if _base == "antilopay":
             if not settings.is_antilopay_enabled():
-                logger.warning('Antilopay is not enabled, cannot create guest payment')
+                logger.warning("Antilopay is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_antilopay_payment(
@@ -1271,18 +1315,18 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'antilopay')
+                await _patch_guest_metadata(result["local_payment_id"], "antilopay")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': 'antilopay',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": "antilopay",
                 }
             return None
 
         # --- Jupiter ----------------------------------------------------------
-        if _base == 'jupiter':
+        if _base == "jupiter":
             if not settings.is_jupiter_enabled():
-                logger.warning('Jupiter is not enabled, cannot create guest payment')
+                logger.warning("Jupiter is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_jupiter_payment(
@@ -1294,18 +1338,18 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'jupiter')
+                await _patch_guest_metadata(result["local_payment_id"], "jupiter")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': 'jupiter',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": "jupiter",
                 }
             return None
 
         # --- Donut ------------------------------------------------------------
-        if _base == 'donut':
+        if _base == "donut":
             if not settings.is_donut_enabled():
-                logger.warning('Donut is not enabled, cannot create guest payment')
+                logger.warning("Donut is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_donut_payment(
@@ -1317,18 +1361,18 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'donut')
+                await _patch_guest_metadata(result["local_payment_id"], "donut")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': 'donut',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": "donut",
                 }
             return None
 
         # --- Lava -------------------------------------------------------------
-        if _base == 'lava':
+        if _base == "lava":
             if not settings.is_lava_enabled():
-                logger.warning('Lava is not enabled, cannot create guest payment')
+                logger.warning("Lava is not enabled, cannot create guest payment")
                 return None
 
             result = await self.create_lava_payment(
@@ -1340,64 +1384,72 @@ class PaymentService(
                 payment_method_type=_option,
             )
             if result:
-                await _patch_guest_metadata(result['local_payment_id'], 'lava')
+                await _patch_guest_metadata(result["local_payment_id"], "lava")
                 return {
-                    'payment_url': result.get('payment_url'),
-                    'payment_id': result.get('order_id'),
-                    'provider': 'lava',
+                    "payment_url": result.get("payment_url"),
+                    "payment_id": result.get("order_id"),
+                    "provider": "lava",
                 }
             return None
 
         # --- Telegram Stars ---------------------------------------------------
-        if payment_method == 'telegram_stars':
+        if payment_method == "telegram_stars":
             if not settings.TELEGRAM_STARS_ENABLED:
-                logger.warning('Telegram Stars is not enabled, cannot create guest payment')
+                logger.warning(
+                    "Telegram Stars is not enabled, cannot create guest payment"
+                )
                 return None
 
             if self.bot is None:
-                logger.warning('Bot instance required for Stars guest payment')
+                logger.warning("Bot instance required for Stars guest payment")
                 return None
 
             from aiogram.types import LabeledPrice
 
             rate = settings.get_stars_rate()
             if rate <= 0:
-                logger.error('TELEGRAM_STARS_RATE_RUB is not positive, cannot create Stars invoice')
+                logger.error(
+                    "TELEGRAM_STARS_RATE_RUB is not positive, cannot create Stars invoice"
+                )
                 return None
 
             amount_rubles = amount_kopeks / 100
             stars_amount = max(1, round(amount_rubles / rate))
 
-            payload = f'guest_purchase_{purchase_token}'
+            payload = f"guest_purchase_{purchase_token}"
 
             try:
                 invoice_url = await self.bot.create_invoice_link(
-                    title='Подарочная подписка VPN',
-                    description=f'{description} ({stars_amount} )',
+                    title="Подарочная подписка VPN",
+                    description=f"{description} ({stars_amount} )",
                     payload=payload,
-                    provider_token='',
-                    currency='XTR',
-                    prices=[LabeledPrice(label='Подарочная подписка', amount=stars_amount)],
+                    provider_token="",
+                    currency="XTR",
+                    prices=[
+                        LabeledPrice(label="Подарочная подписка", amount=stars_amount)
+                    ],
                 )
 
                 logger.info(
-                    'Created Stars invoice for guest purchase',
+                    "Created Stars invoice for guest purchase",
                     stars_amount=stars_amount,
                     purchase_token_prefix=purchase_token[:5],
                 )
                 return {
-                    'payment_url': invoice_url,
-                    'payment_id': f'stars_{purchase_token[:12]}',
-                    'provider': 'telegram_stars',
+                    "payment_url": invoice_url,
+                    "payment_id": f"stars_{purchase_token[:12]}",
+                    "provider": "telegram_stars",
                 }
 
             except Exception as stars_error:
-                logger.error('Error creating Stars invoice for guest payment', error=stars_error)
+                logger.error(
+                    "Error creating Stars invoice for guest payment", error=stars_error
+                )
                 return None
 
         # --- Unsupported provider ---------------------------------------------
         logger.warning(
-            'Guest payment requested for unsupported provider',
+            "Guest payment requested for unsupported provider",
             payment_method=payment_method,
             purchase_token_prefix=purchase_token[:5],
         )

@@ -9,7 +9,6 @@ from app.localization.texts import get_texts
 from app.services.subscription_checkout_service import save_subscription_checkout_draft
 from app.states import SubscriptionStates
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -33,10 +32,18 @@ async def present_subscription_summary(
     from .pricing import _prepare_subscription_summary
 
     try:
-        summary_text, prepared_data = await _prepare_subscription_summary(db_user, data, texts)
+        summary_text, prepared_data = await _prepare_subscription_summary(
+            db_user, data, texts
+        )
     except ValueError as exc:
-        logger.error('Ошибка в расчете цены подписки для пользователя', telegram_id=db_user.telegram_id, exc=exc)
-        await callback.answer('Ошибка расчета цены. Обратитесь в поддержку.', show_alert=True)
+        logger.error(
+            "Ошибка в расчете цены подписки для пользователя",
+            telegram_id=db_user.telegram_id,
+            exc=exc,
+        )
+        await callback.answer(
+            "Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True
+        )
         return False
 
     await state.set_data(prepared_data)
@@ -45,7 +52,7 @@ async def present_subscription_summary(
     await callback.message.edit_text(
         summary_text,
         reply_markup=get_subscription_confirm_keyboard(db_user.language),
-        parse_mode='HTML',
+        parse_mode="HTML",
     )
 
     await state.set_state(SubscriptionStates.confirming_purchase)

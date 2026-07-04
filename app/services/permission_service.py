@@ -14,8 +14,12 @@ from typing import TYPE_CHECKING
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.rbac import SUPERADMIN_LEVEL, AccessPolicyCRUD, AuditLogCRUD, UserRoleCRUD
-
+from app.database.crud.rbac import (
+    SUPERADMIN_LEVEL,
+    AccessPolicyCRUD,
+    AuditLogCRUD,
+    UserRoleCRUD,
+)
 
 if TYPE_CHECKING:
     from app.database.models import AccessPolicy, User
@@ -42,48 +46,48 @@ def _is_legacy_admin(user: User) -> bool:
 # ---------------------------------------------------------------------------
 
 PERMISSION_REGISTRY: dict[str, list[str]] = {
-    'users': [
-        'read',
-        'edit',
-        'block',
-        'delete',
-        'sync',
-        'promo_group',
-        'balance',
-        'subscription',
-        'send_offer',
-        'referral',
+    "users": [
+        "read",
+        "edit",
+        "block",
+        "delete",
+        "sync",
+        "promo_group",
+        "balance",
+        "subscription",
+        "send_offer",
+        "referral",
     ],
-    'tickets': ['read', 'reply', 'close', 'settings'],
-    'stats': ['read', 'export'],
-    'sales_stats': ['read', 'export'],
-    'broadcasts': ['read', 'create', 'edit', 'delete', 'send'],
-    'tariffs': ['read', 'create', 'edit', 'delete'],
-    'promocodes': ['read', 'create', 'edit', 'delete', 'stats'],
-    'promo_groups': ['read', 'create', 'edit', 'delete'],
-    'promo_offers': ['read', 'create', 'edit', 'send'],
-    'campaigns': ['read', 'create', 'edit', 'delete', 'stats'],
-    'partners': ['read', 'edit', 'approve', 'revoke', 'settings'],
-    'withdrawals': ['read', 'approve', 'reject'],
-    'payments': ['read', 'edit', 'export'],
-    'payment_methods': ['read', 'edit'],
-    'servers': ['read', 'edit'],
-    'remnawave': ['read', 'sync', 'manage'],
-    'traffic': ['read', 'export'],
-    'settings': ['read', 'edit'],
-    'roles': ['read', 'create', 'edit', 'delete', 'assign'],
-    'audit_log': ['read', 'export'],
-    'channels': ['read', 'edit'],
-    'ban_system': ['read', 'edit', 'ban', 'unban'],
-    'wheel': ['read', 'edit'],
-    'apps': ['read', 'edit'],
-    'email_templates': ['read', 'edit'],
-    'pinned_messages': ['read', 'create', 'edit', 'delete'],
-    'landings': ['read', 'create', 'edit', 'delete'],
-    'updates': ['read', 'manage'],
-    'bulk_actions': ['read', 'execute'],
-    'info_pages': ['read', 'create', 'edit', 'delete'],
-    'news': ['read', 'create', 'edit', 'delete'],
+    "tickets": ["read", "reply", "close", "settings"],
+    "stats": ["read", "export"],
+    "sales_stats": ["read", "export"],
+    "broadcasts": ["read", "create", "edit", "delete", "send"],
+    "tariffs": ["read", "create", "edit", "delete"],
+    "promocodes": ["read", "create", "edit", "delete", "stats"],
+    "promo_groups": ["read", "create", "edit", "delete"],
+    "promo_offers": ["read", "create", "edit", "send"],
+    "campaigns": ["read", "create", "edit", "delete", "stats"],
+    "partners": ["read", "edit", "approve", "revoke", "settings"],
+    "withdrawals": ["read", "approve", "reject"],
+    "payments": ["read", "edit", "export"],
+    "payment_methods": ["read", "edit"],
+    "servers": ["read", "edit"],
+    "remnawave": ["read", "sync", "manage"],
+    "traffic": ["read", "export"],
+    "settings": ["read", "edit"],
+    "roles": ["read", "create", "edit", "delete", "assign"],
+    "audit_log": ["read", "export"],
+    "channels": ["read", "edit"],
+    "ban_system": ["read", "edit", "ban", "unban"],
+    "wheel": ["read", "edit"],
+    "apps": ["read", "edit"],
+    "email_templates": ["read", "edit"],
+    "pinned_messages": ["read", "create", "edit", "delete"],
+    "landings": ["read", "create", "edit", "delete"],
+    "updates": ["read", "manage"],
+    "bulk_actions": ["read", "execute"],
+    "info_pages": ["read", "create", "edit", "delete"],
+    "news": ["read", "create", "edit", "delete"],
 }
 
 
@@ -94,7 +98,11 @@ PERMISSION_REGISTRY: dict[str, list[str]] = {
 
 def get_all_permissions() -> list[str]:
     """Return flat list of all permissions: ``['users:read', 'users:edit', ...]``."""
-    return [f'{section}:{action}' for section, actions in PERMISSION_REGISTRY.items() for action in actions]
+    return [
+        f"{section}:{action}"
+        for section, actions in PERMISSION_REGISTRY.items()
+        for action in actions
+    ]
 
 
 def permission_matches(user_perm: str, required_perm: str) -> bool:
@@ -119,10 +127,10 @@ def _policy_matches_resource(policy: AccessPolicy, required_perm: str) -> bool:
     ``policy.resource`` is the section pattern (e.g. ``users`` or ``*``).
     ``policy.actions`` is a list of action patterns (e.g. ``['read', '*']``).
     """
-    if ':' not in required_perm:
+    if ":" not in required_perm:
         return False
 
-    section, action = required_perm.split(':', maxsplit=1)
+    section, action = required_perm.split(":", maxsplit=1)
 
     if not fnmatch(section, policy.resource):
         return False
@@ -149,14 +157,16 @@ def _evaluate_conditions(
         return True
 
     # --- time_range ---
-    time_range = conditions.get('time_range')
+    time_range = conditions.get("time_range")
     if time_range is not None:
         now = datetime.now(UTC).time()
         try:
-            start = datetime.strptime(time_range['start'], '%H:%M').time()
-            end = datetime.strptime(time_range['end'], '%H:%M').time()
+            start = datetime.strptime(time_range["start"], "%H:%M").time()
+            end = datetime.strptime(time_range["end"], "%H:%M").time()
         except (KeyError, ValueError) as exc:
-            logger.warning('Invalid time_range condition', condition=time_range, error=str(exc))
+            logger.warning(
+                "Invalid time_range condition", condition=time_range, error=str(exc)
+            )
             return False
 
         if start <= end:
@@ -168,7 +178,7 @@ def _evaluate_conditions(
             return False
 
     # --- ip_whitelist ---
-    ip_whitelist: list[str] | None = conditions.get('ip_whitelist')
+    ip_whitelist: list[str] | None = conditions.get("ip_whitelist")
     if ip_whitelist is not None:
         if ip_address is None:
             # No IP provided but whitelist required -- deny
@@ -177,7 +187,7 @@ def _evaluate_conditions(
         try:
             client_ip = ipaddress.ip_address(ip_address)
         except ValueError:
-            logger.warning('Invalid client IP address', ip_address=ip_address)
+            logger.warning("Invalid client IP address", ip_address=ip_address)
             return False
 
         matched = False
@@ -188,7 +198,7 @@ def _evaluate_conditions(
                     matched = True
                     break
             except ValueError:
-                logger.warning('Invalid IP whitelist entry', entry=entry)
+                logger.warning("Invalid IP whitelist entry", entry=entry)
                 continue
 
         if not matched:
@@ -230,30 +240,34 @@ class PermissionService:
         """
         # Step 0 -- legacy config-based admins get full access
         if _is_legacy_admin(user):
-            return True, 'Granted by legacy admin config'
+            return True, "Granted by legacy admin config"
 
         # Step 1 -- aggregate RBAC permissions
-        permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user.id)
+        permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(
+            db, user.id
+        )
 
         if not permissions:
             logger.debug(
-                'Permission denied: no active roles',
+                "Permission denied: no active roles",
                 user_id=user.id,
                 required=required_permission,
             )
-            return False, 'No active roles assigned'
+            return False, "No active roles assigned"
 
         # Step 2 -- RBAC wildcard matching
-        rbac_granted = any(permission_matches(perm, required_permission) for perm in permissions)
+        rbac_granted = any(
+            permission_matches(perm, required_permission) for perm in permissions
+        )
 
         if not rbac_granted:
             logger.debug(
-                'Permission denied: RBAC mismatch',
+                "Permission denied: RBAC mismatch",
                 user_id=user.id,
                 required=required_permission,
                 permissions=permissions,
             )
-            return False, 'Permission not granted by any role'
+            return False, "Permission not granted by any role"
 
         # Step 3 -- load ABAC policies for the user's roles
         user_roles = await UserRoleCRUD.get_user_roles(db, user.id)
@@ -262,11 +276,11 @@ class PermissionService:
 
         if not policies:
             # No ABAC policies -- RBAC alone grants access
-            return True, 'Granted by RBAC'
+            return True, "Granted by RBAC"
 
         # Step 4 -- evaluate ABAC policies (highest priority first, already sorted)
         explicit_deny = False
-        deny_reason = ''
+        deny_reason = ""
 
         for policy in policies:
             if not _policy_matches_resource(policy, required_permission):
@@ -280,11 +294,11 @@ class PermissionService:
                 # Conditions not satisfied -- this policy does not apply
                 continue
 
-            if policy.effect == 'deny':
+            if policy.effect == "deny":
                 explicit_deny = True
-                deny_reason = f'Denied by policy: {policy.name}'
+                deny_reason = f"Denied by policy: {policy.name}"
                 logger.debug(
-                    'Permission denied by ABAC policy',
+                    "Permission denied by ABAC policy",
                     user_id=user.id,
                     required=required_permission,
                     policy_id=policy.id,
@@ -300,10 +314,12 @@ class PermissionService:
         if explicit_deny:
             return False, deny_reason
 
-        return True, 'Granted by RBAC + ABAC'
+        return True, "Granted by RBAC + ABAC"
 
     @staticmethod
-    async def get_user_permissions(db: AsyncSession, user_id: int, user: User | None = None) -> dict:
+    async def get_user_permissions(
+        db: AsyncSession, user_id: int, user: User | None = None
+    ) -> dict:
         """Return aggregated permission info for a user.
 
         Returns::
@@ -314,19 +330,21 @@ class PermissionService:
                 'role_level': 50,
             }
         """
-        permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user_id)
+        permissions, role_names, max_level = await UserRoleCRUD.get_user_permissions(
+            db, user_id
+        )
 
         # Legacy config-based admins get full superadmin permissions
         # Level is SUPERADMIN_LEVEL + 1 so they can manage all roles including level-999
         if user is not None and not permissions and _is_legacy_admin(user):
-            permissions = ['*:*']
-            role_names = ['superadmin']
+            permissions = ["*:*"]
+            role_names = ["superadmin"]
             max_level = SUPERADMIN_LEVEL + 1
 
         return {
-            'permissions': permissions,
-            'roles': role_names,
-            'role_level': max_level,
+            "permissions": permissions,
+            "roles": role_names,
+            "role_level": max_level,
         }
 
     @staticmethod
@@ -340,7 +358,7 @@ class PermissionService:
         details: dict | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
-        status: str = 'success',
+        status: str = "success",
         request_method: str | None = None,
         request_path: str | None = None,
     ) -> None:

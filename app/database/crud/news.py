@@ -11,38 +11,37 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import NewsArticle
 
-
 logger = structlog.get_logger(__name__)
 
 # Fields that can be set via update_news_article
 _ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
     {
-        'title',
-        'slug',
-        'content',
-        'excerpt',
-        'category',
-        'category_color',
-        'tag',
-        'category_id',
-        'tag_id',
-        'featured_image_url',
-        'is_published',
-        'is_featured',
-        'published_at',
-        'read_time_minutes',
+        "title",
+        "slug",
+        "content",
+        "excerpt",
+        "category",
+        "category_color",
+        "tag",
+        "category_id",
+        "tag_id",
+        "featured_image_url",
+        "is_published",
+        "is_featured",
+        "published_at",
+        "read_time_minutes",
     }
 )
 
 # Fields that can be explicitly set to None
 _NULLABLE_UPDATE_FIELDS: frozenset[str] = frozenset(
     {
-        'excerpt',
-        'tag',
-        'category_id',
-        'tag_id',
-        'featured_image_url',
-        'published_at',
+        "excerpt",
+        "tag",
+        "category_id",
+        "tag_id",
+        "featured_image_url",
+        "published_at",
     }
 )
 
@@ -52,10 +51,10 @@ async def create_news_article(
     *,
     title: str,
     slug: str,
-    content: str = '',
+    content: str = "",
     excerpt: str | None = None,
-    category: str = '',
-    category_color: str = '#00e5a0',
+    category: str = "",
+    category_color: str = "#00e5a0",
     tag: str | None = None,
     category_id: int | None = None,
     tag_id: int | None = None,
@@ -102,7 +101,7 @@ async def create_news_article(
     await db.refresh(article)
 
     logger.info(
-        'Created news article',
+        "Created news article",
         article_id=article.id,
         slug=article.slug,
         is_published=article.is_published,
@@ -110,7 +109,9 @@ async def create_news_article(
     return article
 
 
-async def get_news_article_by_id(db: AsyncSession, article_id: int) -> NewsArticle | None:
+async def get_news_article_by_id(
+    db: AsyncSession, article_id: int
+) -> NewsArticle | None:
     """Get a news article by ID with author, category, and tag relationships."""
     result = await db.execute(
         select(NewsArticle)
@@ -154,7 +155,11 @@ async def get_published_news(
         stmt = stmt.where(NewsArticle.category == category)
 
     # NULLs last so articles without published_at don't float to the top in DESC
-    stmt = stmt.order_by(nullslast(NewsArticle.published_at.desc())).offset(offset).limit(limit)
+    stmt = (
+        stmt.order_by(nullslast(NewsArticle.published_at.desc()))
+        .offset(offset)
+        .limit(limit)
+    )
 
     result = await db.execute(stmt)
     return list(result.scalars().all())
@@ -181,7 +186,12 @@ async def get_all_news(
     offset: int = 0,
 ) -> list[NewsArticle]:
     """Get all news articles (admin), ordered by created_at descending."""
-    stmt = select(NewsArticle).order_by(NewsArticle.created_at.desc()).offset(offset).limit(limit)
+    stmt = (
+        select(NewsArticle)
+        .order_by(NewsArticle.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -197,7 +207,7 @@ async def get_news_categories(db: AsyncSession) -> list[str]:
     result = await db.execute(
         select(NewsArticle.category)
         .where(NewsArticle.is_published.is_(True))
-        .where(NewsArticle.category != '')
+        .where(NewsArticle.category != "")
         .distinct()
         .order_by(NewsArticle.category)
     )
@@ -211,7 +221,11 @@ async def unfeature_all_news(db: AsyncSession) -> None:
     This is intentional — the caller should commit both this operation and the
     subsequent feature operation atomically.
     """
-    await db.execute(update(NewsArticle).where(NewsArticle.is_featured.is_(True)).values(is_featured=False))
+    await db.execute(
+        update(NewsArticle)
+        .where(NewsArticle.is_featured.is_(True))
+        .values(is_featured=False)
+    )
 
 
 async def update_news_article(
@@ -233,16 +247,22 @@ async def update_news_article(
         update_data[key] = value
 
     # Auto-set published_at when transitioning to published
-    if update_data.get('is_published') and not article.is_published and not update_data.get('published_at'):
+    if (
+        update_data.get("is_published")
+        and not article.is_published
+        and not update_data.get("published_at")
+    ):
         if article.published_at is None:
-            update_data['published_at'] = datetime.now(UTC)
+            update_data["published_at"] = datetime.now(UTC)
 
     if not update_data:
         return article
 
-    update_data['updated_at'] = datetime.now(UTC)
+    update_data["updated_at"] = datetime.now(UTC)
 
-    await db.execute(update(NewsArticle).where(NewsArticle.id == article.id).values(**update_data))
+    await db.execute(
+        update(NewsArticle).where(NewsArticle.id == article.id).values(**update_data)
+    )
     try:
         await db.commit()
     except IntegrityError:
@@ -251,7 +271,7 @@ async def update_news_article(
     await db.refresh(article)
 
     logger.info(
-        'Updated news article',
+        "Updated news article",
         article_id=article.id,
         slug=article.slug,
         updated_fields=list(update_data.keys()),
@@ -268,7 +288,7 @@ async def delete_news_article(db: AsyncSession, article: NewsArticle) -> None:
     await db.execute(delete(NewsArticle).where(NewsArticle.id == article_id))
     await db.commit()
 
-    logger.info('Deleted news article', article_id=article_id, slug=article_slug)
+    logger.info("Deleted news article", article_id=article_id, slug=article_slug)
 
 
 async def increment_views(db: AsyncSession, article_id: int) -> int:

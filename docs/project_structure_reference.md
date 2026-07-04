@@ -3,6 +3,7 @@
 Этот документ сгенерирован для быстрой навигации по репозиторию. В нём перечислены основные директории, модули, классы и функции.
 
 ## Общая структура корня
+
 - `.dockerignore` — файл
 - `.env` — файл
 - `.env.example` — файл
@@ -218,10 +219,10 @@
   Функции: `_get_language_prompt_text`, `_get_subscription_status`, `_get_subscription_status_simple`, `_insert_random_message`, `get_referral_code_keyboard`, `register_handlers`
 - `app/handlers/subscription/` — пакет обработчиков подписки
   Ключевые модули:
-    - `common.py` — вспомогательные функции форматирования, расчётов и построения клавиатур.
-    - `purchase.py` — пользовательские сценарии, регистрация обработчиков (`register_handlers`).
-    - `countries.py`, `devices.py`, `traffic.py`, `autopay.py`, `promo.py`, `happ.py`, `links.py`, `notifications.py`, `pricing.py` — тематические обработчики и сервисные утилиты.
-  Публичные функции доступны через `app.handlers.subscription` (например, `create_deep_link`, `get_servers_display_names`, `register_handlers`).
+  - `common.py` — вспомогательные функции форматирования, расчётов и построения клавиатур.
+  - `purchase.py` — пользовательские сценарии, регистрация обработчиков (`register_handlers`).
+  - `countries.py`, `devices.py`, `traffic.py`, `autopay.py`, `promo.py`, `happ.py`, `links.py`, `notifications.py`, `pricing.py` — тематические обработчики и сервисные утилиты.
+    Публичные функции доступны через `app.handlers.subscription` (например, `create_deep_link`, `get_servers_display_names`, `register_handlers`).
 - `app/handlers/support.py` — Python-модуль
   Классы: нет
   Функции: `register_handlers`
@@ -827,7 +828,6 @@
 - `data/bot.db` — файл (.db)
 
 ### data/backups
-
 
 ## logs
 

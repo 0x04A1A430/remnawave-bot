@@ -15,22 +15,21 @@ from app.services.system_settings_service import (
 
 from ..dependencies import get_cabinet_db, require_permission
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/settings', tags=['Admin Settings'])
+router = APIRouter(prefix="/admin/settings", tags=["Admin Settings"])
 
 # Returned (HTTP 409) when an edit targets a key pinned in .env. Such a key's
 # value shadows the DB, so writing it would be silently ignored — we reject the
 # edit and tell the operator where the value actually lives.
 _ENV_LOCKED_DETAIL = (
     "Setting '{key}' is fixed in the environment (.env) and cannot be changed here. "
-    'Remove it from .env (and restart) to manage it from the cabinet.'
+    "Remove it from .env (and restart) to manage it from the cabinet."
 )
 
 
 async def _sync_maintenance_mode_if_needed(key: str) -> None:
-    if key != 'MAINTENANCE_MODE':
+    if key != "MAINTENANCE_MODE":
         return
 
     from app.services.maintenance_service import maintenance_service
@@ -53,7 +52,7 @@ class SettingCategorySummary(BaseModel):
 
     key: str
     label: str
-    description: str = ''
+    description: str = ""
     items: int
 
 
@@ -68,10 +67,10 @@ class SettingChoice(BaseModel):
 class SettingHint(BaseModel):
     """Setting hints and guidance."""
 
-    description: str = ''
-    format: str = ''
-    example: str = ''
-    warning: str = ''
+    description: str = ""
+    format: str = ""
+    example: str = ""
+    warning: str = ""
 
 
 class SettingDefinition(BaseModel):
@@ -113,7 +112,7 @@ def _coerce_value(key: str, value: Any) -> Any:
     if value is None:
         if definition.is_optional:
             return None
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Value is required')
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Value is required")
 
     python_type = definition.python_type
 
@@ -123,14 +122,14 @@ def _coerce_value(key: str, value: Any) -> Any:
                 normalized = value
             elif isinstance(value, str):
                 lowered = value.strip().lower()
-                if lowered in {'true', '1', 'yes', 'on', 'да'}:
+                if lowered in {"true", "1", "yes", "on", "да"}:
                     normalized = True
-                elif lowered in {'false', '0', 'no', 'off', 'нет'}:
+                elif lowered in {"false", "0", "no", "off", "нет"}:
                     normalized = False
                 else:
-                    raise ValueError('invalid bool')
+                    raise ValueError("invalid bool")
             else:
-                raise ValueError('invalid bool')
+                raise ValueError("invalid bool")
 
         elif python_type is int:
             normalized = int(value)
@@ -139,22 +138,26 @@ def _coerce_value(key: str, value: Any) -> Any:
         else:
             normalized = str(value)
     except ValueError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Invalid value type') from None
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid value type") from None
 
     choices = bot_configuration_service.get_choice_options(key)
     if choices:
         allowed_values = {option.value for option in choices}
         if normalized not in allowed_values:
-            readable = ', '.join(bot_configuration_service.format_value(opt.value) for opt in choices)
+            readable = ", ".join(
+                bot_configuration_service.format_value(opt.value) for opt in choices
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=f'Value must be one of: {readable}',
+                detail=f"Value must be one of: {readable}",
             )
 
     return normalized
 
 
-def _serialize_definition(definition, include_choices: bool = True) -> SettingDefinition:
+def _serialize_definition(
+    definition, include_choices: bool = True
+) -> SettingDefinition:
     """Serialize setting definition to response model."""
     raw_current = bot_configuration_service.get_current_value(definition.key)
     # SECURITY: never echo plaintext secrets (payment keys, SMTP/panel passwords, API
@@ -182,10 +185,10 @@ def _serialize_definition(definition, include_choices: bool = True) -> SettingDe
     # Get setting hints
     guidance = bot_configuration_service.get_setting_guidance(definition.key)
     hint = SettingHint(
-        description=guidance.get('description', ''),
-        format=guidance.get('format', ''),
-        example=guidance.get('example', ''),
-        warning=guidance.get('warning', ''),
+        description=guidance.get("description", ""),
+        format=guidance.get("format", ""),
+        example=guidance.get("example", ""),
+        warning=guidance.get("warning", ""),
     )
 
     return SettingDefinition(
@@ -211,9 +214,9 @@ def _serialize_definition(definition, include_choices: bool = True) -> SettingDe
 # ============ Routes ============
 
 
-@router.get('/categories', response_model=list[SettingCategorySummary])
+@router.get("/categories", response_model=list[SettingCategorySummary])
 async def list_categories(
-    admin: User = Depends(require_permission('settings:read')),
+    admin: User = Depends(require_permission("settings:read")),
 ):
     """Get list of setting categories."""
     categories = bot_configuration_service.get_categories()
@@ -228,10 +231,10 @@ async def list_categories(
     ]
 
 
-@router.get('', response_model=list[SettingDefinition])
+@router.get("", response_model=list[SettingDefinition])
 async def list_settings(
-    admin: User = Depends(require_permission('settings:read')),
-    category: str | None = Query(default=None, alias='category_key'),
+    admin: User = Depends(require_permission("settings:read")),
+    category: str | None = Query(default=None, alias="category_key"),
 ):
     """Get list of all settings or settings for a specific category."""
     items: list[SettingDefinition] = []
@@ -248,40 +251,45 @@ async def list_settings(
     return items
 
 
-@router.get('/{key}', response_model=SettingDefinition)
+@router.get("/{key}", response_model=SettingDefinition)
 async def get_setting(
     key: str,
-    admin: User = Depends(require_permission('settings:read')),
+    admin: User = Depends(require_permission("settings:read")),
 ):
     """Get a specific setting by key."""
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
 
     return _serialize_definition(definition)
 
 
-@router.put('/{key}', response_model=SettingDefinition)
+@router.put("/{key}", response_model=SettingDefinition)
 async def update_setting(
     key: str,
     payload: SettingUpdateRequest,
-    admin: User = Depends(require_permission('settings:edit')),
+    admin: User = Depends(require_permission("settings:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update a setting value."""
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
 
     if bot_configuration_service.is_env_locked(key):
-        raise HTTPException(status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key))
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key)
+        )
 
     # The masked sentinel is what we return for secrets; if it comes back unchanged the
     # admin didn't edit the field, so preserve the stored secret instead of overwriting
     # it with the mask string.
-    if bot_configuration_service.is_secret_key(key) and payload.value == bot_configuration_service.SECRET_MASK:
+    if (
+        bot_configuration_service.is_secret_key(key)
+        and payload.value == bot_configuration_service.SECRET_MASK
+    ):
         return _serialize_definition(definition)
 
     value = _coerce_value(key, payload.value)
@@ -293,25 +301,36 @@ async def update_setting(
     await db.commit()
 
     # Never log secret values in plaintext.
-    log_value = bot_configuration_service.SECRET_MASK if bot_configuration_service.is_secret_key(key) else value
-    logger.info('Admin updated setting to', telegram_id=admin.telegram_id, key=key, value=log_value)
+    log_value = (
+        bot_configuration_service.SECRET_MASK
+        if bot_configuration_service.is_secret_key(key)
+        else value
+    )
+    logger.info(
+        "Admin updated setting to",
+        telegram_id=admin.telegram_id,
+        key=key,
+        value=log_value,
+    )
     return _serialize_definition(definition)
 
 
-@router.delete('/{key}', response_model=SettingDefinition)
+@router.delete("/{key}", response_model=SettingDefinition)
 async def reset_setting(
     key: str,
-    admin: User = Depends(require_permission('settings:edit')),
+    admin: User = Depends(require_permission("settings:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset a setting to its default value."""
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
 
     if bot_configuration_service.is_env_locked(key):
-        raise HTTPException(status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key))
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key)
+        )
 
     try:
         await bot_configuration_service.reset_value(db, key)
@@ -320,5 +339,5 @@ async def reset_setting(
     await _sync_maintenance_mode_if_needed(key)
     await db.commit()
 
-    logger.info('Admin reset setting', telegram_id=admin.telegram_id, key=key)
+    logger.info("Admin reset setting", telegram_id=admin.telegram_id, key=key)
     return _serialize_definition(definition)

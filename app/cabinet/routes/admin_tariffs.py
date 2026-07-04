@@ -21,7 +21,15 @@ from app.database.crud.tariff import (
     set_tariff_promo_groups,
     update_tariff,
 )
-from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
+from app.database.models import (
+    PromoGroup,
+    Subscription,
+    SubscriptionStatus,
+    Tariff,
+    Transaction,
+    TransactionType,
+    User,
+)
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
@@ -42,10 +50,9 @@ from ..schemas.tariffs import (
     TariffUpdateRequest,
 )
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/tariffs', tags=['Cabinet Admin Tariffs'])
+router = APIRouter(prefix="/admin/tariffs", tags=["Cabinet Admin Tariffs"])
 
 
 async def _get_tariff_servers(
@@ -60,8 +67,8 @@ async def _get_tariff_servers(
         server_limit = None
         if server.squad_uuid in limits:
             limit_data = limits[server.squad_uuid]
-            if isinstance(limit_data, dict) and 'traffic_limit_gb' in limit_data:
-                server_limit = limit_data['traffic_limit_gb']
+            if isinstance(limit_data, dict) and "traffic_limit_gb" in limit_data:
+                server_limit = limit_data["traffic_limit_gb"]
             elif isinstance(limit_data, int):
                 server_limit = limit_data
 
@@ -78,12 +85,18 @@ async def _get_tariff_servers(
     return result
 
 
-async def _get_tariff_promo_groups(db: AsyncSession, tariff: Tariff) -> list[PromoGroupInfo]:
+async def _get_tariff_promo_groups(
+    db: AsyncSession, tariff: Tariff
+) -> list[PromoGroupInfo]:
     """Get promo group info for tariff."""
     result = await db.execute(select(PromoGroup).order_by(PromoGroup.name))
     all_groups = result.scalars().all()
 
-    selected_ids = {pg.id for pg in tariff.allowed_promo_groups} if tariff.allowed_promo_groups else set()
+    selected_ids = (
+        {pg.id for pg in tariff.allowed_promo_groups}
+        if tariff.allowed_promo_groups
+        else set()
+    )
 
     return [
         PromoGroupInfo(
@@ -110,10 +123,10 @@ def _period_prices_to_dict(period_prices: list[PeriodPrice]) -> dict:
     return {str(pp.days): pp.price_kopeks for pp in period_prices}
 
 
-@router.get('', response_model=TariffListResponse)
+@router.get("", response_model=TariffListResponse)
 async def list_tariffs(
     include_inactive: bool = True,
-    admin: User = Depends(require_permission('tariffs:read')),
+    admin: User = Depends(require_permission("tariffs:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of all tariffs."""
@@ -146,9 +159,9 @@ async def list_tariffs(
     return TariffListResponse(tariffs=items, total=len(items))
 
 
-@router.get('/available-servers', response_model=list[ServerInfo])
+@router.get("/available-servers", response_model=list[ServerInfo])
 async def get_available_servers(
-    admin: User = Depends(require_permission('tariffs:read')),
+    admin: User = Depends(require_permission("tariffs:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of all servers for tariff selection."""
@@ -165,9 +178,11 @@ async def get_available_servers(
     ]
 
 
-@router.get('/available-external-squads', response_model=list[ExternalSquadInfoResponse])
+@router.get(
+    "/available-external-squads", response_model=list[ExternalSquadInfoResponse]
+)
 async def get_available_external_squads(
-    admin: User = Depends(require_permission('tariffs:read')),
+    admin: User = Depends(require_permission("tariffs:read")),
 ):
     """Fetch external squads from RemnaWave panel."""
     from app.services.remnawave_service import RemnaWaveService
@@ -178,36 +193,38 @@ async def get_available_external_squads(
             squads = await api.get_external_squads()
             return [
                 {
-                    'uuid': s.uuid,
-                    'name': s.name,
-                    'members_count': s.members_count,
+                    "uuid": s.uuid,
+                    "name": s.name,
+                    "members_count": s.members_count,
                 }
                 for s in squads
             ]
     except Exception:
-        logger.warning('Failed to fetch external squads from RemnaWave', exc_info=True)
+        logger.warning("Failed to fetch external squads from RemnaWave", exc_info=True)
         return []
 
 
-@router.put('/order')
+@router.put("/order")
 async def update_tariff_order(
     request: TariffSortOrderRequest,
-    admin: User = Depends(require_permission('tariffs:edit')),
+    admin: User = Depends(require_permission("tariffs:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update the display order of tariffs."""
     await reorder_tariffs(db, request.tariff_ids)
     await db.commit()
 
-    logger.info('Admin updated tariff order', admin_id=admin.id, tariff_ids=request.tariff_ids)
+    logger.info(
+        "Admin updated tariff order", admin_id=admin.id, tariff_ids=request.tariff_ids
+    )
 
-    return {'message': 'Tariff order updated successfully'}
+    return {"message": "Tariff order updated successfully"}
 
 
-@router.get('/{tariff_id}', response_model=TariffDetailResponse)
+@router.get("/{tariff_id}", response_model=TariffDetailResponse)
 async def get_tariff(
     tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:read')),
+    admin: User = Depends(require_permission("tariffs:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed tariff info."""
@@ -215,7 +232,7 @@ async def get_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     allowed_squads = tariff.allowed_squads or []
@@ -230,7 +247,9 @@ async def get_tariff(
         if isinstance(limit_data, dict):
             server_limits_response[uuid] = ServerTrafficLimit(**limit_data)
         elif isinstance(limit_data, int):
-            server_limits_response[uuid] = ServerTrafficLimit(traffic_limit_gb=limit_data)
+            server_limits_response[uuid] = ServerTrafficLimit(
+                traffic_limit_gb=limit_data
+            )
 
     return TariffDetailResponse(
         id=tariff.id,
@@ -278,10 +297,10 @@ async def get_tariff(
     )
 
 
-@router.post('', response_model=TariffDetailResponse)
+@router.post("", response_model=TariffDetailResponse)
 async def create_new_tariff(
     request: TariffCreateRequest,
-    admin: User = Depends(require_permission('tariffs:create')),
+    admin: User = Depends(require_permission("tariffs:create")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new tariff."""
@@ -289,7 +308,10 @@ async def create_new_tariff(
 
     # Преобразуем ServerTrafficLimit в dict для хранения
     server_limits_dict = (
-        {uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()}
+        {
+            uuid: limit.model_dump()
+            for uuid, limit in request.server_traffic_limits.items()
+        }
         if request.server_traffic_limits
         else {}
     )
@@ -333,7 +355,12 @@ async def create_new_tariff(
         show_in_gift=request.show_in_gift,
     )
 
-    logger.info('Admin created tariff', admin_id=admin.id, tariff_id=tariff.id, tariff_name=tariff.name)
+    logger.info(
+        "Admin created tariff",
+        admin_id=admin.id,
+        tariff_id=tariff.id,
+        tariff_name=tariff.name,
+    )
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -342,11 +369,11 @@ async def create_new_tariff(
     return await get_tariff(tariff.id, admin, db)
 
 
-@router.put('/{tariff_id}', response_model=TariffDetailResponse)
+@router.put("/{tariff_id}", response_model=TariffDetailResponse)
 async def update_existing_tariff(
     tariff_id: int,
     request: TariffUpdateRequest,
-    admin: User = Depends(require_permission('tariffs:edit')),
+    admin: User = Depends(require_permission("tariffs:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing tariff."""
@@ -354,7 +381,7 @@ async def update_existing_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     # Capture old values for change detection
@@ -364,72 +391,73 @@ async def update_existing_tariff(
     # Build updates dict
     updates = {}
     if request.name is not None:
-        updates['name'] = request.name
+        updates["name"] = request.name
     if request.description is not None:
-        updates['description'] = request.description
+        updates["description"] = request.description
     if request.is_active is not None:
-        updates['is_active'] = request.is_active
+        updates["is_active"] = request.is_active
     if request.allow_traffic_topup is not None:
-        updates['allow_traffic_topup'] = request.allow_traffic_topup
+        updates["allow_traffic_topup"] = request.allow_traffic_topup
     if request.traffic_topup_enabled is not None:
-        updates['traffic_topup_enabled'] = request.traffic_topup_enabled
+        updates["traffic_topup_enabled"] = request.traffic_topup_enabled
     if request.traffic_topup_packages is not None:
-        updates['traffic_topup_packages'] = request.traffic_topup_packages
+        updates["traffic_topup_packages"] = request.traffic_topup_packages
     if request.max_topup_traffic_gb is not None:
-        updates['max_topup_traffic_gb'] = request.max_topup_traffic_gb
+        updates["max_topup_traffic_gb"] = request.max_topup_traffic_gb
     if request.traffic_limit_gb is not None:
-        updates['traffic_limit_gb'] = request.traffic_limit_gb
+        updates["traffic_limit_gb"] = request.traffic_limit_gb
     if request.device_limit is not None:
-        updates['device_limit'] = request.device_limit
+        updates["device_limit"] = request.device_limit
     if request.device_price_kopeks is not None:
-        updates['device_price_kopeks'] = request.device_price_kopeks
+        updates["device_price_kopeks"] = request.device_price_kopeks
     if request.max_device_limit is not None:
-        updates['max_device_limit'] = request.max_device_limit
+        updates["max_device_limit"] = request.max_device_limit
     if request.tier_level is not None:
-        updates['tier_level'] = request.tier_level
+        updates["tier_level"] = request.tier_level
     if request.display_order is not None:
-        updates['display_order'] = request.display_order
+        updates["display_order"] = request.display_order
     if request.period_prices is not None:
-        updates['period_prices'] = _period_prices_to_dict(request.period_prices)
+        updates["period_prices"] = _period_prices_to_dict(request.period_prices)
     if request.allowed_squads is not None:
-        updates['allowed_squads'] = request.allowed_squads
+        updates["allowed_squads"] = request.allowed_squads
     if request.server_traffic_limits is not None:
         # Преобразуем ServerTrafficLimit в dict для хранения
-        updates['server_traffic_limits'] = {
-            uuid: limit.model_dump() for uuid, limit in request.server_traffic_limits.items()
+        updates["server_traffic_limits"] = {
+            uuid: limit.model_dump()
+            for uuid, limit in request.server_traffic_limits.items()
         }
     # Произвольное количество дней
     if request.custom_days_enabled is not None:
-        updates['custom_days_enabled'] = request.custom_days_enabled
+        updates["custom_days_enabled"] = request.custom_days_enabled
     if request.price_per_day_kopeks is not None:
-        updates['price_per_day_kopeks'] = request.price_per_day_kopeks
+        updates["price_per_day_kopeks"] = request.price_per_day_kopeks
     if request.min_days is not None:
-        updates['min_days'] = request.min_days
+        updates["min_days"] = request.min_days
     if request.max_days is not None:
-        updates['max_days'] = request.max_days
+        updates["max_days"] = request.max_days
     # Произвольный трафик при покупке
     if request.custom_traffic_enabled is not None:
-        updates['custom_traffic_enabled'] = request.custom_traffic_enabled
+        updates["custom_traffic_enabled"] = request.custom_traffic_enabled
     if request.traffic_price_per_gb_kopeks is not None:
-        updates['traffic_price_per_gb_kopeks'] = request.traffic_price_per_gb_kopeks
+        updates["traffic_price_per_gb_kopeks"] = request.traffic_price_per_gb_kopeks
     if request.min_traffic_gb is not None:
-        updates['min_traffic_gb'] = request.min_traffic_gb
+        updates["min_traffic_gb"] = request.min_traffic_gb
     if request.max_traffic_gb is not None:
-        updates['max_traffic_gb'] = request.max_traffic_gb
+        updates["max_traffic_gb"] = request.max_traffic_gb
     # Дневной тариф
     if request.is_daily is not None:
-        updates['is_daily'] = request.is_daily
+        updates["is_daily"] = request.is_daily
     if request.daily_price_kopeks is not None:
-        updates['daily_price_kopeks'] = request.daily_price_kopeks
+        updates["daily_price_kopeks"] = request.daily_price_kopeks
     # Режим сброса трафика (None допускается как значение для сброса к глобальной настройке)
-    if 'traffic_reset_mode' in request.model_fields_set:
-        updates['traffic_reset_mode'] = request.traffic_reset_mode
+    if "traffic_reset_mode" in request.model_fields_set:
+        updates["traffic_reset_mode"] = request.traffic_reset_mode
     # Внешний сквад (None допускается для сброса)
-    if 'external_squad_uuid' in request.model_fields_set:
-        updates['external_squad_uuid'] = request.external_squad_uuid
+    if "external_squad_uuid" in request.model_fields_set:
+        updates["external_squad_uuid"] = request.external_squad_uuid
     # Показывать в подарках
     if request.show_in_gift is not None:
-        updates['show_in_gift'] = request.show_in_gift
+        updates["show_in_gift"] = request.show_in_gift
 
     if updates:
         await update_tariff(db, tariff, **updates)
@@ -438,30 +466,33 @@ async def update_existing_tariff(
     if request.promo_group_ids is not None:
         await set_tariff_promo_groups(db, tariff, request.promo_group_ids)
 
-    logger.info('Admin updated tariff', admin_id=admin.id, tariff_id=tariff_id)
+    logger.info("Admin updated tariff", admin_id=admin.id, tariff_id=tariff_id)
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
 
     # Auto-sync squads to active subscriptions in Remnawave when squads changed
     new_squads = tariff.allowed_squads or []
-    squads_changed = request.allowed_squads is not None and sorted(old_squads) != sorted(new_squads)
+    squads_changed = request.allowed_squads is not None and sorted(
+        old_squads
+    ) != sorted(new_squads)
     ext_squad_changed = (
-        'external_squad_uuid' in request.model_fields_set and tariff.external_squad_uuid != old_external_squad
+        "external_squad_uuid" in request.model_fields_set
+        and tariff.external_squad_uuid != old_external_squad
     )
     if squads_changed or ext_squad_changed:
         asyncio.create_task(
             _background_sync_squads(tariff_id, admin.id),
-            name=f'sync-squads-tariff-{tariff_id}',
+            name=f"sync-squads-tariff-{tariff_id}",
         )
 
     return await get_tariff(tariff_id, admin, db)
 
 
-@router.delete('/{tariff_id}')
+@router.delete("/{tariff_id}")
 async def delete_existing_tariff(
     tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:delete')),
+    admin: User = Depends(require_permission("tariffs:delete")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete a tariff."""
@@ -469,13 +500,13 @@ async def delete_existing_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
     await delete_tariff(db, tariff)
     logger.info(
-        'Admin deleted tariff (affected subscriptions: )',
+        "Admin deleted tariff (affected subscriptions: )",
         admin_id=admin.id,
         tariff_id=tariff_id,
         tariff_name=tariff.name,
@@ -485,13 +516,16 @@ async def delete_existing_tariff(
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
 
-    return {'message': 'Tariff deleted successfully', 'affected_subscriptions': subs_count}
+    return {
+        "message": "Tariff deleted successfully",
+        "affected_subscriptions": subs_count,
+    }
 
 
-@router.post('/{tariff_id}/toggle', response_model=TariffToggleResponse)
+@router.post("/{tariff_id}/toggle", response_model=TariffToggleResponse)
 async def toggle_tariff(
     tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:edit')),
+    admin: User = Depends(require_permission("tariffs:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle tariff active status."""
@@ -499,14 +533,16 @@ async def toggle_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     new_status = not tariff.is_active
     await update_tariff(db, tariff, is_active=new_status)
 
-    status_text = 'activated' if new_status else 'deactivated'
-    logger.info('Admin tariff', admin_id=admin.id, status_text=status_text, tariff_id=tariff_id)
+    status_text = "activated" if new_status else "deactivated"
+    logger.info(
+        "Admin tariff", admin_id=admin.id, status_text=status_text, tariff_id=tariff_id
+    )
 
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
@@ -514,14 +550,14 @@ async def toggle_tariff(
     return TariffToggleResponse(
         id=tariff_id,
         is_active=new_status,
-        message=f'Tariff {status_text}',
+        message=f"Tariff {status_text}",
     )
 
 
-@router.post('/{tariff_id}/trial', response_model=TariffTrialResponse)
+@router.post("/{tariff_id}/trial", response_model=TariffTrialResponse)
 async def toggle_trial_tariff(
     tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:edit')),
+    admin: User = Depends(require_permission("tariffs:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle tariff trial availability.
@@ -533,7 +569,7 @@ async def toggle_trial_tariff(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     new_status = not tariff.is_trial_available
@@ -548,20 +584,22 @@ async def toggle_trial_tariff(
 
     await update_tariff(db, tariff, is_trial_available=new_status)
 
-    status_text = 'set as trial' if new_status else 'removed from trial'
-    logger.info('Admin tariff', admin_id=admin.id, status_text=status_text, tariff_id=tariff_id)
+    status_text = "set as trial" if new_status else "removed from trial"
+    logger.info(
+        "Admin tariff", admin_id=admin.id, status_text=status_text, tariff_id=tariff_id
+    )
 
     return TariffTrialResponse(
         id=tariff_id,
         is_trial_available=new_status,
-        message=f'Tariff {status_text}',
+        message=f"Tariff {status_text}",
     )
 
 
-@router.get('/{tariff_id}/stats', response_model=TariffStatsResponse)
+@router.get("/{tariff_id}/stats", response_model=TariffStatsResponse)
 async def get_tariff_stats(
     tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:read')),
+    admin: User = Depends(require_permission("tariffs:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get tariff statistics."""
@@ -569,18 +607,20 @@ async def get_tariff_stats(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     # Count subscriptions
-    total_result = await db.execute(select(func.count(Subscription.id)).where(Subscription.tariff_id == tariff_id))
+    total_result = await db.execute(
+        select(func.count(Subscription.id)).where(Subscription.tariff_id == tariff_id)
+    )
     total_count = total_result.scalar() or 0
 
     # Count active subscriptions
     active_result = await db.execute(
         select(func.count(Subscription.id)).where(
             Subscription.tariff_id == tariff_id,
-            Subscription.status == 'active',
+            Subscription.status == "active",
         )
     )
     active_count = active_result.scalar() or 0
@@ -635,7 +675,12 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                 .where(
                     and_(
                         Subscription.tariff_id == tariff_id,
-                        Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+                        Subscription.status.in_(
+                            [
+                                SubscriptionStatus.ACTIVE.value,
+                                SubscriptionStatus.TRIAL.value,
+                            ]
+                        ),
                         User.remnawave_uuid.isnot(None),
                     )
                 )
@@ -658,7 +703,7 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                 async def _sync_one(sub: Subscription) -> None:
                     nonlocal updated, failed
                     remnawave_uuid = (
-                        getattr(sub, 'remnawave_uuid', None)
+                        getattr(sub, "remnawave_uuid", None)
                         if settings.is_multi_tariff_enabled()
                         else (sub.user.remnawave_uuid if sub.user else None)
                     )
@@ -676,7 +721,7 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                         except Exception as e:
                             failed += 1
                             logger.warning(
-                                'Background sync: failed to sync squads for user',
+                                "Background sync: failed to sync squads for user",
                                 user_id=sub.user_id,
                                 error=str(e),
                             )
@@ -685,7 +730,7 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
 
             await db.commit()
             logger.info(
-                'Background squad sync completed after tariff update',
+                "Background squad sync completed after tariff update",
                 admin_id=admin_id,
                 tariff_id=tariff_id,
                 tariff_name=tariff.name,
@@ -694,17 +739,17 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                 failed=failed,
             )
     except Exception:
-        logger.exception('Background squad sync failed', tariff_id=tariff_id)
+        logger.exception("Background squad sync failed", tariff_id=tariff_id)
 
 
 _SYNC_SQUADS_CONCURRENCY = 5
 _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES = 10
 
 
-@router.post('/{tariff_id}/sync-squads', response_model=SyncSquadsResponse)
+@router.post("/{tariff_id}/sync-squads", response_model=SyncSquadsResponse)
 async def sync_tariff_squads(
     tariff_id: int,
-    admin: User = Depends(require_permission('tariffs:edit')),
+    admin: User = Depends(require_permission("tariffs:edit")),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Sync squads from tariff to all active/trial subscriptions in Remnawave panel.
@@ -717,7 +762,7 @@ async def sync_tariff_squads(
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail="Tariff not found",
         )
 
     # Fetch active + trial subscriptions for this tariff whose users exist in Remnawave
@@ -728,7 +773,9 @@ async def sync_tariff_squads(
         .where(
             and_(
                 Subscription.tariff_id == tariff_id,
-                Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
+                Subscription.status.in_(
+                    [SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]
+                ),
                 User.remnawave_uuid.isnot(None),
             )
         )
@@ -770,21 +817,21 @@ async def sync_tariff_squads(
 
             if aborted:
                 skipped_count += 1
-                return 'skipped'
+                return "skipped"
 
             remnawave_uuid = (
-                getattr(sub, 'remnawave_uuid', None)
+                getattr(sub, "remnawave_uuid", None)
                 if settings.is_multi_tariff_enabled()
                 else (sub.user.remnawave_uuid if sub.user else None)
             )
             if not remnawave_uuid:
                 skipped_count += 1
-                return 'skipped'
+                return "skipped"
 
             async with semaphore:
                 if aborted:
                     skipped_count += 1
-                    return 'skipped'
+                    return "skipped"
 
                 try:
                     await api.update_user(
@@ -796,21 +843,23 @@ async def sync_tariff_squads(
                     sub.connected_squads = new_squads
                     updated_count += 1
                     consecutive_failures = 0
-                    return 'ok'
+                    return "ok"
                 except Exception as e:
                     failed_count += 1
                     consecutive_failures += 1
-                    errors.append(f'user_id={sub.user_id}: sync failed')
+                    errors.append(f"user_id={sub.user_id}: sync failed")
                     logger.warning(
-                        'Failed to sync squads for user in Remnawave',
+                        "Failed to sync squads for user in Remnawave",
                         user_id=sub.user_id,
                         remnawave_uuid=remnawave_uuid,
                         error=str(e),
                     )
                     if consecutive_failures >= _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES:
                         aborted = True
-                        errors.append(f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures')
-                    return 'error'
+                        errors.append(
+                            f"Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures"
+                        )
+                    return "error"
 
         await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])
 
@@ -818,7 +867,7 @@ async def sync_tariff_squads(
     await db.commit()
 
     logger.info(
-        'Admin synced squads for tariff',
+        "Admin synced squads for tariff",
         admin_id=admin.id,
         tariff_id=tariff_id,
         tariff_name=tariff.name,

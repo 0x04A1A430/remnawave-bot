@@ -46,13 +46,13 @@ class CloudPaymentsPaymentMixin:
         Returns:
             Dict with payment_url and invoice_id, or None on error
         """
-        if not getattr(self, 'cloudpayments_service', None):
-            logger.error('CloudPayments service is not initialised')
+        if not getattr(self, "cloudpayments_service", None):
+            logger.error("CloudPayments service is not initialised")
             return None
 
         if amount_kopeks < settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма CloudPayments меньше минимальной: <',
+                "Сумма CloudPayments меньше минимальной: <",
                 amount_kopeks=amount_kopeks,
                 CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
             )
@@ -60,13 +60,13 @@ class CloudPaymentsPaymentMixin:
 
         if amount_kopeks > settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                'Сумма CloudPayments больше максимальной: >',
+                "Сумма CloudPayments больше максимальной: >",
                 amount_kopeks=amount_kopeks,
                 CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
             )
             return None
 
-        payment_module = import_module('app.services.payment_service')
+        payment_module = import_module("app.services.payment_service")
 
         # Generate unique invoice ID (use user_id for uniqueness, works for email-only users too)
         invoice_id = self.cloudpayments_service.generate_invoice_id(user_id)
@@ -84,15 +84,17 @@ class CloudPaymentsPaymentMixin:
                 fail_redirect_url=failed_url,
             )
         except CloudPaymentsAPIError as error:
-            logger.error('Ошибка создания CloudPayments платежа', error=error)
+            logger.error("Ошибка создания CloudPayments платежа", error=error)
             return None
         except Exception as error:
-            logger.exception('Непредвиденная ошибка при создании CloudPayments платежа', error=error)
+            logger.exception(
+                "Непредвиденная ошибка при создании CloudPayments платежа", error=error
+            )
             return None
 
         metadata = {
-            'language': language or settings.DEFAULT_LANGUAGE,
-            'telegram_id': telegram_id,
+            "language": language or settings.DEFAULT_LANGUAGE,
+            "telegram_id": telegram_id,
         }
 
         # Create local payment record
@@ -108,20 +110,20 @@ class CloudPaymentsPaymentMixin:
         )
 
         if not local_payment:
-            logger.error('Не удалось создать локальную запись CloudPayments платежа')
+            logger.error("Не удалось создать локальную запись CloudPayments платежа")
             return None
 
         logger.info(
-            'Создан CloudPayments платёж: invoice amount=₽, user',
+            "Создан CloudPayments платёж: invoice amount=₽, user",
             invoice_id=invoice_id,
             amount_kopeks=amount_kopeks / 100,
             user_id=user_id,
         )
 
         return {
-            'payment_url': payment_url,
-            'invoice_id': invoice_id,
-            'payment_id': local_payment.id,
+            "payment_url": payment_url,
+            "invoice_id": invoice_id,
+            "payment_id": local_payment.id,
         }
 
     async def process_cloudpayments_pay_webhook(
@@ -139,34 +141,39 @@ class CloudPaymentsPaymentMixin:
         Returns:
             True if payment was processed successfully
         """
-        invoice_id = webhook_data.get('invoice_id')
-        transaction_id_cp = webhook_data.get('transaction_id')
-        amount = webhook_data.get('amount', 0)
+        invoice_id = webhook_data.get("invoice_id")
+        transaction_id_cp = webhook_data.get("transaction_id")
+        amount = webhook_data.get("amount", 0)
         amount_kopeks = int(round(amount * 100))
-        account_id = webhook_data.get('account_id', '')
-        token = webhook_data.get('token')
-        test_mode = webhook_data.get('test_mode', False)
+        account_id = webhook_data.get("account_id", "")
+        token = webhook_data.get("token")
+        test_mode = webhook_data.get("test_mode", False)
 
         # Reject test-mode payments when not in test mode
-        if test_mode and not getattr(settings, 'CLOUDPAYMENTS_TEST_MODE', False):
+        if test_mode and not getattr(settings, "CLOUDPAYMENTS_TEST_MODE", False):
             logger.warning(
-                'CloudPayments: rejecting test_mode payment in production',
+                "CloudPayments: rejecting test_mode payment in production",
                 invoice_id=invoice_id,
                 test_mode=test_mode,
             )
             return False
 
         if not invoice_id:
-            logger.error('CloudPayments webhook без invoice_id')
+            logger.error("CloudPayments webhook без invoice_id")
             return False
 
-        payment_module = import_module('app.services.payment_service')
+        payment_module = import_module("app.services.payment_service")
 
         # Find existing payment record
-        payment = await payment_module.get_cloudpayments_payment_by_invoice_id(db, invoice_id)
+        payment = await payment_module.get_cloudpayments_payment_by_invoice_id(
+            db, invoice_id
+        )
 
         if not payment:
-            logger.warning('CloudPayments платёж не найден: invoice создаём новый', invoice_id=invoice_id)
+            logger.warning(
+                "CloudPayments платёж не найден: invoice создаём новый",
+                invoice_id=invoice_id,
+            )
             # Try to extract user_id from account_id (we now use user_id as AccountId)
             try:
                 user_id = int(account_id) if account_id else None
@@ -174,7 +181,9 @@ class CloudPaymentsPaymentMixin:
                 user_id = None
 
             if not user_id:
-                logger.error('Не удалось определить user_id из account_id', account_id=account_id)
+                logger.error(
+                    "Не удалось определить user_id из account_id", account_id=account_id
+                )
                 return False
 
             # Get user by ID
@@ -182,7 +191,7 @@ class CloudPaymentsPaymentMixin:
 
             user = await get_user_by_id(db, user_id)
             if not user:
-                logger.error('Пользователь не найден: id', user_id=user_id)
+                logger.error("Пользователь не найден: id", user_id=user_id)
                 return False
 
             # Create payment record
@@ -196,21 +205,27 @@ class CloudPaymentsPaymentMixin:
             )
 
             if not payment:
-                logger.error('Не удалось создать запись платежа')
+                logger.error("Не удалось создать запись платежа")
                 return False
 
         # Lock payment row to prevent concurrent double-processing
-        from app.database.crud.cloudpayments import get_cloudpayments_payment_by_id_for_update
+        from app.database.crud.cloudpayments import (
+            get_cloudpayments_payment_by_id_for_update,
+        )
 
         locked = await get_cloudpayments_payment_by_id_for_update(db, payment.id)
         if not locked:
-            logger.error('CloudPayments: не удалось заблокировать платёж', payment_id=payment.id)
+            logger.error(
+                "CloudPayments: не удалось заблокировать платёж", payment_id=payment.id
+            )
             return False
         payment = locked
 
         # Check if already processed (under lock)
         if payment.is_paid or payment.transaction_id:
-            logger.info('CloudPayments платёж уже обработан: invoice', invoice_id=invoice_id)
+            logger.info(
+                "CloudPayments платёж уже обработан: invoice", invoice_id=invoice_id
+            )
             return True
 
         # Verify webhook amount matches stored amount
@@ -218,7 +233,7 @@ class CloudPaymentsPaymentMixin:
 
         if not verify_payment_amount(amount_kopeks, payment.amount_kopeks):
             logger.warning(
-                'CloudPayments: несоответствие суммы',
+                "CloudPayments: несоответствие суммы",
                 invoice_id=invoice_id,
                 received_kopeks=amount_kopeks,
                 expected_kopeks=payment.amount_kopeks,
@@ -226,20 +241,22 @@ class CloudPaymentsPaymentMixin:
             return False
 
         # --- Guest purchase flow (landing page) ---
-        cp_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
+        cp_metadata = dict(getattr(payment, "metadata_json", {}) or {})
         from app.services.payment.common import try_fulfill_guest_purchase
 
         guest_result = await try_fulfill_guest_purchase(
             db,
             metadata=cp_metadata,
             payment_amount_kopeks=amount_kopeks,
-            provider_payment_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
-            provider_name='cloudpayments',
+            provider_payment_id=(
+                str(transaction_id_cp) if transaction_id_cp else invoice_id
+            ),
+            provider_name="cloudpayments",
         )
         if guest_result is not None:
             # Update payment record even for guest purchases
             payment.transaction_id_cp = transaction_id_cp
-            payment.status = 'completed'
+            payment.status = "completed"
             payment.is_paid = True
             payment.paid_at = datetime.now(UTC)
             payment.callback_payload = webhook_data
@@ -248,15 +265,15 @@ class CloudPaymentsPaymentMixin:
 
         # Update payment record
         payment.transaction_id_cp = transaction_id_cp
-        payment.status = 'completed'
+        payment.status = "completed"
         payment.is_paid = True
         payment.paid_at = datetime.now(UTC)
         payment.token = token
-        payment.card_first_six = webhook_data.get('card_first_six')
-        payment.card_last_four = webhook_data.get('card_last_four')
-        payment.card_type = webhook_data.get('card_type')
-        payment.card_exp_date = webhook_data.get('card_exp_date')
-        payment.email = webhook_data.get('email')
+        payment.card_first_six = webhook_data.get("card_first_six")
+        payment.card_last_four = webhook_data.get("card_last_four")
+        payment.card_type = webhook_data.get("card_type")
+        payment.card_exp_date = webhook_data.get("card_exp_date")
+        payment.email = webhook_data.get("email")
         payment.test_mode = test_mode
         payment.callback_payload = webhook_data
 
@@ -266,18 +283,18 @@ class CloudPaymentsPaymentMixin:
         user = await get_user_by_id(db, payment.user_id)
 
         if not user:
-            logger.error('Пользователь не найден: id', user_id=payment.user_id)
+            logger.error("Пользователь не найден: id", user_id=payment.user_id)
             return False
 
         # Загружаем промогруппы и данные для уведомлений
-        await db.refresh(user, attribute_names=['promo_group', 'user_promo_groups'])
-        for user_promo_group in getattr(user, 'user_promo_groups', []):
-            await db.refresh(user_promo_group, attribute_names=['promo_group'])
+        await db.refresh(user, attribute_names=["promo_group", "user_promo_groups"])
+        for user_promo_group in getattr(user, "user_promo_groups", []):
+            await db.refresh(user_promo_group, attribute_names=["promo_group"])
 
         from app.utils.user_utils import format_referrer_info
 
         promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, 'subscription', None)
+        subscription = getattr(user, "subscription", None)
         referrer_info = format_referrer_info(user)
 
         # Lock user row to prevent concurrent balance race conditions
@@ -304,7 +321,7 @@ class CloudPaymentsPaymentMixin:
             payment_method=PaymentMethod.CLOUDPAYMENTS,
             external_id=str(transaction_id_cp) if transaction_id_cp else invoice_id,
             is_completed=True,
-            created_at=getattr(payment, 'created_at', None),
+            created_at=getattr(payment, "created_at", None),
             commit=False,
         )
 
@@ -325,9 +342,9 @@ class CloudPaymentsPaymentMixin:
             description=payment.description or settings.CLOUDPAYMENTS_DESCRIPTION,
         )
 
-        user_id_display = user.telegram_id or user.email or f'#{user.id}'
+        user_id_display = user.telegram_id or user.email or f"#{user.id}"
         logger.info(
-            'CloudPayments платёж успешно обработан: invoice amount=₽, user',
+            "CloudPayments платёж успешно обработан: invoice amount=₽, user",
             invoice_id=invoice_id,
             amount_kopeks=amount_kopeks / 100,
             user_id_display=user_id_display,
@@ -341,7 +358,7 @@ class CloudPaymentsPaymentMixin:
                 transaction=transaction,
             )
         except Exception as error:
-            logger.exception('Ошибка отправки уведомления CloudPayments', error=error)
+            logger.exception("Ошибка отправки уведомления CloudPayments", error=error)
 
         # Начисляем реферальную комиссию
         try:
@@ -351,21 +368,29 @@ class CloudPaymentsPaymentMixin:
                 db,
                 user.id,
                 amount_kopeks,
-                getattr(self, 'bot', None),
+                getattr(self, "bot", None),
             )
         except Exception as error:
-            logger.error('Ошибка обработки реферального пополнения CloudPayments', error=error)
+            logger.error(
+                "Ошибка обработки реферального пополнения CloudPayments", error=error
+            )
 
-        if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
+        if (
+            was_first_topup
+            and not user.has_made_first_topup
+            and not user.referred_by_id
+        ):
             user.has_made_first_topup = True
             await db.commit()
             await db.refresh(user)
 
-        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
+        topup_status = "Первое пополнение" if was_first_topup else "Пополнение"
 
-        if getattr(self, 'bot', None):
+        if getattr(self, "bot", None):
             try:
-                from app.services.admin_notification_service import AdminNotificationService
+                from app.services.admin_notification_service import (
+                    AdminNotificationService,
+                )
 
                 notification_service = AdminNotificationService(self.bot)
                 await notification_service.send_balance_topup_notification(
@@ -379,15 +404,19 @@ class CloudPaymentsPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error('Ошибка отправки админ уведомления CloudPayments', error=error)
+                logger.error(
+                    "Ошибка отправки админ уведомления CloudPayments", error=error
+                )
 
         # Автопокупка из сохранённой корзины и уведомление о корзине
         try:
             from app.services.payment.common import send_cart_notification_after_topup
 
-            await send_cart_notification_after_topup(user, amount_kopeks, db, getattr(self, 'bot', None))
+            await send_cart_notification_after_topup(
+                user, amount_kopeks, db, getattr(self, "bot", None)
+            )
         except Exception as error:
-            logger.exception('Ошибка автопокупки после CloudPayments', error=error)
+            logger.exception("Ошибка автопокупки после CloudPayments", error=error)
 
         return True
 
@@ -406,28 +435,30 @@ class CloudPaymentsPaymentMixin:
         Returns:
             True if processed successfully
         """
-        invoice_id = webhook_data.get('invoice_id')
-        reason = webhook_data.get('reason', 'Unknown')
-        reason_code = webhook_data.get('reason_code')
-        card_holder_message = webhook_data.get('card_holder_message', reason)
-        account_id = webhook_data.get('account_id', '')
+        invoice_id = webhook_data.get("invoice_id")
+        reason = webhook_data.get("reason", "Unknown")
+        reason_code = webhook_data.get("reason_code")
+        card_holder_message = webhook_data.get("card_holder_message", reason)
+        account_id = webhook_data.get("account_id", "")
 
         if not invoice_id:
-            logger.warning('CloudPayments fail webhook без invoice_id')
+            logger.warning("CloudPayments fail webhook без invoice_id")
             return True
 
-        payment_module = import_module('app.services.payment_service')
+        payment_module = import_module("app.services.payment_service")
 
         # Find payment record
-        payment = await payment_module.get_cloudpayments_payment_by_invoice_id(db, invoice_id)
+        payment = await payment_module.get_cloudpayments_payment_by_invoice_id(
+            db, invoice_id
+        )
 
         if payment:
-            payment.status = 'failed'
+            payment.status = "failed"
             payment.callback_payload = webhook_data
             await db.commit()
 
         logger.info(
-            'CloudPayments платёж неуспешен',
+            "CloudPayments платёж неуспешен",
             invoice_id=invoice_id,
             reason=reason,
             reason_code=reason_code,
@@ -450,7 +481,9 @@ class CloudPaymentsPaymentMixin:
                             message=card_holder_message,
                         )
         except Exception as error:
-            logger.exception('Ошибка отправки уведомления о неуспешном платеже', error=error)
+            logger.exception(
+                "Ошибка отправки уведомления о неуспешном платеже", error=error
+            )
 
         return True
 
@@ -467,7 +500,10 @@ class CloudPaymentsPaymentMixin:
 
         # Skip email-only users (no telegram_id)
         if not user.telegram_id:
-            logger.debug('Skipping CloudPayments notification for email-only user', user_id=user.id)
+            logger.debug(
+                "Skipping CloudPayments notification for email-only user",
+                user_id=user.id,
+            )
             return
 
         texts = get_texts(user.language)
@@ -479,31 +515,33 @@ class CloudPaymentsPaymentMixin:
         new_balance = user.balance_kopeks / 100
 
         message = texts.t(
-            'PAYMENT_SUCCESS_CLOUDPAYMENTS',
-            '<b>Оплата получена!</b>\n\n'
-            'Сумма: {amount}₽\n'
-            'Способ: CloudPayments\n'
-            'Баланс: {balance}₽\n\n'
-            'Спасибо за пополнение!',
+            "PAYMENT_SUCCESS_CLOUDPAYMENTS",
+            "<b>Оплата получена!</b>\n\n"
+            "Сумма: {amount}₽\n"
+            "Способ: CloudPayments\n"
+            "Баланс: {balance}₽\n\n"
+            "Спасибо за пополнение!",
         ).format(
-            amount=f'{amount_rub:.2f}',
-            balance=f'{new_balance:.2f}',
+            amount=f"{amount_rub:.2f}",
+            balance=f"{new_balance:.2f}",
         )
 
         if referrer_info:
-            message += f'\n\n{referrer_info}'
+            message += f"\n\n{referrer_info}"
 
         async with create_bot() as bot:
             try:
                 await bot.send_message(
                     chat_id=user.telegram_id,
                     text=message,
-                    parse_mode='HTML',
+                    parse_mode="HTML",
                     reply_markup=keyboard,
                 )
             except Exception as error:
                 logger.warning(
-                    'Не удалось отправить уведомление пользователю', telegram_id=user.telegram_id, error=error
+                    "Не удалось отправить уведомление пользователю",
+                    telegram_id=user.telegram_id,
+                    error=error,
                 )
 
     async def _send_cloudpayments_fail_notification(
@@ -515,17 +553,21 @@ class CloudPaymentsPaymentMixin:
 
         from app.bot_factory import create_bot
 
-        text = f'<b>Оплата не прошла</b>\n\n{message}'
+        text = f"<b>Оплата не прошла</b>\n\n{message}"
 
         async with create_bot() as bot:
             try:
                 await bot.send_message(
                     chat_id=telegram_id,
                     text=text,
-                    parse_mode='HTML',
+                    parse_mode="HTML",
                 )
             except Exception as error:
-                logger.warning('Не удалось отправить уведомление пользователю', telegram_id=telegram_id, error=error)
+                logger.warning(
+                    "Не удалось отправить уведомление пользователю",
+                    telegram_id=telegram_id,
+                    error=error,
+                )
 
     async def get_cloudpayments_payment_status(
         self,
@@ -542,64 +584,78 @@ class CloudPaymentsPaymentMixin:
         Returns:
             Dict with payment info or None if not found
         """
-        payment_module = import_module('app.services.payment_service')
+        payment_module = import_module("app.services.payment_service")
 
         # Get local payment record
-        payment = await payment_module.get_cloudpayments_payment_by_id(db, local_payment_id)
+        payment = await payment_module.get_cloudpayments_payment_by_id(
+            db, local_payment_id
+        )
         if not payment:
-            logger.warning('CloudPayments payment not found: id', local_payment_id=local_payment_id)
+            logger.warning(
+                "CloudPayments payment not found: id", local_payment_id=local_payment_id
+            )
             return None
 
         # If already paid, return current state
         if payment.is_paid:
-            return {'payment': payment, 'status': 'completed'}
+            return {"payment": payment, "status": "completed"}
 
         # Check with CloudPayments API
-        if not getattr(self, 'cloudpayments_service', None):
-            logger.warning('CloudPayments service not initialized')
-            return {'payment': payment, 'status': payment.status}
+        if not getattr(self, "cloudpayments_service", None):
+            logger.warning("CloudPayments service not initialized")
+            return {"payment": payment, "status": payment.status}
 
         try:
             # Try to find payment by invoice_id
-            api_response = await self.cloudpayments_service.find_payment(payment.invoice_id)
+            api_response = await self.cloudpayments_service.find_payment(
+                payment.invoice_id
+            )
 
-            if not api_response.get('Success'):
-                logger.debug('CloudPayments API: payment not found or error for invoice', invoice_id=payment.invoice_id)
-                return {'payment': payment, 'status': payment.status}
+            if not api_response.get("Success"):
+                logger.debug(
+                    "CloudPayments API: payment not found or error for invoice",
+                    invoice_id=payment.invoice_id,
+                )
+                return {"payment": payment, "status": payment.status}
 
-            model = api_response.get('Model', {})
-            api_status = model.get('Status', '')
-            transaction_id_cp = model.get('TransactionId')
+            model = api_response.get("Model", {})
+            api_status = model.get("Status", "")
+            transaction_id_cp = model.get("TransactionId")
 
             # Update local record if status changed
-            if api_status == 'Completed' and not payment.is_paid:
+            if api_status == "Completed" and not payment.is_paid:
                 # Payment completed - process it
                 webhook_data = {
-                    'invoice_id': payment.invoice_id,
-                    'transaction_id': transaction_id_cp,
-                    'amount': model.get('Amount', 0),
-                    'account_id': model.get('AccountId', ''),
-                    'token': model.get('Token'),
-                    'card_first_six': model.get('CardFirstSix'),
-                    'card_last_four': model.get('CardLastFour'),
-                    'card_type': model.get('CardType'),
-                    'card_exp_date': model.get('CardExpDate'),
-                    'email': model.get('Email'),
-                    'test_mode': model.get('TestMode', False),
-                    'status': api_status,
+                    "invoice_id": payment.invoice_id,
+                    "transaction_id": transaction_id_cp,
+                    "amount": model.get("Amount", 0),
+                    "account_id": model.get("AccountId", ""),
+                    "token": model.get("Token"),
+                    "card_first_six": model.get("CardFirstSix"),
+                    "card_last_four": model.get("CardLastFour"),
+                    "card_type": model.get("CardType"),
+                    "card_exp_date": model.get("CardExpDate"),
+                    "email": model.get("Email"),
+                    "test_mode": model.get("TestMode", False),
+                    "status": api_status,
                 }
                 await self.process_cloudpayments_pay_webhook(db, webhook_data)
                 await db.refresh(payment)
 
-            elif api_status in ('Declined', 'Cancelled') and payment.status not in ('failed', 'cancelled'):
-                payment.status = 'failed'
+            elif api_status in ("Declined", "Cancelled") and payment.status not in (
+                "failed",
+                "cancelled",
+            ):
+                payment.status = "failed"
                 await db.flush()
                 await db.refresh(payment)
 
-            return {'payment': payment, 'status': payment.status}
+            return {"payment": payment, "status": payment.status}
 
         except Exception as error:
             logger.error(
-                'Error checking CloudPayments payment status: id error', local_payment_id=local_payment_id, error=error
+                "Error checking CloudPayments payment status: id error",
+                local_payment_id=local_payment_id,
+                error=error,
             )
-            return {'payment': payment, 'status': payment.status}
+            return {"payment": payment, "status": payment.status}

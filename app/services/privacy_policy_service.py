@@ -9,7 +9,6 @@ from app.database.crud.privacy_policy import (
 )
 from app.database.models import PrivacyPolicy
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -20,8 +19,8 @@ class PrivacyPolicyService:
 
     @staticmethod
     def _normalize_language(language: str) -> str:
-        base_language = language or settings.DEFAULT_LANGUAGE or 'ru'
-        return base_language.split('-')[0].lower()
+        base_language = language or settings.DEFAULT_LANGUAGE or "ru"
+        return base_language.split("-")[0].lower()
 
     @staticmethod
     def normalize_language(language: str) -> str:
@@ -62,7 +61,11 @@ class PrivacyPolicyService:
         default_lang = cls._normalize_language(settings.DEFAULT_LANGUAGE)
         if lang != default_lang:
             fallback_policy = await get_privacy_policy(db, default_lang)
-            if fallback_policy and fallback_policy.is_enabled and fallback_policy.content.strip():
+            if (
+                fallback_policy
+                and fallback_policy.is_enabled
+                and fallback_policy.content.strip()
+            ):
                 return fallback_policy
 
         return None
@@ -87,7 +90,7 @@ class PrivacyPolicyService:
             content,
             enable_if_new=enable_if_new,
         )
-        logger.info('Политика конфиденциальности обновлена для языка', lang=lang)
+        logger.info("Политика конфиденциальности обновлена для языка", lang=lang)
         return policy
 
     @classmethod
@@ -125,7 +128,7 @@ class PrivacyPolicyService:
         if not content:
             return []
 
-        normalized = content.replace('\r\n', '\n').strip()
+        normalized = content.replace("\r\n", "\n").strip()
         if not normalized:
             return []
 
@@ -134,19 +137,23 @@ class PrivacyPolicyService:
         if len(normalized) <= max_len:
             return [normalized]
 
-        paragraphs = [paragraph.strip() for paragraph in normalized.split('\n\n') if paragraph.strip()]
+        paragraphs = [
+            paragraph.strip()
+            for paragraph in normalized.split("\n\n")
+            if paragraph.strip()
+        ]
 
         pages: list[str] = []
-        current = ''
+        current = ""
 
         def flush_current() -> None:
             nonlocal current
             if current:
                 pages.append(current.strip())
-                current = ''
+                current = ""
 
         for paragraph in paragraphs:
-            candidate = f'{current}\n\n{paragraph}'.strip() if current else paragraph
+            candidate = f"{current}\n\n{paragraph}".strip() if current else paragraph
             if len(candidate) <= max_len:
                 current = candidate
                 continue
@@ -163,7 +170,7 @@ class PrivacyPolicyService:
                 pages.append(chunk.strip())
                 start_index += max_len
 
-            current = ''
+            current = ""
 
         flush_current()
 

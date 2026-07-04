@@ -39,7 +39,11 @@ def _mock_api_client(service, batches: list[list[MagicMock]]) -> AsyncMock:
     last = len(batches) - 1
     api.get_all_users_page_stream = AsyncMock(
         side_effect=[
-            {'users': batch, 'nextCursor': str(i + 1) if i < last else None, 'hasMore': i < last}
+            {
+                "users": batch,
+                "nextCursor": str(i + 1) if i < last else None,
+                "hasMore": i < last,
+            }
             for i, batch in enumerate(batches)
         ]
     )
@@ -56,39 +60,39 @@ def _mock_api_client(service, batches: list[list[MagicMock]]) -> AsyncMock:
 async def test_disabled_and_expired_are_filtered_out(service):
     """DISABLED/EXPIRED отсекаются, ACTIVE/LIMITED остаются."""
     users = [
-        _make_user('active-1', UserStatus.ACTIVE),
-        _make_user('disabled-1', UserStatus.DISABLED),  # «хвост» от удаления через бота
-        _make_user('limited-1', UserStatus.LIMITED),
-        _make_user('expired-1', UserStatus.EXPIRED),
+        _make_user("active-1", UserStatus.ACTIVE),
+        _make_user("disabled-1", UserStatus.DISABLED),  # «хвост» от удаления через бота
+        _make_user("limited-1", UserStatus.LIMITED),
+        _make_user("expired-1", UserStatus.EXPIRED),
     ]
     _mock_api_client(service, [users])
 
     result = await service.get_all_users_with_traffic()
 
     uuids = [u.uuid for u in result]
-    assert uuids == ['active-1', 'limited-1']
+    assert uuids == ["active-1", "limited-1"]
     assert all(u.status not in _NON_MONITORED_STATUSES for u in result)
 
 
 async def test_all_active_pass_through(service):
     """Когда все активны — ничего не теряется."""
     users = [
-        _make_user('a', UserStatus.ACTIVE),
-        _make_user('b', UserStatus.ACTIVE),
-        _make_user('c', UserStatus.LIMITED),
+        _make_user("a", UserStatus.ACTIVE),
+        _make_user("b", UserStatus.ACTIVE),
+        _make_user("c", UserStatus.LIMITED),
     ]
     _mock_api_client(service, [users])
 
     result = await service.get_all_users_with_traffic()
 
-    assert {u.uuid for u in result} == {'a', 'b', 'c'}
+    assert {u.uuid for u in result} == {"a", "b", "c"}
 
 
 async def test_all_inactive_returns_empty(service):
     """Сплошь DISABLED/EXPIRED → пустой список (никого не проверяем)."""
     users = [
-        _make_user('ghost-1', UserStatus.DISABLED),
-        _make_user('ghost-2', UserStatus.EXPIRED),
+        _make_user("ghost-1", UserStatus.DISABLED),
+        _make_user("ghost-2", UserStatus.EXPIRED),
     ]
     _mock_api_client(service, [users])
 
@@ -99,11 +103,13 @@ async def test_all_inactive_returns_empty(service):
 
 async def test_filter_applies_across_paginated_batches(service):
     """Фильтр работает на каждом батче; пагинация — по сырому размеру страницы."""
-    batch_full = [_make_user(f'a{i}', UserStatus.ACTIVE) for i in range(99)]
-    batch_full.append(_make_user('disabled-mid', UserStatus.DISABLED))  # 100 шт → ещё страница
+    batch_full = [_make_user(f"a{i}", UserStatus.ACTIVE) for i in range(99)]
+    batch_full.append(
+        _make_user("disabled-mid", UserStatus.DISABLED)
+    )  # 100 шт → ещё страница
     batch_last = [
-        _make_user('active-last', UserStatus.ACTIVE),
-        _make_user('expired-last', UserStatus.EXPIRED),
+        _make_user("active-last", UserStatus.ACTIVE),
+        _make_user("expired-last", UserStatus.EXPIRED),
     ]
     api = _mock_api_client(service, [batch_full, batch_last])
 
@@ -111,8 +117,8 @@ async def test_filter_applies_across_paginated_batches(service):
 
     # 99 активных из первого батча + 1 активный из второго; disabled/expired убраны
     assert len(result) == 100
-    assert 'disabled-mid' not in {u.uuid for u in result}
-    assert 'expired-last' not in {u.uuid for u in result}
-    assert 'active-last' in {u.uuid for u in result}
+    assert "disabled-mid" not in {u.uuid for u in result}
+    assert "expired-last" not in {u.uuid for u in result}
+    assert "active-last" in {u.uuid for u in result}
     # Должно быть две страницы (первая вернула hasMore=True)
     assert api.get_all_users_page_stream.call_count == 2

@@ -12,12 +12,15 @@ from app.services.remnawave_sync_service import RemnaWaveAutoSyncService
 
 
 @pytest.mark.parametrize(
-    'raw, expected',
+    "raw, expected",
     [
-        ('03:00, 15:30 03:00; 07:05', [time_cls(3, 0), time_cls(7, 5), time_cls(15, 30)]),
-        ('', []),
+        (
+            "03:00, 15:30 03:00; 07:05",
+            [time_cls(3, 0), time_cls(7, 5), time_cls(15, 30)],
+        ),
+        ("", []),
         (None, []),
-        ('25:00, 10:70, test, 09:15', [time_cls(9, 15)]),
+        ("25:00, 10:70, test, 09:15", [time_cls(9, 15)]),
     ],
 )
 def test_parse_daily_time_list(raw, expected):
@@ -28,10 +31,12 @@ def _patch_datetime(monkeypatch, current):
     real_datetime = datetime
 
     monkeypatch.setattr(
-        'app.services.remnawave_sync_service.datetime',
+        "app.services.remnawave_sync_service.datetime",
         SimpleNamespace(
             now=lambda tz=None: current,
-            combine=lambda date_obj, time_obj, tzinfo=None: real_datetime.combine(date_obj, time_obj, tzinfo=tzinfo),
+            combine=lambda date_obj, time_obj, tzinfo=None: real_datetime.combine(
+                date_obj, time_obj, tzinfo=tzinfo
+            ),
         ),
     )
 
@@ -60,8 +65,8 @@ def test_perform_sync_rebuilds_service_on_each_run(monkeypatch):
     class StubService:
         def __init__(self, *, configured: bool, user_stats=None, squads=None):
             self.is_configured = configured
-            self.configuration_error = None if configured else 'missing config'
-            self._user_stats = user_stats or {'synced': 1}
+            self.configuration_error = None if configured else "missing config"
+            self._user_stats = user_stats or {"synced": 1}
             self._squads = squads or []
             self.sync_calls = 0
             self.squad_calls = 0
@@ -80,8 +85,8 @@ def test_perform_sync_rebuilds_service_on_each_run(monkeypatch):
             StubService(configured=False),
             StubService(
                 configured=True,
-                user_stats={'synced': 2},
-                squads=[{'id': 1}, {'id': 2}],
+                user_stats={"synced": 2},
+                squads=[{"id": 1}, {"id": 2}],
             ),
         ]
     )
@@ -102,15 +107,15 @@ def test_perform_sync_rebuilds_service_on_each_run(monkeypatch):
             return False
 
     monkeypatch.setattr(
-        'app.services.remnawave_sync_service.AsyncSessionLocal',
+        "app.services.remnawave_sync_service.AsyncSessionLocal",
         DummySession,
     )
     monkeypatch.setattr(
-        'app.services.remnawave_sync_service.sync_with_remnawave',
+        "app.services.remnawave_sync_service.sync_with_remnawave",
         fake_sync_with_remnawave,
     )
     monkeypatch.setattr(
-        'app.services.remnawave_sync_service.cache',
+        "app.services.remnawave_sync_service.cache",
         cache_mock,
     )
 
@@ -122,10 +127,10 @@ def test_perform_sync_rebuilds_service_on_each_run(monkeypatch):
 
         user_stats, server_stats = await service._perform_sync()
 
-        assert user_stats == {'synced': 2}
-        assert server_stats == {'created': 1, 'updated': 2, 'removed': 3, 'total': 2}
+        assert user_stats == {"synced": 2}
+        assert server_stats == {"created": 1, "updated": 2, "removed": 3, "total": 2}
 
     asyncio.run(runner())
 
     assert not services
-    cache_mock.delete_pattern.assert_awaited_once_with('available_countries*')
+    cache_mock.delete_pattern.assert_awaited_once_with("available_countries*")

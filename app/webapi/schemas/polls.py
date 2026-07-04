@@ -8,12 +8,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class PollOptionCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=500)
 
-    @field_validator('text')
+    @field_validator("text")
     @classmethod
     def strip_text(cls, value: str) -> str:
         text = value.strip()
         if not text:
-            raise ValueError('Option text cannot be empty')
+            raise ValueError("Option text cannot be empty")
         return text
 
 
@@ -21,22 +21,22 @@ class PollQuestionCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=1000)
     options: list[PollOptionCreate] = Field(..., min_length=2)
 
-    @field_validator('text')
+    @field_validator("text")
     @classmethod
     def strip_question_text(cls, value: str) -> str:
         text = value.strip()
         if not text:
-            raise ValueError('Question text cannot be empty')
+            raise ValueError("Question text cannot be empty")
         return text
 
-    @field_validator('options')
+    @field_validator("options")
     @classmethod
     def validate_options(cls, value: list[PollOptionCreate]) -> list[PollOptionCreate]:
         seen: set[str] = set()
         for option in value:
             normalized = option.text.lower()
             if normalized in seen:
-                raise ValueError('Option texts must be unique within a question')
+                raise ValueError("Option texts must be unique within a question")
             seen.add(normalized)
         return value
 
@@ -48,15 +48,15 @@ class PollCreateRequest(BaseModel):
     reward_amount_kopeks: int = Field(default=0, ge=0, le=1_000_000_000)
     questions: list[PollQuestionCreate] = Field(..., min_length=1)
 
-    @field_validator('title')
+    @field_validator("title")
     @classmethod
     def strip_title(cls, value: str) -> str:
         title = value.strip()
         if not title:
-            raise ValueError('Title cannot be empty')
+            raise ValueError("Title cannot be empty")
         return title
 
-    @field_validator('description')
+    @field_validator("description")
     @classmethod
     def normalize_description(cls, value: str | None) -> str | None:
         if value is None:
@@ -64,10 +64,10 @@ class PollCreateRequest(BaseModel):
         description = value.strip()
         return description or None
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_reward(self) -> PollCreateRequest:
         if self.reward_enabled and self.reward_amount_kopeks <= 0:
-            raise ValueError('Reward amount must be positive when rewards are enabled')
+            raise ValueError("Reward amount must be positive when rewards are enabled")
         if not self.reward_enabled:
             self.reward_amount_kopeks = 0
         return self
@@ -173,7 +173,9 @@ class PollResponsesListResponse(BaseModel):
 class PollSendRequest(BaseModel):
     target: str = Field(
         ...,
-        description=('Аудитория для отправки опроса (например: all, active, trial, custom_today и т.д.)'),
+        description=(
+            "Аудитория для отправки опроса (например: all, active, trial, custom_today и т.д.)"
+        ),
         max_length=100,
     )
 

@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import RioPayPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -18,7 +17,7 @@ async def create_riopay_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = 'RUB',
+    currency: str = "RUB",
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -38,35 +37,49 @@ async def create_riopay_payment(
         riopay_order_id=riopay_order_id,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status='pending',
+        status="pending",
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info('Создан платеж RioPay', order_id=order_id, user_id=user_id)
+    logger.info("Создан платеж RioPay", order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_riopay_payment_by_order_id(db: AsyncSession, order_id: str) -> RioPayPayment | None:
+async def get_riopay_payment_by_order_id(
+    db: AsyncSession, order_id: str
+) -> RioPayPayment | None:
     """Получает платеж по order_id (internal)."""
-    result = await db.execute(select(RioPayPayment).where(RioPayPayment.order_id == order_id))
+    result = await db.execute(
+        select(RioPayPayment).where(RioPayPayment.order_id == order_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_riopay_payment_by_riopay_order_id(db: AsyncSession, riopay_order_id: str) -> RioPayPayment | None:
+async def get_riopay_payment_by_riopay_order_id(
+    db: AsyncSession, riopay_order_id: str
+) -> RioPayPayment | None:
     """Получает платеж по ID от RioPay (UUID)."""
-    result = await db.execute(select(RioPayPayment).where(RioPayPayment.riopay_order_id == riopay_order_id))
+    result = await db.execute(
+        select(RioPayPayment).where(RioPayPayment.riopay_order_id == riopay_order_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_riopay_payment_by_id(db: AsyncSession, payment_id: int) -> RioPayPayment | None:
+async def get_riopay_payment_by_id(
+    db: AsyncSession, payment_id: int
+) -> RioPayPayment | None:
     """Получает платеж по ID."""
-    result = await db.execute(select(RioPayPayment).where(RioPayPayment.id == payment_id))
+    result = await db.execute(
+        select(RioPayPayment).where(RioPayPayment.id == payment_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_riopay_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> RioPayPayment | None:
+async def get_riopay_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> RioPayPayment | None:
     """Получает платеж по ID с блокировкой FOR UPDATE (для защиты от TOCTOU race)."""
     result = await db.execute(
         select(RioPayPayment)
@@ -108,7 +121,7 @@ async def update_riopay_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        'Обновлен статус платежа RioPay',
+        "Обновлен статус платежа RioPay",
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -116,12 +129,14 @@ async def update_riopay_payment_status(
     return payment
 
 
-async def get_pending_riopay_payments(db: AsyncSession, user_id: int) -> list[RioPayPayment]:
+async def get_pending_riopay_payments(
+    db: AsyncSession, user_id: int
+) -> list[RioPayPayment]:
     """Получает незавершенные платежи пользователя."""
     result = await db.execute(
         select(RioPayPayment).where(
             RioPayPayment.user_id == user_id,
-            RioPayPayment.status == 'pending',
+            RioPayPayment.status == "pending",
             RioPayPayment.is_paid == False,
         )
     )
@@ -135,7 +150,7 @@ async def get_expired_pending_riopay_payments(
     now = datetime.now(UTC)
     result = await db.execute(
         select(RioPayPayment).where(
-            RioPayPayment.status == 'pending',
+            RioPayPayment.status == "pending",
             RioPayPayment.is_paid == False,
             RioPayPayment.expires_at < now,
         )

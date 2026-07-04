@@ -7,7 +7,6 @@ from aiohttp import web
 from app.config import settings
 from app.services.tribute_service import TributeService
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -22,49 +21,66 @@ class WebhookServer:
     async def create_app(self) -> web.Application:
         self.app = web.Application()
 
-        self.app.router.add_post(settings.TRIBUTE_WEBHOOK_PATH, self._tribute_webhook_handler)
+        self.app.router.add_post(
+            settings.TRIBUTE_WEBHOOK_PATH, self._tribute_webhook_handler
+        )
 
         if settings.is_cryptobot_enabled():
-            self.app.router.add_post(settings.CRYPTOBOT_WEBHOOK_PATH, self._cryptobot_webhook_handler)
+            self.app.router.add_post(
+                settings.CRYPTOBOT_WEBHOOK_PATH, self._cryptobot_webhook_handler
+            )
 
         if settings.is_freekassa_enabled():
-            self.app.router.add_post(settings.FREEKASSA_WEBHOOK_PATH, self._freekassa_webhook_handler)
+            self.app.router.add_post(
+                settings.FREEKASSA_WEBHOOK_PATH, self._freekassa_webhook_handler
+            )
         # Диагностика почему Freekassa не включена
         elif settings.FREEKASSA_ENABLED:
             missing = []
             if settings.FREEKASSA_SHOP_ID is None:
-                missing.append('FREEKASSA_SHOP_ID')
+                missing.append("FREEKASSA_SHOP_ID")
             if settings.FREEKASSA_API_KEY is None:
-                missing.append('FREEKASSA_API_KEY')
+                missing.append("FREEKASSA_API_KEY")
             if settings.FREEKASSA_SECRET_WORD_1 is None:
-                missing.append('FREEKASSA_SECRET_WORD_1')
+                missing.append("FREEKASSA_SECRET_WORD_1")
             if settings.FREEKASSA_SECRET_WORD_2 is None:
-                missing.append('FREEKASSA_SECRET_WORD_2')
+                missing.append("FREEKASSA_SECRET_WORD_2")
             if missing:
                 logger.warning(
-                    'Freekassa ENABLED=true, но webhook не зарегистрирован. Отсутствуют параметры',
-                    value=', '.join(missing),
+                    "Freekassa ENABLED=true, но webhook не зарегистрирован. Отсутствуют параметры",
+                    value=", ".join(missing),
                 )
 
-        self.app.router.add_get('/health', self._health_check)
+        self.app.router.add_get("/health", self._health_check)
 
-        self.app.router.add_options(settings.TRIBUTE_WEBHOOK_PATH, self._options_handler)
+        self.app.router.add_options(
+            settings.TRIBUTE_WEBHOOK_PATH, self._options_handler
+        )
         if settings.is_cryptobot_enabled():
-            self.app.router.add_options(settings.CRYPTOBOT_WEBHOOK_PATH, self._options_handler)
+            self.app.router.add_options(
+                settings.CRYPTOBOT_WEBHOOK_PATH, self._options_handler
+            )
         if settings.is_freekassa_enabled():
-            self.app.router.add_options(settings.FREEKASSA_WEBHOOK_PATH, self._options_handler)
+            self.app.router.add_options(
+                settings.FREEKASSA_WEBHOOK_PATH, self._options_handler
+            )
 
-        logger.info('Webhook сервер настроен:')
-        logger.info('Tribute webhook зарегистрирован (POST)', TRIBUTE_WEBHOOK_PATH=settings.TRIBUTE_WEBHOOK_PATH)
+        logger.info("Webhook сервер настроен:")
+        logger.info(
+            "Tribute webhook зарегистрирован (POST)",
+            TRIBUTE_WEBHOOK_PATH=settings.TRIBUTE_WEBHOOK_PATH,
+        )
         if settings.is_cryptobot_enabled():
             logger.info(
-                'CryptoBot webhook зарегистрирован (POST)', CRYPTOBOT_WEBHOOK_PATH=settings.CRYPTOBOT_WEBHOOK_PATH
+                "CryptoBot webhook зарегистрирован (POST)",
+                CRYPTOBOT_WEBHOOK_PATH=settings.CRYPTOBOT_WEBHOOK_PATH,
             )
         if settings.is_freekassa_enabled():
             logger.info(
-                'Freekassa webhook зарегистрирован (POST)', FREEKASSA_WEBHOOK_PATH=settings.FREEKASSA_WEBHOOK_PATH
+                "Freekassa webhook зарегистрирован (POST)",
+                FREEKASSA_WEBHOOK_PATH=settings.FREEKASSA_WEBHOOK_PATH,
             )
-        logger.info('  - Health check: GET /health')
+        logger.info("  - Health check: GET /health")
 
         return self.app
 
@@ -76,138 +92,169 @@ class WebhookServer:
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
 
-            self.site = web.TCPSite(self.runner, host=settings.TRIBUTE_WEBHOOK_HOST, port=settings.TRIBUTE_WEBHOOK_PORT)
+            self.site = web.TCPSite(
+                self.runner,
+                host=settings.TRIBUTE_WEBHOOK_HOST,
+                port=settings.TRIBUTE_WEBHOOK_PORT,
+            )
 
             await self.site.start()
 
             logger.info(
-                'Webhook сервер запущен',
+                "Webhook сервер запущен",
                 TRIBUTE_WEBHOOK_HOST=settings.TRIBUTE_WEBHOOK_HOST,
                 TRIBUTE_WEBHOOK_PORT=settings.TRIBUTE_WEBHOOK_PORT,
             )
             logger.info(
-                'Tribute webhook URL',
+                "Tribute webhook URL",
                 TRIBUTE_WEBHOOK_HOST=settings.TRIBUTE_WEBHOOK_HOST,
                 TRIBUTE_WEBHOOK_PORT=settings.TRIBUTE_WEBHOOK_PORT,
                 TRIBUTE_WEBHOOK_PATH=settings.TRIBUTE_WEBHOOK_PATH,
             )
             if settings.is_cryptobot_enabled():
                 logger.info(
-                    'CryptoBot webhook URL',
+                    "CryptoBot webhook URL",
                     TRIBUTE_WEBHOOK_HOST=settings.TRIBUTE_WEBHOOK_HOST,
                     TRIBUTE_WEBHOOK_PORT=settings.TRIBUTE_WEBHOOK_PORT,
                     CRYPTOBOT_WEBHOOK_PATH=settings.CRYPTOBOT_WEBHOOK_PATH,
                 )
 
         except Exception as e:
-            logger.error('Ошибка запуска webhook сервера', error=e)
+            logger.error("Ошибка запуска webhook сервера", error=e)
             raise
 
     async def stop(self):
         try:
             if self.site:
                 await self.site.stop()
-                logger.info('Webhook сайт остановлен')
+                logger.info("Webhook сайт остановлен")
 
             if self.runner:
                 await self.runner.cleanup()
-                logger.info('Webhook runner очищен')
+                logger.info("Webhook runner очищен")
 
         except Exception as e:
-            logger.error('Ошибка остановки webhook сервера', error=e)
+            logger.error("Ошибка остановки webhook сервера", error=e)
 
     async def _options_handler(self, request: web.Request) -> web.Response:
         return web.Response(
             status=200,
             headers={
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, trbt-signature, Crypto-Pay-API-Signature, Authorization',
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, trbt-signature, Crypto-Pay-API-Signature, Authorization",
             },
         )
 
     async def _tribute_webhook_handler(self, request: web.Request) -> web.Response:
         try:
-            logger.info('Получен Tribute webhook', method=request.method, path=request.path)
-            logger.info('Headers', value=dict(request.headers))
+            logger.info(
+                "Получен Tribute webhook", method=request.method, path=request.path
+            )
+            logger.info("Headers", value=dict(request.headers))
 
             raw_body = await request.read()
 
             if not raw_body:
-                logger.warning('Получен пустой webhook от Tribute')
-                return web.json_response({'status': 'error', 'reason': 'empty_body'}, status=400)
+                logger.warning("Получен пустой webhook от Tribute")
+                return web.json_response(
+                    {"status": "error", "reason": "empty_body"}, status=400
+                )
 
-            payload = raw_body.decode('utf-8')
-            logger.info('Payload', payload=payload)
+            payload = raw_body.decode("utf-8")
+            logger.info("Payload", payload=payload)
 
             try:
                 webhook_data = json.loads(payload)
-                logger.info('Распарсенные данные', webhook_data=webhook_data)
+                logger.info("Распарсенные данные", webhook_data=webhook_data)
             except json.JSONDecodeError as e:
-                logger.error('Ошибка парсинга JSON', error=e)
-                return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
+                logger.error("Ошибка парсинга JSON", error=e)
+                return web.json_response(
+                    {"status": "error", "reason": "invalid_json"}, status=400
+                )
 
-            signature = request.headers.get('trbt-signature')
-            logger.info('Signature', signature=signature)
+            signature = request.headers.get("trbt-signature")
+            logger.info("Signature", signature=signature)
 
             if not signature:
-                logger.error('Отсутствует заголовок подписи Tribute webhook')
-                return web.json_response({'status': 'error', 'reason': 'missing_signature'}, status=401)
+                logger.error("Отсутствует заголовок подписи Tribute webhook")
+                return web.json_response(
+                    {"status": "error", "reason": "missing_signature"}, status=401
+                )
 
             if settings.TRIBUTE_API_KEY:
                 from app.external.tribute import TributeService as TributeAPI
 
                 tribute_api = TributeAPI()
                 if not tribute_api.verify_webhook_signature(payload, signature):
-                    logger.error('Неверная подпись Tribute webhook')
-                    return web.json_response({'status': 'error', 'reason': 'invalid_signature'}, status=401)
+                    logger.error("Неверная подпись Tribute webhook")
+                    return web.json_response(
+                        {"status": "error", "reason": "invalid_signature"}, status=401
+                    )
 
             result = await self.tribute_service.process_webhook(payload)
 
             if result:
-                logger.info('Tribute webhook обработан успешно', result=result)
-                return web.json_response({'status': 'ok', 'result': result}, status=200)
-            logger.error('Ошибка обработки Tribute webhook')
-            return web.json_response({'status': 'error', 'reason': 'processing_failed'}, status=400)
+                logger.info("Tribute webhook обработан успешно", result=result)
+                return web.json_response({"status": "ok", "result": result}, status=200)
+            logger.error("Ошибка обработки Tribute webhook")
+            return web.json_response(
+                {"status": "error", "reason": "processing_failed"}, status=400
+            )
 
         except Exception as e:
-            logger.error('Критическая ошибка обработки Tribute webhook', error=e, exc_info=True)
-            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(e)}, status=500)
+            logger.error(
+                "Критическая ошибка обработки Tribute webhook", error=e, exc_info=True
+            )
+            return web.json_response(
+                {"status": "error", "reason": "internal_error", "message": str(e)},
+                status=500,
+            )
 
     async def _cryptobot_webhook_handler(self, request: web.Request) -> web.Response:
         try:
-            logger.info('Получен CryptoBot webhook', method=request.method, path=request.path)
-            logger.info('Headers', value=dict(request.headers))
+            logger.info(
+                "Получен CryptoBot webhook", method=request.method, path=request.path
+            )
+            logger.info("Headers", value=dict(request.headers))
 
             raw_body = await request.read()
 
             if not raw_body:
-                logger.warning('Получен пустой CryptoBot webhook')
-                return web.json_response({'status': 'error', 'reason': 'empty_body'}, status=400)
+                logger.warning("Получен пустой CryptoBot webhook")
+                return web.json_response(
+                    {"status": "error", "reason": "empty_body"}, status=400
+                )
 
-            payload = raw_body.decode('utf-8')
-            logger.info('CryptoBot Payload', payload=payload)
+            payload = raw_body.decode("utf-8")
+            logger.info("CryptoBot Payload", payload=payload)
 
             try:
                 webhook_data = json.loads(payload)
-                logger.info('CryptoBot данные', webhook_data=webhook_data)
+                logger.info("CryptoBot данные", webhook_data=webhook_data)
             except json.JSONDecodeError as e:
-                logger.error('Ошибка парсинга CryptoBot JSON', error=e)
-                return web.json_response({'status': 'error', 'reason': 'invalid_json'}, status=400)
+                logger.error("Ошибка парсинга CryptoBot JSON", error=e)
+                return web.json_response(
+                    {"status": "error", "reason": "invalid_json"}, status=400
+                )
 
-            signature = request.headers.get('Crypto-Pay-API-Signature')
-            logger.info('CryptoBot Signature', signature=signature)
+            signature = request.headers.get("Crypto-Pay-API-Signature")
+            logger.info("CryptoBot Signature", signature=signature)
 
             if settings.CRYPTOBOT_API_TOKEN:
                 if not signature:
-                    logger.error('CryptoBot webhook без подписи')
-                    return web.json_response({'status': 'error', 'reason': 'missing_signature'}, status=401)
+                    logger.error("CryptoBot webhook без подписи")
+                    return web.json_response(
+                        {"status": "error", "reason": "missing_signature"}, status=401
+                    )
                 from app.external.cryptobot import CryptoBotService
 
                 cryptobot_service = CryptoBotService()
                 if not cryptobot_service.verify_webhook_signature(payload, signature):
-                    logger.error('Неверная подпись CryptoBot webhook')
-                    return web.json_response({'status': 'error', 'reason': 'invalid_signature'}, status=401)
+                    logger.error("Неверная подпись CryptoBot webhook")
+                    return web.json_response(
+                        {"status": "error", "reason": "invalid_signature"}, status=401
+                    )
 
             from app.database.database import AsyncSessionLocal
             from app.services.payment_service import PaymentService
@@ -215,30 +262,47 @@ class WebhookServer:
             payment_service = PaymentService(self.bot)
 
             async with AsyncSessionLocal() as db:
-                result = await payment_service.process_cryptobot_webhook(db, webhook_data)
+                result = await payment_service.process_cryptobot_webhook(
+                    db, webhook_data
+                )
 
             if result:
-                logger.info('CryptoBot webhook обработан успешно')
-                return web.json_response({'status': 'ok'}, status=200)
-            logger.error('Ошибка обработки CryptoBot webhook')
-            return web.json_response({'status': 'error', 'reason': 'processing_failed'}, status=400)
+                logger.info("CryptoBot webhook обработан успешно")
+                return web.json_response({"status": "ok"}, status=200)
+            logger.error("Ошибка обработки CryptoBot webhook")
+            return web.json_response(
+                {"status": "error", "reason": "processing_failed"}, status=400
+            )
 
         except Exception as e:
-            logger.error('Критическая ошибка обработки CryptoBot webhook', error=e, exc_info=True)
-            return web.json_response({'status': 'error', 'reason': 'internal_error', 'message': str(e)}, status=500)
+            logger.error(
+                "Критическая ошибка обработки CryptoBot webhook", error=e, exc_info=True
+            )
+            return web.json_response(
+                {"status": "error", "reason": "internal_error", "message": str(e)},
+                status=500,
+            )
 
     async def _health_check(self, request: web.Request) -> web.Response:
         return web.json_response(
             {
-                'status': 'ok',
-                'service': 'payment-webhooks',
-                'tribute_enabled': settings.TRIBUTE_ENABLED,
-                'cryptobot_enabled': settings.is_cryptobot_enabled(),
-                'freekassa_enabled': settings.is_freekassa_enabled(),
-                'port': settings.TRIBUTE_WEBHOOK_PORT,
-                'tribute_path': settings.TRIBUTE_WEBHOOK_PATH,
-                'cryptobot_path': settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None,
-                'freekassa_path': settings.FREEKASSA_WEBHOOK_PATH if settings.is_freekassa_enabled() else None,
+                "status": "ok",
+                "service": "payment-webhooks",
+                "tribute_enabled": settings.TRIBUTE_ENABLED,
+                "cryptobot_enabled": settings.is_cryptobot_enabled(),
+                "freekassa_enabled": settings.is_freekassa_enabled(),
+                "port": settings.TRIBUTE_WEBHOOK_PORT,
+                "tribute_path": settings.TRIBUTE_WEBHOOK_PATH,
+                "cryptobot_path": (
+                    settings.CRYPTOBOT_WEBHOOK_PATH
+                    if settings.is_cryptobot_enabled()
+                    else None
+                ),
+                "freekassa_path": (
+                    settings.FREEKASSA_WEBHOOK_PATH
+                    if settings.is_freekassa_enabled()
+                    else None
+                ),
             }
         )
 
@@ -255,34 +319,36 @@ class WebhookServer:
         - CUR_ID: ID валюты/платежной системы
         """
         try:
-            logger.info('Получен Freekassa webhook', method=request.method, path=request.path)
+            logger.info(
+                "Получен Freekassa webhook", method=request.method, path=request.path
+            )
 
             # Получаем IP клиента
-            client_ip = request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+            client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
             if not client_ip:
-                client_ip = request.remote or 'unknown'
-            logger.info('Freekassa webhook IP', client_ip=client_ip)
+                client_ip = request.remote or "unknown"
+            logger.info("Freekassa webhook IP", client_ip=client_ip)
 
             # Freekassa отправляет form-data
             try:
                 form_data = await request.post()
             except Exception as e:
-                logger.error('Ошибка парсинга Freekassa form-data', error=e)
-                return web.Response(text='NO', status=400)
+                logger.error("Ошибка парсинга Freekassa form-data", error=e)
+                return web.Response(text="NO", status=400)
 
-            logger.info('Freekassa webhook data', value=dict(form_data))
+            logger.info("Freekassa webhook data", value=dict(form_data))
 
             # Извлекаем параметры
-            merchant_id = int(form_data.get('MERCHANT_ID', 0))
-            amount = float(form_data.get('AMOUNT', 0))
-            order_id = form_data.get('MERCHANT_ORDER_ID', '')
-            sign = form_data.get('SIGN', '')
-            intid = form_data.get('intid', '')
-            cur_id = form_data.get('CUR_ID')
+            merchant_id = int(form_data.get("MERCHANT_ID", 0))
+            amount = float(form_data.get("AMOUNT", 0))
+            order_id = form_data.get("MERCHANT_ORDER_ID", "")
+            sign = form_data.get("SIGN", "")
+            intid = form_data.get("intid", "")
+            cur_id = form_data.get("CUR_ID")
 
             if not order_id or not sign:
-                logger.warning('Freekassa webhook: отсутствуют обязательные параметры')
-                return web.Response(text='NO', status=400)
+                logger.warning("Freekassa webhook: отсутствуют обязательные параметры")
+                return web.Response(text="NO", status=400)
 
             # Обрабатываем платеж через PaymentService
             from app.database.database import AsyncSessionLocal
@@ -303,12 +369,14 @@ class WebhookServer:
                 )
 
             if success:
-                logger.info('Freekassa webhook обработан успешно', order_id=order_id)
+                logger.info("Freekassa webhook обработан успешно", order_id=order_id)
                 # Freekassa ожидает YES в ответе
-                return web.Response(text='YES', status=200)
-            logger.error('Ошибка обработки Freekassa webhook', order_id=order_id)
-            return web.Response(text='NO', status=400)
+                return web.Response(text="YES", status=200)
+            logger.error("Ошибка обработки Freekassa webhook", order_id=order_id)
+            return web.Response(text="NO", status=400)
 
         except Exception as e:
-            logger.error('Критическая ошибка обработки Freekassa webhook', error=e, exc_info=True)
-            return web.Response(text='NO', status=500)
+            logger.error(
+                "Критическая ошибка обработки Freekassa webhook", error=e, exc_info=True
+            )
+            return web.Response(text="NO", status=500)

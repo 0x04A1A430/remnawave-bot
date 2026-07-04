@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class TokenResponse(BaseModel):
     id: int
     name: str
-    prefix: str = Field(..., description='Первые символы токена для идентификации')
+    prefix: str = Field(..., description="Первые символы токена для идентификации")
     description: str | None = None
     is_active: bool
     created_at: datetime
@@ -26,4 +26,6 @@ class TokenCreateRequest(BaseModel):
 
 
 class TokenCreateResponse(TokenResponse):
-    token: str = Field(..., description='Полное значение токена (возвращается один раз)')
+    token: str = Field(
+        ..., description="Полное значение токена (возвращается один раз)"
+    )

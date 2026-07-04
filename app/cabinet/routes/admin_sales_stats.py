@@ -30,10 +30,9 @@ from app.database.models import (
 
 from ..dependencies import get_cabinet_db, require_permission
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/admin/stats/sales', tags=['Cabinet Admin Sales Stats'])
+router = APIRouter(prefix="/admin/stats/sales", tags=["Cabinet Admin Sales Stats"])
 
 
 # ============ Helpers ============
@@ -54,14 +53,14 @@ def _parse_period(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid start_date format',
+                detail="Invalid start_date format",
             )
         try:
             end = datetime.fromisoformat(end_date)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid end_date format',
+                detail="Invalid end_date format",
             )
         # Ensure timezone awareness
         if start.tzinfo is None:
@@ -72,17 +71,19 @@ def _parse_period(
         if start > end:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='start_date must be before end_date',
+                detail="start_date must be before end_date",
             )
         if (end - start).days > MAX_PERIOD_DAYS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Date range cannot exceed {MAX_PERIOD_DAYS} days',
+                detail=f"Date range cannot exceed {MAX_PERIOD_DAYS} days",
             )
         return start, end.replace(hour=23, minute=59, second=59)
     if days is not None and days > 0:
         days = min(days, MAX_PERIOD_DAYS)
-        start = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = (now - timedelta(days=days)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         return start, now
     # Default: all time (from epoch)
     return datetime(2020, 1, 1, tzinfo=UTC), now
@@ -109,12 +110,18 @@ class SalesSummary(BaseModel):
 # ============ Summary Endpoint ============
 
 
-@router.get('/summary', response_model=SalesSummary)
+@router.get("/summary", response_model=SalesSummary)
 async def get_sales_summary(
-    days: int | None = Query(default=30, description='Preset period in days (7, 30, 90, 0=all)'),
-    start_date: str | None = Query(default=None, description='Custom start date ISO format'),
-    end_date: str | None = Query(default=None, description='Custom end date ISO format'),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    days: int | None = Query(
+        default=30, description="Preset period in days (7, 30, 90, 0=all)"
+    ),
+    start_date: str | None = Query(
+        default=None, description="Custom start date ISO format"
+    ),
+    end_date: str | None = Query(
+        default=None, description="Custom end date ISO format"
+    ),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SalesSummary:
     """Get summary statistics for sales dashboard cards."""
@@ -123,9 +130,16 @@ async def get_sales_summary(
 
         # Total revenue (deposits + direct subscription payments with real payment methods)
         revenue_result = await db.execute(
-            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+            select(
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)
+            ).where(
                 and_(
-                    Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
+                    Transaction.type.in_(
+                        [
+                            TransactionType.DEPOSIT.value,
+                            TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        ]
+                    ),
                     Transaction.is_completed == True,
                     Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                     Transaction.created_at >= period_start,
@@ -154,7 +168,9 @@ async def get_sales_summary(
 
         # Manual top-ups by admins
         manual_topup_result = await db.execute(
-            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+            select(
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)
+            ).where(
                 and_(
                     Transaction.type == TransactionType.DEPOSIT.value,
                     Transaction.is_completed == True,
@@ -173,24 +189,26 @@ async def get_sales_summary(
                     case(
                         (
                             and_(
-                                Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.is_trial.is_(False)
+                                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                                Subscription.is_trial.is_(False),
                             ),
                             1,
                         ),
                         else_=0,
                     )
-                ).label('active_paid'),
+                ).label("active_paid"),
                 func.sum(
                     case(
                         (
                             and_(
-                                Subscription.status == SubscriptionStatus.ACTIVE.value, Subscription.is_trial.is_(True)
+                                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                                Subscription.is_trial.is_(True),
                             ),
                             1,
                         ),
                         else_=0,
                     )
-                ).label('active_trial'),
+                ).label("active_trial"),
                 func.sum(
                     case(
                         (
@@ -203,7 +221,7 @@ async def get_sales_summary(
                         ),
                         else_=0,
                     )
-                ).label('new_trials'),
+                ).label("new_trials"),
                 # New PAID subscriptions started in the period.
                 func.sum(
                     case(
@@ -217,7 +235,7 @@ async def get_sales_summary(
                         ),
                         else_=0,
                     )
-                ).label('new_paid'),
+                ).label("new_paid"),
                 # Paid subscriptions that ENDED in the period (for net active growth).
                 func.sum(
                     case(
@@ -231,7 +249,7 @@ async def get_sales_summary(
                         ),
                         else_=0,
                     )
-                ).label('expired_paid'),
+                ).label("expired_paid"),
             )
         )
         row = sub_counts_result.one()
@@ -272,7 +290,9 @@ async def get_sales_summary(
         # had is_trial flipped to False. Add conversions back to get total trial starters.
         total_trial_starters = new_trials + conversions
         conversion_rate = (
-            min(round((conversions / total_trial_starters * 100), 1), 100.0) if total_trial_starters > 0 else 0.0
+            min(round((conversions / total_trial_starters * 100), 1), 100.0)
+            if total_trial_starters > 0
+            else 0.0
         )
 
         # Renewals count
@@ -308,7 +328,9 @@ async def get_sales_summary(
         # so "Доп. услуги" matches the sum of the Add-ons tab. (Previously this was
         # traffic-only and silently dropped device revenue.)
         addon_revenue_result = await db.execute(
-            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+            select(
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)
+            ).where(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
@@ -338,10 +360,10 @@ async def get_sales_summary(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get sales summary', error=e, exc_info=True)
+        logger.error("Failed to get sales summary", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load sales summary',
+            detail="Failed to load sales summary",
         )
 
 
@@ -371,12 +393,12 @@ class TrialsStatsResponse(BaseModel):
 # ============ Trials Endpoint ============
 
 
-@router.get('/trials', response_model=TrialsStatsResponse)
+@router.get("/trials", response_model=TrialsStatsResponse)
 async def get_trials_stats(
     days: int | None = Query(default=30),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> TrialsStatsResponse:
     """Get trial registration statistics with provider breakdown."""
@@ -420,7 +442,9 @@ async def get_trials_stats(
         # total_trials only counts remaining is_trial=True; add conversions for total starters
         total_trial_starters = total_trials + conversions
         conversion_rate = (
-            min(round((conversions / total_trial_starters * 100), 1), 100.0) if total_trial_starters > 0 else 0.0
+            min(round((conversions / total_trial_starters * 100), 1), 100.0)
+            if total_trial_starters > 0
+            else 0.0
         )
 
         avg_duration_result = await db.execute(
@@ -435,17 +459,17 @@ async def get_trials_stats(
         avg_duration = float(avg_duration_result.scalar() or 0.0)
 
         provider_case = case(
-            (User.vk_id.isnot(None), 'vk'),
-            (User.yandex_id.isnot(None), 'yandex'),
-            (User.google_id.isnot(None), 'google'),
-            (User.discord_id.isnot(None), 'discord'),
-            (User.auth_type == 'email', 'email'),
-            else_='telegram',
+            (User.vk_id.isnot(None), "vk"),
+            (User.yandex_id.isnot(None), "yandex"),
+            (User.google_id.isnot(None), "google"),
+            (User.discord_id.isnot(None), "discord"),
+            (User.auth_type == "email", "email"),
+            else_="telegram",
         )
         provider_query = await db.execute(
             select(
-                provider_case.label('provider'),
-                func.count(Subscription.id).label('count'),
+                provider_case.label("provider"),
+                func.count(Subscription.id).label("count"),
             )
             .join(User, Subscription.user_id == User.id)
             .where(
@@ -457,7 +481,10 @@ async def get_trials_stats(
             )
             .group_by(provider_case)
         )
-        by_provider = [ProviderBreakdownItem(provider=row.provider, count=row.count) for row in provider_query]
+        by_provider = [
+            ProviderBreakdownItem(provider=row.provider, count=row.count)
+            for row in provider_query
+        ]
 
         # Total registrations (all user signups in period)
         reg_total_result = await db.execute(
@@ -473,8 +500,8 @@ async def get_trials_stats(
         # Daily registrations (user signups per day)
         daily_reg_query = await db.execute(
             select(
-                func.date(User.created_at).label('date'),
-                func.count(User.id).label('count'),
+                func.date(User.created_at).label("date"),
+                func.count(User.id).label("count"),
             )
             .where(
                 and_(
@@ -487,14 +514,18 @@ async def get_trials_stats(
         )
         reg_by_date: dict[str, int] = {}
         for row in daily_reg_query:
-            date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+            date_str = (
+                row.date.isoformat()
+                if hasattr(row.date, "isoformat")
+                else str(row.date)
+            )
             reg_by_date[date_str] = row.count
 
         # Daily trials (trial subscriptions per day)
         daily_trial_query = await db.execute(
             select(
-                func.date(Subscription.created_at).label('date'),
-                func.count(Subscription.id).label('count'),
+                func.date(Subscription.created_at).label("date"),
+                func.count(Subscription.id).label("count"),
             )
             .where(
                 and_(
@@ -508,7 +539,11 @@ async def get_trials_stats(
         )
         trial_by_date: dict[str, int] = {}
         for row in daily_trial_query:
-            date_str = row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date)
+            date_str = (
+                row.date.isoformat()
+                if hasattr(row.date, "isoformat")
+                else str(row.date)
+            )
             trial_by_date[date_str] = row.count
 
         # Merge both series by date union
@@ -534,10 +569,10 @@ async def get_trials_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get trials stats', error=e, exc_info=True)
+        logger.error("Failed to get trials stats", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load trials statistics',
+            detail="Failed to load trials statistics",
         )
 
 
@@ -581,12 +616,12 @@ class SalesStatsResponse(BaseModel):
 # ============ Sales Endpoint ============
 
 
-@router.get('/subscriptions', response_model=SalesStatsResponse)
+@router.get("/subscriptions", response_model=SalesStatsResponse)
 async def get_sales_stats(
     days: int | None = Query(default=30),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SalesStatsResponse:
     """Get subscription sales statistics."""
@@ -599,7 +634,9 @@ async def get_sales_stats(
             Subscription.created_at <= period_end,
         )
 
-        totals_result = await db.execute(select(func.count(Subscription.id).label('count')).where(base_filter))
+        totals_result = await db.execute(
+            select(func.count(Subscription.id).label("count")).where(base_filter)
+        )
         totals = totals_result.one()
         total_sales = totals.count
 
@@ -608,8 +645,10 @@ async def get_sales_stats(
         # while the sum included renewals/add-ons too — that inflated the average.)
         revenue_result = await db.execute(
             select(
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
-                func.count(Transaction.id).label('payments'),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "revenue"
+                ),
+                func.count(Transaction.id).label("payments"),
             ).where(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
@@ -626,9 +665,9 @@ async def get_sales_stats(
 
         by_tariff_query = await db.execute(
             select(
-                Tariff.id.label('tariff_id'),
-                Tariff.name.label('tariff_name'),
-                func.count(Subscription.id).label('count'),
+                Tariff.id.label("tariff_id"),
+                Tariff.name.label("tariff_name"),
+                func.count(Subscription.id).label("count"),
             )
             .join(Tariff, Subscription.tariff_id == Tariff.id, isouter=True)
             .where(base_filter)
@@ -636,9 +675,9 @@ async def get_sales_stats(
             .order_by(func.count(Subscription.id).desc())
         )
         by_tariff = []
-        top_tariff_name = '-'
+        top_tariff_name = "-"
         for i, row in enumerate(by_tariff_query):
-            name = row.tariff_name or 'Unknown'
+            name = row.tariff_name or "Unknown"
             by_tariff.append(
                 SalesByTariffItem(
                     tariff_id=row.tariff_id or 0,
@@ -651,27 +690,31 @@ async def get_sales_stats(
 
         # Use epoch extraction / 86400 for correct total days (EXTRACT(day) only returns the day component)
         period_days_expr = cast(
-            func.extract('epoch', Subscription.end_date - Subscription.start_date) / 86400,
+            func.extract("epoch", Subscription.end_date - Subscription.start_date)
+            / 86400,
             SAInteger,
         )
         by_period_query = await db.execute(
             select(
-                period_days_expr.label('period_days'),
-                func.count(Subscription.id).label('count'),
+                period_days_expr.label("period_days"),
+                func.count(Subscription.id).label("count"),
             )
             .where(base_filter)
             .group_by(period_days_expr)
             .order_by(period_days_expr)
         )
         by_period = [
-            SalesByPeriodItem(period_days=int(row.period_days or 0), count=row.count) for row in by_period_query
+            SalesByPeriodItem(period_days=int(row.period_days or 0), count=row.count)
+            for row in by_period_query
         ]
 
         daily_query = await db.execute(
             select(
-                func.date(Transaction.created_at).label('date'),
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                func.date(Transaction.created_at).label("date"),
+                func.count(Transaction.id).label("count"),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "revenue"
+                ),
             )
             .where(
                 and_(
@@ -686,7 +729,11 @@ async def get_sales_stats(
         )
         daily = [
             DailySalesItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
                 count=row.count,
                 revenue_kopeks=row.revenue,
             )
@@ -694,12 +741,12 @@ async def get_sales_stats(
         ]
 
         # Daily sales grouped by tariff
-        tariff_name_col = func.coalesce(Tariff.name, 'Unknown')
+        tariff_name_col = func.coalesce(Tariff.name, "Unknown")
         daily_by_tariff_query = await db.execute(
             select(
-                func.date(Subscription.created_at).label('date'),
-                tariff_name_col.label('tariff_name'),
-                func.count(Subscription.id).label('count'),
+                func.date(Subscription.created_at).label("date"),
+                tariff_name_col.label("tariff_name"),
+                func.count(Subscription.id).label("count"),
             )
             .join(Tariff, Subscription.tariff_id == Tariff.id, isouter=True)
             .where(base_filter)
@@ -708,7 +755,11 @@ async def get_sales_stats(
         )
         daily_by_tariff = [
             DailyTariffSalesItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
                 tariff_name=row.tariff_name,
                 count=row.count,
             )
@@ -729,10 +780,10 @@ async def get_sales_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get sales stats', error=e, exc_info=True)
+        logger.error("Failed to get sales stats", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load sales statistics',
+            detail="Failed to load sales statistics",
         )
 
 
@@ -768,12 +819,12 @@ class RenewalsStatsResponse(BaseModel):
 # ============ Renewals Endpoint ============
 
 
-@router.get('/renewals', response_model=RenewalsStatsResponse)
+@router.get("/renewals", response_model=RenewalsStatsResponse)
 async def get_renewals_stats(
     days: int | None = Query(default=30),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> RenewalsStatsResponse:
     """Get renewal statistics with period comparison."""
@@ -803,8 +854,10 @@ async def get_renewals_stats(
 
             current_result = await db.execute(
                 select(
-                    func.count(Transaction.id).label('count'),
-                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                    func.count(Transaction.id).label("count"),
+                    func.coalesce(
+                        func.sum(func.abs(Transaction.amount_kopeks)), 0
+                    ).label("revenue"),
                 ).where(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
@@ -819,7 +872,7 @@ async def get_renewals_stats(
             current_revenue = current.revenue
 
             # No meaningful previous period for "all time"
-            prev = type('Row', (), {'count': 0, 'revenue': 0})()
+            prev = type("Row", (), {"count": 0, "revenue": 0})()
         else:
             period_length = period_end - period_start
             prev_start = period_start - period_length
@@ -839,8 +892,10 @@ async def get_renewals_stats(
 
             current_result = await db.execute(
                 select(
-                    func.count(Transaction.id).label('count'),
-                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                    func.count(Transaction.id).label("count"),
+                    func.coalesce(
+                        func.sum(func.abs(Transaction.amount_kopeks)), 0
+                    ).label("revenue"),
                 ).where(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
@@ -869,8 +924,10 @@ async def get_renewals_stats(
             )
             prev_result = await db.execute(
                 select(
-                    func.count(Transaction.id).label('count'),
-                    func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                    func.count(Transaction.id).label("count"),
+                    func.coalesce(
+                        func.sum(func.abs(Transaction.amount_kopeks)), 0
+                    ).label("revenue"),
                 ).where(
                     and_(
                         Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
@@ -890,11 +947,11 @@ async def get_renewals_stats(
             change_percent = 100.0 if current_count > 0 else 0.0
 
         if change_percent > 0:
-            trend = 'up'
+            trend = "up"
         elif change_percent < 0:
-            trend = 'down'
+            trend = "down"
         else:
-            trend = 'stable'
+            trend = "stable"
 
         # Denominator for renewal_rate excludes add-ons too, so the rate is
         # renewals / (new + renewals), not diluted by traffic/device top-ups.
@@ -910,12 +967,16 @@ async def get_renewals_stats(
             )
         )
         total_sub_payments = total_sub_payments_result.scalar() or 0
-        renewal_rate = round((current_count / total_sub_payments * 100), 1) if total_sub_payments > 0 else 0.0
+        renewal_rate = (
+            round((current_count / total_sub_payments * 100), 1)
+            if total_sub_payments > 0
+            else 0.0
+        )
 
         daily_query = await db.execute(
             select(
-                func.date(Transaction.created_at).label('date'),
-                func.count(Transaction.id).label('count'),
+                func.date(Transaction.created_at).label("date"),
+                func.count(Transaction.id).label("count"),
             )
             .where(
                 and_(
@@ -932,7 +993,11 @@ async def get_renewals_stats(
         )
         daily = [
             DailyRenewalItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
                 count=row.count,
             )
             for row in daily_query
@@ -942,8 +1007,12 @@ async def get_renewals_stats(
             total_renewals=current_count,
             total_revenue_kopeks=current_revenue,
             renewal_rate=renewal_rate,
-            current_period=RenewalPeriodStats(count=current_count, revenue_kopeks=current_revenue),
-            previous_period=RenewalPeriodStats(count=prev.count, revenue_kopeks=prev.revenue),
+            current_period=RenewalPeriodStats(
+                count=current_count, revenue_kopeks=current_revenue
+            ),
+            previous_period=RenewalPeriodStats(
+                count=prev.count, revenue_kopeks=prev.revenue
+            ),
             change=RenewalChange(
                 absolute=current_count - prev.count,
                 percent=change_percent,
@@ -955,10 +1024,10 @@ async def get_renewals_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get renewals stats', error=e, exc_info=True)
+        logger.error("Failed to get renewals stats", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load renewals statistics',
+            detail="Failed to load renewals statistics",
         )
 
 
@@ -995,12 +1064,12 @@ class AddonsStatsResponse(BaseModel):
 # ============ Add-ons Endpoint ============
 
 
-@router.get('/addons', response_model=AddonsStatsResponse)
+@router.get("/addons", response_model=AddonsStatsResponse)
 async def get_addons_stats(
     days: int | None = Query(default=30),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> AddonsStatsResponse:
     """Get add-on purchase statistics."""
@@ -1014,14 +1083,18 @@ async def get_addons_stats(
 
         totals_result = await db.execute(
             select(
-                func.count(TrafficPurchase.id).label('count'),
-                func.coalesce(func.sum(TrafficPurchase.traffic_gb), 0).label('total_gb'),
+                func.count(TrafficPurchase.id).label("count"),
+                func.coalesce(func.sum(TrafficPurchase.traffic_gb), 0).label(
+                    "total_gb"
+                ),
             ).where(base_filter)
         )
         totals = totals_result.one()
 
         addon_revenue_result = await db.execute(
-            select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
+            select(
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)
+            ).where(
                 and_(
                     Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                     Transaction.is_completed == True,
@@ -1035,20 +1108,25 @@ async def get_addons_stats(
 
         by_package_query = await db.execute(
             select(
-                TrafficPurchase.traffic_gb.label('traffic_gb'),
-                func.count(TrafficPurchase.id).label('count'),
+                TrafficPurchase.traffic_gb.label("traffic_gb"),
+                func.count(TrafficPurchase.id).label("count"),
             )
             .where(base_filter)
             .group_by(TrafficPurchase.traffic_gb)
             .order_by(TrafficPurchase.traffic_gb)
         )
-        by_package = [AddonByPackageItem(traffic_gb=row.traffic_gb, count=row.count) for row in by_package_query]
+        by_package = [
+            AddonByPackageItem(traffic_gb=row.traffic_gb, count=row.count)
+            for row in by_package_query
+        ]
 
         daily_query = await db.execute(
             select(
-                func.date(TrafficPurchase.created_at).label('date'),
-                func.count(TrafficPurchase.id).label('count'),
-                func.coalesce(func.sum(TrafficPurchase.traffic_gb), 0).label('total_gb'),
+                func.date(TrafficPurchase.created_at).label("date"),
+                func.count(TrafficPurchase.id).label("count"),
+                func.coalesce(func.sum(TrafficPurchase.traffic_gb), 0).label(
+                    "total_gb"
+                ),
             )
             .where(base_filter)
             .group_by(func.date(TrafficPurchase.created_at))
@@ -1056,7 +1134,11 @@ async def get_addons_stats(
         )
         daily = [
             DailyAddonItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
                 count=row.count,
                 total_gb=row.total_gb,
             )
@@ -1073,8 +1155,10 @@ async def get_addons_stats(
         )
         device_result = await db.execute(
             select(
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('revenue'),
+                func.count(Transaction.id).label("count"),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "revenue"
+                ),
             ).where(device_filter)
         )
         device_row = device_result.one()
@@ -1082,8 +1166,8 @@ async def get_addons_stats(
         # Daily device purchases
         daily_device_query = await db.execute(
             select(
-                func.date(Transaction.created_at).label('date'),
-                func.count(Transaction.id).label('count'),
+                func.date(Transaction.created_at).label("date"),
+                func.count(Transaction.id).label("count"),
             )
             .where(device_filter)
             .group_by(func.date(Transaction.created_at))
@@ -1091,7 +1175,11 @@ async def get_addons_stats(
         )
         daily_devices = [
             DailyDeviceItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
                 count=row.count,
             )
             for row in daily_device_query
@@ -1111,10 +1199,10 @@ async def get_addons_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get addons stats', error=e, exc_info=True)
+        logger.error("Failed to get addons stats", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load add-ons statistics',
+            detail="Failed to load add-ons statistics",
         )
 
 
@@ -1151,12 +1239,12 @@ class DepositsStatsResponse(BaseModel):
 # ============ Deposits Endpoint ============
 
 
-@router.get('/deposits', response_model=DepositsStatsResponse)
+@router.get("/deposits", response_model=DepositsStatsResponse)
 async def get_deposits_stats(
     days: int | None = Query(default=30),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> DepositsStatsResponse:
     """Get deposit statistics with payment method breakdown."""
@@ -1165,7 +1253,12 @@ async def get_deposits_stats(
 
         methods_with_manual = [*REAL_PAYMENT_METHODS, PaymentMethod.MANUAL.value]
         base_filter = and_(
-            Transaction.type.in_([TransactionType.DEPOSIT.value, TransactionType.SUBSCRIPTION_PAYMENT.value]),
+            Transaction.type.in_(
+                [
+                    TransactionType.DEPOSIT.value,
+                    TransactionType.SUBSCRIPTION_PAYMENT.value,
+                ]
+            ),
             Transaction.is_completed == True,
             Transaction.payment_method.in_(methods_with_manual),
             Transaction.created_at >= period_start,
@@ -1174,8 +1267,10 @@ async def get_deposits_stats(
 
         totals_result = await db.execute(
             select(
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('amount'),
+                func.count(Transaction.id).label("count"),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "amount"
+                ),
             ).where(base_filter)
         )
         totals = totals_result.one()
@@ -1185,24 +1280,32 @@ async def get_deposits_stats(
 
         by_method_query = await db.execute(
             select(
-                Transaction.payment_method.label('method'),
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('amount'),
+                Transaction.payment_method.label("method"),
+                func.count(Transaction.id).label("count"),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "amount"
+                ),
             )
             .where(base_filter)
             .group_by(Transaction.payment_method)
             .order_by(func.sum(func.abs(Transaction.amount_kopeks)).desc())
         )
         by_method = [
-            DepositByMethodItem(method=row.method or 'unknown', count=row.count, amount_kopeks=row.amount)
+            DepositByMethodItem(
+                method=row.method or "unknown",
+                count=row.count,
+                amount_kopeks=row.amount,
+            )
             for row in by_method_query
         ]
 
         daily_query = await db.execute(
             select(
-                func.date(Transaction.created_at).label('date'),
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('amount'),
+                func.date(Transaction.created_at).label("date"),
+                func.count(Transaction.id).label("count"),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "amount"
+                ),
             )
             .where(base_filter)
             .group_by(func.date(Transaction.created_at))
@@ -1210,7 +1313,11 @@ async def get_deposits_stats(
         )
         daily = [
             DailyDepositItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
                 count=row.count,
                 amount_kopeks=row.amount,
             )
@@ -1221,9 +1328,11 @@ async def get_deposits_stats(
         # base_filter already excludes NULLs via .in_(methods_with_manual), no coalesce needed
         daily_by_method_query = await db.execute(
             select(
-                func.date(Transaction.created_at).label('date'),
-                Transaction.payment_method.label('method'),
-                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label('amount'),
+                func.date(Transaction.created_at).label("date"),
+                Transaction.payment_method.label("method"),
+                func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0).label(
+                    "amount"
+                ),
             )
             .where(base_filter)
             .group_by(func.date(Transaction.created_at), Transaction.payment_method)
@@ -1231,8 +1340,12 @@ async def get_deposits_stats(
         )
         daily_by_method = [
             DailyDepositByMethodItem(
-                date=row.date.isoformat() if hasattr(row.date, 'isoformat') else str(row.date),
-                method=row.method or 'unknown',
+                date=(
+                    row.date.isoformat()
+                    if hasattr(row.date, "isoformat")
+                    else str(row.date)
+                ),
+                method=row.method or "unknown",
                 amount_kopeks=row.amount,
             )
             for row in daily_by_method_query
@@ -1250,10 +1363,10 @@ async def get_deposits_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get deposits stats', error=e, exc_info=True)
+        logger.error("Failed to get deposits stats", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load deposits statistics',
+            detail="Failed to load deposits statistics",
         )
 
 
@@ -1278,12 +1391,12 @@ class PaymentHealthResponse(BaseModel):
 # ============ Payment Health Endpoint ============
 
 
-@router.get('/payment-health', response_model=PaymentHealthResponse)
+@router.get("/payment-health", response_model=PaymentHealthResponse)
 async def get_payment_health(
     days: int | None = Query(default=30),
     start_date: str | None = Query(default=None),
     end_date: str | None = Query(default=None),
-    admin: User = Depends(require_permission('sales_stats:read')),
+    admin: User = Depends(require_permission("sales_stats:read")),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PaymentHealthResponse:
     """Payment reliability: per-gateway success-rate + failed-purchase rollbacks.
@@ -1297,9 +1410,11 @@ async def get_payment_health(
         period_start, period_end = _parse_period(days, start_date, end_date)
 
         gateways = await get_gateway_success_rates(db, period_start, period_end)
-        total_attempts = sum(g['total'] for g in gateways)
-        total_paid = sum(g['paid'] for g in gateways)
-        success_rate = round(total_paid / total_attempts * 100, 1) if total_attempts > 0 else 0.0
+        total_attempts = sum(g["total"] for g in gateways)
+        total_paid = sum(g["paid"] for g in gateways)
+        success_rate = (
+            round(total_paid / total_attempts * 100, 1) if total_attempts > 0 else 0.0
+        )
 
         failed_result = await db.execute(
             select(func.count(Transaction.id)).where(
@@ -1325,8 +1440,8 @@ async def get_payment_health(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error('Failed to get payment health', error=e, exc_info=True)
+        logger.error("Failed to get payment health", error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load payment health',
+            detail="Failed to load payment health",
         )

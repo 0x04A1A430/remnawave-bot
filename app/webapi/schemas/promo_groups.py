@@ -5,7 +5,9 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, validator
 
 
-def _normalize_period_discounts(value: dict[object, object] | None) -> dict[int, int] | None:
+def _normalize_period_discounts(
+    value: dict[object, object] | None,
+) -> dict[int, int] | None:
     if value is None:
         return None
 
@@ -44,13 +46,13 @@ class _PromoGroupBase(BaseModel):
     period_discounts: dict[int, int] | None = Field(
         default=None,
         description=(
-            'Словарь скидок по длительности подписки. Ключ — количество месяцев, '
-            'значение — скидка в процентах. Например: {1: 10, 6: 20}.'
+            "Словарь скидок по длительности подписки. Ключ — количество месяцев, "
+            "значение — скидка в процентах. Например: {1: 10, 6: 20}."
         ),
         example={1: 10, 6: 20},
     )
 
-    @validator('period_discounts', pre=True)
+    @validator("period_discounts", pre=True)
     def validate_period_discounts(cls, value):
         return _normalize_period_discounts(value)
 

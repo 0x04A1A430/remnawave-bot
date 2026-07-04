@@ -8,7 +8,6 @@ from aiogram.types import TelegramObject
 
 from app.database.models import SubscriptionStatus
 
-
 logger = structlog.get_logger(__name__)
 
 # Буфер времени перед деактивацией (защита от race condition при продлении)
@@ -32,10 +31,10 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         # Используем db и user из AuthMiddleware - не создаём новую сессию!
-        db = data.get('db')
-        user = data.get('db_user')
+        db = data.get("db")
+        user = data.get("db_user")
 
-        if db and user and getattr(user, 'subscriptions', None):
+        if db and user and getattr(user, "subscriptions", None):
             try:
                 current_time = datetime.now(UTC)
                 needs_commit = False
@@ -43,8 +42,12 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                 # Check all subscriptions (multi-tariff aware)
                 for subscription in user.subscriptions:
                     # Суточные подписки управляются DailySubscriptionService — не экспайрим их тут
-                    tariff = getattr(subscription, 'tariff', None)
-                    is_active_daily = tariff and getattr(tariff, 'is_daily', False) and not subscription.is_daily_paused
+                    tariff = getattr(subscription, "tariff", None)
+                    is_active_daily = (
+                        tariff
+                        and getattr(tariff, "is_daily", False)
+                        and not subscription.is_daily_paused
+                    )
 
                     if (
                         subscription.status == SubscriptionStatus.ACTIVE.value
@@ -54,13 +57,15 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                     ):
                         time_since_expiry = current_time - subscription.end_date
 
-                        if time_since_expiry > timedelta(minutes=EXPIRATION_BUFFER_MINUTES):
+                        if time_since_expiry > timedelta(
+                            minutes=EXPIRATION_BUFFER_MINUTES
+                        ):
                             subscription.status = SubscriptionStatus.EXPIRED.value
                             subscription.updated_at = current_time
                             needs_commit = True
 
                             logger.warning(
-                                'Middleware DEACTIVATION: подписка деактивирована',
+                                "Middleware DEACTIVATION: подписка деактивирована",
                                 subscription_id=subscription.id,
                                 user_id=user.id,
                                 end_date=subscription.end_date,
@@ -68,7 +73,7 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                             )
                         else:
                             logger.debug(
-                                'Middleware: подписка истекла недавно, ждём буфер перед деактивацией',
+                                "Middleware: подписка истекла недавно, ждём буфер перед деактивацией",
                                 user_id=user.id,
                                 time_since_expiry=time_since_expiry,
                                 EXPIRATION_BUFFER_MINUTES=EXPIRATION_BUFFER_MINUTES,
@@ -78,6 +83,6 @@ class SubscriptionStatusMiddleware(BaseMiddleware):
                     await db.commit()
 
             except Exception as e:
-                logger.error('Ошибка проверки статуса подписки', error=e)
+                logger.error("Ошибка проверки статуса подписки", error=e)
 
         return await handler(event, data)

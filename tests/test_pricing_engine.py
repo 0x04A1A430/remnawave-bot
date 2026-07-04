@@ -85,7 +85,7 @@ class TestPeriodDaysValidation:
         subscription = MagicMock()
         subscription.tariff_id = None
         subscription.tariff = None
-        with pytest.raises(ValueError, match='Invalid period_days'):
+        with pytest.raises(ValueError, match="Invalid period_days"):
             await engine.calculate_renewal_price(db, subscription, -1)
 
     @pytest.mark.asyncio
@@ -95,7 +95,7 @@ class TestPeriodDaysValidation:
         subscription = MagicMock()
         subscription.tariff_id = None
         subscription.tariff = None
-        with pytest.raises(ValueError, match='Invalid period_days'):
+        with pytest.raises(ValueError, match="Invalid period_days"):
             await engine.calculate_renewal_price(db, subscription, 0)
 
     @pytest.mark.asyncio
@@ -105,7 +105,7 @@ class TestPeriodDaysValidation:
         subscription = MagicMock()
         subscription.tariff_id = None
         subscription.tariff = None
-        with pytest.raises(ValueError, match='Invalid period_days'):
+        with pytest.raises(ValueError, match="Invalid period_days"):
             await engine.calculate_renewal_price(db, subscription, 30.0)
 
 
@@ -113,7 +113,12 @@ _server_id_seq = itertools.count(1)
 
 
 def _make_server(
-    price_kopeks=5000, is_available=True, is_full=False, allowed_promo_groups=None, server_id=None, squad_uuid=None
+    price_kopeks=5000,
+    is_available=True,
+    is_full=False,
+    allowed_promo_groups=None,
+    server_id=None,
+    squad_uuid=None,
 ):
     if server_id is None:
         server_id = next(_server_id_seq)
@@ -132,49 +137,75 @@ class TestCalculateServersPrice:
     async def test_available_server(self):
         engine = PricingEngine()
         db = AsyncMock()
-        server = _make_server(price_kopeks=5000, squad_uuid='uuid-1')
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]):
-            total, details = await engine._calculate_servers_price(['uuid-1'], db, promo_group_id=None)
+        server = _make_server(price_kopeks=5000, squad_uuid="uuid-1")
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[server],
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1"], db, promo_group_id=None
+            )
         assert total == 5000
         assert len(details) == 1
-        assert details[0]['price'] == 5000
+        assert details[0]["price"] == 5000
 
     @pytest.mark.asyncio
     async def test_unavailable_server_uses_real_price(self):
         engine = PricingEngine()
         db = AsyncMock()
-        server = _make_server(price_kopeks=7000, is_available=False, squad_uuid='uuid-1')
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]):
-            total, details = await engine._calculate_servers_price(['uuid-1'], db, promo_group_id=None)
+        server = _make_server(
+            price_kopeks=7000, is_available=False, squad_uuid="uuid-1"
+        )
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[server],
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1"], db, promo_group_id=None
+            )
         assert total == 7000  # NOT 0!
-        assert details[0]['status'] == 'unavailable'
+        assert details[0]["status"] == "unavailable"
 
     @pytest.mark.asyncio
     async def test_full_server_uses_real_price(self):
         engine = PricingEngine()
         db = AsyncMock()
-        server = _make_server(price_kopeks=3000, is_full=True, squad_uuid='uuid-1')
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]):
-            total, details = await engine._calculate_servers_price(['uuid-1'], db, promo_group_id=None)
+        server = _make_server(price_kopeks=3000, is_full=True, squad_uuid="uuid-1")
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[server],
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1"], db, promo_group_id=None
+            )
         assert total == 3000  # NOT 0!
 
     @pytest.mark.asyncio
     async def test_server_not_found_zero_price(self):
         engine = PricingEngine()
         db = AsyncMock()
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[]):
-            total, details = await engine._calculate_servers_price(['uuid-orphan'], db, promo_group_id=None)
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids", return_value=[]
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-orphan"], db, promo_group_id=None
+            )
         assert total == 0
-        assert details[0]['status'] == 'not_found'
+        assert details[0]["status"] == "not_found"
 
     @pytest.mark.asyncio
     async def test_multiple_servers(self):
         engine = PricingEngine()
         db = AsyncMock()
-        s1 = _make_server(price_kopeks=5000, squad_uuid='uuid-1')
-        s2 = _make_server(price_kopeks=3000, is_available=False, squad_uuid='uuid-2')
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[s1, s2]):
-            total, details = await engine._calculate_servers_price(['uuid-1', 'uuid-2'], db, promo_group_id=None)
+        s1 = _make_server(price_kopeks=5000, squad_uuid="uuid-1")
+        s2 = _make_server(price_kopeks=3000, is_available=False, squad_uuid="uuid-2")
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[s1, s2],
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1", "uuid-2"], db, promo_group_id=None
+            )
         assert total == 8000
 
     @pytest.mark.asyncio
@@ -182,37 +213,47 @@ class TestCalculateServersPrice:
         """Verify server_ids and servers_individual_prices have same length when some servers are not found."""
         engine = PricingEngine()
         db = AsyncMock()
-        s1 = _make_server(price_kopeks=5000, server_id=10, squad_uuid='uuid-1')
-        s3 = _make_server(price_kopeks=3000, server_id=30, squad_uuid='uuid-3')
+        s1 = _make_server(price_kopeks=5000, server_id=10, squad_uuid="uuid-1")
+        s3 = _make_server(price_kopeks=3000, server_id=30, squad_uuid="uuid-3")
         # uuid-orphan not in batch result — should be excluded from BOTH lists
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[s1, s3]):
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[s1, s3],
+        ):
             total, details = await engine._calculate_servers_price(
-                ['uuid-1', 'uuid-orphan', 'uuid-3'], db, promo_group_id=None
+                ["uuid-1", "uuid-orphan", "uuid-3"], db, promo_group_id=None
             )
         assert total == 8000  # 5000 + 0 + 3000
         assert len(details) == 3
         # Verify id fields
-        assert details[0]['id'] == 10
-        assert details[1]['id'] is None
-        assert details[2]['id'] == 30
+        assert details[0]["id"] == 10
+        assert details[1]["id"] is None
+        assert details[2]["id"] == 30
 
     @pytest.mark.asyncio
     async def test_db_exception_path(self):
         """Verify batch DB exception returns price=0 and status=error for all UUIDs."""
         engine = PricingEngine()
         db = AsyncMock()
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', side_effect=RuntimeError('DB error')):
-            total, details = await engine._calculate_servers_price(['uuid-1'], db, promo_group_id=None)
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            side_effect=RuntimeError("DB error"),
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1"], db, promo_group_id=None
+            )
         assert total == 0
-        assert details[0]['status'] == 'error'
-        assert details[0]['id'] is None
+        assert details[0]["status"] == "error"
+        assert details[0]["id"] is None
 
     @pytest.mark.asyncio
     async def test_empty_uuids_returns_empty(self):
         """Verify empty UUIDs list returns 0 total and empty details."""
         engine = PricingEngine()
         db = AsyncMock()
-        total, details = await engine._calculate_servers_price([], db, promo_group_id=None)
+        total, details = await engine._calculate_servers_price(
+            [], db, promo_group_id=None
+        )
         assert total == 0
         assert details == []
 
@@ -220,37 +261,55 @@ class TestCalculateServersPrice:
 class TestCalculateTrafficPrice:
     def test_base_only(self):
         engine = PricingEngine()
-        with patch('app.services.pricing_engine.settings') as ms:
-            ms.get_traffic_price.side_effect = lambda gb: {25: 3000, 50: 5000}.get(gb, 0)
-            price = engine._calculate_traffic_price(traffic_limit_gb=25, purchased_traffic_gb=0)
+        with patch("app.services.pricing_engine.settings") as ms:
+            ms.get_traffic_price.side_effect = lambda gb: {25: 3000, 50: 5000}.get(
+                gb, 0
+            )
+            price = engine._calculate_traffic_price(
+                traffic_limit_gb=25, purchased_traffic_gb=0
+            )
         assert price == 3000
 
     def test_purchased_separated(self):
         engine = PricingEngine()
-        with patch('app.services.pricing_engine.settings') as ms:
-            ms.get_traffic_price.side_effect = lambda gb: {25: 3000, 100: 8000, 125: 12000}.get(gb, 0)
-            price = engine._calculate_traffic_price(traffic_limit_gb=125, purchased_traffic_gb=100)
+        with patch("app.services.pricing_engine.settings") as ms:
+            ms.get_traffic_price.side_effect = lambda gb: {
+                25: 3000,
+                100: 8000,
+                125: 12000,
+            }.get(gb, 0)
+            price = engine._calculate_traffic_price(
+                traffic_limit_gb=125, purchased_traffic_gb=100
+            )
         assert price == 11000  # NOT 12000
 
     def test_unlimited_traffic_has_price(self):
         engine = PricingEngine()
-        with patch('app.services.pricing_engine.settings') as ms:
+        with patch("app.services.pricing_engine.settings") as ms:
             ms.get_traffic_price.side_effect = lambda gb: {0: 20000, 5: 2000}.get(gb, 0)
-            price = engine._calculate_traffic_price(traffic_limit_gb=0, purchased_traffic_gb=0)
+            price = engine._calculate_traffic_price(
+                traffic_limit_gb=0, purchased_traffic_gb=0
+            )
         assert price == 20000  # 0 GB = unlimited, charged at unlimited tier
 
     def test_unlimited_traffic_ignores_purchased(self):
         engine = PricingEngine()
-        with patch('app.services.pricing_engine.settings') as ms:
-            ms.get_traffic_price.side_effect = lambda gb: {0: 20000, 50: 5000}.get(gb, 0)
-            price = engine._calculate_traffic_price(traffic_limit_gb=0, purchased_traffic_gb=50)
+        with patch("app.services.pricing_engine.settings") as ms:
+            ms.get_traffic_price.side_effect = lambda gb: {0: 20000, 50: 5000}.get(
+                gb, 0
+            )
+            price = engine._calculate_traffic_price(
+                traffic_limit_gb=0, purchased_traffic_gb=50
+            )
         assert price == 20000  # unlimited tier, purchased ignored
 
     def test_purchased_exceeds_total(self):
         engine = PricingEngine()
-        with patch('app.services.pricing_engine.settings') as ms:
+        with patch("app.services.pricing_engine.settings") as ms:
             ms.get_traffic_price.side_effect = lambda gb: {0: 0, 100: 8000}.get(gb, 0)
-            price = engine._calculate_traffic_price(traffic_limit_gb=80, purchased_traffic_gb=100)
+            price = engine._calculate_traffic_price(
+                traffic_limit_gb=80, purchased_traffic_gb=100
+            )
         assert price == 8000  # base_gb clamped to 0
 
 
@@ -262,7 +321,7 @@ class TestCalculateRenewalPriceTariffMode:
         subscription = MagicMock()
         subscription.tariff_id = 2
         subscription.tariff = MagicMock()
-        subscription.tariff.period_prices = {'30': 19000}
+        subscription.tariff.period_prices = {"30": 19000}
         subscription.tariff.device_limit = 2
         subscription.tariff.device_price_kopeks = None
         subscription.tariff.id = 2
@@ -276,11 +335,16 @@ class TestCalculateRenewalPriceTariffMode:
         user.promo_offer_discount_percent = 0
         user.promo_offer_expires_at = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
         ):
             ms.PRICE_PER_DEVICE = 5000
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.is_tariff_mode is True
         assert result.final_total == 19000
 
@@ -291,7 +355,7 @@ class TestCalculateRenewalPriceTariffMode:
         subscription = MagicMock()
         subscription.tariff_id = 2
         subscription.tariff = MagicMock()
-        subscription.tariff.period_prices = {'30': 19000}
+        subscription.tariff.period_prices = {"30": 19000}
         subscription.tariff.device_limit = 2
         subscription.tariff.device_price_kopeks = None
         subscription.tariff.id = 2
@@ -305,11 +369,16 @@ class TestCalculateRenewalPriceTariffMode:
         user.promo_offer_discount_percent = 0
         user.promo_offer_expires_at = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
         ):
             ms.PRICE_PER_DEVICE = 5000
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.devices_price == 10000
         assert result.final_total == 29000
 
@@ -321,7 +390,7 @@ class TestCalculateRenewalPriceTariffMode:
         subscription = MagicMock()
         subscription.tariff_id = 2
         subscription.tariff = MagicMock()
-        subscription.tariff.period_prices = {'30': 10000}
+        subscription.tariff.period_prices = {"30": 10000}
         subscription.tariff.device_limit = 2
         subscription.tariff.device_price_kopeks = 3000  # tariff-specific price
         subscription.tariff.id = 2
@@ -330,11 +399,16 @@ class TestCalculateRenewalPriceTariffMode:
         user.promo_group = None
         user.get_primary_promo_group.return_value = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
         ):
             ms.PRICE_PER_DEVICE = 5000  # should NOT be used
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.devices_price == 6000  # 2 extra × 3000 (tariff price)
         assert result.final_total == 16000  # 10000 + 6000
 
@@ -345,7 +419,7 @@ class TestCalculateRenewalPriceTariffMode:
         subscription = MagicMock()
         subscription.tariff_id = 1
         subscription.tariff = MagicMock()
-        subscription.tariff.period_prices = {'30': 20000}
+        subscription.tariff.period_prices = {"30": 20000}
         subscription.tariff.device_limit = 1
         subscription.tariff.device_price_kopeks = None
         subscription.tariff.id = 1
@@ -356,11 +430,16 @@ class TestCalculateRenewalPriceTariffMode:
         user.promo_group = promo_group
         user.get_primary_promo_group.return_value = promo_group
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=5),
-            patch('app.services.pricing_engine.settings') as ms,
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=5,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
         ):
             ms.PRICE_PER_DEVICE = 5000
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.base_price == 18000  # 20000 discounted by 10%
         assert result.promo_group_discount == 2000
         # After group: 18000, then 5% off 18000 = 900
@@ -374,7 +453,7 @@ class TestCalculateRenewalPriceTariffMode:
         subscription = MagicMock()
         subscription.tariff_id = 1
         subscription.tariff = MagicMock()
-        subscription.tariff.period_prices = {'30': 19000}
+        subscription.tariff.period_prices = {"30": 19000}
         subscription.tariff.device_limit = 1
         subscription.tariff.device_price_kopeks = None
         subscription.tariff.id = 1
@@ -385,11 +464,16 @@ class TestCalculateRenewalPriceTariffMode:
         user.promo_group = None
         user.get_primary_promo_group.return_value = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
         ):
             ms.PRICE_PER_DEVICE = 5000
-            result = await engine.calculate_renewal_price(db, subscription, 60, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 60, user=user
+            )
         assert result.base_price == 0
         assert result.final_total == 0
 
@@ -400,7 +484,7 @@ class TestCalculateRenewalPriceTariffMode:
         db = AsyncMock()
         tariff = MagicMock()
         tariff.id = 1
-        tariff.period_prices = {'30': 10000}
+        tariff.period_prices = {"30": 10000}
         tariff.device_price_kopeks = 5000
         tariff.device_limit = 5
         sub = MagicMock()
@@ -411,12 +495,15 @@ class TestCalculateRenewalPriceTariffMode:
         user.promo_group = None
         user.get_primary_promo_group.return_value = None
 
-        with patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0):
+        with patch(
+            "app.services.pricing_engine.get_user_active_promo_discount_percent",
+            return_value=0,
+        ):
             result = await engine.calculate_renewal_price(db, sub, 30, user=user)
 
         assert result.devices_price == 0
         assert result.final_total == 10000
-        assert result.breakdown.get('extra_devices') == 0
+        assert result.breakdown.get("extra_devices") == 0
 
     @pytest.mark.asyncio
     async def test_tariff_user_none(self):
@@ -426,17 +513,22 @@ class TestCalculateRenewalPriceTariffMode:
         subscription = MagicMock()
         subscription.tariff_id = 1
         subscription.tariff = MagicMock()
-        subscription.tariff.period_prices = {'30': 20000}
+        subscription.tariff.period_prices = {"30": 20000}
         subscription.tariff.device_limit = 1
         subscription.tariff.device_price_kopeks = None
         subscription.tariff.id = 1
         subscription.device_limit = 1
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
         ):
             ms.PRICE_PER_DEVICE = 5000
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=None)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=None
+            )
         assert result.final_total == 20000
         assert result.promo_group_discount == 0
         assert result.promo_offer_discount == 0
@@ -450,7 +542,7 @@ class TestCalculateRenewalPriceClassicMode:
         subscription = MagicMock()
         subscription.tariff_id = None
         subscription.tariff = None
-        subscription.connected_squads = ['uuid-1']
+        subscription.connected_squads = ["uuid-1"]
         subscription.traffic_limit_gb = 50
         subscription.purchased_traffic_gb = 0
         subscription.device_limit = 2
@@ -460,19 +552,27 @@ class TestCalculateRenewalPriceClassicMode:
         user.promo_group_id = None
         user.promo_offer_discount_percent = 0
         user.promo_offer_expires_at = None
-        server = _make_server(price_kopeks=5000, squad_uuid='uuid-1')
+        server = _make_server(price_kopeks=5000, squad_uuid="uuid-1")
         with (
-            patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]),
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 29000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {30: 29000}),
+            patch(
+                "app.services.pricing_engine.get_server_squads_by_uuids",
+                return_value=[server],
+            ),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 29000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {30: 29000}),
         ):
             ms.get_traffic_price.return_value = 3000
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 2
             ms.is_traffic_fixed.return_value = False
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.is_tariff_mode is False
         assert result.base_price == 29000
         assert result.servers_price == 5000
@@ -500,16 +600,21 @@ class TestCalculateRenewalPriceClassicMode:
         user.promo_offer_discount_percent = 10
         user.promo_offer_expires_at = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=10),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {30: 10000}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=10,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {30: 10000}),
         ):
             ms.get_traffic_price.return_value = 0
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 2
             ms.is_traffic_fixed.return_value = False
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.final_total == 7200
         assert result.promo_group_discount == 2000
         assert result.promo_offer_discount == 800
@@ -531,16 +636,21 @@ class TestCalculateRenewalPriceClassicMode:
         user.get_primary_promo_group.return_value = None
         user.promo_group_id = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {30: 99000}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {30: 99000}),
         ):
             ms.get_traffic_price.return_value = 0
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 1
             ms.is_traffic_fixed.return_value = False
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.base_price == 99000
         assert result.final_total == 99000
 
@@ -560,16 +670,21 @@ class TestCalculateRenewalPriceClassicMode:
         user.get_primary_promo_group.return_value = None
         user.promo_group_id = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.get_traffic_price.return_value = 0
             ms.PRICE_PER_DEVICE = 3000
             ms.DEFAULT_DEVICE_LIMIT = 2
             ms.is_traffic_fixed.return_value = False
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         # 5 - 2 = 3 extra devices * 3000 = 9000
         assert result.devices_price == 9000
         assert result.final_total == 19000
@@ -582,7 +697,7 @@ class TestCalculateRenewalPriceClassicMode:
         subscription = MagicMock()
         subscription.tariff_id = None
         subscription.tariff = None
-        subscription.connected_squads = ['uuid-found', 'uuid-orphan', 'uuid-found2']
+        subscription.connected_squads = ["uuid-found", "uuid-orphan", "uuid-found2"]
         subscription.traffic_limit_gb = 0
         subscription.purchased_traffic_gb = 0
         subscription.device_limit = 1
@@ -590,27 +705,34 @@ class TestCalculateRenewalPriceClassicMode:
         user.promo_group = None
         user.get_primary_promo_group.return_value = None
         user.promo_group_id = None
-        s1 = _make_server(price_kopeks=5000, server_id=10, squad_uuid='uuid-found')
-        s3 = _make_server(price_kopeks=3000, server_id=30, squad_uuid='uuid-found2')
+        s1 = _make_server(price_kopeks=5000, server_id=10, squad_uuid="uuid-found")
+        s3 = _make_server(price_kopeks=3000, server_id=30, squad_uuid="uuid-found2")
         with (
             patch(
-                'app.services.pricing_engine.get_server_squads_by_uuids',
+                "app.services.pricing_engine.get_server_squads_by_uuids",
                 return_value=[s1, s3],
             ),
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.get_traffic_price.return_value = 0
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 1
             ms.is_traffic_fixed.return_value = False
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         # Verify breakdown alignment — both lists must have same length
-        ids = result.breakdown['server_ids']
-        prices = result.breakdown['servers_individual_prices']
-        assert len(ids) == len(prices), f'server_ids({len(ids)}) != prices({len(prices)})'
+        ids = result.breakdown["server_ids"]
+        prices = result.breakdown["servers_individual_prices"]
+        assert len(ids) == len(
+            prices
+        ), f"server_ids({len(ids)}) != prices({len(prices)})"
         assert ids == [10, 30]
         assert prices == [5000, 3000]
         # Total servers_price includes only found servers
@@ -633,19 +755,24 @@ class TestCalculateRenewalPriceClassicMode:
         user.get_primary_promo_group.return_value = None
         user.promo_group_id = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.is_traffic_fixed.return_value = True
             ms.get_fixed_traffic_limit.return_value = 50
             ms.get_traffic_price.side_effect = lambda gb: {50: 4000}.get(gb, 0)
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 1
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.traffic_price == 4000
-        assert result.breakdown['purchased_traffic_gb'] == 0
+        assert result.breakdown["purchased_traffic_gb"] == 0
 
     @pytest.mark.asyncio
     async def test_classic_default_traffic_limit_when_none(self):
@@ -664,17 +791,22 @@ class TestCalculateRenewalPriceClassicMode:
         user.get_primary_promo_group.return_value = None
         user.promo_group_id = None
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.is_traffic_fixed.return_value = False
             ms.DEFAULT_TRAFFIC_LIMIT_GB = 50
             ms.get_traffic_price.side_effect = lambda gb: {50: 4000}.get(gb, 0)
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 1
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=user
+            )
         assert result.traffic_price == 4000
 
     @pytest.mark.asyncio
@@ -685,7 +817,7 @@ class TestCalculateRenewalPriceClassicMode:
         sub = MagicMock()
         sub.tariff_id = None
         sub.tariff = None
-        sub.connected_squads = ['uuid-s1']
+        sub.connected_squads = ["uuid-s1"]
         sub.traffic_limit_gb = 50
         sub.purchased_traffic_gb = 0
         sub.device_limit = 1
@@ -694,14 +826,20 @@ class TestCalculateRenewalPriceClassicMode:
         user.get_primary_promo_group.return_value = None
         user.promo_group_id = None
 
-        server = _make_server(price_kopeks=3000, squad_uuid='uuid-s1')
+        server = _make_server(price_kopeks=3000, squad_uuid="uuid-s1")
 
         with (
-            patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]),
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {90: 27000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_server_squads_by_uuids",
+                return_value=[server],
+            ),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {90: 27000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.DEFAULT_DEVICE_LIMIT = 1
             ms.PRICE_PER_DEVICE = 5000
@@ -727,7 +865,7 @@ class TestCalculateRenewalPriceClassicMode:
         sub = MagicMock()
         sub.tariff_id = None
         sub.tariff = None
-        sub.connected_squads = ['uuid-s1']
+        sub.connected_squads = ["uuid-s1"]
         sub.traffic_limit_gb = 100
         sub.purchased_traffic_gb = 0
         sub.device_limit = 3  # 2 extra devices
@@ -736,21 +874,27 @@ class TestCalculateRenewalPriceClassicMode:
         promo_group = MagicMock()
 
         def discount_by_category(category, period_days):
-            return {'period': 10, 'servers': 20, 'traffic': 30, 'devices': 0}[category]
+            return {"period": 10, "servers": 20, "traffic": 30, "devices": 0}[category]
 
         promo_group.get_discount_percent = MagicMock(side_effect=discount_by_category)
         user.promo_group = promo_group
         user.get_primary_promo_group.return_value = promo_group
         user.promo_group_id = 1
 
-        server = _make_server(price_kopeks=6000, squad_uuid='uuid-s1')
+        server = _make_server(price_kopeks=6000, squad_uuid="uuid-s1")
 
         with (
-            patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]),
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_server_squads_by_uuids",
+                return_value=[server],
+            ),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.DEFAULT_DEVICE_LIMIT = 1
             ms.PRICE_PER_DEVICE = 4000
@@ -785,16 +929,21 @@ class TestCalculateRenewalPriceClassicMode:
         subscription.purchased_traffic_gb = 0
         subscription.device_limit = 1
         with (
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=0),
-            patch('app.services.pricing_engine.settings') as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 15000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=0,
+            ),
+            patch("app.services.pricing_engine.settings") as ms,
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 15000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.get_traffic_price.return_value = 0
             ms.PRICE_PER_DEVICE = 0
             ms.DEFAULT_DEVICE_LIMIT = 1
             ms.is_traffic_fixed.return_value = False
-            result = await engine.calculate_renewal_price(db, subscription, 30, user=None)
+            result = await engine.calculate_renewal_price(
+                db, subscription, 30, user=None
+            )
         assert result.final_total == 15000
         assert result.promo_group_discount == 0
         assert result.promo_offer_discount == 0
@@ -808,22 +957,36 @@ class TestServerPromoGroupFiltering:
         db = AsyncMock()
         pg_mock = MagicMock()
         pg_mock.id = 99
-        server = _make_server(price_kopeks=5000, squad_uuid='uuid-1', allowed_promo_groups=[pg_mock])
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]):
-            total, details = await engine._calculate_servers_price(['uuid-1'], db, promo_group_id=5)
+        server = _make_server(
+            price_kopeks=5000, squad_uuid="uuid-1", allowed_promo_groups=[pg_mock]
+        )
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[server],
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1"], db, promo_group_id=5
+            )
         assert total == 5000  # real price still charged
-        assert details[0]['status'] == 'not_allowed'
+        assert details[0]["status"] == "not_allowed"
 
     @pytest.mark.asyncio
     async def test_server_empty_allowed_groups_is_open(self):
         """Server with empty allowed_promo_groups is available to all."""
         engine = PricingEngine()
         db = AsyncMock()
-        server = _make_server(price_kopeks=5000, squad_uuid='uuid-1', allowed_promo_groups=[])
-        with patch('app.services.pricing_engine.get_server_squads_by_uuids', return_value=[server]):
-            total, details = await engine._calculate_servers_price(['uuid-1'], db, promo_group_id=5)
+        server = _make_server(
+            price_kopeks=5000, squad_uuid="uuid-1", allowed_promo_groups=[]
+        )
+        with patch(
+            "app.services.pricing_engine.get_server_squads_by_uuids",
+            return_value=[server],
+        ):
+            total, details = await engine._calculate_servers_price(
+                ["uuid-1"], db, promo_group_id=5
+            )
         assert total == 5000
-        assert details[0]['status'] == 'available'
+        assert details[0]["status"] == "available"
 
 
 class TestFromPayloadRoundTrip:
@@ -844,9 +1007,9 @@ class TestFromPayloadRoundTrip:
             period_days=30,
             is_tariff_mode=False,
             breakdown={
-                'server_ids': [1, 2],
-                'servers_individual_prices': [5000, 3000],
-                'offer_discount_pct': 5,
+                "server_ids": [1, 2],
+                "servers_individual_prices": [5000, 3000],
+                "offer_discount_pct": 5,
             },
         )
         payload = dataclasses.asdict(pricing)
@@ -856,7 +1019,7 @@ class TestFromPayloadRoundTrip:
         assert restored.period_days == 30
         assert restored.promo_discount_value == 800  # mapped from promo_offer_discount
         assert restored.server_ids == [1, 2]
-        assert restored.details.get('servers_individual_prices') == [5000, 3000]
+        assert restored.details.get("servers_individual_prices") == [5000, 3000]
         assert restored.months == 1
         assert restored.per_month == 34200
 
@@ -864,14 +1027,17 @@ class TestFromPayloadRoundTrip:
 # ---------------------------------------------------------------------------
 # Patch-target constants used in new tests below
 # ---------------------------------------------------------------------------
-SERVERS_BATCH_PATH = 'app.services.pricing_engine.get_server_squads_by_uuids'
-SETTINGS_PATH = 'app.services.pricing_engine.settings'
+SERVERS_BATCH_PATH = "app.services.pricing_engine.get_server_squads_by_uuids"
+SETTINGS_PATH = "app.services.pricing_engine.settings"
 
 
 class TestFromPayloadLegacyRoundTrip:
     def test_legacy_to_payload_roundtrip(self):
         """Legacy SubscriptionRenewalPricing.to_payload() -> from_payload() preserves all fields."""
-        from app.services.subscription_renewal_service import SubscriptionRenewalPricing, build_renewal_period_id
+        from app.services.subscription_renewal_service import (
+            SubscriptionRenewalPricing,
+            build_renewal_period_id,
+        )
 
         original = SubscriptionRenewalPricing(
             period_days=30,
@@ -885,7 +1051,7 @@ class TestFromPayloadLegacyRoundTrip:
             overall_discount_percent=28,
             per_month=10800,
             server_ids=[1, 2, 3],
-            details={'servers_individual_prices': [5000, 3000, 2000]},
+            details={"servers_individual_prices": [5000, 3000, 2000]},
         )
         payload = original.to_payload()
         restored = SubscriptionRenewalPricing.from_payload(payload)
@@ -911,7 +1077,7 @@ class TestOriginalPriceIdentity:
         db = AsyncMock()
         tariff = MagicMock()
         tariff.id = 1
-        tariff.period_prices = {'30': 20000}
+        tariff.period_prices = {"30": 20000}
         tariff.device_price_kopeks = 3000
         tariff.device_limit = 1
         sub = MagicMock()
@@ -924,11 +1090,19 @@ class TestOriginalPriceIdentity:
         user.promo_group = promo_group
         user.get_primary_promo_group.return_value = promo_group
 
-        with patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=15):
+        with patch(
+            "app.services.pricing_engine.get_user_active_promo_discount_percent",
+            return_value=15,
+        ):
             result = await engine.calculate_renewal_price(db, sub, 30, user=user)
 
         subtotal = 20000 + 2 * 3000  # 26000
-        assert result.final_total + result.promo_group_discount + result.promo_offer_discount == subtotal
+        assert (
+            result.final_total
+            + result.promo_group_discount
+            + result.promo_offer_discount
+            == subtotal
+        )
 
     @pytest.mark.asyncio
     async def test_classic_mode_identity(self):
@@ -938,7 +1112,7 @@ class TestOriginalPriceIdentity:
         sub = MagicMock()
         sub.tariff_id = None
         sub.tariff = None
-        sub.connected_squads = ['uuid-s1']
+        sub.connected_squads = ["uuid-s1"]
         sub.traffic_limit_gb = 50
         sub.purchased_traffic_gb = 0
         sub.device_limit = 2  # 1 extra
@@ -950,14 +1124,17 @@ class TestOriginalPriceIdentity:
         user.get_primary_promo_group.return_value = promo_group
         user.promo_group_id = 1
 
-        server = _make_server(price_kopeks=4000, squad_uuid='uuid-s1')
+        server = _make_server(price_kopeks=4000, squad_uuid="uuid-s1")
 
         with (
             patch(SERVERS_BATCH_PATH, return_value=[server]),
-            patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=10),
+            patch(
+                "app.services.pricing_engine.get_user_active_promo_discount_percent",
+                return_value=10,
+            ),
             patch(SETTINGS_PATH) as ms,
-            patch('app.services.pricing_engine.CLASSIC_PERIOD_PRICES', {30: 10000}),
-            patch('app.services.pricing_engine.PERIOD_PRICES', {}),
+            patch("app.services.pricing_engine.CLASSIC_PERIOD_PRICES", {30: 10000}),
+            patch("app.services.pricing_engine.PERIOD_PRICES", {}),
         ):
             ms.PRICE_PER_DEVICE = 5000
             ms.DEFAULT_DEVICE_LIMIT = 1
@@ -968,7 +1145,11 @@ class TestOriginalPriceIdentity:
             result = await engine.calculate_renewal_price(db, sub, 30, user=user)
 
         # Reconstruct original undiscounted total
-        original = result.final_total + result.promo_group_discount + result.promo_offer_discount
+        original = (
+            result.final_total
+            + result.promo_group_discount
+            + result.promo_offer_discount
+        )
         # original should equal base_original + servers_original + traffic_original + devices_original
         expected_original = 10000 + 4000 + 3000 + 5000  # 22000
         assert original == expected_original
@@ -980,7 +1161,7 @@ class TestOriginalPriceIdentity:
         db = AsyncMock()
         tariff = MagicMock()
         tariff.id = 1
-        tariff.period_prices = {'30': 20000}
+        tariff.period_prices = {"30": 20000}
         tariff.device_price_kopeks = None
         tariff.device_limit = 1
         sub = MagicMock()
@@ -994,6 +1175,9 @@ class TestOriginalPriceIdentity:
         user.get_primary_promo_group.return_value = promo_group
         sub.tariff.is_daily = False
         sub.tariff.can_purchase_custom_days.return_value = False
-        with patch('app.services.pricing_engine.get_user_active_promo_discount_percent', return_value=5):
+        with patch(
+            "app.services.pricing_engine.get_user_active_promo_discount_percent",
+            return_value=5,
+        ):
             result = await engine.calculate_renewal_price(db, sub, 30, user=user)
         assert result.original_total == 20000  # undiscounted subtotal

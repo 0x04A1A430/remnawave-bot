@@ -9,7 +9,6 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import Ticket, TicketNotification
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -17,9 +16,13 @@ class TicketNotificationCRUD:
     """CRUD operations for ticket notifications in cabinet."""
 
     @staticmethod
-    async def get_by_id(db: AsyncSession, notification_id: int) -> TicketNotification | None:
+    async def get_by_id(
+        db: AsyncSession, notification_id: int
+    ) -> TicketNotification | None:
         """Get notification by ID."""
-        query = select(TicketNotification).where(TicketNotification.id == notification_id)
+        query = select(TicketNotification).where(
+            TicketNotification.id == notification_id
+        )
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
@@ -194,21 +197,23 @@ class TicketNotificationCRUD:
         return result.rowcount
 
     @staticmethod
-    async def create_admin_notification_for_new_ticket(db: AsyncSession, ticket: Ticket) -> TicketNotification | None:
+    async def create_admin_notification_for_new_ticket(
+        db: AsyncSession, ticket: Ticket
+    ) -> TicketNotification | None:
         """Create notification for admins about new ticket."""
         from app.services.support_settings_service import SupportSettingsService
 
         if not SupportSettingsService.get_cabinet_admin_notifications_enabled():
             return None
 
-        title = (ticket.title or '').strip()[:50]
-        message = f'Новый тикет #{ticket.id}: {title}'
+        title = (ticket.title or "").strip()[:50]
+        message = f"Новый тикет #{ticket.id}: {title}"
 
         return await TicketNotificationCRUD.create(
             db=db,
             ticket_id=ticket.id,
             user_id=ticket.user_id,
-            notification_type='new_ticket',
+            notification_type="new_ticket",
             message=message,
             is_for_admin=True,
         )
@@ -223,14 +228,14 @@ class TicketNotificationCRUD:
         if not SupportSettingsService.get_cabinet_user_notifications_enabled():
             return None
 
-        preview = (reply_preview or '').strip()[:100]
-        message = f'Ответ на тикет #{ticket.id}: {preview}...'
+        preview = (reply_preview or "").strip()[:100]
+        message = f"Ответ на тикет #{ticket.id}: {preview}..."
 
         return await TicketNotificationCRUD.create(
             db=db,
             ticket_id=ticket.id,
             user_id=ticket.user_id,
-            notification_type='admin_reply',
+            notification_type="admin_reply",
             message=message,
             is_for_admin=False,
         )
@@ -245,14 +250,14 @@ class TicketNotificationCRUD:
         if not SupportSettingsService.get_cabinet_admin_notifications_enabled():
             return None
 
-        preview = (reply_preview or '').strip()[:100]
-        message = f'Ответ в тикете #{ticket.id}: {preview}...'
+        preview = (reply_preview or "").strip()[:100]
+        message = f"Ответ в тикете #{ticket.id}: {preview}..."
 
         return await TicketNotificationCRUD.create(
             db=db,
             ticket_id=ticket.id,
             user_id=ticket.user_id,
-            notification_type='user_reply',
+            notification_type="user_reply",
             message=message,
             is_for_admin=True,
         )

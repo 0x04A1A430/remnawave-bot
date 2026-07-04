@@ -19,7 +19,6 @@ import structlog
 
 from app.database.models import User
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -32,11 +31,11 @@ def _collect_panel_uuids(user: User) -> list[str]:
     first.
     """
     seen: dict[str, None] = {}  # ordered set
-    uuid = getattr(user, 'remnawave_uuid', None)
+    uuid = getattr(user, "remnawave_uuid", None)
     if uuid:
         seen[uuid] = None
-    for sub in getattr(user, 'subscriptions', None) or []:
-        sub_uuid = getattr(sub, 'remnawave_uuid', None)
+    for sub in getattr(user, "subscriptions", None) or []:
+        sub_uuid = getattr(sub, "remnawave_uuid", None)
         if sub_uuid:
             seen.setdefault(sub_uuid, None)
     return list(seen.keys())
@@ -69,15 +68,16 @@ async def verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
             for panel_uuid in panel_uuids:
                 response = await api.get_user_devices_all(panel_uuid)
                 hwids_on_panel = {
-                    (d.get('hwid') or d.get('deviceId') or d.get('id')) for d in (response or {}).get('devices', [])
+                    (d.get("hwid") or d.get("deviceId") or d.get("id"))
+                    for d in (response or {}).get("devices", [])
                 }
                 if hwid in hwids_on_panel:
                     return True
             return False
     except Exception as remnawave_error:
         logger.warning(
-            'RemnaWave unreachable during hwid validation, degrading open',
-            user_id=getattr(user, 'id', None),
+            "RemnaWave unreachable during hwid validation, degrading open",
+            user_id=getattr(user, "id", None),
             panel_uuid_count=len(panel_uuids),
             error=str(remnawave_error)[:200],
         )

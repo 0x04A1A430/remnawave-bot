@@ -16,7 +16,10 @@ from aiogram.filters import IS_MEMBER, IS_NOT_MEMBER, ChatMemberUpdatedFilter
 from aiogram.types import ChatMemberUpdated
 
 from app.config import settings
-from app.database.crud.subscription import deactivate_subscription, reactivate_subscription
+from app.database.crud.subscription import (
+    deactivate_subscription,
+    reactivate_subscription,
+)
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import SubscriptionStatus, UserStatus
@@ -26,10 +29,9 @@ from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.subscription_service import SubscriptionService
 
-
 logger = structlog.get_logger(__name__)
 
-router = Router(name='channel_member')
+router = Router(name="channel_member")
 
 
 async def _is_required_channel(channel_id: str) -> bool:
@@ -38,7 +40,9 @@ async def _is_required_channel(channel_id: str) -> bool:
     return channel_id in required_ids
 
 
-@router.chat_member(ChatMemberUpdatedFilter(member_status_changed=IS_NOT_MEMBER >> IS_MEMBER))
+@router.chat_member(
+    ChatMemberUpdatedFilter(member_status_changed=IS_NOT_MEMBER >> IS_MEMBER)
+)
 async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
     """User subscribed to a channel -- update cache and reactivate VPN if applicable."""
     user = event.new_chat_member.user
@@ -54,7 +58,9 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
     if not settings.CHANNEL_IS_REQUIRED_SUB:
         return
 
-    is_all_subscribed = await channel_subscription_service.is_user_subscribed_to_all(user.id)
+    is_all_subscribed = await channel_subscription_service.is_user_subscribed_to_all(
+        user.id
+    )
     if not is_all_subscribed:
         return  # Still missing some channels
 
@@ -67,11 +73,12 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             if db_user.status == UserStatus.BLOCKED.value:
                 return
 
-            subs = getattr(db_user, 'subscriptions', None) or []
+            subs = getattr(db_user, "subscriptions", None) or []
             disabled_subs = [
                 s
                 for s in subs
-                if s.status == SubscriptionStatus.DISABLED.value and (not s.end_date or s.end_date > datetime.now(UTC))
+                if s.status == SubscriptionStatus.DISABLED.value
+                and (not s.end_date or s.end_date > datetime.now(UTC))
             ]
             if not disabled_subs:
                 return
@@ -82,7 +89,7 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                 # не переотключил подписку при быстрой реподписке
                 subscription.last_webhook_update_at = datetime.now(UTC)
             logger.info(
-                'Subscriptions reactivated via channel event',
+                "Subscriptions reactivated via channel event",
                 telegram_id=user.id,
                 count=len(disabled_subs),
             )
@@ -92,38 +99,48 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             for subscription in disabled_subs:
                 _uuid = (
                     subscription.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                    if settings.is_multi_tariff_enabled()
+                    and subscription.remnawave_uuid
                     else db_user.remnawave_uuid
                 )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                if (
+                    settings.is_multi_tariff_enabled()
+                    and not subscription.remnawave_uuid
+                ):
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
-                        subscription_id=getattr(subscription, 'id', None),
+                        "Multi-tariff: subscription missing remnawave_uuid, using user fallback",
+                        subscription_id=getattr(subscription, "id", None),
                     )
                 if _uuid:
                     try:
                         await service.enable_remnawave_user(_uuid)
                     except Exception as api_error:
-                        logger.error('Failed to enable RemnaWave user', error=api_error)
+                        logger.error("Failed to enable RemnaWave user", error=api_error)
 
             # Notify the user
             try:
                 texts = get_texts(db_user.language or DEFAULT_LANGUAGE)
                 notification_text = texts.t(
-                    'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE',
-                    'Your subscription has been restored! Thank you for subscribing to the channels.',
+                    "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE",
+                    "Your subscription has been restored! Thank you for subscribing to the channels.",
                 )
                 await bot.send_message(user.id, notification_text)
             except Exception as notify_error:
-                logger.warning('Failed to send notification', telegram_id=user.id, error=notify_error)
+                logger.warning(
+                    "Failed to send notification",
+                    telegram_id=user.id,
+                    error=notify_error,
+                )
 
             await db.commit()
         except Exception as e:
-            logger.error('Error reactivating subscription on channel join', error=e)
+            logger.error("Error reactivating subscription on channel join", error=e)
             await db.rollback()
 
 
-@router.chat_member(ChatMemberUpdatedFilter(member_status_changed=IS_MEMBER >> IS_NOT_MEMBER))
+@router.chat_member(
+    ChatMemberUpdatedFilter(member_status_changed=IS_MEMBER >> IS_NOT_MEMBER)
+)
 async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
     """User unsubscribed from a channel -- update cache and deactivate VPN if applicable."""
     user = event.old_chat_member.user
@@ -143,7 +160,9 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
         return
 
     # Fetch per-channel settings to decide whether to disable
-    channel_settings = await channel_subscription_service.get_channel_settings(channel_id)
+    channel_settings = await channel_subscription_service.get_channel_settings(
+        channel_id
+    )
     if not channel_settings:
         return
 
@@ -153,12 +172,14 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             if not db_user:
                 return
 
-            subs = getattr(db_user, 'subscriptions', None) or []
+            subs = getattr(db_user, "subscriptions", None) or []
             active_subs = [
                 s
                 for s in subs
                 if s.status == SubscriptionStatus.ACTIVE.value
-                and channel_subscription_service.should_disable_subscription(channel_settings, s.is_trial)
+                and channel_subscription_service.should_disable_subscription(
+                    channel_settings, s.is_trial
+                )
             ]
             if not active_subs:
                 return
@@ -166,7 +187,7 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             for subscription in active_subs:
                 await deactivate_subscription(db, subscription)
             logger.info(
-                'Subscriptions deactivated via channel event',
+                "Subscriptions deactivated via channel event",
                 telegram_id=user.id,
                 count=len(active_subs),
             )
@@ -176,36 +197,52 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             for subscription in active_subs:
                 _uuid = (
                     subscription.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
+                    if settings.is_multi_tariff_enabled()
+                    and subscription.remnawave_uuid
                     else db_user.remnawave_uuid
                 )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                if (
+                    settings.is_multi_tariff_enabled()
+                    and not subscription.remnawave_uuid
+                ):
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
-                        subscription_id=getattr(subscription, 'id', None),
+                        "Multi-tariff: subscription missing remnawave_uuid, using user fallback",
+                        subscription_id=getattr(subscription, "id", None),
                     )
                 if _uuid:
                     try:
                         await service.disable_remnawave_user(_uuid)
                     except Exception as api_error:
-                        logger.error('Failed to disable RemnaWave user', error=api_error)
+                        logger.error(
+                            "Failed to disable RemnaWave user", error=api_error
+                        )
 
             # Notify the user with channel subscription keyboard
             try:
                 texts = get_texts(db_user.language or DEFAULT_LANGUAGE)
-                unsub_channels = await channel_subscription_service.get_channels_with_status(user.id)
-                notification_text = texts.t(
-                    'SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE',
-                    'Your subscription has been paused because you left a required channel.',
+                unsub_channels = (
+                    await channel_subscription_service.get_channels_with_status(user.id)
                 )
-                channel_kb = get_channel_sub_keyboard(unsub_channels, language=db_user.language or DEFAULT_LANGUAGE)
-                await bot.send_message(user.id, notification_text, reply_markup=channel_kb)
+                notification_text = texts.t(
+                    "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE",
+                    "Your subscription has been paused because you left a required channel.",
+                )
+                channel_kb = get_channel_sub_keyboard(
+                    unsub_channels, language=db_user.language or DEFAULT_LANGUAGE
+                )
+                await bot.send_message(
+                    user.id, notification_text, reply_markup=channel_kb
+                )
             except Exception as notify_error:
-                logger.warning('Failed to send notification', telegram_id=user.id, error=notify_error)
+                logger.warning(
+                    "Failed to send notification",
+                    telegram_id=user.id,
+                    error=notify_error,
+                )
 
             await db.commit()
         except Exception as e:
-            logger.error('Error deactivating subscription on channel leave', error=e)
+            logger.error("Error deactivating subscription on channel leave", error=e)
             await db.rollback()
 
 

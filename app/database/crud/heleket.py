@@ -8,7 +8,6 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import HeleketPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -50,7 +49,7 @@ async def create_heleket_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Создан Heleket платеж',
+        "Создан Heleket платеж",
         uuid=uuid,
         order_id=order_id,
         amount=amount,
@@ -66,7 +65,9 @@ async def get_heleket_payment_by_uuid(
     uuid: str,
 ) -> HeleketPayment | None:
     result = await db.execute(
-        select(HeleketPayment).options(selectinload(HeleketPayment.user)).where(HeleketPayment.uuid == uuid)
+        select(HeleketPayment)
+        .options(selectinload(HeleketPayment.user))
+        .where(HeleketPayment.uuid == uuid)
     )
     return result.scalar_one_or_none()
 
@@ -76,7 +77,9 @@ async def get_heleket_payment_by_order_id(
     order_id: str,
 ) -> HeleketPayment | None:
     result = await db.execute(
-        select(HeleketPayment).options(selectinload(HeleketPayment.user)).where(HeleketPayment.order_id == order_id)
+        select(HeleketPayment)
+        .options(selectinload(HeleketPayment.user))
+        .where(HeleketPayment.order_id == order_id)
     )
     return result.scalar_one_or_none()
 
@@ -86,13 +89,19 @@ async def get_heleket_payment_by_id(
     payment_id: int,
 ) -> HeleketPayment | None:
     result = await db.execute(
-        select(HeleketPayment).options(selectinload(HeleketPayment.user)).where(HeleketPayment.id == payment_id)
+        select(HeleketPayment)
+        .options(selectinload(HeleketPayment.user))
+        .where(HeleketPayment.id == payment_id)
     )
     return result.scalar_one_or_none()
 
 
-async def get_heleket_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> HeleketPayment | None:
-    result = await db.execute(select(HeleketPayment).where(HeleketPayment.id == payment_id).with_for_update())
+async def get_heleket_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> HeleketPayment | None:
+    result = await db.execute(
+        select(HeleketPayment).where(HeleketPayment.id == payment_id).with_for_update()
+    )
     return result.scalar_one_or_none()
 
 
@@ -112,7 +121,7 @@ async def update_heleket_payment(
     payment = await get_heleket_payment_by_uuid(db, uuid)
 
     if not payment:
-        logger.error('Heleket платеж с uuid= не найден', uuid=uuid)
+        logger.error("Heleket платеж с uuid= не найден", uuid=uuid)
         return None
 
     if status is not None:
@@ -140,7 +149,7 @@ async def update_heleket_payment(
     await db.refresh(payment)
 
     logger.info(
-        'Обновлен Heleket платеж',
+        "Обновлен Heleket платеж",
         uuid=uuid,
         payment_status=payment.status,
         payer_amount=payment.payer_amount,
@@ -158,7 +167,7 @@ async def link_heleket_payment_to_transaction(
     payment = await get_heleket_payment_by_uuid(db, uuid)
 
     if not payment:
-        logger.error('Не найден Heleket платеж для связи с транзакцией', uuid=uuid)
+        logger.error("Не найден Heleket платеж для связи с транзакцией", uuid=uuid)
         return None
 
     payment.transaction_id = transaction_id
@@ -167,6 +176,8 @@ async def link_heleket_payment_to_transaction(
     await db.flush()
     await db.refresh(payment)
 
-    logger.info('Heleket платеж связан с транзакцией', uuid=uuid, transaction_id=transaction_id)
+    logger.info(
+        "Heleket платеж связан с транзакцией", uuid=uuid, transaction_id=transaction_id
+    )
 
     return payment

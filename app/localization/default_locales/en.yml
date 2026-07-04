@@ -59,7 +59,6 @@ ADMIN_PAYMENTS_EXPORT_EMPTY: "No payments to export"
 ADMIN_PAYMENTS_EXPORT_CAPTION: "Payments export"
 ADMIN_PAYMENTS_EXPORT_SUCCESS: "File sent"
 
-
 INLINE_GIFT_THUMBNAIL_URL: "https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png"
 
 INLINE_GIFT:

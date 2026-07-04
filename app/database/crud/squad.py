@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Squad
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -19,15 +18,26 @@ async def get_available_squads(db: AsyncSession) -> list[Squad]:
 
 
 async def create_squad(
-    db: AsyncSession, uuid: str, name: str, country_code: str = None, price_kopeks: int = 0, description: str = None
+    db: AsyncSession,
+    uuid: str,
+    name: str,
+    country_code: str = None,
+    price_kopeks: int = 0,
+    description: str = None,
 ) -> Squad:
-    squad = Squad(uuid=uuid, name=name, country_code=country_code, price_kopeks=price_kopeks, description=description)
+    squad = Squad(
+        uuid=uuid,
+        name=name,
+        country_code=country_code,
+        price_kopeks=price_kopeks,
+        description=description,
+    )
 
     db.add(squad)
     await db.commit()
     await db.refresh(squad)
 
-    logger.info('Создан сквад', name=name)
+    logger.info("Создан сквад", name=name)
     return squad
 
 

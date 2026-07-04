@@ -22,7 +22,6 @@ from app.services.subscription_service import SubscriptionService
 from app.utils.user_utils import generate_unique_referral_code
 from app.utils.validators import sanitize_telegram_name
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -66,37 +65,41 @@ async def claim_phantom(
             await AuditLogCRUD.create(
                 db,
                 user_id=phantom.id,
-                action='phantom_claimed',
-                resource_type='user',
+                action="phantom_claimed",
+                resource_type="user",
                 resource_id=str(phantom.id),
                 details={
-                    'telegram_id': telegram_id,
-                    'username': username,
+                    "telegram_id": telegram_id,
+                    "username": username,
                 },
-                status='success',
+                status="success",
             )
     except Exception:
-        logger.warning('Failed to write phantom claim audit log', phantom_id=phantom.id, exc_info=True)
+        logger.warning(
+            "Failed to write phantom claim audit log",
+            phantom_id=phantom.id,
+            exc_info=True,
+        )
 
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
         logger.warning(
-            'IntegrityError claiming phantom user, falling back to existing user lookup',
+            "IntegrityError claiming phantom user, falling back to existing user lookup",
             phantom_user_id=phantom.id,
             telegram_id=telegram_id,
         )
         existing = await get_user_by_telegram_id(db, telegram_id)
         return False, existing
-    await db.refresh(phantom, ['subscriptions'])
+    await db.refresh(phantom, ["subscriptions"])
 
     # SECURITY NOTE: Phantom matched by username only (telegram_id was unknown at purchase time).
     # Telegram usernames are changeable/reassignable, so the claimer may not be the intended
     # recipient. This is logged at WARNING for admin audit. A confirmation flow would be needed
     # to fully prevent username spoofing attacks on phantom claims.
     logger.warning(
-        'Phantom user claimed by username match (verify intended recipient)',
+        "Phantom user claimed by username match (verify intended recipient)",
         phantom_user_id=phantom.id,
         telegram_id=telegram_id,
         username=username,
@@ -112,18 +115,18 @@ async def claim_phantom(
                 await subscription_service.update_remnawave_user(db, sub)
             except Exception:
                 logger.warning(
-                    'Failed to update Remnawave panel after phantom claim',
+                    "Failed to update Remnawave panel after phantom claim",
                     phantom_user_id=phantom.id,
                     subscription_id=sub.id,
                     exc_info=True,
                 )
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
 
-                if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
+                if hasattr(sub, "id") and hasattr(sub, "user_id"):
                     remnawave_retry_queue.enqueue(
                         subscription_id=sub.id,
                         user_id=sub.user_id,
-                        action='update',
+                        action="update",
                     )
 
     return True, phantom
@@ -143,14 +146,16 @@ async def merge_phantom_into_user(
     Remnawave panel AFTER commit via ``sync_remnawave_after_phantom_merge``).
     """
     # Determine which subscription to keep: phantom's if active user has none, otherwise active's
-    await db.refresh(phantom, ['subscriptions'])
-    await db.refresh(active_user, ['subscriptions'])
-    phantom_subs = getattr(phantom, 'subscriptions', None) or []
-    active_subs = getattr(active_user, 'subscriptions', None) or []
-    keep_from: Literal['primary', 'secondary'] = 'secondary' if phantom_subs and not active_subs else 'primary'
+    await db.refresh(phantom, ["subscriptions"])
+    await db.refresh(active_user, ["subscriptions"])
+    phantom_subs = getattr(phantom, "subscriptions", None) or []
+    active_subs = getattr(active_user, "subscriptions", None) or []
+    keep_from: Literal["primary", "secondary"] = (
+        "secondary" if phantom_subs and not active_subs else "primary"
+    )
 
     logger.warning(
-        'Merging phantom user into active user via execute_merge',
+        "Merging phantom user into active user via execute_merge",
         phantom_id=phantom.id,
         active_user_id=active_user.id,
         keep_subscription_from=keep_from,
@@ -163,7 +168,7 @@ async def merge_phantom_into_user(
         primary_user_id=active_user.id,
         secondary_user_id=phantom.id,
         keep_subscription_from=keep_from,
-        provider='phantom_merge',
+        provider="phantom_merge",
     )
 
     # Durable audit log in a savepoint — if it fails, the merge itself is not affected
@@ -172,26 +177,26 @@ async def merge_phantom_into_user(
             await AuditLogCRUD.create(
                 db,
                 user_id=active_user.id,
-                action='phantom_merged',
-                resource_type='user',
+                action="phantom_merged",
+                resource_type="user",
                 resource_id=str(phantom.id),
                 details={
-                    'phantom_id': phantom.id,
-                    'active_user_id': active_user.id,
-                    'keep_subscription_from': keep_from,
-                    'phantom_username': phantom.username,
+                    "phantom_id": phantom.id,
+                    "active_user_id": active_user.id,
+                    "keep_subscription_from": keep_from,
+                    "phantom_username": phantom.username,
                 },
-                status='success',
+                status="success",
             )
     except Exception:
         logger.warning(
-            'Failed to write phantom merge audit log',
+            "Failed to write phantom merge audit log",
             phantom_id=phantom.id,
             active_user_id=active_user.id,
             exc_info=True,
         )
 
-    return keep_from == 'secondary'
+    return keep_from == "secondary"
 
 
 async def sync_remnawave_after_phantom_merge(db: AsyncSession, user: User) -> None:
@@ -199,8 +204,8 @@ async def sync_remnawave_after_phantom_merge(db: AsyncSession, user: User) -> No
 
     Must be called AFTER db.commit() to avoid holding FOR UPDATE locks during HTTP calls.
     """
-    await db.refresh(user, ['subscriptions'])
-    subs = getattr(user, 'subscriptions', None) or []
+    await db.refresh(user, ["subscriptions"])
+    subs = getattr(user, "subscriptions", None) or []
     if not subs:
         return
     try:
@@ -209,16 +214,16 @@ async def sync_remnawave_after_phantom_merge(db: AsyncSession, user: User) -> No
             await subscription_service.update_remnawave_user(db, sub)
     except Exception:
         logger.warning(
-            'Failed to update Remnawave panel after phantom merge',
+            "Failed to update Remnawave panel after phantom merge",
             user_id=user.id,
             exc_info=True,
         )
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         for sub in subs:
-            if hasattr(sub, 'id') and hasattr(sub, 'user_id'):
+            if hasattr(sub, "id") and hasattr(sub, "user_id"):
                 remnawave_retry_queue.enqueue(
                     subscription_id=sub.id,
                     user_id=sub.user_id,
-                    action='update',
+                    action="update",
                 )

@@ -69,7 +69,11 @@ async def get_active_webhooks_for_event(
     event_type: str,
 ) -> list[Webhook]:
     """Получить все активные webhooks для конкретного события."""
-    result = await db.execute(select(Webhook).where(Webhook.event_type == event_type).where(Webhook.is_active == True))
+    result = await db.execute(
+        select(Webhook)
+        .where(Webhook.event_type == event_type)
+        .where(Webhook.is_active == True)
+    )
     return list(result.scalars().all())
 
 
@@ -127,7 +131,7 @@ async def record_webhook_delivery(
         response_body=response_body,
         error_message=error_message,
         attempt_number=attempt_number,
-        delivered_at=datetime.now(UTC) if status == 'success' else None,
+        delivered_at=datetime.now(UTC) if status == "success" else None,
     )
     db.add(delivery)
     await db.commit()

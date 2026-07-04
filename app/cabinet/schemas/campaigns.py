@@ -5,8 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-CampaignBonusType = Literal['balance', 'subscription', 'none', 'tariff']
+CampaignBonusType = Literal["balance", "subscription", "none", "tariff"]
 
 
 class TariffInfo(BaseModel):
@@ -79,7 +78,9 @@ class CampaignCreateRequest(BaseModel):
     """Request to create a campaign."""
 
     name: str = Field(..., min_length=1, max_length=255)
-    start_parameter: str = Field(..., min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$')
+    start_parameter: str = Field(
+        ..., min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$"
+    )
     bonus_type: CampaignBonusType
     is_active: bool = True
     # Balance bonus
@@ -100,7 +101,9 @@ class CampaignUpdateRequest(BaseModel):
     """Request to update a campaign."""
 
     name: str | None = Field(None, min_length=1, max_length=255)
-    start_parameter: str | None = Field(None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$')
+    start_parameter: str | None = Field(
+        None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$"
+    )
     bonus_type: CampaignBonusType | None = None
     is_active: bool | None = None
     # Balance bonus
@@ -243,7 +246,7 @@ class AdminPeriodChange(BaseModel):
 
     absolute: int = 0
     percent: float = 0.0
-    trend: str = 'stable'
+    trend: str = "stable"
 
 
 class AdminPeriodComparison(BaseModel):

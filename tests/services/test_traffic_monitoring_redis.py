@@ -23,7 +23,7 @@ def service():
 @pytest.fixture
 def mock_cache():
     """Мок для cache сервиса."""
-    with patch('app.services.traffic_monitoring_service.cache') as mock:
+    with patch("app.services.traffic_monitoring_service.cache") as mock:
         mock.set = AsyncMock(return_value=True)
         mock.get = AsyncMock(return_value=None)
         yield mock
@@ -33,9 +33,9 @@ def mock_cache():
 def sample_snapshot():
     """Пример snapshot данных."""
     return {
-        'uuid-1': 1073741824.0,  # 1 GB
-        'uuid-2': 2147483648.0,  # 2 GB
-        'uuid-3': 5368709120.0,  # 5 GB
+        "uuid-1": 1073741824.0,  # 1 GB
+        "uuid-2": 2147483648.0,  # 2 GB
+        "uuid-3": 5368709120.0,  # 5 GB
     }
 
 
@@ -68,7 +68,7 @@ async def test_save_snapshot_to_redis_failure(service, mock_cache, sample_snapsh
 
 async def test_save_snapshot_to_redis_exception(service, mock_cache, sample_snapshot):
     """Тест обработки исключения при сохранении."""
-    mock_cache.set = AsyncMock(side_effect=Exception('Redis error'))
+    mock_cache.set = AsyncMock(side_effect=Exception("Redis error"))
 
     result = await service._save_snapshot_to_redis(sample_snapshot)
 
@@ -99,7 +99,7 @@ async def test_load_snapshot_from_redis_empty(service, mock_cache):
 
 async def test_load_snapshot_from_redis_invalid_data(service, mock_cache):
     """Тест загрузки невалидных данных."""
-    mock_cache.get = AsyncMock(return_value='not a dict')
+    mock_cache.get = AsyncMock(return_value="not a dict")
 
     result = await service._load_snapshot_from_redis()
 
@@ -108,7 +108,7 @@ async def test_load_snapshot_from_redis_invalid_data(service, mock_cache):
 
 async def test_load_snapshot_from_redis_exception(service, mock_cache):
     """Тест обработки исключения при загрузке."""
-    mock_cache.get = AsyncMock(side_effect=Exception('Redis error'))
+    mock_cache.get = AsyncMock(side_effect=Exception("Redis error"))
 
     result = await service._load_snapshot_from_redis()
 
@@ -155,7 +155,7 @@ async def test_has_snapshot_memory_fallback(service, mock_cache):
     mock_cache.get = AsyncMock(return_value=None)
 
     # Устанавливаем данные в память
-    service._memory_snapshot = {'uuid-1': 1000.0}
+    service._memory_snapshot = {"uuid-1": 1000.0}
     service._memory_snapshot_time = datetime.now(UTC)
 
     result = await service.has_snapshot()
@@ -205,7 +205,7 @@ async def test_get_snapshot_age_minutes_no_snapshot(service, mock_cache):
 
     result = await service.get_snapshot_age_minutes()
 
-    assert result == float('inf')
+    assert result == float("inf")
 
 
 # ============== Тесты _save_snapshot (с fallback) ==============
@@ -216,7 +216,7 @@ async def test_save_snapshot_redis_success(service, mock_cache, sample_snapshot)
     mock_cache.set = AsyncMock(return_value=True)
 
     # Заполняем память чтобы проверить что она очистится
-    service._memory_snapshot = {'old': 123.0}
+    service._memory_snapshot = {"old": 123.0}
     service._memory_snapshot_time = datetime.now(UTC)
 
     result = await service._save_snapshot(sample_snapshot)
@@ -249,7 +249,9 @@ async def test_get_current_snapshot_from_redis(service, mock_cache, sample_snaps
     assert result == sample_snapshot
 
 
-async def test_get_current_snapshot_fallback_to_memory(service, mock_cache, sample_snapshot):
+async def test_get_current_snapshot_fallback_to_memory(
+    service, mock_cache, sample_snapshot
+):
     """Тест fallback на память."""
     mock_cache.get = AsyncMock(return_value=None)
     service._memory_snapshot = sample_snapshot
@@ -266,12 +268,12 @@ async def test_save_notification_to_redis(service, mock_cache):
     """Тест сохранения времени уведомления."""
     mock_cache.set = AsyncMock(return_value=True)
 
-    result = await service._save_notification_to_redis('uuid-123')
+    result = await service._save_notification_to_redis("uuid-123")
 
     assert result is True
     mock_cache.set.assert_called_once()
     call_args = mock_cache.set.call_args
-    assert 'traffic:notifications:uuid-123' in call_args[0][0]
+    assert "traffic:notifications:uuid-123" in call_args[0][0]
 
 
 async def test_get_notification_time_from_redis(service, mock_cache):
@@ -279,7 +281,7 @@ async def test_get_notification_time_from_redis(service, mock_cache):
     test_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
     mock_cache.get = AsyncMock(return_value=test_time.isoformat())
 
-    result = await service._get_notification_time_from_redis('uuid-123')
+    result = await service._get_notification_time_from_redis("uuid-123")
 
     assert result == test_time
 
@@ -289,7 +291,7 @@ async def test_should_send_notification_no_previous(service, mock_cache):
     mock_cache.get = AsyncMock(return_value=None)
     service._memory_notification_cache = {}
 
-    result = await service.should_send_notification('uuid-123')
+    result = await service.should_send_notification("uuid-123")
 
     assert result is True
 
@@ -300,7 +302,7 @@ async def test_should_send_notification_cooldown_active(service, mock_cache):
     recent_time = datetime.now(UTC) - timedelta(minutes=5)
     mock_cache.get = AsyncMock(return_value=recent_time.isoformat())
 
-    result = await service.should_send_notification('uuid-123')
+    result = await service.should_send_notification("uuid-123")
 
     assert result is False
 
@@ -311,7 +313,7 @@ async def test_should_send_notification_cooldown_expired(service, mock_cache):
     old_time = datetime.now(UTC) - timedelta(minutes=120)
     mock_cache.get = AsyncMock(return_value=old_time.isoformat())
 
-    result = await service.should_send_notification('uuid-123')
+    result = await service.should_send_notification("uuid-123")
 
     assert result is True
 
@@ -320,7 +322,7 @@ async def test_record_notification_redis(service, mock_cache):
     """Тест record_notification сохраняет в Redis."""
     mock_cache.set = AsyncMock(return_value=True)
 
-    await service.record_notification('uuid-123')
+    await service.record_notification("uuid-123")
 
     mock_cache.set.assert_called_once()
 
@@ -329,24 +331,30 @@ async def test_record_notification_fallback_to_memory(service, mock_cache):
     """Тест record_notification с fallback на память."""
     mock_cache.set = AsyncMock(return_value=False)
 
-    await service.record_notification('uuid-123')
+    await service.record_notification("uuid-123")
 
-    assert 'uuid-123' in service._memory_notification_cache
+    assert "uuid-123" in service._memory_notification_cache
 
 
 # ============== Тесты create_initial_snapshot ==============
 
 
-async def test_create_initial_snapshot_uses_existing_redis(service, mock_cache, sample_snapshot):
+async def test_create_initial_snapshot_uses_existing_redis(
+    service, mock_cache, sample_snapshot
+):
     """Тест что create_initial_snapshot использует существующий snapshot из Redis."""
     mock_cache.get = AsyncMock(
         side_effect=[
             sample_snapshot,  # _load_snapshot_from_redis
-            (datetime.now(UTC) - timedelta(minutes=10)).isoformat(),  # _get_snapshot_time_from_redis
+            (
+                datetime.now(UTC) - timedelta(minutes=10)
+            ).isoformat(),  # _get_snapshot_time_from_redis
         ]
     )
 
-    with patch.object(service, 'get_all_users_with_traffic', new_callable=AsyncMock) as mock_get_users:
+    with patch.object(
+        service, "get_all_users_with_traffic", new_callable=AsyncMock
+    ) as mock_get_users:
         result = await service.create_initial_snapshot()
 
         # Не должен вызывать API - используем существующий snapshot
@@ -361,11 +369,13 @@ async def test_create_initial_snapshot_creates_new(service, mock_cache):
 
     # Мокаем пользователей из API
     mock_user = MagicMock()
-    mock_user.uuid = 'uuid-1'
+    mock_user.uuid = "uuid-1"
     mock_user.user_traffic = MagicMock()
     mock_user.user_traffic.used_traffic_bytes = 1073741824  # 1 GB
 
-    with patch.object(service, 'get_all_users_with_traffic', new_callable=AsyncMock) as mock_get_users:
+    with patch.object(
+        service, "get_all_users_with_traffic", new_callable=AsyncMock
+    ) as mock_get_users:
         mock_get_users.return_value = [mock_user]
 
         result = await service.create_initial_snapshot()
@@ -383,11 +393,11 @@ async def test_cleanup_notification_cache_removes_old(service, mock_cache):
     recent_time = datetime.now(UTC) - timedelta(hours=1)
 
     service._memory_notification_cache = {
-        'uuid-old': old_time,
-        'uuid-recent': recent_time,
+        "uuid-old": old_time,
+        "uuid-recent": recent_time,
     }
 
     await service.cleanup_notification_cache()
 
-    assert 'uuid-old' not in service._memory_notification_cache
-    assert 'uuid-recent' in service._memory_notification_cache
+    assert "uuid-old" not in service._memory_notification_cache
+    assert "uuid-recent" in service._memory_notification_cache

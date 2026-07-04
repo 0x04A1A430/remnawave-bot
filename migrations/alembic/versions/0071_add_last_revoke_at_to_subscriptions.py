@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0071'
-down_revision: Union[str, None] = '0070'
+revision: str = "0071"
+down_revision: Union[str, None] = "0070"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -20,10 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    existing_cols = {c['name'] for c in inspector.get_columns('subscriptions')}
-    if 'last_revoke_at' not in existing_cols:
-        op.add_column('subscriptions', sa.Column('last_revoke_at', sa.DateTime(timezone=True), nullable=True))
+    existing_cols = {c["name"] for c in inspector.get_columns("subscriptions")}
+    if "last_revoke_at" not in existing_cols:
+        op.add_column(
+            "subscriptions",
+            sa.Column("last_revoke_at", sa.DateTime(timezone=True), nullable=True),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column('subscriptions', 'last_revoke_at')
+    op.drop_column("subscriptions", "last_revoke_at")

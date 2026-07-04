@@ -17,17 +17,16 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
-
 logger = structlog.get_logger(__name__)
 
 
-DONUT_PAYMENT_METHODS = {'donut', 'donut_card', 'donut_sbp', 'donut_sbp_qr'}
+DONUT_PAYMENT_METHODS = {"donut", "donut_card", "donut_sbp", "donut_sbp_qr"}
 
 DONUT_SERVICE_MAP: dict[str, str | None] = {
-    'donut': None,
-    'donut_card': 'card',
-    'donut_sbp': 'sbp',
-    'donut_sbp_qr': 'sbp_qr',
+    "donut": None,
+    "donut_card": "card",
+    "donut_sbp": "sbp",
+    "donut_sbp_qr": "sbp_qr",
 }
 
 
@@ -37,23 +36,27 @@ def _extract_service_type(payment_method: str) -> str | None:
 
 def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | None:
     """Проверяет ограничение на пополнение."""
-    if not getattr(db_user, 'restriction_topup', False):
+    if not getattr(db_user, "restriction_topup", False):
         return None
 
     keyboard = []
     support_url = settings.get_support_contact_url()
     if support_url:
-        keyboard.append([InlineKeyboardButton(text='\U0001f198 Обжаловать', url=support_url)])
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
+        keyboard.append(
+            [InlineKeyboardButton(text="\U0001f198 Обжаловать", url=support_url)]
+        )
+    keyboard.append(
+        [InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def _get_display_name(payment_method: str) -> str:
-    if payment_method == 'donut_card':
+    if payment_method == "donut_card":
         return settings.get_donut_card_display_name()
-    if payment_method == 'donut_sbp':
+    if payment_method == "donut_sbp":
         return settings.get_donut_sbp_display_name()
-    if payment_method == 'donut_sbp_qr':
+    if payment_method == "donut_sbp_qr":
         return settings.get_donut_sbp_qr_display_name()
     return settings.get_donut_display_name()
 
@@ -74,7 +77,7 @@ async def _create_donut_payment_and_respond(
     payment_service = PaymentService()
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description='Пополнение баланса',
+        description="Пополнение баланса",
     )
 
     result = await payment_service.create_donut_payment(
@@ -82,41 +85,43 @@ async def _create_donut_payment_and_respond(
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
         description=description,
-        email=getattr(db_user, 'email', None),
+        email=getattr(db_user, "email", None),
         language=db_user.language,
         payment_method_type=payment_method_type,
     )
 
     if not result:
         error_text = texts.t(
-            'PAYMENT_CREATE_ERROR',
-            'Не удалось создать платёж. Попробуйте позже.',
+            "PAYMENT_CREATE_ERROR",
+            "Не удалось создать платёж. Попробуйте позже.",
         )
         if edit_message:
             await message_or_callback.edit_text(
                 error_text,
                 reply_markup=get_back_keyboard(db_user.language),
-                parse_mode='HTML',
+                parse_mode="HTML",
             )
         else:
-            await message_or_callback.answer(error_text, parse_mode='HTML')
+            await message_or_callback.answer(error_text, parse_mode="HTML")
         return
 
-    payment_url = result.get('payment_url')
+    payment_url = result.get("payment_url")
     name = display_name or settings.get_donut_display_name()
 
-    pay_button_text = texts.t('PAY_BUTTON', '\U0001f4b3 Оплатить {amount}₽').format(
-        amount=f'{amount_rub:.0f}',
+    pay_button_text = texts.t("PAY_BUTTON", "\U0001f4b3 Оплатить {amount}₽").format(
+        amount=f"{amount_rub:.0f}",
     )
 
     keyboard_buttons: list[list[InlineKeyboardButton]] = []
     if payment_url:
-        keyboard_buttons.append([InlineKeyboardButton(text=pay_button_text, url=payment_url)])
+        keyboard_buttons.append(
+            [InlineKeyboardButton(text=pay_button_text, url=payment_url)]
+        )
     keyboard_buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('BACK_BUTTON', 'Назад'),
-                callback_data='menu_balance',
+                text=texts.t("BACK_BUTTON", "Назад"),
+                callback_data="menu_balance",
             )
         ]
     )
@@ -124,26 +129,32 @@ async def _create_donut_payment_and_respond(
 
     if payment_url:
         response_text = texts.t(
-            'DONUT_PAYMENT_CREATED',
-            '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
-            'Сумма: <b>{amount}₽</b>\n\n'
-            'Нажмите кнопку ниже для перехода к оплате.\n'
-            'После подтверждения платежа баланс будет пополнен автоматически.',
-        ).format(name=name, amount=f'{amount_rub:.2f}')
+            "DONUT_PAYMENT_CREATED",
+            "\U0001f4b3 <b>Оплата через {name}</b>\n\n"
+            "Сумма: <b>{amount}₽</b>\n\n"
+            "Нажмите кнопку ниже для перехода к оплате.\n"
+            "После подтверждения платежа баланс будет пополнен автоматически.",
+        ).format(name=name, amount=f"{amount_rub:.2f}")
     else:
         response_text = texts.t(
-            'DONUT_PAYMENT_PROCESSING',
-            '\U0001f4b3 <b>Платёж создан через {name}</b>\n\n'
-            'Сумма: <b>{amount}₽</b>\n\n'
-            'Платёж в обработке. Реквизиты будут отправлены отдельным сообщением.',
-        ).format(name=name, amount=f'{amount_rub:.2f}')
+            "DONUT_PAYMENT_PROCESSING",
+            "\U0001f4b3 <b>Платёж создан через {name}</b>\n\n"
+            "Сумма: <b>{amount}₽</b>\n\n"
+            "Платёж в обработке. Реквизиты будут отправлены отдельным сообщением.",
+        ).format(name=name, amount=f"{amount_rub:.2f}")
 
     if edit_message:
-        await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')
+        await message_or_callback.edit_text(
+            response_text, reply_markup=keyboard, parse_mode="HTML"
+        )
     else:
-        await message_or_callback.answer(response_text, reply_markup=keyboard, parse_mode='HTML')
+        await message_or_callback.answer(
+            response_text, reply_markup=keyboard, parse_mode="HTML"
+        )
 
-    logger.info('Donut payment created', telegram_id=db_user.telegram_id, amount_rub=amount_rub)
+    logger.info(
+        "Donut payment created", telegram_id=db_user.telegram_id, amount_rub=amount_rub
+    )
 
 
 @error_handler
@@ -159,10 +170,13 @@ async def process_donut_payment_amount(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, "restriction_reason", None)
+            or "Действие ограничено администратором"
+        )
         await message.answer(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
-            parse_mode='HTML',
+            f"\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}",
+            parse_mode="HTML",
             reply_markup=restriction_kb,
         )
         await state.clear()
@@ -174,27 +188,27 @@ async def process_donut_payment_amount(
     if amount_kopeks < min_amount:
         await message.answer(
             texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount}₽',
+                "PAYMENT_AMOUNT_TOO_LOW",
+                "Минимальная сумма пополнения: {min_amount}₽",
             ).format(min_amount=min_amount // 100),
             reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
         return
 
     if amount_kopeks > max_amount:
         await message.answer(
             texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount}₽',
+                "PAYMENT_AMOUNT_TOO_HIGH",
+                "Максимальная сумма пополнения: {max_amount}₽",
             ).format(max_amount=max_amount // 100),
             reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            parse_mode="HTML",
         )
         return
 
     data = await state.get_data()
-    payment_method = data.get('payment_method', 'donut')
+    payment_method = data.get("payment_method", "donut")
     payment_method_type = _extract_service_type(payment_method)
     display_name = _get_display_name(payment_method)
 
@@ -222,10 +236,13 @@ async def _start_donut_topup_impl(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, "restriction_reason", None)
+            or "Действие ограничено администратором"
+        )
         await callback.message.edit_text(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
-            parse_mode='HTML',
+            f"\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}",
+            parse_mode="HTML",
             reply_markup=restriction_kb,
         )
         return
@@ -242,17 +259,17 @@ async def _start_donut_topup_impl(
 
     await callback.message.edit_text(
         texts.t(
-            'DONUT_ENTER_AMOUNT',
-            '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
-            'Минимум: {min_amount}₽\n'
-            'Максимум: {max_amount}₽',
+            "DONUT_ENTER_AMOUNT",
+            "\U0001f4b3 <b>Пополнение через {name}</b>\n\n"
+            "Введите сумму пополнения в рублях.\n\n"
+            "Минимум: {min_amount}₽\n"
+            "Максимум: {max_amount}₽",
         ).format(
             name=display_name,
             min_amount=min_amount,
-            max_amount=f'{max_amount:,}'.replace(',', ' '),
+            max_amount=f"{max_amount:,}".replace(",", " "),
         ),
-        parse_mode='HTML',
+        parse_mode="HTML",
         reply_markup=keyboard,
     )
 
@@ -264,7 +281,7 @@ async def start_donut_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_donut_topup_impl(callback, db_user, state, 'donut')
+    await _start_donut_topup_impl(callback, db_user, state, "donut")
 
 
 @error_handler
@@ -274,7 +291,7 @@ async def start_donut_card_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_donut_topup_impl(callback, db_user, state, 'donut_card')
+    await _start_donut_topup_impl(callback, db_user, state, "donut_card")
 
 
 @error_handler
@@ -284,7 +301,7 @@ async def start_donut_sbp_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_donut_topup_impl(callback, db_user, state, 'donut_sbp')
+    await _start_donut_topup_impl(callback, db_user, state, "donut_sbp")
 
 
 @error_handler
@@ -294,4 +311,4 @@ async def start_donut_sbp_qr_topup(
     db: AsyncSession,
     state: FSMContext,
 ):
-    await _start_donut_topup_impl(callback, db_user, state, 'donut_sbp_qr')
+    await _start_donut_topup_impl(callback, db_user, state, "donut_sbp_qr")

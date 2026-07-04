@@ -28,15 +28,15 @@ async def test_terminates_other_sessions_and_counts():
 
     assert terminated == 3
     sql = str(conn.execute.call_args[0][0])
-    assert 'pg_terminate_backend' in sql
-    assert 'current_database()' in sql
-    assert 'pg_backend_pid()' in sql  # never terminate our own restore connection
+    assert "pg_terminate_backend" in sql
+    assert "current_database()" in sql
+    assert "pg_backend_pid()" in sql  # never terminate our own restore connection
 
 
 @pytest.mark.asyncio
 async def test_best_effort_on_privilege_error():
     conn = MagicMock()
-    conn.execute = AsyncMock(side_effect=RuntimeError('must be superuser to terminate'))
+    conn.execute = AsyncMock(side_effect=RuntimeError("must be superuser to terminate"))
 
     # Must not raise — restore proceeds with the old TRUNCATE-and-wait behaviour.
     assert await bs._terminate_competing_backends(conn) == 0

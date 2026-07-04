@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import LavaPayment
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -18,7 +17,7 @@ async def create_lava_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = 'RUB',
+    currency: str = "RUB",
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -38,35 +37,47 @@ async def create_lava_payment(
         lava_invoice_id=lava_invoice_id,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status='pending',
+        status="pending",
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info('Создан платеж Lava', order_id=order_id, user_id=user_id)
+    logger.info("Создан платеж Lava", order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_lava_payment_by_order_id(db: AsyncSession, order_id: str) -> LavaPayment | None:
+async def get_lava_payment_by_order_id(
+    db: AsyncSession, order_id: str
+) -> LavaPayment | None:
     """Получает платёж по нашему orderId."""
-    result = await db.execute(select(LavaPayment).where(LavaPayment.order_id == order_id))
+    result = await db.execute(
+        select(LavaPayment).where(LavaPayment.order_id == order_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_lava_payment_by_invoice_id(db: AsyncSession, lava_invoice_id: str) -> LavaPayment | None:
+async def get_lava_payment_by_invoice_id(
+    db: AsyncSession, lava_invoice_id: str
+) -> LavaPayment | None:
     """Получает платёж по invoice_id, выданному Lava."""
-    result = await db.execute(select(LavaPayment).where(LavaPayment.lava_invoice_id == lava_invoice_id))
+    result = await db.execute(
+        select(LavaPayment).where(LavaPayment.lava_invoice_id == lava_invoice_id)
+    )
     return result.scalar_one_or_none()
 
 
-async def get_lava_payment_by_id(db: AsyncSession, payment_id: int) -> LavaPayment | None:
+async def get_lava_payment_by_id(
+    db: AsyncSession, payment_id: int
+) -> LavaPayment | None:
     """Получает платёж по локальному ID."""
     result = await db.execute(select(LavaPayment).where(LavaPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_lava_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> LavaPayment | None:
+async def get_lava_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> LavaPayment | None:
     """Получает платёж с FOR UPDATE-блокировкой."""
     result = await db.execute(
         select(LavaPayment)
@@ -108,7 +119,7 @@ async def update_lava_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        'Обновлён статус платежа Lava',
+        "Обновлён статус платежа Lava",
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -116,12 +127,14 @@ async def update_lava_payment_status(
     return payment
 
 
-async def get_pending_lava_payments(db: AsyncSession, user_id: int) -> list[LavaPayment]:
+async def get_pending_lava_payments(
+    db: AsyncSession, user_id: int
+) -> list[LavaPayment]:
     """Возвращает незавершённые платежи пользователя."""
     result = await db.execute(
         select(LavaPayment).where(
             LavaPayment.user_id == user_id,
-            LavaPayment.status == 'pending',
+            LavaPayment.status == "pending",
             LavaPayment.is_paid == False,
         )
     )
@@ -133,7 +146,7 @@ async def get_expired_pending_lava_payments(db: AsyncSession) -> list[LavaPaymen
     now = datetime.now(UTC)
     result = await db.execute(
         select(LavaPayment).where(
-            LavaPayment.status == 'pending',
+            LavaPayment.status == "pending",
             LavaPayment.is_paid == False,
             LavaPayment.expires_at < now,
         )

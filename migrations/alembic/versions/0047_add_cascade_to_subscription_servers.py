@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import text
 
-revision: str = '0047'
-down_revision: str | None = '0046'
+revision: str = "0047"
+down_revision: str | None = "0046"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -38,7 +38,7 @@ def _get_actual_fk_name(connection, table: str, column: str) -> str | None:
                 AND nsp.nspname = 'public'
             LIMIT 1
         """),
-        {'table': table, 'column': column},
+        {"table": table, "column": column},
     )
     row = result.fetchone()
     return row[0] if row else None
@@ -47,35 +47,47 @@ def _get_actual_fk_name(connection, table: str, column: str) -> str | None:
 def upgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    existing_indexes = {idx['name'] for idx in inspector.get_indexes('subscription_servers')}
-    existing_fks = {fk['name'] for fk in inspector.get_foreign_keys('subscription_servers')}
+    existing_indexes = {
+        idx["name"] for idx in inspector.get_indexes("subscription_servers")
+    }
+    existing_fks = {
+        fk["name"] for fk in inspector.get_foreign_keys("subscription_servers")
+    }
 
-    actual_fk = _get_actual_fk_name(connection, 'subscription_servers', 'subscription_id')
+    actual_fk = _get_actual_fk_name(
+        connection, "subscription_servers", "subscription_id"
+    )
     if actual_fk:
-        op.drop_constraint(actual_fk, 'subscription_servers', type_='foreignkey')
-    if 'subscription_servers_subscription_id_fkey' not in existing_fks:
+        op.drop_constraint(actual_fk, "subscription_servers", type_="foreignkey")
+    if "subscription_servers_subscription_id_fkey" not in existing_fks:
         op.create_foreign_key(
-            'subscription_servers_subscription_id_fkey',
-            'subscription_servers',
-            'subscriptions',
-            ['subscription_id'],
-            ['id'],
-            ondelete='CASCADE',
+            "subscription_servers_subscription_id_fkey",
+            "subscription_servers",
+            "subscriptions",
+            ["subscription_id"],
+            ["id"],
+            ondelete="CASCADE",
         )
-    if 'ix_subscription_servers_subscription_id' not in existing_indexes:
-        op.create_index('ix_subscription_servers_subscription_id', 'subscription_servers', ['subscription_id'])
+    if "ix_subscription_servers_subscription_id" not in existing_indexes:
+        op.create_index(
+            "ix_subscription_servers_subscription_id",
+            "subscription_servers",
+            ["subscription_id"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_index('ix_subscription_servers_subscription_id', 'subscription_servers')
+    op.drop_index("ix_subscription_servers_subscription_id", "subscription_servers")
     connection = op.get_bind()
-    actual_fk = _get_actual_fk_name(connection, 'subscription_servers', 'subscription_id')
+    actual_fk = _get_actual_fk_name(
+        connection, "subscription_servers", "subscription_id"
+    )
     if actual_fk:
-        op.drop_constraint(actual_fk, 'subscription_servers', type_='foreignkey')
+        op.drop_constraint(actual_fk, "subscription_servers", type_="foreignkey")
     op.create_foreign_key(
-        'subscription_servers_subscription_id_fkey',
-        'subscription_servers',
-        'subscriptions',
-        ['subscription_id'],
-        ['id'],
+        "subscription_servers_subscription_id_fkey",
+        "subscription_servers",
+        "subscriptions",
+        ["subscription_id"],
+        ["id"],
     )

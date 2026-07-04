@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field, field_validator
 
 class SubscriptionEventCreate(BaseModel):
     event_type: Literal[
-        'activation',
-        'purchase',
-        'renewal',
-        'balance_topup',
-        'promocode_activation',
-        'referral_link_visit',
-        'promo_group_change',
+        "activation",
+        "purchase",
+        "renewal",
+        "balance_topup",
+        "promocode_activation",
+        "referral_link_visit",
+        "promo_group_change",
     ]
     user_id: int = Field(..., ge=1)
     subscription_id: int | None = Field(default=None, ge=1)
@@ -25,7 +25,7 @@ class SubscriptionEventCreate(BaseModel):
     occurred_at: datetime | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator('message')
+    @field_validator("message")
     @classmethod
     def _strip_message(cls, value: str | None) -> str | None:
         if value is None:

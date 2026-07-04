@@ -22,7 +22,7 @@ from alembic import op
 from app.database.models import Base
 
 # revision identifiers, used by Alembic.
-revision: str = '0001'
+revision: str = "0001"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -35,6 +35,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     raise NotImplementedError(
-        'Downgrading the initial schema is not supported. '
-        'Restore from a database backup instead.'
+        "Downgrading the initial schema is not supported. "
+        "Restore from a database backup instead."
     )

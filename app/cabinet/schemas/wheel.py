@@ -5,25 +5,24 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-
 # ==================== ENUMS ====================
 
 
 class WheelPaymentType(StrEnum):
     """Способы оплаты спина."""
 
-    TELEGRAM_STARS = 'telegram_stars'
-    SUBSCRIPTION_DAYS = 'subscription_days'
+    TELEGRAM_STARS = "telegram_stars"
+    SUBSCRIPTION_DAYS = "subscription_days"
 
 
 class WheelPrizeType(StrEnum):
     """Типы призов."""
 
-    SUBSCRIPTION_DAYS = 'subscription_days'
-    BALANCE_BONUS = 'balance_bonus'
-    TRAFFIC_GB = 'traffic_gb'
-    PROMOCODE = 'promocode'
-    NOTHING = 'nothing'
+    SUBSCRIPTION_DAYS = "subscription_days"
+    BALANCE_BONUS = "balance_bonus"
+    TRAFFIC_GB = "traffic_gb"
+    PROMOCODE = "promocode"
+    NOTHING = "nothing"
 
 
 # ==================== USER SCHEMAS ====================
@@ -92,11 +91,11 @@ class SpinResultResponse(BaseModel):
     prize_id: int | None = None
     prize_type: str | None = None
     prize_value: int = 0
-    prize_display_name: str = ''
-    emoji: str = ''
-    color: str = '#3B82F6'
+    prize_display_name: str = ""
+    emoji: str = ""
+    color: str = "#3B82F6"
     rotation_degrees: float = 0.0
-    message: str = ''
+    message: str = ""
     promocode: str | None = None
     error: str | None = None
 
@@ -115,8 +114,8 @@ class SpinHistoryItem(BaseModel):
     prize_type: str
     prize_value: int
     prize_display_name: str
-    emoji: str = ''
-    color: str = '#3B82F6'
+    emoji: str = ""
+    color: str = "#3B82F6"
     prize_value_kopeks: int
     created_at: datetime
 
@@ -206,8 +205,8 @@ class CreatePrizeRequest(BaseModel):
     prize_type: WheelPrizeType
     prize_value: int = Field(..., ge=0)
     display_name: str = Field(..., min_length=1, max_length=100)
-    emoji: str = Field(default='', max_length=10)
-    color: str = Field(default='#3B82F6', pattern=r'^#[0-9A-Fa-f]{6}$')
+    emoji: str = Field(default="", max_length=10)
+    color: str = Field(default="#3B82F6", pattern=r"^#[0-9A-Fa-f]{6}$")
     prize_value_kopeks: int = Field(..., ge=0)
     sort_order: int = Field(default=0, ge=0)
     manual_probability: float | None = Field(None, ge=0, le=1)
@@ -224,7 +223,7 @@ class UpdatePrizeRequest(BaseModel):
     prize_value: int | None = Field(None, ge=0)
     display_name: str | None = Field(None, min_length=1, max_length=100)
     emoji: str | None = Field(None, max_length=10)
-    color: str | None = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')
+    color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
     prize_value_kopeks: int | None = Field(None, ge=0)
     sort_order: int | None = Field(None, ge=0)
     manual_probability: float | None = Field(None, ge=0, le=1)

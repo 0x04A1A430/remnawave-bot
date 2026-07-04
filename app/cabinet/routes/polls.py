@@ -15,14 +15,17 @@ from app.database.crud.poll import (
     record_poll_answer,
 )
 from app.database.models import Poll, PollQuestion, PollResponse, User
-from app.services.poll_service import get_next_question, get_question_option, reward_user_for_poll
+from app.services.poll_service import (
+    get_next_question,
+    get_question_option,
+    reward_user_for_poll,
+)
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
-
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/polls', tags=['Cabinet Polls'])
+router = APIRouter(prefix="/polls", tags=["Cabinet Polls"])
 
 
 # ============ Schemas ============
@@ -115,7 +118,7 @@ class PollsCountResponse(BaseModel):
     count: int
 
 
-@router.get('/count', response_model=PollsCountResponse)
+@router.get("/count", response_model=PollsCountResponse)
 async def get_polls_count(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -130,7 +133,7 @@ async def get_polls_count(
     return PollsCountResponse(count=len(responses))
 
 
-@router.get('', response_model=list[PollInfo])
+@router.get("", response_model=list[PollInfo])
 async def get_available_polls(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -177,7 +180,7 @@ async def get_available_polls(
     return polls
 
 
-@router.get('/{response_id}', response_model=PollInfo)
+@router.get("/{response_id}", response_model=PollInfo)
 async def get_poll_details(
     response_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -189,13 +192,13 @@ async def get_poll_details(
     if not response or response.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll not found',
+            detail="Poll not found",
         )
 
     if not response.poll:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll data not available',
+            detail="Poll data not available",
         )
 
     answered_count = len(response.answers) if response.answers else 0
@@ -218,7 +221,7 @@ async def get_poll_details(
     )
 
 
-@router.post('/{response_id}/start', response_model=PollStartResponse)
+@router.post("/{response_id}/start", response_model=PollStartResponse)
 async def start_poll(
     response_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -230,19 +233,19 @@ async def start_poll(
     if not response or response.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll not found',
+            detail="Poll not found",
         )
 
     if response.completed_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This poll has already been completed',
+            detail="This poll has already been completed",
         )
 
     if not response.poll or not response.poll.questions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Poll is not available',
+            detail="Poll is not available",
         )
 
     # Mark as started if not already
@@ -256,7 +259,7 @@ async def start_poll(
     if not question:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No questions available',
+            detail="No questions available",
         )
 
     return PollStartResponse(
@@ -267,7 +270,9 @@ async def start_poll(
     )
 
 
-@router.post('/{response_id}/questions/{question_id}/answer', response_model=AnswerResponse)
+@router.post(
+    "/{response_id}/questions/{question_id}/answer", response_model=AnswerResponse
+)
 async def answer_question(
     response_id: int,
     question_id: int,
@@ -281,19 +286,19 @@ async def answer_question(
     if not response or response.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll not found',
+            detail="Poll not found",
         )
 
     if response.completed_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This poll has already been completed',
+            detail="This poll has already been completed",
         )
 
     if not response.poll:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Poll is not available',
+            detail="Poll is not available",
         )
 
     # Find the question
@@ -301,7 +306,7 @@ async def answer_question(
     if not question:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Question not found',
+            detail="Question not found",
         )
 
     # Validate option
@@ -309,7 +314,7 @@ async def answer_question(
     if not option:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid answer option',
+            detail="Invalid answer option",
         )
 
     # Record the answer
@@ -322,13 +327,13 @@ async def answer_question(
 
     # Refresh to get updated answers
     try:
-        await db.refresh(response, attribute_names=['answers'])
+        await db.refresh(response, attribute_names=["answers"])
     except Exception:
         response = await get_poll_response_by_id(db, response_id)
         if not response:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to process answer',
+                detail="Failed to process answer",
             )
 
     # Get next question
@@ -352,9 +357,9 @@ async def answer_question(
     # Award reward if any
     reward_amount = await reward_user_for_poll(db, response)
 
-    message = 'Thank you for completing the poll!'
+    message = "Thank you for completing the poll!"
     if reward_amount:
-        message += f' Reward of {settings.format_price(reward_amount)} has been added to your balance.'
+        message += f" Reward of {settings.format_price(reward_amount)} has been added to your balance."
 
     return AnswerResponse(
         success=True,

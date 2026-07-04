@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 # ============ Status & Connection ============
 
 
@@ -163,7 +162,7 @@ class NodeUsageResponse(BaseModel):
 class NodeActionRequest(BaseModel):
     """Request to perform node action."""
 
-    action: Literal['enable', 'disable', 'restart']
+    action: Literal["enable", "disable", "restart"]
 
 
 class NodeActionResponse(BaseModel):
@@ -254,7 +253,9 @@ class SquadUpdateRequest(BaseModel):
 class SquadActionRequest(BaseModel):
     """Request to perform squad action."""
 
-    action: Literal['add_all_users', 'remove_all_users', 'delete', 'rename', 'update_inbounds']
+    action: Literal[
+        "add_all_users", "remove_all_users", "delete", "rename", "update_inbounds"
+    ]
     name: str | None = None
     inbound_uuids: list[str] | None = None
 
@@ -378,7 +379,7 @@ class AutoSyncRunResponse(BaseModel):
 class SyncMode(BaseModel):
     """Sync mode options."""
 
-    mode: Literal['all', 'new_only', 'update_only'] = 'all'
+    mode: Literal["all", "new_only", "update_only"] = "all"
 
 
 class SyncResponse(BaseModel):

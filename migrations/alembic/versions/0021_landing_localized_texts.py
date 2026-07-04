@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0021'
-down_revision: Union[str, None] = '0020'
+revision: str = "0021"
+down_revision: Union[str, None] = "0020"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -85,42 +85,42 @@ def upgrade() -> None:
 
     # --- 2. ALTER COLUMN types: String/Text -> JSON ---
     # Must drop server_default before type change — PG can't auto-cast defaults
-    op.alter_column('landing_pages', 'title', server_default=None)
+    op.alter_column("landing_pages", "title", server_default=None)
     op.alter_column(
-        'landing_pages',
-        'title',
+        "landing_pages",
+        "title",
         type_=sa.JSON(),
-        postgresql_using='title::jsonb',
+        postgresql_using="title::jsonb",
         nullable=False,
     )
     op.execute("ALTER TABLE landing_pages ALTER COLUMN title SET DEFAULT '{}'::jsonb")
 
     op.alter_column(
-        'landing_pages',
-        'subtitle',
+        "landing_pages",
+        "subtitle",
         type_=sa.JSON(),
-        postgresql_using='subtitle::jsonb',
+        postgresql_using="subtitle::jsonb",
         nullable=True,
     )
     op.alter_column(
-        'landing_pages',
-        'footer_text',
+        "landing_pages",
+        "footer_text",
         type_=sa.JSON(),
-        postgresql_using='footer_text::jsonb',
+        postgresql_using="footer_text::jsonb",
         nullable=True,
     )
     op.alter_column(
-        'landing_pages',
-        'meta_title',
+        "landing_pages",
+        "meta_title",
         type_=sa.JSON(),
-        postgresql_using='meta_title::jsonb',
+        postgresql_using="meta_title::jsonb",
         nullable=True,
     )
     op.alter_column(
-        'landing_pages',
-        'meta_description',
+        "landing_pages",
+        "meta_description",
         type_=sa.JSON(),
-        postgresql_using='meta_description::jsonb',
+        postgresql_using="meta_description::jsonb",
         nullable=True,
     )
 
@@ -130,37 +130,37 @@ def downgrade() -> None:
 
     # First, convert JSON columns back to text type
     op.alter_column(
-        'landing_pages',
-        'title',
+        "landing_pages",
+        "title",
         type_=sa.String(500),
         postgresql_using="title->>'ru'",
-        server_default='',
+        server_default="",
         nullable=False,
     )
     op.alter_column(
-        'landing_pages',
-        'subtitle',
+        "landing_pages",
+        "subtitle",
         type_=sa.Text(),
         postgresql_using="subtitle->>'ru'",
         nullable=True,
     )
     op.alter_column(
-        'landing_pages',
-        'footer_text',
+        "landing_pages",
+        "footer_text",
         type_=sa.Text(),
         postgresql_using="footer_text->>'ru'",
         nullable=True,
     )
     op.alter_column(
-        'landing_pages',
-        'meta_title',
+        "landing_pages",
+        "meta_title",
         type_=sa.String(200),
         postgresql_using="meta_title->>'ru'",
         nullable=True,
     )
     op.alter_column(
-        'landing_pages',
-        'meta_description',
+        "landing_pages",
+        "meta_description",
         type_=sa.Text(),
         postgresql_using="meta_description->>'ru'",
         nullable=True,

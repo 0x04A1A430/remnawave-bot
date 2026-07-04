@@ -29,22 +29,21 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-
-revision: str = '0079'
-down_revision: Union[str, None] = '0078'
+revision: str = "0079"
+down_revision: Union[str, None] = "0078"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-_TABLE = 'users'
-_COLUMN = 'email_verification_source'
+_TABLE = "users"
+_COLUMN = "email_verification_source"
 
 
 def _column_exists(bind: sa.engine.Connection) -> bool:
     inspector = sa.inspect(bind)
     if not inspector.has_table(_TABLE):
         return False
-    return any(col['name'] == _COLUMN for col in inspector.get_columns(_TABLE))
+    return any(col["name"] == _COLUMN for col in inspector.get_columns(_TABLE))
 
 
 def upgrade() -> None:
@@ -63,9 +62,7 @@ def upgrade() -> None:
     #   'telegram' — нет email-verify flow обычно (email_verified=False)
     #   'email'    — cabinet OTP flow
     #   'google'/'discord'/'vk'/'yandex' — OAuth providers
-    bind.execute(
-        sa.text(
-            """
+    bind.execute(sa.text("""
             UPDATE users
             SET email_verification_source = CASE auth_type
                 WHEN 'email'   THEN 'cabinet'
@@ -77,9 +74,7 @@ def upgrade() -> None:
             END
             WHERE email_verified = TRUE
               AND email_verification_source IS NULL
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

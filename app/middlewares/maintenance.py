@@ -8,7 +8,6 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, User as TgUser
 from app.config import settings
 from app.services.maintenance_service import maintenance_service
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -45,11 +44,15 @@ class MaintenanceMiddleware(BaseMiddleware):
 
         try:
             if isinstance(event, Message):
-                await event.answer(maintenance_message, parse_mode='HTML')
+                await event.answer(maintenance_message, parse_mode="HTML")
             elif isinstance(event, CallbackQuery):
                 await event.answer(maintenance_message, show_alert=True)
         except Exception as e:
-            logger.error('Ошибка отправки сообщения о техработах пользователю', user_id=user.id, error=e)
+            logger.error(
+                "Ошибка отправки сообщения о техработах пользователю",
+                user_id=user.id,
+                error=e,
+            )
 
-        logger.info('Пользователь заблокирован во время техработ', user_id=user.id)
+        logger.info("Пользователь заблокирован во время техработ", user_id=user.id)
         return None

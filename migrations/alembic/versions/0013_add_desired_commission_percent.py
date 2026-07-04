@@ -14,8 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0013'
-down_revision: Union[str, None] = '0012'
+revision: str = "0013"
+down_revision: Union[str, None] = "0012"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,16 +23,16 @@ depends_on: Union[str, Sequence[str], None] = None
 def _has_column(table: str, column: str) -> bool:
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    return column in [c['name'] for c in inspector.get_columns(table)]
+    return column in [c["name"] for c in inspector.get_columns(table)]
 
 
 def upgrade() -> None:
-    if not _has_column('partner_applications', 'desired_commission_percent'):
+    if not _has_column("partner_applications", "desired_commission_percent"):
         op.add_column(
-            'partner_applications',
-            sa.Column('desired_commission_percent', sa.Integer(), nullable=True),
+            "partner_applications",
+            sa.Column("desired_commission_percent", sa.Integer(), nullable=True),
         )
 
 
 def downgrade() -> None:
-    op.drop_column('partner_applications', 'desired_commission_percent')
+    op.drop_column("partner_applications", "desired_commission_percent")

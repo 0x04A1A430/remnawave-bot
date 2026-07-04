@@ -12,7 +12,12 @@ from datetime import UTC, datetime
 import structlog
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramNetworkError, TelegramRetryAfter
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNetworkError,
+    TelegramRetryAfter,
+)
 
 from app.database.crud.required_channel import (
     get_active_channels,
@@ -21,7 +26,6 @@ from app.database.crud.required_channel import (
 )
 from app.database.database import AsyncSessionLocal
 from app.utils.cache import ChannelSubCache
-
 
 logger = structlog.get_logger(__name__)
 
@@ -34,7 +38,11 @@ _API_DELAY = 0.05  # 50ms between calls -> ~20/sec safe rate
 # неопределённым (None: текущее состояние сохраняется, авто-деактивации НЕ будет).
 _MAX_RETRY_AFTER = 5.0
 
-GOOD_STATUSES = (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR)
+GOOD_STATUSES = (
+    ChatMemberStatus.MEMBER,
+    ChatMemberStatus.ADMINISTRATOR,
+    ChatMemberStatus.CREATOR,
+)
 
 # How long a DB record is considered fresh (no API call needed)
 DB_FRESHNESS_SECONDS = 1800  # 30 min
@@ -58,13 +66,13 @@ class ChannelSubscriptionService:
             channels = await get_active_channels(db)
             result = [
                 {
-                    'id': ch.id,
-                    'channel_id': ch.channel_id,
-                    'channel_link': ch.channel_link,
-                    'title': ch.title,
-                    'sort_order': ch.sort_order,
-                    'disable_trial_on_leave': ch.disable_trial_on_leave,
-                    'disable_paid_on_leave': ch.disable_paid_on_leave,
+                    "id": ch.id,
+                    "channel_id": ch.channel_id,
+                    "channel_link": ch.channel_link,
+                    "title": ch.title,
+                    "sort_order": ch.sort_order,
+                    "disable_trial_on_leave": ch.disable_trial_on_leave,
+                    "disable_paid_on_leave": ch.disable_paid_on_leave,
                 }
                 for ch in channels
             ]
@@ -74,13 +82,13 @@ class ChannelSubscriptionService:
     async def get_required_channel_ids(self) -> set[str]:
         """Get the set of active required channel_ids (for event filtering)."""
         channels = await self.get_required_channels()
-        return {ch['channel_id'] for ch in channels}
+        return {ch["channel_id"] for ch in channels}
 
     async def get_channel_settings(self, channel_id: str) -> dict | None:
         """Get per-channel settings for a specific channel (from cache)."""
         channels = await self.get_required_channels()
         for ch in channels:
-            if ch['channel_id'] == channel_id:
+            if ch["channel_id"] == channel_id:
                 return ch
         return None
 
@@ -97,8 +105,8 @@ class ChannelSubscriptionService:
         if is_trial:
             if not settings.CHANNEL_DISABLE_TRIAL_ON_UNSUBSCRIBE:
                 return False
-            return channel.get('disable_trial_on_leave', True)
-        return channel.get('disable_paid_on_leave', False)
+            return channel.get("disable_trial_on_leave", True)
+        return channel.get("disable_paid_on_leave", False)
 
     async def check_user_subscriptions(self, telegram_id: int) -> dict[str, bool]:
         """Check user subscriptions to all required channels.
@@ -127,10 +135,12 @@ class ChannelSubscriptionService:
         channels_needing_db: list[dict] = []
 
         # Layer 1: Redis cache (single MGET round-trip)
-        all_channel_ids = [ch['channel_id'] for ch in channels]
-        cached_statuses = await ChannelSubCache.get_sub_statuses(telegram_id, all_channel_ids)
+        all_channel_ids = [ch["channel_id"] for ch in channels]
+        cached_statuses = await ChannelSubCache.get_sub_statuses(
+            telegram_id, all_channel_ids
+        )
         for ch in channels:
-            channel_id = ch['channel_id']
+            channel_id = ch["channel_id"]
             cached = cached_statuses.get(channel_id)
             if cached is not None:
                 result[channel_id] = cached
@@ -145,14 +155,16 @@ class ChannelSubscriptionService:
                 sub_map = {s.channel_id: s for s in subs}
 
                 for ch in channels_needing_db:
-                    channel_id = ch['channel_id']
+                    channel_id = ch["channel_id"]
                     sub = sub_map.get(channel_id)
 
                     if sub and sub.checked_at:
                         age = (datetime.now(UTC) - sub.checked_at).total_seconds()
                         if age < DB_FRESHNESS_SECONDS:
                             result[channel_id] = sub.is_member
-                            await ChannelSubCache.set_sub_status(telegram_id, channel_id, sub.is_member)
+                            await ChannelSubCache.set_sub_status(
+                                telegram_id, channel_id, sub.is_member
+                            )
                             continue
 
                     channels_needing_api.append(ch)
@@ -162,37 +174,43 @@ class ChannelSubscriptionService:
             async with AsyncSessionLocal() as db:
                 # Reuse the sub_map from layer 2 above so we can fall back to the
                 # last known DB value when an API call returns None (uncertain).
-                sub_map_local = locals().get('sub_map', {})
+                sub_map_local = locals().get("sub_map", {})
                 for ch in channels_needing_api:
-                    check_result = await self._rate_limited_check(telegram_id, ch['channel_id'])
+                    check_result = await self._rate_limited_check(
+                        telegram_id, ch["channel_id"]
+                    )
                     if check_result is None:
                         # Uncertain — keep last known DB value if any, otherwise
                         # default to True so a transient API hiccup never punishes
                         # a paying user (Telegram bug #313502).
-                        last_known = sub_map_local.get(ch['channel_id'])
+                        last_known = sub_map_local.get(ch["channel_id"])
                         is_member = last_known.is_member if last_known else True
-                        result[ch['channel_id']] = is_member
+                        result[ch["channel_id"]] = is_member
                         # Do NOT persist the uncertain value — let the next check
                         # try again with fresh API state.
                         continue
-                    result[ch['channel_id']] = check_result
+                    result[ch["channel_id"]] = check_result
                     # Write DB first (source of truth), then cache
-                    await upsert_user_channel_sub(db, telegram_id, ch['channel_id'], check_result)
-                    await ChannelSubCache.set_sub_status(telegram_id, ch['channel_id'], check_result)
+                    await upsert_user_channel_sub(
+                        db, telegram_id, ch["channel_id"], check_result
+                    )
+                    await ChannelSubCache.set_sub_status(
+                        telegram_id, ch["channel_id"], check_result
+                    )
                 await db.commit()
         elif channels_needing_api:
             # No bot available (e.g., cabinet API context). Fall back to the last
             # known DB value to avoid revoking access from paying users when the
             # bot singleton hasn't been initialised yet for this request.
             logger.warning(
-                'No bot instance for API check -- using last known DB value (paid users keep access)',
+                "No bot instance for API check -- using last known DB value (paid users keep access)",
                 telegram_id=telegram_id,
-                channels=[ch['channel_id'] for ch in channels_needing_api],
+                channels=[ch["channel_id"] for ch in channels_needing_api],
             )
-            sub_map_local = locals().get('sub_map', {})
+            sub_map_local = locals().get("sub_map", {})
             for ch in channels_needing_api:
-                last_known = sub_map_local.get(ch['channel_id'])
-                result[ch['channel_id']] = last_known.is_member if last_known else True
+                last_known = sub_map_local.get(ch["channel_id"])
+                result[ch["channel_id"]] = last_known.is_member if last_known else True
 
         return result
 
@@ -210,7 +228,7 @@ class ChannelSubscriptionService:
 
         unsubscribed = []
         for ch in channels:
-            if not subs.get(ch['channel_id'], False):
+            if not subs.get(ch["channel_id"], False):
                 unsubscribed.append(ch)
         return unsubscribed
 
@@ -223,12 +241,12 @@ class ChannelSubscriptionService:
         for ch in channels:
             result.append(
                 {
-                    'channel_id': ch['channel_id'],
-                    'channel_link': ch.get('channel_link'),
-                    'title': ch.get('title'),
-                    'is_subscribed': subs.get(ch['channel_id'], False),
-                    'disable_trial_on_leave': ch.get('disable_trial_on_leave', True),
-                    'disable_paid_on_leave': ch.get('disable_paid_on_leave', False),
+                    "channel_id": ch["channel_id"],
+                    "channel_link": ch.get("channel_link"),
+                    "title": ch.get("title"),
+                    "is_subscribed": subs.get(ch["channel_id"], False),
+                    "disable_trial_on_leave": ch.get("disable_trial_on_leave", True),
+                    "disable_paid_on_leave": ch.get("disable_paid_on_leave", False),
                 }
             )
         return result
@@ -242,13 +260,15 @@ class ChannelSubscriptionService:
         channels = await self.get_required_channels()
         if not channels:
             return None
-        return channels[0]['channel_id']
+        return channels[0]["channel_id"]
 
     # -- Event handlers (called from ChatMemberUpdated router) --------------------
 
     async def on_user_joined(self, telegram_id: int, channel_id: str) -> None:
         """Called when ChatMemberUpdated fires: user subscribed."""
-        logger.info('Channel join event', telegram_id=telegram_id, channel_id=channel_id)
+        logger.info(
+            "Channel join event", telegram_id=telegram_id, channel_id=channel_id
+        )
         # Write DB first (source of truth), then cache
         async with AsyncSessionLocal() as db:
             await upsert_user_channel_sub(db, telegram_id, channel_id, True)
@@ -257,7 +277,9 @@ class ChannelSubscriptionService:
 
     async def on_user_left(self, telegram_id: int, channel_id: str) -> None:
         """Called when ChatMemberUpdated fires: user unsubscribed."""
-        logger.info('Channel leave event', telegram_id=telegram_id, channel_id=channel_id)
+        logger.info(
+            "Channel leave event", telegram_id=telegram_id, channel_id=channel_id
+        )
         # Write DB first (source of truth), then cache
         async with AsyncSessionLocal() as db:
             await upsert_user_channel_sub(db, telegram_id, channel_id, False)
@@ -273,12 +295,14 @@ class ChannelSubscriptionService:
     async def invalidate_user_cache(self, telegram_id: int) -> None:
         """Invalidate all cached subscription statuses for a user."""
         channels = await self.get_required_channels()
-        channel_ids = [ch['channel_id'] for ch in channels]
+        channel_ids = [ch["channel_id"] for ch in channels]
         await ChannelSubCache.invalidate_user_channels(telegram_id, channel_ids)
 
     # -- Rate-limited Telegram API ------------------------------------------------
 
-    async def _rate_limited_check(self, telegram_id: int, channel_id: str) -> bool | None:
+    async def _rate_limited_check(
+        self, telegram_id: int, channel_id: str
+    ) -> bool | None:
         """Check subscription via Telegram API with rate-limiting.
 
         Returns:
@@ -295,30 +319,40 @@ class ChannelSubscriptionService:
         """
         async with _API_SEMAPHORE:
             try:
-                member = await self.bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
+                member = await self.bot.get_chat_member(
+                    chat_id=channel_id, user_id=telegram_id
+                )
                 await asyncio.sleep(_API_DELAY)
                 return member.status in GOOD_STATUSES
             except TelegramRetryAfter as e:
-                logger.warning('Rate limited by Telegram', retry_after=e.retry_after, channel_id=channel_id)
+                logger.warning(
+                    "Rate limited by Telegram",
+                    retry_after=e.retry_after,
+                    channel_id=channel_id,
+                )
                 if e.retry_after > _MAX_RETRY_AFTER:
                     # Слишком долгий FloodWait — не вешаем хендлер; результат неизвестен.
                     logger.warning(
-                        'Telegram rate-limit too long, skipping channel check',
+                        "Telegram rate-limit too long, skipping channel check",
                         retry_after=e.retry_after,
                         channel_id=channel_id,
                     )
                     return None
                 await asyncio.sleep(e.retry_after)
                 try:
-                    member = await self.bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
+                    member = await self.bot.get_chat_member(
+                        chat_id=channel_id, user_id=telegram_id
+                    )
                     return member.status in GOOD_STATUSES
                 except Exception:
-                    logger.error('Double failure after rate-limit retry', channel_id=channel_id)
+                    logger.error(
+                        "Double failure after rate-limit retry", channel_id=channel_id
+                    )
                     return None  # Uncertain — preserve last known value, do not auto-deactivate
             except TelegramForbiddenError:
                 logger.critical(
-                    'Bot removed/blocked from channel -- treating result as uncertain so '
-                    'paid subs are not deactivated wholesale until the operator fixes access',
+                    "Bot removed/blocked from channel -- treating result as uncertain so "
+                    "paid subs are not deactivated wholesale until the operator fixes access",
                     channel_id=channel_id,
                 )
                 return None  # Uncertain — bot's fault, not the user's
@@ -331,27 +365,35 @@ class ChannelSubscriptionService:
                 # TelegramNotifierProcessor шёл в админ-чат каждый polling-cycle
                 # (час) — спамил без причины.
                 if (
-                    'user not found' in err_msg
-                    or 'member not found' in err_msg
-                    or 'participant_id_invalid' in err_msg
-                    or 'chat not found' in err_msg
-                    or 'user is deactivated' in err_msg
-                    or 'user_deactivated' in err_msg
+                    "user not found" in err_msg
+                    or "member not found" in err_msg
+                    or "participant_id_invalid" in err_msg
+                    or "chat not found" in err_msg
+                    or "user is deactivated" in err_msg
+                    or "user_deactivated" in err_msg
                 ):
                     logger.debug(
-                        'User not a channel member (expected)',
+                        "User not a channel member (expected)",
                         channel_id=channel_id,
                         telegram_id=telegram_id,
                         reason=err_msg[:80],
                     )
                     return False
-                logger.error('Bad request checking channel', channel_id=channel_id, error=str(e))
+                logger.error(
+                    "Bad request checking channel", channel_id=channel_id, error=str(e)
+                )
                 return None  # Uncertain — unknown BadRequest, don't punish the user
             except TelegramNetworkError:
-                logger.warning('Network error checking channel', channel_id=channel_id)
-                return None  # Uncertain — transient, the next check will probably succeed
+                logger.warning("Network error checking channel", channel_id=channel_id)
+                return (
+                    None  # Uncertain — transient, the next check will probably succeed
+                )
             except Exception as e:
-                logger.error('Unexpected error checking channel', channel_id=channel_id, error=str(e))
+                logger.error(
+                    "Unexpected error checking channel",
+                    channel_id=channel_id,
+                    error=str(e),
+                )
                 return None  # Uncertain — same logic, do not deactivate on unknown failures
 
 
