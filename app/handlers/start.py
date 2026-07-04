@@ -240,15 +240,16 @@ async def _activate_pending_inline_gift_after_registration(
     state: FSMContext,
     message: types.Message,
     from_user: types.User | None = None,
-) -> None:
+) -> bool:
     """Show pending inline gift preview after registration if user arrived via bs_ link.
 
     Must be called BEFORE state.clear() to preserve the gift code.
+    Returns True if a gift was shown.
     """
     data = await state.get_data()
     gift_code = data.get("pending_inline_gift_code")
     if not gift_code:
-        return
+        return False
     try:
         from app.handlers.inline_gift import show_pending_inline_gift
 
@@ -266,6 +267,7 @@ async def _activate_pending_inline_gift_after_registration(
         )
     finally:
         await state.update_data(pending_inline_gift_code=None)
+    return True  # gift code existed, skip main menu
 
 
 async def _claim_phantom_user(
@@ -1219,12 +1221,16 @@ async def cmd_start(
             await _activate_pending_gift_after_registration(
                 db, state, user, message.answer
             )
-            await _activate_pending_inline_gift_after_registration(state, message)
+            showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
             await state.update_data(pending_gift_token=None)
             await _persist_pending_subid_after_registration(db, state, user)
             await state.update_data(pending_subid=None)
             # Refresh user to pick up newly created subscriptions
             await db.refresh(user, attribute_names=["subscriptions"])
+
+            if showed_gift:
+                await state.clear()
+                return
 
         user_subs_for_flags = getattr(user, "subscriptions", None) or []
         first_sub_for_flags = next(
@@ -2244,10 +2250,14 @@ async def complete_registration_from_callback(
     await _activate_pending_gift_after_registration(
         db, state, user, callback.message.answer
     )
-    await _activate_pending_inline_gift_after_registration(state, callback.message, from_user=callback.from_user)
+    showed_gift = await _activate_pending_inline_gift_after_registration(state, callback.message, from_user=callback.from_user)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
+
+    if showed_gift:
+        logger.info("Регистрация завершена для пользователя", telegram_id=user.telegram_id)
+        return
 
     if campaign_message:
         try:
@@ -2656,10 +2666,14 @@ async def complete_registration(
 
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
-    await _activate_pending_inline_gift_after_registration(state, message)
+    showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
+
+    if showed_gift:
+        logger.info("Регистрация завершена для пользователя", telegram_id=user.telegram_id)
+        return
 
     if campaign_message:
         try:
