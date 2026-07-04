@@ -171,7 +171,16 @@ def _check_recipient(
     gift: InlineGiftSubscription, telegram_id: int, username: str
 ) -> bool:
     if gift.recipient_telegram_id == 0:
-        # Gift by @username — any user who arrived via deep link is the intended recipient
+        raw = gift.inline_message_id or ""
+        if not raw.startswith("u:") and not raw.startswith("tid:"):
+            return True
+        if raw.startswith("tid:"):
+            try:
+                return telegram_id == int(raw[4:])
+            except ValueError:
+                return False
+        if raw.startswith("u:"):
+            return username.lower() == raw[2:].lower()
         return True
     result = telegram_id == gift.recipient_telegram_id
     if not result:
@@ -218,6 +227,12 @@ async def handle_gift_deeplink(
             )
             return True
 
+        # Unregistered user — save gift code and let start.py run registration first
+        if not user:
+            if state:
+                await state.update_data(pending_inline_gift_code=gift_code)
+            return False
+
         if not _check_recipient(gift, telegram_id, username):
             await message.answer(
                 texts.t(
@@ -226,12 +241,6 @@ async def handle_gift_deeplink(
                 )
             )
             return True
-
-        # Unregistered user — save gift code and let start.py run registration
-        if not user:
-            if state:
-                await state.update_data(pending_inline_gift_code=gift_code)
-            return False
 
         if gift.recipient_telegram_id == 0 and max_act == 1:
             gift.recipient_telegram_id = telegram_id
