@@ -171,16 +171,7 @@ def _check_recipient(
     gift: InlineGiftSubscription, telegram_id: int, username: str
 ) -> bool:
     if gift.recipient_telegram_id == 0:
-        raw = gift.inline_message_id or ""
-        if not raw.startswith("u:") and not raw.startswith("tid:"):
-            return True
-        if raw.startswith("tid:"):
-            try:
-                return telegram_id == int(raw[4:])
-            except ValueError:
-                return False
-        if raw.startswith("u:"):
-            return username.lower() == raw[2:].lower()
+        # Gift by @username — any user who arrived via deep link is the intended recipient
         return True
     result = telegram_id == gift.recipient_telegram_id
     if not result:
