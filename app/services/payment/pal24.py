@@ -543,8 +543,7 @@ class Pal24PaymentMixin:
                         "<b>Пополнение успешно!</b>\n\n"
                         f"Сумма: {settings.format_price(payment.amount_kopeks)}\n"
                         "Способ: PayPalych\n"
-                        f"Транзакция: {transaction.id}\n\n"
-                        "Баланс пополнен автоматически!"
+                        f"Транзакция: {transaction.id}"
                     ),
                     parse_mode="HTML",
                     reply_markup=keyboard,

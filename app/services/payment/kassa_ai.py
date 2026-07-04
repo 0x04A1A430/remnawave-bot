@@ -427,8 +427,7 @@ class KassaAiPaymentMixin:
                     "<b>Пополнение успешно!</b>\n\n"
                     f"Сумма: {settings.format_price(payment.amount_kopeks)}\n"
                     f"Способ: {display_name}\n"
-                    f"Транзакция: {transaction.id}\n\n"
-                    "Баланс пополнен автоматически!"
+                    f"Транзакция: {transaction.id}"
                 )
 
                 await self.bot.send_message(
