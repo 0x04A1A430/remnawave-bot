@@ -239,6 +239,7 @@ async def _activate_pending_gift_after_registration(
 async def _activate_pending_inline_gift_after_registration(
     state: FSMContext,
     message: types.Message,
+    from_user: types.User | None = None,
 ) -> None:
     """Show pending inline gift preview after registration if user arrived via bs_ link.
 
@@ -251,7 +252,13 @@ async def _activate_pending_inline_gift_after_registration(
     try:
         from app.handlers.inline_gift import show_pending_inline_gift
 
-        await show_pending_inline_gift(message, gift_code)
+        effective_user = from_user or message.from_user
+        await show_pending_inline_gift(
+            message,
+            gift_code,
+            telegram_id=effective_user.id,
+            username=effective_user.username,
+        )
     except Exception:
         logger.exception(
             "Failed to show pending inline gift after registration",
@@ -2237,7 +2244,7 @@ async def complete_registration_from_callback(
     await _activate_pending_gift_after_registration(
         db, state, user, callback.message.answer
     )
-    await _activate_pending_inline_gift_after_registration(state, callback.message)
+    await _activate_pending_inline_gift_after_registration(state, callback.message, from_user=callback.from_user)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
