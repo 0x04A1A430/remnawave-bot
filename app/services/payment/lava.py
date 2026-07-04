@@ -573,8 +573,7 @@ class LavaPaymentMixin:
                         "<b>Пополнение успешно!</b>\n\n"
                         f"\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
                         f"\U0001f4b3 Способ: {display_name}\n"
-                        f"\U0001f194 Транзакция: {transaction.id}\n\n"
-                        "Баланс пополнен автоматически!"
+                        f"\U0001f194 Транзакция: {transaction.id}"
                     ),
                     parse_mode="HTML",
                     reply_markup=keyboard,

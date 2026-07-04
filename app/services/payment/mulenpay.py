@@ -406,8 +406,7 @@ class MulenPayPaymentMixin:
                                 "<b>Пополнение успешно!</b>\n\n"
                                 f"Сумма: {settings.format_price(payment.amount_kopeks)}\n"
                                 f"Способ: {display_name_html}\n"
-                                f"Транзакция: {transaction.id}\n\n"
-                                "Баланс пополнен автоматически!"
+                                f"Транзакция: {transaction.id}"
                             ),
                             parse_mode="HTML",
                             reply_markup=keyboard,

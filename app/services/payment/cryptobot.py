@@ -401,8 +401,7 @@ class CryptoBotPaymentMixin:
                             f"Сумма: {settings.format_price(amount_kopeks)}\n"
                             f"Платеж: {updated_payment.amount} {updated_payment.asset}\n"
                             f"Курс: 1 USD = {conversion_rate:.2f}₽\n"
-                            f"Транзакция: {invoice_id[:8]}...\n\n"
-                            "Баланс пополнен автоматически!"
+                            f"Транзакция: {invoice_id[:8]}..."
                         )
                         user_notification = _UserNotificationPayload(
                             telegram_id=user.telegram_id,
