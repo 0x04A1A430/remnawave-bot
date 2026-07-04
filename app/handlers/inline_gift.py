@@ -434,10 +434,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 return
 
             if gift_type == "temp_traffic":
-                from app.database.crud.subscription import (
-                    _lock_subscription_row,
-                    get_subscription_by_user_id,
-                )
+                from app.database.crud.subscription import _lock_subscription_row
                 from app.database.models import TrafficPurchase
 
                 gb = gift.traffic_limit_gb or 0
