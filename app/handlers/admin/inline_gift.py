@@ -32,7 +32,7 @@ Placeholder: - (dash) = пропустить позицию, не менять �
 
 import html
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import structlog
