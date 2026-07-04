@@ -769,6 +769,11 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
             gift_code=gift_code,
             recipient_telegram_id=recipient_telegram_id,
             gift_type=parsed.gift_type,
+            target_id=parsed.target_id,
+            username=parsed.username,
+            db_user_found=db_user is not None,
+            intended_sentinel=intended_sentinel,
+            inline_message_id=inline_message_id,
         )
 
 
