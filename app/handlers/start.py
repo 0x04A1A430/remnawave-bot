@@ -236,6 +236,31 @@ async def _activate_pending_gift_after_registration(
             pass
 
 
+async def _activate_pending_inline_gift_after_registration(
+    state: FSMContext,
+    message: types.Message,
+) -> None:
+    """Show pending inline gift preview after registration if user arrived via bs_ link.
+
+    Must be called BEFORE state.clear() to preserve the gift code.
+    """
+    data = await state.get_data()
+    gift_code = data.get("pending_inline_gift_code")
+    if not gift_code:
+        return
+    try:
+        from app.handlers.inline_gift import show_pending_inline_gift
+
+        await show_pending_inline_gift(message, gift_code)
+    except Exception:
+        logger.exception(
+            "Failed to show pending inline gift after registration",
+            gift_code_prefix=(gift_code or "")[:8],
+        )
+    finally:
+        await state.update_data(pending_inline_gift_code=None)
+
+
 async def _claim_phantom_user(
     db: AsyncSession,
     phantom: "User",
@@ -887,6 +912,22 @@ async def cmd_start(
             await state.update_data(pending_gift_token=gift_token)
             start_parameter = None  # Don't treat as campaign or referral
 
+    # Handle admin inline gift deep links: /start bs_<gift_code>
+    if start_parameter and start_parameter.startswith("bs_"):
+        gift_code = start_parameter[3:]
+        if gift_code:
+            logger.info(
+                "Inline gift deep link detected",
+                gift_code_prefix=gift_code[:8],
+                telegram_id=message.from_user.id,
+            )
+            from app.handlers.inline_gift import handle_gift_deeplink
+
+            handled = await handle_gift_deeplink(message, gift_code, state)
+            if handled:
+                return
+            start_parameter = None  # Don't treat as campaign or referral
+
     # Handle web auth deep links: /start webauth_{token}
     if start_parameter and start_parameter.startswith("webauth_"):
         web_auth_token = start_parameter.removeprefix("webauth_")
@@ -1171,6 +1212,7 @@ async def cmd_start(
             await _activate_pending_gift_after_registration(
                 db, state, user, message.answer
             )
+            await _activate_pending_inline_gift_after_registration(state, message)
             await state.update_data(pending_gift_token=None)
             await _persist_pending_subid_after_registration(db, state, user)
             await state.update_data(pending_subid=None)
@@ -2195,6 +2237,7 @@ async def complete_registration_from_callback(
     await _activate_pending_gift_after_registration(
         db, state, user, callback.message.answer
     )
+    await _activate_pending_inline_gift_after_registration(state, callback.message)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
@@ -2606,6 +2649,7 @@ async def complete_registration(
 
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
+    await _activate_pending_inline_gift_after_registration(state, message)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()

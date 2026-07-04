@@ -17,7 +17,8 @@ Syntax:
   Multi-activation (первым N):
     @botname -r 5 30               — 5 активаций, 30 дней
     @botname -r 5 30 500 3         — 5 активаций, 30 дней, 500 ГБ, 3 уст.
-    @botname -r 5 30 - 3 -bc       — 5 активаций, 30 дней, уст. 3, доп. сервер
+    @botname -r 5 30               — 5 активаций, 30 дней
+    @botname -r 5 30 500 3         — 5 активаций, 30 дней, 500 ГБ, 3 уст.
 
   Discount:
     @botname @user -d 15           — скидка 15%
@@ -25,16 +26,13 @@ Syntax:
   Balance:
     @botname @user -b 1500         — +1500 ₽
 
-  Extra squad:
-    -bc  добавляет сквад 050365af-1377-469c-b625-4e88d3e0e3ae
-
 Special values: -1 for days = forever; -1 for traffic = unlimited; -1 for devices = 999
 Placeholder: - (dash) = пропустить позицию, не менять значение
 """
 
 import html
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import structlog
@@ -52,7 +50,6 @@ from app.localization.texts import get_texts
 logger = structlog.get_logger(__name__)
 
 _GIFT_PREFIX = "bs_"
-_EXTRA_SQUAD_UUID = "050365af-1377-469c-b625-4e88d3e0e3ae"
 
 _FOREVER_DAYS = (2099 - 2025) * 365
 _MAX_DEVICES = 999
@@ -73,7 +70,6 @@ class ParsedQuery:
     devices: int | None  # None = no change
     discount_percent: int
     balance_rub: int
-    add_extra_squad: bool = field(default=False)
     temp_traffic_gb: int = field(default=0)  # >0 for -t mode (временный трафик)
 
 
@@ -126,11 +122,8 @@ def _parse_query(query_text: str) -> ParsedQuery:
     text = query_text.strip()
     tokens = text.split()
 
-    add_bc = "-bc" in tokens
-    tokens = [t for t in tokens if t != "-bc"]
-
     if not tokens:
-        return ParsedQuery("subscription", "", 0, 0, None, None, None, 0, 0, add_bc)
+        return ParsedQuery("subscription", "", 0, 0, None, None, None, 0, 0)
 
     # -r N [days [traffic [devices]]]
     if tokens[0] == "-r":
@@ -138,7 +131,7 @@ def _parse_query(query_text: str) -> ParsedQuery:
         count = max(1, int(rest[0]) if rest and rest[0].isdigit() else 1)
         rest = rest[1:]
         days, traffic, devices = _parse_sub_args(rest)
-        return ParsedQuery("multi", "", 0, count, days, traffic, devices, 0, 0, add_bc)
+        return ParsedQuery("multi", "", 0, count, days, traffic, devices, 0, 0)
 
     # Extract target
     first = tokens[0]
@@ -151,11 +144,11 @@ def _parse_query(query_text: str) -> ParsedQuery:
         username = ""
         rest = tokens[1:]
     else:
-        return ParsedQuery("subscription", "", 0, 0, None, None, None, 0, 0, add_bc)
+        return ParsedQuery("subscription", "", 0, 0, None, None, None, 0, 0)
 
     if not rest:
         return ParsedQuery(
-            "subscription", username, target_id, 0, None, None, None, 0, 0, add_bc
+            "subscription", username, target_id, 0, None, None, None, 0, 0
         )
 
     flag = rest[0]
@@ -164,31 +157,31 @@ def _parse_query(query_text: str) -> ParsedQuery:
     if flag == "-d":
         pct = max(1, min(99, int(args[0]) if args and args[0].isdigit() else 0))
         return ParsedQuery(
-            "discount", username, target_id, 0, None, None, None, pct, 0, add_bc
+            "discount", username, target_id, 0, None, None, None, pct, 0
         )
 
     if flag == "-b":
         rub = int(args[0]) if args and args[0].isdigit() else 0
         return ParsedQuery(
-            "balance", username, target_id, 0, None, None, None, 0, rub, add_bc
+            "balance", username, target_id, 0, None, None, None, 0, rub
         )
 
     if flag == "-t":
         gb = max(1, int(args[0])) if args and args[0].isdigit() else 0
         return ParsedQuery(
-            "temp_traffic", username, target_id, 0, None, None, None, 0, 0, add_bc, gb
+            "temp_traffic", username, target_id, 0, None, None, None, 0, 0, gb
         )
 
     if flag == "-p":
         days, traffic, devices = _parse_sub_args(args)
         return ParsedQuery(
-            "subscription", username, target_id, 0, days, traffic, devices, 0, 0, add_bc
+            "subscription", username, target_id, 0, days, traffic, devices, 0, 0
         )
 
     # No flag: plain values after target
     days, traffic, devices = _parse_sub_args(rest)
     return ParsedQuery(
-        "subscription", username, target_id, 0, days, traffic, devices, 0, 0, add_bc
+        "subscription", username, target_id, 0, days, traffic, devices, 0, 0
     )
 
 
@@ -215,7 +208,6 @@ def _gift_summary(
     traffic_gb: int | None,
     devices: int | None,
     texts,
-    bc: bool = False,
 ) -> str:
     """Build short summary showing only specified values."""
     parts = []
@@ -225,8 +217,6 @@ def _gift_summary(
         parts.append(_fmt_traffic(traffic_gb, texts))
     if devices is not None:
         parts.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
-    if bc:
-        parts.append("+ доп. сервер")
     return ", ".join(parts) if parts else "—"
 
 
@@ -237,7 +227,6 @@ def _build_subscription_caption(
     devices: int | None,
     texts,
     multi_count: int = 0,
-    bc: bool = False,
 ) -> str:
     safe = html.escape(display) if display else ""
     lines = []
@@ -247,8 +236,6 @@ def _build_subscription_caption(
         lines.append(_fmt_traffic(traffic_gb, texts))
     if devices is not None:
         lines.append(f'{devices} {texts.t("INLINE_GIFT_DEVICES_SUFFIX", "уст.")}')
-    if bc:
-        lines.append("+ доп. сервер")
     body = "\n".join(lines) if lines else "—"
     hint = texts.t(
         "INLINE_GIFT_CAPTION_HINT", "Нажмите кнопку ниже, чтобы активировать."
@@ -314,12 +301,6 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
             "Временный трафик (30 дн.): @user -t 100",
             "@user -t 100",
         ),
-        (
-            "hint_bc",
-            "... -bc",
-            "Доп. сервер: @user 30 -bc  /  -r 5 30 -bc",
-            "@user 30 -bc",
-        ),
     ]
     results = []
     for rid, title, desc, _ in hints:
@@ -351,8 +332,6 @@ def _flag_hint(query_text: str, texts) -> str:
         return "-t гб  — временный трафик 30 дней"
     if "-p" in t:
         return "-p дни [гб [уст.]]  |  - для пропуска позиции"
-    if "-bc" in t:
-        return "-bc  — добавить в доп. сервер"
     return "@user дни [гб [уст.]] | -r N | -d % | -b ₽ | -t гб  |  - пропуск"
 
 
@@ -395,7 +374,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             parsed.traffic_gb,
             parsed.devices,
             texts,
-            bc=parsed.add_extra_squad,
         )
         gift_code = secrets.token_urlsafe(32)
         bot_username = settings.BOT_USERNAME or ""
@@ -407,7 +385,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             parsed.devices,
             texts,
             multi_count=parsed.multi_count,
-            bc=parsed.add_extra_squad,
         )
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
@@ -597,7 +574,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             parsed.traffic_gb,
             parsed.devices,
             texts,
-            bc=parsed.add_extra_squad,
         )
 
         if sub_info_lines and sub:
@@ -623,7 +599,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             parsed.traffic_gb,
             parsed.devices,
             texts,
-            bc=parsed.add_extra_squad,
         )
         title = f"{recipient_display} — {summary}"
 
@@ -660,7 +635,6 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
         "hint_disc",
         "hint_bal",
         "hint_t",
-        "hint_bc",
     ):
         return
 
@@ -690,7 +664,6 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 device_limit=parsed.devices,
                 max_activations=parsed.multi_count,
                 activated_count=0,
-                add_extra_squad=parsed.add_extra_squad,
                 inline_message_id=inline_message_id,
             )
             db.add(gift)
@@ -740,7 +713,6 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 discount_percent=parsed.discount_percent,
-                add_extra_squad=False,
                 inline_message_id=inline_message_id or intended_sentinel,
             )
         elif parsed.gift_type == "balance":
@@ -755,7 +727,6 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 traffic_limit_gb=0,
                 device_limit=1,
                 balance_amount_kopeks=parsed.balance_rub * 100,
-                add_extra_squad=False,
                 inline_message_id=inline_message_id or intended_sentinel,
             )
         elif parsed.gift_type == "temp_traffic":
@@ -769,7 +740,6 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 days=0,
                 traffic_limit_gb=parsed.temp_traffic_gb,  # используем это поле для хранения кол-ва ГБ
                 device_limit=1,
-                add_extra_squad=False,
                 inline_message_id=inline_message_id or intended_sentinel,
             )
         else:
@@ -788,7 +758,6 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
                 days=parsed.days,
                 traffic_limit_gb=parsed.traffic_gb,
                 device_limit=parsed.devices,
-                add_extra_squad=parsed.add_extra_squad,
                 inline_message_id=inline_message_id or intended_sentinel,
             )
 

@@ -41,7 +41,6 @@ from app.utils.button_emoji import make_button
 logger = structlog.get_logger(__name__)
 
 _FOREVER_DAYS = (2099 - 2025) * 365
-_EXTRA_SQUAD_UUID = "050365af-1377-469c-b625-4e88d3e0e3ae"
 
 
 def _days_label(days: int, texts) -> str:
@@ -306,7 +305,6 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
         )
 
         gift_type = getattr(gift, "gift_type", "subscription") or "subscription"
-        add_extra_squad = getattr(gift, "add_extra_squad", False) or False
 
         try:
             if gift_type == "discount":
@@ -403,8 +401,6 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
             available = await get_available_server_squads(db)
             squads: list[str] = [available[0].squad_uuid] if available else []
-            if add_extra_squad and _EXTRA_SQUAD_UUID not in squads:
-                squads.append(_EXTRA_SQUAD_UUID)
 
             existing_sub = await get_subscription_by_user_id(db, user.id)
             subscription_service = SubscriptionService()
