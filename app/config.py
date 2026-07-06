@@ -941,7 +941,11 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
     HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: str | None = None
     # Remnawave 2.8.0 удалил /api/system/tools/happ/encrypt — недостающие crypt-ссылки
-    # генерируются через официальный Happ API (crypto.happ.su -> happ://crypt5/...).
+    # генерируются локально (RSA публичным ключом Happ, как на subpage панели ->
+    # happ://crypt4/...). Выключатель на случай ротации ключа Happ: тогда до обновления
+    # бота ссылки поедут через панель/внешний API.
+    HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED: bool = True
+    # Запасной путь — официальный Happ API (crypto.happ.su -> happ://crypt5/...).
     # Выключатель на случай проблем с внешним сервисом.
     HAPP_CRYPTOLINK_API_FALLBACK_ENABLED: bool = True
     HAPP_DOWNLOAD_LINK_IOS: str | None = None
