@@ -11,13 +11,28 @@ remains valid; the response-side rename is consumed in ``admin_traffic`` routes.
 
 from __future__ import annotations
 
+import base64
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError
 
 
 def _api() -> RemnaWaveAPI:
     return RemnaWaveAPI('http://panel.local', 'key')
+
+
+@pytest.fixture(autouse=True)
+def _local_happ_encryption_off(monkeypatch):
+    """Тесты fallback-цепочки ниже проверяют путь панель -> внешний Happ API;
+    локальное RSA-шифрование (основной путь по умолчанию) закоротило бы их,
+    поэтому здесь оно выключено и включается явно в тестах локального шифрования."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', False)
+    # Кэш ключуется по URL и не знает о подменах ключа в тестах — чистим между тестами.
+    RemnaWaveAPI._happ_local_cache.clear()
 
 
 async def test_restart_node_sends_force_restart_body_default_false():
@@ -103,6 +118,7 @@ def _reset_happ_state() -> None:
     RemnaWaveAPI._happ_api_disabled_until = 0.0
     RemnaWaveAPI._happ_api_cache.clear()
     RemnaWaveAPI._happ_api_failed_urls.clear()
+    RemnaWaveAPI._happ_local_cache.clear()
 
 
 async def test_happ_encrypt_404_disables_panel_endpoint_and_falls_back():
@@ -259,6 +275,105 @@ async def test_happ_api_fallback_disabled_by_setting(monkeypatch):
     api._call_happ_crypto_api = AsyncMock(return_value='happ://crypt5/encrypted')
     try:
         assert await api.encrypt_happ_crypto_link('https://sub.example/x') is None
+        api._call_happ_crypto_api.assert_not_called()
+    finally:
+        _reset_happ_state()
+
+
+async def test_happ_local_encryption_roundtrip(monkeypatch):
+    """Локальное шифрование должно давать happ://crypt4/<base64>, расшифровываемый
+    приватным ключом (та же схема PKCS#1 v1.5, что у subpage панели). Настоящий
+    приватный ключ есть только у Happ, поэтому roundtrip — на тестовой паре."""
+    from Crypto.Cipher import PKCS1_v1_5
+    from Crypto.PublicKey import RSA
+
+    import app.external.remnawave_api as rw
+    from app.config import settings
+
+    keypair = RSA.generate(2048)
+    monkeypatch.setattr(rw, 'HAPP_CRYPTO_V4_PUBLIC_KEY', keypair.publickey().export_key().decode())
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
+
+    api = _api()
+    api._make_request = AsyncMock()
+    api._call_happ_crypto_api = AsyncMock()
+
+    link = await api.encrypt_happ_crypto_link('https://sub.example/x')
+
+    assert link is not None and link.startswith('happ://crypt4/')
+    blob = base64.b64decode(link.removeprefix('happ://crypt4/'))
+    assert PKCS1_v1_5.new(keypair).decrypt(blob, None) == b'https://sub.example/x'
+    # Локальный путь не должен трогать ни панель, ни внешний сервис.
+    api._make_request.assert_not_called()
+    api._call_happ_crypto_api.assert_not_called()
+
+
+async def test_happ_local_encryption_real_key_single_rsa4096_block(monkeypatch):
+    """Со вшитым ключом Happ v4 (RSA-4096) шифртекст — один блок в 512 байт,
+    как у ссылок, которые генерирует официальная страница подписки."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
+
+    link = RemnaWaveAPI._encrypt_locally('https://sub.example/x')
+
+    assert link is not None and link.startswith('happ://crypt4/')
+    assert len(base64.b64decode(link.removeprefix('happ://crypt4/'))) == 512
+
+
+async def test_happ_local_encryption_rejects_oversized_payload(monkeypatch):
+    """PKCS#1 v1.5 вмещает size_in_bytes()-11: слишком длинная ссылка -> None,
+    а не исключение (дальше цепочка уйдёт в панель/внешний API)."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
+
+    assert RemnaWaveAPI._encrypt_locally('https://sub.example/' + 'x' * 600) is None
+
+
+async def test_happ_local_encryption_disabled_by_setting():
+    """HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED=false должен пропустить локальный
+    путь (fixture уже выключила флаг) — цепочка идёт в панель/внешний API."""
+    assert RemnaWaveAPI._encrypt_locally('https://sub.example/x') is None
+
+
+async def test_happ_local_encryption_stable_for_same_url(monkeypatch):
+    """Паддинг PKCS#1 v1.5 случайный, поэтому без кэша каждый вызов давал бы новую
+    ссылку для того же URL — и синки (сравнение с сохранённой subscription_crypto_link)
+    записывали бы ложное «изменение» на каждом проходе. Кэш держит ссылку стабильной
+    в рамках процесса."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
+
+    first = RemnaWaveAPI._encrypt_locally('https://sub.example/x')
+    second = RemnaWaveAPI._encrypt_locally('https://sub.example/x')
+
+    assert first is not None
+    assert first == second
+    # Другой URL по-прежнему шифруется независимо.
+    assert RemnaWaveAPI._encrypt_locally('https://sub.example/y') != first
+
+
+async def test_enrich_uses_local_encryption_without_network(monkeypatch):
+    """С локальным шифрованием enrich заполняет crypt-ссылку в любом режиме бота,
+    не делая ни одного сетевого вызова (ни в панель, ни во внешний Happ API)."""
+    from types import SimpleNamespace
+
+    from app.config import settings
+
+    _reset_happ_state()
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
+    monkeypatch.setattr(type(settings), 'is_happ_cryptolink_mode', lambda self: False)
+    api = _api()
+    api._make_request = AsyncMock()
+    api._call_happ_crypto_api = AsyncMock()
+    user = SimpleNamespace(happ_crypto_link=None, subscription_url='https://sub.example/x')
+    try:
+        enriched = await api.enrich_user_with_happ_link(user)
+        assert enriched.happ_crypto_link is not None
+        assert enriched.happ_crypto_link.startswith('happ://crypt4/')
+        api._make_request.assert_not_called()
         api._call_happ_crypto_api.assert_not_called()
     finally:
         _reset_happ_state()
