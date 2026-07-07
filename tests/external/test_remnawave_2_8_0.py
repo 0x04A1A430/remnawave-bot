@@ -31,6 +31,8 @@ def _local_happ_encryption_off(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', False)
+    # Кэш ключуется по URL и не знает о подменах ключа в тестах — чистим между тестами.
+    RemnaWaveAPI._happ_local_cache.clear()
 
 
 async def test_restart_node_sends_force_restart_body_default_false():
@@ -116,6 +118,7 @@ def _reset_happ_state() -> None:
     RemnaWaveAPI._happ_api_disabled_until = 0.0
     RemnaWaveAPI._happ_api_cache.clear()
     RemnaWaveAPI._happ_api_failed_urls.clear()
+    RemnaWaveAPI._happ_local_cache.clear()
 
 
 async def test_happ_encrypt_404_disables_panel_endpoint_and_falls_back():
@@ -332,6 +335,24 @@ async def test_happ_local_encryption_disabled_by_setting():
     """HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED=false должен пропустить локальный
     путь (fixture уже выключила флаг) — цепочка идёт в панель/внешний API."""
     assert RemnaWaveAPI._encrypt_locally('https://sub.example/x') is None
+
+
+async def test_happ_local_encryption_stable_for_same_url(monkeypatch):
+    """Паддинг PKCS#1 v1.5 случайный, поэтому без кэша каждый вызов давал бы новую
+    ссылку для того же URL — и синки (сравнение с сохранённой subscription_crypto_link)
+    записывали бы ложное «изменение» на каждом проходе. Кэш держит ссылку стабильной
+    в рамках процесса."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
+
+    first = RemnaWaveAPI._encrypt_locally('https://sub.example/x')
+    second = RemnaWaveAPI._encrypt_locally('https://sub.example/x')
+
+    assert first is not None
+    assert first == second
+    # Другой URL по-прежнему шифруется независимо.
+    assert RemnaWaveAPI._encrypt_locally('https://sub.example/y') != first
 
 
 async def test_enrich_uses_local_encryption_without_network(monkeypatch):

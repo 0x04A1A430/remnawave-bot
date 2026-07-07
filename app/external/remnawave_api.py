@@ -284,10 +284,15 @@ class RemnaWaveAPI:
     #    вызовов, пока ссылка не сохранена в БД (клиент пересоздаётся на каждый запрос);
     #  - _happ_api_failed_urls: URL, которые Happ API отверг (4xx/мусор в ответе) —
     #    их не ретраим, но и весь fallback из-за них не выключаем.
+    #  - _happ_local_cache: subscription_url -> crypt4-ссылка локального шифрования.
+    #    Паддинг PKCS#1 v1.5 случайный, без кэша каждый вызов даёт новую ссылку для
+    #    того же URL — и синки (сравнение с сохранённой subscription_crypto_link)
+    #    видели бы ложное «изменение» на каждом проходе.
     _happ_encrypt_unavailable: bool = False
     _happ_api_disabled_until: float = 0.0
     _happ_api_cache: ClassVar[dict[str, str]] = {}
     _happ_api_failed_urls: ClassVar[set[str]] = set()
+    _happ_local_cache: ClassVar[dict[str, str]] = {}
 
     def __init__(
         self,
@@ -1449,6 +1454,9 @@ class RemnaWaveAPI:
         """
         if not settings.HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED:
             return None
+        cached = RemnaWaveAPI._happ_local_cache.get(link_to_encrypt)
+        if cached:
+            return cached
         try:
             key = RSA.import_key(HAPP_CRYPTO_V4_PUBLIC_KEY)
             payload = link_to_encrypt.encode('utf-8')
@@ -1457,7 +1465,11 @@ class RemnaWaveAPI:
                 logger.warning('Ссылка слишком длинная для happ crypt4', length=len(payload))
                 return None
             encrypted = PKCS1_v1_5.new(key).encrypt(payload)
-            return HAPP_CRYPTO_V4_DEEP_LINK_PREFIX + base64.b64encode(encrypted).decode('ascii')
+            link = HAPP_CRYPTO_V4_DEEP_LINK_PREFIX + base64.b64encode(encrypted).decode('ascii')
+            if len(RemnaWaveAPI._happ_local_cache) >= HAPP_CRYPTO_API_CACHE_MAX:
+                RemnaWaveAPI._happ_local_cache.clear()
+            RemnaWaveAPI._happ_local_cache[link_to_encrypt] = link
+            return link
         except Exception as e:
             logger.warning('Не удалось локально зашифровать happ ссылку', error=e)
             return None
