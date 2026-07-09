@@ -64,6 +64,7 @@ from .referral import router as referral_router
 from .site_verification import router as site_verification_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
+from .support_ws import router as support_ws_router
 from .ticket_notifications import (
     admin_router as admin_ticket_notifications_router,
     router as ticket_notifications_router,
@@ -165,5 +166,6 @@ router.include_router(admin_overpay_certificate_router)
 
 # WebSocket route
 router.include_router(websocket_router)
+router.include_router(support_ws_router)
 
 __all__ = ['router']
