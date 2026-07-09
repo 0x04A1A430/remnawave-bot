@@ -396,10 +396,18 @@ async def test_upload_lifecycle_makes_media_attachable_only_after_finish(monkeyp
 
     monkeypatch.setattr(support_ws, '_upload_to_telegram', fake_upload_to_telegram)
 
+    ticket = _ticket(user_id=session.context.user_id)
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+
     begin = await support_ws._handle_upload_begin(
-        types.SimpleNamespace(),
+        _FakeDb(),
         session,
         {
+            'ticketId': str(ticket.id),
             'fileName': 'proof.png',
             'contentType': 'image/png',
             'mediaType': 'photo',
@@ -430,10 +438,18 @@ async def test_upload_lifecycle_makes_media_attachable_only_after_finish(monkeyp
 async def test_upload_finish_rejects_checksum_mismatch(monkeypatch) -> None:
     session = _session()
     data = b'corrupted'
+    ticket = _ticket(user_id=session.context.user_id)
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+
     begin = await support_ws._handle_upload_begin(
-        types.SimpleNamespace(),
+        _FakeDb(),
         session,
         {
+            'ticketId': str(ticket.id),
             'fileName': 'safe.txt',
             'contentType': 'text/plain',
             'mediaType': 'document',
@@ -451,6 +467,58 @@ async def test_upload_finish_rejects_checksum_mismatch(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match='UPLOAD_CHECKSUM_MISMATCH'):
         await support_ws._handle_upload_finish(session, {'uploadId': begin['uploadId'], 'checksumSha256': 'bad'})
+
+
+@pytest.mark.asyncio
+async def test_upload_begin_requires_ticket_id() -> None:
+    """Uploads must be anchored to a visible ticket; a ticketless begin is rejected
+    so no account can stage arbitrary files through the support bot unauthorized."""
+    session = _session()
+    with pytest.raises(ValueError, match='ticketId'):
+        await support_ws._handle_upload_begin(
+            _FakeDb(),
+            session,
+            {'fileName': 'proof.png', 'contentType': 'image/png', 'mediaType': 'photo', 'sizeBytes': 3},
+        )
+
+
+@pytest.mark.asyncio
+async def test_upload_begin_enforces_active_transfer_cap(monkeypatch) -> None:
+    """A single session cannot pin unbounded memory by opening endless transfers;
+    once MAX_ACTIVE_TRANSFERS live transfers exist, further begins are rate-limited."""
+    session = _session()
+    ticket = _ticket(user_id=session.context.user_id)
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+
+    for _ in range(support_ws.MAX_ACTIVE_TRANSFERS):
+        await support_ws._handle_upload_begin(
+            _FakeDb(),
+            session,
+            {
+                'ticketId': str(ticket.id),
+                'fileName': 'a.png',
+                'contentType': 'image/png',
+                'mediaType': 'photo',
+                'sizeBytes': 3,
+            },
+        )
+
+    with pytest.raises(RuntimeError, match='RATE_LIMITED'):
+        await support_ws._handle_upload_begin(
+            _FakeDb(),
+            session,
+            {
+                'ticketId': str(ticket.id),
+                'fileName': 'b.png',
+                'contentType': 'image/png',
+                'mediaType': 'photo',
+                'sizeBytes': 3,
+            },
+        )
 
 
 def test_ticket_create_declared_out_of_scope_in_ready_event() -> None:

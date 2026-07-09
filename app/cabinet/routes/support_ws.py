@@ -78,6 +78,15 @@ MAX_UPLOAD_CHUNK_SIZE = 512 * 1024
 DEFAULT_DOWNLOAD_CHUNK_SIZE = 256 * 1024
 TRANSFER_TTL_SECONDS = 15 * 60
 AUTH_EXPIRING_NOTICE_SECONDS = 5 * 60
+# One base64 chunk (512 KiB -> ~683 KiB) plus envelope; reject larger frames before
+# json.loads so a single client cannot force multi-hundred-MB parses into memory.
+MAX_MESSAGE_BYTES = 2 * 1024 * 1024
+# Per-session ceilings so one connection cannot pin unbounded memory: in-flight
+# transfers each buffer up to MAX_FILE_SIZE, and the completed/idempotency maps would
+# otherwise grow for the life of the socket.
+MAX_ACTIVE_TRANSFERS = 8
+MAX_COMPLETED_MEDIA = 32
+MAX_IDEMPOTENCY_KEYS = 256
 ALLOWED_PRIORITIES = {'low', 'normal', 'high', 'urgent'}
 ALLOWED_STATUSES = {'open', 'pending', 'answered', 'closed'}
 
@@ -767,6 +776,10 @@ def _check_idempotency(session: SupportWsSession, key: Any, payload: dict[str, A
         if cached is not None:
             return cached
     session.idempotency[key] = fingerprint
+    while len(session.idempotency) > MAX_IDEMPOTENCY_KEYS:
+        oldest = next(iter(session.idempotency))
+        session.idempotency.pop(oldest, None)
+        session.idempotency_results.pop(oldest, None)
     return None
 
 
@@ -1047,6 +1060,19 @@ async def _upload_to_telegram(upload: UploadTransfer) -> dict[str, Any]:
         await bot.session.close()
 
 
+def _prune_expired_transfers(session: SupportWsSession) -> None:
+    for key in [k for k, v in session.uploads.items() if v.expired or v.cancelled]:
+        session.uploads.pop(key, None)
+    for key in [k for k, v in session.downloads.items() if v.expired or v.cancelled]:
+        session.downloads.pop(key, None)
+
+
+def _assert_transfer_capacity(session: SupportWsSession) -> None:
+    _prune_expired_transfers(session)
+    if len(session.uploads) + len(session.downloads) >= MAX_ACTIVE_TRANSFERS:
+        raise RuntimeError('RATE_LIMITED')
+
+
 async def _handle_upload_begin(db: AsyncSession, session: SupportWsSession, payload: dict[str, Any]) -> dict[str, Any]:
     file_name = payload.get('fileName') or 'upload'
     content_type = payload.get('contentType')
@@ -1056,12 +1082,14 @@ async def _handle_upload_begin(db: AsyncSession, session: SupportWsSession, payl
         raise RuntimeError('UNSUPPORTED_MEDIA_TYPE')
     if _is_blocked_upload(file_name, content_type):
         raise RuntimeError('UNSUPPORTED_MEDIA_TYPE')
-    ticket_id = payload.get('ticketId')
-    parsed_ticket_id = _parse_ticket_id(ticket_id) if ticket_id not in (None, '') else None
-    if parsed_ticket_id is not None:
-        ticket = await _get_visible_ticket(db, session.context, parsed_ticket_id)
-        if ticket is None:
-            raise LookupError(str(parsed_ticket_id))
+    # Uploads require an existing visible ticket (see docs: media upload/download
+    # requires ticket/media visibility). A ticketless upload would let any account
+    # stage arbitrary files through the support bot with no authorization anchor.
+    parsed_ticket_id = _parse_ticket_id(payload.get('ticketId'))
+    ticket = await _get_visible_ticket(db, session.context, parsed_ticket_id)
+    if ticket is None:
+        raise LookupError(str(parsed_ticket_id))
+    _assert_transfer_capacity(session)
     upload_id = secrets.token_urlsafe(16)
     session.uploads[upload_id] = UploadTransfer(
         upload_id=upload_id,
@@ -1133,6 +1161,8 @@ async def _handle_upload_finish(session: SupportWsSession, payload: dict[str, An
     media['sha256'] = digest
     media['ownerUserId'] = session.context.user_id
     session.completed_media[media['mediaId']] = media
+    while len(session.completed_media) > MAX_COMPLETED_MEDIA:
+        session.completed_media.pop(next(iter(session.completed_media)))
     session.uploads.pop(upload_id, None)
     return media
 
@@ -1187,6 +1217,7 @@ async def _handle_download_begin(
     ticket = await _get_visible_ticket(db, session.context, ticket_id)
     if ticket is None or not _ticket_has_media(ticket, media_id):
         raise RuntimeError('DOWNLOAD_NOT_FOUND')
+    _assert_transfer_capacity(session)
     content, file_name, content_type, headers = await _download_media_bytes(media_id)
     download_id = secrets.token_urlsafe(16)
     session.downloads[download_id] = DownloadTransfer(
@@ -1425,6 +1456,15 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
         while True:
             try:
                 raw = await websocket.receive_text()
+                if len(raw) > MAX_MESSAGE_BYTES:
+                    await session.send_json(
+                        _command_result(
+                            'unknown',
+                            '',
+                            error=_shared_error('PAYLOAD_TOO_LARGE', 'message exceeds maximum frame size'),
+                        )
+                    )
+                    continue
                 message = json.loads(raw)
                 command, request_id, payload = _validate_envelope(message)
                 if command != 'auth.reauthenticate':

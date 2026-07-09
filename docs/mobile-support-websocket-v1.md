@@ -69,10 +69,14 @@ Download commands:
 
 Uploads and downloads are scoped to the authenticated websocket session. Cross-connection resume is not supported. A returned `mediaId` is attachable to `ticket.reply` only after `media.upload.finish` succeeds.
 
+`media.upload.begin` requires a `ticketId` for a ticket the caller can see; a missing or invisible ticket is rejected (`VALIDATION_ERROR`/`NOT_FOUND`).
+
 Limits and protections:
 
 - maximum file size: 10 MB
 - maximum upload chunk: 512 KiB
+- maximum command frame: 2 MiB (larger frames are rejected with `PAYLOAD_TOO_LARGE`)
+- maximum concurrent in-flight transfers per session: 8 (further begins return `RATE_LIMITED`; expired/cancelled transfers are pruned first)
 - base64 JSON frames
 - SHA-256 finish validation
 - existing unsafe MIME/extension blocks for HTML, SVG, XML, and JavaScript content
