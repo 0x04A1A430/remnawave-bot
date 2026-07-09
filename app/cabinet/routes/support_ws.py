@@ -32,6 +32,7 @@ from app.cabinet.routes.media import (
     _content_response_params,
     _resolve_target_chat_id,
 )
+from app.cabinet.routes.websocket import notify_admins_ticket_reply, notify_user_ticket_reply
 from app.config import settings
 from app.database.crud.rbac import SUPERADMIN_LEVEL, UserRoleCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
@@ -463,6 +464,90 @@ async def _has_permission(db: AsyncSession, context: WsUserContext, permission: 
     return allowed
 
 
+def _ws_client_ip(websocket: WebSocket) -> str | None:
+    forwarded_for = websocket.headers.get('x-forwarded-for') if hasattr(websocket, 'headers') else None
+    if forwarded_for:
+        return forwarded_for.split(',', maxsplit=1)[0].strip()
+    client = getattr(websocket, 'client', None)
+    return getattr(client, 'host', None)
+
+
+async def _log_ws_permission_audit(
+    db: AsyncSession,
+    session: SupportWsSession,
+    *,
+    permission: str,
+    command: str,
+    status: str,
+    ticket_id: int | None = None,
+    reason: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    resource_type = permission.split(':', maxsplit=1)[0] if ':' in permission else None
+    audit_details: dict[str, Any] = {
+        'method': 'WEBSOCKET',
+        'path': '/cabinet/ws/support/v1',
+        'command': command,
+    }
+    if ticket_id is not None:
+        audit_details['ticketId'] = str(ticket_id)
+    if reason:
+        audit_details['reason'] = reason
+    if details:
+        audit_details.update(details)
+    await PermissionService.log_action(
+        db,
+        user_id=session.context.user_id,
+        action=permission,
+        resource_type=resource_type,
+        resource_id=str(ticket_id) if ticket_id is not None else None,
+        details=audit_details,
+        ip_address=_ws_client_ip(session.websocket),
+        user_agent=session.websocket.headers.get('user-agent', '') if hasattr(session.websocket, 'headers') else '',
+        status=status,
+        request_method='WEBSOCKET',
+        request_path='/cabinet/ws/support/v1',
+    )
+
+
+async def _require_ws_permission(
+    db: AsyncSession,
+    session: SupportWsSession,
+    *,
+    permission: str,
+    command: str,
+    ticket_id: int | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    allowed, reason = await PermissionService.check_permission(
+        db,
+        session.context.user,
+        permission,
+        ip_address=_ws_client_ip(session.websocket),
+    )
+    if not allowed:
+        await _log_ws_permission_audit(
+            db,
+            session,
+            permission=permission,
+            command=command,
+            status='denied',
+            ticket_id=ticket_id,
+            reason=reason,
+        )
+        await db.commit()
+        raise PermissionError(f'Permission denied: {reason}')
+    await _log_ws_permission_audit(
+        db,
+        session,
+        permission=permission,
+        command=command,
+        status='success',
+        ticket_id=ticket_id,
+        details=details,
+    )
+
+
 async def _can_view_ticket(db: AsyncSession, context: WsUserContext, ticket: Ticket) -> bool:
     if context.role == 'owner':
         return ticket.user_id == context.user_id
@@ -545,6 +630,10 @@ def _message_snapshot(message: TicketMessage) -> dict[str, Any]:
     }
 
 
+def _is_ticket_reply_blocked(ticket: Ticket) -> bool:
+    return bool(getattr(ticket, 'is_user_reply_blocked', False) or getattr(ticket, 'is_reply_blocked', False))
+
+
 def _ticket_snapshot(ticket: Ticket, *, include_messages: bool = False) -> dict[str, Any]:
     messages = sorted(ticket.messages or [], key=lambda item: item.created_at)
     snapshot: dict[str, Any] = {
@@ -562,7 +651,7 @@ def _ticket_snapshot(ticket: Ticket, *, include_messages: bool = False) -> dict[
         'user': _user_snapshot(getattr(ticket, 'user', None)),
     }
     if include_messages:
-        snapshot['isReplyBlocked'] = bool(getattr(ticket, 'is_user_reply_blocked', False))
+        snapshot['isReplyBlocked'] = _is_ticket_reply_blocked(ticket)
         snapshot['messages'] = [_message_snapshot(message) for message in messages]
     return snapshot
 
@@ -662,10 +751,13 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
     ticket = await _get_visible_ticket(db, session.context, ticket_id)
     if ticket is None:
         raise LookupError(str(ticket_id))
-    if not await _can_reply_ticket(db, session.context, ticket):
+    is_from_admin = session.context.role in {'admin', 'support'}
+    if not is_from_admin and not await _can_reply_ticket(db, session.context, ticket):
         raise PermissionError('tickets:reply is required')
     if ticket.status == 'closed':
         raise RuntimeError('TICKET_CLOSED')
+    if session.context.role == 'owner' and _is_ticket_reply_blocked(ticket):
+        raise PermissionError('Replies to this ticket are blocked')
 
     _check_idempotency(session, payload.get('idempotencyKey'), payload)
     body = payload.get('body') or ''
@@ -685,7 +777,15 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
         media_items.append({'type': item['type'], 'file_id': media_id, 'caption': item.get('caption')})
 
     primary = media_items[0] if media_items else None
-    is_from_admin = session.context.role in {'admin', 'support'}
+    if is_from_admin:
+        await _require_ws_permission(
+            db,
+            session,
+            permission='tickets:reply',
+            command='ticket.reply',
+            ticket_id=ticket.id,
+            details={'hasBody': bool(body.strip()), 'attachmentCount': len(media_items)},
+        )
     message = TicketMessage(
         ticket_id=ticket.id,
         user_id=ticket.user_id,
@@ -707,9 +807,13 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
 
     try:
         if is_from_admin:
-            await TicketNotificationCRUD.create_user_notification_for_admin_reply(db, ticket, body)
+            notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(db, ticket, body)
+            if notification:
+                await notify_user_ticket_reply(ticket.user_id, ticket.id, body[:100])
         else:
-            await TicketNotificationCRUD.create_admin_notification_for_user_reply(db, ticket, body)
+            notification = await TicketNotificationCRUD.create_admin_notification_for_user_reply(db, ticket, body)
+            if notification:
+                await notify_admins_ticket_reply(ticket.id, body[:100], session.context.user_id)
     except Exception as exc:
         logger.warning('Support WS ticket notification creation failed', ticket_id=ticket.id, error=str(exc))
 
@@ -731,6 +835,7 @@ async def _handle_ticket_mutation(
     session: SupportWsSession,
     payload: dict[str, Any],
     *,
+    command_name: str,
     field_name: str,
     allowed_values: set[str],
     event_name: str,
@@ -739,14 +844,32 @@ async def _handle_ticket_mutation(
     ticket = await _get_visible_ticket(db, session.context, ticket_id)
     if ticket is None:
         raise LookupError(str(ticket_id))
-    if not await _can_update_ticket(db, session.context):
-        raise PermissionError('tickets:close is required')
     _check_idempotency(session, payload.get('idempotencyKey'), payload)
     value = payload.get(field_name)
     if value not in allowed_values:
         raise ValueError(f'{field_name} must be one of: {sorted(allowed_values)}')
 
     previous = getattr(ticket, field_name if field_name != 'status' else 'status')
+    if session.context.role == 'owner':
+        await _log_ws_permission_audit(
+            db,
+            session,
+            permission='tickets:close',
+            command=command_name,
+            status='denied',
+            ticket_id=ticket.id,
+            reason='owners cannot update ticket status or priority',
+        )
+        await db.commit()
+        raise PermissionError('tickets:close is required')
+    await _require_ws_permission(
+        db,
+        session,
+        permission='tickets:close',
+        command=command_name,
+        ticket_id=ticket.id,
+        details={'field': field_name, 'previousValue': previous, 'newValue': value},
+    )
     setattr(ticket, field_name, value)
     ticket.updated_at = _utc_now()
     if field_name == 'status':
@@ -1080,6 +1203,7 @@ async def _dispatch_command(
             db,
             session,
             payload,
+            command_name='ticket.status.update',
             field_name='status',
             allowed_values=ALLOWED_STATUSES,
             event_name='ticket.status.updated',
@@ -1089,6 +1213,7 @@ async def _dispatch_command(
             db,
             session,
             payload,
+            command_name='ticket.priority.update',
             field_name='priority',
             allowed_values=ALLOWED_PRIORITIES,
             event_name='ticket.priority.updated',

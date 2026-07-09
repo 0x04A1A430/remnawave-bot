@@ -4,6 +4,7 @@ import base64
 import hashlib
 import types
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -30,6 +31,41 @@ def _context(user_id: int = 10) -> support_ws.WsUserContext:
 def _session() -> support_ws.SupportWsSession:
     websocket = types.SimpleNamespace()
     return support_ws.SupportWsSession(websocket=websocket, context=_context())
+
+
+class _FakeDb:
+    def __init__(self) -> None:
+        self.added = []
+        self.commits = 0
+
+    def add(self, item) -> None:
+        if isinstance(item, support_ws.TicketMessage) and item.id is None:
+            item.id = 501
+        self.added.append(item)
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def refresh(self, _item, _attrs=None) -> None:
+        return None
+
+
+def _ticket(**overrides):
+    base = {
+        'id': 3,
+        'user_id': 10,
+        'title': 'Need help',
+        'status': 'open',
+        'priority': 'normal',
+        'created_at': datetime(2026, 7, 9, 0, 0, tzinfo=UTC),
+        'updated_at': datetime(2026, 7, 9, 0, 1, tzinfo=UTC),
+        'closed_at': None,
+        'messages': [],
+        'user': None,
+        'is_user_reply_blocked': False,
+    }
+    base.update(overrides)
+    return types.SimpleNamespace(**base)
 
 
 def _ws_client() -> TestClient:
@@ -109,6 +145,231 @@ def test_ticket_snapshot_keeps_assignment_fields_explicitly_nullable() -> None:
 
     assert snapshot['assignedTo'] is None
     assert snapshot['messages'][0]['attachments'] == []
+
+
+@pytest.mark.asyncio
+async def test_owner_ticket_reply_respects_reply_block(monkeypatch) -> None:
+    session = _session()
+    ticket = _ticket(user_id=session.context.user_id, is_user_reply_blocked=True)
+    db = _FakeDb()
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+
+    with pytest.raises(PermissionError, match='Replies to this ticket are blocked'):
+        await support_ws._handle_ticket_reply(
+            db,
+            session,
+            {
+                'ticketId': str(ticket.id),
+                'clientMessageId': 'client-1',
+                'body': 'blocked reply',
+                'attachmentMediaIds': [],
+                'idempotencyKey': 'reply-1',
+            },
+        )
+
+    assert db.added == []
+    assert session.idempotency == {}
+
+
+@pytest.mark.asyncio
+async def test_owner_ws_reply_notifies_legacy_admin_websocket(monkeypatch) -> None:
+    session = _session()
+    ticket = _ticket(user_id=session.context.user_id)
+    legacy_notify = AsyncMock()
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(support_ws.TicketNotificationCRUD, 'create_admin_notification_for_user_reply', AsyncMock(return_value=object()))
+    monkeypatch.setattr(support_ws, 'notify_admins_ticket_reply', legacy_notify)
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', AsyncMock())
+
+    await support_ws._handle_ticket_reply(
+        _FakeDb(),
+        session,
+        {
+            'ticketId': str(ticket.id),
+            'clientMessageId': 'client-1',
+            'body': 'hello legacy admins',
+            'attachmentMediaIds': [],
+            'idempotencyKey': 'reply-1',
+        },
+    )
+
+    legacy_notify.assert_awaited_once_with(ticket.id, 'hello legacy admins', session.context.user_id)
+
+
+@pytest.mark.asyncio
+async def test_support_ws_reply_notifies_legacy_user_websocket(monkeypatch) -> None:
+    session = _session()
+    session.context.role = 'support'
+    session.context.user.id = 20
+    session.websocket = types.SimpleNamespace(
+        headers={'user-agent': 'pytest', 'x-forwarded-for': '203.0.113.9'},
+        client=types.SimpleNamespace(host='127.0.0.1'),
+    )
+    ticket = _ticket(user_id=10)
+    legacy_notify = AsyncMock()
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    async def fake_check_permission(_db, _user, permission, ip_address=None):
+        return permission == 'tickets:reply', 'ok'
+
+    async def fake_log_action(_db, **_kwargs):
+        return None
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(support_ws.PermissionService, 'check_permission', fake_check_permission)
+    monkeypatch.setattr(support_ws.PermissionService, 'log_action', fake_log_action)
+    monkeypatch.setattr(support_ws.TicketNotificationCRUD, 'create_user_notification_for_admin_reply', AsyncMock(return_value=object()))
+    monkeypatch.setattr(support_ws, 'notify_user_ticket_reply', legacy_notify)
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', AsyncMock())
+
+    await support_ws._handle_ticket_reply(
+        _FakeDb(),
+        session,
+        {
+            'ticketId': str(ticket.id),
+            'clientMessageId': 'client-1',
+            'body': 'hello legacy user',
+            'attachmentMediaIds': [],
+            'idempotencyKey': 'reply-1',
+        },
+    )
+
+    legacy_notify.assert_awaited_once_with(ticket.user_id, ticket.id, 'hello legacy user')
+
+
+@pytest.mark.asyncio
+async def test_privileged_ws_reply_writes_permission_audit_without_sensitive_payload(monkeypatch) -> None:
+    session = _session()
+    session.context.role = 'support'
+    session.context.user.id = 20
+    session.websocket = types.SimpleNamespace(
+        headers={'user-agent': 'pytest', 'x-forwarded-for': '203.0.113.9'},
+        client=types.SimpleNamespace(host='127.0.0.1'),
+    )
+    ticket = _ticket(user_id=10)
+    audit_rows = []
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    async def fake_check_permission(_db, _user, permission, ip_address=None):
+        assert permission == 'tickets:reply'
+        assert ip_address == '203.0.113.9'
+        return True, 'ok'
+
+    async def fake_log_action(_db, **kwargs):
+        audit_rows.append(kwargs)
+
+    async def fake_notify(_db, _ticket, _body):
+        return None
+
+    async def fake_broadcast(_db, _ticket, _event):
+        return None
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(support_ws.PermissionService, 'check_permission', fake_check_permission)
+    monkeypatch.setattr(support_ws.PermissionService, 'log_action', fake_log_action)
+    monkeypatch.setattr(support_ws.TicketNotificationCRUD, 'create_user_notification_for_admin_reply', fake_notify)
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+
+    await support_ws._handle_ticket_reply(
+        _FakeDb(),
+        session,
+        {
+            'ticketId': str(ticket.id),
+            'clientMessageId': 'client-1',
+            'body': 'sensitive support response',
+            'attachmentMediaIds': [],
+            'idempotencyKey': 'reply-1',
+        },
+    )
+
+    assert len(audit_rows) == 1
+    row = audit_rows[0]
+    assert row['action'] == 'tickets:reply'
+    assert row['resource_type'] == 'tickets'
+    assert row['resource_id'] == str(ticket.id)
+    assert row['status'] == 'success'
+    assert row['request_method'] == 'WEBSOCKET'
+    assert row['request_path'] == '/cabinet/ws/support/v1'
+    assert row['details']['command'] == 'ticket.reply'
+    assert row['details']['hasBody'] is True
+    assert row['details']['attachmentCount'] == 0
+    assert 'sensitive support response' not in str(row['details'])
+    assert 'request_body' not in row['details']
+
+
+@pytest.mark.asyncio
+async def test_privileged_ws_status_update_writes_permission_audit(monkeypatch) -> None:
+    session = _session()
+    session.context.role = 'admin'
+    session.context.user.id = 20
+    session.websocket = types.SimpleNamespace(
+        headers={'user-agent': 'pytest', 'x-forwarded-for': '203.0.113.10'},
+        client=types.SimpleNamespace(host='127.0.0.1'),
+    )
+    ticket = _ticket(user_id=10)
+    audit_rows = []
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    async def fake_check_permission(_db, _user, permission, ip_address=None):
+        assert permission == 'tickets:close'
+        assert ip_address == '203.0.113.10'
+        return True, 'ok'
+
+    async def fake_log_action(_db, **kwargs):
+        audit_rows.append(kwargs)
+
+    async def fake_broadcast(_db, _ticket, _event):
+        return None
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(support_ws.PermissionService, 'check_permission', fake_check_permission)
+    monkeypatch.setattr(support_ws.PermissionService, 'log_action', fake_log_action)
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+
+    db = _FakeDb()
+    result = await support_ws._handle_ticket_mutation(
+        db,
+        session,
+        {'ticketId': str(ticket.id), 'status': 'closed', 'idempotencyKey': 'status-1'},
+        command_name='ticket.status.update',
+        field_name='status',
+        allowed_values=support_ws.ALLOWED_STATUSES,
+        event_name='ticket.status.updated',
+    )
+
+    assert result['ticket']['status'] == 'closed'
+    assert db.commits == 1
+    assert len(audit_rows) == 1
+    row = audit_rows[0]
+    assert row['action'] == 'tickets:close'
+    assert row['resource_type'] == 'tickets'
+    assert row['resource_id'] == str(ticket.id)
+    assert row['status'] == 'success'
+    assert row['request_method'] == 'WEBSOCKET'
+    assert row['request_path'] == '/cabinet/ws/support/v1'
+    assert row['details'] == {
+        'method': 'WEBSOCKET',
+        'path': '/cabinet/ws/support/v1',
+        'command': 'ticket.status.update',
+        'ticketId': str(ticket.id),
+        'field': 'status',
+        'previousValue': 'open',
+        'newValue': 'closed',
+    }
 
 
 @pytest.mark.asyncio
