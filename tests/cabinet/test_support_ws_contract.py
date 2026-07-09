@@ -185,7 +185,9 @@ async def test_owner_ws_reply_notifies_legacy_admin_websocket(monkeypatch) -> No
         return ticket
 
     monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
-    monkeypatch.setattr(support_ws.TicketNotificationCRUD, 'create_admin_notification_for_user_reply', AsyncMock(return_value=object()))
+    monkeypatch.setattr(
+        support_ws.TicketNotificationCRUD, 'create_admin_notification_for_user_reply', AsyncMock(return_value=object())
+    )
     monkeypatch.setattr(support_ws, 'notify_admins_ticket_reply', legacy_notify)
     monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', AsyncMock())
 
@@ -228,7 +230,9 @@ async def test_support_ws_reply_notifies_legacy_user_websocket(monkeypatch) -> N
     monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
     monkeypatch.setattr(support_ws.PermissionService, 'check_permission', fake_check_permission)
     monkeypatch.setattr(support_ws.PermissionService, 'log_action', fake_log_action)
-    monkeypatch.setattr(support_ws.TicketNotificationCRUD, 'create_user_notification_for_admin_reply', AsyncMock(return_value=object()))
+    monkeypatch.setattr(
+        support_ws.TicketNotificationCRUD, 'create_user_notification_for_admin_reply', AsyncMock(return_value=object())
+    )
     monkeypatch.setattr(support_ws, 'notify_user_ticket_reply', legacy_notify)
     monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', AsyncMock())
 

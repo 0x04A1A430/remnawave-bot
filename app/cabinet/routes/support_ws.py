@@ -389,7 +389,9 @@ async def _apply_cabinet_account_guards(
             except NotDeletedError:
                 logger.info('Support WS auto-revival race: user already revived', user_id=user.id)
         elif status_value == UserStatus.DELETED.value:
-            return _shared_error('FORBIDDEN', 'Account is deleted and must be restored through the bot', resource_type='auth')
+            return _shared_error(
+                'FORBIDDEN', 'Account is deleted and must be restored through the bot', resource_type='auth'
+            )
         else:
             return _shared_error('FORBIDDEN', 'User account is not active', resource_type='auth')
 
@@ -400,7 +402,9 @@ async def _apply_cabinet_account_guards(
         from app.services.channel_subscription_service import channel_subscription_service
 
         channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
-        is_subscribed = all(channel['is_subscribed'] for channel in channels_with_status) if channels_with_status else True
+        is_subscribed = (
+            all(channel['is_subscribed'] for channel in channels_with_status) if channels_with_status else True
+        )
         if not is_subscribed:
             return _shared_error('FORBIDDEN', 'Required channel subscription is missing', resource_type='auth')
 
