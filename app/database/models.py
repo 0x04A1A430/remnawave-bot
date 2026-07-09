@@ -2784,6 +2784,17 @@ class PublicOffer(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
+class RecurrentPayments(Base):
+    __tablename__ = 'recurrent_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String(10), nullable=False, unique=True)
+    content = Column(Text, nullable=False)
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+
 class FaqSetting(Base):
     __tablename__ = 'faq_settings'
 

@@ -965,6 +965,7 @@ class Settings(BaseSettings):
 
     PRIVACY_POLICY_DISPLAY_MODE: str = 'both'
     PUBLIC_OFFER_DISPLAY_MODE: str = 'both'
+    RECURRENT_PAYMENTS_DISPLAY_MODE: str = 'both'
     SERVICE_RULES_DISPLAY_MODE: str = 'both'
     FAQ_DISPLAY_MODE: str = 'both'
 
