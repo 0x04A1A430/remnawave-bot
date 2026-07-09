@@ -15,7 +15,7 @@ from typing import Any
 
 import structlog
 from aiogram.types import BufferedInputFile
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,7 +24,6 @@ from starlette.websockets import WebSocketState
 from app.bot_factory import create_bot
 from app.cabinet.auth.jwt_handler import get_token_payload
 from app.cabinet.auth.telegram_auth import validate_telegram_init_data
-from app.cabinet.dependencies import get_cabinet_db
 from app.cabinet.routes.media import (
     _BLOCKED_UPLOAD_CONTENT_TYPES,
     _BLOCKED_UPLOAD_EXTENSIONS,
@@ -37,8 +36,13 @@ from app.config import settings
 from app.database.crud.rbac import SUPERADMIN_LEVEL, UserRoleCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.crud.user import get_user_by_id
+from app.database.database import AsyncSessionLocal
 from app.database.models import Ticket, TicketMessage, User, UserStatus
+from app.services.blacklist_service import blacklist_service
+from app.services.maintenance_service import maintenance_service
 from app.services.permission_service import PermissionService
+from app.services.rbac_bootstrap_service import is_user_admin_by_env
+from app.services.user_revival_service import NotDeletedError, revive_deleted_user
 
 
 logger = structlog.get_logger(__name__)
@@ -336,7 +340,7 @@ support_ws_manager = SupportWsManager()
 async def _role_context(db: AsyncSession, user: User, payload: dict[str, Any]) -> WsUserContext:
     permissions, role_names, role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
     lower_roles = {role.lower() for role in role_names}
-    is_legacy_admin = settings.is_admin(telegram_id=user.telegram_id, email=user.email if user.email_verified else None)
+    is_legacy_admin = is_user_admin_by_env(user).is_admin
 
     if is_legacy_admin or role_level >= SUPERADMIN_LEVEL or ADMIN_ROLES.intersection(lower_roles):
         role = 'admin'
@@ -353,6 +357,59 @@ async def _role_context(db: AsyncSession, user: User, payload: dict[str, Any]) -
         role_names=role_names,
         role_level=role_level,
     )
+
+
+def _user_status_value(user: User) -> str | None:
+    status = getattr(user, 'status', None)
+    return getattr(status, 'value', status)
+
+
+async def _apply_cabinet_account_guards(
+    db: AsyncSession,
+    user: User,
+    *,
+    init_data_matches_user: bool,
+) -> dict[str, Any] | None:
+    if user.telegram_id is not None:
+        is_blacklisted, _blacklist_reason = await blacklist_service.is_user_blacklisted(user.telegram_id, user.username)
+        if is_blacklisted:
+            return _shared_error('FORBIDDEN', 'User is blacklisted', resource_type='auth')
+
+    status_value = _user_status_value(user)
+    if status_value != UserStatus.ACTIVE.value:
+        can_auto_revive = (
+            status_value == UserStatus.DELETED.value and user.telegram_id is not None and init_data_matches_user
+        )
+        if can_auto_revive:
+            try:
+                await revive_deleted_user(db, user, source='cabinet_support_ws')
+                await db.commit()
+                await db.refresh(user)
+            except NotDeletedError:
+                logger.info('Support WS auto-revival race: user already revived', user_id=user.id)
+        elif status_value == UserStatus.DELETED.value:
+            return _shared_error('FORBIDDEN', 'Account is deleted and must be restored through the bot', resource_type='auth')
+        else:
+            return _shared_error('FORBIDDEN', 'User account is not active', resource_type='auth')
+
+    if maintenance_service.is_maintenance_active() and not is_user_admin_by_env(user).is_admin:
+        return _shared_error('FORBIDDEN', 'Service is under maintenance', resource_type='auth')
+
+    if settings.CHANNEL_IS_REQUIRED_SUB and user.telegram_id is not None and not is_user_admin_by_env(user).is_admin:
+        from app.services.channel_subscription_service import channel_subscription_service
+
+        channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
+        is_subscribed = all(channel['is_subscribed'] for channel in channels_with_status) if channels_with_status else True
+        if not is_subscribed:
+            return _shared_error('FORBIDDEN', 'Required channel subscription is missing', resource_type='auth')
+
+    user.cabinet_last_login = _utc_now()
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    return None
 
 
 async def _authenticate_ws(
@@ -383,6 +440,7 @@ async def _authenticate_ws(
         return None, _shared_error('AUTH_REQUIRED', 'User was not found', resource_type='auth')
 
     init_data_raw = websocket.headers.get('x-telegram-init-data')
+    init_data_matches_user = False
     if init_data_raw and user.telegram_id is not None:
         tg_user = validate_telegram_init_data(init_data_raw, max_age_seconds=86400 * 30)
         if not tg_user or tg_user.get('id') != user.telegram_id:
@@ -391,16 +449,16 @@ async def _authenticate_ws(
                 'Session belongs to a different Telegram account',
                 resource_type='auth',
             )
+        init_data_matches_user = True
 
-    if getattr(user, 'status', None) != UserStatus.ACTIVE.value and getattr(user, 'status', None) != 'active':
-        return None, _shared_error('FORBIDDEN', 'User account is not active', resource_type='auth')
+    account_error = await _apply_cabinet_account_guards(db, user, init_data_matches_user=init_data_matches_user)
+    if account_error is not None:
+        return None, account_error
 
     return await _role_context(db, user, payload), None
 
 
 async def _has_permission(db: AsyncSession, context: WsUserContext, permission: str) -> bool:
-    if context.role == 'admin':
-        return True
     allowed, _reason = await PermissionService.check_permission(db, context.user, permission)
     return allowed
 
@@ -622,7 +680,7 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
     media_items = []
     for media_id in attachment_ids:
         item = session.completed_media.get(media_id)
-        if item is None:
+        if item is None or item.get('ownerUserId') != session.context.user_id:
             raise LookupError(media_id)
         media_items.append({'type': item['type'], 'file_id': media_id, 'caption': item.get('caption')})
 
@@ -812,11 +870,17 @@ async def _handle_upload_begin(db: AsyncSession, session: SupportWsSession, payl
     }
 
 
+def _assert_transfer_owner(session: SupportWsSession, transfer: UploadTransfer | DownloadTransfer) -> None:
+    if transfer.owner_user_id != session.context.user_id:
+        raise RuntimeError('FORBIDDEN')
+
+
 async def _handle_upload_chunk(session: SupportWsSession, payload: dict[str, Any]) -> dict[str, Any]:
     upload_id = payload.get('uploadId')
     upload = session.uploads.get(upload_id)
     if upload is None:
         raise RuntimeError('UPLOAD_NOT_FOUND')
+    _assert_transfer_owner(session, upload)
     if upload.cancelled:
         raise RuntimeError('UPLOAD_CANCELLED')
     if upload.expired:
@@ -844,6 +908,7 @@ async def _handle_upload_finish(session: SupportWsSession, payload: dict[str, An
     upload = session.uploads.get(upload_id)
     if upload is None:
         raise RuntimeError('UPLOAD_NOT_FOUND')
+    _assert_transfer_owner(session, upload)
     if upload.cancelled:
         raise RuntimeError('UPLOAD_CANCELLED')
     if upload.expired:
@@ -856,6 +921,7 @@ async def _handle_upload_finish(session: SupportWsSession, payload: dict[str, An
         raise ValueError('uploaded byte count does not match declared sizeBytes')
     media = await _upload_to_telegram(upload)
     media['sha256'] = digest
+    media['ownerUserId'] = session.context.user_id
     session.completed_media[media['mediaId']] = media
     session.uploads.pop(upload_id, None)
     return media
@@ -866,6 +932,7 @@ async def _handle_upload_cancel(session: SupportWsSession, payload: dict[str, An
     upload = session.uploads.get(upload_id)
     if upload is None:
         raise RuntimeError('UPLOAD_NOT_FOUND')
+    _assert_transfer_owner(session, upload)
     upload.cancelled = True
     session.uploads.pop(upload_id, None)
     return {'uploadId': upload_id, 'cancelled': True}
@@ -940,6 +1007,7 @@ async def _handle_download_next(session: SupportWsSession, payload: dict[str, An
     download = session.downloads.get(download_id)
     if download is None or download.cancelled:
         raise RuntimeError('DOWNLOAD_NOT_FOUND')
+    _assert_transfer_owner(session, download)
     if download.expired:
         session.downloads.pop(download_id, None)
         raise RuntimeError('DOWNLOAD_EXPIRED')
@@ -970,6 +1038,7 @@ async def _handle_download_cancel(session: SupportWsSession, payload: dict[str, 
     download = session.downloads.get(download_id)
     if download is None:
         raise RuntimeError('DOWNLOAD_NOT_FOUND')
+    _assert_transfer_owner(session, download)
     download.cancelled = True
     session.downloads.pop(download_id, None)
     return {'downloadId': download_id, 'cancelled': True}
@@ -984,6 +1053,8 @@ async def _handle_reauthenticate(
     context, error = await _authenticate_ws(db, session.websocket, access_token=access_token)
     if error is not None or context is None:
         raise RuntimeError(error['code'] if error else 'AUTH_REQUIRED')
+    if context.user_id != session.context.user_id:
+        raise RuntimeError('FORBIDDEN')
     session.context = context
     return {
         'authenticated': True,
@@ -1104,7 +1175,7 @@ async def _reject_upgrade(websocket: WebSocket, code: int, reason: str) -> None:
 
 
 @router.websocket('/ws/support/v1')
-async def support_mobile_websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_cabinet_db)):
+async def support_mobile_websocket_endpoint(websocket: WebSocket):
     """Mobile-only support ticket command WebSocket."""
     if websocket.query_params.get('token') or websocket.query_params.get('api_key'):
         await _reject_upgrade(websocket, 400, 'Query-token auth is not supported')
@@ -1114,7 +1185,8 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket, db: AsyncSessi
         await _reject_upgrade(websocket, 426, 'Unsupported WebSocket subprotocol')
         return
 
-    context, error = await _authenticate_ws(db, websocket)
+    async with AsyncSessionLocal() as db:
+        context, error = await _authenticate_ws(db, websocket)
     if error is not None or context is None:
         await _reject_upgrade(websocket, 401, error['code'] if error else 'AUTH_REQUIRED')
         return
@@ -1156,7 +1228,8 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket, db: AsyncSessi
                         )
                         await websocket.close(code=1008, reason='Access token expired')
                         return
-                result = await _dispatch_command(db, session, command, payload)
+                async with AsyncSessionLocal() as db:
+                    result = await _dispatch_command(db, session, command, payload)
                 await websocket.send_json(_command_result(command, request_id, payload=result))
             except json.JSONDecodeError:
                 await websocket.send_json(
