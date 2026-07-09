@@ -303,9 +303,17 @@ class SupportWsSession:
     downloads: dict[str, DownloadTransfer] = field(default_factory=dict)
     completed_media: dict[str, dict[str, Any]] = field(default_factory=dict)
     idempotency: dict[str, str] = field(default_factory=dict)
+    idempotency_results: dict[str, dict[str, Any]] = field(default_factory=dict)
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def __hash__(self) -> int:
         return id(self)
+
+    async def send_json(self, data: dict[str, Any]) -> None:
+        # Broadcasts run from another user's task; serialize with the session's own
+        # receive-loop sends so two coroutines never interleave frames on one socket.
+        async with self.send_lock:
+            await self.websocket.send_json(data)
 
 
 class SupportWsManager:
@@ -330,7 +338,7 @@ class SupportWsManager:
         for session in sessions:
             try:
                 if await _can_view_ticket(db, session.context, ticket):
-                    await session.websocket.send_json(event)
+                    await session.send_json(event)
             except Exception as exc:
                 logger.warning('Support WS event delivery failed', user_id=session.context.user_id, error=str(exc))
 
@@ -738,16 +746,66 @@ def _idempotency_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _check_idempotency(session: SupportWsSession, key: Any, payload: dict[str, Any]) -> None:
+def _check_idempotency(session: SupportWsSession, key: Any, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Guard a command against duplicate execution under the same idempotencyKey.
+
+    Returns the previously produced result for an identical retry (so the caller
+    replays it without re-running side effects), raises IDEMPOTENCY_CONFLICT when
+    the same key arrives with a different payload, and returns None for a first-seen
+    key (recording its fingerprint so the eventual result can be cached).
+    """
     if not key:
-        return
+        return None
     if not isinstance(key, str):
         raise ValueError('idempotencyKey must be a string')
     fingerprint = _idempotency_fingerprint(payload)
     previous = session.idempotency.get(key)
     if previous and previous != fingerprint:
         raise RuntimeError('IDEMPOTENCY_CONFLICT')
+    if previous == fingerprint:
+        cached = session.idempotency_results.get(key)
+        if cached is not None:
+            return cached
     session.idempotency[key] = fingerprint
+    return None
+
+
+def _store_idempotency_result(session: SupportWsSession, key: Any, result: dict[str, Any]) -> None:
+    if isinstance(key, str) and key:
+        session.idempotency_results[key] = result
+
+
+async def _notify_ticket_reply_via_telegram(
+    db: AsyncSession,
+    ticket: Ticket,
+    body: str,
+    *,
+    is_from_admin: bool,
+    media_file_id: str | None = None,
+    media_type: str | None = None,
+) -> None:
+    """Send the same Telegram notification the HTTP reply routes send.
+
+    Admin/support reply -> DM the ticket owner (mirrors app/cabinet/routes/admin_tickets.py);
+    user reply -> push to the admin bot chat (mirrors app/cabinet/routes/tickets.py).
+    Best-effort: never let a notification failure break the reply flow.
+    """
+    try:
+        if is_from_admin:
+            from app.bot_factory import create_bot
+            from app.handlers.admin.tickets import notify_user_about_ticket_reply
+
+            bot = create_bot()
+            try:
+                await notify_user_about_ticket_reply(bot, ticket, body, db)
+            finally:
+                await bot.session.close()
+        else:
+            from app.handlers.tickets import notify_admins_about_ticket_reply
+
+            await notify_admins_about_ticket_reply(ticket, body, db, media_file_id=media_file_id, media_type=media_type)
+    except Exception as exc:
+        logger.warning('Support WS Telegram reply notification failed', ticket_id=ticket.id, error=str(exc))
 
 
 async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payload: dict[str, Any]) -> dict[str, Any]:
@@ -763,7 +821,9 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
     if session.context.role == 'owner' and _is_ticket_reply_blocked(ticket):
         raise PermissionError('Replies to this ticket are blocked')
 
-    _check_idempotency(session, payload.get('idempotencyKey'), payload)
+    replay = _check_idempotency(session, payload.get('idempotencyKey'), payload)
+    if replay is not None:
+        return replay
     body = payload.get('body') or ''
     if not isinstance(body, str) or len(body) > 4000:
         raise ValueError('body must be a string up to 4000 characters')
@@ -803,12 +863,22 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
         created_at=_utc_now(),
     )
     db.add(message)
-    ticket.status = 'answered' if is_from_admin else 'pending'
+    # Mirror TicketCRUD.add_message: admin reply -> answered; user reply -> open and
+    # re-arm SLA reminders from this message. Using 'pending' here diverged from every
+    # other reply channel and left SLA reminders stale.
+    if is_from_admin:
+        ticket.status = 'answered'
+    else:
+        ticket.status = 'open'
+        if hasattr(ticket, 'last_sla_reminder_at'):
+            ticket.last_sla_reminder_at = None
     ticket.updated_at = _utc_now()
     await db.commit()
     await db.refresh(message)
     await db.refresh(ticket, ['messages', 'user'])
 
+    media_file_id = primary.get('file_id') if primary else None
+    media_type = primary.get('type') if primary else None
     try:
         if is_from_admin:
             notification = await TicketNotificationCRUD.create_user_notification_for_admin_reply(db, ticket, body)
@@ -821,17 +891,26 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
     except Exception as exc:
         logger.warning('Support WS ticket notification creation failed', ticket_id=ticket.id, error=str(exc))
 
+    # Telegram parity with the HTTP reply paths: admin replies DM the ticket owner,
+    # user replies push to the admin bot chat. Without this, replies sent from the
+    # mobile app are invisible to anyone monitoring support over Telegram.
+    await _notify_ticket_reply_via_telegram(
+        db, ticket, body, is_from_admin=is_from_admin, media_file_id=media_file_id, media_type=media_type
+    )
+
     event = _message_event(
         'message.created',
         {'ticketId': str(ticket.id), 'message': _message_snapshot(message), 'ticketSnapshot': _ticket_snapshot(ticket)},
         ticket=ticket,
     )
     await support_ws_manager.broadcast_ticket_event(db, ticket, event)
-    return {
+    result = {
         'message': _message_snapshot(message),
         'ticketSnapshotVersion': _snapshot_version(ticket),
         'serverCursor': event['serverCursor'],
     }
+    _store_idempotency_result(session, payload.get('idempotencyKey'), result)
+    return result
 
 
 async def _handle_ticket_mutation(
@@ -848,7 +927,9 @@ async def _handle_ticket_mutation(
     ticket = await _get_visible_ticket(db, session.context, ticket_id)
     if ticket is None:
         raise LookupError(str(ticket_id))
-    _check_idempotency(session, payload.get('idempotencyKey'), payload)
+    replay = _check_idempotency(session, payload.get('idempotencyKey'), payload)
+    if replay is not None:
+        return replay
     value = payload.get(field_name)
     if value not in allowed_values:
         raise ValueError(f'{field_name} must be one of: {sorted(allowed_values)}')
@@ -892,7 +973,9 @@ async def _handle_ticket_mutation(
         ticket=ticket,
     )
     await support_ws_manager.broadcast_ticket_event(db, ticket, event)
-    return {'ticket': _ticket_snapshot(ticket, include_messages=True), 'serverCursor': event['serverCursor']}
+    result = {'ticket': _ticket_snapshot(ticket, include_messages=True), 'serverCursor': event['serverCursor']}
+    _store_idempotency_result(session, payload.get('idempotencyKey'), result)
+    return result
 
 
 async def _handle_state_reconcile(
@@ -1287,7 +1370,7 @@ async def _send_auth_expiring_notice(session: SupportWsSession) -> None:
         await session.websocket.close(code=1008, reason='Access token expired')
         return
     if seconds_left <= AUTH_EXPIRING_NOTICE_SECONDS:
-        await session.websocket.send_json(
+        await session.send_json(
             _message_event(
                 'auth.expiring',
                 {
@@ -1324,7 +1407,7 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
     session = SupportWsSession(websocket=websocket, context=context)
     await support_ws_manager.connect(session)
     try:
-        await websocket.send_json(
+        await session.send_json(
             _message_event(
                 'connection.ready',
                 {
@@ -1348,7 +1431,7 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
                     await _send_auth_expiring_notice(session)
                     exp = session.context.exp_timestamp
                     if exp is not None and exp <= int(_utc_now().timestamp()):
-                        await websocket.send_json(
+                        await session.send_json(
                             _command_result(
                                 command,
                                 request_id,
@@ -1359,9 +1442,9 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
                         return
                 async with AsyncSessionLocal() as db:
                     result = await _dispatch_command(db, session, command, payload)
-                await websocket.send_json(_command_result(command, request_id, payload=result))
+                await session.send_json(_command_result(command, request_id, payload=result))
             except json.JSONDecodeError:
-                await websocket.send_json(
+                await session.send_json(
                     _command_result(
                         'unknown',
                         '',
@@ -1374,7 +1457,7 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
                 try:
                     command = command if 'command' in locals() else 'unknown'
                     request_id = request_id if 'request_id' in locals() else ''
-                    await websocket.send_json(_command_result(command, request_id, error=_map_exception(command, exc)))
+                    await session.send_json(_command_result(command, request_id, error=_map_exception(command, exc)))
                 except Exception:
                     logger.exception('Support WS failed to send command error')
                     break

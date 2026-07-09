@@ -467,3 +467,69 @@ def test_ticket_create_declared_out_of_scope_in_ready_event() -> None:
     assert event['payload']['mediaDownload']['transport'] == 'websocket'
     assert event['payload']['assignment']['assignedTo'] is None
     assert event['payload']['assignment']['previousAssignedTo'] is None
+
+
+@pytest.mark.asyncio
+async def test_ws_reply_idempotent_retry_replays_without_duplicate(monkeypatch) -> None:
+    """An identical retry under the same idempotencyKey must replay the cached
+    result — not create a second message or re-broadcast. PKCS-style dedup was
+    previously broken: _check_idempotency only detected payload conflicts."""
+    session = _session()
+    ticket = _ticket(user_id=session.context.user_id)
+    broadcast = AsyncMock()
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(
+        support_ws.TicketNotificationCRUD, 'create_admin_notification_for_user_reply', AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(support_ws, '_notify_ticket_reply_via_telegram', AsyncMock())
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', broadcast)
+
+    db = _FakeDb()
+    payload = {
+        'ticketId': str(ticket.id),
+        'body': 'hi',
+        'attachmentMediaIds': [],
+        'idempotencyKey': 'reply-dup',
+    }
+    first = await support_ws._handle_ticket_reply(db, session, dict(payload))
+    second = await support_ws._handle_ticket_reply(db, session, dict(payload))
+
+    assert first == second
+    assert broadcast.await_count == 1
+    assert sum(isinstance(item, support_ws.TicketMessage) for item in db.added) == 1
+
+
+@pytest.mark.asyncio
+async def test_ws_owner_reply_sets_open_status_and_resets_sla(monkeypatch) -> None:
+    """A user (owner) reply must move the ticket to 'open' and clear the SLA
+    reminder marker, matching TicketCRUD.add_message. The handler previously set
+    'pending' and never reset last_sla_reminder_at."""
+    session = _session()
+    ticket = _ticket(
+        user_id=session.context.user_id,
+        status='answered',
+        last_sla_reminder_at=datetime(2026, 7, 9, tzinfo=UTC),
+    )
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(
+        support_ws.TicketNotificationCRUD, 'create_admin_notification_for_user_reply', AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(support_ws, '_notify_ticket_reply_via_telegram', AsyncMock())
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', AsyncMock())
+
+    await support_ws._handle_ticket_reply(
+        _FakeDb(),
+        session,
+        {'ticketId': str(ticket.id), 'body': 'more info', 'attachmentMediaIds': [], 'idempotencyKey': 'k'},
+    )
+
+    assert ticket.status == 'open'
+    assert ticket.last_sla_reminder_at is None
