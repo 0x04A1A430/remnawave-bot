@@ -585,6 +585,11 @@ class Settings(BaseSettings):
     PLATEGA_SECRET: str | None = None
     PLATEGA_DISPLAY_NAME: str = 'Platega'
     PLATEGA_BASE_URL: str = 'https://app.platega.io'
+    # 'v1' — документированный POST /transaction/process с обязательным paymentMethod
+    # (ответ несёт ссылку в поле `redirect`); 'v2' — POST /v2/transaction/process
+    # (ссылка в поле `url`), нужен мерчантам, у которых карточные каскады доступны
+    # только в v2 (#2934: v1 отдаёт 400 «No available card cascades» для карт).
+    PLATEGA_API_VERSION: str = 'v1'
     PLATEGA_RETURN_URL: str | None = None
     PLATEGA_FAILED_URL: str | None = None
     PLATEGA_CURRENCY: str = 'RUB'
