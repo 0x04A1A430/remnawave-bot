@@ -67,6 +67,10 @@ class EmailService:
         расшифровку и превращается в "<" вместо "&lt;".
         """
         text = re.sub(r'<(style|script)\b[^>]*>.*?</\1\s*>', '', body_html, flags=re.DOTALL | re.IGNORECASE)
+        # Запасной проход для битого шаблона (кастомные письма из админки): открытый
+        # <style>/<script> без закрывающего тега иначе утёк бы телом CSS/JS в текст —
+        # срезаем висячий блок до конца ввода.
+        text = re.sub(r'<(style|script)\b[^>]*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r'<[^>]+>', '', text)
         text = text.replace('&nbsp;', ' ')
         text = text.replace('&lt;', '<')

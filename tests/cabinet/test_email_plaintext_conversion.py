@@ -88,3 +88,58 @@ def test_real_default_template_produces_clean_plain_text() -> None:
     assert 'font-family' not in text
     assert '{' not in text, 'CSS-правила утекли в text/plain'
     assert text.strip(), 'plain-версия не должна быть пустой'
+
+
+def test_unclosed_style_block_does_not_leak_css() -> None:
+    """Битый шаблон (частый случай для кастомных писем из админки): открытый
+    <style> без закрывающего тега не должен утечь телом CSS в text/plain."""
+    html = '<body><p>Здравствуйте</p><style>\nbody { color: #333; }\n.container { max-width: 600px; }'
+
+    text = EmailService._html_to_plain_text(html)
+
+    assert 'color' not in text
+    assert 'max-width' not in text
+    assert '{' not in text
+    assert 'Здравствуйте' in text
+
+
+def test_send_email_plain_part_is_clean(monkeypatch) -> None:
+    """End-to-end: send_email должен положить в text/plain часть очищенный текст,
+    а не сырой CSS — фикс живёт именно в этой сборке multipart/alternative."""
+    from email import message_from_string
+
+    service = EmailService()
+    # from_email/from_name are read-only properties over settings — patch the
+    # descriptors on the class; is_configured is a method, patch on the instance.
+    monkeypatch.setattr(service, 'is_configured', lambda: True)
+    monkeypatch.setattr(type(service), 'from_email', property(lambda self: 'noreply@example.com'))
+    monkeypatch.setattr(type(service), 'from_name', property(lambda self: 'Service'))
+
+    sent: dict[str, str] = {}
+
+    class _FakeSMTP:
+        def sendmail(self, from_addr, to_addrs, msg):
+            sent['raw'] = msg
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(service, '_get_smtp_connection', lambda: _FakeSMTP())
+
+    html = '<html><head><style>body { font-family: Arial; }</style></head><body><p>Код: 123456</p></body></html>'
+    ok = service.send_email('user@example.com', 'Тема', html)
+
+    assert ok is True
+    message = message_from_string(sent['raw'])
+    plain_parts = [
+        part.get_payload(decode=True).decode('utf-8')
+        for part in message.walk()
+        if part.get_content_type() == 'text/plain'
+    ]
+    assert plain_parts, 'письмо должно содержать text/plain часть'
+    plain = plain_parts[0]
+    assert 'font-family' not in plain, 'CSS утёк в text/plain'
+    assert 'Код: 123456' in plain
