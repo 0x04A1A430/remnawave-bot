@@ -2,8 +2,7 @@
 
 The bot talks to the cache strictly through redis-py / REDIS_URL, so the only
 places where the Redis→Valkey switch can silently break are the compose files
-themselves: an image/binary mismatch (``redis-server``/``redis-cli`` do not
-exist in the valkey image and vice versa) or the two compose files drifting
+themselves: an image/binary mismatch (the valkey image ships redis-* only as compat symlinks, which upstream may drop - we pin the native valkey-* binaries) or the two compose files drifting
 apart. These tests parse both files and pin the invariants.
 """
 
