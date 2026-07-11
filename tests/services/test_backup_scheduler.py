@@ -65,6 +65,31 @@ def test_utc_timezone_keeps_legacy_behavior(service, monkeypatch: pytest.MonkeyP
     assert next_run == datetime(2026, 7, 3, 3, 0, tzinfo=UTC)
 
 
+def test_naive_reference_is_treated_as_utc(service, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Naive reference не должен интерпретироваться в системной зоне хоста —
+    трактуем как UTC (конвенция кодбазы), иначе расчёт уехал бы на offset хоста."""
+    monkeypatch.setattr(settings, 'TIMEZONE', 'Europe/Moscow', raising=False)
+    service._settings.backup_time = '21:00'
+
+    naive_reference = datetime(2026, 7, 2, 11, 36)  # без tzinfo, подразумеваем UTC
+    next_run = service._calculate_next_backup_datetime(naive_reference)
+
+    # 11:36 UTC == 14:36 MSK, ближайшие 21:00 MSK == 18:00 UTC того же дня
+    assert next_run == datetime(2026, 7, 2, 18, 0, tzinfo=UTC)
+
+
+def test_format_local_renders_next_run_in_configured_timezone(service, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Лог-время запуска выводится в settings.TIMEZONE (с меткой зоны), чтобы
+    оператор видел время, совпадающее с BACKUP_TIME, а не UTC (#3030)."""
+    monkeypatch.setattr(settings, 'TIMEZONE', 'Europe/Moscow', raising=False)
+
+    rendered = service._format_local(datetime(2026, 7, 2, 18, 0, tzinfo=UTC))
+
+    # 18:00 UTC == 21:00 MSK
+    assert rendered.startswith('02.07.2026 21:00:00')
+    assert 'MSK' in rendered
+
+
 def test_invalid_timezone_falls_back_to_utc(service, monkeypatch: pytest.MonkeyPatch) -> None:
     # Валидатор конфига отсекает мусор при старте, но настройка может прийти
     # из БД/окружения мимо валидатора — расчёт не должен падать.

@@ -408,6 +408,14 @@ class BackupService:
             logger.warning('Некорректная TIMEZONE, для расчёта бекапов используется UTC', timezone=tz_name)
             return ZoneInfo('UTC')
 
+    def _format_local(self, dt: datetime) -> str:
+        """UTC-aware datetime → строка в settings.TIMEZONE с меткой зоны для логов.
+
+        Все лог-строки о времени запуска идут через этот хелпер, чтобы оператор
+        везде видел время, совпадающее с его BACKUP_TIME, а не UTC (#3030).
+        """
+        return dt.astimezone(self._get_timezone()).strftime('%d.%m.%Y %H:%M:%S %Z')
+
     def _calculate_next_backup_datetime(self, reference: datetime | None = None) -> datetime:
         """Ближайший запуск по BACKUP_TIME, интерпретированному в settings.TIMEZONE.
 
@@ -418,6 +426,11 @@ class BackupService:
         aware-datetime в UTC — сам цикл продолжает жить в UTC.
         """
         reference = reference or datetime.now(UTC)
+        # Naive reference → трактуем как UTC (конвенция кодбазы). Иначе astimezone
+        # ниже интерпретировал бы его в системной зоне хоста и сдвинул расчёт —
+        # тот же класс бага, что #3030.
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=UTC)
         hours, minutes = self._parse_backup_time()
 
         tz = self._get_timezone()
@@ -1996,7 +2009,7 @@ class BackupService:
                 logger.info(
                     '📄 Автобекапы включены, интервал: ч, ближайший запуск',
                     total_seconds=interval.total_seconds() / 3600,
-                    next_run=next_run.astimezone(self._get_timezone()).strftime('%d.%m.%Y %H:%M:%S %Z'),
+                    next_run=self._format_local(next_run),
                 )
 
     async def stop_auto_backup(self):
@@ -2023,14 +2036,14 @@ class BackupService:
                 if delay > 0:
                     logger.info(
                         '⏰ Запланирован следующий автоматический бекап',
-                        next_run=next_run.strftime('%d.%m.%Y %H:%M:%S'),
+                        next_run=self._format_local(next_run),
                         delay=delay / 3600,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.info(
                         '⏰ Время автоматического бекапа уже наступило, запускаем немедленно',
-                        next_run=next_run.strftime('%d.%m.%Y %H:%M:%S'),
+                        next_run=self._format_local(next_run),
                     )
 
                 logger.info('📄 Запуск автоматического бекапа...')
