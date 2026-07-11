@@ -19,7 +19,7 @@ from app.database.crud.coupon import (
 )
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import CouponBatch, CouponStatus, User
-from app.services.coupon_service import COUPON_DEEP_LINK_PREFIX
+from app.services.coupon_service import build_coupon_deeplink
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.coupons import (
@@ -42,7 +42,7 @@ def _build_links(tokens: list[str]) -> list[str]:
     bot_username = settings.get_bot_username()
     if not bot_username:
         return []
-    return [f'https://t.me/{bot_username}?start={COUPON_DEEP_LINK_PREFIX}{token}' for token in tokens]
+    return [build_coupon_deeplink(bot_username, token) for token in tokens]
 
 
 def _serialize_batch(batch: CouponBatch, counts: dict[str, int]) -> CouponBatchResponse:
@@ -78,13 +78,13 @@ async def list_coupon_batches(
     offset: int = Query(0, ge=0),
 ) -> CouponBatchListResponse:
     """List coupon batches with redemption stats."""
-    total = await get_coupon_batches_count(db) or 0
+    total = await get_coupon_batches_count(db)
     batches = await get_coupon_batches(db, offset=offset, limit=limit)
     counts_by_batch = await get_status_counts_for_batches(db, [batch.id for batch in batches])
 
     return CouponBatchListResponse(
         items=[_serialize_batch(batch, counts_by_batch.get(batch.id, {})) for batch in batches],
-        total=int(total),
+        total=total,
         limit=limit,
         offset=offset,
     )

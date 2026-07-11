@@ -15,8 +15,8 @@ from app.config import settings
 from app.database.crud.coupon import get_coupon_by_token
 from app.database.models import CouponStatus, User
 from app.services.coupon_service import (
-    COUPON_DEEP_LINK_PREFIX,
     CouponRedemptionError,
+    build_coupon_deeplink,
     is_coupon_token,
     redeem_coupon,
 )
@@ -117,5 +117,5 @@ async def coupon_status(
         tariff_name=coupon.batch.tariff.name if coupon.batch.tariff else '',
         period_days=coupon.batch.period_days,
         valid_until=coupon.batch.valid_until,
-        bot_link=(f'https://t.me/{bot_username}?start={COUPON_DEEP_LINK_PREFIX}{normalized}' if bot_username else None),
+        bot_link=(build_coupon_deeplink(bot_username, normalized) if bot_username else None),
     )

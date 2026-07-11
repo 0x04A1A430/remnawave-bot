@@ -41,6 +41,15 @@ def is_coupon_token(value: str) -> bool:
     return bool(_COUPON_TOKEN_RE.fullmatch(value))
 
 
+def build_coupon_deeplink(bot_username: str, token: str) -> str:
+    """The single source of truth for the coupon activation deep link.
+
+    Callers guard the empty-``bot_username`` case themselves (the username is
+    not known until the bot has synced its identity).
+    """
+    return f'https://t.me/{bot_username}?start={COUPON_DEEP_LINK_PREFIX}{token}'
+
+
 class CouponRedemptionError(Exception):
     """Coupon cannot be redeemed; ``code`` selects the user-facing message.
 
