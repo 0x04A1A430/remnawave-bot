@@ -6,8 +6,9 @@
 ## Зачем
 
 **Лицензия.** Тег `redis:7-alpine` уже давно указывает на Redis 7.4, который
-(как и Redis 8) распространяется под RSALv2/SSPL и AGPLv3 — это не
-open-source-лицензии по определению OSI. Valkey — форк Redis 7.2.4 под
+распространяется под двойной лицензией RSALv2/SSPLv1 — ни одна из них
+не является open-source по определению OSI. (В Redis 8 добавлена опция
+AGPLv3 — она OSI-approved, но это сильный copyleft.) Valkey — форк Redis 7.2.4 под
 BSD-3-Clause, развиваемый под крылом Linux Foundation (AWS, Google, Oracle,
 Ericsson); именно им заменили Redis в репозиториях Fedora, Debian, Alpine
 и openSUSE.
@@ -53,3 +54,4 @@ docker compose up -d
 Если ваш том создавался ещё на Redis ≤ 7.2, Valkey загрузит его данные
 напрямую — можно обойтись `docker compose pull redis && docker compose up -d redis`,
 но вариант с пересозданием тома работает в любом случае.
+
