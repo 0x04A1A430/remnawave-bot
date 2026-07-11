@@ -30,7 +30,9 @@ class PlategaService:
         forced_version: str | None = None
         for candidate in self._SUPPORTED_API_VERSIONS:
             suffix = f'/{candidate}'
-            if base_url.endswith(suffix):
+            # Case-insensitive: a manually appended suffix may be '/V2', which would
+            # otherwise slip through and build a malformed '/V2/transaction/process'.
+            if base_url.lower().endswith(suffix):
                 forced_version = candidate
                 base_url = base_url[: -len(suffix)].rstrip('/')
                 logger.info(
