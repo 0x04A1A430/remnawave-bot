@@ -129,6 +129,9 @@ async def redeem_coupon(db: AsyncSession, token: str, user: User) -> CouponRedem
         remnawave_user = await SubscriptionService().create_remnawave_user(db, subscription)
         if remnawave_user is None:
             raise RuntimeError('Remnawave sync failed')
+        # Explicit final commit (belt-and-suspenders): guarantees claim+grant
+        # persist even if create_remnawave_user's internal-commit behaviour ever
+        # changes. Do not remove without re-auditing that contract.
         await db.commit()
     except Exception:
         logger.exception('Не удалось погасить купон', coupon_id=coupon_id, user_id=user.id)

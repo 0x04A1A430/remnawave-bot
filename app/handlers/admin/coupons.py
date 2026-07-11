@@ -31,6 +31,11 @@ MAX_COUPONS_PER_BATCH = 500
 MAX_PERIOD_DAYS = 3650
 MAX_WHOLESALE_PRICE_RUBLES = 10_000_000
 
+# Admin ids with a batch-creation in flight. aiogram dispatches updates
+# concurrently, so the FSM check→clear alone is not atomic against a double tap;
+# the check+add below run with no await between them and close that window.
+_batch_creation_in_progress: set[int] = set()
+
 _CANCEL_KEYBOARD = types.InlineKeyboardMarkup(
     inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')]]
 )
@@ -347,60 +352,70 @@ async def process_coupon_batch_expiry(message: types.Message, db_user: User, sta
 async def confirm_coupon_batch_creation(
     callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession
 ):
-    # An old confirmation message keeps a live button: accept it only while the
-    # wizard is actually waiting on this confirmation, otherwise a stale tap
-    # would create a batch from half-entered state of a NEW wizard run.
-    current_state = await state.get_state()
-    if current_state != AdminStates.creating_coupon_batch_expiry.state:
-        await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
+    # Synchronous double-submit guard: the check+add run with no await between
+    # them, so two concurrently-dispatched taps can't both pass (the FSM
+    # check→clear below is not atomic on its own).
+    if db_user.id in _batch_creation_in_progress:
+        await callback.answer('⏳ Партия уже создаётся, подождите', show_alert=True)
         return
+    _batch_creation_in_progress.add(db_user.id)
+    try:
+        # An old confirmation message keeps a live button: accept it only while the
+        # wizard is actually waiting on this confirmation, otherwise a stale tap
+        # would create a batch from half-entered state of a NEW wizard run.
+        current_state = await state.get_state()
+        if current_state != AdminStates.creating_coupon_batch_expiry.state:
+            await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
+            return
 
-    data = await state.get_data()
-    tariff_id = data.get('coupon_tariff_id')
-    period_days = data.get('coupon_period_days')
-    count = data.get('coupon_count')
-    name = data.get('coupon_batch_name')
-    expiry_days = data.get('coupon_expiry_days')
+        data = await state.get_data()
+        tariff_id = data.get('coupon_tariff_id')
+        period_days = data.get('coupon_period_days')
+        count = data.get('coupon_count')
+        name = data.get('coupon_batch_name')
+        expiry_days = data.get('coupon_expiry_days')
 
-    if not all([tariff_id, period_days, count, name]) or expiry_days is None:
-        await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
+        if not all([tariff_id, period_days, count, name]) or expiry_days is None:
+            await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
+            await state.clear()
+            return
+
+        # Consume the wizard state BEFORE the (slow) batch insert — a double-tap on
+        # the confirm button must not create the batch twice.
         await state.clear()
-        return
 
-    # Consume the wizard state BEFORE the (slow) batch insert — a double-tap on
-    # the confirm button must not create the batch twice.
-    await state.clear()
+        tariff = await get_tariff_by_id(db, tariff_id)
+        if not tariff or not tariff.is_active:
+            await callback.answer('❌ Тариф не найден или неактивен', show_alert=True)
+            return
 
-    tariff = await get_tariff_by_id(db, tariff_id)
-    if not tariff or not tariff.is_active:
-        await callback.answer('❌ Тариф не найден или неактивен', show_alert=True)
-        return
+        valid_until = datetime.now(UTC) + timedelta(days=expiry_days) if expiry_days else None
 
-    valid_until = datetime.now(UTC) + timedelta(days=expiry_days) if expiry_days else None
+        batch = await create_coupon_batch(
+            db,
+            name=name,
+            tariff_id=tariff.id,
+            period_days=period_days,
+            coupons_count=count,
+            wholesale_price_kopeks=data.get('coupon_price_kopeks', 0),
+            valid_until=valid_until,
+            created_by=db_user.id,
+        )
 
-    batch = await create_coupon_batch(
-        db,
-        name=name,
-        tariff_id=tariff.id,
-        period_days=period_days,
-        coupons_count=count,
-        wholesale_price_kopeks=data.get('coupon_price_kopeks', 0),
-        valid_until=valid_until,
-        created_by=db_user.id,
-    )
+        logger.info(
+            'Создана партия купонов',
+            batch_id=batch.id,
+            tariff_id=tariff.id,
+            period_days=period_days,
+            count=count,
+            created_by=db_user.id,
+        )
 
-    logger.info(
-        'Создана партия купонов',
-        batch_id=batch.id,
-        tariff_id=tariff.id,
-        period_days=period_days,
-        count=count,
-        created_by=db_user.id,
-    )
-
-    await _show_batch_card(callback, db, batch)
-    await _send_batch_links_file(callback, db, batch)
-    await callback.answer('✅ Партия создана')
+        await _show_batch_card(callback, db, batch)
+        await _send_batch_links_file(callback, db, batch)
+        await callback.answer('✅ Партия создана')
+    finally:
+        _batch_creation_in_progress.discard(db_user.id)
 
 
 @admin_required
@@ -413,12 +428,17 @@ async def show_coupon_batch(callback: types.CallbackQuery, db_user: User, db: As
     await callback.answer()
 
 
-async def _send_batch_links_file(callback: types.CallbackQuery, db: AsyncSession, batch: CouponBatch) -> None:
-    """Send a .txt with the deep links of all still-active coupons of the batch."""
+async def _send_batch_links_file(callback: types.CallbackQuery, db: AsyncSession, batch: CouponBatch) -> bool:
+    """Send a .txt with the deep links of all still-active coupons of the batch.
+
+    Returns True if the document was sent; False if the batch has no active
+    coupons (in which case the callback is already answered with an alert, so
+    the caller must NOT answer it again — Telegram rejects a double answer).
+    """
     tokens = await get_batch_coupon_tokens(db, batch.id, status=CouponStatus.ACTIVE.value)
     if not tokens:
         await callback.answer('❌ В партии нет активных купонов', show_alert=True)
-        return
+        return False
 
     # The username is synced into settings at startup; get_me() is a fallback
     # to avoid an extra Bot API round trip on every export.
@@ -432,6 +452,7 @@ async def _send_batch_links_file(callback: types.CallbackQuery, db: AsyncSession
             f'{len(tokens)} активных купонов, {batch.period_days} дн. каждый.'
         ),
     )
+    return True
 
 
 @admin_required
@@ -440,8 +461,8 @@ async def export_coupon_batch(callback: types.CallbackQuery, db_user: User, db: 
     batch = await _load_batch(callback, db)
     if batch is None:
         return
-    await _send_batch_links_file(callback, db, batch)
-    await callback.answer()
+    if await _send_batch_links_file(callback, db, batch):
+        await callback.answer()
 
 
 @admin_required

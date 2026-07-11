@@ -105,6 +105,17 @@ def test_create_confirm_is_guarded_against_stale_buttons_and_double_taps() -> No
     clear = source.index('await state.clear()')
     create = source.index('await create_coupon_batch(')
     assert clear < create, 'a double-tap on the confirm button must not create the batch twice'
+    # FSM check→clear is not atomic across awaits (aiogram dispatches updates
+    # concurrently), so a synchronous set guard must close the double-tap window:
+    # the membership check and .add() run with no await between them.
+    assert isinstance(admin_coupons._batch_creation_in_progress, set)
+    add = source.index('_batch_creation_in_progress.add(')
+    check = source.index('in _batch_creation_in_progress')
+    guarded_create = source.index('await create_coupon_batch(')
+    assert check < add < guarded_create, 'the in-flight guard must be claimed before the batch insert'
+    # And released in a finally so a failure can't wedge the admin out forever.
+    assert '_batch_creation_in_progress.discard(' in source
+    assert 'finally:' in source
 
 
 def test_admin_states_for_coupon_creation_exist() -> None:
