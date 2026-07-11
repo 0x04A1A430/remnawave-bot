@@ -19,11 +19,15 @@
 и глотают сбои: уведомление не должно ронять webhook после зачисления денег.
 """
 
+import ast
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from app.cabinet.services.email_templates import EmailNotificationTemplates
+from app.config import settings
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -177,3 +181,85 @@ async def test_auto_purchase_notification_swallows_errors(monkeypatch: pytest.Mo
     monkeypatch.setattr(notification_delivery_service, 'send_notification', boom)
 
     await _notify_email_user_auto_purchase(_email_user(), _subscription(), 'X', renewed=True)
+
+
+# ============ Реальные шаблоны рендерятся с контекстом хелперов ============
+# Тесты выше подменяют роутер и НЕ доказывают, что письмо реально соберётся.
+# Здесь прогоняем те же контексты через настоящие email-шаблоны, чтобы
+# переименование ключа или пропавший шаблон ловились, а не проходили зелёными.
+
+
+def test_real_topup_template_renders_with_helper_context() -> None:
+    context = {
+        'formatted_amount': settings.format_price(25000),
+        'formatted_balance': settings.format_price(50000),
+        'amount_kopeks': 25000,
+        'new_balance_kopeks': 50000,
+    }
+    template = EmailNotificationTemplates().get_template(NotificationType.BALANCE_TOPUP, 'ru', context)
+
+    assert template is not None, 'нет email-шаблона для BALANCE_TOPUP'
+    assert template['subject'].strip()
+    assert settings.format_price(25000) in template['body_html'], 'сумма пополнения не попала в письмо'
+
+
+def test_real_activated_template_renders_with_helper_context() -> None:
+    context = {
+        'expires_at': '15.08.2026',
+        'new_expires_at': '15.08.2026',
+        'traffic_limit_gb': 100,
+        'device_limit': 3,
+        'tariff_name': 'Базовый',
+    }
+    template = EmailNotificationTemplates().get_template(NotificationType.SUBSCRIPTION_ACTIVATED, 'ru', context)
+
+    assert template is not None, 'нет email-шаблона для SUBSCRIPTION_ACTIVATED'
+    assert template['subject'].strip()
+    assert '15.08.2026' in template['body_html'], 'дата окончания не попала в письмо об активации'
+
+
+def test_real_renewed_template_renders_with_helper_context() -> None:
+    context = {
+        'expires_at': '15.08.2026',
+        'new_expires_at': '15.08.2026',
+        'traffic_limit_gb': 100,
+        'device_limit': 3,
+        'tariff_name': 'Базовый',
+    }
+    template = EmailNotificationTemplates().get_template(NotificationType.SUBSCRIPTION_RENEWED, 'ru', context)
+
+    assert template is not None, 'нет email-шаблона для SUBSCRIPTION_RENEWED'
+    assert template['subject'].strip()
+    assert '15.08.2026' in template['body_html'], 'новая дата окончания не попала в письмо о продлении'
+
+
+# ============ Trial→paid = активация, а не продление (#2952) ============
+
+
+def test_trial_conversion_labeled_activated_not_renewed() -> None:
+    """Пин: сайты автопокупки тарифа/суточного/extend не должны помечать
+    конверсию триала как RENEWED (для email-юзера это первая активация)."""
+    source = (
+        Path(__file__).resolve().parents[2] / 'app' / 'services' / 'subscription_auto_purchase_service.py'
+    ).read_text(encoding='utf-8')
+    tree = ast.parse(source)
+
+    renewed_exprs: list[str] = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == '_notify_email_user_auto_purchase'
+        ):
+            for kw in node.keywords:
+                if kw.arg == 'renewed':
+                    renewed_exprs.append(ast.unparse(kw.value))
+
+    assert renewed_exprs, 'не найдены вызовы _notify_email_user_auto_purchase'
+    # Ни один renewed не должен быть голым bool(existing_subscription) без учёта триала.
+    for expr in renewed_exprs:
+        if 'existing_subscription' in expr:
+            assert 'was_trial_conversion' in expr, (
+                f'renewed={expr!r} помечает конверсию триала как продление — '
+                'должно исключать was_trial_conversion (#2952)'
+            )

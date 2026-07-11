@@ -775,7 +775,9 @@ async def _auto_extend_subscription(
                 error=error,
             )
 
-    await _notify_email_user_auto_purchase(user, updated_subscription, prepared.tariff_name, renewed=True)
+    # Конвертация триала в платную — это первая активация, а не продление
+    # (email иначе получил бы «Подписка продлена» вместо «активирована», #2952).
+    await _notify_email_user_auto_purchase(user, updated_subscription, prepared.tariff_name, renewed=not was_trial)
 
     logger.info(
         '✅ Автопокупка: подписка продлена на дней для пользователя',
@@ -1143,8 +1145,9 @@ async def _auto_purchase_tariff(
                 error=error,
             )
 
+    # Триал→платный = первая активация, не продление (иначе email врёт «продлена»).
     await _notify_email_user_auto_purchase(
-        user, subscription, tariff_name_for_label, renewed=bool(existing_subscription)
+        user, subscription, tariff_name_for_label, renewed=bool(existing_subscription) and not was_trial_conversion
     )
 
     logger.info(
@@ -1499,7 +1502,10 @@ async def _auto_purchase_daily_tariff(
                 error=error,
             )
 
-    await _notify_email_user_auto_purchase(user, subscription, tariff.name, renewed=bool(existing_subscription))
+    # Триал→платный = первая активация, не продление (иначе email врёт «продлена»).
+    await _notify_email_user_auto_purchase(
+        user, subscription, tariff.name, renewed=bool(existing_subscription) and not was_trial_conversion
+    )
 
     logger.info(
         '✅ Автопокупка суточного тарифа: тариф активирован для пользователя',
