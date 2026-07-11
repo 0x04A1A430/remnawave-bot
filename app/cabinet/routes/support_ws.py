@@ -865,7 +865,11 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
         )
     message = TicketMessage(
         ticket_id=ticket.id,
-        user_id=ticket.user_id,
+        # Автор — тот, кто реально отправил: для admin/support это их user id
+        # (session.context.user_id), не владелец тикета (#3029). Иначе
+        # authorUserId в _message_snapshot врёт, а при нескольких сотрудниках
+        # поддержки не установить, кто отвечал. Бот-путь пишет id админа же.
+        user_id=session.context.user_id if is_from_admin else ticket.user_id,
         message_text=body,
         is_from_admin=is_from_admin,
         has_media=bool(primary),
