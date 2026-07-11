@@ -80,6 +80,21 @@ async def get_batch_status_counts(db: AsyncSession, batch_id: int) -> dict[str, 
     return dict(result.all())
 
 
+async def get_status_counts_for_batches(db: AsyncSession, batch_ids: list[int]) -> dict[int, dict[str, int]]:
+    """Status counts for many batches in one query (list views)."""
+    if not batch_ids:
+        return {}
+    result = await db.execute(
+        select(Coupon.batch_id, Coupon.status, func.count(Coupon.id))
+        .where(Coupon.batch_id.in_(batch_ids))
+        .group_by(Coupon.batch_id, Coupon.status)
+    )
+    counts: dict[int, dict[str, int]] = {}
+    for batch_id, coupon_status, count in result.all():
+        counts.setdefault(batch_id, {})[coupon_status] = count
+    return counts
+
+
 async def revoke_batch_coupons(db: AsyncSession, batch: CouponBatch) -> int:
     """Flip all still-active coupons of the batch to REVOKED. Returns how many were revoked.
 
