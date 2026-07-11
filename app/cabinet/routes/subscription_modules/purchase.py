@@ -28,6 +28,7 @@ from app.database.crud.subscription import (
     extend_subscription,
     get_subscription_by_id_for_user,
     get_subscription_by_user_id,
+    should_carry_trial_remaining_days,
 )
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
@@ -969,7 +970,8 @@ async def purchase_tariff(
             # --- Trial cleanup: find and kill all trials BEFORE creating/extending ---
             from app.database.crud.subscription import deactivate_user_trial_subscriptions
 
-            # Collect remaining trial seconds for TRIAL_ADD_REMAINING_DAYS_TO_PAID
+            # Collect remaining trial seconds (перенос — по общему правилу:
+            # TARIFF_SWITCH_RESET_FREE_DAYS перебивает TRIAL_ADD_REMAINING_DAYS_TO_PAID).
             _bonus_seconds = 0
             _now_trial = datetime.now(UTC)
             killed_trials = await deactivate_user_trial_subscriptions(
@@ -977,7 +979,7 @@ async def purchase_tariff(
                 user.id,
                 exclude_subscription_id=subscription.id if subscription else None,
             )
-            if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+            if should_carry_trial_remaining_days():
                 for _kt in killed_trials:
                     if _kt.end_date and _kt.end_date > _now_trial:
                         _bonus_seconds += max(0, (_kt.end_date - _now_trial).total_seconds())

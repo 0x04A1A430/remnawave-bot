@@ -199,9 +199,11 @@ class Settings(BaseSettings):
     RESET_DEVICES_ON_RENEWAL: bool = False
     TARIFF_SWITCH_UPGRADE_ENABLED: bool = True
     TARIFF_SWITCH_DOWNGRADE_ENABLED: bool = True
-    # При смене тарифа НЕ переносить остаток дней, наспамленных на бесплатном (0₽)
-    # тарифе, на новый платный тариф (иначе юзер бесплатно уносит, напр., 1000 дней).
-    # Платные подписки переносят дни как обычно. Выключите, чтобы вернуть перенос.
+    # Мастер-переключатель сброса бесплатного периода при переходе на платный.
+    # При True остаток НЕ переносится ни для триала («бесплатная версия» бота),
+    # ни для 0₽-тарифа — даже если TRIAL_ADD_REMAINING_DAYS_TO_PAID=true (сброс
+    # перебивает перенос). Платные подписки переносят дни как обычно. Выключите,
+    # чтобы разрешить перенос (тогда для триалов действует TRIAL_ADD_REMAINING_DAYS_TO_PAID).
     TARIFF_SWITCH_RESET_FREE_DAYS: bool = True
     MAX_DEVICES_LIMIT: int = 20
 
