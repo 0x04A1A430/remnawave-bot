@@ -13,6 +13,7 @@ from .admin_bulk_actions import router as admin_bulk_actions_router
 from .admin_button_styles import router as admin_button_styles_router
 from .admin_campaigns import router as admin_campaigns_router
 from .admin_channels import router as admin_channels_router
+from .admin_coupons import router as admin_coupons_router
 from .admin_email_templates import router as admin_email_templates_router
 from .admin_info_pages import router as admin_info_pages_router
 from .admin_landings import router as admin_landings_router
@@ -48,6 +49,7 @@ from .auth import router as auth_router
 from .balance import router as balance_router
 from .branding import router as branding_router
 from .contests import router as contests_router
+from .coupon import router as coupon_router
 from .gift import router as gift_router
 from .info import router as info_router
 from .info_pages import router as info_pages_router
@@ -102,6 +104,7 @@ router.include_router(withdrawal_router)
 router.include_router(ticket_notifications_router)
 router.include_router(tickets_router)
 router.include_router(promocode_router)
+router.include_router(coupon_router)
 router.include_router(contests_router)
 router.include_router(polls_router)
 router.include_router(promo_router)
@@ -133,6 +136,7 @@ router.include_router(admin_ban_system_router)
 router.include_router(admin_broadcasts_router)
 router.include_router(admin_promocodes_router)
 router.include_router(admin_promo_groups_router)
+router.include_router(admin_coupons_router)
 router.include_router(admin_campaigns_router)
 router.include_router(admin_partners_router)
 router.include_router(admin_withdrawals_router)

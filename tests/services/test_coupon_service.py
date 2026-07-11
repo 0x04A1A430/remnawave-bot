@@ -206,7 +206,8 @@ async def test_success_claims_under_lock_and_flips_before_remnawave_sync() -> No
     coupon = _coupon()
     user = _user()
     db = AsyncMock()
-    subscription = SimpleNamespace(id=99)
+    end_date = datetime.now(UTC) + timedelta(days=30)
+    subscription = SimpleNamespace(id=99, end_date=end_date, traffic_limit_gb=100, device_limit=2)
 
     status_at_sync: list[str] = []
 
@@ -219,7 +220,7 @@ async def test_success_claims_under_lock_and_flips_before_remnawave_sync() -> No
 
     with (
         patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)),
-        patch('app.services.coupon_service._grant_subscription_days', AsyncMock(return_value=subscription)),
+        patch('app.services.coupon_service._grant_subscription_days', AsyncMock(return_value=(subscription, True))),
         patch('app.services.coupon_service.SubscriptionService.create_remnawave_user', new=fake_sync),
     ):
         result = await redeem_coupon(db, VALID_TOKEN, user)
@@ -232,6 +233,10 @@ async def test_success_claims_under_lock_and_flips_before_remnawave_sync() -> No
     db.rollback.assert_not_called()
     assert result.tariff_name == 'Basic'
     assert result.period_days == 30
+    assert result.renewed is True
+    assert result.end_date == end_date
+    assert result.traffic_limit_gb == 100
+    assert result.device_limit == 2
 
 
 @pytest.mark.asyncio
@@ -245,9 +250,10 @@ async def test_failed_remnawave_sync_aborts_redemption() -> None:
     async def failing_sync(self, db_arg, sub):
         return None
 
+    granted = (SimpleNamespace(id=99, end_date=None, traffic_limit_gb=0, device_limit=None), False)
     with (
         patch('app.services.coupon_service.get_coupon_by_token', AsyncMock(return_value=coupon)),
-        patch('app.services.coupon_service._grant_subscription_days', AsyncMock(return_value=SimpleNamespace(id=99))),
+        patch('app.services.coupon_service._grant_subscription_days', AsyncMock(return_value=granted)),
         patch('app.services.coupon_service.SubscriptionService.create_remnawave_user', new=failing_sync),
     ):
         with pytest.raises(CouponRedemptionError) as err:
@@ -289,9 +295,10 @@ async def test_grant_extends_active_subscription(monkeypatch: pytest.MonkeyPatch
         patch('app.services.coupon_service.get_subscription_by_user_id', AsyncMock(return_value=existing)),
         patch('app.services.coupon_service.extend_subscription', extend),
     ):
-        result = await _grant_subscription_days(AsyncMock(), _user(), _tariff(), 30)
+        subscription, renewed = await _grant_subscription_days(AsyncMock(), _user(), _tariff(), 30)
 
-    assert result == 'extended'
+    assert subscription == 'extended'
+    assert renewed is True
     assert extend.await_args.args[2] == 30
     kwargs = extend.await_args.kwargs
     assert kwargs['commit'] is False, 'the caller owns the transaction'
@@ -308,13 +315,14 @@ async def test_grant_replaces_expired_subscription(monkeypatch: pytest.MonkeyPat
         patch('app.services.coupon_service.get_subscription_by_user_id', AsyncMock(return_value=existing)),
         patch('app.services.coupon_service.replace_subscription', replace),
     ):
-        result = await _grant_subscription_days(AsyncMock(), _user(), _tariff(), 30)
+        subscription, renewed = await _grant_subscription_days(AsyncMock(), _user(), _tariff(), 30)
 
     kwargs = replace.await_args.kwargs
     assert kwargs['is_trial'] is False
     assert kwargs['commit'] is False
     assert kwargs['duration_days'] == 30
-    assert result.tariff_id == 3, 'replaced subscription must be reassigned to the batch tariff'
+    assert renewed is False, 'replacing an expired subscription is an activation, not a renewal'
+    assert subscription.tariff_id == 3, 'replaced subscription must be reassigned to the batch tariff'
 
 
 @pytest.mark.asyncio
@@ -325,9 +333,10 @@ async def test_grant_creates_subscription_when_none_exists(monkeypatch: pytest.M
         patch('app.services.coupon_service.get_subscription_by_user_id', AsyncMock(return_value=None)),
         patch('app.services.coupon_service.create_paid_subscription', create),
     ):
-        result = await _grant_subscription_days(AsyncMock(), _user(9), _tariff(), 30)
+        subscription, renewed = await _grant_subscription_days(AsyncMock(), _user(9), _tariff(), 30)
 
-    assert result == 'created'
+    assert subscription == 'created'
+    assert renewed is False
     kwargs = create.await_args.kwargs
     assert kwargs['user_id'] == 9
     assert kwargs['duration_days'] == 30
@@ -344,8 +353,8 @@ async def test_grant_multi_tariff_looks_up_by_tariff(monkeypatch: pytest.MonkeyP
         patch('app.database.crud.subscription.get_subscription_by_user_and_tariff', lookup),
         patch('app.services.coupon_service.create_paid_subscription', create),
     ):
-        result = await _grant_subscription_days(AsyncMock(), _user(9), _tariff(), 30)
+        subscription, _renewed = await _grant_subscription_days(AsyncMock(), _user(9), _tariff(), 30)
 
     lookup.assert_awaited_once()
     assert lookup.await_args.args[1:] == (9, 3)
-    assert result == 'created'
+    assert subscription == 'created'

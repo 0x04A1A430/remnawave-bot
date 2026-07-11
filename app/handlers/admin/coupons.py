@@ -19,7 +19,7 @@ from app.database.crud.coupon import (
 from app.database.crud.tariff import get_all_active_tariffs, get_tariff_by_id
 from app.database.models import CouponBatch, CouponStatus, User
 from app.keyboards.admin import get_admin_pagination_keyboard
-from app.services.coupon_service import COUPON_DEEP_LINK_PREFIX
+from app.services.coupon_service import build_coupon_deeplink
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
@@ -39,10 +39,6 @@ _batch_creation_in_progress: set[int] = set()
 _CANCEL_KEYBOARD = types.InlineKeyboardMarkup(
     inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')]]
 )
-
-
-def _build_coupon_link(bot_username: str, token: str) -> str:
-    return f'https://t.me/{bot_username}?start={COUPON_DEEP_LINK_PREFIX}{token}'
 
 
 def _format_batch_button(batch: CouponBatch) -> str:
@@ -443,7 +439,7 @@ async def _send_batch_links_file(callback: types.CallbackQuery, db: AsyncSession
     # The username is synced into settings at startup; get_me() is a fallback
     # to avoid an extra Bot API round trip on every export.
     bot_username = settings.get_bot_username() or (await callback.bot.get_me()).username
-    content = '\n'.join(_build_coupon_link(bot_username, token) for token in tokens) + '\n'
+    content = '\n'.join(build_coupon_deeplink(bot_username, token) for token in tokens) + '\n'
     file = types.BufferedInputFile(content.encode('utf-8'), filename=f'coupons_batch_{batch.id}.txt')
     await callback.message.answer_document(
         document=file,

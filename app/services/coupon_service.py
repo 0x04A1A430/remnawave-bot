@@ -41,6 +41,15 @@ def is_coupon_token(value: str) -> bool:
     return bool(_COUPON_TOKEN_RE.fullmatch(value))
 
 
+def build_coupon_deeplink(bot_username: str, token: str) -> str:
+    """The single source of truth for the coupon activation deep link.
+
+    Callers guard the empty-``bot_username`` case themselves (the username is
+    not known until the bot has synced its identity).
+    """
+    return f'https://t.me/{bot_username}?start={COUPON_DEEP_LINK_PREFIX}{token}'
+
+
 class CouponRedemptionError(Exception):
     """Coupon cannot be redeemed; ``code`` selects the user-facing message.
 
@@ -58,6 +67,10 @@ class CouponRedemptionError(Exception):
 class CouponRedemptionResult:
     tariff_name: str
     period_days: int
+    renewed: bool  # True — продлили действующую подписку, False — выдали новую/заменили истёкшую
+    end_date: datetime | None
+    traffic_limit_gb: int | None
+    device_limit: int | None
 
 
 def _check_redeemable(coupon: Coupon, user: User) -> None:
@@ -116,7 +129,10 @@ async def redeem_coupon(db: AsyncSession, token: str, user: User) -> CouponRedem
     _check_redeemable(coupon, user)
 
     try:
-        subscription = await _grant_subscription_days(db, user, tariff, period_days)
+        subscription, renewed = await _grant_subscription_days(db, user, tariff, period_days)
+        end_date = subscription.end_date
+        traffic_limit_gb = subscription.traffic_limit_gb
+        device_limit = subscription.device_limit
 
         coupon.status = CouponStatus.REDEEMED.value
         coupon.redeemed_by = user.id
@@ -145,14 +161,25 @@ async def redeem_coupon(db: AsyncSession, token: str, user: User) -> CouponRedem
         user_id=user.id,
         days=period_days,
     )
-    return CouponRedemptionResult(tariff_name=tariff_name, period_days=period_days)
+    return CouponRedemptionResult(
+        tariff_name=tariff_name,
+        period_days=period_days,
+        renewed=renewed,
+        end_date=end_date,
+        traffic_limit_gb=traffic_limit_gb,
+        device_limit=device_limit,
+    )
 
 
-async def _grant_subscription_days(db: AsyncSession, user: User, tariff: Tariff, period_days: int) -> Subscription:
+async def _grant_subscription_days(
+    db: AsyncSession, user: User, tariff: Tariff, period_days: int
+) -> tuple[Subscription, bool]:
     """Create/extend/replace a subscription for ``period_days`` of ``tariff``.
 
-    Mirrors the gift-activation branches in ``activate_purchase``. All CRUD
-    calls use ``commit=False`` — the caller owns the transaction.
+    Returns ``(subscription, renewed)``: ``renewed`` is True when an active
+    subscription was extended, False when a new one was created or an expired
+    one replaced. Mirrors the gift-activation branches in ``activate_purchase``.
+    All CRUD calls use ``commit=False`` — the caller owns the transaction.
     """
     squads = list(tariff.allowed_squads or [])
     if not squads:
@@ -176,7 +203,7 @@ async def _grant_subscription_days(db: AsyncSession, user: User, tariff: Tariff,
         # In multi-tariff mode the subscription already belongs to this tariff,
         # so passing tariff_id is a no-op; in single mode it switches the
         # subscription to the batch tariff (same as gift activation).
-        return await extend_subscription(
+        subscription = await extend_subscription(
             db,
             existing,
             period_days,
@@ -186,6 +213,7 @@ async def _grant_subscription_days(db: AsyncSession, user: User, tariff: Tariff,
             connected_squads=squads,
             commit=False,
         )
+        return subscription, True
 
     if existing is not None:
         # Expired subscription — replace with fresh dates
@@ -201,9 +229,9 @@ async def _grant_subscription_days(db: AsyncSession, user: User, tariff: Tariff,
             commit=False,
         )
         subscription.tariff_id = tariff.id
-        return subscription
+        return subscription, False
 
-    return await create_paid_subscription(
+    subscription = await create_paid_subscription(
         db=db,
         user_id=user.id,
         duration_days=period_days,
@@ -214,3 +242,4 @@ async def _grant_subscription_days(db: AsyncSession, user: User, tariff: Tariff,
         update_server_counters=True,
         commit=False,
     )
+    return subscription, False
