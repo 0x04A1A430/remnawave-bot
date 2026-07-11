@@ -32,7 +32,8 @@ from app.database.crud.subscription import (
 from app.database.crud.tariff import get_tariff_by_id, get_tariffs_for_user
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import add_user_balance, get_user_by_id, subtract_user_balance
-from app.database.models import PaymentMethod, Subscription, Tariff, TransactionType, User
+from app.database.database import AsyncSessionLocal
+from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -67,6 +68,42 @@ logger = structlog.get_logger(__name__)
 REMNAWAVE_SYNC_TIMEOUT = 10.0
 
 router = APIRouter()
+
+
+async def _persist_failed_refund(user_id: int, amount_kopeks: int, reason: str, error: Exception | str) -> None:
+    """Record a refund that could not be applied, via a fresh session, for later retry.
+
+    The caller's session may be broken (post-rollback / connection error), so a
+    dedicated session is used. Mirrors the bot-handler compensation path so an
+    unapplied refund is never lost silently (#3031).
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            record = Transaction(
+                user_id=user_id,
+                type=TransactionType.FAILED_REFUND.value,
+                amount_kopeks=amount_kopeks,
+                description=f'{reason} | error: {error}',
+                is_completed=False,
+                created_at=datetime.now(UTC),
+            )
+            session.add(record)
+            await session.commit()
+            logger.warning(
+                'Cabinet purchase: записан failed_refund для последующей обработки',
+                user_id=user_id,
+                amount_kopeks=amount_kopeks,
+                transaction_id=record.id,
+            )
+    except Exception as persist_error:
+        logger.critical(
+            'CRITICAL: невозможно сохранить failed_refund в кабинете — требуется ручное вмешательство',
+            user_id=user_id,
+            amount_kopeks=amount_kopeks,
+            reason=reason,
+            original_error=str(error),
+            persist_error=persist_error,
+        )
 
 
 # ============ Full Purchase Flow (like MiniApp) ============
@@ -884,8 +921,12 @@ async def purchase_tariff(
                         user_id=refund_user_id,
                         price_kopeks=price_kopeks,
                     )
+                    await _persist_failed_refund(refund_user_id, price_kopeks, reason, 'user not found for refund')
                     return
-                await add_user_balance(
+                # add_user_balance swallows its own errors and returns False rather than
+                # raising, so the return value — not just an exception — must be checked;
+                # otherwise a failed refund would be lost silently (#3031).
+                refund_success = await add_user_balance(
                     db,
                     refund_user,
                     price_kopeks,
@@ -893,6 +934,16 @@ async def purchase_tariff(
                     create_transaction=True,
                     transaction_type=TransactionType.REFUND,
                 )
+                if not refund_success:
+                    logger.critical(
+                        'CRITICAL: add_user_balance вернул False при возврате средств в кабинете',
+                        user_id=refund_user_id,
+                        price_kopeks=price_kopeks,
+                    )
+                    await _persist_failed_refund(
+                        refund_user_id, price_kopeks, reason, 'add_user_balance returned False'
+                    )
+                    return
                 logger.info(
                     'Cabinet purchase: средства возвращены после ошибки покупки тарифа',
                     user_id=refund_user_id,
@@ -905,6 +956,7 @@ async def purchase_tariff(
                     price_kopeks=price_kopeks,
                     refund_error=refund_error,
                 )
+                await _persist_failed_refund(refund_user_id, price_kopeks, reason, refund_error)
 
         # С этого места деньги уже списаны и закоммичены (subtract_user_balance +
         # create_transaction). Любая ошибка до успешного сохранения подписки без

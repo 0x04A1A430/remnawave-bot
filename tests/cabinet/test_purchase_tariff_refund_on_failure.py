@@ -44,6 +44,7 @@ from pathlib import Path
 PURCHASE_PATH = (
     Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'subscription_modules' / 'purchase.py'
 )
+SUBSCRIPTION_CRUD_PATH = Path(__file__).resolve().parents[2] / 'app' / 'database' / 'crud' / 'subscription.py'
 
 
 def _find_async_function(tree: ast.AST, name: str) -> ast.AsyncFunctionDef:
@@ -173,6 +174,76 @@ def test_refund_helper_uses_fresh_user_and_refund_transaction() -> None:
     assert isinstance(create_tx, ast.Constant) and create_tx.value is True, (
         'refund must create a transaction record (create_transaction=True)'
     )
+
+
+def test_refund_helper_records_failed_refund_when_credit_fails() -> None:
+    """REGRESSION: ``add_user_balance`` swallows its own errors and returns False
+    instead of raising, so ``_refund_charge`` must inspect the return value and
+    persist a ``FAILED_REFUND`` record when the credit did not apply — otherwise a
+    failed refund is lost silently, re-introducing the #3031 payment loss.
+    """
+    tree = ast.parse(PURCHASE_PATH.read_text(encoding='utf-8'))
+    func = _find_async_function(tree, 'purchase_tariff')
+    helper = _find_async_function(func, '_refund_charge')
+
+    # The add_user_balance result must be captured (not discarded), so its False
+    # return can be acted on rather than ignored.
+    result_captured = any(
+        isinstance(n, ast.Assign)
+        and isinstance(n.value, ast.Await)
+        and isinstance(n.value.value, ast.Call)
+        and isinstance(n.value.value.func, ast.Name)
+        and n.value.value.func.id == 'add_user_balance'
+        for n in ast.walk(helper)
+    )
+    assert result_captured, (
+        '_refund_charge must capture the add_user_balance return value — it returns '
+        'False (not an exception) when the credit fails, so ignoring it loses the refund'
+    )
+    assert '_persist_failed_refund' in _call_names(helper), (
+        '_refund_charge must persist a FAILED_REFUND record when the credit does not '
+        'apply, so an unapplied refund is recoverable instead of silently lost'
+    )
+
+    module_calls = _call_names(tree)
+    assert '_persist_failed_refund' in {
+        node.name for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef)
+    }, 'the module must define _persist_failed_refund'
+    assert (
+        'FAILED_REFUND' in {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+        or 'FAILED_REFUND' in module_calls
+    ), 'the failed-refund record must use TransactionType.FAILED_REFUND'
+
+
+def test_extend_subscription_post_commit_cleanup_is_best_effort() -> None:
+    """REGRESSION: ``extend_subscription`` commits the extension, then runs
+    ``clear_notifications``. Because ``purchase_tariff`` wraps ``extend_subscription``
+    in a compensating refund guard, a raise from that post-commit cleanup would make
+    the guard refund an already-delivered extension (free extension). The cleanup must
+    therefore be best-effort (wrapped so it cannot propagate) — pinned here because the
+    guard lives in a different module and cannot defend against it.
+    """
+    tree = ast.parse(SUBSCRIPTION_CRUD_PATH.read_text(encoding='utf-8'))
+    func = _find_async_function(tree, 'extend_subscription')
+
+    clear_calls = [
+        n
+        for n in ast.walk(func)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'clear_notifications'
+    ]
+    assert clear_calls, 'extend_subscription must clear notifications after extending'
+
+    try_nodes = [n for n in ast.walk(func) if isinstance(n, ast.Try)]
+
+    def _within(inner: ast.AST, outer: ast.AST) -> bool:
+        return any(child is inner for child in ast.walk(outer))
+
+    for call in clear_calls:
+        assert any(_within(call, t) and t.handlers for t in try_nodes), (
+            'the post-commit clear_notifications in extend_subscription must be wrapped '
+            'in try/except: a failure there must not propagate into a caller-level refund '
+            'guard and refund an already-committed extension'
+        )
 
 
 def test_charge_precedes_guard_and_delivery_steps_stay_outside() -> None:

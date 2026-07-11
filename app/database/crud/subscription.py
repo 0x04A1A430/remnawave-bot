@@ -1172,7 +1172,21 @@ async def extend_subscription(
     else:
         await db.flush()
 
-    await clear_notifications(db, subscription.id, commit=commit)
+    # Best-effort cleanup: the extension is already committed above. A failure here
+    # must not propagate — a caller that wraps extend_subscription in a compensating
+    # refund guard would otherwise roll back (a no-op for the committed extension) and
+    # refund a subscription that was actually delivered.
+    try:
+        await clear_notifications(db, subscription.id, commit=commit)
+    except Exception as clear_err:
+        logger.warning('Failed to clear notifications on extend', error=clear_err)
+        if commit:
+            # A failed internal commit leaves the session in an errored state; reset it
+            # so the caller can keep using it (the extension itself is already durable).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     # Kill other trial subscriptions if this extension converts trial to paid
     if not subscription.is_trial and days > 0:
