@@ -1,0 +1,428 @@
+"""Rich-рендер главного меню через rich-сообщения Bot API 10.1 (aiogram 3.29+).
+
+Главное меню собирается в rich-HTML (заголовки, таблица подписок, details-блоки,
+tg-time с датами в таймзоне клиента, footer) и отправляется через sendRichMessage /
+editMessageText(rich_message=...). Все try_*-хелперы возвращают bool: False означает
+«rich не отрисован» — вызывающий код обязан показать классическое меню.
+
+Fallback-модель повторяет happ-crypt паттерн из app/external/remnawave_api.py:
+после первого ответа сервера «метод неизвестен» (устаревший self-hosted
+telegram-bot-api) модуль запоминает недоступность до рестарта и больше не
+пытается. Ошибки конкретного рендера (например, неотредактированное сообщение)
+на флаг не влияют — просто отдаём False и меню рисуется классикой.
+
+Ограничение: у rich-сообщения нет фото, поэтому при ENABLE_LOGO_MODE главное
+меню в rich-режиме показывается без логотипа, а переходы меню <-> разделы с
+логотипом идут через delete+send (существующие fallback-и photo_message).
+"""
+
+import html
+import re
+from datetime import UTC, datetime
+
+import structlog
+from aiogram import Bot
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNetworkError,
+    TelegramNotFound,
+)
+from aiogram.methods import EditMessageText
+from aiogram.types import (
+    CallbackQuery,
+    InaccessibleMessage,
+    InlineKeyboardMarkup,
+    InputRichMessage,
+    Message,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database.crud.subscription import get_all_subscriptions_by_user_id
+from app.database.crud.tariff import get_tariff_by_id
+from app.database.crud.user_message import get_random_active_message
+from app.database.models import User
+from app.utils.promo_offer import build_promo_offer_hint, build_test_access_hint
+from app.utils.timezone import format_local_datetime
+
+
+logger = structlog.get_logger(__name__)
+
+_RTL_LANGUAGES = frozenset({'ar', 'fa', 'he'})
+_PROGRESS_BAR_LENGTH = 10
+
+# Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).
+# Взводится один раз до рестарта — по образцу _happ_encrypt_unavailable.
+_rich_unavailable = False
+
+# Теги, которые допускает sanitize_html, но не понимает rich-HTML: спойлерный
+# span конвертируем в родной <tg-spoiler>, прочие span разворачиваем (содержимое
+# остаётся), img выкидываем целиком.
+_SPOILER_SPAN_RE = re.compile(
+    r'<span\s+class=(["\'])tg-spoiler\1[^>]*>(.*?)</span>',
+    re.IGNORECASE | re.DOTALL,
+)
+_SPAN_TAG_RE = re.compile(r'</?span[^>]*>', re.IGNORECASE)
+_IMG_TAG_RE = re.compile(r'<img[^>]*/?>', re.IGNORECASE)
+
+
+def is_rich_menu_enabled() -> bool:
+    return bool(settings.MAIN_MENU_RICH_ENABLED) and not _rich_unavailable
+
+
+def _reset_rich_menu_availability() -> None:
+    """Сбрасывает флаг недоступности (используется в тестах)."""
+    global _rich_unavailable
+    _rich_unavailable = False
+
+
+def _mark_rich_unavailable(error: Exception) -> None:
+    global _rich_unavailable
+    if not _rich_unavailable:
+        logger.warning(
+            'Bot API сервер не поддерживает rich-сообщения — главное меню переключено на классический рендер',
+            error=str(error),
+        )
+    _rich_unavailable = True
+
+
+def _looks_like_unsupported(error: Exception) -> bool:
+    """Отличает «сервер не знает про rich» от ошибок конкретного рендера.
+
+    Устаревший telegram-bot-api отвечает 404 Not Found на неизвестный метод
+    (sendRichMessage) и 'message text is empty' на editMessageText без text.
+    """
+    if isinstance(error, TelegramNotFound):
+        return True
+    text = str(error).lower()
+    return 'unknown method' in text or 'method not found' in text or 'text is empty' in text
+
+
+def _tg_time(moment: datetime, time_format: str, fallback: str) -> str:
+    return f'<tg-time unix="{int(moment.timestamp())}" format="{time_format}">{html.escape(fallback)}</tg-time>'
+
+
+def _progress_bar(seconds_left: float, total_seconds: float) -> str:
+    # Тот же вид [████░░░░░░], что у таймеров промо-предложений (app/utils/promo_offer.py).
+    if total_seconds <= 0:
+        total_seconds = seconds_left or 1
+    ratio = max(0.0, min(1.0, seconds_left / total_seconds))
+    filled = int(round(ratio * _PROGRESS_BAR_LENGTH))
+    filled = max(0, min(_PROGRESS_BAR_LENGTH, filled))
+    if filled == 0 and seconds_left > 0:
+        filled = 1
+    return f'[{"█" * filled}{"░" * (_PROGRESS_BAR_LENGTH - filled)}]'
+
+
+def _rich_status_label(texts, actual_status: str, is_trial: bool) -> str:
+    if actual_status == 'limited':
+        return texts.t('MAIN_MENU_RICH_STATUS_LIMITED', '🟡 Лимит трафика')
+    if actual_status == 'expired':
+        return texts.t('MAIN_MENU_RICH_STATUS_EXPIRED', '🔴 Истекла')
+    if actual_status == 'disabled':
+        return texts.t('MAIN_MENU_RICH_STATUS_DISABLED', '⚫ Отключена')
+    if actual_status == 'pending':
+        return texts.t('MAIN_MENU_RICH_STATUS_PENDING', '⏳ Ожидает')
+    if is_trial or actual_status == 'trial':
+        return texts.t('MAIN_MENU_RICH_STATUS_TRIAL', '🎁 Тестовая')
+    if actual_status == 'active':
+        return texts.t('MAIN_MENU_RICH_STATUS_ACTIVE', '🟢 Активна')
+    return texts.t('SUB_STATUS_UNKNOWN', '❓ Неизвестно')
+
+
+def _sanitize_rich_inline(value: str) -> str:
+    """Приводит sanitize_html-вывод (случайные сообщения админа) к rich-HTML."""
+    value = _SPOILER_SPAN_RE.sub(r'<tg-spoiler>\2</tg-spoiler>', value)
+    value = _SPAN_TAG_RE.sub('', value)
+    return _IMG_TAG_RE.sub('', value)
+
+
+async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str:
+    subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+    if not subscriptions:
+        return f'<p>{html.escape(texts.t("SUB_STATUS_NONE", "❌ Отсутствует"))}</p>'
+
+    current_time = datetime.now(UTC)
+    header = (
+        '<tr>'
+        f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_TARIFF", "Тариф"))}</th>'
+        f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_STATUS", "Статус"))}</th>'
+        f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_UNTIL", "Действует до"))}</th>'
+        '</tr>'
+    )
+    tariff_fallback = texts.t('MAIN_MENU_RICH_TARIFF_FALLBACK', 'Подписка')
+    rows = [header]
+    for subscription in subscriptions:
+        tariff_name = html.escape(subscription.tariff.name if subscription.tariff else tariff_fallback)
+        actual_status = (subscription.actual_status or '').lower()
+        status_label = _rich_status_label(texts, actual_status, bool(getattr(subscription, 'is_trial', False)))
+
+        end_date = getattr(subscription, 'end_date', None)
+        end_date_text = format_local_datetime(end_date, '%d.%m.%Y') if end_date else ''
+        if end_date and end_date > current_time and actual_status in {'active', 'trial', 'limited'}:
+            days_left = (end_date - current_time).days
+            days_text = texts.t('MAIN_MENU_RICH_DAYS_LEFT', 'осталось {days} дн.').replace('{days}', str(days_left))
+            until_cell = f'{_tg_time(end_date, "d", end_date_text)} ({html.escape(days_text)})'
+        elif end_date:
+            until_cell = _tg_time(end_date, 'd', end_date_text)
+        else:
+            until_cell = '—'
+
+        rows.append(
+            f'<tr><td>{tariff_name}</td><td>{html.escape(status_label)}</td><td align="right">{until_cell}</td></tr>'
+        )
+
+    return f'<table bordered striped>{"".join(rows)}</table>'
+
+
+async def _build_single_subscription_block(user: User, texts, db: AsyncSession) -> str:
+    # Статусные строки берём из того же builder-а, что и классическое меню, —
+    # единый источник правды для формулировок (см. tests/test_start_menu_text_consistency.py).
+    from app.handlers.menu import _get_subscription_status
+
+    subscription = getattr(user, 'subscription', None)
+    if not subscription:
+        return f'<p>{html.escape(texts.t("SUB_STATUS_NONE", "❌ Отсутствует"))}</p>'
+
+    is_daily_tariff = False
+    tariff_line = ''
+    if settings.is_tariffs_mode() and subscription.tariff_id:
+        try:
+            tariff = await get_tariff_by_id(db, subscription.tariff_id)
+        except Exception as error:
+            tariff = None
+            logger.debug('Не удалось загрузить тариф для rich-меню', error=error)
+        if tariff:
+            is_daily_tariff = bool(getattr(tariff, 'is_daily', False))
+            tariff_template = texts.t('MAIN_MENU_RICH_TARIFF', '📦 Тариф: {tariff}')
+            tariff_line = html.escape(tariff_template).replace('{tariff}', f'<b>{html.escape(tariff.name)}</b>')
+
+    status_text = _get_subscription_status(user, texts, is_daily_tariff)
+    lines = [html.escape(line) for line in status_text.split('\n') if line.strip()]
+    if tariff_line:
+        lines.append(tariff_line)
+
+    current_time = datetime.now(UTC)
+    end_date = getattr(subscription, 'end_date', None)
+    start_date = getattr(subscription, 'start_date', None)
+    actual_status = (subscription.actual_status or '').lower()
+    if not is_daily_tariff and end_date and end_date > current_time and actual_status in {'active', 'trial'}:
+        seconds_left = (end_date - current_time).total_seconds()
+        total_seconds = (end_date - start_date).total_seconds() if start_date else 0
+        relative_template = texts.t('MAIN_MENU_RICH_EXPIRES_RELATIVE', '⏳ истекает {when}')
+        days_left_text = texts.t('MAIN_MENU_RICH_DAYS_LEFT', 'осталось {days} дн.').replace(
+            '{days}', str(max((end_date - current_time).days, 0))
+        )
+        relative_line = html.escape(relative_template).replace('{when}', _tg_time(end_date, 'r', days_left_text))
+        lines.append(f'<code>{_progress_bar(seconds_left, total_seconds)}</code> {relative_line}')
+
+    return '<blockquote>' + '<br>'.join(lines) + '</blockquote>'
+
+
+async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
+    """Собирает rich-HTML главного меню (контент, без клавиатуры)."""
+    blocks: list[str] = []
+
+    user_name = html.escape(user.full_name or '')
+    blocks.append(f'<h4>👤 {user_name}</h4>')
+    blocks.append('<hr/>')
+
+    if settings.is_multi_tariff_enabled():
+        heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTIONS_HEADING', '📱 Подписки')
+        subscription_block = await _build_subscriptions_table(user, texts, db)
+    else:
+        heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTION_HEADING', '📱 Подписка')
+        subscription_block = await _build_single_subscription_block(user, texts, db)
+    blocks.append(f'<h6>{html.escape(heading)}</h6>')
+    blocks.append(subscription_block)
+
+    balance_template = texts.t('MAIN_MENU_RICH_BALANCE', '💰 Баланс: {balance}')
+    balance_value = f'<b>{html.escape(settings.format_price(user.balance_kopeks))}</b>'
+    blocks.append(f'<p>{html.escape(balance_template).replace("{balance}", balance_value)}</p>')
+
+    hint_sections: list[str] = []
+    try:
+        promo_hint = await build_promo_offer_hint(db, user, texts)
+        if promo_hint:
+            hint_sections.append(promo_hint.strip())
+    except Exception as hint_error:
+        logger.debug('Не удалось построить подсказку промо-предложения для rich-меню', hint_error=hint_error)
+    try:
+        test_access_hint = await build_test_access_hint(db, user, texts)
+        if test_access_hint:
+            hint_sections.append(test_access_hint.strip())
+    except Exception as test_error:
+        logger.debug('Не удалось построить подсказку тестового доступа для rich-меню', test_error=test_error)
+
+    if hint_sections:
+        summary = texts.t('MAIN_MENU_RICH_HINTS_SUMMARY', '💡 Акции и подсказки')
+        # Строки подсказок содержат только inline-теги (<code>{bar}</code>) — переносы
+        # превращаем в отдельные параграфы внутри details-блока.
+        inner = ''.join(f'<p>{line}</p>' for section in hint_sections for line in section.split('\n') if line.strip())
+        blocks.append(f'<details open><summary>{html.escape(summary)}</summary>{inner}</details>')
+
+    try:
+        random_message = await get_random_active_message(db)
+    except Exception as error:
+        random_message = None
+        logger.error('Ошибка получения случайного сообщения для rich-меню', error=error)
+    if random_message:
+        # Rich-HTML живёт по правилам HTML: перенос строки — только через <br>.
+        random_message_html = _sanitize_rich_inline(random_message).replace('\n', '<br>')
+        blocks.append(f'<blockquote>{random_message_html}</blockquote>')
+
+    blocks.append('<hr/>')
+    action_prompt = texts.t('MAIN_MENU_ACTION_PROMPT', 'Выберите действие:')
+    blocks.append(f'<footer>{html.escape(action_prompt)}</footer>')
+
+    return ''.join(blocks)
+
+
+def _input_rich_message(rich_html: str, language: str | None) -> InputRichMessage:
+    return InputRichMessage(
+        html=rich_html,
+        is_rtl=True if (language or '').lower() in _RTL_LANGUAGES else None,
+        skip_entity_detection=True,
+    )
+
+
+async def _send_rich_menu(
+    bot: Bot,
+    chat_id: int,
+    rich_html: str,
+    keyboard: InlineKeyboardMarkup,
+    language: str | None,
+) -> None:
+    await bot.send_rich_message(
+        chat_id=chat_id,
+        rich_message=_input_rich_message(rich_html, language),
+        reply_markup=keyboard,
+    )
+
+
+async def try_send_rich_main_menu(
+    bot: Bot,
+    chat_id: int,
+    db_user: User,
+    texts,
+    db: AsyncSession,
+    keyboard: InlineKeyboardMarkup,
+) -> bool:
+    """Отправляет главное меню rich-сообщением. False — показать классическое меню."""
+    if not is_rich_menu_enabled():
+        return False
+
+    try:
+        rich_html = await build_main_menu_rich_html(db_user, texts, db)
+    except Exception as error:
+        logger.error('Ошибка сборки rich-меню', error=error, user_id=getattr(db_user, 'id', None))
+        return False
+
+    try:
+        await _send_rich_menu(bot, chat_id, rich_html, keyboard, db_user.language)
+        return True
+    except TelegramForbiddenError:
+        # Пользователь заблокировал бота — классический рендер упадёт так же, не ретраим.
+        logger.warning('Не удалось отправить rich-меню: бот заблокирован пользователем', chat_id=chat_id)
+        return True
+    except (TelegramNotFound, TelegramBadRequest) as error:
+        if _looks_like_unsupported(error):
+            _mark_rich_unavailable(error)
+        else:
+            logger.error('Не удалось отправить rich-меню', error=error, chat_id=chat_id)
+        return False
+    except TelegramNetworkError as error:
+        logger.warning('Сетевая ошибка при отправке rich-меню', error=error, chat_id=chat_id)
+        return False
+
+
+async def try_answer_rich_main_menu(
+    message: Message,
+    db_user: User,
+    texts,
+    db: AsyncSession,
+    keyboard: InlineKeyboardMarkup,
+) -> bool:
+    """Rich-аналог message.answer(menu_text) для /start и завершения регистрации."""
+    bot = message.bot
+    if bot is None:
+        return False
+    return await try_send_rich_main_menu(bot, message.chat.id, db_user, texts, db, keyboard)
+
+
+async def try_edit_rich_main_menu(
+    callback: CallbackQuery,
+    db_user: User,
+    texts,
+    db: AsyncSession,
+    keyboard: InlineKeyboardMarkup,
+) -> bool:
+    """Rich-аналог edit_or_answer_photo для callback-навигации. False — рисовать классику."""
+    if not is_rich_menu_enabled():
+        return False
+
+    message = callback.message
+    bot = callback.bot
+    if message is None or bot is None:
+        return False
+
+    try:
+        rich_html = await build_main_menu_rich_html(db_user, texts, db)
+    except Exception as error:
+        logger.error('Ошибка сборки rich-меню', error=error, user_id=getattr(db_user, 'id', None))
+        return False
+
+    chat_id = message.chat.id
+    language = db_user.language
+
+    is_editable_as_rich = (
+        not isinstance(message, InaccessibleMessage)
+        and not getattr(message, 'photo', None)
+        and (message.text is not None or getattr(message, 'rich_message', None) is not None)
+    )
+
+    try:
+        if is_editable_as_rich:
+            # parse_mode=None явно: иначе дефолтный parse_mode бота (HTML) сериализуется
+            # в запрос рядом с rich_message.
+            await bot(
+                EditMessageText(
+                    chat_id=chat_id,
+                    message_id=message.message_id,
+                    rich_message=_input_rich_message(rich_html, language),
+                    reply_markup=keyboard,
+                    parse_mode=None,
+                )
+            )
+        else:
+            # Фото/медиа-сообщение (логотип) или недоступное (>48ч) нельзя превратить
+            # в rich редактированием — пересоздаём, как это делает edit_or_answer_photo
+            # при смене типа сообщения.
+            if not isinstance(message, InaccessibleMessage):
+                try:
+                    await message.delete()
+                except (TelegramBadRequest, TelegramForbiddenError) as delete_error:
+                    # Например, сообщению больше 48 часов — deleteMessage запрещён, хотя
+                    # редактирование ещё работает. Отдаём классическому рендеру: он
+                    # отредактирует уцелевшее сообщение на месте и не наплодит дублей.
+                    logger.debug('Не удалось удалить сообщение перед rich-меню', error=delete_error)
+                    return False
+            await _send_rich_menu(bot, chat_id, rich_html, keyboard, language)
+        return True
+    except TelegramForbiddenError:
+        logger.warning('Не удалось показать rich-меню: бот заблокирован пользователем', chat_id=chat_id)
+        return True
+    except (TelegramNotFound, TelegramBadRequest) as error:
+        if 'message is not modified' in str(error).lower():
+            return True
+        if _looks_like_unsupported(error):
+            _mark_rich_unavailable(error)
+        else:
+            # Правка не удалась (сообщение удалено/устарело и т.п.) — классический
+            # рендер разрулит своей цепочкой фоллбеков (edit_or_answer_photo).
+            logger.warning('Не удалось отредактировать rich-меню, фоллбек на классику', error=error, chat_id=chat_id)
+        return False
+    except TelegramNetworkError as error:
+        logger.warning('Сетевая ошибка при показе rich-меню', error=error, chat_id=chat_id)
+        return False

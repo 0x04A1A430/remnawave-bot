@@ -379,6 +379,7 @@ class BotConfigurationService:
         'LOGO_FILE': 'INTERFACE_BRANDING',
         'HIDE_SUBSCRIPTION_LINK': 'INTERFACE_SUBSCRIPTION',
         'MAIN_MENU_MODE': 'INTERFACE',
+        'MAIN_MENU_RICH_ENABLED': 'INTERFACE',
         'CABINET_BUTTON_STYLE': 'INTERFACE',
         'CONNECT_BUTTON_MODE': 'CONNECT_BUTTON',
         'MINIAPP_CUSTOM_URL': 'CONNECT_BUTTON',
@@ -670,6 +671,21 @@ class BotConfigurationService:
             'format': 'Выберите сквад из списка или очистите значение.',
             'example': 'd4aa2b8c-9a36-4f31-93a2-6f07dad05fba',
             'warning': 'Убедитесь, что выбранный сквад активен и доступен для подписки.',
+        },
+        'MAIN_MENU_RICH_ENABLED': {
+            'description': (
+                'Rich-меню (Bot API 10.1): главное меню с заголовками, таблицей подписок, '
+                'сворачиваемыми блоками акций и датами в часовом поясе пользователя (tg-time).'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': (
+                'Требует telegram-bot-api с поддержкой Bot API 10.1 (официальный сервер поддерживает). '
+                'Если сервер не поддерживает rich-сообщения, бот сам вернётся к классическому меню до рестарта. '
+                'В rich-режиме главное меню отображается без логотипа (rich-сообщение не является фото), '
+                'а при включённом ENABLE_LOGO_MODE переходы меню и разделов пересоздают сообщение.'
+            ),
+            'dependencies': 'ENABLE_LOGO_MODE',
         },
         'MULTI_TARIFF_ENABLED': {
             'description': (

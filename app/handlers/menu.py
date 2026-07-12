@@ -42,6 +42,7 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
 )
+from app.utils.rich_menu import try_edit_rich_main_menu
 from app.utils.telegram_html import html_to_telegram, info_page_faq_to_telegram, split_telegram_text
 from app.utils.timezone import format_local_datetime
 
@@ -198,8 +199,6 @@ async def show_main_menu(
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
-    menu_text = await get_main_menu_text(db_user, texts, db)
-
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
@@ -238,12 +237,14 @@ async def show_main_menu(
         custom_buttons=custom_buttons,
     )
 
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=menu_text,
-        keyboard=keyboard,
-        parse_mode='HTML',
-    )
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        menu_text = await get_main_menu_text(db_user, texts, db)
+        await edit_or_answer_photo(
+            callback=callback,
+            caption=menu_text,
+            keyboard=keyboard,
+            parse_mode='HTML',
+        )
     if not skip_callback_answer:
         await callback.answer()
 
@@ -1231,8 +1232,6 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
     has_active_subscription = any(sub.is_active or getattr(sub, 'actual_status', None) == 'limited' for sub in _subs)
     subscription_is_active = has_active_subscription
 
-    menu_text = await get_main_menu_text(db_user, texts, db)
-
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
@@ -1271,12 +1270,14 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         custom_buttons=custom_buttons,
     )
 
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=menu_text,
-        keyboard=keyboard,
-        parse_mode='HTML',
-    )
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        menu_text = await get_main_menu_text(db_user, texts, db)
+        await edit_or_answer_photo(
+            callback=callback,
+            caption=menu_text,
+            keyboard=keyboard,
+            parse_mode='HTML',
+        )
     await callback.answer()
 
 
