@@ -269,7 +269,7 @@ def _trial_offer_link(user: User, texts) -> str:
         if user.is_trial_already_used():
             return ''
     except Exception as error:
-        logger.debug('Не удалось проверить доступность триала для rich-меню', error=error)
+        logger.debug('Не удалось проверить доступность триала для rich-меню', error=str(error))
         return ''
 
     if settings.is_trial_paid_activation_enabled():
@@ -357,7 +357,7 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
             tariff = await get_tariff_by_id(db, subscription.tariff_id)
         except Exception as error:
             tariff = None
-            logger.debug('Не удалось загрузить тариф для rich-меню', error=error)
+            logger.debug('Не удалось загрузить тариф для rich-меню', error=str(error))
         if tariff:
             is_daily_tariff = bool(getattr(tariff, 'is_daily', False))
             tariff_template = texts.t('MAIN_MENU_RICH_TARIFF', '📦 Тариф: {tariff}')
@@ -552,7 +552,7 @@ async def try_send_rich_main_menu(
             logger.error('Не удалось отправить rich-меню', error=error, chat_id=chat_id)
         return False
     except TelegramNetworkError as error:
-        logger.warning('Сетевая ошибка при отправке rich-меню', error=error, chat_id=chat_id)
+        logger.warning('Сетевая ошибка при отправке rich-меню', error=str(error), chat_id=chat_id)
         return False
 
 
@@ -625,7 +625,7 @@ async def try_edit_rich_main_menu(
                     # Например, сообщению больше 48 часов — deleteMessage запрещён, хотя
                     # редактирование ещё работает. Отдаём классическому рендеру: он
                     # отредактирует уцелевшее сообщение на месте и не наплодит дублей.
-                    logger.debug('Не удалось удалить сообщение перед rich-меню', error=delete_error)
+                    logger.debug('Не удалось удалить сообщение перед rich-меню', error=str(delete_error))
                     return False
             await _send_rich_menu(bot, chat_id, rich_html, keyboard, language)
         return True
@@ -643,8 +643,10 @@ async def try_edit_rich_main_menu(
         else:
             # Правка не удалась (сообщение удалено/устарело и т.п.) — классический
             # рендер разрулит своей цепочкой фоллбеков (edit_or_answer_photo).
-            logger.warning('Не удалось отредактировать rich-меню, фоллбек на классику', error=error, chat_id=chat_id)
+            logger.warning(
+                'Не удалось отредактировать rich-меню, фоллбек на классику', error=str(error), chat_id=chat_id
+            )
         return False
     except TelegramNetworkError as error:
-        logger.warning('Сетевая ошибка при показе rich-меню', error=error, chat_id=chat_id)
+        logger.warning('Сетевая ошибка при показе rich-меню', error=str(error), chat_id=chat_id)
         return False
