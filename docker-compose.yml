@@ -24,19 +24,16 @@ services:
       start_period: 30s
 
   redis:
-    # Valkey — открытый (BSD-3, Linux Foundation) drop-in форк Redis:
-    # тот же протокол RESP и команды, клиент redis-py работает без изменений.
-    # Сервис/том намеренно оставлены с именем redis — для бота ничего не меняется.
-    image: valkey/valkey:9-alpine
+    image: redis:7-alpine
     container_name: remnawave_bot_redis
     restart: unless-stopped
-    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     networks:
       - bot_network
     healthcheck:
-      test: ['CMD', 'valkey-cli', 'ping']
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 30s
       timeout: 10s
       retries: 3
