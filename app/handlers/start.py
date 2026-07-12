@@ -65,6 +65,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
+from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -659,7 +660,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после ввода реферального кода')
         else:
@@ -694,7 +695,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после принятия промокода')
         else:
@@ -783,7 +784,7 @@ async def _continue_registration_after_language(
 
     rules_text = await get_rules(language)
     try:
-        await target_message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+        await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
         logger.warning(
             '⚠️ Пользователь заблокировал бота, пропускаем отправку правил',
@@ -1460,8 +1461,11 @@ async def _show_privacy_policy_after_rules(
         logger.info('🔒 Используется политика конфиденциальности из БД для языка', language=language)
 
     try:
-        await callback.message.edit_text(
-            privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language), parse_mode='HTML'
+        await edit_long_text(
+            callback.message,
+            privacy_policy_text,
+            reply_markup=get_privacy_policy_keyboard(language),
+            parse_mode='HTML',
         )
         await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
         logger.info('🔒 Политика конфиденциальности отправлена пользователю', from_user_id=callback.from_user.id)
@@ -1469,8 +1473,11 @@ async def _show_privacy_policy_after_rules(
     except Exception as e:
         logger.error('Ошибка при показе политики конфиденциальности', error=e, exc_info=True)
         try:
-            await callback.message.answer(
-                privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language), parse_mode='HTML'
+            await answer_long_text(
+                callback.message,
+                privacy_policy_text,
+                reply_markup=get_privacy_policy_keyboard(language),
+                parse_mode='HTML',
             )
             await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
             logger.info(
@@ -2967,9 +2974,10 @@ async def required_sub_channel_check(
                     )
                     _cache_logo_file_id(_result)
                 else:
-                    await bot.send_message(
-                        chat_id=query.from_user.id,
-                        text=rules_text,
+                    await send_long_text(
+                        bot,
+                        query.from_user.id,
+                        rules_text,
                         reply_markup=get_rules_keyboard(language),
                     )
                 await state.set_state(RegistrationStates.waiting_for_rules_accept)
