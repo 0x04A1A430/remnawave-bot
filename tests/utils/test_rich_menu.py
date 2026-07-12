@@ -49,17 +49,21 @@ def _make_subscription(now, *, status='active', days_left=12, is_trial=False, ta
         traffic_used_gb=12.5,
         traffic_limit_gb=100,
         device_limit=3,
+        subscription_url='https://sub.example.com/u/abc',
+        subscription_crypto_link=None,
     )
 
 
-def _make_user(subscription):
+def _make_user(subscription, *, trial_used=True):
     return SimpleNamespace(
         id=1,
         full_name='Егор <script>',
         language='ru',
+        auth_type='telegram',
         balance_kopeks=125_000,
         subscription=subscription,
         subscriptions=[subscription] if subscription else [],
+        is_trial_already_used=lambda: trial_used,
     )
 
 
@@ -627,7 +631,7 @@ async def test_usage_row_in_multi_tariff_table(monkeypatch):
 
     html_out = await rich_menu.build_main_menu_rich_html(_make_user(active), DummyTexts(), AsyncMock())
 
-    assert '<td colspan="3">📊 12.5 ГБ / 100 ГБ · 📱 3</td>' in html_out
+    assert '<td colspan="4">📊 12.5 ГБ / 100 ГБ · 📱 3</td>' in html_out
 
 
 async def test_send_passes_message_effect(monkeypatch):
@@ -729,3 +733,108 @@ async def test_logo_fetch_failure_degrades_and_resends(monkeypatch):
     assert '<img' in calls[0]
     assert '<img' not in calls[1]
     assert rich_menu.is_rich_menu_enabled() is True
+
+
+async def test_connect_link_for_active_subscription_in_table(monkeypatch):
+    """Активная строка таблицы получает «кнопку» подключения — ссылку на subscription_url."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+    now = datetime.now(UTC)
+    active = _make_subscription(now)
+
+    async def fake_get_all(db, user_id):
+        return [active]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(active), DummyTexts(), AsyncMock())
+
+    assert '<a href="https://sub.example.com/u/abc"><b>⚡ Подключить</b></a>' in html_out
+
+
+async def test_connect_link_hidden_when_subscription_link_hidden(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(type(settings), 'should_hide_subscription_link', lambda self: True)
+
+    now = datetime.now(UTC)
+    active = _make_subscription(now)
+
+    async def fake_get_all(db, user_id):
+        return [active]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(active), DummyTexts(), AsyncMock())
+
+    assert 'Подключить' not in html_out
+    assert 'sub.example.com' not in html_out
+
+
+async def test_connect_link_uses_happ_redirect_in_happ_mode(monkeypatch):
+    """В happ-режиме подключение идёт через https-обёртку редиректа, не через сырую happ://."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_happ_cryptolink_mode', lambda self: True)
+    monkeypatch.setattr(
+        rich_menu,
+        'get_happ_cryptolink_redirect_link',
+        lambda link: f'https://redirect.example.com/?l={link}' if link else None,
+    )
+
+    now = datetime.now(UTC)
+    sub = _make_subscription(now)
+    sub.subscription_crypto_link = 'happ://crypt4/xyz'
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(sub), DummyTexts(), AsyncMock())
+
+    assert 'https://redirect.example.com/?l=happ://crypt4/xyz' in html_out
+    assert 'href="happ://' not in html_out
+
+
+async def test_trial_offer_free_deeplink(monkeypatch):
+    """Новый юзер без триала: ссылка t.me/<bot>?start=trial (бесплатный триал)."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_trial_paid_activation_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'get_bot_username', lambda self: 'testbot')
+    monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 3, raising=False)
+    monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none', raising=False)
+
+    user = _make_user(None, trial_used=False)
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert '<a href="https://t.me/testbot?start=trial"><b>🚀 Активировать триал</b></a>' in html_out
+
+
+async def test_trial_offer_paid_opens_miniapp(monkeypatch):
+    """Платный триал: ссылка ведёт на оплату в миниапп (startapp=trial), не на диплинк."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_trial_paid_activation_enabled', lambda self: True)
+    monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 3, raising=False)
+    monkeypatch.setattr(settings, 'TRIAL_DISABLED_FOR', 'none', raising=False)
+    monkeypatch.setattr(
+        rich_menu,
+        'build_miniapp_startapp_url',
+        lambda start_param: f'https://t.me/bot/cab?startapp={start_param}',
+    )
+
+    user = _make_user(None, trial_used=False)
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert 'https://t.me/bot/cab?startapp=trial' in html_out
+    assert 'start=trial' not in html_out.replace('startapp=trial', '')
+
+
+async def test_trial_offer_absent_when_trial_used(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(settings, 'TRIAL_DURATION_DAYS', 3, raising=False)
+
+    user = _make_user(None, trial_used=True)
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert 'Активировать триал' not in html_out

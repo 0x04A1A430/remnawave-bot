@@ -67,3 +67,20 @@ def test_single_subscription_block_reuses_menu_status_builder():
     source = inspect.getsource(rich_menu_mod._build_single_subscription_block)
     assert 'from app.handlers.menu import _get_subscription_status' in source
     assert '_get_subscription_status(user, texts' in source
+
+
+def test_trial_deeplink_wired_in_start():
+    """Диплинк /start trial: ветка сташит pending_trial, drain — рядом с купонным
+    (до state.clear() и показа меню), платный триал деплинком не активируется."""
+    source = _START_PATH.read_text(encoding='utf-8')
+
+    assert "if start_parameter == 'trial':" in source
+    assert 'pending_trial=True' in source
+
+    coupon_drain = source.index('await _redeem_pending_coupon(db, state, user, message.answer)')
+    trial_drain = source.index('await _activate_pending_trial(db, state, user, message.answer)')
+    assert coupon_drain < trial_drain
+
+    helper = source.index('async def _activate_pending_trial(')
+    assert 'is_trial_paid_activation_enabled' in source[helper : helper + 3000]
+    assert 'is_trial_already_used' in source[helper : helper + 3000]

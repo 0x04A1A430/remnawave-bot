@@ -47,6 +47,7 @@ from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
 from app.utils.miniapp_buttons import build_miniapp_startapp_url
 from app.utils.promo_offer import build_promo_offer_hint, build_test_access_hint
+from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.timezone import format_local_datetime
 
 
@@ -227,6 +228,62 @@ def _traffic_usage_text(subscription, texts) -> str:
     return f'{used} / {limit}'
 
 
+def _connect_url(subscription) -> str:
+    """URL мгновенного подключения подписки для текстовой ссылки.
+
+    В happ-режиме — https-обёртка редиректа над crypto-ссылкой (сырой happ://
+    в <a href> rich-HTML не поддерживается); иначе — страница подписки
+    subscription_url, если оператор не скрыл прямые ссылки.
+    """
+    if settings.is_happ_cryptolink_mode():
+        crypto_link = getattr(subscription, 'subscription_crypto_link', None)
+        redirect_link = get_happ_cryptolink_redirect_link(crypto_link) if crypto_link else None
+        if redirect_link:
+            return redirect_link
+    if settings.should_hide_subscription_link():
+        return ''
+    return getattr(subscription, 'subscription_url', None) or ''
+
+
+def _connect_link(subscription, texts) -> str:
+    url = _connect_url(subscription)
+    if not url:
+        return ''
+    label = html.escape(texts.t('MAIN_MENU_RICH_CONNECT', '⚡ Подключить'))
+    return f'<a href="{html.escape(url, quote=True)}"><b>{label}</b></a>'
+
+
+def _trial_offer_link(user: User, texts) -> str:
+    """Ссылка «Активировать триал» для нового юзера без использованного триала.
+
+    Бесплатный триал — диплинк t.me/<bot>?start=trial (обрабатывается в
+    start.py: активация + перерисовка меню с новой подпиской). Платный триал
+    (TRIAL_PAYMENT_ENABLED + цена) активируется только через оплату — ссылка
+    ведёт в миниапп-кабинет (дашборд с TrialOfferCard, startapp=trial).
+    """
+    if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
+        return ''
+    if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None)):
+        return ''
+    try:
+        if user.is_trial_already_used():
+            return ''
+    except Exception as error:
+        logger.debug('Не удалось проверить доступность триала для rich-меню', error=error)
+        return ''
+
+    if settings.is_trial_paid_activation_enabled():
+        url = build_miniapp_startapp_url('trial')
+    else:
+        bot_username = settings.get_bot_username()
+        url = f'https://t.me/{bot_username}?start=trial' if bot_username else ''
+    if not url:
+        return ''
+
+    label = html.escape(texts.t('MAIN_MENU_RICH_TRIAL_BUTTON', '🚀 Активировать триал'))
+    return f'<a href="{html.escape(url, quote=True)}"><b>{label}</b></a>'
+
+
 async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str:
     subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
     if not subscriptions:
@@ -238,6 +295,7 @@ async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str
         f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_TARIFF", "Тариф"))}</th>'
         f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_STATUS", "Статус"))}</th>'
         f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_UNTIL", "Действует до"))}</th>'
+        '<th></th>'
         '</tr>'
     )
     tariff_fallback = texts.t('MAIN_MENU_RICH_TARIFF_FALLBACK', 'Подписка')
@@ -258,13 +316,18 @@ async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str
         else:
             until_cell = '—'
 
-        if actual_status == 'expired':
-            renew_link = _renew_link(getattr(subscription, 'id', None), texts)
-            if renew_link:
-                until_cell = f'{until_cell} · {renew_link}' if until_cell != '—' else renew_link
+        # «Кнопка» действия в последней колонке: активным — подключение,
+        # истёкшим — продление в кабинете.
+        if actual_status in {'active', 'trial', 'limited'}:
+            action_cell = _connect_link(subscription, texts)
+        elif actual_status == 'expired':
+            action_cell = _renew_link(getattr(subscription, 'id', None), texts)
+        else:
+            action_cell = ''
 
         rows.append(
-            f'<tr><td>{tariff_name}</td><td>{html.escape(status_label)}</td><td align="right">{until_cell}</td></tr>'
+            f'<tr><td>{tariff_name}</td><td>{html.escape(status_label)}</td>'
+            f'<td align="right">{until_cell}</td><td align="center">{action_cell}</td></tr>'
         )
 
         # Текущий расход под активными строками: 📊 трафик · 📱 лимит устройств
@@ -273,7 +336,7 @@ async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str
             device_limit = getattr(subscription, 'device_limit', None)
             if device_limit:
                 usage_parts.append(f'📱 {device_limit}')
-            rows.append(f'<tr><td colspan="3">{" · ".join(usage_parts)}</td></tr>')
+            rows.append(f'<tr><td colspan="4">{" · ".join(usage_parts)}</td></tr>')
 
     return f'<table bordered striped>{"".join(rows)}</table>'
 
@@ -328,6 +391,9 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
         if device_limit:
             devices_template = texts.t('MAIN_MENU_RICH_DEVICES', '📱 Устройства: {devices}')
             lines.append(html.escape(devices_template).replace('{devices}', str(device_limit)))
+        connect_link = _connect_link(subscription, texts)
+        if connect_link:
+            lines.append(connect_link)
 
     if actual_status == 'expired':
         renew_link = _renew_link(getattr(subscription, 'id', None), texts)
@@ -357,6 +423,10 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
         subscription_block = await _build_single_subscription_block(user, texts, db)
     blocks.append(f'<h6>{html.escape(heading)}</h6>')
     blocks.append(subscription_block)
+
+    trial_link = _trial_offer_link(user, texts)
+    if trial_link:
+        blocks.append(f'<p>{trial_link}</p>')
 
     balance_template = texts.t('MAIN_MENU_RICH_BALANCE', '💰 Баланс: {balance}')
     balance_value = f'<b>{html.escape(settings.format_price(user.balance_kopeks))}</b>'
