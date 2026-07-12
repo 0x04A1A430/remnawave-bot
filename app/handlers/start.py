@@ -42,6 +42,12 @@ from app.middlewares.channel_checker import (
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
+from app.services.coupon_service import (
+    COUPON_DEEP_LINK_PREFIX,
+    CouponRedemptionError,
+    is_coupon_token,
+    redeem_coupon,
+)
 from app.services.guest_purchase_service import GIFT_TOKEN_MIN_PREFIX_LENGTH
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.phantom_service import claim_phantom, merge_phantom_into_user
@@ -59,6 +65,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
+from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -220,6 +227,66 @@ async def _activate_pending_gift_after_registration(
             )
         except Exception:
             pass
+
+
+_COUPON_ERROR_TEXTS = {
+    'invalid': '❌ Купон не найден или уже использован.',
+    'expired': '⌛ Срок действия купона истёк.',
+    'already_redeemed_by_you': 'ℹ️ Вы уже активировали этот купон.',
+    'internal': '❌ Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
+}
+
+
+async def _redeem_pending_coupon(
+    db: AsyncSession,
+    state: FSMContext,
+    user: 'User',
+    answer_func: Callable[..., Any],
+) -> None:
+    """Extract pending_coupon_token from FSM state and redeem it for ``user``.
+
+    Must be called BEFORE state.clear() to preserve the token.
+    """
+    coupon_token: str | None = None
+    try:
+        fresh_state = await state.get_data()
+        coupon_token = fresh_state.get('pending_coupon_token')
+        if not coupon_token:
+            return
+
+        try:
+            result = await redeem_coupon(db, coupon_token, user)
+        except CouponRedemptionError as error:
+            await answer_func(
+                _COUPON_ERROR_TEXTS.get(error.code, _COUPON_ERROR_TEXTS['invalid']),
+                parse_mode=ParseMode.HTML,
+            )
+            return
+    except Exception:
+        logger.exception(
+            'Failed to redeem coupon deep link',
+            token_prefix=(coupon_token or '')[:5],
+        )
+        try:
+            await answer_func(_COUPON_ERROR_TEXTS['internal'], parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+        return
+
+    # Redemption is committed at this point — a failed confirmation send must
+    # not claim the activation failed (the coupon IS consumed).
+    try:
+        tariff_name = html.escape(result.tariff_name)
+        await answer_func(
+            f'🎟 <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception(
+            'Coupon redeemed but the confirmation message failed to send',
+            token_prefix=(coupon_token or '')[:5],
+            user_id=user.id,
+        )
 
 
 async def _claim_phantom_user(
@@ -593,7 +660,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после ввода реферального кода')
         else:
@@ -628,7 +695,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('📋 Правила отправлены после принятия промокода')
         else:
@@ -717,7 +784,7 @@ async def _continue_registration_after_language(
 
     rules_text = await get_rules(language)
     try:
-        await target_message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+        await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
         logger.warning(
             '⚠️ Пользователь заблокировал бота, пропускаем отправку правил',
@@ -814,6 +881,28 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             # _activate_pending_gift_after_registration() before state.clear().
             await state.update_data(pending_gift_token=gift_token)
             start_parameter = None  # Don't treat as campaign or referral
+
+    # Handle coupon deep links: /start coupon_{token} — one-time wholesale coupons
+    if start_parameter and start_parameter.startswith(COUPON_DEEP_LINK_PREFIX):
+        coupon_token = start_parameter.removeprefix(COUPON_DEEP_LINK_PREFIX).lower()
+        # The payload fits Telegram's 64-char start param untruncated, so the
+        # lookup is exact-match. Swallow the parameter only for coupons that
+        # actually exist — a campaign start_parameter may legitimately begin
+        # with 'coupon_' (even coupon_<32 hex>) and must fall through to the
+        # campaign lookup below.
+        if is_coupon_token(coupon_token):
+            from app.database.crud.coupon import get_coupon_by_token
+
+            if await get_coupon_by_token(db, coupon_token) is not None:
+                logger.info(
+                    'Coupon deep link detected',
+                    token_prefix=coupon_token[:5],
+                    telegram_id=message.from_user.id,
+                )
+                # Redeemed via _redeem_pending_coupon(): immediately below for
+                # registered users, after registration for new ones.
+                await state.update_data(pending_coupon_token=coupon_token)
+                start_parameter = None  # Don't treat as campaign or referral
 
     # Handle web auth deep links: /start webauth_{token}
     if start_parameter and start_parameter.startswith('webauth_'):
@@ -1065,12 +1154,12 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             except Exception as e:
                 logger.error('Ошибка отправки уведомления о рекламной кампании', error=e)
 
-        # Auto-activate pending gift if deep link contained GIFT_
+        # Auto-activate pending gift/coupon if deep link contained GIFT_/coupon_
         if user:
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
-            await state.update_data(pending_gift_token=None)
+            await _redeem_pending_coupon(db, state, user, message.answer)
             await _persist_pending_subid_after_registration(db, state, user)
-            await state.update_data(pending_subid=None)
+            await state.update_data(pending_gift_token=None, pending_coupon_token=None, pending_subid=None)
             # Refresh user to pick up newly created subscriptions
             await db.refresh(user, attribute_names=['subscriptions'])
 
@@ -1372,8 +1461,11 @@ async def _show_privacy_policy_after_rules(
         logger.info('🔒 Используется политика конфиденциальности из БД для языка', language=language)
 
     try:
-        await callback.message.edit_text(
-            privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language), parse_mode='HTML'
+        await edit_long_text(
+            callback.message,
+            privacy_policy_text,
+            reply_markup=get_privacy_policy_keyboard(language),
+            parse_mode='HTML',
         )
         await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
         logger.info('🔒 Политика конфиденциальности отправлена пользователю', from_user_id=callback.from_user.id)
@@ -1381,8 +1473,11 @@ async def _show_privacy_policy_after_rules(
     except Exception as e:
         logger.error('Ошибка при показе политики конфиденциальности', error=e, exc_info=True)
         try:
-            await callback.message.answer(
-                privacy_policy_text, reply_markup=get_privacy_policy_keyboard(language), parse_mode='HTML'
+            await answer_long_text(
+                callback.message,
+                privacy_policy_text,
+                reply_markup=get_privacy_policy_keyboard(language),
+                parse_mode='HTML',
             )
             await state.set_state(RegistrationStates.waiting_for_privacy_policy_accept)
             logger.info(
@@ -1930,9 +2025,20 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         telegram_id=user.telegram_id,
     )
 
-    # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
+    # Auto-activate pending gift/coupon for newly registered user (before state.clear() wipes the tokens)
     await _activate_pending_gift_after_registration(db, state, user, callback.message.answer)
+    await _redeem_pending_coupon(db, state, user, callback.message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
+    # Gift/coupon may have just created a subscription — reload it, otherwise the
+    # stale empty list below offers the trial on top of the granted subscription
+    try:
+        await db.refresh(user, ['subscriptions'])
+    except Exception as refresh_error:
+        logger.error(
+            'Ошибка обновления подписок после активации подарка/купона',
+            telegram_id=user.telegram_id,
+            refresh_error=refresh_error,
+        )
 
     await state.clear()
 
@@ -2278,9 +2384,20 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         '🗑️ COMPLETE: Redis payload удален после успешной регистрации пользователя', telegram_id=user.telegram_id
     )
 
-    # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
+    # Auto-activate pending gift/coupon for newly registered user (before state.clear() wipes the tokens)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
+    await _redeem_pending_coupon(db, state, user, message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
+    # Gift/coupon may have just created a subscription — reload it, otherwise the
+    # stale empty list below offers the trial on top of the granted subscription
+    try:
+        await db.refresh(user, ['subscriptions'])
+    except Exception as refresh_error:
+        logger.error(
+            'Ошибка обновления подписок после активации подарка/купона',
+            telegram_id=user.telegram_id,
+            refresh_error=refresh_error,
+        )
 
     await state.clear()
 
@@ -2857,9 +2974,10 @@ async def required_sub_channel_check(
                     )
                     _cache_logo_file_id(_result)
                 else:
-                    await bot.send_message(
-                        chat_id=query.from_user.id,
-                        text=rules_text,
+                    await send_long_text(
+                        bot,
+                        query.from_user.id,
+                        rules_text,
                         reply_markup=get_rules_keyboard(language),
                     )
                 await state.set_state(RegistrationStates.waiting_for_rules_accept)

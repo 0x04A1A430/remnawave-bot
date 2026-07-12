@@ -406,6 +406,7 @@ class BotConfigurationService:
         'EMAIL_DATE_FORMAT': 'TIMEZONE',
         'PRIVACY_POLICY_DISPLAY_MODE': 'INFO_PAGES',
         'PUBLIC_OFFER_DISPLAY_MODE': 'INFO_PAGES',
+        'RECURRENT_PAYMENTS_DISPLAY_MODE': 'INFO_PAGES',
         'SERVICE_RULES_DISPLAY_MODE': 'INFO_PAGES',
         'FAQ_DISPLAY_MODE': 'INFO_PAGES',
     }
@@ -595,6 +596,11 @@ class BotConfigurationService:
             ChoiceOption('both', '🔁 Бот и веб'),
         ],
         'PUBLIC_OFFER_DISPLAY_MODE': [
+            ChoiceOption('bot', '🤖 Только бот'),
+            ChoiceOption('web', '🌐 Только веб'),
+            ChoiceOption('both', '🔁 Бот и веб'),
+        ],
+        'RECURRENT_PAYMENTS_DISPLAY_MODE': [
             ChoiceOption('bot', '🤖 Только бот'),
             ChoiceOption('web', '🌐 Только веб'),
             ChoiceOption('both', '🔁 Бот и веб'),
