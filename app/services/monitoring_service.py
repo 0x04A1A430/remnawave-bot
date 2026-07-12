@@ -1834,6 +1834,9 @@ class MonitoringService:
                 '💳 <b>Автоплатеж:</b> {autopay_status}\n\n'
                 '{action_text}\n',
             ).format(
+                # Кастомные/старые локали используют {days} вместо {days_text} —
+                # передаём оба, иначе .format() падает с KeyError('days') (#2737).
+                days=days,
                 days_text=days_text,
                 end_date=end_date,
                 autopay_status=autopay_status,
