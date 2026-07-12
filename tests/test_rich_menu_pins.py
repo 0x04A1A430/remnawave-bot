@@ -84,3 +84,9 @@ def test_trial_deeplink_wired_in_start():
     helper = source.index('async def _activate_pending_trial(')
     assert 'is_trial_paid_activation_enabled' in source[helper : helper + 3000]
     assert 'is_trial_already_used' in source[helper : helper + 3000]
+
+    # Подтверждение активации — эфемерное: удаляется отложенной задачей
+    confirmation = source.index('MAIN_MENU_RICH_TRIAL_ACTIVATED')
+    tail = source[confirmation : confirmation + 800]
+    assert '_delete_message_later' in tail
+    assert 'delay=30' in tail

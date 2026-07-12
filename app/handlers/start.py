@@ -1,3 +1,4 @@
+import asyncio
 import html
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -290,6 +291,14 @@ async def _redeem_pending_coupon(
         )
 
 
+async def _delete_message_later(bot, chat_id: int, message_id: int, delay: int = 30) -> None:
+    try:
+        await asyncio.sleep(delay)
+        await bot.delete_message(chat_id, message_id)
+    except Exception as error:  # pragma: no cover - best-effort cleanup
+        logger.debug('Не удалось удалить эфемерное сообщение', message_id=message_id, error=str(error))
+
+
 async def _activate_pending_trial(
     db: AsyncSession,
     state: FSMContext,
@@ -381,10 +390,15 @@ async def _activate_pending_trial(
 
     try:
         texts = get_texts(user.language)
-        await answer_func(
+        confirmation = await answer_func(
             texts.t('MAIN_MENU_RICH_TRIAL_ACTIVATED', '🎉 <b>Тестовая подписка активирована!</b>'),
             parse_mode=ParseMode.HTML,
         )
+        # Подтверждение эфемерное: новая подписка и так видна в меню ниже.
+        if confirmation is not None and getattr(confirmation, 'bot', None) is not None:
+            asyncio.create_task(
+                _delete_message_later(confirmation.bot, confirmation.chat.id, confirmation.message_id, delay=30)
+            )
     except Exception:
         logger.exception('Триал активирован, но подтверждение не отправилось', user_id=user.id)
 

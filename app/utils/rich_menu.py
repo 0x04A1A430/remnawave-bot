@@ -295,7 +295,6 @@ async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str
         f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_TARIFF", "Тариф"))}</th>'
         f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_STATUS", "Статус"))}</th>'
         f'<th>{html.escape(texts.t("MAIN_MENU_RICH_TABLE_UNTIL", "Действует до"))}</th>'
-        '<th></th>'
         '</tr>'
     )
     tariff_fallback = texts.t('MAIN_MENU_RICH_TARIFF_FALLBACK', 'Подписка')
@@ -316,27 +315,26 @@ async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str
         else:
             until_cell = '—'
 
-        # «Кнопка» действия в последней колонке: активным — подключение,
-        # истёкшим — продление в кабинете.
-        if actual_status in {'active', 'trial', 'limited'}:
-            action_cell = _connect_link(subscription, texts)
-        elif actual_status == 'expired':
-            action_cell = _renew_link(getattr(subscription, 'id', None), texts)
-        else:
-            action_cell = ''
-
         rows.append(
-            f'<tr><td>{tariff_name}</td><td>{html.escape(status_label)}</td>'
-            f'<td align="right">{until_cell}</td><td align="center">{action_cell}</td></tr>'
+            f'<tr><td>{tariff_name}</td><td>{html.escape(status_label)}</td><td align="right">{until_cell}</td></tr>'
         )
 
-        # Текущий расход под активными строками: 📊 трафик · 📱 лимит устройств
+        # Нижняя строка ряда: расход + «кнопки» действий. Отдельная узкая колонка
+        # действий не влезает на мобильных (таблица уезжает за край экрана) —
+        # colspan-строка видна всегда.
         if actual_status in {'active', 'trial', 'limited'}:
             usage_parts = [f'📊 {html.escape(_traffic_usage_text(subscription, texts))}']
             device_limit = getattr(subscription, 'device_limit', None)
             if device_limit:
                 usage_parts.append(f'📱 {device_limit}')
-            rows.append(f'<tr><td colspan="4">{" · ".join(usage_parts)}</td></tr>')
+            connect_link = _connect_link(subscription, texts)
+            if connect_link:
+                usage_parts.append(connect_link)
+            rows.append(f'<tr><td colspan="3">{" · ".join(usage_parts)}</td></tr>')
+        elif actual_status == 'expired':
+            renew_link = _renew_link(getattr(subscription, 'id', None), texts)
+            if renew_link:
+                rows.append(f'<tr><td colspan="3">{renew_link}</td></tr>')
 
     return f'<table bordered striped>{"".join(rows)}</table>'
 

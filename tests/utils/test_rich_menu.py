@@ -631,7 +631,10 @@ async def test_usage_row_in_multi_tariff_table(monkeypatch):
 
     html_out = await rich_menu.build_main_menu_rich_html(_make_user(active), DummyTexts(), AsyncMock())
 
-    assert '<td colspan="4">📊 12.5 ГБ / 100 ГБ · 📱 3</td>' in html_out
+    # Расход и кнопка подключения — в нижней colspan-строке ряда (узкая 4-я
+    # колонка не влезала на мобильных: таблица уезжала за край экрана).
+    assert '<td colspan="3">📊 12.5 ГБ / 100 ГБ · 📱 3 · ' in html_out
+    assert '<td colspan="4"' not in html_out
 
 
 async def test_send_passes_message_effect(monkeypatch):
