@@ -19,24 +19,36 @@ class DummyTexts:
     def t(self, key, default=None):
         return default
 
+    @staticmethod
+    def format_traffic(gb, is_limit=True):
+        if not gb and is_limit:
+            return '∞'
+        return f'{gb:g} ГБ'
+
 
 @pytest.fixture(autouse=True)
 def _rich_menu_env(monkeypatch):
-    """Включает rich-меню и сбрасывает флаг недоступности вокруг каждого теста."""
+    """Включает rich-меню, изолирует логотип/эффект и сбрасывает флаги недоступности."""
     rich_menu._reset_rich_menu_availability()
     monkeypatch.setattr(settings, 'MAIN_MENU_RICH_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_LOGO_URL', '', raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_URL', None, raising=False)
     yield
     rich_menu._reset_rich_menu_availability()
 
 
 def _make_subscription(now, *, status='active', days_left=12, is_trial=False, tariff_name='Стандарт'):
     return SimpleNamespace(
+        id=7,
         actual_status=status,
         is_trial=is_trial,
         end_date=now + timedelta(days=days_left),
         start_date=now - timedelta(days=18),
         tariff_id=None,
         tariff=SimpleNamespace(name=tariff_name),
+        traffic_used_gb=12.5,
+        traffic_limit_gb=100,
+        device_limit=3,
     )
 
 
@@ -432,6 +444,10 @@ async def test_multi_tariff_table_is_fully_localized(monkeypatch):
         def t(self, key, default=None):
             return f'[{key}]'
 
+        @staticmethod
+        def format_traffic(gb, is_limit=True):
+            return 'GB'
+
     _patch_content_sources(monkeypatch)
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
 
@@ -439,12 +455,16 @@ async def test_multi_tariff_table_is_fully_localized(monkeypatch):
     subs = [
         _make_subscription(now, tariff_name='Plan-A'),
         SimpleNamespace(
+            id=8,
             actual_status='active',
             is_trial=False,
             end_date=now + timedelta(days=5),
             start_date=now,
             tariff_id=None,
             tariff=None,  # тарифless-подписка использует локализованный fallback
+            traffic_used_gb=0,
+            traffic_limit_gb=0,
+            device_limit=1,
         ),
     ]
 
@@ -513,4 +533,199 @@ async def test_show_main_menu_prefers_rich_and_falls_back(monkeypatch):
     classic_render.assert_awaited_once()
     assert classic_render.await_args.kwargs['caption'] == 'classic menu'
     assert classic_render.await_args.kwargs['keyboard'] is keyboard
+    assert rich_menu.is_rich_menu_enabled() is True
+
+
+async def test_expired_subscription_renew_link_in_cabinet_mode(monkeypatch):
+    """Истёкшая подписка в cabinet-режиме получает ссылку «Продлить» в кабинет."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(type(settings), 'is_cabinet_mode', lambda self: True)
+    monkeypatch.setattr(
+        rich_menu,
+        'build_miniapp_startapp_url',
+        lambda start_param: f'https://t.me/bot/cab?startapp={start_param}',
+    )
+
+    now = datetime.now(UTC)
+    expired = _make_subscription(now, status='expired', days_left=-3)
+
+    async def fake_get_all(db, user_id):
+        return [expired]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(expired), DummyTexts(), AsyncMock())
+
+    assert '<a href="https://t.me/bot/cab?startapp=renew_7">🔄 Продлить</a>' in html_out
+
+
+async def test_expired_subscription_no_renew_link_outside_cabinet_mode(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(type(settings), 'is_cabinet_mode', lambda self: False)
+
+    now = datetime.now(UTC)
+    expired = _make_subscription(now, status='expired', days_left=-3)
+
+    async def fake_get_all(db, user_id):
+        return [expired]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(expired), DummyTexts(), AsyncMock())
+
+    assert 'startapp=renew_' not in html_out
+    assert 'Продлить' not in html_out
+
+
+async def test_single_mode_expired_renew_link(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_cabinet_mode', lambda self: True)
+    monkeypatch.setattr(
+        rich_menu,
+        'build_miniapp_startapp_url',
+        lambda start_param: f'https://t.me/bot/cab?startapp={start_param}',
+    )
+
+    now = datetime.now(UTC)
+    expired = _make_subscription(now, status='expired', days_left=-3)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(expired), DummyTexts(), AsyncMock())
+
+    assert 'startapp=renew_7' in html_out
+
+
+async def test_usage_traffic_and_devices_displayed(monkeypatch):
+    """Активная подписка показывает текущий трафик и лимит устройств."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+
+    now = datetime.now(UTC)
+    user = _make_user(_make_subscription(now))
+
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert '📊 Трафик: 12.5 ГБ / 100 ГБ' in html_out
+    assert '📱 Устройства: 3' in html_out
+
+
+async def test_usage_row_in_multi_tariff_table(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+    now = datetime.now(UTC)
+    active = _make_subscription(now)
+
+    async def fake_get_all(db, user_id):
+        return [active]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(active), DummyTexts(), AsyncMock())
+
+    assert '<td colspan="3">📊 12.5 ГБ / 100 ГБ · 📱 3</td>' in html_out
+
+
+async def test_send_passes_message_effect(monkeypatch):
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_EFFECT_ID', '5046509860389126442', raising=False)
+
+    bot = AsyncMock()
+    sent = await rich_menu.try_send_rich_main_menu(
+        bot, 1, _make_user(None), DummyTexts(), AsyncMock(), _make_keyboard()
+    )
+
+    assert sent is True
+    assert bot.send_rich_message.await_args.kwargs['message_effect_id'] == '5046509860389126442'
+
+
+async def test_rejected_effect_degrades_and_resends(monkeypatch):
+    """Отклонённый эффект: повтор без него, эффект отключается до рестарта."""
+
+    async def fake_build(user, texts, db):
+        return '<p>menu</p>'
+
+    monkeypatch.setattr(rich_menu, 'build_main_menu_rich_html', fake_build)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_EFFECT_ID', '123', raising=False)
+
+    bot = AsyncMock()
+
+    def _reject_effect(**kwargs):
+        if kwargs.get('message_effect_id'):
+            raise TelegramBadRequest(method=None, message='Bad Request: wrong message effect identifier')
+        return AsyncMock()()
+
+    bot.send_rich_message.side_effect = _reject_effect
+
+    sent = await rich_menu.try_send_rich_main_menu(
+        bot, 1, _make_user(None), DummyTexts(), AsyncMock(), _make_keyboard()
+    )
+
+    assert sent is True
+    assert bot.send_rich_message.await_count == 2
+    # Второй вызов — без эффекта; последующие отправки эффект не включают
+    assert 'message_effect_id' not in bot.send_rich_message.await_args.kwargs
+
+    bot.send_rich_message.reset_mock()
+    bot.send_rich_message.side_effect = None
+    await rich_menu.try_send_rich_main_menu(bot, 1, _make_user(None), DummyTexts(), AsyncMock(), _make_keyboard())
+    assert bot.send_rich_message.await_args.kwargs['message_effect_id'] is None
+
+
+async def test_logo_included_from_explicit_url(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_LOGO_URL', 'https://example.com/logo.png', raising=False)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(None), DummyTexts(), AsyncMock())
+
+    assert html_out.startswith('<img src="https://example.com/logo.png"/>')
+
+
+async def test_logo_auto_url_from_webhook(monkeypatch, tmp_path):
+    logo = tmp_path / 'logo.png'
+    logo.write_bytes(b'png')
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_LOGO_URL', '', raising=False)
+    monkeypatch.setattr(settings, 'WEBHOOK_URL', 'https://bot.example.com/webhook', raising=False)
+    monkeypatch.setattr(settings, 'LOGO_FILE', str(logo), raising=False)
+
+    assert rich_menu._resolve_rich_logo_url() == 'https://bot.example.com/cabinet/branding/bot-logo'
+
+    # Файла нет — логотип не подставляется
+    monkeypatch.setattr(settings, 'LOGO_FILE', str(tmp_path / 'missing.png'), raising=False)
+    assert rich_menu._resolve_rich_logo_url() == ''
+
+
+async def test_logo_fetch_failure_degrades_and_resends(monkeypatch):
+    """Telegram не скачал логотип: единственный повтор без логотипа, флаг до рестарта."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_LOGO_URL', 'https://example.com/logo.png', raising=False)
+
+    bot = AsyncMock()
+    calls: list[str] = []
+
+    def _reject_logo(**kwargs):
+        calls.append(kwargs['rich_message'].html)
+        if '<img' in kwargs['rich_message'].html:
+            raise TelegramBadRequest(method=None, message='Bad Request: failed to get HTTP URL content')
+        return AsyncMock()()
+
+    bot.send_rich_message.side_effect = _reject_logo
+
+    sent = await rich_menu.try_send_rich_main_menu(
+        bot, 1, _make_user(None), DummyTexts(), AsyncMock(), _make_keyboard()
+    )
+
+    assert sent is True
+    assert len(calls) == 2
+    assert '<img' in calls[0]
+    assert '<img' not in calls[1]
     assert rich_menu.is_rich_menu_enabled() is True

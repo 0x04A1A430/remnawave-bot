@@ -380,6 +380,8 @@ class BotConfigurationService:
         'HIDE_SUBSCRIPTION_LINK': 'INTERFACE_SUBSCRIPTION',
         'MAIN_MENU_MODE': 'INTERFACE',
         'MAIN_MENU_RICH_ENABLED': 'INTERFACE',
+        'MAIN_MENU_RICH_EFFECT_ID': 'INTERFACE',
+        'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
         'CABINET_BUTTON_STYLE': 'INTERFACE',
         'CONNECT_BUTTON_MODE': 'CONNECT_BUTTON',
         'MINIAPP_CUSTOM_URL': 'CONNECT_BUTTON',
@@ -686,6 +688,34 @@ class BotConfigurationService:
                 'а при включённом ENABLE_LOGO_MODE переходы меню и разделов пересоздают сообщение.'
             ),
             'dependencies': 'ENABLE_LOGO_MODE',
+        },
+        'MAIN_MENU_RICH_EFFECT_ID': {
+            'description': (
+                'Эффект сообщения (конфетти и т.п.) при отправке rich-меню новым сообщением. '
+                'Работает только в личных чатах и только при MAIN_MENU_RICH_ENABLED.'
+            ),
+            'format': 'Идентификатор эффекта Telegram или пустая строка (без эффекта).',
+            'example': '5046509860389126442',
+            'warning': (
+                'Известные id: 🎉 5046509860389126442, ❤️ 5044134455711629726, 🔥 5104841245755180586, '
+                '👍 5107584321108051014, 👎 5104858069142078462, 💩 5046589136895476101. '
+                'Если сервер отклонит эффект, бот отправит меню без него и отключит эффект до рестарта.'
+            ),
+            'dependencies': 'MAIN_MENU_RICH_ENABLED',
+        },
+        'MAIN_MENU_RICH_LOGO_URL': {
+            'description': (
+                'Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. '
+                'Пусто — авто-режим: при заданном WEBHOOK_URL и существующем LOGO_FILE '
+                'логотип отдаётся эндпоинтом /cabinet/branding/bot-logo.'
+            ),
+            'format': 'HTTPS-URL картинки (png/jpg/webp) или пустая строка.',
+            'example': 'https://example.com/logo.png',
+            'warning': (
+                'URL должен быть доступен серверам Telegram. Если картинку скачать не удалось, '
+                'бот один раз повторит отправку без логотипа и отключит его до рестарта.'
+            ),
+            'dependencies': 'MAIN_MENU_RICH_ENABLED, WEBHOOK_URL, LOGO_FILE',
         },
         'MULTI_TARIFF_ENABLED': {
             'description': (
