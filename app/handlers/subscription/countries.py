@@ -633,7 +633,18 @@ async def _get_available_countries(promo_group_id: int | None = None):
 
                 if not any(flag in squad_name for flag in ['', '', '', '', '', '', '', '', '', '', '']):
                     name_lower = squad_name.lower()
-                    if 'netherlands' in name_lower or 'нидерланды' in name_lower or 'nl' in name_lower or 'germany' in name_lower or 'германия' in name_lower or 'de' in name_lower or 'usa' in name_lower or 'сша' in name_lower or 'america' in name_lower or 'us' in name_lower:
+                    if (
+                        'netherlands' in name_lower
+                        or 'нидерланды' in name_lower
+                        or 'nl' in name_lower
+                        or 'germany' in name_lower
+                        or 'германия' in name_lower
+                        or 'de' in name_lower
+                        or 'usa' in name_lower
+                        or 'сша' in name_lower
+                        or 'america' in name_lower
+                        or 'us' in name_lower
+                    ):
                         squad_name = f'{squad_name}'
                     else:
                         squad_name = f'{squad_name}'
