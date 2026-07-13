@@ -406,7 +406,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
 
     recipient_display = f'@{username}' if username else str(target_id)
     sub_info_lines: list[str] = []
-    db_user_found = False
     sub = None
     cur_days, cur_devices = 0, 1
 

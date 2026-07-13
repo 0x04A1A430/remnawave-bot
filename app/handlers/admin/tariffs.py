@@ -303,9 +303,6 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     traffic = format_traffic(tariff.traffic_limit_gb)
     prices_display = _format_period_prices_display(tariff.period_prices or {})
 
-    # Форматируем список серверов
-    squads_list = tariff.allowed_squads or []
-
     # Форматируем промогруппы
     promo_groups = tariff.allowed_promo_groups or []
     if promo_groups:
