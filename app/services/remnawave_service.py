@@ -32,6 +32,7 @@ from app.external.remnawave_api import (
     RemnaWaveAPI,
     RemnaWaveAPIError,
     UserStatus,
+    is_user_not_found_error,
 )
 from app.services.subscription_service import get_traffic_reset_strategy
 from app.utils.subscription_utils import (
@@ -2570,12 +2571,10 @@ class RemnaWaveService:
                                             user.remnawave_uuid = panel_uuid
                                         return ('updated', sub, None)
                                     except RemnaWaveAPIError as api_error:
-                                        # UUID в БД протух — панель-юзера уже нет. Разные версии
-                                        # RemnaWave сообщают это по-разному: A018 или A063, и не всегда
-                                        # со статусом 404. Пересоздаём по любому из этих признаков, чтобы
-                                        # синхронизация в панель чинила рассинхрон, а не падала в ошибку.
-                                        error_code = (api_error.response_data or {}).get('errorCode', '')
-                                        if api_error.status_code == 404 or error_code in ('A018', 'A063'):
+                                        # UUID в БД протух — панель-юзера уже нет. Пересоздаём,
+                                        # чтобы синхронизация в панель чинила рассинхрон,
+                                        # а не падала в ошибку.
+                                        if is_user_not_found_error(api_error):
                                             new_user = await api.create_user(**create_kwargs)
                                             return ('created', sub, new_user)
                                         raise
