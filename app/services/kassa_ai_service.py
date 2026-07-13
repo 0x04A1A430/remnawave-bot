@@ -132,7 +132,7 @@ class KassaAiService:
                 amount_str = str(amount)
 
             sign_str = f'{shop_id}:{amount_str}:{self.secret2}:{order_id}'
-            expected_sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()
+            expected_sign = hashlib.md5(sign_str.encode('utf-8')).hexdigest()  # provider-defined algorithm
 
             return hmac.compare_digest(expected_sign.lower(), sign.lower())
         except Exception as e:

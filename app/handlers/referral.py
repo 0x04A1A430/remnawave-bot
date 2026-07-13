@@ -277,7 +277,7 @@ async def show_referral_qr(
     qr_dir = Path('data') / 'referral_qr'
     qr_dir.mkdir(parents=True, exist_ok=True)
 
-    link_hash = hashlib.md5(bot_referral_link.encode()).hexdigest()[:8]
+    link_hash = hashlib.shake_128(bot_referral_link.encode()).hexdigest(4)
     file_path = qr_dir / f'{db_user.id}_{link_hash}.png'
     if not file_path.exists():
         img = qrcode.make(bot_referral_link)
