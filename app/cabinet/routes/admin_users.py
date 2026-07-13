@@ -3054,6 +3054,7 @@ def _activity_sources(user_id: int) -> dict[str, tuple]:
     def _map_button_click(c: ButtonClickLog) -> UserActivityItem:
         return UserActivityItem(
             type='button_click',
+            subtype='command' if c.button_type == 'command' else None,
             source='bot',
             title=c.button_text or c.callback_data or c.button_id,
             timestamp=c.clicked_at,
