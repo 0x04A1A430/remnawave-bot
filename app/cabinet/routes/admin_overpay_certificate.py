@@ -10,7 +10,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/overpay", tags=["Cabinet Admin Overpay"])
+router = APIRouter(prefix='/admin/overpay', tags=['Cabinet Admin Overpay'])
 
 
 class OverpayCertificateStatusResponse(BaseModel):
@@ -34,18 +34,18 @@ class OverpayCertificateUploadResponse(BaseModel):
     warning: str | None = None
 
 
-@router.get("/certificate", response_model=OverpayCertificateStatusResponse)
+@router.get('/certificate', response_model=OverpayCertificateStatusResponse)
 async def get_certificate_status(
-    admin: User = Depends(require_permission("settings:read")),
+    admin: User = Depends(require_permission('settings:read')),
 ) -> OverpayCertificateStatusResponse:
     return OverpayCertificateStatusResponse(**overpay_certificate_service.get_status())
 
 
-@router.post("/certificate", response_model=OverpayCertificateUploadResponse)
+@router.post('/certificate', response_model=OverpayCertificateUploadResponse)
 async def upload_certificate(
     file: UploadFile = File(...),
-    passphrase: str = Form(""),
-    admin: User = Depends(require_permission("settings:edit")),
+    passphrase: str = Form(''),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> OverpayCertificateUploadResponse:
     data = await file.read(overpay_certificate_service.MAX_P12_SIZE + 1)
@@ -54,19 +54,17 @@ async def upload_certificate(
     if not data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty file",
+            detail='Empty file',
         )
 
     if len(data) > overpay_certificate_service.MAX_P12_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="File too large. Maximum size: 1 MB",
+            detail='File too large. Maximum size: 1 MB',
         )
 
     try:
-        metadata = await overpay_certificate_service.store_certificate(
-            db, data, passphrase
-        )
+        metadata = await overpay_certificate_service.store_certificate(db, data, passphrase)
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -74,18 +72,18 @@ async def upload_certificate(
         ) from None
 
     logger.info(
-        "Admin uploaded Overpay certificate via cabinet",
+        'Admin uploaded Overpay certificate via cabinet',
         admin_id=admin.id,
-        subject=metadata["subject"],
-        not_valid_after=metadata["not_valid_after"],
+        subject=metadata['subject'],
+        not_valid_after=metadata['not_valid_after'],
     )
     return OverpayCertificateUploadResponse(**metadata)
 
 
-@router.delete("/certificate", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/certificate', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_certificate(
-    admin: User = Depends(require_permission("settings:edit")),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     await overpay_certificate_service.delete_certificate(db)
-    logger.info("Admin deleted Overpay certificate via cabinet", admin_id=admin.id)
+    logger.info('Admin deleted Overpay certificate via cabinet', admin_id=admin.id)

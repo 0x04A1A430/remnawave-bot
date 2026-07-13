@@ -67,89 +67,73 @@ class SubscriptionRenewalPricing:
 
     def to_payload(self) -> dict[str, Any]:
         return {
-            "period_id": self.period_id,
-            "period_days": self.period_days,
-            "months": self.months,
-            "base_original_total": self.base_original_total,
-            "discounted_total": self.discounted_total,
-            "final_total": self.final_total,
-            "promo_discount_value": self.promo_discount_value,
-            "promo_discount_percent": self.promo_discount_percent,
-            "overall_discount_percent": self.overall_discount_percent,
-            "per_month": self.per_month,
-            "server_ids": list(self.server_ids),
-            "details": dict(self.details),
+            'period_id': self.period_id,
+            'period_days': self.period_days,
+            'months': self.months,
+            'base_original_total': self.base_original_total,
+            'discounted_total': self.discounted_total,
+            'final_total': self.final_total,
+            'promo_discount_value': self.promo_discount_value,
+            'promo_discount_percent': self.promo_discount_percent,
+            'overall_discount_percent': self.overall_discount_percent,
+            'per_month': self.per_month,
+            'server_ids': list(self.server_ids),
+            'details': dict(self.details),
         }
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> SubscriptionRenewalPricing:
         """Deserialize from dict. Supports both legacy SubscriptionRenewalPricing
         and new RenewalPricing (from PricingEngine) schemas."""
-        breakdown = payload.get("breakdown") or {}
-        period_days = int(payload.get("period_days", 0) or 0)
-        final_total = int(payload.get("final_total", 0) or 0)
+        breakdown = payload.get('breakdown') or {}
+        period_days = int(payload.get('period_days', 0) or 0)
+        final_total = int(payload.get('final_total', 0) or 0)
 
         # RenewalPricing uses 'promo_offer_discount', legacy uses 'promo_discount_value'
         promo_discount_value = int(
-            payload.get("promo_discount_value", 0)
-            or payload.get("promo_offer_discount", 0)
-            or 0
+            payload.get('promo_discount_value', 0) or payload.get('promo_offer_discount', 0) or 0
         )
 
         # months: legacy has it directly, RenewalPricing needs derivation
-        months = int(payload.get("months", 0) or 0)
+        months = int(payload.get('months', 0) or 0)
         if not months and period_days > 0:
             months = max(1, round(period_days / 30))
 
         # base_original_total: legacy has it, RenewalPricing needs reconstruction
-        base_original_total = int(payload.get("base_original_total", 0) or 0)
+        base_original_total = int(payload.get('base_original_total', 0) or 0)
         if not base_original_total and final_total > 0:
-            promo_group_discount = int(payload.get("promo_group_discount", 0) or 0)
-            base_original_total = (
-                final_total + promo_group_discount + promo_discount_value
-            )
+            promo_group_discount = int(payload.get('promo_group_discount', 0) or 0)
+            base_original_total = final_total + promo_group_discount + promo_discount_value
 
         # discounted_total: legacy has it, RenewalPricing = final + offer discount
-        discounted_total = int(payload.get("discounted_total", 0) or 0)
+        discounted_total = int(payload.get('discounted_total', 0) or 0)
         if not discounted_total:
             discounted_total = final_total + promo_discount_value
 
         # per_month
-        per_month = int(payload.get("per_month", 0) or 0)
+        per_month = int(payload.get('per_month', 0) or 0)
         if not per_month and months > 0:
             per_month = final_total // months
 
         # server_ids: legacy at top level, RenewalPricing in breakdown
-        server_ids = list(
-            payload.get("server_ids") or breakdown.get("server_ids") or []
-        )
+        server_ids = list(payload.get('server_ids') or breakdown.get('server_ids') or [])
 
         # details: legacy uses 'details', RenewalPricing uses 'breakdown'
-        details = dict(payload.get("details") or breakdown or {})
+        details = dict(payload.get('details') or breakdown or {})
 
         # promo_discount_percent: from payload or breakdown
         promo_discount_percent = int(
-            payload.get("promo_discount_percent", 0)
-            or breakdown.get("offer_discount_pct", 0)
-            or 0
+            payload.get('promo_discount_percent', 0) or breakdown.get('offer_discount_pct', 0) or 0
         )
 
         # overall_discount_percent: derive if not present
-        overall_discount_percent = int(payload.get("overall_discount_percent", 0) or 0)
-        if (
-            not overall_discount_percent
-            and base_original_total > 0
-            and base_original_total > final_total
-        ):
-            overall_discount_percent = int(
-                round((base_original_total - final_total) * 100 / base_original_total)
-            )
+        overall_discount_percent = int(payload.get('overall_discount_percent', 0) or 0)
+        if not overall_discount_percent and base_original_total > 0 and base_original_total > final_total:
+            overall_discount_percent = int(round((base_original_total - final_total) * 100 / base_original_total))
 
         return cls(
             period_days=period_days,
-            period_id=str(
-                payload.get("period_id") or build_renewal_period_id(period_days)
-            ),
+            period_id=str(payload.get('period_id') or build_renewal_period_id(period_days)),
             months=months,
             base_original_total=base_original_total,
             discounted_total=discounted_total,
@@ -188,11 +172,11 @@ class RenewalPaymentDescriptor:
         return max(0, remaining)
 
 
-_PAYLOAD_PREFIX = "subscription_renewal"
+_PAYLOAD_PREFIX = 'subscription_renewal'
 
 
 def build_renewal_period_id(period_days: int) -> str:
-    return f"days:{period_days}"
+    return f'days:{period_days}'
 
 
 def build_payment_descriptor(
@@ -216,39 +200,35 @@ def build_payment_descriptor(
 
 
 def encode_payment_payload(descriptor: RenewalPaymentDescriptor) -> str:
-    snapshot_segment = ""
+    snapshot_segment = ''
     if descriptor.pricing_snapshot:
         try:
             raw_snapshot = json.dumps(
                 descriptor.pricing_snapshot,
-                separators=(",", ":"),
+                separators=(',', ':'),
                 ensure_ascii=False,
-            ).encode("utf-8")
-            snapshot_segment = (
-                base64.urlsafe_b64encode(raw_snapshot).decode("ascii").rstrip("=")
-            )
+            ).encode('utf-8')
+            snapshot_segment = base64.urlsafe_b64encode(raw_snapshot).decode('ascii').rstrip('=')
         except (TypeError, ValueError):
-            snapshot_segment = ""
+            snapshot_segment = ''
 
     payload = (
-        f"{_PAYLOAD_PREFIX}|{descriptor.user_id}|{descriptor.subscription_id}|"
-        f"{descriptor.period_days}|{descriptor.total_amount_kopeks}|"
-        f"{descriptor.missing_amount_kopeks}|{descriptor.payload_id}"
+        f'{_PAYLOAD_PREFIX}|{descriptor.user_id}|{descriptor.subscription_id}|'
+        f'{descriptor.period_days}|{descriptor.total_amount_kopeks}|'
+        f'{descriptor.missing_amount_kopeks}|{descriptor.payload_id}'
     )
 
     if snapshot_segment:
-        payload = f"{payload}|{snapshot_segment}"
+        payload = f'{payload}|{snapshot_segment}'
 
     return payload
 
 
-def decode_payment_payload(
-    payload: str, expected_user_id: int | None = None
-) -> RenewalPaymentDescriptor | None:
-    if not payload or not payload.startswith(f"{_PAYLOAD_PREFIX}|"):
+def decode_payment_payload(payload: str, expected_user_id: int | None = None) -> RenewalPaymentDescriptor | None:
+    if not payload or not payload.startswith(f'{_PAYLOAD_PREFIX}|'):
         return None
 
-    parts = payload.split("|")
+    parts = payload.split('|')
     if len(parts) < 7:
         return None
 
@@ -275,16 +255,14 @@ def decode_payment_payload(
     if snapshot_parts:
         encoded_snapshot = snapshot_parts[0]
         if encoded_snapshot:
-            padding = "=" * (-len(encoded_snapshot) % 4)
+            padding = '=' * (-len(encoded_snapshot) % 4)
             try:
-                decoded = base64.urlsafe_b64decode(
-                    (encoded_snapshot + padding).encode("ascii")
-                )
-                snapshot_data = json.loads(decoded.decode("utf-8"))
+                decoded = base64.urlsafe_b64decode((encoded_snapshot + padding).encode('ascii'))
+                snapshot_data = json.loads(decoded.decode('utf-8'))
                 if isinstance(snapshot_data, dict):
                     pricing_snapshot = snapshot_data
             except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
-                logger.warning("Failed to decode renewal pricing snapshot from payload")
+                logger.warning('Failed to decode renewal pricing snapshot from payload')
 
     if expected_user_id is not None and user_id != expected_user_id:
         return None
@@ -302,13 +280,13 @@ def decode_payment_payload(
 
 def build_payment_metadata(descriptor: RenewalPaymentDescriptor) -> dict[str, Any]:
     return {
-        "payment_purpose": _PAYLOAD_PREFIX,
-        "subscription_id": str(descriptor.subscription_id),
-        "period_days": str(descriptor.period_days),
-        "total_amount_kopeks": str(descriptor.total_amount_kopeks),
-        "missing_amount_kopeks": str(descriptor.missing_amount_kopeks),
-        "payload_id": descriptor.payload_id,
-        "pricing_snapshot": descriptor.pricing_snapshot or {},
+        'payment_purpose': _PAYLOAD_PREFIX,
+        'subscription_id': str(descriptor.subscription_id),
+        'period_days': str(descriptor.period_days),
+        'total_amount_kopeks': str(descriptor.total_amount_kopeks),
+        'missing_amount_kopeks': str(descriptor.missing_amount_kopeks),
+        'payload_id': descriptor.payload_id,
+        'pricing_snapshot': descriptor.pricing_snapshot or {},
     }
 
 
@@ -320,19 +298,19 @@ def parse_payment_metadata(
     if not metadata:
         return None
 
-    if metadata.get("payment_purpose") != _PAYLOAD_PREFIX:
+    if metadata.get('payment_purpose') != _PAYLOAD_PREFIX:
         return None
 
     try:
-        subscription_id = int(metadata.get("subscription_id"))
-        period_days = int(metadata.get("period_days"))
-        total_amount = int(metadata.get("total_amount_kopeks"))
-        missing_amount = int(metadata.get("missing_amount_kopeks"))
+        subscription_id = int(metadata.get('subscription_id'))
+        period_days = int(metadata.get('period_days'))
+        total_amount = int(metadata.get('total_amount_kopeks'))
+        missing_amount = int(metadata.get('missing_amount_kopeks'))
     except (TypeError, ValueError):
         return None
 
-    payload_id = str(metadata.get("payload_id") or "")
-    user_id = metadata.get("user_id")
+    payload_id = str(metadata.get('payload_id') or '')
+    user_id = metadata.get('user_id')
     if user_id is not None:
         try:
             user_id_int = int(user_id)
@@ -341,14 +319,10 @@ def parse_payment_metadata(
     else:
         user_id_int = None
 
-    if (
-        expected_user_id is not None
-        and user_id_int is not None
-        and user_id_int != expected_user_id
-    ):
+    if expected_user_id is not None and user_id_int is not None and user_id_int != expected_user_id:
         return None
 
-    pricing_snapshot = metadata.get("pricing_snapshot")
+    pricing_snapshot = metadata.get('pricing_snapshot')
     if isinstance(pricing_snapshot, dict):
         snapshot_dict = pricing_snapshot
     else:
@@ -368,10 +342,10 @@ def parse_payment_metadata(
 async def with_admin_notification_service(
     handler: Callable[[AdminNotificationService], Awaitable[Any]],
 ) -> None:
-    if not getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False):
+    if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False):
         return
     if not settings.BOT_TOKEN:
-        logger.debug("Skipping admin notification: bot token is not configured")
+        logger.debug('Skipping admin notification: bot token is not configured')
         return
 
     bot: Bot | None = None
@@ -380,9 +354,7 @@ async def with_admin_notification_service(
         service = AdminNotificationService(bot)
         await handler(service)
     except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            "Failed to send admin notification from renewal service", error=error
-        )
+        logger.error('Failed to send admin notification from renewal service', error=error)
     finally:
         if bot is not None:
             await bot.session.close()
@@ -417,24 +389,12 @@ class SubscriptionRenewalService:
         else:
             consume_promo_offer = bool(pricing.promo_offer_discount)
 
-        description_text = description or f"Продление подписки на {period_days} дней"
+        description_text = description or f'Продление подписки на {period_days} дней'
 
         # Save promo offer state before charge so we can restore on failure
-        saved_promo_percent = (
-            int(getattr(user, "promo_offer_discount_percent", 0) or 0)
-            if consume_promo_offer
-            else 0
-        )
-        saved_promo_source = (
-            getattr(user, "promo_offer_discount_source", None)
-            if consume_promo_offer
-            else None
-        )
-        saved_promo_expires = (
-            getattr(user, "promo_offer_discount_expires_at", None)
-            if consume_promo_offer
-            else None
-        )
+        saved_promo_percent = int(getattr(user, 'promo_offer_discount_percent', 0) or 0) if consume_promo_offer else 0
+        saved_promo_source = getattr(user, 'promo_offer_discount_source', None) if consume_promo_offer else None
+        saved_promo_expires = getattr(user, 'promo_offer_discount_expires_at', None) if consume_promo_offer else None
 
         if charge_from_balance > 0 or consume_promo_offer:
             success = await subtract_user_balance(
@@ -446,7 +406,7 @@ class SubscriptionRenewalService:
                 mark_as_paid_subscription=True,
             )
             if not success:
-                raise SubscriptionRenewalChargeError("Failed to charge balance")
+                raise SubscriptionRenewalChargeError('Failed to charge balance')
             await db.refresh(user)
 
         # Lock subscription row to prevent double-extension race
@@ -466,26 +426,19 @@ class SubscriptionRenewalService:
         # Determine expired state BEFORE extend_subscription mutates the object
         now = datetime.now(UTC)
         was_expired = subscription_before.status in (
-            "expired",
-            "disabled",
-            "limited",
-        ) or (
-            subscription_before.end_date is not None
-            and subscription_before.end_date <= now
-        )
+            'expired',
+            'disabled',
+            'limited',
+        ) or (subscription_before.end_date is not None and subscription_before.end_date <= now)
 
         try:
-            subscription_after = await extend_subscription(
-                db, subscription_before, period_days
-            )
+            subscription_after = await extend_subscription(db, subscription_before, period_days)
         except Exception:
             # Session may be in a failed state after a broken commit — rollback first
             await db.rollback()
 
             # Compensate: refund the charged balance since extension failed
-            if charge_from_balance > 0 or (
-                consume_promo_offer and saved_promo_percent > 0
-            ):
+            if charge_from_balance > 0 or (consume_promo_offer and saved_promo_percent > 0):
                 try:
                     from app.database.crud.user import add_user_balance
 
@@ -494,13 +447,13 @@ class SubscriptionRenewalService:
                             db,
                             user,
                             charge_from_balance,
-                            "Возврат: ошибка продления подписки",
+                            'Возврат: ошибка продления подписки',
                             create_transaction=True,
                             transaction_type=TransactionType.REFUND,
                         )
                         if not refunded:
                             logger.critical(
-                                "CRITICAL: add_user_balance returned False during refund",
+                                'CRITICAL: add_user_balance returned False during refund',
                                 charge_from_balance=charge_from_balance,
                                 user_id=user.id,
                             )
@@ -512,13 +465,13 @@ class SubscriptionRenewalService:
                         user.promo_offer_discount_expires_at = saved_promo_expires
                         await db.commit()
                         logger.info(
-                            "Restored promo offer after failed extension",
+                            'Restored promo offer after failed extension',
                             user_id=user.id,
                             restored_percent=saved_promo_percent,
                         )
                 except Exception as refund_error:
                     logger.critical(
-                        "CRITICAL: Failed to refund kopeks to user after extension failure",
+                        'CRITICAL: Failed to refund kopeks to user after extension failure',
                         charge_from_balance=charge_from_balance,
                         user_id=user.id,
                         refund_error=refund_error,
@@ -528,13 +481,11 @@ class SubscriptionRenewalService:
         # Support both SubscriptionRenewalPricing (server_ids, details) and RenewalPricing (breakdown)
         if isinstance(pricing, SubscriptionRenewalPricing):
             server_ids = pricing.server_ids or []
-            server_prices_for_period = (pricing.details or {}).get(
-                "servers_individual_prices", []
-            )
+            server_prices_for_period = (pricing.details or {}).get('servers_individual_prices', [])
         else:
             breakdown = pricing.breakdown or {}
-            server_ids = breakdown.get("server_ids", [])
-            server_prices_for_period = breakdown.get("servers_individual_prices", [])
+            server_ids = breakdown.get('server_ids', [])
+            server_prices_for_period = breakdown.get('servers_individual_prices', [])
         if server_ids:
             try:
                 await add_subscription_servers(
@@ -545,7 +496,7 @@ class SubscriptionRenewalService:
                 )
             except Exception as error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to record renewal server prices for subscription",
+                    'Failed to record renewal server prices for subscription',
                     subscription_after_id=subscription_after.id,
                     error=error,
                 )
@@ -558,7 +509,7 @@ class SubscriptionRenewalService:
             if settings.is_multi_tariff_enabled():
                 _should_create = not subscription_after.remnawave_uuid
             else:
-                _should_create = not getattr(user, "remnawave_uuid", None)
+                _should_create = not getattr(user, 'remnawave_uuid', None)
 
             async with asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT):
                 if _should_create:
@@ -566,22 +517,20 @@ class SubscriptionRenewalService:
                         db,
                         subscription_after,
                         reset_traffic=reset_traffic,
-                        reset_reason="subscription renewal",
+                        reset_reason='subscription renewal',
                     )
                 else:
                     await subscription_service.update_remnawave_user(
                         db,
                         subscription_after,
                         reset_traffic=reset_traffic,
-                        reset_reason="subscription renewal",
+                        reset_reason='subscription renewal',
                     )
-        except (
-            RemnaWaveConfigurationError
-        ) as error:  # pragma: no cover - configuration issues
-            logger.warning("RemnaWave update skipped", error=error)
+        except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
+            logger.warning('RemnaWave update skipped', error=error)
         except Exception as error:  # pragma: no cover - defensive logging
             logger.error(
-                "Failed to sync RemnaWave user for subscription",
+                'Failed to sync RemnaWave user for subscription',
                 subscription_after_id=subscription_after.id,
                 error=error,
             )
@@ -590,11 +539,7 @@ class SubscriptionRenewalService:
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription_after.id,
                 user_id=subscription_after.user_id,
-                action=(
-                    "create"
-                    if not getattr(subscription_after, "remnawave_uuid", None)
-                    else "update"
-                ),
+                action=('create' if not getattr(subscription_after, 'remnawave_uuid', None) else 'update'),
             )
 
         # Сброс привязанных устройств при продлении (если включено)
@@ -604,22 +549,20 @@ class SubscriptionRenewalService:
 
                 rw_service = RemnaWaveService()
                 _uuid = (
-                    getattr(subscription_after, "remnawave_uuid", None)
+                    getattr(subscription_after, 'remnawave_uuid', None)
                     if settings.is_multi_tariff_enabled()
-                    else getattr(user, "remnawave_uuid", None)
+                    else getattr(user, 'remnawave_uuid', None)
                 )
                 if _uuid:
                     async with rw_service.get_api_client() as api:
                         await api.reset_user_devices(_uuid)
                     logger.info(
-                        "Devices reset on renewal",
+                        'Devices reset on renewal',
                         subscription_id=subscription_after.id,
                         user_id=user.id,
                     )
             except Exception as error:
-                logger.warning(
-                    "Failed to reset devices on renewal", error=error, exc_info=True
-                )
+                logger.warning('Failed to reset devices on renewal', error=error, exc_info=True)
 
         transaction: Transaction | None = None
         try:
@@ -633,7 +576,7 @@ class SubscriptionRenewalService:
             )
         except Exception as error:  # pragma: no cover - defensive logging
             logger.warning(
-                "Failed to create renewal transaction for subscription",
+                'Failed to create renewal transaction for subscription',
                 subscription_after_id=subscription_after.id,
                 error=error,
             )

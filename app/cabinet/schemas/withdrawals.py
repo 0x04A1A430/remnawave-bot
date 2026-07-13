@@ -21,7 +21,7 @@ class WithdrawalBalanceResponse(BaseModel):
     is_withdrawal_enabled: bool
     can_request: bool
     cannot_request_reason: str | None = None
-    requisites_text: str = ""
+    requisites_text: str = ''
 
 
 class WithdrawalCreateRequest(BaseModel):
@@ -77,7 +77,7 @@ class AdminWithdrawalItem(BaseModel):
     amount_rubles: float
     status: str
     risk_score: int = 0
-    risk_level: str = "low"
+    risk_level: str = 'low'
     payment_details: str | None = None
     admin_comment: str | None = None
     created_at: datetime
@@ -105,7 +105,7 @@ class AdminWithdrawalDetailResponse(BaseModel):
     amount_rubles: float
     status: str
     risk_score: int = 0
-    risk_level: str = "low"
+    risk_level: str = 'low'
     risk_analysis: dict | None = None
     payment_details: str | None = None
     admin_comment: str | None = None

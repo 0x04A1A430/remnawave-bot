@@ -65,19 +65,19 @@ logger = structlog.get_logger(__name__)
 class BlockCheckStatus(Enum):
     """Статус проверки блокировки пользователя."""
 
-    BLOCKED = "blocked"
-    ACTIVE = "active"
-    NO_TELEGRAM_ID = "no_telegram_id"
-    ERROR = "error"
+    BLOCKED = 'blocked'
+    ACTIVE = 'active'
+    NO_TELEGRAM_ID = 'no_telegram_id'
+    ERROR = 'error'
 
 
 class BlockedUserAction(Enum):
     """Действия над заблокированными пользователями."""
 
-    DELETE_FROM_DB = "delete_from_db"
-    DELETE_FROM_REMNAWAVE = "delete_from_remnawave"
-    DELETE_BOTH = "delete_both"
-    MARK_AS_BLOCKED = "mark_as_blocked"
+    DELETE_FROM_DB = 'delete_from_db'
+    DELETE_FROM_REMNAWAVE = 'delete_from_remnawave'
+    DELETE_BOTH = 'delete_both'
+    MARK_AS_BLOCKED = 'mark_as_blocked'
 
 
 @dataclass
@@ -142,41 +142,29 @@ class BlockedUsersService:
         но позволяет определить блокировку.
         """
         try:
-            await self.bot.send_chat_action(chat_id=telegram_id, action="typing")
+            await self.bot.send_chat_action(chat_id=telegram_id, action='typing')
             return BlockCheckStatus.ACTIVE
         except TelegramForbiddenError:
             # Пользователь заблокировал бота
             return BlockCheckStatus.BLOCKED
         except TelegramBadRequest as e:
             error_lower = str(e).lower()
-            if "chat not found" in error_lower or "user not found" in error_lower:
+            if 'chat not found' in error_lower or 'user not found' in error_lower:
                 # Пользователь удалил аккаунт или никогда не начинал диалог
                 return BlockCheckStatus.BLOCKED
-            logger.warning(
-                "TelegramBadRequest при проверке", telegram_id=telegram_id, error=e
-            )
+            logger.warning('TelegramBadRequest при проверке', telegram_id=telegram_id, error=e)
             return BlockCheckStatus.ERROR
         except TelegramAPIError as e:
-            logger.warning(
-                "TelegramAPIError при проверке", telegram_id=telegram_id, error=e
-            )
+            logger.warning('TelegramAPIError при проверке', telegram_id=telegram_id, error=e)
             return BlockCheckStatus.ERROR
         except Exception as e:
-            logger.error(
-                "Неожиданная ошибка при проверке", telegram_id=telegram_id, error=e
-            )
+            logger.error('Неожиданная ошибка при проверке', telegram_id=telegram_id, error=e)
             return BlockCheckStatus.ERROR
 
     async def _check_single_user(self, user: User) -> BlockCheckResult:
         """Проверяет одного пользователя."""
-        sub_uuids = [
-            s.remnawave_uuid
-            for s in (getattr(user, "subscriptions", None) or [])
-            if s.remnawave_uuid
-        ]
-        remnawave_uuids = sub_uuids or (
-            [user.remnawave_uuid] if user.remnawave_uuid else []
-        )
+        sub_uuids = [s.remnawave_uuid for s in (getattr(user, 'subscriptions', None) or []) if s.remnawave_uuid]
+        remnawave_uuids = sub_uuids or ([user.remnawave_uuid] if user.remnawave_uuid else [])
 
         if not user.telegram_id:
             return BlockCheckResult(
@@ -225,9 +213,7 @@ class BlockedUsersService:
         result = BlockedUsersScanResult()
 
         # Формируем запрос
-        query = select(User).options(
-            selectinload(User.subscriptions).selectinload(Subscription.tariff)
-        )
+        query = select(User).options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
         if only_active:
             query = query.where(User.status == UserStatus.ACTIVE.value)
         query = query.where(User.telegram_id.isnot(None))
@@ -238,7 +224,7 @@ class BlockedUsersService:
         total_users = len(all_users)
 
         logger.info(
-            "Начинаем проверку пользователей на блокировку бота",
+            'Начинаем проверку пользователей на блокировку бота',
             total_users=total_users,
         )
 
@@ -260,9 +246,7 @@ class BlockedUsersService:
             for check_result in batch_results:
                 if isinstance(check_result, Exception):
                     result.errors += 1
-                    logger.error(
-                        "Ошибка при проверке пользователя", check_result=check_result
-                    )
+                    logger.error('Ошибка при проверке пользователя', check_result=check_result)
                     continue
 
                 result.total_checked += 1
@@ -280,12 +264,10 @@ class BlockedUsersService:
             if progress_callback:
                 await progress_callback(checked, total_users)
 
-        result.scan_duration_seconds = (
-            datetime.now(tz=UTC) - start_time
-        ).total_seconds()
+        result.scan_duration_seconds = (datetime.now(tz=UTC) - start_time).total_seconds()
 
         logger.info(
-            "Сканирование завершено",
+            'Сканирование завершено',
             blocked_count=result.blocked_count,
             total_checked=result.total_checked,
             scan_duration_seconds=round(result.scan_duration_seconds, 1),
@@ -300,26 +282,22 @@ class BlockedUsersService:
 
         try:
             if not self.remnawave_service.is_configured:
-                logger.warning("Remnawave API не настроен")
+                logger.warning('Remnawave API не настроен')
                 return False
 
             async with self.remnawave_service.get_api_client() as api:
                 await api.delete_user(remnawave_uuid)
-                logger.info(
-                    "Удален пользователь из Remnawave", remnawave_uuid=remnawave_uuid
-                )
+                logger.info('Удален пользователь из Remnawave', remnawave_uuid=remnawave_uuid)
                 return True
         except Exception as e:
             error_msg = str(e).lower()
-            if "not found" in error_msg or "404" in error_msg:
+            if 'not found' in error_msg or '404' in error_msg:
                 logger.info(
-                    "Пользователь уже удален из Remnawave",
+                    'Пользователь уже удален из Remnawave',
                     remnawave_uuid=remnawave_uuid,
                 )
                 return True
-            logger.error(
-                "Ошибка удаления из Remnawave", remnawave_uuid=remnawave_uuid, error=e
-            )
+            logger.error('Ошибка удаления из Remnawave', remnawave_uuid=remnawave_uuid, error=e)
             return False
 
     async def delete_user_from_db(self, db: AsyncSession, user_id: int) -> bool:
@@ -330,135 +308,63 @@ class BlockedUsersService:
             # Получаем пользователя
             user_result = await db.execute(
                 select(User)
-                .options(
-                    selectinload(User.subscriptions).selectinload(Subscription.tariff)
-                )
+                .options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
                 .where(User.id == user_id)
             )
             user = user_result.scalar_one_or_none()
 
             if not user:
-                logger.warning("Пользователь не найден в БД", user_id=user_id)
+                logger.warning('Пользователь не найден в БД', user_id=user_id)
                 return False
 
-            user_display = user.telegram_id or user.email or f"#{user.id}"
+            user_display = user.telegram_id or user.email or f'#{user.id}'
 
             # Удаляем связанные записи (порядок важен из-за foreign keys)
 
             # 1. Платежные системы (до транзакций, т.к. ссылаются на них)
-            await db.execute(
-                delete(YooKassaPayment).where(YooKassaPayment.user_id == user.id)
-            )
-            await db.execute(
-                delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user.id)
-            )
-            await db.execute(
-                delete(HeleketPayment).where(HeleketPayment.user_id == user.id)
-            )
-            await db.execute(
-                delete(MulenPayPayment).where(MulenPayPayment.user_id == user.id)
-            )
-            await db.execute(
-                delete(Pal24Payment).where(Pal24Payment.user_id == user.id)
-            )
+            await db.execute(delete(YooKassaPayment).where(YooKassaPayment.user_id == user.id))
+            await db.execute(delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user.id))
+            await db.execute(delete(HeleketPayment).where(HeleketPayment.user_id == user.id))
+            await db.execute(delete(MulenPayPayment).where(MulenPayPayment.user_id == user.id))
+            await db.execute(delete(Pal24Payment).where(Pal24Payment.user_id == user.id))
             await db.execute(delete(WataPayment).where(WataPayment.user_id == user.id))
-            await db.execute(
-                delete(PlategaPayment).where(PlategaPayment.user_id == user.id)
-            )
-            await db.execute(
-                delete(CloudPaymentsPayment).where(
-                    CloudPaymentsPayment.user_id == user.id
-                )
-            )
-            await db.execute(
-                delete(FreekassaPayment).where(FreekassaPayment.user_id == user.id)
-            )
-            await db.execute(
-                delete(KassaAiPayment).where(KassaAiPayment.user_id == user.id)
-            )
+            await db.execute(delete(PlategaPayment).where(PlategaPayment.user_id == user.id))
+            await db.execute(delete(CloudPaymentsPayment).where(CloudPaymentsPayment.user_id == user.id))
+            await db.execute(delete(FreekassaPayment).where(FreekassaPayment.user_id == user.id))
+            await db.execute(delete(KassaAiPayment).where(KassaAiPayment.user_id == user.id))
 
             # 2. Транзакции (после платежей)
             await db.execute(delete(Transaction).where(Transaction.user_id == user.id))
 
             # 3. Подписки — cleanup ALL subscriptions' servers, then delete all subscriptions
-            for sub in getattr(user, "subscriptions", None) or []:
-                await db.execute(
-                    delete(SubscriptionServer).where(
-                        SubscriptionServer.subscription_id == sub.id
-                    )
-                )
-            await db.execute(
-                delete(Subscription).where(Subscription.user_id == user.id)
-            )
-            await db.execute(
-                delete(SubscriptionConversion).where(
-                    SubscriptionConversion.user_id == user.id
-                )
-            )
-            await db.execute(
-                delete(SubscriptionEvent).where(SubscriptionEvent.user_id == user.id)
-            )
+            for sub in getattr(user, 'subscriptions', None) or []:
+                await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
+            await db.execute(delete(Subscription).where(Subscription.user_id == user.id))
+            await db.execute(delete(SubscriptionConversion).where(SubscriptionConversion.user_id == user.id))
+            await db.execute(delete(SubscriptionEvent).where(SubscriptionEvent.user_id == user.id))
 
             # 4. Тикеты (сначала зависимые)
-            await db.execute(
-                delete(TicketNotification).where(TicketNotification.user_id == user.id)
-            )
-            await db.execute(
-                delete(TicketMessage).where(TicketMessage.user_id == user.id)
-            )
+            await db.execute(delete(TicketNotification).where(TicketNotification.user_id == user.id))
+            await db.execute(delete(TicketMessage).where(TicketMessage.user_id == user.id))
             await db.execute(delete(Ticket).where(Ticket.user_id == user.id))
 
             # 5. Остальные связи
+            await db.execute(delete(ReferralEarning).where(ReferralEarning.user_id == user.id))
+            await db.execute(delete(ReferralEarning).where(ReferralEarning.referral_id == user.id))
+            await db.execute(delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user.id))
+            await db.execute(delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id))
+            await db.execute(delete(DiscountOffer).where(DiscountOffer.user_id == user.id))
+            await db.execute(delete(SentNotification).where(SentNotification.user_id == user.id))
+            await db.execute(delete(PollResponse).where(PollResponse.user_id == user.id))
+            await db.execute(delete(ContestAttempt).where(ContestAttempt.user_id == user.id))
+            await db.execute(delete(ReferralContestEvent).where(ReferralContestEvent.referrer_id == user.id))
+            await db.execute(delete(ReferralContestEvent).where(ReferralContestEvent.referral_id == user.id))
             await db.execute(
-                delete(ReferralEarning).where(ReferralEarning.user_id == user.id)
+                delete(AdvertisingCampaignRegistration).where(AdvertisingCampaignRegistration.user_id == user.id)
             )
-            await db.execute(
-                delete(ReferralEarning).where(ReferralEarning.referral_id == user.id)
-            )
-            await db.execute(
-                delete(WithdrawalRequest).where(WithdrawalRequest.user_id == user.id)
-            )
-            await db.execute(
-                delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id)
-            )
-            await db.execute(
-                delete(DiscountOffer).where(DiscountOffer.user_id == user.id)
-            )
-            await db.execute(
-                delete(SentNotification).where(SentNotification.user_id == user.id)
-            )
-            await db.execute(
-                delete(PollResponse).where(PollResponse.user_id == user.id)
-            )
-            await db.execute(
-                delete(ContestAttempt).where(ContestAttempt.user_id == user.id)
-            )
-            await db.execute(
-                delete(ReferralContestEvent).where(
-                    ReferralContestEvent.referrer_id == user.id
-                )
-            )
-            await db.execute(
-                delete(ReferralContestEvent).where(
-                    ReferralContestEvent.referral_id == user.id
-                )
-            )
-            await db.execute(
-                delete(AdvertisingCampaignRegistration).where(
-                    AdvertisingCampaignRegistration.user_id == user.id
-                )
-            )
-            await db.execute(
-                delete(UserPromoGroup).where(UserPromoGroup.user_id == user.id)
-            )
-            await db.execute(
-                delete(CabinetRefreshToken).where(
-                    CabinetRefreshToken.user_id == user.id
-                )
-            )
-            await db.execute(
-                delete(ButtonClickLog).where(ButtonClickLog.user_id == user.id)
-            )
+            await db.execute(delete(UserPromoGroup).where(UserPromoGroup.user_id == user.id))
+            await db.execute(delete(CabinetRefreshToken).where(CabinetRefreshToken.user_id == user.id))
+            await db.execute(delete(ButtonClickLog).where(ButtonClickLog.user_id == user.id))
             await db.execute(delete(WheelSpin).where(WheelSpin.user_id == user.id))
 
             # Обнуляем referred_by_id у рефералов этого пользователя
@@ -471,13 +377,11 @@ class BlockedUsersService:
             await db.delete(user)
             await db.commit()
 
-            logger.info(
-                "Пользователь полностью удален из БД", user_display=user_display
-            )
+            logger.info('Пользователь полностью удален из БД', user_display=user_display)
             return True
 
         except Exception as e:
-            logger.error("Ошибка удаления пользователя из БД", user_id=user_id, error=e)
+            logger.error('Ошибка удаления пользователя из БД', user_id=user_id, error=e)
             await db.rollback()
             return False
 
@@ -495,13 +399,13 @@ class BlockedUsersService:
             await db.commit()
 
             logger.info(
-                "Пользователь помечен как заблокированный",
+                'Пользователь помечен как заблокированный',
                 telegram_id=user.telegram_id or user.id,
             )
             return True
 
         except Exception as e:
-            logger.error("Ошибка пометки пользователя", user_id=user_id, error=e)
+            logger.error('Ошибка пометки пользователя', user_id=user_id, error=e)
             await db.rollback()
             return False
 
@@ -535,9 +439,7 @@ class BlockedUsersService:
                     BlockedUserAction.DELETE_BOTH,
                 ):
                     uuids_to_delete = user_result.remnawave_uuids or (
-                        [user_result.remnawave_uuid]
-                        if user_result.remnawave_uuid
-                        else []
+                        [user_result.remnawave_uuid] if user_result.remnawave_uuid else []
                     )
                     for rw_uuid in uuids_to_delete:
                         success = await self.delete_user_from_remnawave(rw_uuid)
@@ -545,7 +447,7 @@ class BlockedUsersService:
                             result.deleted_from_remnawave += 1
                         else:
                             result.errors.append(
-                                f"Ошибка удаления {user_result.telegram_id} (uuid={rw_uuid}) из Remnawave"
+                                f'Ошибка удаления {user_result.telegram_id} (uuid={rw_uuid}) из Remnawave'
                             )
                         # Задержка для избежания rate limit
                         await asyncio.sleep(self.API_DELAY_SECONDS)
@@ -558,24 +460,20 @@ class BlockedUsersService:
                     if success:
                         result.deleted_from_db += 1
                     else:
-                        result.errors.append(
-                            f"Ошибка удаления {user_result.telegram_id} из БД"
-                        )
+                        result.errors.append(f'Ошибка удаления {user_result.telegram_id} из БД')
 
                 if action == BlockedUserAction.MARK_AS_BLOCKED:
                     success = await self.mark_user_as_blocked(db, user_result.user_id)
                     if success:
                         result.marked_as_blocked += 1
                     else:
-                        result.errors.append(
-                            f"Ошибка пометки {user_result.telegram_id}"
-                        )
+                        result.errors.append(f'Ошибка пометки {user_result.telegram_id}')
 
                 if progress_callback:
                     await progress_callback(i + 1, total)
 
             except Exception as e:
-                error_msg = f"Ошибка обработки {user_result.telegram_id}: {e}"
+                error_msg = f'Ошибка обработки {user_result.telegram_id}: {e}'
                 result.errors.append(error_msg)
                 logger.error(error_msg)
 

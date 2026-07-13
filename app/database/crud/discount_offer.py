@@ -22,7 +22,7 @@ async def upsert_discount_offer(
     discount_percent: int,
     bonus_amount_kopeks: int,
     valid_hours: int,
-    effect_type: str = "percent_discount",
+    effect_type: str = 'percent_discount',
     extra_data: dict | None = None,
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
@@ -170,7 +170,7 @@ async def mark_offer_claimed(
             db,
             user_id=offer.user_id,
             offer_id=offer.id,
-            action="claimed",
+            action='claimed',
             source=offer.notification_type,
             percent=offer.discount_percent,
             effect_type=offer.effect_type,
@@ -178,7 +178,7 @@ async def mark_offer_claimed(
         )
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.warning(
-            "Failed to record promo offer claim log for offer",
+            'Failed to record promo offer claim log for offer',
             offer_id=offer.id,
             exc=exc,
         )
@@ -186,7 +186,7 @@ async def mark_offer_claimed(
             await db.rollback()
         except Exception as rollback_error:  # pragma: no cover - defensive logging
             logger.warning(
-                "Failed to rollback session after promo offer claim log failure",
+                'Failed to rollback session after promo offer claim log failure',
                 rollback_error=rollback_error,
             )
 
@@ -212,41 +212,41 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
         count += 1
         log_payloads.append(
             {
-                "user_id": offer.user_id,
-                "offer_id": offer.id,
-                "source": offer.notification_type,
-                "percent": offer.discount_percent,
-                "effect_type": offer.effect_type,
+                'user_id': offer.user_id,
+                'offer_id': offer.id,
+                'source': offer.notification_type,
+                'percent': offer.discount_percent,
+                'effect_type': offer.effect_type,
             }
         )
 
     await db.commit()
 
     for payload in log_payloads:
-        if not payload.get("user_id"):
+        if not payload.get('user_id'):
             continue
         try:
             await log_promo_offer_action(
                 db,
-                user_id=payload["user_id"],
-                offer_id=payload["offer_id"],
-                action="disabled",
-                source=payload.get("source"),
-                percent=payload.get("percent"),
-                effect_type=payload.get("effect_type"),
-                details={"reason": "offer_expired"},
+                user_id=payload['user_id'],
+                offer_id=payload['offer_id'],
+                action='disabled',
+                source=payload.get('source'),
+                percent=payload.get('percent'),
+                effect_type=payload.get('effect_type'),
+                details={'reason': 'offer_expired'},
             )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
-                "Failed to record promo offer disable log for offer",
-                payload=payload.get("offer_id"),
+                'Failed to record promo offer disable log for offer',
+                payload=payload.get('offer_id'),
                 exc=exc,
             )
             try:
                 await db.rollback()
             except Exception as rollback_error:  # pragma: no cover - defensive logging
                 logger.warning(
-                    "Failed to rollback session after promo offer disable log failure",
+                    'Failed to rollback session after promo offer disable log failure',
                     rollback_error=rollback_error,
                 )
 

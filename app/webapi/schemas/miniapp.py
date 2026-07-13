@@ -14,13 +14,13 @@ class MiniAppBranding(BaseModel):
 
 
 class MiniAppSubscriptionRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
 
 
 class MiniAppMaintenanceStatusResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    is_active: bool = Field(..., alias="isActive")
+    is_active: bool = Field(..., alias='isActive')
     message: str | None = None
     reason: str | None = None
 
@@ -96,7 +96,7 @@ class MiniAppDevice(BaseModel):
 
 
 class MiniAppDeviceRemovalRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     hwid: str
 
 
@@ -143,7 +143,7 @@ class MiniAppPromoOffer(BaseModel):
 
 
 class MiniAppPromoOfferClaimRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
 
 
 class MiniAppPromoOfferClaimResponse(BaseModel):
@@ -162,23 +162,21 @@ class MiniAppSubscriptionAutopay(BaseModel):
     days_options: list[int] = Field(default_factory=list)
     options: list[int] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra='allow')
 
 
 class MiniAppSubscriptionRenewalPeriod(BaseModel):
     id: str
     days: int | None = None
     months: int | None = None
-    price_kopeks: int | None = Field(default=None, alias="priceKopeks")
-    price_label: str | None = Field(default=None, alias="priceLabel")
-    original_price_kopeks: int | None = Field(default=None, alias="originalPriceKopeks")
-    original_price_label: str | None = Field(default=None, alias="originalPriceLabel")
-    discount_percent: int = Field(default=0, alias="discountPercent")
-    price_per_month_kopeks: int | None = Field(
-        default=None, alias="pricePerMonthKopeks"
-    )
-    price_per_month_label: str | None = Field(default=None, alias="pricePerMonthLabel")
-    is_recommended: bool = Field(default=False, alias="isRecommended")
+    price_kopeks: int | None = Field(default=None, alias='priceKopeks')
+    price_label: str | None = Field(default=None, alias='priceLabel')
+    original_price_kopeks: int | None = Field(default=None, alias='originalPriceKopeks')
+    original_price_label: str | None = Field(default=None, alias='originalPriceLabel')
+    discount_percent: int = Field(default=0, alias='discountPercent')
+    price_per_month_kopeks: int | None = Field(default=None, alias='pricePerMonthKopeks')
+    price_per_month_label: str | None = Field(default=None, alias='pricePerMonthLabel')
+    is_recommended: bool = Field(default=False, alias='isRecommended')
     description: str | None = None
     badge: str | None = None
     title: str | None = None
@@ -187,41 +185,41 @@ class MiniAppSubscriptionRenewalPeriod(BaseModel):
 
 
 class MiniAppSubscriptionRenewalOptionsRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    init_data: str = Field(..., alias='initData')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
     success: bool = True
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
     currency: str
-    balance_kopeks: int | None = Field(default=None, alias="balanceKopeks")
-    balance_label: str | None = Field(default=None, alias="balanceLabel")
-    promo_group: MiniAppPromoGroup | None = Field(default=None, alias="promoGroup")
-    promo_offer: dict[str, Any] | None = Field(default=None, alias="promoOffer")
+    balance_kopeks: int | None = Field(default=None, alias='balanceKopeks')
+    balance_label: str | None = Field(default=None, alias='balanceLabel')
+    promo_group: MiniAppPromoGroup | None = Field(default=None, alias='promoGroup')
+    promo_offer: dict[str, Any] | None = Field(default=None, alias='promoOffer')
     periods: list[MiniAppSubscriptionRenewalPeriod] = Field(default_factory=list)
-    default_period_id: str | None = Field(default=None, alias="defaultPeriodId")
-    missing_amount_kopeks: int | None = Field(default=None, alias="missingAmountKopeks")
-    status_message: str | None = Field(default=None, alias="statusMessage")
+    default_period_id: str | None = Field(default=None, alias='defaultPeriodId')
+    missing_amount_kopeks: int | None = Field(default=None, alias='missingAmountKopeks')
+    status_message: str | None = Field(default=None, alias='statusMessage')
     autopay_enabled: bool = False
     autopay_days_before: int | None = None
     autopay_days_options: list[int] = Field(default_factory=list)
     autopay: MiniAppSubscriptionAutopay | None = None
     autopay_settings: MiniAppSubscriptionAutopay | None = None
     # Флаги для определения типа действия (покупка vs продление)
-    is_trial: bool = Field(default=False, alias="isTrial")
-    sales_mode: str = Field(default="classic", alias="salesMode")
+    is_trial: bool = Field(default=False, alias='isTrial')
+    sales_mode: str = Field(default='classic', alias='salesMode')
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(populate_by_name=True, extra='allow')
 
 
 class MiniAppSubscriptionRenewalRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
-    period_id: str | None = Field(default=None, alias="periodId")
-    period_days: int | None = Field(default=None, alias="periodDays")
+    init_data: str = Field(..., alias='initData')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
+    period_id: str | None = Field(default=None, alias='periodId')
+    period_days: int | None = Field(default=None, alias='periodDays')
     method: str | None = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -230,41 +228,41 @@ class MiniAppSubscriptionRenewalRequest(BaseModel):
 class MiniAppSubscriptionRenewalResponse(BaseModel):
     success: bool = True
     message: str | None = None
-    balance_kopeks: int | None = Field(default=None, alias="balanceKopeks")
-    balance_label: str | None = Field(default=None, alias="balanceLabel")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
-    renewed_until: datetime | None = Field(default=None, alias="renewedUntil")
-    requires_payment: bool = Field(default=False, alias="requiresPayment")
-    payment_method: str | None = Field(default=None, alias="paymentMethod")
-    payment_url: str | None = Field(default=None, alias="paymentUrl")
-    payment_amount_kopeks: int | None = Field(default=None, alias="paymentAmountKopeks")
-    payment_id: int | None = Field(default=None, alias="paymentId")
-    invoice_id: str | None = Field(default=None, alias="invoiceId")
-    payment_payload: str | None = Field(default=None, alias="paymentPayload")
-    payment_extra: dict[str, Any] | None = Field(default=None, alias="paymentExtra")
+    balance_kopeks: int | None = Field(default=None, alias='balanceKopeks')
+    balance_label: str | None = Field(default=None, alias='balanceLabel')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
+    renewed_until: datetime | None = Field(default=None, alias='renewedUntil')
+    requires_payment: bool = Field(default=False, alias='requiresPayment')
+    payment_method: str | None = Field(default=None, alias='paymentMethod')
+    payment_url: str | None = Field(default=None, alias='paymentUrl')
+    payment_amount_kopeks: int | None = Field(default=None, alias='paymentAmountKopeks')
+    payment_id: int | None = Field(default=None, alias='paymentId')
+    invoice_id: str | None = Field(default=None, alias='invoiceId')
+    payment_payload: str | None = Field(default=None, alias='paymentPayload')
+    payment_extra: dict[str, Any] | None = Field(default=None, alias='paymentExtra')
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionAutopayRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    init_data: str = Field(..., alias='initData')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
     enabled: bool | None = None
-    days_before: int | None = Field(default=None, alias="daysBefore")
+    days_before: int | None = Field(default=None, alias='daysBefore')
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionAutopayResponse(BaseModel):
     success: bool = True
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
     autopay_enabled: bool = False
     autopay_days_before: int | None = None
     autopay_days_options: list[int] = Field(default_factory=list)
     autopay: MiniAppSubscriptionAutopay | None = None
     autopay_settings: MiniAppSubscriptionAutopay | None = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(populate_by_name=True, extra='allow')
 
 
 class MiniAppPromoCode(BaseModel):
@@ -278,7 +276,7 @@ class MiniAppPromoCode(BaseModel):
 
 
 class MiniAppPromoCodeActivationRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     code: str
     # Multi-tariff SUBSCRIPTION_DAYS promos may require choosing which subscription
     # to extend; the client re-submits with the chosen subscription_id.
@@ -322,7 +320,7 @@ class MiniAppRichTextDocument(BaseModel):
     language: str
     title: str | None = None
     is_enabled: bool = True
-    content: str = ""
+    content: str = ''
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -400,12 +398,12 @@ class MiniAppReferralInfo(BaseModel):
 
 
 class MiniAppPaymentMethodsRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
 
 
 class MiniAppPaymentIntegrationType(StrEnum):
-    IFRAME = "iframe"
-    REDIRECT = "redirect"
+    IFRAME = 'iframe'
+    REDIRECT = 'redirect'
 
 
 class MiniAppPaymentOption(BaseModel):
@@ -413,8 +411,8 @@ class MiniAppPaymentOption(BaseModel):
     icon: str | None = None
     title: str | None = None
     description: str | None = None
-    title_key: str | None = Field(default=None, alias="titleKey")
-    description_key: str | None = Field(default=None, alias="descriptionKey")
+    title_key: str | None = Field(default=None, alias='titleKey')
+    description_key: str | None = Field(default=None, alias='descriptionKey')
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -422,19 +420,17 @@ class MiniAppPaymentOption(BaseModel):
 class MiniAppPaymentIframeConfig(BaseModel):
     expected_origin: str
 
-    @model_validator(mode="after")
-    def _normalize_expected_origin(
-        cls, values: MiniAppPaymentIframeConfig
-    ) -> MiniAppPaymentIframeConfig:
-        origin = (values.expected_origin or "").strip()
+    @model_validator(mode='after')
+    def _normalize_expected_origin(cls, values: MiniAppPaymentIframeConfig) -> MiniAppPaymentIframeConfig:
+        origin = (values.expected_origin or '').strip()
         if not origin:
-            raise ValueError("expected_origin must not be empty")
+            raise ValueError('expected_origin must not be empty')
 
         parsed = urlparse(origin)
         if not parsed.scheme or not parsed.netloc:
-            raise ValueError("expected_origin must include scheme and host")
+            raise ValueError('expected_origin must include scheme and host')
 
-        values.expected_origin = f"{parsed.scheme}://{parsed.netloc}"
+        values.expected_origin = f'{parsed.scheme}://{parsed.netloc}'
         return values
 
 
@@ -443,7 +439,7 @@ class MiniAppPaymentMethod(BaseModel):
     name: str | None = None
     icon: str | None = None
     requires_amount: bool = False
-    currency: str = "RUB"
+    currency: str = 'RUB'
     min_amount_kopeks: int | None = None
     max_amount_kopeks: int | None = None
     amount_step_kopeks: int | None = None
@@ -451,17 +447,10 @@ class MiniAppPaymentMethod(BaseModel):
     options: list[MiniAppPaymentOption] = Field(default_factory=list)
     iframe_config: MiniAppPaymentIframeConfig | None = None
 
-    @model_validator(mode="after")
-    def _ensure_iframe_config(
-        cls, values: MiniAppPaymentMethod
-    ) -> MiniAppPaymentMethod:
-        if (
-            values.integration_type == MiniAppPaymentIntegrationType.IFRAME
-            and values.iframe_config is None
-        ):
-            raise ValueError(
-                "iframe_config is required when integration_type is 'iframe'"
-            )
+    @model_validator(mode='after')
+    def _ensure_iframe_config(cls, values: MiniAppPaymentMethod) -> MiniAppPaymentMethod:
+        if values.integration_type == MiniAppPaymentIntegrationType.IFRAME and values.iframe_config is None:
+            raise ValueError("iframe_config is required when integration_type is 'iframe'")
         return values
 
 
@@ -470,11 +459,11 @@ class MiniAppPaymentMethodsResponse(BaseModel):
 
 
 class MiniAppPaymentCreateRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     method: str
-    amount_rubles: float | None = Field(default=None, alias="amountRubles")
-    amount_kopeks: int | None = Field(default=None, alias="amountKopeks")
-    payment_option: str | None = Field(default=None, alias="option")
+    amount_rubles: float | None = Field(default=None, alias='amountRubles')
+    amount_kopeks: int | None = Field(default=None, alias='amountKopeks')
+    payment_option: str | None = Field(default=None, alias='option')
 
 
 class MiniAppPaymentCreateResponse(BaseModel):
@@ -487,17 +476,17 @@ class MiniAppPaymentCreateResponse(BaseModel):
 
 class MiniAppPaymentStatusQuery(BaseModel):
     method: str
-    local_payment_id: int | None = Field(default=None, alias="localPaymentId")
-    payment_link_id: str | None = Field(default=None, alias="paymentLinkId")
-    invoice_id: str | None = Field(default=None, alias="invoiceId")
-    payment_id: str | None = Field(default=None, alias="paymentId")
+    local_payment_id: int | None = Field(default=None, alias='localPaymentId')
+    payment_link_id: str | None = Field(default=None, alias='paymentLinkId')
+    invoice_id: str | None = Field(default=None, alias='invoiceId')
+    payment_id: str | None = Field(default=None, alias='paymentId')
     payload: str | None = None
-    amount_kopeks: int | None = Field(default=None, alias="amountKopeks")
-    started_at: str | None = Field(default=None, alias="startedAt")
+    amount_kopeks: int | None = Field(default=None, alias='amountKopeks')
+    started_at: str | None = Field(default=None, alias='startedAt')
 
 
 class MiniAppPaymentStatusRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     payments: list[MiniAppPaymentStatusQuery] = Field(default_factory=list)
 
 
@@ -556,9 +545,7 @@ class MiniAppTariff(BaseModel):
     is_current: bool = False
     is_available: bool = True
     # Для режима мгновенного переключения тарифа
-    switch_cost_kopeks: int | None = (
-        None  # Стоимость переключения (None если не в режиме switch)
-    )
+    switch_cost_kopeks: int | None = None  # Стоимость переключения (None если не в режиме switch)
     switch_cost_label: str | None = None  # Форматированная стоимость
     is_upgrade: bool | None = None  # True = повышение, False = понижение
     is_switch_free: bool | None = None  # True = бесплатное переключение
@@ -596,14 +583,10 @@ class MiniAppCurrentTariff(BaseModel):
     monthly_price_kopeks: int = 0
     # Докупка трафика
     traffic_topup_enabled: bool = False
-    traffic_topup_packages: list[MiniAppTrafficTopupPackage] = Field(
-        default_factory=list
-    )
+    traffic_topup_packages: list[MiniAppTrafficTopupPackage] = Field(default_factory=list)
     # Лимит докупки трафика (0 = без лимита)
     max_topup_traffic_gb: int = 0
-    available_topup_gb: int | None = (
-        None  # Сколько еще можно докупить (None = без лимита)
-    )
+    available_topup_gb: int | None = None  # Сколько еще можно докупить (None = без лимита)
     # Суточные тарифы
     is_daily: bool = False
     daily_price_kopeks: int = 0
@@ -613,8 +596,8 @@ class MiniAppCurrentTariff(BaseModel):
 class MiniAppTrafficTopupRequest(BaseModel):
     """Запрос на докупку трафика."""
 
-    init_data: str = Field(..., alias="initData")
-    subscription_id: int | None = Field(None, alias="subscriptionId")
+    init_data: str = Field(..., alias='initData')
+    subscription_id: int | None = Field(None, alias='subscriptionId')
     gb: int
 
 
@@ -622,7 +605,7 @@ class MiniAppTrafficTopupResponse(BaseModel):
     """Ответ на докупку трафика."""
 
     success: bool = True
-    message: str = ""
+    message: str = ''
     new_traffic_limit_gb: int = 0
     new_balance_kopeks: int = 0
     charged_kopeks: int = 0
@@ -631,29 +614,27 @@ class MiniAppTrafficTopupResponse(BaseModel):
 class MiniAppTariffsRequest(BaseModel):
     """Запрос списка тарифов."""
 
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
 
 
 class MiniAppTariffsResponse(BaseModel):
     """Ответ со списком тарифов."""
 
     success: bool = True
-    sales_mode: str = "tariffs"
+    sales_mode: str = 'tariffs'
     tariffs: list[MiniAppTariff] = Field(default_factory=list)
     current_tariff: MiniAppCurrentTariff | None = None
     balance_kopeks: int = 0
     balance_label: str | None = None
-    promo_group: MiniAppPromoGroup | None = (
-        None  # Промогруппа пользователя для отображения скидок
-    )
+    promo_group: MiniAppPromoGroup | None = None  # Промогруппа пользователя для отображения скидок
 
 
 class MiniAppTariffPurchaseRequest(BaseModel):
     """Запрос на покупку/смену тарифа."""
 
-    init_data: str = Field(..., alias="initData")
-    tariff_id: int = Field(..., alias="tariffId")
-    period_days: int = Field(..., alias="periodDays")
+    init_data: str = Field(..., alias='initData')
+    tariff_id: int = Field(..., alias='tariffId')
+    period_days: int = Field(..., alias='periodDays')
 
 
 class MiniAppTariffPurchaseResponse(BaseModel):
@@ -674,7 +655,7 @@ class MiniAppTariffSwitchRequest(BaseModel):
 
     init_data: str = Field(...)
     tariff_id: int = Field(...)
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
 
 
 class MiniAppTariffSwitchPreviewResponse(BaseModel):
@@ -687,12 +668,12 @@ class MiniAppTariffSwitchPreviewResponse(BaseModel):
     new_tariff_name: str
     remaining_days: int = 0
     upgrade_cost_kopeks: int = 0  # 0 если даунгрейд или равная цена
-    upgrade_cost_label: str = ""
+    upgrade_cost_label: str = ''
     balance_kopeks: int = 0
-    balance_label: str = ""
+    balance_label: str = ''
     has_enough_balance: bool = True
     missing_amount_kopeks: int = 0
-    missing_amount_label: str = ""
+    missing_amount_label: str = ''
     is_upgrade: bool = False  # True если новый тариф дороже
     message: str | None = None
 
@@ -706,14 +687,14 @@ class MiniAppTariffSwitchResponse(BaseModel):
     tariff_name: str
     charged_kopeks: int = 0
     balance_kopeks: int = 0
-    balance_label: str = ""
+    balance_label: str = ''
 
 
 class MiniAppDailySubscriptionToggleRequest(BaseModel):
     """Запрос на паузу/возобновление суточной подписки."""
 
     init_data: str = Field(...)
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
 
 
 class MiniAppDailySubscriptionToggleResponse(BaseModel):
@@ -723,7 +704,7 @@ class MiniAppDailySubscriptionToggleResponse(BaseModel):
     message: str | None = None
     is_paused: bool = False
     balance_kopeks: int = 0
-    balance_label: str = ""
+    balance_label: str = ''
 
 
 class MiniAppTrafficPurchase(BaseModel):
@@ -744,9 +725,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     user: MiniAppSubscriptionUser
     traffic_purchases: list[MiniAppTrafficPurchase] = Field(default_factory=list)
     subscription_url: str | None = None
-    hide_subscription_link: bool = (
-        False  # Скрывать ли отображение ссылки (но кнопки работают)
-    )
+    hide_subscription_link: bool = False  # Скрывать ли отображение ссылки (но кнопки работают)
     subscription_crypto_link: str | None = None
     subscription_purchase_url: str | None = None
     links: list[str] = Field(default_factory=list)
@@ -766,9 +745,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     transactions: list[MiniAppTransaction] = Field(default_factory=list)
     promo_offers: list[MiniAppPromoOffer] = Field(default_factory=list)
     promo_group: MiniAppPromoGroup | None = None
-    auto_assign_promo_groups: list[MiniAppAutoPromoGroupLevel] = Field(
-        default_factory=list
-    )
+    auto_assign_promo_groups: list[MiniAppAutoPromoGroupLevel] = Field(default_factory=list)
     total_spent_kopeks: int = 0
     total_spent_rubles: float = 0.0
     total_spent_label: str | None = None
@@ -787,17 +764,15 @@ class MiniAppSubscriptionResponse(BaseModel):
     trial_available: bool = False
     trial_duration_days: int | None = None
     trial_status: str | None = None
-    trial_payment_required: bool = Field(default=False, alias="trialPaymentRequired")
-    trial_price_kopeks: int | None = Field(default=None, alias="trialPriceKopeks")
-    trial_price_label: str | None = Field(default=None, alias="trialPriceLabel")
+    trial_payment_required: bool = Field(default=False, alias='trialPaymentRequired')
+    trial_price_kopeks: int | None = Field(default=None, alias='trialPriceKopeks')
+    trial_price_label: str | None = Field(default=None, alias='trialPriceLabel')
 
     # Режим продаж и тариф
-    sales_mode: str = Field(default="classic", alias="salesMode")
-    current_tariff: MiniAppCurrentTariff | None = Field(
-        default=None, alias="currentTariff"
-    )
+    sales_mode: str = Field(default='classic', alias='salesMode')
+    current_tariff: MiniAppCurrentTariff | None = Field(default=None, alias='currentTariff')
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    model_config = ConfigDict(extra='allow', populate_by_name=True)
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
@@ -868,7 +843,7 @@ class MiniAppSubscriptionBillingContext(BaseModel):
 
 class MiniAppSubscriptionSettings(BaseModel):
     subscription_id: int
-    currency: str = "RUB"
+    currency: str = 'RUB'
     current: MiniAppSubscriptionCurrentSettings
     servers: MiniAppSubscriptionServersSettings
     traffic: MiniAppSubscriptionTrafficSettings
@@ -882,22 +857,22 @@ class MiniAppSubscriptionSettingsResponse(BaseModel):
 
 
 class MiniAppSubscriptionSettingsRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     subscription_id: int | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
-    @model_validator(mode="before")
+    @model_validator(mode='before')
     @classmethod
     def _populate_aliases(cls, values: Any) -> Any:
         if isinstance(values, dict):
-            if "subscriptionId" in values and "subscription_id" not in values:
-                values["subscription_id"] = values["subscriptionId"]
+            if 'subscriptionId' in values and 'subscription_id' not in values:
+                values['subscription_id'] = values['subscriptionId']
         return values
 
 
 class MiniAppSubscriptionServersUpdateRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     subscription_id: int | None = None
     servers: list[str] | None = None
     squads: list[str] | None = None
@@ -906,14 +881,14 @@ class MiniAppSubscriptionServersUpdateRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    @model_validator(mode="before")
+    @model_validator(mode='before')
     @classmethod
     def _populate_aliases(cls, values: Any) -> Any:
         if isinstance(values, dict):
             alias_map = {
-                "subscriptionId": "subscription_id",
-                "serverUuids": "server_uuids",
-                "squadUuids": "squad_uuids",
+                'subscriptionId': 'subscription_id',
+                'serverUuids': 'server_uuids',
+                'squadUuids': 'squad_uuids',
             }
             for alias, target in alias_map.items():
                 if alias in values and target not in values:
@@ -922,20 +897,20 @@ class MiniAppSubscriptionServersUpdateRequest(BaseModel):
 
 
 class MiniAppSubscriptionTrafficUpdateRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     subscription_id: int | None = None
     traffic: int | None = None
     traffic_gb: int | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
-    @model_validator(mode="before")
+    @model_validator(mode='before')
     @classmethod
     def _populate_aliases(cls, values: Any) -> Any:
         if isinstance(values, dict):
             alias_map = {
-                "subscriptionId": "subscription_id",
-                "trafficGb": "traffic_gb",
+                'subscriptionId': 'subscription_id',
+                'trafficGb': 'traffic_gb',
             }
             for alias, target in alias_map.items():
                 if alias in values and target not in values:
@@ -944,20 +919,20 @@ class MiniAppSubscriptionTrafficUpdateRequest(BaseModel):
 
 
 class MiniAppSubscriptionDevicesUpdateRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
     subscription_id: int | None = None
     devices: int | None = None
     device_limit: int | None = None
 
     model_config = ConfigDict(populate_by_name=True)
 
-    @model_validator(mode="before")
+    @model_validator(mode='before')
     @classmethod
     def _populate_aliases(cls, values: Any) -> Any:
         if isinstance(values, dict):
             alias_map = {
-                "subscriptionId": "subscription_id",
-                "deviceLimit": "device_limit",
+                'subscriptionId': 'subscription_id',
+                'deviceLimit': 'device_limit',
             }
             for alias, target in alias_map.items():
                 if alias in values and target not in values:
@@ -971,7 +946,7 @@ class MiniAppSubscriptionUpdateResponse(BaseModel):
 
 
 class MiniAppSubscriptionPurchaseOptionsRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -979,48 +954,48 @@ class MiniAppSubscriptionPurchaseOptionsRequest(BaseModel):
 class MiniAppSubscriptionPurchaseOptionsResponse(BaseModel):
     success: bool = True
     currency: str
-    balance_kopeks: int | None = Field(default=None, alias="balanceKopeks")
-    balance_label: str | None = Field(default=None, alias="balanceLabel")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    balance_kopeks: int | None = Field(default=None, alias='balanceKopeks')
+    balance_label: str | None = Field(default=None, alias='balanceLabel')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
     data: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionPurchasePreviewRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    init_data: str = Field(..., alias='initData')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
     selection: dict[str, Any] | None = None
-    period_id: str | None = Field(default=None, alias="periodId")
-    period_days: int | None = Field(default=None, alias="periodDays")
+    period_id: str | None = Field(default=None, alias='periodId')
+    period_days: int | None = Field(default=None, alias='periodDays')
     period: str | None = None
-    traffic_value: int | None = Field(default=None, alias="trafficValue")
+    traffic_value: int | None = Field(default=None, alias='trafficValue')
     traffic: int | None = None
-    traffic_gb: int | None = Field(default=None, alias="trafficGb")
+    traffic_gb: int | None = Field(default=None, alias='trafficGb')
     servers: list[str] | None = None
     countries: list[str] | None = None
-    server_uuids: list[str] | None = Field(default=None, alias="serverUuids")
+    server_uuids: list[str] | None = Field(default=None, alias='serverUuids')
     devices: int | None = None
-    device_limit: int | None = Field(default=None, alias="deviceLimit")
+    device_limit: int | None = Field(default=None, alias='deviceLimit')
 
     model_config = ConfigDict(populate_by_name=True)
 
-    @model_validator(mode="before")
+    @model_validator(mode='before')
     @classmethod
     def _merge_selection(cls, values: Any) -> Any:
         if not isinstance(values, dict):
             return values
-        selection = values.get("selection")
+        selection = values.get('selection')
         if isinstance(selection, dict):
             merged = {**selection, **values}
         else:
             merged = dict(values)
         aliases = {
-            "period_id": ("periodId", "period", "code"),
-            "period_days": ("periodDays",),
-            "traffic_value": ("trafficValue", "traffic", "trafficGb"),
-            "servers": ("countries", "server_uuids", "serverUuids"),
-            "devices": ("deviceLimit",),
+            'period_id': ('periodId', 'period', 'code'),
+            'period_days': ('periodDays',),
+            'traffic_value': ('trafficValue', 'traffic', 'trafficGb'),
+            'servers': ('countries', 'server_uuids', 'serverUuids'),
+            'devices': ('deviceLimit',),
         }
         for target, sources in aliases.items():
             if merged.get(target) is not None:
@@ -1035,8 +1010,8 @@ class MiniAppSubscriptionPurchasePreviewRequest(BaseModel):
 class MiniAppSubscriptionPurchasePreviewResponse(BaseModel):
     success: bool = True
     preview: dict[str, Any] = Field(default_factory=dict)
-    balance_kopeks: int | None = Field(default=None, alias="balanceKopeks")
-    balance_label: str | None = Field(default=None, alias="balanceLabel")
+    balance_kopeks: int | None = Field(default=None, alias='balanceKopeks')
+    balance_label: str | None = Field(default=None, alias='balanceLabel')
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -1048,15 +1023,15 @@ class MiniAppSubscriptionPurchaseRequest(MiniAppSubscriptionPurchasePreviewReque
 class MiniAppSubscriptionPurchaseResponse(BaseModel):
     success: bool = True
     message: str | None = None
-    balance_kopeks: int | None = Field(default=None, alias="balanceKopeks")
-    balance_label: str | None = Field(default=None, alias="balanceLabel")
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
+    balance_kopeks: int | None = Field(default=None, alias='balanceKopeks')
+    balance_label: str | None = Field(default=None, alias='balanceLabel')
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionTrialRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
+    init_data: str = Field(..., alias='initData')
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -1064,12 +1039,12 @@ class MiniAppSubscriptionTrialRequest(BaseModel):
 class MiniAppSubscriptionTrialResponse(BaseModel):
     success: bool = True
     message: str | None = None
-    subscription_id: int | None = Field(default=None, alias="subscriptionId")
-    trial_status: str | None = Field(default=None, alias="trialStatus")
-    trial_duration_days: int | None = Field(default=None, alias="trialDurationDays")
-    charged_amount_kopeks: int | None = Field(default=None, alias="chargedAmountKopeks")
-    charged_amount_label: str | None = Field(default=None, alias="chargedAmountLabel")
-    balance_kopeks: int | None = Field(default=None, alias="balanceKopeks")
-    balance_label: str | None = Field(default=None, alias="balanceLabel")
+    subscription_id: int | None = Field(default=None, alias='subscriptionId')
+    trial_status: str | None = Field(default=None, alias='trialStatus')
+    trial_duration_days: int | None = Field(default=None, alias='trialDurationDays')
+    charged_amount_kopeks: int | None = Field(default=None, alias='chargedAmountKopeks')
+    charged_amount_label: str | None = Field(default=None, alias='chargedAmountLabel')
+    balance_kopeks: int | None = Field(default=None, alias='balanceKopeks')
+    balance_label: str | None = Field(default=None, alias='balanceLabel')
 
     model_config = ConfigDict(populate_by_name=True)

@@ -42,7 +42,7 @@ class BaseGameStrategy(ABC):
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         """Render game UI for user."""
 
@@ -55,9 +55,7 @@ class BaseGameStrategy(ABC):
     ) -> AnswerCheckResult:
         """Check if user's answer is correct."""
 
-    def _get_back_button(
-        self, language: str, callback: str
-    ) -> types.InlineKeyboardButton:
+    def _get_back_button(self, language: str, callback: str) -> types.InlineKeyboardButton:
         from app.localization.texts import get_texts
 
         texts = get_texts(language)
@@ -75,22 +73,22 @@ class QuestButtonsStrategy(BaseGameStrategy):
     game_type = GameType.QUEST_BUTTONS
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        rows = template_payload.get("rows", 3)
-        cols = template_payload.get("cols", 3)
+        rows = template_payload.get('rows', 3)
+        cols = template_payload.get('cols', 3)
         total = rows * cols
         secret_idx = random.randint(0, total - 1)
-        return {"rows": rows, "cols": cols, "secret_idx": secret_idx}
+        return {'rows': rows, 'cols': cols, 'secret_idx': secret_idx}
 
     def render(
         self,
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        rows = payload.get("rows", 3)
-        cols = payload.get("cols", 3)
+        rows = payload.get('rows', 3)
+        cols = payload.get('cols', 3)
 
         keyboard_rows = []
         for r in range(rows):
@@ -99,15 +97,15 @@ class QuestButtonsStrategy(BaseGameStrategy):
                 idx = r * cols + c
                 row_buttons.append(
                     types.InlineKeyboardButton(
-                        text="",
-                        callback_data=f"contest_pick_{round_id}_quest_{idx}",
+                        text='',
+                        callback_data=f'contest_pick_{round_id}_quest_{idx}',
                     )
                 )
             keyboard_rows.append(row_buttons)
         keyboard_rows.append([self._get_back_button(language, back_callback)])
 
         return GameRenderResult(
-            text=texts.t("CONTEST_QUEST_PROMPT", "Выбери один из узлов 3×3:"),
+            text=texts.t('CONTEST_QUEST_PROMPT', 'Выбери один из узлов 3×3:'),
             keyboard=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         )
 
@@ -117,20 +115,20 @@ class QuestButtonsStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        secret_idx = payload.get("secret_idx")
+        secret_idx = payload.get('secret_idx')
         try:
-            if user_answer.startswith("quest_"):
-                idx = int(user_answer.split("_")[1])
+            if user_answer.startswith('quest_'):
+                idx = int(user_answer.split('_')[1])
                 is_correct = secret_idx is not None and idx == secret_idx
             else:
                 is_correct = False
         except (ValueError, IndexError):
             is_correct = False
 
-        responses = ["Пусто", "Ложный сервер", "Найди другой узел"]
+        responses = ['Пусто', 'Ложный сервер', 'Найди другой узел']
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else random.choice(responses),
+            response_text='' if is_correct else random.choice(responses),
         )
 
 
@@ -140,27 +138,27 @@ class LockHackStrategy(BaseGameStrategy):
     game_type = GameType.LOCK_HACK
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        total = template_payload.get("buttons", 20)
+        total = template_payload.get('buttons', 20)
         secret_idx = random.randint(0, max(0, total - 1))
-        return {"total": total, "secret_idx": secret_idx}
+        return {'total': total, 'secret_idx': secret_idx}
 
     def render(
         self,
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        total = payload.get("total", 20)
+        total = payload.get('total', 20)
 
         keyboard_rows = []
         row = []
         for i in range(total):
             row.append(
                 types.InlineKeyboardButton(
-                    text="",
-                    callback_data=f"contest_pick_{round_id}_locks_{i}",
+                    text='',
+                    callback_data=f'contest_pick_{round_id}_locks_{i}',
                 )
             )
             if len(row) == 5:
@@ -171,9 +169,7 @@ class LockHackStrategy(BaseGameStrategy):
         keyboard_rows.append([self._get_back_button(language, back_callback)])
 
         return GameRenderResult(
-            text=texts.t(
-                "CONTEST_LOCKS_PROMPT", "Найди взломанную кнопку среди замков:"
-            ),
+            text=texts.t('CONTEST_LOCKS_PROMPT', 'Найди взломанную кнопку среди замков:'),
             keyboard=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         )
 
@@ -183,20 +179,20 @@ class LockHackStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        secret_idx = payload.get("secret_idx")
+        secret_idx = payload.get('secret_idx')
         try:
-            if user_answer.startswith("locks_"):
-                idx = int(user_answer.split("_")[1])
+            if user_answer.startswith('locks_'):
+                idx = int(user_answer.split('_')[1])
                 is_correct = secret_idx is not None and idx == secret_idx
             else:
                 is_correct = False
         except (ValueError, IndexError):
             is_correct = False
 
-        responses = ["Заблокировано", "Попробуй ещё", "Нет доступа"]
+        responses = ['Заблокировано', 'Попробуй ещё', 'Нет доступа']
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else random.choice(responses),
+            response_text='' if is_correct else random.choice(responses),
         )
 
 
@@ -205,22 +201,22 @@ class ServerLotteryStrategy(BaseGameStrategy):
 
     game_type = GameType.SERVER_LOTTERY
 
-    DEFAULT_FLAGS = ["", "", "", "", "", "", "", "", "", ""]
+    DEFAULT_FLAGS = ['', '', '', '', '', '', '', '', '', '']
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        flags = template_payload.get("flags") or self.DEFAULT_FLAGS
+        flags = template_payload.get('flags') or self.DEFAULT_FLAGS
         secret_idx = random.randint(0, len(flags) - 1)
-        return {"flags": flags, "secret_idx": secret_idx}
+        return {'flags': flags, 'secret_idx': secret_idx}
 
     def render(
         self,
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        flags = payload.get("flags") or []
+        flags = payload.get('flags') or []
         shuffled_flags = flags.copy()
         random.shuffle(shuffled_flags)
 
@@ -230,7 +226,7 @@ class ServerLotteryStrategy(BaseGameStrategy):
             row.append(
                 types.InlineKeyboardButton(
                     text=flag,
-                    callback_data=f"contest_pick_{round_id}_{flag}",
+                    callback_data=f'contest_pick_{round_id}_{flag}',
                 )
             )
             if len(row) == 5:
@@ -241,7 +237,7 @@ class ServerLotteryStrategy(BaseGameStrategy):
         keyboard_rows.append([self._get_back_button(language, back_callback)])
 
         return GameRenderResult(
-            text=texts.t("CONTEST_SERVER_PROMPT", "Выбери сервер:"),
+            text=texts.t('CONTEST_SERVER_PROMPT', 'Выбери сервер:'),
             keyboard=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
         )
 
@@ -251,19 +247,15 @@ class ServerLotteryStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        secret_idx = payload.get("secret_idx")
-        flags = payload.get("flags") or []
-        correct_flag = (
-            flags[secret_idx]
-            if secret_idx is not None and secret_idx < len(flags)
-            else ""
-        )
+        secret_idx = payload.get('secret_idx')
+        flags = payload.get('flags') or []
+        correct_flag = flags[secret_idx] if secret_idx is not None and secret_idx < len(flags) else ''
         is_correct = user_answer == correct_flag
 
-        responses = ["Сервер перегружен", "Нет ответа", "Попробуй завтра"]
+        responses = ['Сервер перегружен', 'Нет ответа', 'Попробуй завтра']
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else random.choice(responses),
+            response_text='' if is_correct else random.choice(responses),
         )
 
 
@@ -273,14 +265,14 @@ class BlitzReactionStrategy(BaseGameStrategy):
     game_type = GameType.BLITZ_REACTION
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        return {"timeout_seconds": template_payload.get("timeout_seconds", 10)}
+        return {'timeout_seconds': template_payload.get('timeout_seconds', 10)}
 
     def render(
         self,
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
 
@@ -288,8 +280,8 @@ class BlitzReactionStrategy(BaseGameStrategy):
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t("CONTEST_BLITZ_BUTTON", "Я здесь!"),
-                        callback_data=f"contest_pick_{round_id}_blitz",
+                        text=texts.t('CONTEST_BLITZ_BUTTON', 'Я здесь!'),
+                        callback_data=f'contest_pick_{round_id}_blitz',
                     )
                 ],
                 [self._get_back_button(language, back_callback)],
@@ -297,7 +289,7 @@ class BlitzReactionStrategy(BaseGameStrategy):
         )
 
         return GameRenderResult(
-            text=texts.t("CONTEST_BLITZ_PROMPT", "Блиц! Нажми «Я здесь!»"),
+            text=texts.t('CONTEST_BLITZ_PROMPT', 'Блиц! Нажми «Я здесь!»'),
             keyboard=keyboard,
         )
 
@@ -307,10 +299,10 @@ class BlitzReactionStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        is_correct = user_answer == "blitz"
+        is_correct = user_answer == 'blitz'
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else "Время вышло",
+            response_text='' if is_correct else 'Время вышло',
         )
 
 
@@ -319,27 +311,27 @@ class LetterCipherStrategy(BaseGameStrategy):
 
     game_type = GameType.LETTER_CIPHER
 
-    DEFAULT_WORDS = ["VPN", "SERVER", "PROXY", "XRAY"]
+    DEFAULT_WORDS = ['VPN', 'SERVER', 'PROXY', 'XRAY']
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        words = template_payload.get("words") or self.DEFAULT_WORDS
+        words = template_payload.get('words') or self.DEFAULT_WORDS
         word = random.choice(words)
         codes = [str(ord(ch.upper()) - 64) for ch in word if ch.isalpha()]
-        return {"question": "-".join(codes), "answer": word.upper()}
+        return {'question': '-'.join(codes), 'answer': word.upper()}
 
     def render(
         self,
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        question = payload.get("question", "")
+        question = payload.get('question', '')
         from app.keyboards.inline import get_back_keyboard
 
         return GameRenderResult(
-            text=texts.t("CONTEST_CIPHER_PROMPT", "Расшифруй: {q}").format(q=question),
+            text=texts.t('CONTEST_CIPHER_PROMPT', 'Расшифруй: {q}').format(q=question),
             keyboard=get_back_keyboard(language),
             requires_text_input=True,
         )
@@ -350,12 +342,12 @@ class LetterCipherStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        correct = (payload.get("answer") or "").upper()
+        correct = (payload.get('answer') or '').upper()
         is_correct = correct and user_answer.strip().upper() == correct
 
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else "Неверно, попробуй в следующем раунде",
+            response_text='' if is_correct else 'Неверно, попробуй в следующем раунде',
         )
 
 
@@ -365,7 +357,7 @@ class EmojiGuessStrategy(BaseGameStrategy):
     game_type = GameType.EMOJI_GUESS
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        pairs = template_payload.get("pairs") or [{"question": "", "answer": "VPN"}]
+        pairs = template_payload.get('pairs') or [{'question': '', 'answer': 'VPN'}]
         pair = random.choice(pairs)
         return pair
 
@@ -374,19 +366,17 @@ class EmojiGuessStrategy(BaseGameStrategy):
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        question = payload.get("question", "")
+        question = payload.get('question', '')
         emoji_list = question.split()
         random.shuffle(emoji_list)
-        shuffled_question = " ".join(emoji_list)
+        shuffled_question = ' '.join(emoji_list)
         from app.keyboards.inline import get_back_keyboard
 
         return GameRenderResult(
-            text=texts.t("CONTEST_EMOJI_PROMPT", "Угадай сервис по эмодзи: {q}").format(
-                q=shuffled_question
-            ),
+            text=texts.t('CONTEST_EMOJI_PROMPT', 'Угадай сервис по эмодзи: {q}').format(q=shuffled_question),
             keyboard=get_back_keyboard(language),
             requires_text_input=True,
         )
@@ -397,12 +387,12 @@ class EmojiGuessStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        correct = (payload.get("answer") or "").upper()
+        correct = (payload.get('answer') or '').upper()
         is_correct = correct and user_answer.strip().upper() == correct
 
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else "Неверно, попробуй в следующем раунде",
+            response_text='' if is_correct else 'Неверно, попробуй в следующем раунде',
         )
 
 
@@ -411,29 +401,27 @@ class AnagramStrategy(BaseGameStrategy):
 
     game_type = GameType.ANAGRAM
 
-    DEFAULT_WORDS = ["SERVER", "XRAY", "VPN"]
+    DEFAULT_WORDS = ['SERVER', 'XRAY', 'VPN']
 
     def build_payload(self, template_payload: dict[str, Any]) -> dict[str, Any]:
-        words = template_payload.get("words") or self.DEFAULT_WORDS
+        words = template_payload.get('words') or self.DEFAULT_WORDS
         word = random.choice(words).upper()
-        shuffled = "".join(random.sample(word, len(word)))
-        return {"letters": shuffled, "answer": word}
+        shuffled = ''.join(random.sample(word, len(word)))
+        return {'letters': shuffled, 'answer': word}
 
     def render(
         self,
         round_id: int,
         payload: dict[str, Any],
         language: str,
-        back_callback: str = "contests_menu",
+        back_callback: str = 'contests_menu',
     ) -> GameRenderResult:
         texts = self._get_texts(language)
-        letters = payload.get("letters", "")
+        letters = payload.get('letters', '')
         from app.keyboards.inline import get_back_keyboard
 
         return GameRenderResult(
-            text=texts.t("CONTEST_ANAGRAM_PROMPT", "Составь слово: {letters}").format(
-                letters=letters
-            ),
+            text=texts.t('CONTEST_ANAGRAM_PROMPT', 'Составь слово: {letters}').format(letters=letters),
             keyboard=get_back_keyboard(language),
             requires_text_input=True,
         )
@@ -444,12 +432,12 @@ class AnagramStrategy(BaseGameStrategy):
         payload: dict[str, Any],
         language: str,
     ) -> AnswerCheckResult:
-        correct = (payload.get("answer") or "").upper()
+        correct = (payload.get('answer') or '').upper()
         is_correct = correct and user_answer.strip().upper() == correct
 
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text="" if is_correct else "Неверно, попробуй в следующем раунде",
+            response_text='' if is_correct else 'Неверно, попробуй в следующем раунде',
         )
 
 

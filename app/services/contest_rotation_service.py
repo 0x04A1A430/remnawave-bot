@@ -33,95 +33,95 @@ GAME_ANAGRAM = GameType.ANAGRAM.value
 
 DEFAULT_TEMPLATES = [
     {
-        "slug": GAME_QUEST,
-        "name": "Квест-кнопки",
-        "description": "Найди секретную кнопку 3×3",
-        "prize_type": "days",
-        "prize_value": "1",
-        "max_winners": 3,
-        "attempts_per_user": 1,
-        "times_per_day": 2,
-        "schedule_times": "10:00,18:00",
-        "payload": {"rows": 3, "cols": 3},
-        "is_enabled": False,
+        'slug': GAME_QUEST,
+        'name': 'Квест-кнопки',
+        'description': 'Найди секретную кнопку 3×3',
+        'prize_type': 'days',
+        'prize_value': '1',
+        'max_winners': 3,
+        'attempts_per_user': 1,
+        'times_per_day': 2,
+        'schedule_times': '10:00,18:00',
+        'payload': {'rows': 3, 'cols': 3},
+        'is_enabled': False,
     },
     {
-        "slug": GAME_LOCKS,
-        "name": "Кнопочный взлом",
-        "description": "Найди взломанную кнопку среди 20 замков",
-        "prize_type": "days",
-        "prize_value": "5",
-        "max_winners": 1,
-        "attempts_per_user": 1,
-        "times_per_day": 2,
-        "schedule_times": "09:00,19:00",
-        "payload": {"buttons": 20},
-        "is_enabled": False,
+        'slug': GAME_LOCKS,
+        'name': 'Кнопочный взлом',
+        'description': 'Найди взломанную кнопку среди 20 замков',
+        'prize_type': 'days',
+        'prize_value': '5',
+        'max_winners': 1,
+        'attempts_per_user': 1,
+        'times_per_day': 2,
+        'schedule_times': '09:00,19:00',
+        'payload': {'buttons': 20},
+        'is_enabled': False,
     },
     {
-        "slug": GAME_CIPHER,
-        "name": "Шифр букв",
-        "description": "Расшифруй слово по номерам",
-        "prize_type": "days",
-        "prize_value": "1",
-        "max_winners": 1,
-        "attempts_per_user": 1,
-        "times_per_day": 2,
-        "schedule_times": "12:00,20:00",
-        "payload": {"words": ["VPN", "SERVER", "PROXY", "XRAY"]},
-        "is_enabled": False,
+        'slug': GAME_CIPHER,
+        'name': 'Шифр букв',
+        'description': 'Расшифруй слово по номерам',
+        'prize_type': 'days',
+        'prize_value': '1',
+        'max_winners': 1,
+        'attempts_per_user': 1,
+        'times_per_day': 2,
+        'schedule_times': '12:00,20:00',
+        'payload': {'words': ['VPN', 'SERVER', 'PROXY', 'XRAY']},
+        'is_enabled': False,
     },
     {
-        "slug": GAME_SERVER,
-        "name": "Сервер-лотерея",
-        "description": "Угадай доступный сервер",
-        "prize_type": "days",
-        "prize_value": "7",
-        "max_winners": 1,
-        "attempts_per_user": 1,
-        "times_per_day": 1,
-        "schedule_times": "15:00",
-        "payload": {"flags": ["", "", "", "", "", "", "", "", "", ""]},
-        "is_enabled": False,
+        'slug': GAME_SERVER,
+        'name': 'Сервер-лотерея',
+        'description': 'Угадай доступный сервер',
+        'prize_type': 'days',
+        'prize_value': '7',
+        'max_winners': 1,
+        'attempts_per_user': 1,
+        'times_per_day': 1,
+        'schedule_times': '15:00',
+        'payload': {'flags': ['', '', '', '', '', '', '', '', '', '']},
+        'is_enabled': False,
     },
     {
-        "slug": GAME_BLITZ,
-        "name": "Блиц-реакция",
-        "description": "Нажми кнопку за 10 секунд",
-        "prize_type": "days",
-        "prize_value": "1",
-        "max_winners": 1,
-        "attempts_per_user": 1,
-        "times_per_day": 2,
-        "schedule_times": "11:00,21:00",
-        "payload": {"timeout_seconds": 10},
-        "is_enabled": False,
+        'slug': GAME_BLITZ,
+        'name': 'Блиц-реакция',
+        'description': 'Нажми кнопку за 10 секунд',
+        'prize_type': 'days',
+        'prize_value': '1',
+        'max_winners': 1,
+        'attempts_per_user': 1,
+        'times_per_day': 2,
+        'schedule_times': '11:00,21:00',
+        'payload': {'timeout_seconds': 10},
+        'is_enabled': False,
     },
     {
-        "slug": GAME_EMOJI,
-        "name": "Угадай сервис по эмодзи",
-        "description": "Определи сервис по эмодзи",
-        "prize_type": "days",
-        "prize_value": "1",
-        "max_winners": 1,
-        "attempts_per_user": 1,
-        "times_per_day": 1,
-        "schedule_times": "13:00",
-        "payload": {"pairs": [{"question": "", "answer": "VPN"}]},
-        "is_enabled": False,
+        'slug': GAME_EMOJI,
+        'name': 'Угадай сервис по эмодзи',
+        'description': 'Определи сервис по эмодзи',
+        'prize_type': 'days',
+        'prize_value': '1',
+        'max_winners': 1,
+        'attempts_per_user': 1,
+        'times_per_day': 1,
+        'schedule_times': '13:00',
+        'payload': {'pairs': [{'question': '', 'answer': 'VPN'}]},
+        'is_enabled': False,
     },
     {
-        "slug": GAME_ANAGRAM,
-        "name": "Анаграмма дня",
-        "description": "Собери слово из букв",
-        "prize_type": "days",
-        "prize_value": "1",
-        "max_winners": 1,
-        "attempts_per_user": 1,
-        "times_per_day": 1,
-        "schedule_times": "17:00",
-        "payload": {"words": ["SERVER", "XRAY", "VPN"]},
-        "is_enabled": False,
+        'slug': GAME_ANAGRAM,
+        'name': 'Анаграмма дня',
+        'description': 'Собери слово из букв',
+        'prize_type': 'days',
+        'prize_value': '1',
+        'max_winners': 1,
+        'attempts_per_user': 1,
+        'times_per_day': 1,
+        'schedule_times': '17:00',
+        'payload': {'words': ['SERVER', 'XRAY', 'VPN']},
+        'is_enabled': False,
     },
 ]
 
@@ -142,13 +142,13 @@ class ContestRotationService:
         await self.stop()
 
         if not settings.is_contests_enabled():
-            logger.info("Сервис игр отключён настройками")
+            logger.info('Сервис игр отключён настройками')
             return
 
         await self._ensure_default_templates()
 
         self._task = asyncio.create_task(self._loop())
-        logger.info("Сервис ротационных конкурсов запущен")
+        logger.info('Сервис ротационных конкурсов запущен')
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -165,7 +165,7 @@ class ContestRotationService:
                 try:
                     await upsert_template(db, **tpl)
                 except Exception as exc:
-                    logger.error("Не удалось создать шаблон", tpl=tpl["slug"], exc=exc)
+                    logger.error('Не удалось создать шаблон', tpl=tpl['slug'], exc=exc)
 
     async def _loop(self) -> None:
         try:
@@ -175,22 +175,22 @@ class ContestRotationService:
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    logger.error("Ошибка в ротации конкурсов", exc=exc)
+                    logger.error('Ошибка в ротации конкурсов', exc=exc)
                 await asyncio.sleep(self._interval_seconds)
         except asyncio.CancelledError:
-            logger.info("Сервис ротации конкурсов остановлен")
+            logger.info('Сервис ротации конкурсов остановлен')
             raise
 
     def _parse_times(self, times_str: str | None) -> list[time]:
         if not times_str:
             return []
         times: list[time] = []
-        for part in times_str.split(","):
+        for part in times_str.split(','):
             part = part.strip()
             if not part:
                 continue
             try:
-                hh, mm = part.split(":")
+                hh, mm = part.split(':')
                 times.append(time(int(hh), int(mm)))
             except Exception:
                 continue
@@ -208,14 +208,10 @@ class ContestRotationService:
                 times = self._parse_times(tpl.schedule_times) or []
                 for slot in times[: tpl.times_per_day]:
                     # Apply schedule time to local date
-                    starts_at_local = now_local.replace(
-                        hour=slot.hour, minute=slot.minute, second=0, microsecond=0
-                    )
+                    starts_at_local = now_local.replace(hour=slot.hour, minute=slot.minute, second=0, microsecond=0)
                     if starts_at_local > now_local:
                         starts_at_local -= timedelta(days=1)
-                    ends_at_local = starts_at_local + timedelta(
-                        hours=tpl.cooldown_hours
-                    )
+                    ends_at_local = starts_at_local + timedelta(hours=tpl.cooldown_hours)
                     if not (starts_at_local <= now_local <= ends_at_local):
                         continue
 
@@ -228,9 +224,7 @@ class ContestRotationService:
                     ends_at_utc = ends_at_local.astimezone(UTC)
 
                     # Анонс перед созданием раунда
-                    await self._announce_round_start(
-                        tpl, starts_at_local, ends_at_local
-                    )
+                    await self._announce_round_start(tpl, starts_at_local, ends_at_local)
                     payload = self._build_payload_for_template(tpl)
                     round_obj = await create_round(
                         db,
@@ -240,18 +234,18 @@ class ContestRotationService:
                         payload=payload,
                     )
                     logger.info(
-                        "Создан раунд для шаблона",
+                        'Создан раунд для шаблона',
                         round_obj_id=round_obj.id,
                         slug=tpl.slug,
                     )
 
     def _get_timezone(self) -> ZoneInfo:
-        tz_name = settings.TIMEZONE or "UTC"
+        tz_name = settings.TIMEZONE or 'UTC'
         try:
             return ZoneInfo(tz_name)
         except Exception:
-            logger.warning("Не удалось загрузить TZ , используем UTC", tz_name=tz_name)
-            return ZoneInfo("UTC")
+            logger.warning('Не удалось загрузить TZ , используем UTC', tz_name=tz_name)
+            return ZoneInfo('UTC')
 
     def _build_payload_for_template(self, tpl: ContestTemplate) -> dict:
         """Build round-specific payload using game strategy."""
@@ -272,16 +266,16 @@ class ContestRotationService:
 
         from app.localization.texts import get_texts
 
-        texts = get_texts("ru")  # Default to ru for announcements
+        texts = get_texts('ru')  # Default to ru for announcements
 
         # Format prize display based on prize_type
         prize_type = tpl.prize_type or PrizeType.DAYS.value
-        prize_value = tpl.prize_value or "1"
+        prize_value = tpl.prize_value or '1'
 
         if prize_type == PrizeType.DAYS.value:
             prize_display = f'{prize_value} {texts.t("DAYS", "дн. подписки")}'
         elif prize_type == PrizeType.BALANCE.value:
-            prize_display = f"{prize_value} коп."
+            prize_display = f'{prize_value} коп.'
         elif prize_type == PrizeType.CUSTOM.value:
             prize_display = prize_value
         else:
@@ -329,8 +323,8 @@ class ContestRotationService:
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="Играть",
-                            url=f"https://t.me/{bot_username}?start=contests",
+                            text='Играть',
+                            url=f'https://t.me/{bot_username}?start=contests',
                         )
                     ]
                 ]
@@ -344,9 +338,7 @@ class ContestRotationService:
                 reply_markup=keyboard,
             )
         except Exception as exc:
-            logger.error(
-                "Не удалось отправить анонс в канал", channel_id=channel_id, exc=exc
-            )
+            logger.error('Не удалось отправить анонс в канал', channel_id=channel_id, exc=exc)
 
     async def _broadcast_to_users(self, text: str) -> None:
         """Отправляет анонс всем пользователям с активной/триальной подпиской."""
@@ -359,9 +351,7 @@ class ContestRotationService:
             sent = failed = 0
 
             keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [InlineKeyboardButton(text="Играть", callback_data="contests_menu")]
-                ]
+                inline_keyboard=[[InlineKeyboardButton(text='Играть', callback_data='contests_menu')]]
             )
 
             while True:
@@ -397,13 +387,11 @@ class ContestRotationService:
 
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-            logger.info("Анонс игр разослан", sent=sent, failed=failed)
+            logger.info('Анонс игр разослан', sent=sent, failed=failed)
         except Exception as exc:
-            logger.error("Ошибка рассылки анонса игр пользователям", exc=exc)
+            logger.error('Ошибка рассылки анонса игр пользователям', exc=exc)
 
-    async def _load_users_batch(
-        self, db: AsyncSession, offset: int, limit: int
-    ) -> list[User]:
+    async def _load_users_batch(self, db: AsyncSession, offset: int, limit: int) -> list[User]:
         from app.database.crud.user import get_users_list
 
         users = await get_users_list(
@@ -414,7 +402,7 @@ class ContestRotationService:
         )
         allowed: list[User] = []
         for u in users:
-            sub = getattr(u, "subscription", None)
+            sub = getattr(u, 'subscription', None)
             if not sub:
                 continue
             if sub.status in {

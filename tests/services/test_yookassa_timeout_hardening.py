@@ -41,12 +41,8 @@ import pytest
 
 from app.services import yookassa_service
 
-YOOKASSA_SERVICE_PATH = (
-    Path(__file__).resolve().parents[2] / "app" / "services" / "yookassa_service.py"
-)
-YOOKASSA_PAYMENT_PATH = (
-    Path(__file__).resolve().parents[2] / "app" / "services" / "payment" / "yookassa.py"
-)
+YOOKASSA_SERVICE_PATH = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'yookassa_service.py'
+YOOKASSA_PAYMENT_PATH = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'payment' / 'yookassa.py'
 
 
 # ---------------------------------------------------------------------------
@@ -70,26 +66,22 @@ def test_apiclient_patch_helper_exists_and_runs_at_import() -> None:
     sidesteps the shadow entirely and catches the actual regression
     class we care about: 'someone deleted the patch'.
     """
-    source = YOOKASSA_SERVICE_PATH.read_text(encoding="utf-8")
+    source = YOOKASSA_SERVICE_PATH.read_text(encoding='utf-8')
 
     # Helper must exist.
-    assert "def _patch_yookassa_timeout(" in source, (
-        "yookassa_service.py must define _patch_yookassa_timeout — the SDK "
-        "ships with no HTTP timeout and threads block on socket.recv forever "
-        "without our patch"
+    assert 'def _patch_yookassa_timeout(' in source, (
+        'yookassa_service.py must define _patch_yookassa_timeout — the SDK '
+        'ships with no HTTP timeout and threads block on socket.recv forever '
+        'without our patch'
     )
 
     # And must be invoked at import time (module-level call, not
     # behind ``if __name__ == "__main__":`` or similar).
     # We allow it on any indentation == 0 line for resilience.
-    invocation_lines = [
-        line
-        for line in source.splitlines()
-        if line.startswith("_patch_yookassa_timeout()")
-    ]
+    invocation_lines = [line for line in source.splitlines() if line.startswith('_patch_yookassa_timeout()')]
     assert invocation_lines, (
-        "_patch_yookassa_timeout() must be CALLED at module import — defining "
-        "it but never calling it would silently leave the SDK unpatched"
+        '_patch_yookassa_timeout() must be CALLED at module import — defining '
+        'it but never calling it would silently leave the SDK unpatched'
     )
 
 
@@ -101,18 +93,16 @@ def test_patched_execute_passes_timeout_to_session_request() -> None:
     for why we avoid directly importing yookassa.client).
     """
     src = inspect.getsource(yookassa_service._patch_yookassa_timeout)
-    assert (
-        "session.request" in src
-    ), "_patch_yookassa_timeout must replace session.request behaviour"
-    assert "timeout=" in src, (
-        "Patched ApiClient.execute must pass timeout= to session.request. "
-        "Without it, requests.Session blocks on socket.recv indefinitely."
+    assert 'session.request' in src, '_patch_yookassa_timeout must replace session.request behaviour'
+    assert 'timeout=' in src, (
+        'Patched ApiClient.execute must pass timeout= to session.request. '
+        'Without it, requests.Session blocks on socket.recv indefinitely.'
     )
     # The (connect, read) tuple is the requests convention. Reject a
     # single-int hardcoded timeout that would skip operator override.
-    assert "(connect_timeout, read_timeout)" in src, (
-        "Patched execute must use the (connect_timeout, read_timeout) tuple "
-        "so operators can tune both phases independently via env vars"
+    assert '(connect_timeout, read_timeout)' in src, (
+        'Patched execute must use the (connect_timeout, read_timeout) tuple '
+        'so operators can tune both phases independently via env vars'
     )
 
 
@@ -123,14 +113,11 @@ def test_patch_idempotency_guard_exists() -> None:
     depth on every YK call and risking recursion errors.
     """
     src = inspect.getsource(yookassa_service._patch_yookassa_timeout)
-    assert "_timeout_patched" in src, (
-        "_patch_yookassa_timeout must guard against re-wrapping via the "
-        "_timeout_patched flag — pin against accidental double-wrap on reload"
+    assert '_timeout_patched' in src, (
+        '_patch_yookassa_timeout must guard against re-wrapping via the '
+        '_timeout_patched flag — pin against accidental double-wrap on reload'
     )
-    assert (
-        "getattr(ApiClient, '_timeout_patched'" in src
-        or "ApiClient._timeout_patched" in src
-    )
+    assert "getattr(ApiClient, '_timeout_patched'" in src or 'ApiClient._timeout_patched' in src
 
 
 def test_patch_respects_settings_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -141,8 +128,8 @@ def test_patch_respects_settings_overrides(monkeypatch: pytest.MonkeyPatch) -> N
     the settings (i.e., doesn't hardcode the numbers).
     """
     src = inspect.getsource(yookassa_service._patch_yookassa_timeout)
-    assert "YOOKASSA_HTTP_CONNECT_TIMEOUT" in src
-    assert "YOOKASSA_HTTP_READ_TIMEOUT" in src
+    assert 'YOOKASSA_HTTP_CONNECT_TIMEOUT' in src
+    assert 'YOOKASSA_HTTP_READ_TIMEOUT' in src
 
 
 # ---------------------------------------------------------------------------
@@ -163,13 +150,13 @@ def test_dedicated_executor_exists_with_bounded_max_workers() -> None:
     assert executor is not None
     # ThreadPoolExecutor stores max_workers as _max_workers — private
     # but stable across Python versions.
-    max_workers = getattr(executor, "_max_workers", None)
-    assert (
-        isinstance(max_workers, int) and max_workers >= 1
-    ), "Dedicated YK executor must have a positive max_workers cap"
+    max_workers = getattr(executor, '_max_workers', None)
+    assert isinstance(max_workers, int) and max_workers >= 1, (
+        'Dedicated YK executor must have a positive max_workers cap'
+    )
     assert max_workers <= 32, (
-        f"YK executor max_workers={max_workers} is suspiciously large — "
-        f"starvation protection diminishes as the pool approaches the default pool size"
+        f'YK executor max_workers={max_workers} is suspiciously large — '
+        f'starvation protection diminishes as the pool approaches the default pool size'
     )
 
 
@@ -180,10 +167,10 @@ def test_max_workers_resolver_respects_setting(monkeypatch: pytest.MonkeyPatch) 
     """
     from app.config import settings
 
-    monkeypatch.setattr(settings, "YOOKASSA_MAX_CONCURRENT_REQUESTS", 12, raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 12, raising=False)
     assert yookassa_service._resolve_max_workers() == 12
 
-    monkeypatch.setattr(settings, "YOOKASSA_MAX_CONCURRENT_REQUESTS", 1, raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 1, raising=False)
     assert yookassa_service._resolve_max_workers() == 1
 
 
@@ -194,15 +181,13 @@ def test_max_workers_resolver_floors_at_one(monkeypatch: pytest.MonkeyPatch) -> 
     """
     from app.config import settings
 
-    monkeypatch.setattr(settings, "YOOKASSA_MAX_CONCURRENT_REQUESTS", 0, raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 0, raising=False)
     assert yookassa_service._resolve_max_workers() == 4
 
-    monkeypatch.setattr(settings, "YOOKASSA_MAX_CONCURRENT_REQUESTS", -5, raising=False)
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', -5, raising=False)
     assert yookassa_service._resolve_max_workers() == 1
 
-    monkeypatch.setattr(
-        settings, "YOOKASSA_MAX_CONCURRENT_REQUESTS", "garbage", raising=False
-    )
+    monkeypatch.setattr(settings, 'YOOKASSA_MAX_CONCURRENT_REQUESTS', 'garbage', raising=False)
     assert yookassa_service._resolve_max_workers() == 4
 
 
@@ -213,7 +198,7 @@ def test_dedicated_executor_thread_name_prefix() -> None:
     """
     executor = yookassa_service._yookassa_executor
     # _thread_name_prefix is set via the constructor arg.
-    assert getattr(executor, "_thread_name_prefix", "") == "yookassa-sdk"
+    assert getattr(executor, '_thread_name_prefix', '') == 'yookassa-sdk'
 
 
 def test_all_run_in_executor_callsites_use_dedicated_pool() -> None:
@@ -221,29 +206,29 @@ def test_all_run_in_executor_callsites_use_dedicated_pool() -> None:
     ``yookassa_service.py`` must pass ``_yookassa_executor`` as the
     first argument, NEVER ``None`` (which means default pool).
     """
-    source = YOOKASSA_SERVICE_PATH.read_text(encoding="utf-8")
+    source = YOOKASSA_SERVICE_PATH.read_text(encoding='utf-8')
 
     # Find every "loop.run_in_executor(" occurrence and verify the
     # first arg is _yookassa_executor.
     lines = source.splitlines()
     offending: list[tuple[int, str]] = []
     for i, line in enumerate(lines, start=1):
-        if "loop.run_in_executor(" not in line:
+        if 'loop.run_in_executor(' not in line:
             continue
         # The first arg is on the NEXT line in our codebase. Look
         # ahead until we see ',' or a closing paren — robust to either
         # one-liner or multi-line forms.
         for j in range(i, min(i + 3, len(lines))):
             window = lines[j]
-            if "_yookassa_executor" in window:
+            if '_yookassa_executor' in window:
                 break
-            if "None," in window or "None ," in window:
+            if 'None,' in window or 'None ,' in window:
                 offending.append((j + 1, window.strip()))
                 break
 
     assert not offending, (
-        "Every loop.run_in_executor(...) in yookassa_service.py must use "
-        f"_yookassa_executor, not None. Offending lines: {offending}"
+        'Every loop.run_in_executor(...) in yookassa_service.py must use '
+        f'_yookassa_executor, not None. Offending lines: {offending}'
     )
 
 
@@ -262,11 +247,11 @@ def test_webhook_uses_wait_for_with_tight_budget() -> None:
     Pre-fix: no wait_for, the inner ``asyncio.timeout(30)`` was the
     only bound, and a single slow YK API call could pile up webhooks.
     """
-    source = YOOKASSA_PAYMENT_PATH.read_text(encoding="utf-8")
+    source = YOOKASSA_PAYMENT_PATH.read_text(encoding='utf-8')
 
-    assert "asyncio.wait_for(" in source, (
-        "process_yookassa_webhook must wrap get_payment_info in asyncio.wait_for "
-        "with a tight budget — otherwise YK API slowness queues webhook processing"
+    assert 'asyncio.wait_for(' in source, (
+        'process_yookassa_webhook must wrap get_payment_info in asyncio.wait_for '
+        'with a tight budget — otherwise YK API slowness queues webhook processing'
     )
 
     # Find the relevant wait_for and confirm the timeout is ≤ 10s.
@@ -274,15 +259,15 @@ def test_webhook_uses_wait_for_with_tight_budget() -> None:
     lines = source.splitlines()
     found_tight_budget = False
     for i, line in enumerate(lines):
-        if "asyncio.wait_for(" not in line:
+        if 'asyncio.wait_for(' not in line:
             continue
         # Look up to 5 lines ahead for the timeout= kwarg.
         for k in range(i, min(i + 6, len(lines))):
-            if "timeout=" in lines[k]:
+            if 'timeout=' in lines[k]:
                 # Extract the number after 'timeout='.
                 import re
 
-                match = re.search(r"timeout\s*=\s*(\d+)", lines[k])
+                match = re.search(r'timeout\s*=\s*(\d+)', lines[k])
                 if match and int(match.group(1)) <= 10:
                     found_tight_budget = True
                     break
@@ -290,8 +275,8 @@ def test_webhook_uses_wait_for_with_tight_budget() -> None:
             break
 
     assert found_tight_budget, (
-        "asyncio.wait_for around get_payment_info must use timeout ≤ 10s "
-        "(8s recommended). Larger budgets allow YK degradation to queue webhooks."
+        'asyncio.wait_for around get_payment_info must use timeout ≤ 10s '
+        '(8s recommended). Larger budgets allow YK degradation to queue webhooks.'
     )
 
 
@@ -301,31 +286,31 @@ def test_webhook_handles_timeout_with_payload_fallback() -> None:
     signature-verified). The bug report calls this out as "при таймауте
     использовать данные из payload webhook'а".
     """
-    source = YOOKASSA_PAYMENT_PATH.read_text(encoding="utf-8")
+    source = YOOKASSA_PAYMENT_PATH.read_text(encoding='utf-8')
 
     # Find the asyncio.wait_for block and confirm its except branch
     # catches TimeoutError without re-raising.
-    assert "TimeoutError" in source or "asyncio.TimeoutError" in source, (
-        "Webhook handler must catch TimeoutError from wait_for and fall back "
-        "to the payload, otherwise YK API slowness propagates as 500s"
+    assert 'TimeoutError' in source or 'asyncio.TimeoutError' in source, (
+        'Webhook handler must catch TimeoutError from wait_for and fall back '
+        'to the payload, otherwise YK API slowness propagates as 500s'
     )
 
     # Negative-control: must NOT have ``raise`` inside the wait_for's
     # TimeoutError handler — that would defeat the fallback.
-    wait_for_idx = source.find("asyncio.wait_for(")
+    wait_for_idx = source.find('asyncio.wait_for(')
     assert wait_for_idx >= 0
     snippet = source[wait_for_idx : wait_for_idx + 1500]
     # The TimeoutError block must contain a logger.warning (use of
     # payload) and not contain "raise" before the next exception
     # handler.
-    timeout_block_start = snippet.find("TimeoutError")
+    timeout_block_start = snippet.find('TimeoutError')
     assert timeout_block_start >= 0
     timeout_block = snippet[timeout_block_start : timeout_block_start + 500]
     # Splitting on 'except' would catch ALL except handlers; we want
     # only the TimeoutError block until the next 'except'.
-    next_except = timeout_block.find("except", 10)
+    next_except = timeout_block.find('except', 10)
     if next_except > 0:
         timeout_block = timeout_block[:next_except]
-    assert (
-        "raise" not in timeout_block
-    ), "TimeoutError handler must not re-raise — the payload fallback is the whole point"
+    assert 'raise' not in timeout_block, (
+        'TimeoutError handler must not re-raise — the payload fallback is the whole point'
+    )

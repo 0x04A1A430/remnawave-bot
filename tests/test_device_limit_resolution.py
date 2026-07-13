@@ -38,7 +38,7 @@ class StubSettings:
 
 
 @pytest.mark.parametrize(
-    "forced_amount, expected",
+    'forced_amount, expected',
     [
         (None, None),
         (0, 0),
@@ -50,7 +50,7 @@ def test_resolve_hwid_device_limit_disabled_mode(monkeypatch, forced_amount, exp
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
+        'settings',
         StubSettings(
             enabled=False,
             disabled_amount=forced_amount,
@@ -66,7 +66,7 @@ def test_resolve_hwid_device_limit_enabled_mode(monkeypatch):
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
+        'settings',
         StubSettings(enabled=True, disabled_amount=None),
     )
 
@@ -78,7 +78,7 @@ def test_resolve_hwid_device_limit_enabled_ignores_non_positive(monkeypatch):
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
+        'settings',
         StubSettings(enabled=True, disabled_amount=None),
     )
 
@@ -90,10 +90,8 @@ def test_resolve_hwid_device_limit_for_payload_returns_subscription_limit(monkey
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
-        StubSettings(
-            enabled=False, disabled_amount=None, disabled_selection_amount=None
-        ),
+        'settings',
+        StubSettings(enabled=False, disabled_amount=None, disabled_selection_amount=None),
     )
 
     assert resolve_hwid_device_limit(subscription) is None
@@ -105,10 +103,8 @@ def test_resolve_hwid_device_limit_for_payload_ignores_non_positive(monkeypatch)
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
-        StubSettings(
-            enabled=False, disabled_amount=None, disabled_selection_amount=None
-        ),
+        'settings',
+        StubSettings(enabled=False, disabled_amount=None, disabled_selection_amount=None),
     )
 
     assert resolve_hwid_device_limit(subscription) is None
@@ -120,7 +116,7 @@ def test_resolve_hwid_device_limit_for_payload_prefers_forced_limit(monkeypatch)
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
+        'settings',
         StubSettings(enabled=False, disabled_amount=7, disabled_selection_amount=7),
     )
 
@@ -132,7 +128,7 @@ def test_resolve_hwid_device_limit_for_payload_handles_zero(monkeypatch):
 
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
+        'settings',
         StubSettings(enabled=False, disabled_amount=0, disabled_selection_amount=0),
     )
 
@@ -141,7 +137,7 @@ def test_resolve_hwid_device_limit_for_payload_handles_zero(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "enabled, simple_limit, disabled_amount, disabled_selection_amount, expected",
+    'enabled, simple_limit, disabled_amount, disabled_selection_amount, expected',
     [
         (True, 4, None, None, 4),
         (False, 4, None, None, 4),
@@ -159,7 +155,7 @@ def test_resolve_simple_subscription_device_limit(
 ):
     monkeypatch.setattr(
         subscription_utils,
-        "settings",
+        'settings',
         StubSettings(
             enabled=enabled,
             disabled_amount=disabled_amount,

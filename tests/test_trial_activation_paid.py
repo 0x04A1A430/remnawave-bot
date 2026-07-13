@@ -23,7 +23,7 @@ def trial_user():
     user = MagicMock(spec=User)
     user.subscription = None
     user.has_had_paid_subscription = False
-    user.language = "ru"
+    user.language = 'ru'
     return user
 
 
@@ -44,17 +44,17 @@ async def test_activate_trial_uses_trial_price_for_topup_redirect(
 
     with (
         patch(
-            "app.handlers.subscription.purchase.preview_trial_activation_charge",
+            'app.handlers.subscription.purchase.preview_trial_activation_charge',
             side_effect=error,
         ),
         patch(
-            "app.handlers.subscription.purchase.get_texts",
+            'app.handlers.subscription.purchase.get_texts',
             return_value=MagicMock(
                 t=lambda key, default, **kwargs: default,
             ),
         ),
         patch(
-            "app.handlers.subscription.purchase.get_insufficient_balance_keyboard",
+            'app.handlers.subscription.purchase.get_insufficient_balance_keyboard',
             return_value=mock_keyboard,
         ) as insufficient_keyboard,
     ):

@@ -27,10 +27,10 @@ class BulkBanService:
         db: AsyncSession,
         admin_user_id: int,
         telegram_ids: list[int],
-        reason: str = "Заблокирован администратором по списку",
+        reason: str = 'Заблокирован администратором по списку',
         bot: Bot = None,
         notify_admin: bool = True,
-        admin_name: str = "Администратор",
+        admin_name: str = 'Администратор',
     ) -> tuple[int, int, list[int]]:
         """
         Массовая блокировка пользователей по Telegram ID
@@ -57,29 +57,21 @@ class BulkBanService:
                 user = await get_user_by_telegram_id(db, telegram_id)
 
                 if not user:
-                    logger.warning(
-                        "Пользователь с Telegram ID не найден", telegram_id=telegram_id
-                    )
+                    logger.warning('Пользователь с Telegram ID не найден', telegram_id=telegram_id)
                     not_found_users.append(telegram_id)
                     continue
 
                 # Проверяем, что пользователь не заблокирован уже
                 if user.status == UserStatus.BLOCKED.value:
-                    logger.info(
-                        "Пользователь уже заблокирован", telegram_id=telegram_id
-                    )
+                    logger.info('Пользователь уже заблокирован', telegram_id=telegram_id)
                     continue
 
                 # Блокируем пользователя
-                ban_success = await self.user_service.block_user(
-                    db, user.id, admin_user_id, reason
-                )
+                ban_success = await self.user_service.block_user(db, user.id, admin_user_id, reason)
 
                 if ban_success:
                     successfully_banned += 1
-                    logger.info(
-                        "Пользователь успешно заблокирован", telegram_id=telegram_id
-                    )
+                    logger.info('Пользователь успешно заблокирован', telegram_id=telegram_id)
 
                     # Отправляем уведомление пользователю, если возможно
                     if bot:
@@ -87,28 +79,26 @@ class BulkBanService:
                             await bot.send_message(
                                 chat_id=telegram_id,
                                 text=(
-                                    f"<b>Ваш аккаунт заблокирован</b>\n\n"
-                                    f"Причина: {reason}\n\n"
-                                    f"Если вы считаете, что блокировка произошла ошибочно, "
-                                    f"обратитесь в поддержку."
+                                    f'<b>Ваш аккаунт заблокирован</b>\n\n'
+                                    f'Причина: {reason}\n\n'
+                                    f'Если вы считаете, что блокировка произошла ошибочно, '
+                                    f'обратитесь в поддержку.'
                                 ),
-                                parse_mode="HTML",
+                                parse_mode='HTML',
                             )
                         except Exception as e:
                             logger.warning(
-                                "Не удалось отправить уведомление пользователю",
+                                'Не удалось отправить уведомление пользователю',
                                 telegram_id=telegram_id,
                                 error=e,
                             )
                 else:
-                    logger.error(
-                        "Не удалось заблокировать пользователя", telegram_id=telegram_id
-                    )
+                    logger.error('Не удалось заблокировать пользователя', telegram_id=telegram_id)
                     error_ids.append(telegram_id)
 
             except Exception as e:
                 logger.error(
-                    "Ошибка при блокировке пользователя",
+                    'Ошибка при блокировке пользователя',
                     telegram_id=telegram_id,
                     error=e,
                 )
@@ -126,10 +116,10 @@ class BulkBanService:
                     admin_name,
                 )
             except Exception as e:
-                logger.error("Ошибка при отправке уведомления администратору", error=e)
+                logger.error('Ошибка при отправке уведомления администратору', error=e)
 
         logger.info(
-            "Массовая блокировка завершена",
+            'Массовая блокировка завершена',
             successfully_banned=successfully_banned,
             not_found_users_count=len(not_found_users),
             error_ids_count=len(error_ids),
@@ -149,23 +139,23 @@ class BulkBanService:
             return []
 
         # Удаляем лишние пробелы и разбиваем по переносам строк
-        lines = text.strip().split("\n")
+        lines = text.strip().split('\n')
         ids = []
 
         for line in lines:
             # Убираем комментарии и лишние пробелы
             line = line.strip()
-            if not line or line.startswith("#"):
+            if not line or line.startswith('#'):
                 continue
 
             # Разбиваем строку по запятым или пробелам
-            tokens = line.replace(",", " ").split()
+            tokens = line.replace(',', ' ').split()
 
             for token in tokens:
                 token = token.strip()
 
                 # Убираем символ @ если присутствует
-                token = token.removeprefix("@")
+                token = token.removeprefix('@')
 
                 # Проверяем, является ли токен числом (Telegram ID)
                 try:

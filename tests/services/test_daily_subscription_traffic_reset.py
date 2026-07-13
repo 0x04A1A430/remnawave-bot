@@ -46,8 +46,8 @@ def _make_subscription(reset_mode: str) -> SimpleNamespace:
         id=1,
         user_id=1,
         tariff_id=None,
-        tariff=SimpleNamespace(traffic_reset_mode=reset_mode, name="t"),
-        remnawave_uuid="uuid-1",
+        tariff=SimpleNamespace(traffic_reset_mode=reset_mode, name='t'),
+        remnawave_uuid='uuid-1',
         traffic_limit_gb=150,
         purchased_traffic_gb=50,
         traffic_reset_at=None,
@@ -66,30 +66,22 @@ def _make_service(panel_used_gb: float | None) -> DailySubscriptionService:
 
 def _make_fake_subscription_service(panel_used_bytes: int) -> SubscriptionService:
     fake = SubscriptionService.__new__(SubscriptionService)
-    fake.update_remnawave_user = AsyncMock(
-        return_value=SimpleNamespace(used_traffic_bytes=panel_used_bytes)
-    )
+    fake.update_remnawave_user = AsyncMock(return_value=SimpleNamespace(used_traffic_bytes=panel_used_bytes))
     return fake
 
 
 def _recently_expired() -> list[SimpleNamespace]:
-    return [
-        SimpleNamespace(
-            traffic_gb=50, id=10, expires_at=datetime.now(UTC) - timedelta(days=1)
-        )
-    ]
+    return [SimpleNamespace(traffic_gb=50, id=10, expires_at=datetime.now(UTC) - timedelta(days=1))]
 
 
 async def test_defers_drop_when_panel_resets_and_user_over_limit():
     """MONTH + used 130 > нового лимита 100 → понижение ОТКЛАДЫВАЕТСЯ до сброса панели."""
-    sub = _make_subscription("MONTH")
+    sub = _make_subscription('MONTH')
     db = _make_db(sub)
     service = _make_service(panel_used_gb=130.0)
     fake_ss = _make_fake_subscription_service(130 * _GB)
 
-    with patch(
-        "app.services.subscription_service.SubscriptionService", return_value=fake_ss
-    ):
+    with patch('app.services.subscription_service.SubscriptionService', return_value=fake_ss):
         await service._reset_subscription_traffic(db, sub.id, _recently_expired())
 
     # Лимит не тронут, докупки не удалены, в панель ничего не синкали
@@ -100,44 +92,33 @@ async def test_defers_drop_when_panel_resets_and_user_over_limit():
 
 async def test_applies_drop_cleanly_when_user_under_limit():
     """MONTH + used 40 <= нового лимита 100 → лимит понижается, сброса used нет."""
-    sub = _make_subscription("MONTH")
+    sub = _make_subscription('MONTH')
     db = _make_db(sub)
     service = _make_service(panel_used_gb=40.0)
     fake_ss = _make_fake_subscription_service(40 * _GB)
 
-    with patch(
-        "app.services.subscription_service.SubscriptionService", return_value=fake_ss
-    ):
+    with patch('app.services.subscription_service.SubscriptionService', return_value=fake_ss):
         await service._reset_subscription_traffic(db, sub.id, _recently_expired())
 
     assert sub.traffic_limit_gb == 100
     db.delete.assert_awaited()
     assert fake_ss.update_remnawave_user.await_count == 1
-    assert not fake_ss.update_remnawave_user.await_args_list[0].kwargs.get(
-        "reset_traffic"
-    )
+    assert not fake_ss.update_remnawave_user.await_args_list[0].kwargs.get('reset_traffic')
 
 
 async def test_no_reset_tariff_resets_used_when_over_limit():
     """NO_RESET (панель сама не сбрасывает) + used 130 > 100 → лимит вниз + сброс used (clamp)."""
-    sub = _make_subscription("NO_RESET")
+    sub = _make_subscription('NO_RESET')
     db = _make_db(sub)
-    service = _make_service(
-        panel_used_gb=130.0
-    )  # не вызовется: NO_RESET закорачивает defer
+    service = _make_service(panel_used_gb=130.0)  # не вызовется: NO_RESET закорачивает defer
     fake_ss = _make_fake_subscription_service(130 * _GB)
 
-    with patch(
-        "app.services.subscription_service.SubscriptionService", return_value=fake_ss
-    ):
+    with patch('app.services.subscription_service.SubscriptionService', return_value=fake_ss):
         await service._reset_subscription_traffic(db, sub.id, _recently_expired())
 
     assert sub.traffic_limit_gb == 100
     assert fake_ss.update_remnawave_user.await_count == 2
-    assert (
-        fake_ss.update_remnawave_user.await_args_list[1].kwargs.get("reset_traffic")
-        is True
-    )
+    assert fake_ss.update_remnawave_user.await_args_list[1].kwargs.get('reset_traffic') is True
     assert sub.traffic_used_gb == 0.0
     # На NO_RESET панель используем как страховку, used из панели не запрашиваем
     service._get_panel_used_gb.assert_not_awaited()
@@ -145,29 +126,18 @@ async def test_no_reset_tariff_resets_used_when_over_limit():
 
 async def test_forces_drop_after_grace_even_if_panel_resets():
     """MONTH, но докупка просрочена >40д → не ждём вечно: понижаем + добиваем used."""
-    sub = _make_subscription("MONTH")
+    sub = _make_subscription('MONTH')
     db = _make_db(sub)
-    service = _make_service(
-        panel_used_gb=130.0
-    )  # не вызовется: grace закорачивает defer
+    service = _make_service(panel_used_gb=130.0)  # не вызовется: grace закорачивает defer
     fake_ss = _make_fake_subscription_service(130 * _GB)
-    long_overdue = [
-        SimpleNamespace(
-            traffic_gb=50, id=10, expires_at=datetime.now(UTC) - timedelta(days=50)
-        )
-    ]
+    long_overdue = [SimpleNamespace(traffic_gb=50, id=10, expires_at=datetime.now(UTC) - timedelta(days=50))]
 
-    with patch(
-        "app.services.subscription_service.SubscriptionService", return_value=fake_ss
-    ):
+    with patch('app.services.subscription_service.SubscriptionService', return_value=fake_ss):
         await service._reset_subscription_traffic(db, sub.id, long_overdue)
 
     assert sub.traffic_limit_gb == 100
     assert fake_ss.update_remnawave_user.await_count == 2
-    assert (
-        fake_ss.update_remnawave_user.await_args_list[1].kwargs.get("reset_traffic")
-        is True
-    )
+    assert fake_ss.update_remnawave_user.await_args_list[1].kwargs.get('reset_traffic') is True
     service._get_panel_used_gb.assert_not_awaited()
 
 
@@ -185,12 +155,10 @@ async def test_traffic_reset_only_loop_runs_processor(monkeypatch):
     async def fake_process():
         calls.append(1)
         service._running = False  # один проход — и выходим из цикла
-        return {"checked": 0, "reset": 0, "errors": 0}
+        return {'checked': 0, 'reset': 0, 'errors': 0}
 
-    monkeypatch.setattr(service, "process_traffic_resets", fake_process)
-    monkeypatch.setattr(
-        "app.services.daily_subscription_service.asyncio.sleep", AsyncMock()
-    )
+    monkeypatch.setattr(service, 'process_traffic_resets', fake_process)
+    monkeypatch.setattr('app.services.daily_subscription_service.asyncio.sleep', AsyncMock())
 
     await service.start_traffic_reset_monitoring()
 

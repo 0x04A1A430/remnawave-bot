@@ -88,7 +88,7 @@ class PeriodChange(BaseModel):
 
     absolute: int = 0
     percent: float = 0.0
-    trend: str = "stable"
+    trend: str = 'stable'
 
 
 class PeriodComparison(BaseModel):

@@ -23,38 +23,36 @@ async def ensure_external_admin_token(
 ) -> str | None:
     """Генерирует и сохраняет токен внешней админки, если требуется."""
 
-    username_raw = (bot_username or "").strip()
+    username_raw = (bot_username or '').strip()
     if not username_raw:
         logger.warning(
-            "Не удалось обеспечить токен внешней админки: username бота отсутствует",
+            'Не удалось обеспечить токен внешней админки: username бота отсутствует',
         )
         return None
 
-    normalized_username = username_raw.lstrip("@").lower()
+    normalized_username = username_raw.lstrip('@').lower()
     if not normalized_username:
         logger.warning(
-            "Не удалось обеспечить токен внешней админки: username пустой после нормализации",
+            'Не удалось обеспечить токен внешней админки: username пустой после нормализации',
         )
         return None
 
     try:
         token = settings.build_external_admin_token(normalized_username)
     except Exception as error:  # pragma: no cover - защитный блок
-        logger.error("Ошибка генерации токена внешней админки", error=error)
+        logger.error('Ошибка генерации токена внешней админки', error=error)
         return None
 
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(SystemSetting.key, SystemSetting.value).where(
-                    SystemSetting.key.in_(
-                        ["EXTERNAL_ADMIN_TOKEN", "EXTERNAL_ADMIN_TOKEN_BOT_ID"]
-                    )
+                    SystemSetting.key.in_(['EXTERNAL_ADMIN_TOKEN', 'EXTERNAL_ADMIN_TOKEN_BOT_ID'])
                 )
             )
             rows = dict(result.all())
-            existing_token = rows.get("EXTERNAL_ADMIN_TOKEN")
-            existing_bot_id_raw = rows.get("EXTERNAL_ADMIN_TOKEN_BOT_ID")
+            existing_token = rows.get('EXTERNAL_ADMIN_TOKEN')
+            existing_bot_id_raw = rows.get('EXTERNAL_ADMIN_TOKEN_BOT_ID')
 
             existing_bot_id: int | None = None
             if existing_bot_id_raw is not None:
@@ -65,7 +63,7 @@ async def ensure_external_admin_token(
                     ValueError,
                 ):  # pragma: no cover - защита от мусорных значений
                     logger.warning(
-                        "Не удалось разобрать сохраненный идентификатор бота внешней админки",
+                        'Не удалось разобрать сохраненный идентификатор бота внешней админки',
                         existing_bot_id_raw=existing_bot_id_raw,
                     )
 
@@ -76,13 +74,9 @@ async def ensure_external_admin_token(
                     settings.EXTERNAL_ADMIN_TOKEN_BOT_ID = existing_bot_id
                 return token
 
-            if (
-                existing_bot_id is not None
-                and bot_id is not None
-                and existing_bot_id != bot_id
-            ):
+            if existing_bot_id is not None and bot_id is not None and existing_bot_id != bot_id:
                 logger.error(
-                    "Обнаружено несовпадение ID бота для токена внешней админки: сохранен , текущий",
+                    'Обнаружено несовпадение ID бота для токена внешней админки: сохранен , текущий',
                     existing_bot_id=existing_bot_id,
                     bot_id=bot_id,
                 )
@@ -90,22 +84,22 @@ async def ensure_external_admin_token(
                 try:
                     await bot_configuration_service.reset_value(
                         session,
-                        "EXTERNAL_ADMIN_TOKEN",
+                        'EXTERNAL_ADMIN_TOKEN',
                         force=True,
                     )
                     await bot_configuration_service.reset_value(
                         session,
-                        "EXTERNAL_ADMIN_TOKEN_BOT_ID",
+                        'EXTERNAL_ADMIN_TOKEN_BOT_ID',
                         force=True,
                     )
                     await session.commit()
                     logger.warning(
-                        "Токен внешней админки очищен из-за несовпадения идентификаторов бота",
+                        'Токен внешней админки очищен из-за несовпадения идентификаторов бота',
                     )
                 except Exception as cleanup_error:  # pragma: no cover - защитный блок
                     await session.rollback()
                     logger.error(
-                        "Не удалось очистить токен внешней админки после обнаружения подмены",
+                        'Не удалось очистить токен внешней админки после обнаружения подмены',
                         cleanup_error=cleanup_error,
                     )
                 finally:
@@ -116,24 +110,18 @@ async def ensure_external_admin_token(
 
             updates: list[tuple[str, object]] = []
             if existing_token != token:
-                updates.append(("EXTERNAL_ADMIN_TOKEN", token))
+                updates.append(('EXTERNAL_ADMIN_TOKEN', token))
 
             if bot_id is not None and existing_bot_id != bot_id:
-                updates.append(("EXTERNAL_ADMIN_TOKEN_BOT_ID", bot_id))
+                updates.append(('EXTERNAL_ADMIN_TOKEN_BOT_ID', bot_id))
 
             if not updates:
                 # Токен совпал, но могли отсутствовать значения в настройках приложения
                 if settings.get_external_admin_token() != (existing_token or token):
                     settings.EXTERNAL_ADMIN_TOKEN = existing_token or token
-                if existing_bot_id is not None and (
-                    existing_bot_id != settings.EXTERNAL_ADMIN_TOKEN_BOT_ID
-                ):
+                if existing_bot_id is not None and (existing_bot_id != settings.EXTERNAL_ADMIN_TOKEN_BOT_ID):
                     settings.EXTERNAL_ADMIN_TOKEN_BOT_ID = existing_bot_id
-                elif (
-                    bot_id is not None
-                    and bot_id != settings.EXTERNAL_ADMIN_TOKEN_BOT_ID
-                    and existing_bot_id is None
-                ):
+                elif bot_id is not None and bot_id != settings.EXTERNAL_ADMIN_TOKEN_BOT_ID and existing_bot_id is None:
                     settings.EXTERNAL_ADMIN_TOKEN_BOT_ID = bot_id
                 return existing_token or token
 
@@ -147,19 +135,17 @@ async def ensure_external_admin_token(
                     )
                 await session.commit()
                 logger.info(
-                    "Токен внешней админки синхронизирован для @",
+                    'Токен внешней админки синхронизирован для @',
                     normalized_username=normalized_username,
                 )
-            except (
-                ReadOnlySettingError
-            ):  # pragma: no cover - force=True предотвращает исключение
+            except ReadOnlySettingError:  # pragma: no cover - force=True предотвращает исключение
                 await session.rollback()
                 logger.warning(
-                    "Не удалось сохранить токен внешней админки из-за ограничения доступа",
+                    'Не удалось сохранить токен внешней админки из-за ограничения доступа',
                 )
                 return None
 
             return token
     except SQLAlchemyError as error:
-        logger.error("Ошибка сохранения токена внешней админки", error=error)
+        logger.error('Ошибка сохранения токена внешней админки', error=error)
         return None

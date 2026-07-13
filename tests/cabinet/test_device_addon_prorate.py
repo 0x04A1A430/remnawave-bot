@@ -51,7 +51,7 @@ def _cabinet_quote(device_price_kopeks: int, devices: int, days_left: int) -> in
 
 
 @pytest.mark.parametrize(
-    ("days_left", "expected_kopeks"),
+    ('days_left', 'expected_kopeks'),
     [
         (5, 416),  # 25₽ × 5/30 ≈ 4.17₽ — prorated DOWN for a short remainder
         (12, 1000),  # 25₽ × 12/30 = 10₽
@@ -61,9 +61,7 @@ def _cabinet_quote(device_price_kopeks: int, devices: int, days_left: int) -> in
         (365, 30416),  # ~1 year ≈ 304₽
     ],
 )
-def test_device_addon_prorates_to_full_remaining_period(
-    days_left: int, expected_kopeks: int
-) -> None:
+def test_device_addon_prorates_to_full_remaining_period(days_left: int, expected_kopeks: int) -> None:
     """Device add-on scales with the actual remaining days — no one-month cap."""
     assert _bot_quote(2500, days_left) == expected_kopeks
 
@@ -107,6 +105,4 @@ def test_multi_device_scales_linearly() -> None:
 def test_bot_and_cabinet_formulas_agree() -> None:
     """The bot (calculate_prorated_price) and the cabinet inline math must match."""
     for days in (5, 12, 30, 58, 116, 200, 365, 366):
-        assert _bot_quote(2500, days) == _cabinet_quote(
-            2500, 1, days
-        ), f"mismatch at {days} days"
+        assert _bot_quote(2500, days) == _cabinet_quote(2500, 1, days), f'mismatch at {days} days'

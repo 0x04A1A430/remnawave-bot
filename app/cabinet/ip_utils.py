@@ -17,7 +17,7 @@ def _is_trusted_proxy(peer_ip: str, trusted: set[str]) -> bool:
         return False
     for entry in trusted:
         try:
-            if "/" in entry:
+            if '/' in entry:
                 if addr in ip_network(entry, strict=False):
                     return True
             elif addr == ip_address(entry):
@@ -36,20 +36,20 @@ def get_client_ip(request: Request) -> str:
     if not request.client:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unable to determine client IP",
+            detail='Unable to determine client IP',
         )
     peer_ip = request.client.host
     trusted_proxies = settings.get_cabinet_trusted_proxies()
 
     if trusted_proxies and _is_trusted_proxy(peer_ip, trusted_proxies):
-        forwarded = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        forwarded = request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
         if forwarded:
             try:
                 ip_address(forwarded)
                 return forwarded
             except ValueError:
                 pass  # invalid IP in header — fall through to peer_ip
-        real_ip = request.headers.get("X-Real-IP", "").strip()
+        real_ip = request.headers.get('X-Real-IP', '').strip()
         if real_ip:
             try:
                 ip_address(real_ip)

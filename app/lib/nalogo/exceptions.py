@@ -30,7 +30,7 @@ class DomainException(Exception):  # noqa: N818 для совместимост�
         safe_headers = self._mask_sensitive_headers(dict(response.headers))
 
         logger.error(
-            "API Error: %s | Status: %d | URL: %s | Headers: %s | Body: %s",
+            'API Error: %s | Status: %d | URL: %s | Headers: %s | Body: %s',
             message,
             response.status_code,
             safe_url,
@@ -42,9 +42,9 @@ class DomainException(Exception):  # noqa: N818 для совместимост�
         """Mask potential sensitive data in URL."""
         # Replace tokens/keys with asterisks
         patterns = [
-            (r"(token=)[^&]*", r"\1***"),
-            (r"(key=)[^&]*", r"\1***"),
-            (r"(secret=)[^&]*", r"\1***"),
+            (r'(token=)[^&]*', r'\1***'),
+            (r'(key=)[^&]*', r'\1***'),
+            (r'(secret=)[^&]*', r'\1***'),
         ]
 
         for pattern, replacement in patterns:
@@ -54,13 +54,13 @@ class DomainException(Exception):  # noqa: N818 для совместимост�
     def _mask_sensitive_headers(self, headers: dict[str, str]) -> dict[str, str]:
         """Mask sensitive headers."""
         safe_headers = headers.copy()
-        sensitive_keys = ["authorization", "x-api-key", "cookie", "set-cookie"]
+        sensitive_keys = ['authorization', 'x-api-key', 'cookie', 'set-cookie']
 
         for key in sensitive_keys:
             if key.lower() in [h.lower() for h in safe_headers]:
                 # Find the actual key (case-insensitive)
                 actual_key = next(k for k in safe_headers if k.lower() == key.lower())
-                safe_headers[actual_key] = "***"
+                safe_headers[actual_key] = '***'
 
         return safe_headers
 
@@ -70,10 +70,10 @@ class DomainException(Exception):  # noqa: N818 для совместимост�
             body = response.text[:1000]  # Limit body size for logging
             # Mask potential tokens in JSON responses
             patterns = [
-                (r'("token":\s*")[^"]*(")', r"\1***\2"),
-                (r'("refreshToken":\s*")[^"]*(")', r"\1***\2"),
-                (r'("password":\s*")[^"]*(")', r"\1***\2"),
-                (r'("secret":\s*")[^"]*(")', r"\1***\2"),
+                (r'("token":\s*")[^"]*(")', r'\1***\2'),
+                (r'("refreshToken":\s*")[^"]*(")', r'\1***\2'),
+                (r'("password":\s*")[^"]*(")', r'\1***\2'),
+                (r'("secret":\s*")[^"]*(")', r'\1***\2'),
             ]
 
             for pattern, replacement in patterns:
@@ -81,7 +81,7 @@ class DomainException(Exception):  # noqa: N818 для совместимост�
 
             return body
         except Exception:
-            return "[Failed to read response body]"
+            return '[Failed to read response body]'
 
 
 class ValidationException(DomainException):
@@ -150,7 +150,7 @@ def raise_for_status(response: httpx.Response) -> None:
     if response.status_code == HTTPStatus.NOT_FOUND:
         raise NotFoundException(body, response)
     if response.status_code == HTTPStatus.NOT_ACCEPTABLE:
-        raise ClientException("Wrong Accept headers", response)
+        raise ClientException('Wrong Accept headers', response)
     if response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY:
         raise PhoneException(body, response)
     if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:

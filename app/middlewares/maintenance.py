@@ -44,15 +44,15 @@ class MaintenanceMiddleware(BaseMiddleware):
 
         try:
             if isinstance(event, Message):
-                await event.answer(maintenance_message, parse_mode="HTML")
+                await event.answer(maintenance_message, parse_mode='HTML')
             elif isinstance(event, CallbackQuery):
                 await event.answer(maintenance_message, show_alert=True)
         except Exception as e:
             logger.error(
-                "Ошибка отправки сообщения о техработах пользователю",
+                'Ошибка отправки сообщения о техработах пользователю',
                 user_id=user.id,
                 error=e,
             )
 
-        logger.info("Пользователь заблокирован во время техработ", user_id=user.id)
+        logger.info('Пользователь заблокирован во время техработ', user_id=user.id)
         return None

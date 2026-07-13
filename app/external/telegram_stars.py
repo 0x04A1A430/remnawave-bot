@@ -21,7 +21,7 @@ class TelegramStarsService:
     @staticmethod
     def calculate_rubles_from_stars(stars: int) -> Decimal:
         rate = Decimal(str(settings.get_stars_rate()))
-        return (Decimal(stars) * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        return (Decimal(stars) * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     async def create_invoice(
         self,
@@ -41,14 +41,14 @@ class TelegramStarsService:
                 title=title,
                 description=description,
                 payload=payload,
-                provider_token="",
-                currency="XTR",
+                provider_token='',
+                currency='XTR',
                 prices=[LabeledPrice(label=title, amount=stars_amount)],
                 start_parameter=start_parameter,
             )
 
             logger.info(
-                "Создан Stars invoice",
+                'Создан Stars invoice',
                 stars_amount=stars_amount,
                 settings=settings.format_price(amount_kopeks),
                 chat_id=chat_id,
@@ -57,7 +57,7 @@ class TelegramStarsService:
             return invoice_link
 
         except Exception as e:
-            logger.error("Ошибка создания Stars invoice", error=e)
+            logger.error('Ошибка создания Stars invoice', error=e)
             return None
 
     async def send_invoice(
@@ -79,28 +79,28 @@ class TelegramStarsService:
                 title=title,
                 description=description,
                 payload=payload,
-                provider_token="",
-                currency="XTR",
+                provider_token='',
+                currency='XTR',
                 prices=[LabeledPrice(label=title, amount=stars_amount)],
                 reply_markup=keyboard,
             )
 
             logger.info(
-                "Отправлен Stars invoice",
+                'Отправлен Stars invoice',
                 message_id=message.message_id,
                 stars_amount=stars_amount,
                 settings=settings.format_price(amount_kopeks),
                 stars_rate=stars_rate,
             )
             return {
-                "message_id": message.message_id,
-                "stars_amount": stars_amount,
-                "rubles_amount": float(amount_rubles),
-                "payload": payload,
+                'message_id': message.message_id,
+                'stars_amount': stars_amount,
+                'rubles_amount': float(amount_rubles),
+                'payload': payload,
             }
 
         except Exception as e:
-            logger.error("Ошибка отправки Stars invoice", error=e)
+            logger.error('Ошибка отправки Stars invoice', error=e)
             return None
 
     async def answer_pre_checkout_query(
@@ -115,8 +115,8 @@ class TelegramStarsService:
                 ok=ok,
                 error_message=error_message,
             )
-            logger.info("Ответ на pre_checkout_query отправлен", ok=ok)
+            logger.info('Ответ на pre_checkout_query отправлен', ok=ok)
             return True
         except Exception as e:
-            logger.error("Ошибка ответа на pre_checkout_query", error=e)
+            logger.error('Ошибка ответа на pre_checkout_query', error=e)
             return False

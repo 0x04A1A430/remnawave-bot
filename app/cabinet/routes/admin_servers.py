@@ -31,21 +31,15 @@ from ..schemas.servers import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/servers", tags=["Cabinet Admin Servers"])
+router = APIRouter(prefix='/admin/servers', tags=['Cabinet Admin Servers'])
 
 
-async def _get_server_promo_groups(
-    db: AsyncSession, server: ServerSquad
-) -> list[PromoGroupInfo]:
+async def _get_server_promo_groups(db: AsyncSession, server: ServerSquad) -> list[PromoGroupInfo]:
     """Get promo group info for server."""
     result = await db.execute(select(PromoGroup).order_by(PromoGroup.name))
     all_groups = result.scalars().all()
 
-    selected_ids = (
-        {pg.id for pg in server.allowed_promo_groups}
-        if server.allowed_promo_groups
-        else set()
-    )
+    selected_ids = {pg.id for pg in server.allowed_promo_groups} if server.allowed_promo_groups else set()
 
     return [
         PromoGroupInfo(
@@ -68,10 +62,10 @@ async def _get_tariffs_using_server(db: AsyncSession, squad_uuid: str) -> list[s
     return tariff_names
 
 
-@router.get("", response_model=ServerListResponse)
+@router.get('', response_model=ServerListResponse)
 async def list_servers(
     include_unavailable: bool = True,
-    admin: User = Depends(require_permission("servers:read")),
+    admin: User = Depends(require_permission('servers:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of all servers."""
@@ -105,10 +99,10 @@ async def list_servers(
     return ServerListResponse(servers=items, total=total)
 
 
-@router.get("/{server_id}", response_model=ServerDetailResponse)
+@router.get('/{server_id}', response_model=ServerDetailResponse)
 async def get_server(
     server_id: int,
-    admin: User = Depends(require_permission("servers:read")),
+    admin: User = Depends(require_permission('servers:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed server info."""
@@ -116,7 +110,7 @@ async def get_server(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Server not found",
+            detail='Server not found',
         )
 
     promo_groups = await _get_server_promo_groups(db, server)
@@ -147,11 +141,11 @@ async def get_server(
     )
 
 
-@router.put("/{server_id}", response_model=ServerDetailResponse)
+@router.put('/{server_id}', response_model=ServerDetailResponse)
 async def update_existing_server(
     server_id: int,
     request: ServerUpdateRequest,
-    admin: User = Depends(require_permission("servers:edit")),
+    admin: User = Depends(require_permission('servers:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing server."""
@@ -159,27 +153,27 @@ async def update_existing_server(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Server not found",
+            detail='Server not found',
         )
 
     # Build updates dict
     updates = {}
     if request.display_name is not None:
-        updates["display_name"] = request.display_name
+        updates['display_name'] = request.display_name
     if request.description is not None:
-        updates["description"] = request.description
+        updates['description'] = request.description
     if request.country_code is not None:
-        updates["country_code"] = request.country_code
+        updates['country_code'] = request.country_code
     if request.is_available is not None:
-        updates["is_available"] = request.is_available
+        updates['is_available'] = request.is_available
     if request.is_trial_eligible is not None:
-        updates["is_trial_eligible"] = request.is_trial_eligible
+        updates['is_trial_eligible'] = request.is_trial_eligible
     if request.price_kopeks is not None:
-        updates["price_kopeks"] = request.price_kopeks
+        updates['price_kopeks'] = request.price_kopeks
     if request.max_users is not None:
-        updates["max_users"] = request.max_users if request.max_users > 0 else None
+        updates['max_users'] = request.max_users if request.max_users > 0 else None
     if request.sort_order is not None:
-        updates["sort_order"] = request.sort_order
+        updates['sort_order'] = request.sort_order
 
     if updates:
         await update_server_squad(db, server_id, **updates)
@@ -188,15 +182,15 @@ async def update_existing_server(
     if request.promo_group_ids is not None:
         await update_server_squad_promo_groups(db, server_id, request.promo_group_ids)
 
-    logger.info("Admin updated server", admin_id=admin.id, server_id=server_id)
+    logger.info('Admin updated server', admin_id=admin.id, server_id=server_id)
 
     return await get_server(server_id, admin, db)
 
 
-@router.post("/{server_id}/toggle", response_model=ServerToggleResponse)
+@router.post('/{server_id}/toggle', response_model=ServerToggleResponse)
 async def toggle_server(
     server_id: int,
-    admin: User = Depends(require_permission("servers:edit")),
+    admin: User = Depends(require_permission('servers:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle server availability."""
@@ -204,28 +198,26 @@ async def toggle_server(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Server not found",
+            detail='Server not found',
         )
 
     new_status = not server.is_available
     await update_server_squad(db, server_id, is_available=new_status)
 
-    status_text = "enabled" if new_status else "disabled"
-    logger.info(
-        "Admin server", admin_id=admin.id, status_text=status_text, server_id=server_id
-    )
+    status_text = 'enabled' if new_status else 'disabled'
+    logger.info('Admin server', admin_id=admin.id, status_text=status_text, server_id=server_id)
 
     return ServerToggleResponse(
         id=server_id,
         is_available=new_status,
-        message=f"Server {status_text}",
+        message=f'Server {status_text}',
     )
 
 
-@router.post("/{server_id}/trial", response_model=ServerTrialToggleResponse)
+@router.post('/{server_id}/trial', response_model=ServerTrialToggleResponse)
 async def toggle_server_trial(
     server_id: int,
-    admin: User = Depends(require_permission("servers:edit")),
+    admin: User = Depends(require_permission('servers:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle server trial eligibility."""
@@ -233,28 +225,26 @@ async def toggle_server_trial(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Server not found",
+            detail='Server not found',
         )
 
     new_status = not server.is_trial_eligible
     await update_server_squad(db, server_id, is_trial_eligible=new_status)
 
-    status_text = "enabled for trial" if new_status else "disabled for trial"
-    logger.info(
-        "Admin server", admin_id=admin.id, status_text=status_text, server_id=server_id
-    )
+    status_text = 'enabled for trial' if new_status else 'disabled for trial'
+    logger.info('Admin server', admin_id=admin.id, status_text=status_text, server_id=server_id)
 
     return ServerTrialToggleResponse(
         id=server_id,
         is_trial_eligible=new_status,
-        message=f"Server {status_text}",
+        message=f'Server {status_text}',
     )
 
 
-@router.get("/{server_id}/stats", response_model=ServerStatsResponse)
+@router.get('/{server_id}/stats', response_model=ServerStatsResponse)
 async def get_server_stats(
     server_id: int,
-    admin: User = Depends(require_permission("servers:read")),
+    admin: User = Depends(require_permission('servers:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get server statistics."""
@@ -262,7 +252,7 @@ async def get_server_stats(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Server not found",
+            detail='Server not found',
         )
 
     active_subs = await count_active_users_for_squad(db, server.squad_uuid)
@@ -272,10 +262,8 @@ async def get_server_stats(
     trial_result = await db.execute(
         select(func.count(Subscription.id)).where(
             Subscription.is_trial == True,
-            Subscription.status == "active",
-            func.cast(Subscription.connected_squads, String).like(
-                f'%"{server.squad_uuid}"%'
-            ),
+            Subscription.status == 'active',
+            func.cast(Subscription.connected_squads, String).like(f'%"{server.squad_uuid}"%'),
         )
     )
     trial_count = trial_result.scalar() or 0
@@ -296,9 +284,9 @@ async def get_server_stats(
     )
 
 
-@router.post("/sync", response_model=ServerSyncResponse)
+@router.post('/sync', response_model=ServerSyncResponse)
 async def sync_servers(
-    admin: User = Depends(require_permission("servers:edit")),
+    admin: User = Depends(require_permission('servers:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Sync servers with RemnaWave."""
@@ -307,7 +295,7 @@ async def sync_servers(
         if not subscription_service.is_configured:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="RemnaWave is not configured",
+                detail='RemnaWave is not configured',
             )
 
         # Get squads from RemnaWave
@@ -315,14 +303,14 @@ async def sync_servers(
         if squads is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to fetch squads from RemnaWave",
+                detail='Failed to fetch squads from RemnaWave',
             )
 
         # Sync with database
         created, updated, removed = await sync_with_remnawave(db, squads)
 
         logger.info(
-            "Admin synced servers: + ~",
+            'Admin synced servers: + ~',
             admin_id=admin.id,
             created=created,
             updated=updated,
@@ -333,14 +321,14 @@ async def sync_servers(
             created=created,
             updated=updated,
             removed=removed,
-            message=f"Synced: {created} created, {updated} updated, {removed} removed",
+            message=f'Synced: {created} created, {updated} updated, {removed} removed',
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to sync servers", error=e)
+        logger.error('Failed to sync servers', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sync failed: {e!s}",
+            detail=f'Sync failed: {e!s}',
         )

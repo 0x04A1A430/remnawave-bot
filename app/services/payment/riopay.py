@@ -26,12 +26,12 @@ from app.utils.user_utils import format_referrer_info
 
 # Маппинг статусов RioPay → internal
 RIOPAY_STATUS_MAP = {
-    "COMPLETED": ("success", True),
-    "CANCELED": ("canceled", False),
-    "FAILED": ("failed", False),
-    "EXPIRED": ("expired", False),
-    "CREATED": ("pending", False),
-    "PENDING": ("pending", False),
+    'COMPLETED': ('success', True),
+    'CANCELED': ('canceled', False),
+    'FAILED': ('failed', False),
+    'EXPIRED': ('expired', False),
+    'CREATED': ('pending', False),
+    'PENDING': ('pending', False),
 }
 
 
@@ -44,9 +44,9 @@ class RioPayPaymentMixin:
         *,
         user_id: int | None,
         amount_kopeks: int,
-        description: str = "Пополнение баланса",
+        description: str = 'Пополнение баланса',
         email: str | None = None,
-        language: str = "ru",
+        language: str = 'ru',
         success_url: str | None = None,
         fail_url: str | None = None,
     ) -> dict[str, Any] | None:
@@ -57,13 +57,13 @@ class RioPayPaymentMixin:
             Словарь с данными платежа или None при ошибке
         """
         if not settings.is_riopay_enabled():
-            logger.error("RioPay не настроен")
+            logger.error('RioPay не настроен')
             return None
 
         # Валидация лимитов
         if amount_kopeks < settings.RIOPAY_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                "RioPay: сумма меньше минимальной",
+                'RioPay: сумма меньше минимальной',
                 amount_kopeks=amount_kopeks,
                 RIOPAY_MIN_AMOUNT_KOPEKS=settings.RIOPAY_MIN_AMOUNT_KOPEKS,
             )
@@ -71,7 +71,7 @@ class RioPayPaymentMixin:
 
         if amount_kopeks > settings.RIOPAY_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                "RioPay: сумма больше максимальной",
+                'RioPay: сумма больше максимальной',
                 amount_kopeks=amount_kopeks,
                 RIOPAY_MAX_AMOUNT_KOPEKS=settings.RIOPAY_MAX_AMOUNT_KOPEKS,
             )
@@ -82,10 +82,10 @@ class RioPayPaymentMixin:
             user = await get_user_by_id(db, user_id)
             tg_id = user.telegram_id if user else user_id
         else:
-            tg_id = "guest"
+            tg_id = 'guest'
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
-        order_id = f"rp{tg_id}_{uuid.uuid4().hex[:6]}"
+        order_id = f'rp{tg_id}_{uuid.uuid4().hex[:6]}'
         amount_rubles = amount_kopeks / 100
 
         # Срок действия платежа (1 час по умолчанию)
@@ -93,11 +93,11 @@ class RioPayPaymentMixin:
 
         # Метаданные
         metadata = {
-            "user_id": user_id,
-            "amount_kopeks": amount_kopeks,
-            "description": description,
-            "language": language,
-            "type": "balance_topup",
+            'user_id': user_id,
+            'amount_kopeks': amount_kopeks,
+            'description': description,
+            'language': language,
+            'type': 'balance_topup',
         }
 
         try:
@@ -109,15 +109,15 @@ class RioPayPaymentMixin:
                 success_url=success_url or settings.RIOPAY_SUCCESS_URL,
             )
 
-            payment_url = result.get("paymentLink")
-            riopay_order_id = result.get("id")
+            payment_url = result.get('paymentLink')
+            riopay_order_id = result.get('id')
 
             if not payment_url:
-                logger.error("RioPay API не вернул URL платежа", result=result)
+                logger.error('RioPay API не вернул URL платежа', result=result)
                 return None
 
             logger.info(
-                "RioPay API: создан заказ",
+                'RioPay API: создан заказ',
                 order_id=order_id,
                 riopay_order_id=riopay_order_id,
                 payment_url=payment_url,
@@ -133,13 +133,13 @@ class RioPayPaymentMixin:
                 description=description,
                 payment_url=payment_url,
                 riopay_order_id=riopay_order_id,
-                payment_method=result.get("paymentType"),
+                payment_method=result.get('paymentType'),
                 expires_at=expires_at,
                 metadata_json=metadata,
             )
 
             logger.info(
-                "RioPay: создан платеж",
+                'RioPay: создан платеж',
                 order_id=order_id,
                 user_id=user_id,
                 amount_rubles=amount_rubles,
@@ -147,18 +147,18 @@ class RioPayPaymentMixin:
             )
 
             return {
-                "order_id": order_id,
-                "riopay_order_id": riopay_order_id,
-                "amount_kopeks": amount_kopeks,
-                "amount_rubles": amount_rubles,
-                "currency": settings.RIOPAY_CURRENCY,
-                "payment_url": payment_url,
-                "expires_at": expires_at.isoformat(),
-                "local_payment_id": local_payment.id,
+                'order_id': order_id,
+                'riopay_order_id': riopay_order_id,
+                'amount_kopeks': amount_kopeks,
+                'amount_rubles': amount_rubles,
+                'currency': settings.RIOPAY_CURRENCY,
+                'payment_url': payment_url,
+                'expires_at': expires_at.isoformat(),
+                'local_payment_id': local_payment.id,
             }
 
         except Exception as e:
-            logger.exception("RioPay: ошибка создания платежа", e=e)
+            logger.exception('RioPay: ошибка создания платежа', e=e)
             return None
 
     async def process_riopay_webhook(
@@ -181,15 +181,13 @@ class RioPayPaymentMixin:
         """
         try:
             # Извлекаем данные из payload
-            riopay_order_id = payload.get("id")
-            external_id = payload.get("externalId")
-            riopay_status = payload.get("status")
-            amount = payload.get("amount")
+            riopay_order_id = payload.get('id')
+            external_id = payload.get('externalId')
+            riopay_status = payload.get('status')
+            amount = payload.get('amount')
 
             if not riopay_order_id or not riopay_status:
-                logger.warning(
-                    "RioPay webhook: отсутствуют обязательные поля", payload=payload
-                )
+                logger.warning('RioPay webhook: отсутствуют обязательные поля', payload=payload)
                 return False
 
             # Ищем платеж по external_id (наш order_id) или riopay_order_id
@@ -197,13 +195,11 @@ class RioPayPaymentMixin:
             if external_id:
                 payment = await get_riopay_payment_by_order_id(db, external_id)
             if not payment and riopay_order_id:
-                payment = await get_riopay_payment_by_riopay_order_id(
-                    db, riopay_order_id
-                )
+                payment = await get_riopay_payment_by_riopay_order_id(db, riopay_order_id)
 
             if not payment:
                 logger.warning(
-                    "RioPay webhook: платеж не найден",
+                    'RioPay webhook: платеж не найден',
                     external_id=external_id,
                     riopay_order_id=riopay_order_id,
                 )
@@ -212,30 +208,26 @@ class RioPayPaymentMixin:
             # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
             locked = await get_riopay_payment_by_id_for_update(db, payment.id)
             if not locked:
-                logger.error(
-                    "RioPay: не удалось заблокировать платёж", payment_id=payment.id
-                )
+                logger.error('RioPay: не удалось заблокировать платёж', payment_id=payment.id)
                 return False
             payment = locked
 
             # Re-check is_paid from the locked row
             if payment.is_paid:
-                logger.info(
-                    "RioPay webhook: платеж уже обработан", order_id=payment.order_id
-                )
+                logger.info('RioPay webhook: платеж уже обработан', order_id=payment.order_id)
                 return True
 
             # Маппинг статуса
-            status_info = RIOPAY_STATUS_MAP.get(riopay_status, ("pending", False))
+            status_info = RIOPAY_STATUS_MAP.get(riopay_status, ('pending', False))
             internal_status, is_paid = status_info
 
             callback_payload = {
-                "riopay_order_id": riopay_order_id,
-                "external_id": external_id,
-                "status": riopay_status,
-                "amount": amount,
-                "payment_type": payload.get("paymentType"),
-                "included_fee": payload.get("includedFee"),
+                'riopay_order_id': riopay_order_id,
+                'external_id': external_id,
+                'status': riopay_status,
+                'amount': amount,
+                'payment_type': payload.get('paymentType'),
+                'included_fee': payload.get('includedFee'),
             }
 
             # Проверка суммы ДО обновления статуса
@@ -243,7 +235,7 @@ class RioPayPaymentMixin:
                 expected = payment.amount_kopeks / 100
                 if abs(float(amount) - expected) > 0.01:
                     logger.error(
-                        "RioPay amount mismatch",
+                        'RioPay amount mismatch',
                         expected=expected,
                         received=amount,
                         order_id=payment.order_id,
@@ -251,10 +243,10 @@ class RioPayPaymentMixin:
                     await update_riopay_payment_status(
                         db=db,
                         payment=payment,
-                        status="amount_mismatch",
+                        status='amount_mismatch',
                         is_paid=False,
                         riopay_order_id=riopay_order_id,
-                        payment_method=payload.get("paymentType"),
+                        payment_method=payload.get('paymentType'),
                         callback_payload=callback_payload,
                     )
                     return False
@@ -267,13 +259,13 @@ class RioPayPaymentMixin:
                 payment.updated_at = datetime.now(UTC)
                 if riopay_order_id:
                     payment.riopay_order_id = riopay_order_id
-                if payload.get("paymentType") is not None:
-                    payment.payment_method = payload.get("paymentType")
+                if payload.get('paymentType') is not None:
+                    payment.payment_method = payload.get('paymentType')
                 payment.callback_payload = callback_payload
                 await db.flush()
 
                 return await self._finalize_riopay_payment(
-                    db, payment, riopay_order_id=riopay_order_id, trigger="webhook"
+                    db, payment, riopay_order_id=riopay_order_id, trigger='webhook'
                 )
 
             # Non-success status — safe to use update with commit
@@ -283,13 +275,13 @@ class RioPayPaymentMixin:
                 status=internal_status,
                 is_paid=False,
                 riopay_order_id=riopay_order_id,
-                payment_method=payload.get("paymentType"),
+                payment_method=payload.get('paymentType'),
                 callback_payload=callback_payload,
             )
             return True
 
         except Exception as e:
-            logger.exception("RioPay webhook: ошибка обработки", e=e)
+            logger.exception('RioPay webhook: ошибка обработки', e=e)
             return False
 
     async def _finalize_riopay_payment(
@@ -306,24 +298,22 @@ class RioPayPaymentMixin:
         """
         if payment.transaction_id:
             logger.info(
-                "RioPay платеж уже привязан к транзакции",
+                'RioPay платеж уже привязан к транзакции',
                 order_id=payment.order_id,
                 trigger=trigger,
             )
             return True
 
         # --- Guest purchase flow (landing page / gift) ---
-        riopay_metadata = dict(getattr(payment, "metadata_json", {}) or {})
+        riopay_metadata = dict(getattr(payment, 'metadata_json', {}) or {})
         from app.services.payment.common import try_fulfill_guest_purchase
 
         guest_result = await try_fulfill_guest_purchase(
             db,
             metadata=riopay_metadata,
             payment_amount_kopeks=payment.amount_kopeks,
-            provider_payment_id=(
-                str(riopay_order_id) if riopay_order_id else payment.order_id
-            ),
-            provider_name="riopay",
+            provider_payment_id=(str(riopay_order_id) if riopay_order_id else payment.order_id),
+            provider_name='riopay',
         )
         if guest_result is not None:
             return True
@@ -332,7 +322,7 @@ class RioPayPaymentMixin:
         user = await get_user_by_id(db, payment.user_id)
         if not user:
             logger.error(
-                "Пользователь не найден для RioPay платежа",
+                'Пользователь не найден для RioPay платежа',
                 user_id=payment.user_id,
                 order_id=payment.order_id,
                 trigger=trigger,
@@ -345,11 +335,11 @@ class RioPayPaymentMixin:
             user_id=payment.user_id,
             type=TransactionType.DEPOSIT,
             amount_kopeks=payment.amount_kopeks,
-            description=f"Пополнение через RioPay (#{riopay_order_id or payment.order_id})",
+            description=f'Пополнение через RioPay (#{riopay_order_id or payment.order_id})',
             payment_method=PaymentMethod.RIOPAY,
             external_id=str(riopay_order_id) if riopay_order_id else payment.order_id,
             is_completed=True,
-            created_at=getattr(payment, "created_at", None),
+            created_at=getattr(payment, 'created_at', None),
             commit=False,
         )
 
@@ -370,14 +360,12 @@ class RioPayPaymentMixin:
         if was_first_topup and not user.referred_by_id:
             update_values[UserModel.has_made_first_topup] = True
 
-        await db.execute(
-            update(UserModel).where(UserModel.id == user.id).values(update_values)
-        )
+        await db.execute(update(UserModel).where(UserModel.id == user.id).values(update_values))
 
         promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, "subscription", None)
+        subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        topup_status = "Первое пополнение" if was_first_topup else "Пополнение"
+        topup_status = 'Первое пополнение' if was_first_topup else 'Пополнение'
 
         await db.commit()
 
@@ -392,28 +380,24 @@ class RioPayPaymentMixin:
                 user_id=payment.user_id,
                 type=TransactionType.DEPOSIT,
                 payment_method=PaymentMethod.RIOPAY,
-                external_id=(
-                    str(riopay_order_id) if riopay_order_id else payment.order_id
-                ),
+                external_id=(str(riopay_order_id) if riopay_order_id else payment.order_id),
             )
         except Exception as error:
-            logger.error("Ошибка emit_transaction_side_effects RioPay", error=error)
+            logger.error('Ошибка emit_transaction_side_effects RioPay', error=error)
 
         # Обработка реферального пополнения
         try:
             from app.services.referral_service import process_referral_topup
 
-            await process_referral_topup(
-                db, user.id, payment.amount_kopeks, getattr(self, "bot", None)
-            )
+            await process_referral_topup(db, user.id, payment.amount_kopeks, getattr(self, 'bot', None))
         except Exception as error:
-            logger.error("Ошибка обработки реферального пополнения RioPay", error=error)
+            logger.error('Ошибка обработки реферального пополнения RioPay', error=error)
 
         await db.refresh(user)
         await db.refresh(payment)
 
         # Отправка уведомления админам
-        if getattr(self, "bot", None):
+        if getattr(self, 'bot', None):
             try:
                 from app.services.admin_notification_service import (
                     AdminNotificationService,
@@ -431,49 +415,45 @@ class RioPayPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error("Ошибка отправки админ уведомления RioPay", error=error)
+                logger.error('Ошибка отправки админ уведомления RioPay', error=error)
 
         # Отправка уведомления пользователю (только Telegram-пользователям)
-        if getattr(self, "bot", None) and user.telegram_id:
+        if getattr(self, 'bot', None) and user.telegram_id:
             try:
                 display_name = settings.get_riopay_display_name()
 
                 keyboard = await self.build_topup_success_keyboard(user)
                 message = (
-                    "<b>Пополнение успешно!</b>\n\n"
-                    f"Сумма: {settings.format_price(payment.amount_kopeks)}\n"
-                    f"Способ: {display_name}\n"
-                    f"Транзакция: {transaction.id}"
+                    '<b>Пополнение успешно!</b>\n\n'
+                    f'Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                    f'Способ: {display_name}\n'
+                    f'Транзакция: {transaction.id}'
                 )
 
                 await self.bot.send_message(
                     user.telegram_id,
                     message,
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error(
-                    "Ошибка отправки уведомления пользователю RioPay", error=error
-                )
+                logger.error('Ошибка отправки уведомления пользователю RioPay', error=error)
 
         # Автопокупка подписки и уведомление о корзине
         try:
             from app.services.payment.common import send_cart_notification_after_topup
 
-            await send_cart_notification_after_topup(
-                user, payment.amount_kopeks, db, getattr(self, "bot", None)
-            )
+            await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                "Ошибка при работе с сохраненной корзиной для пользователя",
+                'Ошибка при работе с сохраненной корзиной для пользователя',
                 user_id=user.id,
                 error=error,
                 exc_info=True,
             )
 
         logger.info(
-            "Обработан RioPay платеж",
+            'Обработан RioPay платеж',
             order_id=payment.order_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -492,36 +472,34 @@ class RioPayPaymentMixin:
         try:
             payment = await get_riopay_payment_by_order_id(db, order_id)
             if not payment:
-                logger.warning("RioPay payment not found", order_id=order_id)
+                logger.warning('RioPay payment not found', order_id=order_id)
                 return None
 
             if payment.is_paid:
                 return {
-                    "payment": payment,
-                    "status": "success",
-                    "is_paid": True,
+                    'payment': payment,
+                    'status': 'success',
+                    'is_paid': True,
                 }
 
             # Проверяем через API по riopay_order_id (UUID)
             if payment.riopay_order_id:
                 try:
                     order_data = await riopay_service.get_order(payment.riopay_order_id)
-                    riopay_status = order_data.get("status")
+                    riopay_status = order_data.get('status')
 
                     if riopay_status:
-                        status_info = RIOPAY_STATUS_MAP.get(
-                            riopay_status, ("pending", False)
-                        )
+                        status_info = RIOPAY_STATUS_MAP.get(riopay_status, ('pending', False))
                         internal_status, is_paid = status_info
 
                         if is_paid:
                             # Проверка суммы ДО обновления статуса
-                            api_amount = order_data.get("amount")
+                            api_amount = order_data.get('amount')
                             if api_amount is not None:
                                 expected = payment.amount_kopeks / 100
                                 if abs(float(api_amount) - expected) > 0.01:
                                     logger.error(
-                                        "RioPay amount mismatch (API check)",
+                                        'RioPay amount mismatch (API check)',
                                         expected=expected,
                                         received=api_amount,
                                         order_id=payment.order_id,
@@ -529,57 +507,53 @@ class RioPayPaymentMixin:
                                     await update_riopay_payment_status(
                                         db=db,
                                         payment=payment,
-                                        status="amount_mismatch",
+                                        status='amount_mismatch',
                                         is_paid=False,
                                         riopay_order_id=payment.riopay_order_id,
                                         callback_payload={
-                                            "check_source": "api",
-                                            "riopay_order_data": order_data,
+                                            'check_source': 'api',
+                                            'riopay_order_data': order_data,
                                         },
                                     )
                                     return {
-                                        "payment": payment,
-                                        "status": "amount_mismatch",
-                                        "is_paid": False,
+                                        'payment': payment,
+                                        'status': 'amount_mismatch',
+                                        'is_paid': False,
                                     }
 
                             # Lock payment row before finalization (TOCTOU race protection)
-                            locked = await get_riopay_payment_by_id_for_update(
-                                db, payment.id
-                            )
+                            locked = await get_riopay_payment_by_id_for_update(db, payment.id)
                             if not locked:
                                 logger.error(
-                                    "RioPay status check: не удалось заблокировать платёж",
+                                    'RioPay status check: не удалось заблокировать платёж',
                                     payment_id=payment.id,
                                 )
                             elif locked.is_paid:
                                 # Another concurrent handler already processed — skip
                                 logger.info(
-                                    "RioPay платеж уже оплачен после блокировки",
+                                    'RioPay платеж уже оплачен после блокировки',
                                     order_id=locked.order_id,
                                 )
                                 payment = locked
                             else:
                                 payment = locked
                                 logger.info(
-                                    "RioPay payment confirmed via API",
+                                    'RioPay payment confirmed via API',
                                     order_id=payment.order_id,
                                 )
 
                                 callback_payload = {
-                                    "check_source": "api",
-                                    "riopay_order_data": order_data,
+                                    'check_source': 'api',
+                                    'riopay_order_data': order_data,
                                 }
 
                                 # Inline field updates — NO intermediate commit
-                                payment.status = "success"
+                                payment.status = 'success'
                                 payment.is_paid = True
                                 payment.paid_at = datetime.now(UTC)
                                 payment.updated_at = datetime.now(UTC)
-                                if order_data.get("paymentType") is not None:
-                                    payment.payment_method = order_data.get(
-                                        "paymentType"
-                                    )
+                                if order_data.get('paymentType') is not None:
+                                    payment.payment_method = order_data.get('paymentType')
                                 payment.callback_payload = callback_payload
                                 await db.flush()
 
@@ -587,7 +561,7 @@ class RioPayPaymentMixin:
                                     db,
                                     payment,
                                     riopay_order_id=payment.riopay_order_id,
-                                    trigger="api_check",
+                                    trigger='api_check',
                                 )
                         elif internal_status != payment.status:
                             # Обновляем статус если изменился
@@ -598,14 +572,14 @@ class RioPayPaymentMixin:
                             )
 
                 except Exception as e:
-                    logger.error("Error checking RioPay payment status via API", e=e)
+                    logger.error('Error checking RioPay payment status via API', e=e)
 
             return {
-                "payment": payment,
-                "status": payment.status or "pending",
-                "is_paid": payment.is_paid,
+                'payment': payment,
+                'status': payment.status or 'pending',
+                'is_paid': payment.is_paid,
             }
 
         except Exception as e:
-            logger.exception("RioPay: ошибка проверки статуса", e=e)
+            logger.exception('RioPay: ошибка проверки статуса', e=e)
             return None

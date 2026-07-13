@@ -36,14 +36,14 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/menu-layout", tags=["Admin Menu Layout"])
+router = APIRouter(prefix='/admin/menu-layout', tags=['Admin Menu Layout'])
 
 # ---- Constants ---------------------------------------------------------------
 
 MAX_ROWS = 20
 MAX_BUTTONS_PER_ROW = 8  # Telegram inline keyboard limit
 MAX_LABEL_LENGTH = 100
-URL_PATTERN = re.compile(r"^(https?://|tg://)")
+URL_PATTERN = re.compile(r'^(https?://|tg://)')
 
 
 # ---- Schemas -----------------------------------------------------------------
@@ -53,13 +53,13 @@ class ButtonConfig(BaseModel):
     """Configuration for a single button (built-in or custom URL)."""
 
     id: str = Field(max_length=100)
-    type: Literal["builtin", "custom"]
-    style: str = Field(default="primary", max_length=20)
-    icon_custom_emoji_id: str = Field(default="", max_length=100)
+    type: Literal['builtin', 'custom']
+    style: str = Field(default='primary', max_length=20)
+    icon_custom_emoji_id: str = Field(default='', max_length=100)
     enabled: bool = True
     labels: dict[str, str] = Field(default_factory=dict, max_length=10)
     url: str | None = Field(default=None, max_length=2048)
-    open_in: Literal["external", "webapp"] = "external"
+    open_in: Literal['external', 'webapp'] = 'external'
 
 
 class RowConfig(BaseModel):
@@ -67,9 +67,7 @@ class RowConfig(BaseModel):
 
     id: str = Field(max_length=100)
     max_per_row: int = Field(default=2, ge=1, le=3)
-    buttons: list[ButtonConfig] = Field(
-        default_factory=list, max_length=MAX_BUTTONS_PER_ROW
-    )
+    buttons: list[ButtonConfig] = Field(default_factory=list, max_length=MAX_BUTTONS_PER_ROW)
 
 
 class MenuConfigResponse(BaseModel):
@@ -121,12 +119,12 @@ def _build_merged_response(
     Built-in buttons get style/emoji/enabled/labels from ``button_styles``.
     Custom URL buttons get all config from layout's ``custom_buttons``.
     """
-    custom_buttons: dict[str, dict] = layout.get("custom_buttons", {})
+    custom_buttons: dict[str, dict] = layout.get('custom_buttons', {})
 
     # Collect row entries sorted numerically (row_1, row_2, ..., row_10, ...)
     row_keys = sorted(
-        (k for k in layout if k.startswith("row_")),
-        key=lambda k: int(k.split("_", 1)[1]) if k.split("_", 1)[1].isdigit() else 0,
+        (k for k in layout if k.startswith('row_')),
+        key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 0,
     )
 
     rows: list[RowConfig] = []
@@ -135,9 +133,9 @@ def _build_merged_response(
         if not isinstance(row_data, dict):
             continue
 
-        raw_buttons: list[str] = row_data.get("buttons", [])
-        max_per_row: int = row_data.get("max_per_row", 2)
-        row_id: str = row_data.get("id", row_key)
+        raw_buttons: list[str] = row_data.get('buttons', [])
+        max_per_row: int = row_data.get('max_per_row', 2)
+        row_id: str = row_data.get('id', row_key)
 
         merged_buttons: list[ButtonConfig] = []
         for btn_id in raw_buttons:
@@ -147,26 +145,26 @@ def _build_merged_response(
                 merged_buttons.append(
                     ButtonConfig(
                         id=btn_id,
-                        type="builtin",
-                        style=style_cfg.get("style", "primary"),
-                        icon_custom_emoji_id=style_cfg.get("icon_custom_emoji_id", ""),
-                        enabled=style_cfg.get("enabled", True),
-                        labels=style_cfg.get("labels", {}),
+                        type='builtin',
+                        style=style_cfg.get('style', 'primary'),
+                        icon_custom_emoji_id=style_cfg.get('icon_custom_emoji_id', ''),
+                        enabled=style_cfg.get('enabled', True),
+                        labels=style_cfg.get('labels', {}),
                     ),
                 )
-            elif btn_id.startswith("custom_") and btn_id in custom_buttons:
+            elif btn_id.startswith('custom_') and btn_id in custom_buttons:
                 # Custom URL button: pull config from layout's custom_buttons
                 cb = custom_buttons[btn_id]
                 merged_buttons.append(
                     ButtonConfig(
                         id=btn_id,
-                        type="custom",
-                        style=cb.get("style", "primary"),
-                        icon_custom_emoji_id=cb.get("icon_custom_emoji_id", ""),
-                        enabled=cb.get("enabled", True),
-                        labels=cb.get("labels", {}),
-                        url=cb.get("url"),
-                        open_in=cb.get("open_in", "external"),
+                        type='custom',
+                        style=cb.get('style', 'primary'),
+                        icon_custom_emoji_id=cb.get('icon_custom_emoji_id', ''),
+                        enabled=cb.get('enabled', True),
+                        labels=cb.get('labels', {}),
+                        url=cb.get('url'),
+                        open_in=cb.get('open_in', 'external'),
                     ),
                 )
 
@@ -197,37 +195,37 @@ def _split_update(
     button_styles_updates: dict[str, dict] = {}
 
     for idx, row in enumerate(rows, start=1):
-        row_key = f"row_{idx}"
+        row_key = f'row_{idx}'
         button_ids: list[str] = []
 
         for btn in row.buttons:
             button_ids.append(btn.id)
 
-            if btn.type == "builtin" and btn.id in BUILTIN_SECTIONS:
+            if btn.type == 'builtin' and btn.id in BUILTIN_SECTIONS:
                 button_styles_updates[btn.id] = {
-                    "style": btn.style,
-                    "icon_custom_emoji_id": btn.icon_custom_emoji_id,
-                    "enabled": btn.enabled,
-                    "labels": btn.labels,
+                    'style': btn.style,
+                    'icon_custom_emoji_id': btn.icon_custom_emoji_id,
+                    'enabled': btn.enabled,
+                    'labels': btn.labels,
                 }
-            elif btn.type == "custom" and btn.id.startswith("custom_"):
+            elif btn.type == 'custom' and btn.id.startswith('custom_'):
                 custom_buttons[btn.id] = {
-                    "id": btn.id,
-                    "url": btn.url or "",
-                    "style": btn.style,
-                    "icon_custom_emoji_id": btn.icon_custom_emoji_id,
-                    "enabled": btn.enabled,
-                    "labels": btn.labels,
-                    "open_in": btn.open_in,
+                    'id': btn.id,
+                    'url': btn.url or '',
+                    'style': btn.style,
+                    'icon_custom_emoji_id': btn.icon_custom_emoji_id,
+                    'enabled': btn.enabled,
+                    'labels': btn.labels,
+                    'open_in': btn.open_in,
                 }
 
         layout_data[row_key] = {
-            "id": row.id or row_key,
-            "buttons": button_ids,
-            "max_per_row": row.max_per_row,
+            'id': row.id or row_key,
+            'buttons': button_ids,
+            'max_per_row': row.max_per_row,
         }
 
-    layout_data["custom_buttons"] = custom_buttons
+    layout_data['custom_buttons'] = custom_buttons
     return layout_data, button_styles_updates
 
 
@@ -236,7 +234,7 @@ def _validate_update_payload(rows: list[RowConfig]) -> None:
     if len(rows) > MAX_ROWS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Too many rows: {len(rows)}. Maximum allowed: {MAX_ROWS}.",
+            detail=f'Too many rows: {len(rows)}. Maximum allowed: {MAX_ROWS}.',
         )
 
     # Check for duplicate button IDs across all rows
@@ -259,26 +257,26 @@ def _validate_update_payload(rows: list[RowConfig]) -> None:
 
         for btn in row.buttons:
             # Validate button type consistency
-            if btn.type == "builtin" and btn.id not in BUILTIN_SECTIONS:
+            if btn.type == 'builtin' and btn.id not in BUILTIN_SECTIONS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f'Unknown built-in section: "{btn.id}".',
                 )
 
-            if btn.type == "custom" and not btn.id.startswith("custom_"):
+            if btn.type == 'custom' and not btn.id.startswith('custom_'):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f'Custom button id must start with "custom_": "{btn.id}".',
                 )
 
             # Validate URL for custom buttons
-            if btn.type == "custom":
+            if btn.type == 'custom':
                 if not btn.url or not URL_PATTERN.match(btn.url):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f'Custom button "{btn.id}" must have a URL starting with http://, https://, or tg://.',
                     )
-                if btn.open_in == "webapp" and not btn.url.startswith("https://"):
+                if btn.open_in == 'webapp' and not btn.url.startswith('https://'):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f'Custom button "{btn.id}" with webapp mode requires an https:// URL.',
@@ -310,16 +308,16 @@ def _validate_update_payload(rows: list[RowConfig]) -> None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f'Label for locale "{locale_key}" on button "{btn.id}" '
-                        f"exceeds {MAX_LABEL_LENGTH} characters.",
+                        f'exceeds {MAX_LABEL_LENGTH} characters.',
                     )
 
 
 # ---- Routes ------------------------------------------------------------------
 
 
-@router.get("", response_model=MenuConfigResponse)
+@router.get('', response_model=MenuConfigResponse)
 async def get_menu_layout(
-    _admin: User = Depends(require_permission("settings:read")),
+    _admin: User = Depends(require_permission('settings:read')),
 ):
     """Return merged menu layout config (rows + button styles). Admin only."""
     layout = get_cached_menu_layout()
@@ -327,10 +325,10 @@ async def get_menu_layout(
     return _build_merged_response(layout, button_styles)
 
 
-@router.put("", response_model=MenuConfigResponse)
+@router.put('', response_model=MenuConfigResponse)
 async def update_menu_layout(
     payload: MenuConfigUpdateRequest,
-    admin: User = Depends(require_permission("settings:edit")),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Save full menu layout config. Splits into layout + button styles. Admin only."""
@@ -364,10 +362,10 @@ async def update_menu_layout(
     await load_menu_layout_cache()
 
     logger.info(
-        "Admin updated menu layout",
+        'Admin updated menu layout',
         telegram_id=admin.telegram_id,
         rows_count=len(payload.rows),
-        custom_buttons_count=len(layout_data.get("custom_buttons", {})),
+        custom_buttons_count=len(layout_data.get('custom_buttons', {})),
     )
 
     # Return merged response from fresh caches
@@ -376,9 +374,9 @@ async def update_menu_layout(
     return _build_merged_response(layout, button_styles)
 
 
-@router.post("/reset", response_model=MenuConfigResponse)
+@router.post('/reset', response_model=MenuConfigResponse)
 async def reset_menu_layout(
-    admin: User = Depends(require_permission("settings:edit")),
+    admin: User = Depends(require_permission('settings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset menu layout AND button styles to defaults. Admin only."""
@@ -393,7 +391,7 @@ async def reset_menu_layout(
     await load_menu_layout_cache()
 
     logger.info(
-        "Admin reset menu layout and button styles to defaults",
+        'Admin reset menu layout and button styles to defaults',
         telegram_id=admin.telegram_id,
     )
 

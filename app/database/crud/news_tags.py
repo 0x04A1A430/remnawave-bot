@@ -22,7 +22,7 @@ async def get_tag_by_id(db: AsyncSession, tag_id: int) -> NewsTag | None:
     return result.scalar_one_or_none()
 
 
-async def create_tag(db: AsyncSession, *, name: str, color: str = "#94a3b8") -> NewsTag:
+async def create_tag(db: AsyncSession, *, name: str, color: str = '#94a3b8') -> NewsTag:
     """Create a new news tag.
 
     Raises:
@@ -36,7 +36,7 @@ async def create_tag(db: AsyncSession, *, name: str, color: str = "#94a3b8") -> 
         await db.rollback()
         raise
     await db.refresh(tag)
-    logger.info("Created news tag", tag_id=tag.id, name=tag.name)
+    logger.info('Created news tag', tag_id=tag.id, name=tag.name)
     return tag
 
 
@@ -53,10 +53,10 @@ async def update_tag(
         IntegrityError: if the new name conflicts with an existing tag.
     """
     update_data: dict[str, str] = {}
-    if "name" in kwargs and kwargs["name"] is not None:
-        update_data["name"] = kwargs["name"].strip()
-    if "color" in kwargs and kwargs["color"] is not None:
-        update_data["color"] = kwargs["color"]
+    if 'name' in kwargs and kwargs['name'] is not None:
+        update_data['name'] = kwargs['name'].strip()
+    if 'color' in kwargs and kwargs['color'] is not None:
+        update_data['color'] = kwargs['color']
 
     if not update_data:
         return tag
@@ -68,9 +68,7 @@ async def update_tag(
         await db.rollback()
         raise
     await db.refresh(tag)
-    logger.info(
-        "Updated news tag", tag_id=tag.id, updated_fields=list(update_data.keys())
-    )
+    logger.info('Updated news tag', tag_id=tag.id, updated_fields=list(update_data.keys()))
     return tag
 
 
@@ -78,11 +76,7 @@ async def delete_tag(db: AsyncSession, tag: NewsTag) -> None:
     """Delete a news tag and clear tag fields from all linked articles."""
     tag_id, tag_name = tag.id, tag.name
     # Clear legacy string field on articles that reference this tag
-    await db.execute(
-        update(NewsArticle)
-        .where(NewsArticle.tag_id == tag_id)
-        .values(tag=None, tag_id=None)
-    )
+    await db.execute(update(NewsArticle).where(NewsArticle.tag_id == tag_id).values(tag=None, tag_id=None))
     await db.delete(tag)
     await db.commit()
-    logger.info("Deleted news tag", tag_id=tag_id, name=tag_name)
+    logger.info('Deleted news tag', tag_id=tag_id, name=tag_name)

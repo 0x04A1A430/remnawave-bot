@@ -53,7 +53,7 @@ class RemnaWaveNodeListResponse(BaseModel):
 
 
 class RemnaWaveNodeActionRequest(BaseModel):
-    action: Literal["enable", "disable", "restart"]
+    action: Literal['enable', 'disable', 'restart']
 
 
 class RemnaWaveNodeActionResponse(BaseModel):
@@ -146,9 +146,7 @@ class RemnaWaveSquadUpdateRequest(BaseModel):
 
 
 class RemnaWaveSquadActionRequest(BaseModel):
-    action: Literal[
-        "add_all_users", "remove_all_users", "delete", "rename", "update_inbounds"
-    ]
+    action: Literal['add_all_users', 'remove_all_users', 'delete', 'rename', 'update_inbounds']
     name: str | None = None
     inbound_uuids: list[str] | None = None
 
@@ -175,7 +173,7 @@ class RemnaWaveUserTrafficResponse(BaseModel):
 
 
 class RemnaWaveSyncFromPanelRequest(BaseModel):
-    mode: Literal["all", "new_only", "update_only"] = "all"
+    mode: Literal['all', 'new_only', 'update_only'] = 'all'
 
 
 class RemnaWaveGenericSyncResponse(BaseModel):

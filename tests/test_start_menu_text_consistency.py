@@ -16,20 +16,20 @@ async def test_start_main_menu_text_delegates_to_menu_builder(monkeypatch):
     seen = {}
 
     async def fake_builder(user, texts, db):
-        seen["args"] = (user, texts, db)
-        return "CANONICAL_MENU_TEXT"
+        seen['args'] = (user, texts, db)
+        return 'CANONICAL_MENU_TEXT'
 
-    monkeypatch.setattr(menu_mod, "get_main_menu_text", fake_builder)
+    monkeypatch.setattr(menu_mod, 'get_main_menu_text', fake_builder)
 
     user, texts, db = object(), object(), object()
     result = await start_mod.get_main_menu_text(user, texts, db)
 
-    assert result == "CANONICAL_MENU_TEXT"
-    assert seen["args"] == (user, texts, db)
+    assert result == 'CANONICAL_MENU_TEXT'
+    assert seen['args'] == (user, texts, db)
 
 
 def test_start_no_longer_has_duplicate_status_formatter():
     """The duplicate formatter that caused the /start-vs-menu divergence is gone."""
     from app.handlers import start as start_mod
 
-    assert not hasattr(start_mod, "_get_subscription_status")
+    assert not hasattr(start_mod, '_get_subscription_status')

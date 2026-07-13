@@ -52,8 +52,8 @@ class MainMenuButtonService:
 
             items: list[_MainMenuButtonData] = []
             for record in result.scalars().all():
-                text = (record.text or "").strip()
-                action_value = (record.action_value or "").strip()
+                text = (record.text or '').strip()
+                action_value = (record.action_value or '').strip()
 
                 if not text or not action_value:
                     continue
@@ -102,19 +102,16 @@ class MainMenuButtonService:
             if item.visibility == MainMenuButtonVisibility.ADMINS and not is_admin:
                 continue
 
-            if (
-                item.visibility == MainMenuButtonVisibility.SUBSCRIBERS
-                and not has_subscription
-            ):
+            if item.visibility == MainMenuButtonVisibility.SUBSCRIBERS and not has_subscription:
                 continue
 
             # Проверка реферальной программы: скрыть кнопки, связанные с рефералами, если программа отключена
             if not settings.is_referral_program_enabled() and (
-                "partner" in item.text.lower()
-                or "referr" in item.text.lower()
-                or "партнер" in item.text.lower()
-                or "реферал" in item.text.lower()
-                or "referral" in item.action_value.lower()
+                'partner' in item.text.lower()
+                or 'referr' in item.text.lower()
+                or 'партнер' in item.text.lower()
+                or 'реферал' in item.text.lower()
+                or 'referral' in item.action_value.lower()
             ):
                 continue
 

@@ -35,8 +35,8 @@ def _make_user(
     balance_kopeks: int = 0,
     username: str | None = None,
     first_name: str | None = None,
-    status: str = "active",
-    partner_status: str = "none",
+    status: str = 'active',
+    partner_status: str = 'none',
     referral_code: str | None = None,
     referral_commission_percent: int | None = None,
     referred_by_id: int | None = None,
@@ -74,13 +74,13 @@ def _make_user(
 def _make_subscription(
     *,
     user_id: int = 1,
-    status: str = "active",
+    status: str = 'active',
     is_trial: bool = False,
     end_date: datetime | None = None,
     traffic_limit_gb: float = 100.0,
     traffic_used_gb: float = 10.0,
     device_limit: int = 3,
-    tariff_name: str = "Basic",
+    tariff_name: str = 'Basic',
     autopay_enabled: bool = False,
 ) -> SimpleNamespace:
     tariff = SimpleNamespace(name=tariff_name)
@@ -117,38 +117,38 @@ class TestComputeAuthMethods:
 
     def test_telegram_only(self):
         user = _make_user(telegram_id=12345)
-        assert compute_auth_methods(user) == ["telegram"]
+        assert compute_auth_methods(user) == ['telegram']
 
     def test_email_only(self):
-        user = _make_user(email="test@example.com", password_hash="hash123")
-        assert compute_auth_methods(user) == ["email"]
+        user = _make_user(email='test@example.com', password_hash='hash123')
+        assert compute_auth_methods(user) == ['email']
 
     def test_email_without_password_not_counted(self):
-        user = _make_user(email="test@example.com")
+        user = _make_user(email='test@example.com')
         assert compute_auth_methods(user) == []
 
     def test_all_methods(self):
         user = _make_user(
             telegram_id=12345,
-            email="test@example.com",
-            password_hash="hash",
-            google_id="g123",
-            yandex_id="y123",
-            discord_id="d123",
+            email='test@example.com',
+            password_hash='hash',
+            google_id='g123',
+            yandex_id='y123',
+            discord_id='d123',
             vk_id=99999,
         )
         assert compute_auth_methods(user) == [
-            "telegram",
-            "email",
-            "google",
-            "yandex",
-            "discord",
-            "vk",
+            'telegram',
+            'email',
+            'google',
+            'yandex',
+            'discord',
+            'vk',
         ]
 
     def test_oauth_only(self):
-        user = _make_user(google_id="g123", discord_id="d123")
-        assert compute_auth_methods(user) == ["google", "discord"]
+        user = _make_user(google_id='g123', discord_id='d123')
+        assert compute_auth_methods(user) == ['google', 'discord']
 
 
 # ---------------------------------------------------------------------------
@@ -161,18 +161,18 @@ class TestBuildSubscriptionPreview:
         assert _build_subscription_preview(None) is None
 
     def test_valid_subscription(self):
-        sub = _make_subscription(tariff_name="Premium")
+        sub = _make_subscription(tariff_name='Premium')
         result = _build_subscription_preview(sub)
-        assert result["tariff_name"] == "Premium"
-        assert result["status"] == "active"
-        assert result["is_trial"] is False
-        assert result["device_limit"] == 3
+        assert result['tariff_name'] == 'Premium'
+        assert result['status'] == 'active'
+        assert result['is_trial'] is False
+        assert result['device_limit'] == 3
 
     def test_subscription_without_tariff(self):
         sub = _make_subscription()
         sub.tariff = None
         result = _build_subscription_preview(sub)
-        assert result["tariff_name"] is None
+        assert result['tariff_name'] is None
 
 
 # ---------------------------------------------------------------------------
@@ -182,19 +182,19 @@ class TestBuildSubscriptionPreview:
 
 class TestBuildUserPreview:
     def test_basic_user(self):
-        user = _make_user(id=42, username="alice", email="a@b.com", balance_kopeks=5000)
+        user = _make_user(id=42, username='alice', email='a@b.com', balance_kopeks=5000)
         result = _build_user_preview(user)
-        assert result["id"] == 42
-        assert result["username"] == "alice"
-        assert result["balance_kopeks"] == 5000
-        assert result["subscription"] is None
+        assert result['id'] == 42
+        assert result['username'] == 'alice'
+        assert result['balance_kopeks'] == 5000
+        assert result['subscription'] is None
 
     def test_user_with_subscription(self):
         sub = _make_subscription(user_id=1)
         user = _make_user(id=1, subscription=sub)
         result = _build_user_preview(user)
-        assert result["subscription"] is not None
-        assert result["subscription"]["status"] == "active"
+        assert result['subscription'] is not None
+        assert result['subscription']['status'] == 'active'
 
 
 # ---------------------------------------------------------------------------
@@ -205,15 +205,13 @@ class TestBuildUserPreview:
 class TestGetMergePreview:
     async def test_same_user_ids_raises(self):
         db = _make_db()
-        with pytest.raises(ValueError, match="не могут совпадать"):
+        with pytest.raises(ValueError, match='не могут совпадать'):
             await get_merge_preview(db, 1, 1)
 
     async def test_primary_not_found_raises(self, monkeypatch):
         db = _make_db()
-        monkeypatch.setattr(
-            account_merge_service, "get_user_by_id", AsyncMock(return_value=None)
-        )
-        with pytest.raises(ValueError, match="Основной пользователь"):
+        monkeypatch.setattr(account_merge_service, 'get_user_by_id', AsyncMock(return_value=None))
+        with pytest.raises(ValueError, match='Основной пользователь'):
             await get_merge_preview(db, 1, 2)
 
     async def test_secondary_not_found_raises(self, monkeypatch):
@@ -221,26 +219,26 @@ class TestGetMergePreview:
         primary = _make_user(id=1)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, None]),
         )
-        with pytest.raises(ValueError, match="Вторичный пользователь"):
+        with pytest.raises(ValueError, match='Вторичный пользователь'):
             await get_merge_preview(db, 1, 2)
 
     async def test_success(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, username="primary", telegram_id=111)
-        secondary = _make_user(id=2, username="secondary", google_id="g123")
+        primary = _make_user(id=1, username='primary', telegram_id=111)
+        secondary = _make_user(id=2, username='secondary', google_id='g123')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         result = await get_merge_preview(db, 1, 2)
-        assert result["primary"]["id"] == 1
-        assert result["secondary"]["id"] == 2
-        assert "telegram" in result["primary"]["auth_methods"]
-        assert "google" in result["secondary"]["auth_methods"]
+        assert result['primary']['id'] == 1
+        assert result['secondary']['id'] == 2
+        assert 'telegram' in result['primary']['auth_methods']
+        assert 'google' in result['secondary']['auth_methods']
 
 
 # ---------------------------------------------------------------------------
@@ -251,15 +249,13 @@ class TestGetMergePreview:
 class TestExecuteMergeValidation:
     async def test_same_ids_raises(self):
         db = _make_db()
-        with pytest.raises(ValueError, match="не могут совпадать"):
+        with pytest.raises(ValueError, match='не могут совпадать'):
             await execute_merge(db, 1, 1)
 
     async def test_primary_not_found_raises(self, monkeypatch):
         db = _make_db()
-        monkeypatch.setattr(
-            account_merge_service, "get_user_by_id", AsyncMock(return_value=None)
-        )
-        with pytest.raises(ValueError, match="Основной пользователь"):
+        monkeypatch.setattr(account_merge_service, 'get_user_by_id', AsyncMock(return_value=None))
+        with pytest.raises(ValueError, match='Основной пользователь'):
             await execute_merge(db, 1, 2)
 
     async def test_secondary_not_found_raises(self, monkeypatch):
@@ -267,40 +263,40 @@ class TestExecuteMergeValidation:
         primary = _make_user(id=1)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, None]),
         )
-        with pytest.raises(ValueError, match="Вторичный пользователь"):
+        with pytest.raises(ValueError, match='Вторичный пользователь'):
             await execute_merge(db, 1, 2)
 
     async def test_deleted_secondary_raises(self, monkeypatch):
         db = _make_db()
         primary = _make_user(id=1)
-        secondary = _make_user(id=2, status="deleted")
+        secondary = _make_user(id=2, status='deleted')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
-        with pytest.raises(ValueError, match="уже удалён"):
+        with pytest.raises(ValueError, match='уже удалён'):
             await execute_merge(db, 1, 2)
 
     async def test_deleted_primary_raises(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, status="deleted")
+        primary = _make_user(id=1, status='deleted')
         secondary = _make_user(id=2)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
-        with pytest.raises(ValueError, match="удалён"):
+        with pytest.raises(ValueError, match='удалён'):
             await execute_merge(db, 1, 2)
 
     async def test_invalid_keep_subscription_from_raises(self):
         db = _make_db()
-        with pytest.raises(ValueError, match=r"primary.*secondary"):
-            await execute_merge(db, 1, 2, keep_subscription_from="invalid")
+        with pytest.raises(ValueError, match=r'primary.*secondary'):
+            await execute_merge(db, 1, 2, keep_subscription_from='invalid')
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +307,7 @@ class TestExecuteMergeValidation:
 def _patch_remnawave_delete():
     return patch.object(
         account_merge_service,
-        "_delete_remnawave_user_with_fallback",
+        '_delete_remnawave_user_with_fallback',
         new_callable=AsyncMock,
     )
 
@@ -319,21 +315,21 @@ def _patch_remnawave_delete():
 class TestExecuteMergeOAuthTransfer:
     async def test_transfers_oauth_ids(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, google_id="g_primary")
-        secondary = _make_user(id=2, yandex_id="y_sec", discord_id="d_sec", vk_id=12345)
+        primary = _make_user(id=1, google_id='g_primary')
+        secondary = _make_user(id=2, yandex_id='y_sec', discord_id='d_sec', vk_id=12345)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
         # google_id stays on primary (already set)
-        assert result.google_id == "g_primary"
+        assert result.google_id == 'g_primary'
         # transferred from secondary
-        assert result.yandex_id == "y_sec"
-        assert result.discord_id == "d_sec"
+        assert result.yandex_id == 'y_sec'
+        assert result.discord_id == 'd_sec'
         assert result.vk_id == 12345
         # cleared on secondary
         assert secondary.yandex_id is None
@@ -342,18 +338,18 @@ class TestExecuteMergeOAuthTransfer:
 
     async def test_does_not_overwrite_existing_oauth(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, google_id="g_primary")
-        secondary = _make_user(id=2, google_id="g_secondary")
+        primary = _make_user(id=1, google_id='g_primary')
+        secondary = _make_user(id=2, google_id='g_secondary')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
         # Primary keeps its own google_id
-        assert result.google_id == "g_primary"
+        assert result.google_id == 'g_primary'
         # Secondary's conflicting google_id is cleared (unique constraint cleanup)
         assert secondary.google_id is None
 
@@ -365,7 +361,7 @@ class TestExecuteMergeTelegramTransfer:
         secondary = _make_user(id=2, telegram_id=99999)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -380,7 +376,7 @@ class TestExecuteMergeTelegramTransfer:
         secondary = _make_user(id=2, telegram_id=22222)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -397,39 +393,39 @@ class TestExecuteMergeEmailTransfer:
         primary = _make_user(id=1)
         secondary = _make_user(
             id=2,
-            email="sec@example.com",
+            email='sec@example.com',
             email_verified=True,
             email_verified_at=datetime(2024, 6, 1, tzinfo=UTC),
-            password_hash="hash_sec",
+            password_hash='hash_sec',
         )
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
-        assert result.email == "sec@example.com"
+        assert result.email == 'sec@example.com'
         assert result.email_verified is True
-        assert result.password_hash == "hash_sec"
+        assert result.password_hash == 'hash_sec'
         # secondary cleared
         assert secondary.email is None
         assert secondary.password_hash is None
 
     async def test_does_not_overwrite_existing_email(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, email="pri@example.com", password_hash="hash_pri")
-        secondary = _make_user(id=2, email="sec@example.com", password_hash="hash_sec")
+        primary = _make_user(id=1, email='pri@example.com', password_hash='hash_pri')
+        secondary = _make_user(id=2, email='sec@example.com', password_hash='hash_sec')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
-        assert result.email == "pri@example.com"
+        assert result.email == 'pri@example.com'
 
 
 class TestExecuteMergeBalance:
@@ -439,7 +435,7 @@ class TestExecuteMergeBalance:
         secondary = _make_user(id=2, balance_kopeks=3000)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -455,7 +451,7 @@ class TestExecuteMergeBalance:
         secondary = _make_user(id=2, balance_kopeks=-2000)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -470,7 +466,7 @@ class TestExecuteMergeBalance:
         secondary = _make_user(id=2, balance_kopeks=0)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -482,61 +478,61 @@ class TestExecuteMergeBalance:
 class TestExecuteMergePartnerStatus:
     async def test_higher_priority_transferred(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, partner_status="none")
-        secondary = _make_user(id=2, partner_status="approved")
+        primary = _make_user(id=1, partner_status='none')
+        secondary = _make_user(id=2, partner_status='approved')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
-        assert result.partner_status == "approved"
+        assert result.partner_status == 'approved'
 
     async def test_lower_priority_not_overwritten(self, monkeypatch):
         db = _make_db()
-        primary = _make_user(id=1, partner_status="approved")
-        secondary = _make_user(id=2, partner_status="pending")
+        primary = _make_user(id=1, partner_status='approved')
+        secondary = _make_user(id=2, partner_status='pending')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
-        assert result.partner_status == "approved"
+        assert result.partner_status == 'approved'
 
     async def test_pending_beats_rejected(self, monkeypatch):
         """Pending application should not be overwritten by rejected status."""
         db = _make_db()
-        primary = _make_user(id=1, partner_status="pending")
-        secondary = _make_user(id=2, partner_status="rejected")
+        primary = _make_user(id=1, partner_status='pending')
+        secondary = _make_user(id=2, partner_status='rejected')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
-        assert result.partner_status == "pending"
+        assert result.partner_status == 'pending'
 
     async def test_rejected_does_not_beat_pending(self, monkeypatch):
         """Rejected on secondary should not overwrite pending on primary."""
         db = _make_db()
-        primary = _make_user(id=1, partner_status="rejected")
-        secondary = _make_user(id=2, partner_status="pending")
+        primary = _make_user(id=1, partner_status='rejected')
+        secondary = _make_user(id=2, partner_status='pending')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             result = await execute_merge(db, 1, 2)
 
-        assert result.partner_status == "pending"
+        assert result.partner_status == 'pending'
 
 
 class TestExecuteMergeReferralCommission:
@@ -546,7 +542,7 @@ class TestExecuteMergeReferralCommission:
         secondary = _make_user(id=2, referral_commission_percent=15)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -560,7 +556,7 @@ class TestExecuteMergeReferralCommission:
         secondary = _make_user(id=2, referral_commission_percent=15)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -578,16 +574,16 @@ class TestExecuteMergeSecondaryDeleted:
     async def test_secondary_marked_deleted(self, monkeypatch):
         db = _make_db()
         primary = _make_user(id=1)
-        secondary = _make_user(id=2, referral_code="REF123", email="sec@e.com")
+        secondary = _make_user(id=2, referral_code='REF123', email='sec@e.com')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
             await execute_merge(db, 1, 2)
 
-        assert secondary.status == "deleted"
+        assert secondary.status == 'deleted'
         assert secondary.referral_code is None
         assert secondary.remnawave_uuid is None
         assert secondary.email is None
@@ -596,21 +592,21 @@ class TestExecuteMergeSecondaryDeleted:
         """All unique constraint fields must be cleared on secondary after merge."""
         db = _make_db()
         # Primary has its own OAuth + telegram, so secondary's won't transfer
-        primary = _make_user(id=1, telegram_id=111, google_id="g1", yandex_id="y1")
+        primary = _make_user(id=1, telegram_id=111, google_id='g1', yandex_id='y1')
         secondary = _make_user(
             id=2,
             telegram_id=222,
-            google_id="g2",
-            yandex_id="y2",
-            discord_id="d2",
+            google_id='g2',
+            yandex_id='y2',
+            discord_id='d2',
             vk_id=999,
-            email="sec@e.com",
-            referral_code="REF",
-            remnawave_uuid="rw-sec",
+            email='sec@e.com',
+            referral_code='REF',
+            remnawave_uuid='rw-sec',
         )
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -632,7 +628,7 @@ class TestExecuteMergeSecondaryDeleted:
         secondary = _make_user(id=2)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -653,7 +649,7 @@ class TestExecuteMergeSubscription:
         secondary = _make_user(id=2)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete() as mock_del:
@@ -663,16 +659,16 @@ class TestExecuteMergeSubscription:
     async def test_only_primary_has_subscription(self, monkeypatch):
         db = _make_db()
         sub = _make_subscription(user_id=1)
-        primary = _make_user(id=1, subscription=sub, remnawave_uuid="rw-primary")
-        secondary = _make_user(id=2, remnawave_uuid="rw-secondary")
+        primary = _make_user(id=1, subscription=sub, remnawave_uuid='rw-primary')
+        secondary = _make_user(id=2, remnawave_uuid='rw-secondary')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete() as mock_del:
             await execute_merge(db, 1, 2)
-            mock_del.assert_awaited_once_with("rw-secondary")
+            mock_del.assert_awaited_once_with('rw-secondary')
 
         # secondary remnawave_uuid cleared
         assert secondary.remnawave_uuid is None
@@ -681,10 +677,10 @@ class TestExecuteMergeSubscription:
         db = _make_db()
         sub = _make_subscription(user_id=2)
         primary = _make_user(id=1)
-        secondary = _make_user(id=2, subscription=sub, remnawave_uuid="rw-secondary")
+        secondary = _make_user(id=2, subscription=sub, remnawave_uuid='rw-secondary')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -692,23 +688,23 @@ class TestExecuteMergeSubscription:
 
         # Subscription transferred to primary
         assert sub.user_id == 1
-        assert primary.remnawave_uuid == "rw-secondary"
+        assert primary.remnawave_uuid == 'rw-secondary'
         assert secondary.remnawave_uuid is None
 
     async def test_both_have_subscription_keep_primary(self, monkeypatch):
         db = _make_db()
         sub_p = _make_subscription(user_id=1)
         sub_s = _make_subscription(user_id=2)
-        primary = _make_user(id=1, subscription=sub_p, remnawave_uuid="rw-primary")
-        secondary = _make_user(id=2, subscription=sub_s, remnawave_uuid="rw-secondary")
+        primary = _make_user(id=1, subscription=sub_p, remnawave_uuid='rw-primary')
+        secondary = _make_user(id=2, subscription=sub_s, remnawave_uuid='rw-secondary')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete() as mock_del:
-            await execute_merge(db, 1, 2, keep_subscription_from="primary")
-            mock_del.assert_awaited_once_with("rw-secondary")
+            await execute_merge(db, 1, 2, keep_subscription_from='primary')
+            mock_del.assert_awaited_once_with('rw-secondary')
 
         db.delete.assert_awaited_once_with(sub_s)
 
@@ -716,21 +712,21 @@ class TestExecuteMergeSubscription:
         db = _make_db()
         sub_p = _make_subscription(user_id=1)
         sub_s = _make_subscription(user_id=2)
-        primary = _make_user(id=1, subscription=sub_p, remnawave_uuid="rw-primary")
-        secondary = _make_user(id=2, subscription=sub_s, remnawave_uuid="rw-secondary")
+        primary = _make_user(id=1, subscription=sub_p, remnawave_uuid='rw-primary')
+        secondary = _make_user(id=2, subscription=sub_s, remnawave_uuid='rw-secondary')
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete() as mock_del:
-            await execute_merge(db, 1, 2, keep_subscription_from="secondary")
-            mock_del.assert_awaited_once_with("rw-primary")
+            await execute_merge(db, 1, 2, keep_subscription_from='secondary')
+            mock_del.assert_awaited_once_with('rw-primary')
 
         db.delete.assert_awaited_once_with(sub_p)
         # Secondary subscription transferred
         assert sub_s.user_id == 1
-        assert primary.remnawave_uuid == "rw-secondary"
+        assert primary.remnawave_uuid == 'rw-secondary'
 
 
 # ---------------------------------------------------------------------------
@@ -745,7 +741,7 @@ class TestExecuteMergeBulkUpdates:
         secondary = _make_user(id=2)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -769,7 +765,7 @@ class TestExecuteMergeSelfReferralPrevention:
         secondary = _make_user(id=2)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -784,7 +780,7 @@ class TestExecuteMergeSelfReferralPrevention:
         secondary = _make_user(id=2)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -799,7 +795,7 @@ class TestExecuteMergeSelfReferralPrevention:
         secondary = _make_user(id=2, referred_by_id=99)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -814,7 +810,7 @@ class TestExecuteMergeSelfReferralPrevention:
         secondary = _make_user(id=2, referred_by_id=99)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -822,16 +818,14 @@ class TestExecuteMergeSelfReferralPrevention:
 
         assert result.referred_by_id == 99
 
-    async def test_secondary_referrer_not_transferred_if_primary_has_one(
-        self, monkeypatch
-    ):
+    async def test_secondary_referrer_not_transferred_if_primary_has_one(self, monkeypatch):
         """If primary already has a referrer, secondary's is not transferred."""
         db = _make_db()
         primary = _make_user(id=1, referred_by_id=50)
         secondary = _make_user(id=2, referred_by_id=99)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():
@@ -839,16 +833,14 @@ class TestExecuteMergeSelfReferralPrevention:
 
         assert result.referred_by_id == 50
 
-    async def test_secondary_referrer_pointing_to_primary_not_transferred(
-        self, monkeypatch
-    ):
+    async def test_secondary_referrer_pointing_to_primary_not_transferred(self, monkeypatch):
         """If secondary was referred by primary, don't create self-referral."""
         db = _make_db()
         primary = _make_user(id=1, referred_by_id=None)
         secondary = _make_user(id=2, referred_by_id=1)
         monkeypatch.setattr(
             account_merge_service,
-            "get_user_by_id",
+            'get_user_by_id',
             AsyncMock(side_effect=[primary, secondary]),
         )
         with _patch_remnawave_delete():

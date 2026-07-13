@@ -18,15 +18,11 @@ async def get_all_categories(db: AsyncSession) -> list[NewsCategory]:
 
 async def get_category_by_id(db: AsyncSession, category_id: int) -> NewsCategory | None:
     """Get a single news category by primary key."""
-    result = await db.execute(
-        select(NewsCategory).where(NewsCategory.id == category_id)
-    )
+    result = await db.execute(select(NewsCategory).where(NewsCategory.id == category_id))
     return result.scalar_one_or_none()
 
 
-async def create_category(
-    db: AsyncSession, *, name: str, color: str = "#00e5a0"
-) -> NewsCategory:
+async def create_category(db: AsyncSession, *, name: str, color: str = '#00e5a0') -> NewsCategory:
     """Create a new news category.
 
     Raises:
@@ -40,7 +36,7 @@ async def create_category(
         await db.rollback()
         raise
     await db.refresh(category)
-    logger.info("Created news category", category_id=category.id, name=category.name)
+    logger.info('Created news category', category_id=category.id, name=category.name)
     return category
 
 
@@ -57,17 +53,15 @@ async def update_category(
         IntegrityError: if the new name conflicts with an existing category.
     """
     update_data: dict[str, str] = {}
-    if "name" in kwargs and kwargs["name"] is not None:
-        update_data["name"] = kwargs["name"].strip()
-    if "color" in kwargs and kwargs["color"] is not None:
-        update_data["color"] = kwargs["color"]
+    if 'name' in kwargs and kwargs['name'] is not None:
+        update_data['name'] = kwargs['name'].strip()
+    if 'color' in kwargs and kwargs['color'] is not None:
+        update_data['color'] = kwargs['color']
 
     if not update_data:
         return category
 
-    await db.execute(
-        update(NewsCategory).where(NewsCategory.id == category.id).values(**update_data)
-    )
+    await db.execute(update(NewsCategory).where(NewsCategory.id == category.id).values(**update_data))
     try:
         await db.commit()
     except IntegrityError:
@@ -75,7 +69,7 @@ async def update_category(
         raise
     await db.refresh(category)
     logger.info(
-        "Updated news category",
+        'Updated news category',
         category_id=category.id,
         updated_fields=list(update_data.keys()),
     )
@@ -89,8 +83,8 @@ async def delete_category(db: AsyncSession, category: NewsCategory) -> None:
     await db.execute(
         update(NewsArticle)
         .where(NewsArticle.category_id == cat_id)
-        .values(category="", category_color="#00e5a0", category_id=None)
+        .values(category='', category_color='#00e5a0', category_id=None)
     )
     await db.delete(category)
     await db.commit()
-    logger.info("Deleted news category", category_id=cat_id, name=cat_name)
+    logger.info('Deleted news category', category_id=cat_id, name=cat_name)

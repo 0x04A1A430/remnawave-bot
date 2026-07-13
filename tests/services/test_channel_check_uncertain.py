@@ -37,8 +37,8 @@ def _fake_member(status: str) -> MagicMock:
 @pytest.mark.asyncio
 async def test_member_check_returns_true_when_user_is_member() -> None:
     svc = ChannelSubscriptionService(bot=AsyncMock())
-    svc.bot.get_chat_member = AsyncMock(return_value=_fake_member("member"))
-    assert await svc._rate_limited_check(123, "-100123") is True
+    svc.bot.get_chat_member = AsyncMock(return_value=_fake_member('member'))
+    assert await svc._rate_limited_check(123, '-100123') is True
 
 
 @pytest.mark.asyncio
@@ -47,11 +47,9 @@ async def test_member_check_returns_false_on_confirmed_user_not_found() -> None:
     the user really did leave (or never joined) the channel."""
     svc = ChannelSubscriptionService(bot=AsyncMock())
     svc.bot.get_chat_member = AsyncMock(
-        side_effect=TelegramBadRequest(
-            method=MagicMock(), message="Bad Request: user not found"
-        )
+        side_effect=TelegramBadRequest(method=MagicMock(), message='Bad Request: user not found')
     )
-    assert await svc._rate_limited_check(123, "-100123") is False
+    assert await svc._rate_limited_check(123, '-100123') is False
 
 
 @pytest.mark.asyncio
@@ -59,10 +57,8 @@ async def test_member_check_returns_none_on_network_error() -> None:
     """Transient network error must NOT be treated as 'not a member' —
     that's how Chara's paid annual sub got deactivated."""
     svc = ChannelSubscriptionService(bot=AsyncMock())
-    svc.bot.get_chat_member = AsyncMock(
-        side_effect=TelegramNetworkError(method=MagicMock(), message="read timeout")
-    )
-    assert await svc._rate_limited_check(123, "-100123") is None
+    svc.bot.get_chat_member = AsyncMock(side_effect=TelegramNetworkError(method=MagicMock(), message='read timeout'))
+    assert await svc._rate_limited_check(123, '-100123') is None
 
 
 @pytest.mark.asyncio
@@ -71,11 +67,9 @@ async def test_member_check_returns_none_on_bot_removed_from_channel() -> None:
     don't auto-deactivate every paid sub when the bot itself loses access."""
     svc = ChannelSubscriptionService(bot=AsyncMock())
     svc.bot.get_chat_member = AsyncMock(
-        side_effect=TelegramForbiddenError(
-            method=MagicMock(), message="bot kicked from channel"
-        )
+        side_effect=TelegramForbiddenError(method=MagicMock(), message='bot kicked from channel')
     )
-    assert await svc._rate_limited_check(123, "-100123") is None
+    assert await svc._rate_limited_check(123, '-100123') is None
 
 
 @pytest.mark.asyncio
@@ -84,11 +78,9 @@ async def test_member_check_returns_none_on_unknown_bad_request() -> None:
     assuming the user left."""
     svc = ChannelSubscriptionService(bot=AsyncMock())
     svc.bot.get_chat_member = AsyncMock(
-        side_effect=TelegramBadRequest(
-            method=MagicMock(), message="some new error message we have not seen"
-        )
+        side_effect=TelegramBadRequest(method=MagicMock(), message='some new error message we have not seen')
     )
-    assert await svc._rate_limited_check(123, "-100123") is None
+    assert await svc._rate_limited_check(123, '-100123') is None
 
 
 @pytest.mark.asyncio
@@ -97,14 +89,12 @@ async def test_member_check_returns_none_on_double_rate_limit_failure() -> None:
     svc = ChannelSubscriptionService(bot=AsyncMock())
     svc.bot.get_chat_member = AsyncMock(
         side_effect=[
-            TelegramRetryAfter(
-                method=MagicMock(), message="rate-limited", retry_after=0
-            ),
-            TelegramNetworkError(method=MagicMock(), message="retry also failed"),
+            TelegramRetryAfter(method=MagicMock(), message='rate-limited', retry_after=0),
+            TelegramNetworkError(method=MagicMock(), message='retry also failed'),
         ]
     )
-    with patch("app.services.channel_subscription_service.asyncio.sleep", AsyncMock()):
-        result = await svc._rate_limited_check(123, "-100123")
+    with patch('app.services.channel_subscription_service.asyncio.sleep', AsyncMock()):
+        result = await svc._rate_limited_check(123, '-100123')
     assert result is None
 
 
@@ -112,10 +102,8 @@ async def test_member_check_returns_none_on_double_rate_limit_failure() -> None:
 async def test_member_check_returns_none_on_generic_exception() -> None:
     """Any unexpected error keeps the user's access."""
     svc = ChannelSubscriptionService(bot=AsyncMock())
-    svc.bot.get_chat_member = AsyncMock(
-        side_effect=RuntimeError("something unexpected")
-    )
-    assert await svc._rate_limited_check(123, "-100123") is None
+    svc.bot.get_chat_member = AsyncMock(side_effect=RuntimeError('something unexpected'))
+    assert await svc._rate_limited_check(123, '-100123') is None
 
 
 @pytest.mark.asyncio
@@ -140,30 +128,24 @@ async def test_check_user_subscriptions_preserves_last_known_on_uncertain() -> N
     mock_db.commit = AsyncMock()
 
     async def fake_get_user_channel_subs(_db, _tg_id):
-        return [
-            SimpleNamespace(
-                channel_id="-100123", is_member=True, checked_at=last_known.checked_at
-            )
-        ]
+        return [SimpleNamespace(channel_id='-100123', is_member=True, checked_at=last_known.checked_at)]
 
     with (
+        patch('app.services.channel_subscription_service.AsyncSessionLocal') as session_local,
         patch(
-            "app.services.channel_subscription_service.AsyncSessionLocal"
-        ) as session_local,
-        patch(
-            "app.services.channel_subscription_service.ChannelSubCache.get_sub_statuses",
+            'app.services.channel_subscription_service.ChannelSubCache.get_sub_statuses',
             AsyncMock(return_value={}),
         ),
         patch(
-            "app.services.channel_subscription_service.ChannelSubCache.set_sub_status",
+            'app.services.channel_subscription_service.ChannelSubCache.set_sub_status',
             AsyncMock(),
         ),
         patch(
-            "app.services.channel_subscription_service.get_user_channel_subs",
+            'app.services.channel_subscription_service.get_user_channel_subs',
             fake_get_user_channel_subs,
         ),
         patch(
-            "app.services.channel_subscription_service.upsert_user_channel_sub",
+            'app.services.channel_subscription_service.upsert_user_channel_sub',
             AsyncMock(),
         ) as upsert_mock,
     ):
@@ -172,10 +154,10 @@ async def test_check_user_subscriptions_preserves_last_known_on_uncertain() -> N
 
         result = await svc._check_user_subscriptions_for_channels(
             123,
-            [{"channel_id": "-100123", "disable_paid_on_leave": True}],
+            [{'channel_id': '-100123', 'disable_paid_on_leave': True}],
         )
 
     # Last known value preserved despite API being uncertain
-    assert result["-100123"] is True
+    assert result['-100123'] is True
     # And we never persisted the uncertain result
     upsert_mock.assert_not_called()

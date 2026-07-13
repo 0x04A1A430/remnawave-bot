@@ -56,22 +56,21 @@ class PurchaseTrafficOption:
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "value": self.value,
-            "label": self.label,
-            "price_kopeks": self.price_per_month,
-            "price_label": self.price_label,
-            "is_available": self.is_available,
+            'value': self.value,
+            'label': self.label,
+            'price_kopeks': self.price_per_month,
+            'price_label': self.price_label,
+            'is_available': self.is_available,
         }
         if self.original_price_per_month is not None and (
-            self.original_price_label
-            and self.original_price_per_month != self.price_per_month
+            self.original_price_label and self.original_price_per_month != self.price_per_month
         ):
-            payload["original_price_kopeks"] = self.original_price_per_month
-            payload["original_price_label"] = self.original_price_label
+            payload['original_price_kopeks'] = self.original_price_per_month
+            payload['original_price_label'] = self.original_price_label
         if self.discount_percent:
-            payload["discount_percent"] = self.discount_percent
+            payload['discount_percent'] = self.discount_percent
         if self.is_default:
-            payload["is_default"] = True
+            payload['is_default'] = True
         return payload
 
 
@@ -86,17 +85,17 @@ class PurchaseTrafficConfig:
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "selectable": self.selectable,
-            "mode": self.mode,
+            'selectable': self.selectable,
+            'mode': self.mode,
         }
         if self.options:
-            payload["options"] = [option.to_payload() for option in self.options]
+            payload['options'] = [option.to_payload() for option in self.options]
         if self.default_value is not None:
-            payload["default"] = self.default_value
+            payload['default'] = self.default_value
         if self.current_value is not None:
-            payload["current"] = self.current_value
+            payload['current'] = self.current_value
         if self.hint:
-            payload["hint"] = self.hint
+            payload['hint'] = self.hint
         return payload
 
 
@@ -113,20 +112,19 @@ class PurchaseServerOption:
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "uuid": self.uuid,
-            "name": self.name,
-            "price_kopeks": self.price_per_month,
-            "price_label": self.price_label,
-            "is_available": self.is_available,
+            'uuid': self.uuid,
+            'name': self.name,
+            'price_kopeks': self.price_per_month,
+            'price_label': self.price_label,
+            'is_available': self.is_available,
         }
         if self.original_price_per_month is not None and (
-            self.original_price_label
-            and self.original_price_per_month != self.price_per_month
+            self.original_price_label and self.original_price_per_month != self.price_per_month
         ):
-            payload["original_price_kopeks"] = self.original_price_per_month
-            payload["original_price_label"] = self.original_price_label
+            payload['original_price_kopeks'] = self.original_price_per_month
+            payload['original_price_label'] = self.original_price_label
         if self.discount_percent:
-            payload["discount_percent"] = self.discount_percent
+            payload['discount_percent'] = self.discount_percent
         return payload
 
 
@@ -140,14 +138,14 @@ class PurchaseServersConfig:
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "options": [option.to_payload() for option in self.options],
-            "min": self.min_selectable,
-            "max": self.max_selectable,
-            "default": list(self.default_selection),
-            "selected": list(self.default_selection),
+            'options': [option.to_payload() for option in self.options],
+            'min': self.min_selectable,
+            'max': self.max_selectable,
+            'default': list(self.default_selection),
+            'selected': list(self.default_selection),
         }
         if self.hint:
-            payload["hint"] = self.hint
+            payload['hint'] = self.hint
         return payload
 
 
@@ -166,24 +164,21 @@ class PurchaseDevicesConfig:
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "min": self.minimum,
-            "max": self.maximum,
-            "default": self.default,
-            "current": self.current,
-            "price_per_device_kopeks": self.discounted_price_per_device,
-            "price_per_device_label": self.price_label,
+            'min': self.minimum,
+            'max': self.maximum,
+            'default': self.default,
+            'current': self.current,
+            'price_per_device_kopeks': self.discounted_price_per_device,
+            'price_per_device_label': self.price_label,
         }
-        if (
-            self.price_per_device
-            and self.price_per_device != self.discounted_price_per_device
-        ):
-            payload["price_per_device_original_kopeks"] = self.price_per_device
+        if self.price_per_device and self.price_per_device != self.discounted_price_per_device:
+            payload['price_per_device_original_kopeks'] = self.price_per_device
             if self.original_price_label:
-                payload["price_per_device_original_label"] = self.original_price_label
+                payload['price_per_device_original_label'] = self.original_price_label
         if self.discount_percent:
-            payload["discount_percent"] = self.discount_percent
+            payload['discount_percent'] = self.discount_percent
         if self.hint:
-            payload["hint"] = self.hint
+            payload['hint'] = self.hint
         return payload
 
 
@@ -206,31 +201,27 @@ class PurchasePeriodConfig:
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "id": self.id,
-            "code": self.id,
-            "period_id": self.id,
-            "period_days": self.days,
-            "period": self.days,
-            "months": self.months,
-            "label": self.label,
-            "price_kopeks": self.base_price,
-            "price_label": self.base_price_label,
-            "per_month_price_kopeks": self.per_month_price,
-            "per_month_price_label": self.per_month_price_label,
-            "is_available": True,
-            "traffic": self.traffic.to_payload(),
-            "servers": self.servers.to_payload(),
-            "devices": self.devices.to_payload(),
+            'id': self.id,
+            'code': self.id,
+            'period_id': self.id,
+            'period_days': self.days,
+            'period': self.days,
+            'months': self.months,
+            'label': self.label,
+            'price_kopeks': self.base_price,
+            'price_label': self.base_price_label,
+            'per_month_price_kopeks': self.per_month_price,
+            'per_month_price_label': self.per_month_price_label,
+            'is_available': True,
+            'traffic': self.traffic.to_payload(),
+            'servers': self.servers.to_payload(),
+            'devices': self.devices.to_payload(),
         }
         if self.discount_percent:
-            payload["discount_percent"] = self.discount_percent
-        if (
-            self.base_price_original
-            and self.base_price_original_label
-            and self.base_price_original != self.base_price
-        ):
-            payload["original_price_kopeks"] = self.base_price_original
-            payload["original_price_label"] = self.base_price_original_label
+            payload['discount_percent'] = self.discount_percent
+        if self.base_price_original and self.base_price_original_label and self.base_price_original != self.base_price:
+            payload['original_price_kopeks'] = self.base_price_original
+            payload['original_price_label'] = self.base_price_original_label
         return payload
 
 
@@ -270,7 +261,7 @@ class PurchaseOptionsContext:
 
 
 class PurchaseValidationError(Exception):
-    def __init__(self, message: str, code: str = "invalid_selection") -> None:
+    def __init__(self, message: str, code: str = 'invalid_selection') -> None:
         super().__init__(message)
         self.code = code
 
@@ -280,19 +271,15 @@ class PurchaseBalanceError(Exception):
         super().__init__(message)
 
 
-def _apply_discount_to_monthly_component(
-    amount_per_month: int, percent: int, months: int
-) -> dict[str, int]:
-    discounted_per_month, discount_per_month = apply_percentage_discount(
-        amount_per_month, percent
-    )
+def _apply_discount_to_monthly_component(amount_per_month: int, percent: int, months: int) -> dict[str, int]:
+    discounted_per_month, discount_per_month = apply_percentage_discount(amount_per_month, percent)
     return {
-        "original_per_month": amount_per_month,
-        "discounted_per_month": discounted_per_month,
-        "discount_percent": max(0, min(100, percent)),
-        "discount_per_month": discount_per_month,
-        "total": discounted_per_month * months,
-        "discount_total": discount_per_month * months,
+        'original_per_month': amount_per_month,
+        'discounted_per_month': discounted_per_month,
+        'discount_percent': max(0, min(100, percent)),
+        'discount_per_month': discount_per_month,
+        'total': discounted_per_month * months,
+        'discount_total': discount_per_month * months,
     }
 
 
@@ -301,26 +288,17 @@ def _build_server_option(
     discount_percent: int,
     texts,
 ) -> PurchaseServerOption:
-    base_per_month = int(getattr(server, "price_kopeks", 0) or 0)
-    discounted_per_month, _ = apply_percentage_discount(
-        base_per_month, discount_percent
-    )
+    base_per_month = int(getattr(server, 'price_kopeks', 0) or 0)
+    discounted_per_month, _ = apply_percentage_discount(base_per_month, discount_percent)
     return PurchaseServerOption(
         uuid=server.squad_uuid,
-        name=getattr(server, "display_name", server.squad_uuid) or server.squad_uuid,
+        name=getattr(server, 'display_name', server.squad_uuid) or server.squad_uuid,
         price_per_month=discounted_per_month,
         price_label=texts.format_price(discounted_per_month),
         original_price_per_month=base_per_month,
-        original_price_label=(
-            texts.format_price(base_per_month)
-            if base_per_month != discounted_per_month
-            else None
-        ),
+        original_price_label=(texts.format_price(base_per_month) if base_per_month != discounted_per_month else None),
         discount_percent=max(0, discount_percent),
-        is_available=bool(
-            getattr(server, "is_available", True)
-            and not getattr(server, "is_full", False)
-        ),
+        is_available=bool(getattr(server, 'is_available', True) and not getattr(server, 'is_full', False)),
     )
 
 
@@ -338,9 +316,7 @@ class MiniAppSubscriptionPurchaseService:
                     get_subscription_by_id_for_user,
                 )
 
-                subscription = await get_subscription_by_id_for_user(
-                    db, subscription_id, user.id
-                )
+                subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
             else:
                 from app.database.crud.subscription import (
                     get_active_subscriptions_by_user_id,
@@ -348,28 +324,22 @@ class MiniAppSubscriptionPurchaseService:
 
                 active_subs = await get_active_subscriptions_by_user_id(db, user.id)
                 if active_subs:
-                    _non_daily = [
-                        s
-                        for s in active_subs
-                        if not getattr(s, "is_daily_tariff", False)
-                    ]
+                    _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
                     _pool = _non_daily or active_subs
                     subscription = max(_pool, key=lambda s: s.days_left)
                 else:
                     subscription = None
         else:
             subscription = await get_subscription_by_user_id(db, user.id)
-        balance_kopeks = int(getattr(user, "balance_kopeks", 0) or 0)
-        currency = (getattr(user, "balance_currency", None) or "RUB").upper()
-        texts = get_texts(getattr(user, "language", None))
+        balance_kopeks = int(getattr(user, 'balance_kopeks', 0) or 0)
+        currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
+        texts = get_texts(getattr(user, 'language', None))
 
         available_servers = await get_available_server_squads(
             db,
-            promo_group_id=getattr(user, "promo_group_id", None),
+            promo_group_id=getattr(user, 'promo_group_id', None),
         )
-        server_catalog: dict[str, ServerSquad] = {
-            server.squad_uuid: server for server in available_servers
-        }
+        server_catalog: dict[str, ServerSquad] = {server.squad_uuid: server for server in available_servers}
 
         if subscription and subscription.connected_squads:
             for uuid in subscription.connected_squads:
@@ -378,9 +348,7 @@ class MiniAppSubscriptionPurchaseService:
                 try:
                     existing = await get_server_squad_by_uuid(db, uuid)
                 except Exception as error:  # pragma: no cover - defensive logging
-                    logger.warning(
-                        "Failed to load server squad", uuid=uuid, error=error
-                    )
+                    logger.warning('Failed to load server squad', uuid=uuid, error=error)
                     existing = None
                 if existing:
                     server_catalog[uuid] = existing
@@ -388,18 +356,14 @@ class MiniAppSubscriptionPurchaseService:
         server_uuid_to_id: dict[str, int] = {}
         for server in server_catalog.values():
             try:
-                server_uuid_to_id[server.squad_uuid] = int(
-                    getattr(server, "id", 0) or 0
-                )
+                server_uuid_to_id[server.squad_uuid] = int(getattr(server, 'id', 0) or 0)
             except (TypeError, ValueError):
                 continue
 
-        default_connected = list(getattr(subscription, "connected_squads", []) or [])
+        default_connected = list(getattr(subscription, 'connected_squads', []) or [])
         if not default_connected:
             for server in available_servers:
-                if getattr(server, "is_available", True) and not getattr(
-                    server, "is_full", False
-                ):
+                if getattr(server, 'is_available', True) and not getattr(server, 'is_full', False):
                     default_connected = [server.squad_uuid]
                     break
 
@@ -410,40 +374,26 @@ class MiniAppSubscriptionPurchaseService:
         default_devices = settings.DEFAULT_DEVICE_LIMIT
         # Для триала НЕ используем его ограничения как дефолтные,
         # чтобы при продлении клиент получил стандартные значения платной подписки
-        is_trial_subscription = subscription and getattr(
-            subscription, "is_trial", False
-        )
-        if (
-            subscription
-            and getattr(subscription, "device_limit", None)
-            and not is_trial_subscription
-        ):
+        is_trial_subscription = subscription and getattr(subscription, 'is_trial', False)
+        if subscription and getattr(subscription, 'device_limit', None) and not is_trial_subscription:
             default_devices = max(default_devices, int(subscription.device_limit))
 
         fixed_traffic_value = None
         if settings.is_traffic_fixed():
             fixed_traffic_value = settings.get_fixed_traffic_limit()
-        elif (
-            subscription
-            and subscription.traffic_limit_gb is not None
-            and not is_trial_subscription
-        ):
+        elif subscription and subscription.traffic_limit_gb is not None and not is_trial_subscription:
             fixed_traffic_value = subscription.traffic_limit_gb
 
         default_period_days = available_periods[0] if available_periods else 30
 
         for period_days in available_periods:
             months = calculate_months_from_days(period_days)
-            period_id = f"days:{period_days}"
-            label = format_period_description(
-                period_days, getattr(user, "language", "ru")
-            )
+            period_id = f'days:{period_days}'
+            label = format_period_description(period_days, getattr(user, 'language', 'ru'))
 
             base_price_original = PERIOD_PRICES.get(period_days, 0)
-            period_discount_percent = user.get_promo_discount("period", period_days)
-            base_price, base_discount_total = apply_percentage_discount(
-                base_price_original, period_discount_percent
-            )
+            period_discount_percent = user.get_promo_discount('period', period_days)
+            base_price, base_discount_total = apply_percentage_discount(base_price_original, period_discount_percent)
             base_price_label = texts.format_price(base_price)
             base_price_original_label = (
                 texts.format_price(base_price_original)
@@ -496,50 +446,48 @@ class MiniAppSubscriptionPurchaseService:
             period_map[period_id] = period_config
 
         if not periods:
-            raise PurchaseValidationError(
-                "No subscription periods configured", code="configuration"
-            )
+            raise PurchaseValidationError('No subscription periods configured', code='configuration')
 
-        default_period = period_map.get(f"days:{default_period_days}") or periods[0]
+        default_period = period_map.get(f'days:{default_period_days}') or periods[0]
 
         default_selection = {
-            "period_id": default_period.id,
-            "periodId": default_period.id,
-            "period_days": default_period.days,
-            "periodDays": default_period.days,
-            "traffic_value": (
+            'period_id': default_period.id,
+            'periodId': default_period.id,
+            'period_days': default_period.days,
+            'periodDays': default_period.days,
+            'traffic_value': (
                 default_period.traffic.current_value
                 if default_period.traffic.current_value is not None
                 else default_period.traffic.default_value
             ),
-            "trafficValue": (
+            'trafficValue': (
                 default_period.traffic.current_value
                 if default_period.traffic.current_value is not None
                 else default_period.traffic.default_value
             ),
-            "servers": list(default_period.servers.default_selection),
-            "countries": list(default_period.servers.default_selection),
-            "server_uuids": list(default_period.servers.default_selection),
-            "serverUuids": list(default_period.servers.default_selection),
-            "devices": default_period.devices.current,
-            "device_limit": default_period.devices.current,
-            "deviceLimit": default_period.devices.current,
+            'servers': list(default_period.servers.default_selection),
+            'countries': list(default_period.servers.default_selection),
+            'server_uuids': list(default_period.servers.default_selection),
+            'serverUuids': list(default_period.servers.default_selection),
+            'devices': default_period.devices.current,
+            'device_limit': default_period.devices.current,
+            'deviceLimit': default_period.devices.current,
         }
 
         payload = {
-            "currency": currency,
-            "balance_kopeks": balance_kopeks,
-            "balanceKopeks": balance_kopeks,
-            "balance_label": texts.format_price(balance_kopeks),
-            "balanceLabel": texts.format_price(balance_kopeks),
-            "subscription_id": getattr(subscription, "id", None),
-            "subscriptionId": getattr(subscription, "id", None),
-            "periods": [period.to_payload() for period in periods],
-            "traffic": default_period.traffic.to_payload(),
-            "servers": default_period.servers.to_payload(),
-            "devices": default_period.devices.to_payload(),
-            "selection": default_selection,
-            "summary": None,
+            'currency': currency,
+            'balance_kopeks': balance_kopeks,
+            'balanceKopeks': balance_kopeks,
+            'balance_label': texts.format_price(balance_kopeks),
+            'balanceLabel': texts.format_price(balance_kopeks),
+            'subscription_id': getattr(subscription, 'id', None),
+            'subscriptionId': getattr(subscription, 'id', None),
+            'periods': [period.to_payload() for period in periods],
+            'traffic': default_period.traffic.to_payload(),
+            'servers': default_period.servers.to_payload(),
+            'devices': default_period.devices.to_payload(),
+            'selection': default_selection,
+            'summary': None,
         }
 
         return PurchaseOptionsContext(
@@ -563,11 +511,7 @@ class MiniAppSubscriptionPurchaseService:
         fixed_traffic_value: int | None,
     ) -> PurchaseTrafficConfig:
         if settings.is_traffic_fixed():
-            value = (
-                fixed_traffic_value
-                if fixed_traffic_value is not None
-                else settings.get_fixed_traffic_limit()
-            )
+            value = fixed_traffic_value if fixed_traffic_value is not None else settings.get_fixed_traffic_limit()
             # Передаём актуальный режим (fixed или fixed_with_topup)
             actual_mode = settings.TRAFFIC_SELECTION_MODE.lower()
             return PurchaseTrafficConfig(
@@ -579,20 +523,14 @@ class MiniAppSubscriptionPurchaseService:
                 hint=None,
             )
 
-        packages = [
-            package
-            for package in settings.get_traffic_packages()
-            if package.get("enabled", True)
-        ]
-        discount_percent = user.get_promo_discount("traffic", period_days)
+        packages = [package for package in settings.get_traffic_packages() if package.get('enabled', True)]
+        discount_percent = user.get_promo_discount('traffic', period_days)
         options: list[PurchaseTrafficOption] = []
 
         for package in packages:
-            value = int(package.get("gb") or 0)
-            price_per_month = int(package.get("price") or 0)
-            discounted_per_month, discount_value = apply_percentage_discount(
-                price_per_month, discount_percent
-            )
+            value = int(package.get('gb') or 0)
+            price_per_month = int(package.get('price') or 0)
+            discounted_per_month, discount_value = apply_percentage_discount(price_per_month, discount_percent)
             label = texts.format_traffic(value or 0)
             options.append(
                 PurchaseTrafficOption(
@@ -622,13 +560,11 @@ class MiniAppSubscriptionPurchaseService:
             options[0].is_default = True
             default_option = options[0]
 
-        default_value = (
-            default_option.value if default_option else (fixed_traffic_value or 0)
-        )
+        default_value = default_option.value if default_option else (fixed_traffic_value or 0)
 
         return PurchaseTrafficConfig(
             selectable=True,
-            mode="selectable",
+            mode='selectable',
             options=options,
             default_value=default_value,
             current_value=default_value,
@@ -643,7 +579,7 @@ class MiniAppSubscriptionPurchaseService:
         server_catalog: dict[str, ServerSquad],
         default_selection: list[str],
     ) -> PurchaseServersConfig:
-        discount_percent = user.get_promo_discount("servers", period_days)
+        discount_percent = user.get_promo_discount('servers', period_days)
         options: list[PurchaseServerOption] = []
 
         for server in server_catalog.values():
@@ -668,21 +604,15 @@ class MiniAppSubscriptionPurchaseService:
         period_days: int,
         default_devices: int,
     ) -> PurchaseDevicesConfig:
-        discount_percent = user.get_promo_discount("devices", period_days)
+        discount_percent = user.get_promo_discount('devices', period_days)
         unit_price = settings.PRICE_PER_DEVICE
-        discounted_unit_price, unit_discount_value = apply_percentage_discount(
-            unit_price, discount_percent
-        )
+        discounted_unit_price, unit_discount_value = apply_percentage_discount(unit_price, discount_percent)
         price_label = texts.format_price(discounted_unit_price)
         original_label = (
-            texts.format_price(unit_price)
-            if unit_discount_value and unit_price != discounted_unit_price
-            else None
+            texts.format_price(unit_price) if unit_discount_value and unit_price != discounted_unit_price else None
         )
 
-        max_devices_setting = (
-            settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
-        )
+        max_devices_setting = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else None
         if max_devices_setting is not None:
             maximum = max(max_devices_setting, default_devices)
         else:
@@ -707,33 +637,29 @@ class MiniAppSubscriptionPurchaseService:
         selection_payload: dict[str, Any],
     ) -> PurchaseSelection:
         period_id = (
-            selection_payload.get("period_id")
-            or selection_payload.get("periodId")
-            or selection_payload.get("period")
-            or selection_payload.get("code")
+            selection_payload.get('period_id')
+            or selection_payload.get('periodId')
+            or selection_payload.get('period')
+            or selection_payload.get('code')
         )
         if not period_id:
-            period_days = selection_payload.get("period_days") or selection_payload.get(
-                "periodDays"
-            )
+            period_days = selection_payload.get('period_days') or selection_payload.get('periodDays')
             if period_days is not None:
-                period_id = f"days:{int(period_days)}"
+                period_id = f'days:{int(period_days)}'
 
         if not period_id or period_id not in context.period_map:
-            raise PurchaseValidationError(
-                "Invalid or missing subscription period", code="invalid_period"
-            )
+            raise PurchaseValidationError('Invalid or missing subscription period', code='invalid_period')
 
         period = context.period_map[period_id]
 
         # Don't use `or` chaining - 0 is valid for unlimited traffic
         traffic_value = None
         for key in (
-            "traffic_value",
-            "trafficValue",
-            "traffic",
-            "traffic_gb",
-            "trafficGb",
+            'traffic_value',
+            'trafficValue',
+            'traffic',
+            'traffic_gb',
+            'trafficGb',
         ):
             value = selection_payload.get(key)
             if value is not None:
@@ -743,23 +669,19 @@ class MiniAppSubscriptionPurchaseService:
         if period.traffic.selectable:
             available_values = {option.value for option in period.traffic.options}
             if traffic_value is None:
-                traffic_value = (
-                    period.traffic.current_value or period.traffic.default_value
-                )
+                traffic_value = period.traffic.current_value or period.traffic.default_value
             else:
                 traffic_value = int(traffic_value)
                 if available_values and traffic_value not in available_values:
                     raise PurchaseValidationError(
-                        "Selected traffic option is not available",
-                        code="invalid_traffic",
+                        'Selected traffic option is not available',
+                        code='invalid_traffic',
                     )
         else:
-            traffic_value = (
-                period.traffic.current_value or period.traffic.default_value or 0
-            )
+            traffic_value = period.traffic.current_value or period.traffic.default_value or 0
 
         raw_servers: list[str] = []
-        for key in ("servers", "countries", "server_uuids", "serverUuids"):
+        for key in ('servers', 'countries', 'server_uuids', 'serverUuids'):
             value = selection_payload.get(key)
             if isinstance(value, list):
                 raw_servers.extend(value)
@@ -778,33 +700,23 @@ class MiniAppSubscriptionPurchaseService:
         if not servers:
             servers = list(period.servers.default_selection)
 
-        if (
-            period.servers.min_selectable
-            and len(servers) < period.servers.min_selectable
-        ):
-            raise PurchaseValidationError(
-                "Select at least one server", code="invalid_servers"
-            )
+        if period.servers.min_selectable and len(servers) < period.servers.min_selectable:
+            raise PurchaseValidationError('Select at least one server', code='invalid_servers')
 
-        if (
-            period.servers.max_selectable
-            and len(servers) > period.servers.max_selectable
-        ):
+        if period.servers.max_selectable and len(servers) > period.servers.max_selectable:
             servers = servers[: period.servers.max_selectable]
 
         devices = (
-            selection_payload.get("devices")
-            or selection_payload.get("device_limit")
-            or selection_payload.get("deviceLimit")
+            selection_payload.get('devices')
+            or selection_payload.get('device_limit')
+            or selection_payload.get('deviceLimit')
             or period.devices.current
             or period.devices.default
         )
         try:
             devices = int(devices)
         except (TypeError, ValueError):
-            raise PurchaseValidationError(
-                "Invalid devices selection", code="invalid_devices"
-            )
+            raise PurchaseValidationError('Invalid devices selection', code='invalid_devices')
 
         devices = max(devices, period.devices.minimum)
         if period.devices.maximum and devices > period.devices.maximum:
@@ -823,7 +735,7 @@ class MiniAppSubscriptionPurchaseService:
         context: PurchaseOptionsContext,
         selection: PurchaseSelection,
     ) -> PurchasePricingResult:
-        get_texts(getattr(context.user, "language", None))
+        get_texts(getattr(context.user, 'language', None))
         months = selection.period.months
 
         # PricingEngine — single source of truth (includes promo-offer internally).
@@ -840,48 +752,33 @@ class MiniAppSubscriptionPurchaseService:
         )
 
         # Validate all requested servers were found
-        server_ids = pricing.breakdown.get("server_ids", [])
+        server_ids = pricing.breakdown.get('server_ids', [])
         if len(server_ids) != len(selection.servers):
-            raise PurchaseValidationError(
-                "Some selected servers are not available", code="invalid_servers"
-            )
+            raise PurchaseValidationError('Some selected servers are not available', code='invalid_servers')
 
         details = PricingEngine.classic_pricing_to_purchase_details(pricing)
 
         base_original_total = pricing.original_total
-        discounted_total = (
-            pricing.final_total + pricing.promo_offer_discount
-        )  # subtotal before offer
+        discounted_total = pricing.final_total + pricing.promo_offer_discount  # subtotal before offer
         promo_discount_value = pricing.promo_offer_discount
-        promo_percent = pricing.breakdown.get("offer_discount_pct", 0)
+        promo_percent = pricing.breakdown.get('offer_discount_pct', 0)
 
         is_valid = validate_pricing_calculation(
-            details.get("base_price", 0),
-            (
-                details.get("traffic_price_per_month", 0)
-                - details.get("traffic_discount_total", 0) // max(1, months)
-            )
-            + (
-                details.get("servers_price_per_month", 0)
-                - details.get("servers_discount_total", 0) // max(1, months)
-            )
-            + (
-                details.get("devices_price_per_month", 0)
-                - details.get("devices_discount_total", 0) // max(1, months)
-            ),
+            details.get('base_price', 0),
+            (details.get('traffic_price_per_month', 0) - details.get('traffic_discount_total', 0) // max(1, months))
+            + (details.get('servers_price_per_month', 0) - details.get('servers_discount_total', 0) // max(1, months))
+            + (details.get('devices_price_per_month', 0) - details.get('devices_discount_total', 0) // max(1, months)),
             months,
             discounted_total,
         )
 
         if not is_valid:
-            raise PurchaseValidationError(
-                "Failed to validate pricing", code="calculation_error"
-            )
+            raise PurchaseValidationError('Failed to validate pricing', code='calculation_error')
 
         return PurchasePricingResult(
             selection=selection,
             server_ids=server_ids,
-            server_prices_for_period=list(details.get("servers_individual_prices", [])),
+            server_prices_for_period=list(details.get('servers_individual_prices', [])),
             base_original_total=base_original_total,
             discounted_total=discounted_total,
             promo_discount_value=promo_discount_value,
@@ -896,21 +793,17 @@ class MiniAppSubscriptionPurchaseService:
         context: PurchaseOptionsContext,
         pricing: PurchasePricingResult,
     ) -> dict[str, Any]:
-        texts = get_texts(getattr(context.user, "language", None))
+        texts = get_texts(getattr(context.user, 'language', None))
         details = pricing.details
 
         total_discount = pricing.base_original_total - pricing.final_total
         overall_discount_percent = 0
         if pricing.base_original_total > 0 and total_discount > 0:
-            overall_discount_percent = int(
-                round(total_discount * 100 / pricing.base_original_total)
-            )
+            overall_discount_percent = int(round(total_discount * 100 / pricing.base_original_total))
 
         discount_lines: list[str] = []
 
-        def build_discount_line(
-            key: str, default: str, amount: int, percent: int
-        ) -> str | None:
+        def build_discount_line(key: str, default: str, amount: int, percent: int) -> str | None:
             if not amount:
                 return None
             return texts.t(key, default).format(
@@ -922,45 +815,45 @@ class MiniAppSubscriptionPurchaseService:
             if not amount:
                 return None
             return texts.t(
-                "MINIAPP_PURCHASE_BREAKDOWN_DISCOUNT_NOTE",
-                "Discount: -{amount} ({percent}%)",
+                'MINIAPP_PURCHASE_BREAKDOWN_DISCOUNT_NOTE',
+                'Discount: -{amount} ({percent}%)',
             ).format(
                 amount=texts.format_price(amount),
                 percent=percent,
             )
 
         base_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_PERIOD",
-            "Period discount: -{amount} ({percent}%)",
-            details.get("base_discount_total", 0),
-            details.get("base_discount_percent", 0),
+            'MINIAPP_PURCHASE_DISCOUNT_PERIOD',
+            'Period discount: -{amount} ({percent}%)',
+            details.get('base_discount_total', 0),
+            details.get('base_discount_percent', 0),
         )
         if base_discount_line:
             discount_lines.append(base_discount_line)
 
         traffic_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_TRAFFIC",
-            "Traffic discount: -{amount} ({percent}%)",
-            details.get("traffic_discount_total", 0),
-            details.get("traffic_discount_percent", 0),
+            'MINIAPP_PURCHASE_DISCOUNT_TRAFFIC',
+            'Traffic discount: -{amount} ({percent}%)',
+            details.get('traffic_discount_total', 0),
+            details.get('traffic_discount_percent', 0),
         )
         if traffic_discount_line:
             discount_lines.append(traffic_discount_line)
 
         servers_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_SERVERS",
-            "Servers discount: -{amount} ({percent}%)",
-            details.get("servers_discount_total", 0),
-            details.get("servers_discount_percent", 0),
+            'MINIAPP_PURCHASE_DISCOUNT_SERVERS',
+            'Servers discount: -{amount} ({percent}%)',
+            details.get('servers_discount_total', 0),
+            details.get('servers_discount_percent', 0),
         )
         if servers_discount_line:
             discount_lines.append(servers_discount_line)
 
         devices_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_DEVICES",
-            "Devices discount: -{amount} ({percent}%)",
-            details.get("devices_discount_total", 0),
-            details.get("devices_discount_percent", 0),
+            'MINIAPP_PURCHASE_DISCOUNT_DEVICES',
+            'Devices discount: -{amount} ({percent}%)',
+            details.get('devices_discount_total', 0),
+            details.get('devices_discount_percent', 0),
         )
         if devices_discount_line:
             discount_lines.append(devices_discount_line)
@@ -968,8 +861,8 @@ class MiniAppSubscriptionPurchaseService:
         promo_discount_line = None
         if pricing.promo_discount_value:
             promo_discount_line = texts.t(
-                "MINIAPP_PURCHASE_DISCOUNT_PROMO",
-                "Promo offer: -{amount} ({percent}%)",
+                'MINIAPP_PURCHASE_DISCOUNT_PROMO',
+                'Promo offer: -{amount} ({percent}%)',
             ).format(
                 amount=texts.format_price(pricing.promo_discount_value),
                 percent=pricing.promo_discount_percent,
@@ -978,170 +871,144 @@ class MiniAppSubscriptionPurchaseService:
 
         breakdown = [
             {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_BASE",
-                    "Base plan",
+                'label': texts.t(
+                    'MINIAPP_PURCHASE_BREAKDOWN_BASE',
+                    'Base plan',
                 ),
-                "value": texts.format_price(details.get("base_price", 0)),
+                'value': texts.format_price(details.get('base_price', 0)),
             }
         ]
 
         base_discount_note = build_discount_note(
-            details.get("base_discount_total", 0),
-            details.get("base_discount_percent", 0),
+            details.get('base_discount_total', 0),
+            details.get('base_discount_percent', 0),
         )
         if base_discount_note:
-            breakdown[0]["discount_label"] = base_discount_note
-            breakdown[0]["discountLabel"] = base_discount_note
+            breakdown[0]['discount_label'] = base_discount_note
+            breakdown[0]['discountLabel'] = base_discount_note
 
-        if details.get("total_traffic_price"):
+        if details.get('total_traffic_price'):
             traffic_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_TRAFFIC",
-                    "Traffic",
+                'label': texts.t(
+                    'MINIAPP_PURCHASE_BREAKDOWN_TRAFFIC',
+                    'Traffic',
                 ),
-                "value": texts.format_price(details["total_traffic_price"]),
+                'value': texts.format_price(details['total_traffic_price']),
             }
             traffic_discount_note = build_discount_note(
-                details.get("traffic_discount_total", 0),
-                details.get("traffic_discount_percent", 0),
+                details.get('traffic_discount_total', 0),
+                details.get('traffic_discount_percent', 0),
             )
             if traffic_discount_note:
-                traffic_item["discount_label"] = traffic_discount_note
-                traffic_item["discountLabel"] = traffic_discount_note
+                traffic_item['discount_label'] = traffic_discount_note
+                traffic_item['discountLabel'] = traffic_discount_note
             breakdown.append(traffic_item)
 
-        if details.get("total_servers_price"):
+        if details.get('total_servers_price'):
             servers_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_SERVERS",
-                    "Servers",
+                'label': texts.t(
+                    'MINIAPP_PURCHASE_BREAKDOWN_SERVERS',
+                    'Servers',
                 ),
-                "value": texts.format_price(details["total_servers_price"]),
+                'value': texts.format_price(details['total_servers_price']),
             }
             servers_discount_note = build_discount_note(
-                details.get("servers_discount_total", 0),
-                details.get("servers_discount_percent", 0),
+                details.get('servers_discount_total', 0),
+                details.get('servers_discount_percent', 0),
             )
             if servers_discount_note:
-                servers_item["discount_label"] = servers_discount_note
-                servers_item["discountLabel"] = servers_discount_note
+                servers_item['discount_label'] = servers_discount_note
+                servers_item['discountLabel'] = servers_discount_note
             breakdown.append(servers_item)
 
-        if details.get("total_devices_price"):
+        if details.get('total_devices_price'):
             devices_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_DEVICES",
-                    "Devices",
+                'label': texts.t(
+                    'MINIAPP_PURCHASE_BREAKDOWN_DEVICES',
+                    'Devices',
                 ),
-                "value": texts.format_price(details["total_devices_price"]),
+                'value': texts.format_price(details['total_devices_price']),
             }
             devices_discount_note = build_discount_note(
-                details.get("devices_discount_total", 0),
-                details.get("devices_discount_percent", 0),
+                details.get('devices_discount_total', 0),
+                details.get('devices_discount_percent', 0),
             )
             if devices_discount_note:
-                devices_item["discount_label"] = devices_discount_note
-                devices_item["discountLabel"] = devices_discount_note
+                devices_item['discount_label'] = devices_discount_note
+                devices_item['discountLabel'] = devices_discount_note
             breakdown.append(devices_item)
 
         if pricing.promo_discount_value:
             promo_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_PROMO",
-                    "Promo discount",
+                'label': texts.t(
+                    'MINIAPP_PURCHASE_BREAKDOWN_PROMO',
+                    'Promo discount',
                 ),
-                "value": f"- {texts.format_price(pricing.promo_discount_value)}",
+                'value': f'- {texts.format_price(pricing.promo_discount_value)}',
             }
             if promo_discount_line:
-                promo_item["discount_label"] = promo_discount_line
-                promo_item["discountLabel"] = promo_discount_line
+                promo_item['discount_label'] = promo_discount_line
+                promo_item['discountLabel'] = promo_discount_line
             breakdown.append(promo_item)
 
         missing = max(0, pricing.final_total - context.balance_kopeks)
-        status_message = ""
+        status_message = ''
         if missing > 0:
             status_message = texts.t(
-                "MINIAPP_PURCHASE_STATUS_INSUFFICIENT",
-                "Not enough funds on balance",
+                'MINIAPP_PURCHASE_STATUS_INSUFFICIENT',
+                'Not enough funds on balance',
             )
 
-        per_month_price = (
-            pricing.final_total // pricing.months
-            if pricing.months
-            else pricing.final_total
-        )
+        per_month_price = pricing.final_total // pricing.months if pricing.months else pricing.final_total
 
         return {
-            "total_price_kopeks": pricing.final_total,
-            "totalPriceKopeks": pricing.final_total,
-            "total_price_label": texts.format_price(pricing.final_total),
-            "totalPriceLabel": texts.format_price(pricing.final_total),
-            "original_price_kopeks": (
-                pricing.base_original_total if total_discount else None
-            ),
-            "originalPriceKopeks": (
-                pricing.base_original_total if total_discount else None
-            ),
-            "original_price_label": (
-                texts.format_price(pricing.base_original_total)
-                if total_discount
-                else None
-            ),
-            "originalPriceLabel": (
-                texts.format_price(pricing.base_original_total)
-                if total_discount
-                else None
-            ),
-            "discount_percent": overall_discount_percent,
-            "discountPercent": overall_discount_percent,
-            "discount_label": (
+            'total_price_kopeks': pricing.final_total,
+            'totalPriceKopeks': pricing.final_total,
+            'total_price_label': texts.format_price(pricing.final_total),
+            'totalPriceLabel': texts.format_price(pricing.final_total),
+            'original_price_kopeks': (pricing.base_original_total if total_discount else None),
+            'originalPriceKopeks': (pricing.base_original_total if total_discount else None),
+            'original_price_label': (texts.format_price(pricing.base_original_total) if total_discount else None),
+            'originalPriceLabel': (texts.format_price(pricing.base_original_total) if total_discount else None),
+            'discount_percent': overall_discount_percent,
+            'discountPercent': overall_discount_percent,
+            'discount_label': (
                 texts.t(
-                    "MINIAPP_PURCHASE_SUMMARY_DISCOUNT",
-                    "You save {amount}",
+                    'MINIAPP_PURCHASE_SUMMARY_DISCOUNT',
+                    'You save {amount}',
                 ).format(amount=texts.format_price(total_discount))
                 if total_discount
                 else None
             ),
-            "discountLabel": (
+            'discountLabel': (
                 texts.t(
-                    "MINIAPP_PURCHASE_SUMMARY_DISCOUNT",
-                    "You save {amount}",
+                    'MINIAPP_PURCHASE_SUMMARY_DISCOUNT',
+                    'You save {amount}',
                 ).format(amount=texts.format_price(total_discount))
                 if total_discount
                 else None
             ),
-            "discount_lines": discount_lines,
-            "discountLines": discount_lines,
-            "per_month_price_kopeks": per_month_price,
-            "perMonthPriceKopeks": per_month_price,
-            "per_month_price_label": texts.format_price(per_month_price),
-            "perMonthPriceLabel": texts.format_price(per_month_price),
-            "breakdown": [
-                {"label": item["label"], "value": item["value"]} for item in breakdown
-            ],
-            "balance_kopeks": context.balance_kopeks,
-            "balanceKopeks": context.balance_kopeks,
+            'discount_lines': discount_lines,
+            'discountLines': discount_lines,
+            'per_month_price_kopeks': per_month_price,
+            'perMonthPriceKopeks': per_month_price,
+            'per_month_price_label': texts.format_price(per_month_price),
+            'perMonthPriceLabel': texts.format_price(per_month_price),
+            'breakdown': [{'label': item['label'], 'value': item['value']} for item in breakdown],
+            'balance_kopeks': context.balance_kopeks,
+            'balanceKopeks': context.balance_kopeks,
             # round_kopeks=False — без него при FX-rounding нехватке (<1₽) юзер видит
             # "Баланс 150 ₽, не хватает 0 ₽" и не понимает что мешает покупке.
-            "balance_label": texts.format_price(
-                context.balance_kopeks, round_kopeks=False
-            ),
-            "balanceLabel": texts.format_price(
-                context.balance_kopeks, round_kopeks=False
-            ),
-            "missing_amount_kopeks": missing,
-            "missingAmountKopeks": missing,
-            "missing_amount_label": (
-                texts.format_price(missing, round_kopeks=False) if missing else None
-            ),
-            "missingAmountLabel": (
-                texts.format_price(missing, round_kopeks=False) if missing else None
-            ),
-            "can_purchase": missing == 0,
-            "canPurchase": missing == 0,
-            "status_message": status_message,
-            "statusMessage": status_message,
+            'balance_label': texts.format_price(context.balance_kopeks, round_kopeks=False),
+            'balanceLabel': texts.format_price(context.balance_kopeks, round_kopeks=False),
+            'missing_amount_kopeks': missing,
+            'missingAmountKopeks': missing,
+            'missing_amount_label': (texts.format_price(missing, round_kopeks=False) if missing else None),
+            'missingAmountLabel': (texts.format_price(missing, round_kopeks=False) if missing else None),
+            'can_purchase': missing == 0,
+            'canPurchase': missing == 0,
+            'status_message': status_message,
+            'statusMessage': status_message,
         }
 
     async def submit_purchase(
@@ -1151,24 +1018,22 @@ class MiniAppSubscriptionPurchaseService:
         pricing: PurchasePricingResult,
     ) -> dict[str, Any]:
         user = context.user
-        texts = get_texts(getattr(user, "language", None))
+        texts = get_texts(getattr(user, 'language', None))
 
         # Block only if pricing is genuinely invalid (no base price configured).
         # final_total == 0 with base_original_total > 0 means a valid 100% discount.
         if pricing.final_total <= 0 and pricing.base_original_total <= 0:
-            raise PurchaseValidationError(
-                "Invalid total amount", code="calculation_error"
-            )
+            raise PurchaseValidationError('Invalid total amount', code='calculation_error')
 
         if pricing.final_total > 0 and user.balance_kopeks < pricing.final_total:
             raise PurchaseBalanceError(
                 texts.t(
-                    "MINIAPP_PURCHASE_STATUS_INSUFFICIENT",
-                    "Not enough funds on balance",
+                    'MINIAPP_PURCHASE_STATUS_INSUFFICIENT',
+                    'Not enough funds on balance',
                 )
             )
 
-        description = f"Покупка подписки на {pricing.selection.period.days} дней"
+        description = f'Покупка подписки на {pricing.selection.period.days} дней'
         success = await subtract_user_balance(
             db,
             user,
@@ -1180,21 +1045,19 @@ class MiniAppSubscriptionPurchaseService:
         if not success:
             raise PurchaseBalanceError(
                 texts.t(
-                    "MINIAPP_PURCHASE_STATUS_INSUFFICIENT",
-                    "Not enough funds on balance",
+                    'MINIAPP_PURCHASE_STATUS_INSUFFICIENT',
+                    'Not enough funds on balance',
                 )
             )
 
         await db.refresh(user)
 
         subscription = context.subscription
-        if subscription is not None and getattr(subscription, "id", None):
+        if subscription is not None and getattr(subscription, 'id', None):
             # Lock subscription row to prevent concurrent extension race
             result = await db.execute(
                 select(Subscription)
-                .where(
-                    Subscription.id == subscription.id, Subscription.user_id == user.id
-                )
+                .where(Subscription.id == subscription.id, Subscription.user_id == user.id)
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
@@ -1204,18 +1067,15 @@ class MiniAppSubscriptionPurchaseService:
                 context.subscription = locked_sub
             else:
                 logger.warning(
-                    "Subscription from context not found after FOR UPDATE",
-                    subscription_id=getattr(subscription, "id", None),
+                    'Subscription from context not found after FOR UPDATE',
+                    subscription_id=getattr(subscription, 'id', None),
                     user_id=user.id,
                 )
                 subscription = None
                 context.subscription = None
         else:
-            context_subscription_id: int | None = context.payload.get("subscription_id")
-            if (
-                settings.is_multi_tariff_enabled()
-                and context_subscription_id is not None
-            ):
+            context_subscription_id: int | None = context.payload.get('subscription_id')
+            if settings.is_multi_tariff_enabled() and context_subscription_id is not None:
                 result = await db.execute(
                     select(Subscription)
                     .where(
@@ -1255,15 +1115,13 @@ class MiniAppSubscriptionPurchaseService:
                         db=db,
                         user_id=user.id,
                         trial_duration_days=trial_duration,
-                        payment_method="balance",
+                        payment_method='balance',
                         first_payment_amount_kopeks=pricing.final_total,
                         first_paid_period_days=pricing.selection.period.days,
                     )
-                except (
-                    Exception
-                ) as conversion_error:  # pragma: no cover - defensive logging
+                except Exception as conversion_error:  # pragma: no cover - defensive logging
                     logger.error(
-                        "Failed to create subscription conversion record",
+                        'Failed to create subscription conversion record',
                         conversion_error=conversion_error,
                     )
 
@@ -1279,11 +1137,7 @@ class MiniAppSubscriptionPurchaseService:
             else:
                 subscription.start_date = now
 
-            subscription.end_date = (
-                extension_base_date
-                + timedelta(days=pricing.selection.period.days)
-                + bonus_period
-            )
+            subscription.end_date = extension_base_date + timedelta(days=pricing.selection.period.days) + bonus_period
             subscription.updated_at = now
             subscription.traffic_used_gb = 0.0
 
@@ -1310,7 +1164,7 @@ class MiniAppSubscriptionPurchaseService:
                 )
                 await add_user_to_servers(db, pricing.server_ids)
             except Exception as error:  # pragma: no cover - defensive logging
-                logger.error("Failed to register subscription servers", error=error)
+                logger.error('Failed to register subscription servers', error=error)
 
         # Kill remaining trial subscriptions (trial = probe, dies on any paid purchase)
         from app.database.crud.subscription import (
@@ -1318,9 +1172,7 @@ class MiniAppSubscriptionPurchaseService:
             decrement_subscription_server_counts,
         )
 
-        killed_trials = await deactivate_user_trial_subscriptions(
-            db, user.id, exclude_subscription_id=subscription.id
-        )
+        killed_trials = await deactivate_user_trial_subscriptions(db, user.id, exclude_subscription_id=subscription.id)
 
         # Add remaining trial time from OTHER killed trials (current trial already handled above)
         if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID and killed_trials:
@@ -1329,9 +1181,7 @@ class MiniAppSubscriptionPurchaseService:
                 if _kt.end_date and _kt.end_date > now:
                     extra_seconds += max(0, (_kt.end_date - now).total_seconds())
             if extra_seconds > 0:
-                subscription.end_date = subscription.end_date + timedelta(
-                    seconds=extra_seconds
-                )
+                subscription.end_date = subscription.end_date + timedelta(seconds=extra_seconds)
                 await db.commit()
                 await db.refresh(subscription)
 
@@ -1341,16 +1191,14 @@ class MiniAppSubscriptionPurchaseService:
         for trial_sub in killed_trials:
             try:
                 _trial_uuid = trial_sub.remnawave_uuid or (
-                    getattr(user, "remnawave_uuid", None)
-                    if not settings.is_multi_tariff_enabled()
-                    else None
+                    getattr(user, 'remnawave_uuid', None) if not settings.is_multi_tariff_enabled() else None
                 )
                 if _trial_uuid:
                     await subscription_service.disable_remnawave_user(_trial_uuid)
                 await decrement_subscription_server_counts(db, trial_sub)
             except Exception as trial_err:
                 logger.warning(
-                    "Failed to disable trial on RemnaWave",
+                    'Failed to disable trial on RemnaWave',
                     error=trial_err,
                     trial_id=trial_sub.id,
                 )
@@ -1362,26 +1210,26 @@ class MiniAppSubscriptionPurchaseService:
             if settings.is_multi_tariff_enabled():
                 _should_create = not subscription.remnawave_uuid
             else:
-                _should_create = not getattr(user, "remnawave_uuid", None)
+                _should_create = not getattr(user, 'remnawave_uuid', None)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=True,
-                    reset_reason="miniapp purchase",
+                    reset_reason='miniapp purchase',
                 )
             else:
                 await subscription_service.update_remnawave_user(
                     db,
                     subscription,
                     reset_traffic=True,
-                    reset_reason="miniapp purchase",
+                    reset_reason='miniapp purchase',
                     sync_squads=True,
                 )
         except Exception as remnawave_error:  # pragma: no cover - defensive logging
             logger.error(
-                "Failed to sync subscription with RemnaWave",
+                'Failed to sync subscription with RemnaWave',
                 remnawave_error=remnawave_error,
             )
             from app.services.remnawave_retry_queue import remnawave_retry_queue
@@ -1389,11 +1237,7 @@ class MiniAppSubscriptionPurchaseService:
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=user.id,
-                action=(
-                    "create"
-                    if not getattr(subscription, "remnawave_uuid", None)
-                    else "update"
-                ),
+                action=('create' if not getattr(subscription, 'remnawave_uuid', None) else 'update'),
             )
 
         transaction = await create_transaction(
@@ -1401,7 +1245,7 @@ class MiniAppSubscriptionPurchaseService:
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=pricing.final_total,
-            description=f"Подписка на {pricing.selection.period.days} дней ({pricing.months} мес)",
+            description=f'Подписка на {pricing.selection.period.days} дней ({pricing.months} мес)',
             payment_method=PaymentMethod.BALANCE,
         )
 
@@ -1409,25 +1253,25 @@ class MiniAppSubscriptionPurchaseService:
         await db.refresh(subscription)
 
         message = texts.t(
-            "SUBSCRIPTION_PURCHASED",
-            "Subscription purchased successfully!",
+            'SUBSCRIPTION_PURCHASED',
+            'Subscription purchased successfully!',
         )
 
         if pricing.promo_discount_value:
             note = texts.t(
-                "SUBSCRIPTION_PROMO_DISCOUNT_NOTE",
-                "Extra discount {percent}%: -{amount}",
+                'SUBSCRIPTION_PROMO_DISCOUNT_NOTE',
+                'Extra discount {percent}%: -{amount}',
             ).format(
                 percent=pricing.promo_discount_percent,
                 amount=texts.format_price(pricing.promo_discount_value),
             )
-            message = f"{message}\n\n{note}"
+            message = f'{message}\n\n{note}'
 
         return {
-            "subscription": subscription,
-            "transaction": transaction,
-            "was_trial_conversion": was_trial_conversion,
-            "message": message,
+            'subscription': subscription,
+            'transaction': transaction,
+            'was_trial_conversion': was_trial_conversion,
+            'message': message,
         }
 
 

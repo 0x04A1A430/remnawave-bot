@@ -28,25 +28,25 @@ logger = structlog.get_logger(__name__)
 def _build_poll_invitation_text(poll: Poll, language: str) -> str:
     texts = get_texts(language)
 
-    lines: list[str] = [f"<b>{html.escape(poll.title)}</b>"]
+    lines: list[str] = [f'<b>{html.escape(poll.title)}</b>']
     if poll.description:
         lines.append(html.escape(poll.description))
 
     if poll.reward_enabled and poll.reward_amount_kopeks > 0:
         reward_line = texts.t(
-            "POLL_INVITATION_REWARD",
-            "За участие вы получите {amount}.",
+            'POLL_INVITATION_REWARD',
+            'За участие вы получите {amount}.',
         ).format(amount=settings.format_price(poll.reward_amount_kopeks))
         lines.append(reward_line)
 
     lines.append(
         texts.t(
-            "POLL_INVITATION_START",
-            "Нажмите кнопку ниже, чтобы пройти опрос.",
+            'POLL_INVITATION_START',
+            'Нажмите кнопку ниже, чтобы пройти опрос.',
         )
     )
 
-    return "\n\n".join(lines)
+    return '\n\n'.join(lines)
 
 
 def build_start_keyboard(response_id: int, language: str) -> InlineKeyboardMarkup:
@@ -55,8 +55,8 @@ def build_start_keyboard(response_id: int, language: str) -> InlineKeyboardMarku
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t("POLL_START_BUTTON", "Пройти опрос"),
-                    callback_data=f"poll_start:{response_id}",
+                    text=texts.t('POLL_START_BUTTON', 'Пройти опрос'),
+                    callback_data=f'poll_start:{response_id}',
                 )
             ]
         ]
@@ -89,16 +89,12 @@ async def send_poll_to_users(
     # Получаем список пользователей, которые уже прошли опрос, за один запрос
     user_ids = [user_snapshot.id for user_snapshot in user_snapshots]
     existing_responses_result = await db.execute(
-        select(PollResponse.user_id).where(
-            and_(PollResponse.poll_id == poll_id, PollResponse.user_id.in_(user_ids))
-        )
+        select(PollResponse.user_id).where(and_(PollResponse.poll_id == poll_id, PollResponse.user_id.in_(user_ids)))
     )
     existing_user_ids = set(existing_responses_result.scalars().all())
 
     # Используем умеренный семафор, чтобы не превышать лимиты подключений к БД
-    semaphore = asyncio.Semaphore(
-        30
-    )  # Баланс между производительностью и нагрузкой на БД
+    semaphore = asyncio.Semaphore(30)  # Баланс между производительностью и нагрузкой на БД
 
     # Создаем отдельную функцию для создания отдельной сессии для каждой отправки
     async def send_poll_invitation(user_snapshot):
@@ -106,11 +102,11 @@ async def send_poll_to_users(
         async with semaphore:
             # Skip email-only users (no telegram_id)
             if not user_snapshot.telegram_id:
-                return "skipped"
+                return 'skipped'
 
             # Пропускаем пользователей, которые уже прошли опрос
             if user_snapshot.id in existing_user_ids:
-                return "skipped"
+                return 'skipped'
 
             # Создаем новую сессию для изоляции транзакции
             async with AsyncSessionLocal() as new_db:
@@ -126,7 +122,7 @@ async def send_poll_to_users(
                     )
                     existing_id = existing_response.scalar_one_or_none()
                     if existing_id:
-                        return "skipped"
+                        return 'skipped'
 
                     response = PollResponse(
                         poll_id=poll_id,
@@ -143,29 +139,26 @@ async def send_poll_to_users(
                         chat_id=user_snapshot.telegram_id,
                         text=text,
                         reply_markup=keyboard,
-                        parse_mode="HTML",
+                        parse_mode='HTML',
                         disable_web_page_preview=True,
                     )
 
                     await new_db.commit()
-                    return "sent"
+                    return 'sent'
                 except TelegramBadRequest as error:
                     error_text = str(error).lower()
-                    if (
-                        "chat not found" in error_text
-                        or "bot was blocked by the user" in error_text
-                    ):
+                    if 'chat not found' in error_text or 'bot was blocked by the user' in error_text:
                         await new_db.rollback()
-                        return "skipped"
+                        return 'skipped'
                     # pragma: no cover - unexpected telegram error
                     await new_db.rollback()
-                    return "failed"
+                    return 'failed'
                 except Exception as error:  # pragma: no cover - defensive logging
                     await new_db.rollback()
                     # Проверяем, является ли ошибка связанной с лимитом подключений
-                    if "too many clients" in str(error).lower():
+                    if 'too many clients' in str(error).lower():
                         logger.warning(
-                            "Ограничение на количество подключений к БД при обработке пользователя",
+                            'Ограничение на количество подключений к БД при обработке пользователя',
                             poll_id=poll_id,
                             telegram_id=user_snapshot.telegram_id,
                         )
@@ -173,12 +166,12 @@ async def send_poll_to_users(
                         await asyncio.sleep(0.1)
                     else:
                         logger.error(
-                            "Ошибка отправки опроса пользователю",
+                            'Ошибка отправки опроса пользователю',
                             poll_id=poll_id,
                             telegram_id=user_snapshot.telegram_id,
                             error=error,
                         )
-                    return "failed"
+                    return 'failed'
 
     # Отправляем все приглашения одновременно без задержек для максимальной скорости
     tasks = [send_poll_invitation(user_snapshot) for user_snapshot in user_snapshots]
@@ -186,20 +179,20 @@ async def send_poll_to_users(
 
     for result in results:
         if isinstance(result, str):  # Успешно выполненная задача
-            if result == "sent":
+            if result == 'sent':
                 sent += 1
-            elif result == "failed":
+            elif result == 'failed':
                 failed += 1
-            elif result == "skipped":
+            elif result == 'skipped':
                 skipped += 1
         elif isinstance(result, Exception):  # Ошибка выполнения задачи
             failed += 1
 
     return {
-        "sent": sent,
-        "failed": failed,
-        "skipped": skipped,
-        "total": sent + failed + skipped,
+        'sent': sent,
+        'failed': failed,
+        'skipped': skipped,
+        'total': sent + failed + skipped,
     }
 
 
@@ -235,7 +228,7 @@ async def reward_user_for_poll(
 
     await db.refresh(
         response,
-        attribute_names=["reward_given", "reward_amount_kopeks"],
+        attribute_names=['reward_given', 'reward_amount_kopeks'],
     )
 
     return poll.reward_amount_kopeks
@@ -257,9 +250,7 @@ async def get_next_question(
     return None, None
 
 
-async def get_question_option(
-    question: PollQuestion, option_id: int
-) -> PollOption | None:
+async def get_question_option(question: PollQuestion, option_id: int) -> PollOption | None:
     for option in question.options:
         if option.id == option_id:
             return option

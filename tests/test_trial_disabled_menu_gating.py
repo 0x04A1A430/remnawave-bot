@@ -19,11 +19,7 @@ from app.database.models import User
 
 
 def _menu_has_trial(markup) -> bool:
-    return any(
-        getattr(btn, "callback_data", None) == "menu_trial"
-        for row in markup.inline_keyboard
-        for btn in row
-    )
+    return any(getattr(btn, 'callback_data', None) == 'menu_trial' for row in markup.inline_keyboard for btn in row)
 
 
 # --- Surface 1: default sync keyboard -------------------------------------
@@ -35,15 +31,11 @@ def test_keyboard_hides_trial_when_duration_zero():
     orig = settings.TRIAL_DURATION_DAYS
     try:
         settings.TRIAL_DURATION_DAYS = 0
-        kb = get_main_menu_keyboard(
-            has_had_paid_subscription=False, has_active_subscription=False
-        )
+        kb = get_main_menu_keyboard(has_had_paid_subscription=False, has_active_subscription=False)
         assert not _menu_has_trial(kb)
 
         settings.TRIAL_DURATION_DAYS = 3
-        kb = get_main_menu_keyboard(
-            has_had_paid_subscription=False, has_active_subscription=False
-        )
+        kb = get_main_menu_keyboard(has_had_paid_subscription=False, has_active_subscription=False)
         assert _menu_has_trial(kb)
     finally:
         settings.TRIAL_DURATION_DAYS = orig
@@ -55,10 +47,8 @@ def test_keyboard_hides_trial_when_disabled_for_all():
     orig_days, orig_disabled = settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR
     try:
         settings.TRIAL_DURATION_DAYS = 3
-        settings.TRIAL_DISABLED_FOR = "all"
-        kb = get_main_menu_keyboard(
-            has_had_paid_subscription=False, has_active_subscription=False
-        )
+        settings.TRIAL_DISABLED_FOR = 'all'
+        kb = get_main_menu_keyboard(has_had_paid_subscription=False, has_active_subscription=False)
         assert not _menu_has_trial(kb)
     finally:
         settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = (
@@ -75,19 +65,19 @@ def test_menu_layout_hides_trial_when_disabled():
     from app.services.menu_layout.service import MenuLayoutService
 
     ctx = MenuContext(has_had_paid_subscription=False, has_active_subscription=False)
-    cond = {"show_trial": True}
+    cond = {'show_trial': True}
 
     orig_days, orig_disabled = settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR
     try:
         settings.TRIAL_DURATION_DAYS = 3
-        settings.TRIAL_DISABLED_FOR = "none"
+        settings.TRIAL_DISABLED_FOR = 'none'
         assert MenuLayoutService._evaluate_conditions(cond, ctx) is True
 
         settings.TRIAL_DURATION_DAYS = 0
         assert MenuLayoutService._evaluate_conditions(cond, ctx) is False
 
         settings.TRIAL_DURATION_DAYS = 3
-        settings.TRIAL_DISABLED_FOR = "all"
+        settings.TRIAL_DISABLED_FOR = 'all'
         assert MenuLayoutService._evaluate_conditions(cond, ctx) is False
     finally:
         settings.TRIAL_DURATION_DAYS, settings.TRIAL_DISABLED_FOR = (
@@ -105,8 +95,8 @@ def _make_cb_user_db():
     cb.message.edit_text = AsyncMock()
     cb.answer = AsyncMock()
     user = MagicMock(spec=User)
-    user.language = "ru"
-    user.auth_type = "telegram"
+    user.language = 'ru'
+    user.auth_type = 'telegram'
     user.restriction_subscription = False
     user.is_trial_already_used = MagicMock(return_value=False)
     db = AsyncMock(spec=AsyncSession)

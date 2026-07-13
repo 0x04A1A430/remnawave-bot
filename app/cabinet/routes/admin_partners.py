@@ -35,7 +35,7 @@ from ..schemas.partners import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/partners", tags=["Cabinet Admin Partners"])
+router = APIRouter(prefix='/admin/partners', tags=['Cabinet Admin Partners'])
 
 
 # ==================== Settings ====================
@@ -49,7 +49,7 @@ class PartnerSettingsResponse(BaseModel):
     partner_section_visible: bool
     referral_program_enabled: bool
     first_payment_commission_percent: int | None = None
-    recurring_commission_tiers: str = ""
+    recurring_commission_tiers: str = ''
 
 
 class PartnerSettingsUpdateRequest(BaseModel):
@@ -76,18 +76,18 @@ def _build_partner_settings_response() -> PartnerSettingsResponse:
     )
 
 
-@router.get("/settings", response_model=PartnerSettingsResponse)
+@router.get('/settings', response_model=PartnerSettingsResponse)
 async def get_partner_settings(
-    admin: User = Depends(require_permission("partners:settings")),
+    admin: User = Depends(require_permission('partners:settings')),
 ):
     """Get partner system settings."""
     return _build_partner_settings_response()
 
 
-@router.patch("/settings", response_model=PartnerSettingsResponse)
+@router.patch('/settings', response_model=PartnerSettingsResponse)
 async def update_partner_settings(
     request: PartnerSettingsUpdateRequest,
-    admin: User = Depends(require_permission("partners:settings")),
+    admin: User = Depends(require_permission('partners:settings')),
 ):
     """Update partner system settings."""
     import asyncio
@@ -97,74 +97,50 @@ async def update_partner_settings(
     if request.withdrawal_enabled is not None:
         settings.REFERRAL_WITHDRAWAL_ENABLED = request.withdrawal_enabled
     if request.withdrawal_min_amount_kopeks is not None:
-        settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS = (
-            request.withdrawal_min_amount_kopeks
-        )
+        settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS = request.withdrawal_min_amount_kopeks
     if request.withdrawal_cooldown_days is not None:
         settings.REFERRAL_WITHDRAWAL_COOLDOWN_DAYS = request.withdrawal_cooldown_days
     if request.withdrawal_requisites_text is not None:
-        settings.REFERRAL_WITHDRAWAL_REQUISITES_TEXT = (
-            request.withdrawal_requisites_text
-        )
+        settings.REFERRAL_WITHDRAWAL_REQUISITES_TEXT = request.withdrawal_requisites_text
     if request.partner_section_visible is not None:
         settings.REFERRAL_PARTNER_SECTION_VISIBLE = request.partner_section_visible
     if request.referral_program_enabled is not None:
         settings.REFERRAL_PROGRAM_ENABLED = request.referral_program_enabled
     if request.first_payment_commission_percent is not None:
-        settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT = (
-            request.first_payment_commission_percent
-        )
+        settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT = request.first_payment_commission_percent
     if request.recurring_commission_tiers is not None:
-        settings.REFERRAL_RECURRING_COMMISSION_TIERS = (
-            request.recurring_commission_tiers
-        )
+        settings.REFERRAL_RECURRING_COMMISSION_TIERS = request.recurring_commission_tiers
 
     # Persist to .env file
     try:
-        env_file = Path(".env")
+        env_file = Path('.env')
         if await asyncio.to_thread(env_file.exists):
             lines = (await asyncio.to_thread(env_file.read_text)).splitlines()
             updates: dict[str, str] = {}
 
             if request.withdrawal_enabled is not None:
-                updates["REFERRAL_WITHDRAWAL_ENABLED"] = str(
-                    request.withdrawal_enabled
-                ).lower()
+                updates['REFERRAL_WITHDRAWAL_ENABLED'] = str(request.withdrawal_enabled).lower()
             if request.withdrawal_min_amount_kopeks is not None:
-                updates["REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS"] = str(
-                    request.withdrawal_min_amount_kopeks
-                )
+                updates['REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS'] = str(request.withdrawal_min_amount_kopeks)
             if request.withdrawal_cooldown_days is not None:
-                updates["REFERRAL_WITHDRAWAL_COOLDOWN_DAYS"] = str(
-                    request.withdrawal_cooldown_days
-                )
+                updates['REFERRAL_WITHDRAWAL_COOLDOWN_DAYS'] = str(request.withdrawal_cooldown_days)
             if request.withdrawal_requisites_text is not None:
                 # Sanitize: replace newlines to prevent .env injection
                 sanitized = (
-                    request.withdrawal_requisites_text.replace("\r\n", " ")
-                    .replace("\n", " ")
-                    .replace("\r", " ")
+                    request.withdrawal_requisites_text.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
                 )
-                updates["REFERRAL_WITHDRAWAL_REQUISITES_TEXT"] = sanitized
+                updates['REFERRAL_WITHDRAWAL_REQUISITES_TEXT'] = sanitized
             if request.partner_section_visible is not None:
-                updates["REFERRAL_PARTNER_SECTION_VISIBLE"] = str(
-                    request.partner_section_visible
-                ).lower()
+                updates['REFERRAL_PARTNER_SECTION_VISIBLE'] = str(request.partner_section_visible).lower()
             if request.referral_program_enabled is not None:
-                updates["REFERRAL_PROGRAM_ENABLED"] = str(
-                    request.referral_program_enabled
-                ).lower()
+                updates['REFERRAL_PROGRAM_ENABLED'] = str(request.referral_program_enabled).lower()
             if request.first_payment_commission_percent is not None:
-                updates["REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT"] = str(
-                    request.first_payment_commission_percent
-                )
+                updates['REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT'] = str(request.first_payment_commission_percent)
             if request.recurring_commission_tiers is not None:
                 sanitized_tiers = (
-                    request.recurring_commission_tiers.replace("\r\n", "")
-                    .replace("\n", "")
-                    .replace("\r", "")
+                    request.recurring_commission_tiers.replace('\r\n', '').replace('\n', '').replace('\r', '')
                 )
-                updates["REFERRAL_RECURRING_COMMISSION_TIERS"] = sanitized_tiers
+                updates['REFERRAL_RECURRING_COMMISSION_TIERS'] = sanitized_tiers
 
             new_lines = []
             updated_keys: set[str] = set()
@@ -172,8 +148,8 @@ async def update_partner_settings(
             for line in lines:
                 updated = False
                 for key, value in updates.items():
-                    if line.startswith(f"{key}="):
-                        new_lines.append(f"{key}={value}")
+                    if line.startswith(f'{key}='):
+                        new_lines.append(f'{key}={value}')
                         updated_keys.add(key)
                         updated = True
                         break
@@ -182,12 +158,12 @@ async def update_partner_settings(
 
             for key, value in updates.items():
                 if key not in updated_keys:
-                    new_lines.append(f"{key}={value}")
+                    new_lines.append(f'{key}={value}')
 
-            await asyncio.to_thread(env_file.write_text, "\n".join(new_lines) + "\n")
-            logger.info("Updated partner settings in .env file", admin_id=admin.id)
+            await asyncio.to_thread(env_file.write_text, '\n'.join(new_lines) + '\n')
+            logger.info('Updated partner settings in .env file', admin_id=admin.id)
     except Exception as e:
-        logger.warning("Failed to update .env file", error=e)
+        logger.warning('Failed to update .env file', error=e)
 
     return _build_partner_settings_response()
 
@@ -195,14 +171,12 @@ async def update_partner_settings(
 # ==================== Applications (static paths first) ====================
 
 
-@router.get("/applications", response_model=AdminPartnerApplicationsResponse)
+@router.get('/applications', response_model=AdminPartnerApplicationsResponse)
 async def list_applications(
-    application_status: (
-        Literal["pending", "approved", "rejected", "none"] | None
-    ) = Query(None, alias="status"),
+    application_status: (Literal['pending', 'approved', 'rejected', 'none'] | None) = Query(None, alias='status'),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    admin: User = Depends(require_permission("partners:read")),
+    admin: User = Depends(require_permission('partners:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List partner applications."""
@@ -245,11 +219,11 @@ async def list_applications(
     return AdminPartnerApplicationsResponse(items=items, total=total)
 
 
-@router.post("/applications/{application_id}/approve")
+@router.post('/applications/{application_id}/approve')
 async def approve_application(
     application_id: int,
     request: AdminApproveRequest,
-    admin: User = Depends(require_permission("partners:approve")),
+    admin: User = Depends(require_permission('partners:approve')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Approve a partner application."""
@@ -279,8 +253,10 @@ async def approve_application(
             application = await db.get(PartnerApplication, application_id)
             user = await db.get(User, application.user_id) if application else None
             if user:
-                comment_text = f"\n{request.comment}" if request.comment else ""
-                tg_message = f"Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}"
+                comment_text = f'\n{request.comment}' if request.comment else ''
+                tg_message = (
+                    f'Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
+                )
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_approved(
@@ -293,16 +269,16 @@ async def approve_application(
                 finally:
                     await bot.session.close()
     except Exception as e:
-        logger.error("Failed to send partner approval notification", error=e)
+        logger.error('Failed to send partner approval notification', error=e)
 
-    return {"success": True}
+    return {'success': True}
 
 
-@router.post("/applications/{application_id}/reject")
+@router.post('/applications/{application_id}/reject')
 async def reject_application(
     application_id: int,
     request: AdminRejectRequest,
-    admin: User = Depends(require_permission("partners:approve")),
+    admin: User = Depends(require_permission('partners:approve')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reject a partner application."""
@@ -331,10 +307,8 @@ async def reject_application(
             application = await db.get(PartnerApplication, application_id)
             user = await db.get(User, application.user_id) if application else None
             if user:
-                comment_text = (
-                    f"\nПричина: {request.comment}" if request.comment else ""
-                )
-                tg_message = f"Ваша заявка на партнёрство отклонена.{comment_text}"
+                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
+                tg_message = f'Ваша заявка на партнёрство отклонена.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_rejected(
@@ -346,60 +320,52 @@ async def reject_application(
                 finally:
                     await bot.session.close()
     except Exception as e:
-        logger.error("Failed to send partner rejection notification", error=e)
+        logger.error('Failed to send partner rejection notification', error=e)
 
-    return {"success": True}
+    return {'success': True}
 
 
 # ==================== Stats (static paths) ====================
 
 
-@router.get("/stats")
+@router.get('/stats')
 async def get_partner_stats(
-    admin: User = Depends(require_permission("partners:read")),
+    admin: User = Depends(require_permission('partners:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get overall partner statistics."""
     total_partners = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.partner_status == PartnerStatus.APPROVED.value)
+        select(func.count()).select_from(User).where(User.partner_status == PartnerStatus.APPROVED.value)
     )
     pending_apps = await db.execute(
         select(func.count())
         .select_from(PartnerApplication)
         .where(PartnerApplication.status == PartnerStatus.PENDING.value)
     )
-    total_referrals = await db.execute(
-        select(func.count()).select_from(User).where(User.referred_by_id.isnot(None))
-    )
-    total_earnings = await db.execute(
-        select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
-    )
+    total_referrals = await db.execute(select(func.count()).select_from(User).where(User.referred_by_id.isnot(None)))
+    total_earnings = await db.execute(select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)))
 
     return {
-        "total_partners": total_partners.scalar() or 0,
-        "pending_applications": pending_apps.scalar() or 0,
-        "total_referrals": total_referrals.scalar() or 0,
-        "total_earnings_kopeks": total_earnings.scalar() or 0,
+        'total_partners': total_partners.scalar() or 0,
+        'pending_applications': pending_apps.scalar() or 0,
+        'total_referrals': total_referrals.scalar() or 0,
+        'total_earnings_kopeks': total_earnings.scalar() or 0,
     }
 
 
 # ==================== Partners list ====================
 
 
-@router.get("", response_model=AdminPartnerListResponse)
+@router.get('', response_model=AdminPartnerListResponse)
 async def list_partners(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    admin: User = Depends(require_permission("partners:read")),
+    admin: User = Depends(require_permission('partners:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List approved partners."""
     count_result = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.partner_status == PartnerStatus.APPROVED.value)
+        select(func.count()).select_from(User).where(User.partner_status == PartnerStatus.APPROVED.value)
     )
     total = count_result.scalar() or 0
 
@@ -458,10 +424,10 @@ async def list_partners(
 # ==================== Partner detail (parametric paths last) ====================
 
 
-@router.get("/{user_id}", response_model=AdminPartnerDetailResponse)
+@router.get('/{user_id}', response_model=AdminPartnerDetailResponse)
 async def get_partner_detail(
     user_id: int,
-    admin: User = Depends(require_permission("partners:read")),
+    admin: User = Depends(require_permission('partners:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed partner info."""
@@ -469,23 +435,19 @@ async def get_partner_detail(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден",
+            detail='Пользователь не найден',
         )
 
     stats = await PartnerStatsService.get_referrer_detailed_stats(db, user_id)
 
     # Get assigned campaigns with per-campaign stats
     campaigns_result = await db.execute(
-        select(AdvertisingCampaign).where(
-            AdvertisingCampaign.partner_user_id == user_id
-        )
+        select(AdvertisingCampaign).where(AdvertisingCampaign.partner_user_id == user_id)
     )
     campaigns = campaigns_result.scalars().all()
 
     campaign_ids = [c.id for c in campaigns]
-    per_campaign_stats = await PartnerStatsService.get_per_campaign_stats(
-        db, user_id, campaign_ids
-    )
+    per_campaign_stats = await PartnerStatsService.get_per_campaign_stats(db, user_id, campaign_ids)
 
     campaign_list = [
         CampaignSummary(
@@ -493,17 +455,15 @@ async def get_partner_detail(
             name=c.name,
             start_parameter=c.start_parameter,
             is_active=c.is_active,
-            registrations_count=per_campaign_stats.get(c.id, {}).get(
-                "registrations_count", 0
-            ),
-            referrals_count=per_campaign_stats.get(c.id, {}).get("referrals_count", 0),
-            earnings_kopeks=per_campaign_stats.get(c.id, {}).get("earnings_kopeks", 0),
+            registrations_count=per_campaign_stats.get(c.id, {}).get('registrations_count', 0),
+            referrals_count=per_campaign_stats.get(c.id, {}).get('referrals_count', 0),
+            earnings_kopeks=per_campaign_stats.get(c.id, {}).get('earnings_kopeks', 0),
         )
         for c in campaigns
     ]
 
-    summary = stats["summary"]
-    earnings = stats["earnings"]
+    summary = stats['summary']
+    earnings = stats['earnings']
 
     return AdminPartnerDetailResponse(
         user_id=user.id,
@@ -513,24 +473,24 @@ async def get_partner_detail(
         commission_percent=user.referral_commission_percent,
         partner_status=user.partner_status,
         balance_kopeks=user.balance_kopeks,
-        total_referrals=summary["total_referrals"],
-        paid_referrals=summary["paid_referrals"],
-        active_referrals=summary["active_referrals"],
-        earnings_all_time=earnings["all_time_kopeks"],
-        earnings_today=earnings["today_kopeks"],
-        earnings_week=earnings["week_kopeks"],
-        earnings_month=earnings["month_kopeks"],
-        conversion_to_paid=summary["conversion_to_paid_percent"],
+        total_referrals=summary['total_referrals'],
+        paid_referrals=summary['paid_referrals'],
+        active_referrals=summary['active_referrals'],
+        earnings_all_time=earnings['all_time_kopeks'],
+        earnings_today=earnings['today_kopeks'],
+        earnings_week=earnings['week_kopeks'],
+        earnings_month=earnings['month_kopeks'],
+        conversion_to_paid=summary['conversion_to_paid_percent'],
         campaigns=campaign_list,
         created_at=user.created_at,
     )
 
 
-@router.patch("/{user_id}/commission")
+@router.patch('/{user_id}/commission')
 async def update_commission(
     user_id: int,
     request: AdminUpdateCommissionRequest,
-    admin: User = Depends(require_permission("partners:edit")),
+    admin: User = Depends(require_permission('partners:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update partner commission percent."""
@@ -538,13 +498,13 @@ async def update_commission(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден",
+            detail='Пользователь не найден',
         )
 
     if user.partner_status != PartnerStatus.APPROVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Пользователь не является партнёром",
+            detail='Пользователь не является партнёром',
         )
 
     old_commission = user.referral_commission_percent
@@ -552,26 +512,24 @@ async def update_commission(
     await db.commit()
 
     logger.info(
-        "Комиссия партнёра обновлена",
+        'Комиссия партнёра обновлена',
         user_id=user_id,
         old_commission=old_commission,
         new_commission=request.commission_percent,
         admin_id=admin.id,
     )
 
-    return {"success": True, "commission_percent": request.commission_percent}
+    return {'success': True, 'commission_percent': request.commission_percent}
 
 
-@router.post("/{user_id}/revoke")
+@router.post('/{user_id}/revoke')
 async def revoke_partner(
     user_id: int,
-    admin: User = Depends(require_permission("partners:revoke")),
+    admin: User = Depends(require_permission('partners:revoke')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Revoke partner status."""
-    success, error = await partner_application_service.revoke_partner(
-        db, user_id=user_id, admin_id=admin.id
-    )
+    success, error = await partner_application_service.revoke_partner(db, user_id=user_id, admin_id=admin.id)
 
     if not success:
         raise HTTPException(
@@ -579,14 +537,14 @@ async def revoke_partner(
             detail=error,
         )
 
-    return {"success": True}
+    return {'success': True}
 
 
-@router.post("/{user_id}/campaigns/{campaign_id}/assign")
+@router.post('/{user_id}/campaigns/{campaign_id}/assign')
 async def assign_campaign(
     user_id: int,
     campaign_id: int,
-    admin: User = Depends(require_permission("partners:edit")),
+    admin: User = Depends(require_permission('partners:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Assign a campaign to a partner."""
@@ -594,14 +552,14 @@ async def assign_campaign(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Кампания не найдена",
+            detail='Кампания не найдена',
         )
 
     user = await db.get(User, user_id)
     if not user or user.partner_status != PartnerStatus.APPROVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Пользователь не является партнёром",
+            detail='Пользователь не является партнёром',
         )
 
     # Atomic check-and-set to prevent race conditions
@@ -619,24 +577,24 @@ async def assign_campaign(
     if result.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Кампания уже привязана к другому партнёру",
+            detail='Кампания уже привязана к другому партнёру',
         )
     await db.commit()
 
     logger.info(
-        "Кампания привязана к партнёру",
+        'Кампания привязана к партнёру',
         campaign_id=campaign_id,
         partner_user_id=user_id,
         admin_id=admin.id,
     )
-    return {"success": True}
+    return {'success': True}
 
 
-@router.post("/{user_id}/campaigns/{campaign_id}/unassign")
+@router.post('/{user_id}/campaigns/{campaign_id}/unassign')
 async def unassign_campaign(
     user_id: int,
     campaign_id: int,
-    admin: User = Depends(require_permission("partners:edit")),
+    admin: User = Depends(require_permission('partners:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Unassign a campaign from a partner."""
@@ -654,18 +612,18 @@ async def unassign_campaign(
         if not campaign:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Кампания не найдена",
+                detail='Кампания не найдена',
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Кампания не привязана к этому партнёру",
+            detail='Кампания не привязана к этому партнёру',
         )
     await db.commit()
 
     logger.info(
-        "Кампания откреплена от партнёра",
+        'Кампания откреплена от партнёра',
         campaign_id=campaign_id,
         partner_user_id=user_id,
         admin_id=admin.id,
     )
-    return {"success": True}
+    return {'success': True}

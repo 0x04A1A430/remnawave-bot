@@ -24,15 +24,13 @@ from ..schemas.channel import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(
-    prefix="/admin/channel-subscriptions", tags=["Cabinet Admin Channels"]
-)
+router = APIRouter(prefix='/admin/channel-subscriptions', tags=['Cabinet Admin Channels'])
 
 
-@router.get("", response_model=ChannelListResponse)
+@router.get('', response_model=ChannelListResponse)
 async def list_channels(
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(require_permission("channels:read")),
+    _admin: User = Depends(require_permission('channels:read')),
 ) -> ChannelListResponse:
     channels = await get_all_channels(db)
     return ChannelListResponse(
@@ -41,11 +39,11 @@ async def list_channels(
     )
 
 
-@router.post("", response_model=ChannelResponse, status_code=201)
+@router.post('', response_model=ChannelResponse, status_code=201)
 async def create_channel(
     data: ChannelCreateRequest,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(require_permission("channels:edit")),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> ChannelResponse:
     ch = await add_channel(
         db,
@@ -59,41 +57,41 @@ async def create_channel(
     return ChannelResponse.model_validate(ch)
 
 
-@router.patch("/{channel_db_id}", response_model=ChannelResponse)
+@router.patch('/{channel_db_id}', response_model=ChannelResponse)
 async def update_channel_endpoint(
     channel_db_id: int,
     data: ChannelUpdateRequest,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(require_permission("channels:edit")),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> ChannelResponse:
     update_data = data.model_dump(exclude_unset=True)
     ch = await update_channel(db, channel_db_id, **update_data)
     if not ch:
-        raise HTTPException(status_code=404, detail="Channel not found")
+        raise HTTPException(status_code=404, detail='Channel not found')
     await channel_subscription_service.invalidate_channels_cache()
     return ChannelResponse.model_validate(ch)
 
 
-@router.post("/{channel_db_id}/toggle", response_model=ChannelResponse)
+@router.post('/{channel_db_id}/toggle', response_model=ChannelResponse)
 async def toggle_channel_endpoint(
     channel_db_id: int,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(require_permission("channels:edit")),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> ChannelResponse:
     ch = await toggle_channel(db, channel_db_id)
     if not ch:
-        raise HTTPException(status_code=404, detail="Channel not found")
+        raise HTTPException(status_code=404, detail='Channel not found')
     await channel_subscription_service.invalidate_channels_cache()
     return ChannelResponse.model_validate(ch)
 
 
-@router.delete("/{channel_db_id}", status_code=204)
+@router.delete('/{channel_db_id}', status_code=204)
 async def delete_channel_endpoint(
     channel_db_id: int,
     db: AsyncSession = Depends(get_cabinet_db),
-    _admin: User = Depends(require_permission("channels:edit")),
+    _admin: User = Depends(require_permission('channels:edit')),
 ) -> None:
     ok = await delete_channel(db, channel_db_id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Channel not found")
+        raise HTTPException(status_code=404, detail='Channel not found')
     await channel_subscription_service.invalidate_channels_cache()

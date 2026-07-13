@@ -37,57 +37,53 @@ from .branding import ALLOWED_BG_TYPES, _validate_settings
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/landings", tags=["Cabinet Admin Landings"])
+router = APIRouter(prefix='/admin/landings', tags=['Cabinet Admin Landings'])
 
 # Slugs that conflict with public landing router path segments
 _RESERVED_SLUGS = frozenset(
     {
-        "purchase",
-        "gift",
-        "success",
-        "admin",
-        "api",
-        "health",
-        "static",
-        "assets",
-        "favicon",
-        "robots",
-        "sitemap",
-        "well-known",
+        'purchase',
+        'gift',
+        'success',
+        'admin',
+        'api',
+        'health',
+        'static',
+        'assets',
+        'favicon',
+        'robots',
+        'sitemap',
+        'well-known',
     }
 )
 
 
-_ALLOWED_BG_CONFIG_KEYS = frozenset(
-    {"enabled", "type", "settings", "opacity", "blur", "reducedOnMobile"}
-)
+_ALLOWED_BG_CONFIG_KEYS = frozenset({'enabled', 'type', 'settings', 'opacity', 'blur', 'reducedOnMobile'})
 
 
 def _validate_background_config(v: dict | None) -> dict | None:
     """Validate and sanitize background_config, reusing branding constraints."""
     if v is None:
         return None
-    if not isinstance(v.get("enabled"), bool):
-        raise ValueError("background_config.enabled must be a boolean")
-    bg_type = v.get("type")
+    if not isinstance(v.get('enabled'), bool):
+        raise ValueError('background_config.enabled must be a boolean')
+    bg_type = v.get('type')
     if not isinstance(bg_type, str) or bg_type not in ALLOWED_BG_TYPES:
-        raise ValueError(
-            f'background_config.type must be one of: {", ".join(ALLOWED_BG_TYPES)}'
-        )
-    if "settings" in v:
-        if not isinstance(v["settings"], dict):
-            raise ValueError("background_config.settings must be a dict")
-        _validate_settings(v["settings"])
-    if "opacity" in v:
-        opacity = v["opacity"]
+        raise ValueError(f'background_config.type must be one of: {", ".join(ALLOWED_BG_TYPES)}')
+    if 'settings' in v:
+        if not isinstance(v['settings'], dict):
+            raise ValueError('background_config.settings must be a dict')
+        _validate_settings(v['settings'])
+    if 'opacity' in v:
+        opacity = v['opacity']
         if not isinstance(opacity, int | float) or not (0 <= opacity <= 1):
-            raise ValueError("background_config.opacity must be 0-1")
-    if "blur" in v:
-        blur = v["blur"]
+            raise ValueError('background_config.opacity must be 0-1')
+    if 'blur' in v:
+        blur = v['blur']
         if not isinstance(blur, int | float) or not (0 <= blur <= 100):
-            raise ValueError("background_config.blur must be 0-100")
-    if "reducedOnMobile" in v and not isinstance(v["reducedOnMobile"], bool):
-        raise ValueError("background_config.reducedOnMobile must be a boolean")
+            raise ValueError('background_config.blur must be 0-100')
+    if 'reducedOnMobile' in v and not isinstance(v['reducedOnMobile'], bool):
+        raise ValueError('background_config.reducedOnMobile must be a boolean')
     # Strip unknown keys
     return {k: val for k, val in v.items() if k in _ALLOWED_BG_CONFIG_KEYS}
 
@@ -96,24 +92,24 @@ def _validate_background_config(v: dict | None) -> dict | None:
 
 
 class LandingFeatureInput(BaseModel):
-    icon: str = Field(default="", max_length=100)
+    icon: str = Field(default='', max_length=100)
     title: dict[str, str] = Field(default_factory=dict)
     description: dict[str, str] = Field(default_factory=dict)
 
-    @field_validator("title", "description", mode="before")
+    @field_validator('title', 'description', mode='before')
     @classmethod
     def coerce_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str]:
         return ensure_locale_dict(v)
 
-    @field_validator("title")
+    @field_validator('title')
     @classmethod
     def validate_title_length(cls, v: dict[str, str]) -> dict[str, str]:
-        return validate_locale_dict(v, max_length=200, field_name="feature.title")
+        return validate_locale_dict(v, max_length=200, field_name='feature.title')
 
-    @field_validator("description")
+    @field_validator('description')
     @classmethod
     def validate_description_length(cls, v: dict[str, str]) -> dict[str, str]:
-        return validate_locale_dict(v, max_length=500, field_name="feature.description")
+        return validate_locale_dict(v, max_length=500, field_name='feature.description')
 
 
 class LandingPaymentMethodInput(BaseModel):
@@ -128,93 +124,83 @@ class LandingPaymentMethodInput(BaseModel):
     return_url: str | None = Field(default=None, max_length=500)
     sub_options: dict[str, bool] | None = None
 
-    @field_validator("sub_options", mode="before")
+    @field_validator('sub_options', mode='before')
     @classmethod
     def validate_sub_options(cls, v: dict[str, bool] | None) -> dict[str, bool] | None:
         if not v:
             return None
         if len(v) > 20:
-            raise ValueError("sub_options cannot have more than 20 keys")
+            raise ValueError('sub_options cannot have more than 20 keys')
         for key in v:
             if not isinstance(key, str) or len(key) > 50:
-                raise ValueError(
-                    "sub_options keys must be strings of at most 50 characters"
-                )
+                raise ValueError('sub_options keys must be strings of at most 50 characters')
         return v
 
-    @field_validator("icon_url", mode="before")
+    @field_validator('icon_url', mode='before')
     @classmethod
     def validate_icon_url(cls, v: str | None) -> str | None:
         if not v:
             return None
-        if not v.startswith(("https://", "/")):
-            raise ValueError("icon_url must use HTTPS or be a relative path")
+        if not v.startswith(('https://', '/')):
+            raise ValueError('icon_url must use HTTPS or be a relative path')
         return v
 
-    @field_validator("return_url", mode="before")
+    @field_validator('return_url', mode='before')
     @classmethod
     def validate_return_url(cls, v: str | None) -> str | None:
         if not v:
             return None
-        if not v.startswith("https://"):
-            raise ValueError("return_url must use HTTPS")
+        if not v.startswith('https://'):
+            raise ValueError('return_url must use HTTPS')
         parsed = urlparse(v)
         if not parsed.hostname or parsed.username or parsed.password:
-            raise ValueError("return_url must be a valid HTTPS URL without credentials")
+            raise ValueError('return_url must be a valid HTTPS URL without credentials')
         return v
 
-    @field_validator("currency", mode="before")
+    @field_validator('currency', mode='before')
     @classmethod
     def validate_currency(cls, v: str | None) -> str | None:
         if not v:
             return None
         return v.strip().upper()
 
-    @field_validator("min_amount_kopeks", "max_amount_kopeks")
+    @field_validator('min_amount_kopeks', 'max_amount_kopeks')
     @classmethod
     def validate_amounts(cls, v: int | None) -> int | None:
         if v is not None and v < 0:
-            raise ValueError("Amount cannot be negative")
+            raise ValueError('Amount cannot be negative')
         return v
 
-    @model_validator(mode="after")
-    def validate_amount_range(self) -> "LandingPaymentMethodInput":
+    @model_validator(mode='after')
+    def validate_amount_range(self) -> 'LandingPaymentMethodInput':
         if (
             self.min_amount_kopeks is not None
             and self.max_amount_kopeks is not None
             and self.min_amount_kopeks > self.max_amount_kopeks
         ):
-            raise ValueError(
-                "min_amount_kopeks cannot be greater than max_amount_kopeks"
-            )
+            raise ValueError('min_amount_kopeks cannot be greater than max_amount_kopeks')
         return self
 
 
 class LandingCreateRequest(BaseModel):
-    slug: str = Field(pattern=r"^[a-z0-9\-]+$", min_length=1, max_length=100)
-    title: dict[str, str] = Field(default_factory=lambda: {"ru": ""})
+    slug: str = Field(pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
+    title: dict[str, str] = Field(default_factory=lambda: {'ru': ''})
     subtitle: dict[str, str] | None = None
     is_active: bool = True
     features: list[LandingFeatureInput] = Field(default_factory=list, max_length=20)
     footer_text: dict[str, str] | None = None
     allowed_tariff_ids: list[int] = Field(default_factory=list, max_length=50)
     allowed_periods: dict[str, list[int]] = Field(default_factory=dict)
-    payment_methods: list[LandingPaymentMethodInput] = Field(
-        default_factory=list, max_length=10
-    )
+    payment_methods: list[LandingPaymentMethodInput] = Field(default_factory=list, max_length=10)
 
-    @field_validator("allowed_periods")
+    @field_validator('allowed_periods')
     @classmethod
-    def validate_allowed_periods_size(
-        cls, v: dict[str, list[int]]
-    ) -> dict[str, list[int]]:
+    def validate_allowed_periods_size(cls, v: dict[str, list[int]]) -> dict[str, list[int]]:
         if len(v) > 50:
-            raise ValueError("allowed_periods cannot have more than 50 entries")
+            raise ValueError('allowed_periods cannot have more than 50 entries')
         for key, periods in v.items():
             if len(periods) > 20:
-                raise ValueError(
-                    f"allowed_periods[{key}] cannot have more than 20 periods"
-                )
+                raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
         return v
 
     gift_enabled: bool = True
@@ -233,130 +219,110 @@ class LandingCreateRequest(BaseModel):
     analytics_click_enabled: bool = False
     analytics_click_goal: str | None = Field(default=None, max_length=64)
 
-    @model_validator(mode="after")
-    def validate_analytics_goals(self) -> "LandingCreateRequest":
+    @model_validator(mode='after')
+    def validate_analytics_goals(self) -> 'LandingCreateRequest':
         if self.analytics_view_enabled and not self.analytics_view_goal:
-            raise ValueError(
-                "analytics_view_goal is required when analytics_view_enabled is True"
-            )
+            raise ValueError('analytics_view_goal is required when analytics_view_enabled is True')
         if self.analytics_click_enabled and not self.analytics_click_goal:
-            raise ValueError(
-                "analytics_click_goal is required when analytics_click_enabled is True"
-            )
+            raise ValueError('analytics_click_goal is required when analytics_click_enabled is True')
         return self
 
-    @field_validator("background_config")
+    @field_validator('background_config')
     @classmethod
     def validate_background_config(cls, v: dict | None) -> dict | None:
         return _validate_background_config(v)
 
     @field_validator(
-        "title",
-        "subtitle",
-        "footer_text",
-        "meta_title",
-        "meta_description",
-        "discount_badge_text",
-        mode="before",
+        'title',
+        'subtitle',
+        'footer_text',
+        'meta_title',
+        'meta_description',
+        'discount_badge_text',
+        mode='before',
     )
     @classmethod
-    def coerce_text_to_dict(
-        cls, v: dict[str, str] | str | None
-    ) -> dict[str, str] | None:
+    def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
         if v is None:
             return None
         return ensure_locale_dict(v)
 
-    @field_validator("title")
+    @field_validator('title')
     @classmethod
     def validate_title(cls, v: dict[str, str]) -> dict[str, str]:
-        return validate_locale_dict(v, max_length=500, field_name="title")
+        return validate_locale_dict(v, max_length=500, field_name='title')
 
-    @field_validator("subtitle")
+    @field_validator('subtitle')
     @classmethod
     def validate_subtitle(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=1000, field_name="subtitle")
+        return validate_locale_dict(v, max_length=1000, field_name='subtitle')
 
-    @field_validator("footer_text")
+    @field_validator('footer_text')
     @classmethod
     def validate_footer_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=5000, field_name="footer_text")
+        return validate_locale_dict(v, max_length=5000, field_name='footer_text')
 
-    @field_validator("meta_title")
+    @field_validator('meta_title')
     @classmethod
     def validate_meta_title(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=200, field_name="meta_title")
+        return validate_locale_dict(v, max_length=200, field_name='meta_title')
 
-    @field_validator("meta_description")
+    @field_validator('meta_description')
     @classmethod
-    def validate_meta_description(
-        cls, v: dict[str, str] | None
-    ) -> dict[str, str] | None:
+    def validate_meta_description(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=500, field_name="meta_description")
+        return validate_locale_dict(v, max_length=500, field_name='meta_description')
 
-    @field_validator("discount_badge_text")
+    @field_validator('discount_badge_text')
     @classmethod
-    def validate_discount_badge_text(
-        cls, v: dict[str, str] | None
-    ) -> dict[str, str] | None:
+    def validate_discount_badge_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=200, field_name="discount_badge_text")
+        return validate_locale_dict(v, max_length=200, field_name='discount_badge_text')
 
-    @field_validator("discount_starts_at", "discount_ends_at", mode="after")
+    @field_validator('discount_starts_at', 'discount_ends_at', mode='after')
     @classmethod
     def ensure_aware_datetime(cls, v: datetime | None) -> datetime | None:
         if v is not None and v.tzinfo is None:
             v = v.replace(tzinfo=UTC)
         return v
 
-    @model_validator(mode="after")
-    def validate_discount(self) -> "LandingCreateRequest":
+    @model_validator(mode='after')
+    def validate_discount(self) -> 'LandingCreateRequest':
         has_discount = self.discount_percent is not None
-        has_dates = (
-            self.discount_starts_at is not None or self.discount_ends_at is not None
-        )
+        has_dates = self.discount_starts_at is not None or self.discount_ends_at is not None
         if has_dates and not has_discount:
-            raise ValueError("discount_percent is required when discount dates are set")
+            raise ValueError('discount_percent is required when discount dates are set')
         if has_discount and not (self.discount_starts_at and self.discount_ends_at):
-            raise ValueError(
-                "discount_starts_at and discount_ends_at are required when discount_percent is set"
-            )
+            raise ValueError('discount_starts_at and discount_ends_at are required when discount_percent is set')
         if self.discount_starts_at and self.discount_ends_at:
             if self.discount_starts_at >= self.discount_ends_at:
-                raise ValueError("discount_starts_at must be before discount_ends_at")
+                raise ValueError('discount_starts_at must be before discount_ends_at')
         if self.discount_overrides:
             if len(self.discount_overrides) > 100:
-                raise ValueError("discount_overrides cannot have more than 100 entries")
+                raise ValueError('discount_overrides cannot have more than 100 entries')
             for key, val in self.discount_overrides.items():
                 if not key.isdigit():
-                    raise ValueError(
-                        "discount_overrides keys must be tariff ID strings"
-                    )
+                    raise ValueError('discount_overrides keys must be tariff ID strings')
                 if not (1 <= val <= 99):
-                    raise ValueError("discount_overrides values must be 1-99")
+                    raise ValueError('discount_overrides values must be 1-99')
             if self.allowed_tariff_ids:
                 allowed_set = {str(tid) for tid in self.allowed_tariff_ids}
                 invalid = set(self.discount_overrides.keys()) - allowed_set
                 if invalid:
-                    raise ValueError(
-                        f"discount_overrides contains tariff IDs not in allowed_tariff_ids: {invalid}"
-                    )
+                    raise ValueError(f'discount_overrides contains tariff IDs not in allowed_tariff_ids: {invalid}')
         return self
 
 
 class LandingUpdateRequest(BaseModel):
-    slug: str | None = Field(
-        default=None, pattern=r"^[a-z0-9\-]+$", min_length=1, max_length=100
-    )
+    slug: str | None = Field(default=None, pattern=r'^[a-z0-9\-]+$', min_length=1, max_length=100)
     title: dict[str, str] | None = None
     subtitle: dict[str, str] | None = None
     is_active: bool | None = None
@@ -364,9 +330,7 @@ class LandingUpdateRequest(BaseModel):
     footer_text: dict[str, str] | None = None
     allowed_tariff_ids: list[int] | None = Field(default=None, max_length=50)
     allowed_periods: dict[str, list[int]] | None = None
-    payment_methods: list[LandingPaymentMethodInput] | None = Field(
-        default=None, max_length=10
-    )
+    payment_methods: list[LandingPaymentMethodInput] | None = Field(default=None, max_length=10)
     gift_enabled: bool | None = None
     custom_css: str | None = Field(default=None, max_length=10000)
     meta_title: dict[str, str] | None = None
@@ -383,112 +347,100 @@ class LandingUpdateRequest(BaseModel):
     analytics_click_enabled: bool | None = None
     analytics_click_goal: str | None = Field(default=None, max_length=64)
 
-    @field_validator("background_config")
+    @field_validator('background_config')
     @classmethod
     def validate_background_config(cls, v: dict | None) -> dict | None:
         return _validate_background_config(v)
 
-    @field_validator("allowed_periods")
+    @field_validator('allowed_periods')
     @classmethod
-    def validate_allowed_periods_size(
-        cls, v: dict[str, list[int]] | None
-    ) -> dict[str, list[int]] | None:
+    def validate_allowed_periods_size(cls, v: dict[str, list[int]] | None) -> dict[str, list[int]] | None:
         if v is None:
             return None
         if len(v) > 50:
-            raise ValueError("allowed_periods cannot have more than 50 entries")
+            raise ValueError('allowed_periods cannot have more than 50 entries')
         for key, periods in v.items():
             if len(periods) > 20:
-                raise ValueError(
-                    f"allowed_periods[{key}] cannot have more than 20 periods"
-                )
+                raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
         return v
 
     @field_validator(
-        "title",
-        "subtitle",
-        "footer_text",
-        "meta_title",
-        "meta_description",
-        "discount_badge_text",
-        mode="before",
+        'title',
+        'subtitle',
+        'footer_text',
+        'meta_title',
+        'meta_description',
+        'discount_badge_text',
+        mode='before',
     )
     @classmethod
-    def coerce_text_to_dict(
-        cls, v: dict[str, str] | str | None
-    ) -> dict[str, str] | None:
+    def coerce_text_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
         if v is None:
             return None
         return ensure_locale_dict(v)
 
-    @field_validator("title")
+    @field_validator('title')
     @classmethod
     def validate_title(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=500, field_name="title")
+        return validate_locale_dict(v, max_length=500, field_name='title')
 
-    @field_validator("subtitle")
+    @field_validator('subtitle')
     @classmethod
     def validate_subtitle(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=1000, field_name="subtitle")
+        return validate_locale_dict(v, max_length=1000, field_name='subtitle')
 
-    @field_validator("footer_text")
+    @field_validator('footer_text')
     @classmethod
     def validate_footer_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=5000, field_name="footer_text")
+        return validate_locale_dict(v, max_length=5000, field_name='footer_text')
 
-    @field_validator("meta_title")
+    @field_validator('meta_title')
     @classmethod
     def validate_meta_title(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=200, field_name="meta_title")
+        return validate_locale_dict(v, max_length=200, field_name='meta_title')
 
-    @field_validator("meta_description")
+    @field_validator('meta_description')
     @classmethod
-    def validate_meta_description(
-        cls, v: dict[str, str] | None
-    ) -> dict[str, str] | None:
+    def validate_meta_description(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=500, field_name="meta_description")
+        return validate_locale_dict(v, max_length=500, field_name='meta_description')
 
-    @field_validator("discount_badge_text")
+    @field_validator('discount_badge_text')
     @classmethod
-    def validate_discount_badge_text(
-        cls, v: dict[str, str] | None
-    ) -> dict[str, str] | None:
+    def validate_discount_badge_text(cls, v: dict[str, str] | None) -> dict[str, str] | None:
         if v is None:
             return None
-        return validate_locale_dict(v, max_length=200, field_name="discount_badge_text")
+        return validate_locale_dict(v, max_length=200, field_name='discount_badge_text')
 
-    @field_validator("discount_starts_at", "discount_ends_at", mode="after")
+    @field_validator('discount_starts_at', 'discount_ends_at', mode='after')
     @classmethod
     def ensure_aware_datetime(cls, v: datetime | None) -> datetime | None:
         if v is not None and v.tzinfo is None:
             v = v.replace(tzinfo=UTC)
         return v
 
-    @model_validator(mode="after")
-    def validate_discount(self) -> "LandingUpdateRequest":
+    @model_validator(mode='after')
+    def validate_discount(self) -> 'LandingUpdateRequest':
         if self.discount_starts_at is not None and self.discount_ends_at is not None:
             if self.discount_starts_at >= self.discount_ends_at:
-                raise ValueError("discount_starts_at must be before discount_ends_at")
+                raise ValueError('discount_starts_at must be before discount_ends_at')
         if self.discount_overrides:
             if len(self.discount_overrides) > 100:
-                raise ValueError("discount_overrides cannot have more than 100 entries")
+                raise ValueError('discount_overrides cannot have more than 100 entries')
             for key, val in self.discount_overrides.items():
                 if not key.isdigit():
-                    raise ValueError(
-                        "discount_overrides keys must be tariff ID strings"
-                    )
+                    raise ValueError('discount_overrides keys must be tariff ID strings')
                 if not (1 <= val <= 99):
-                    raise ValueError("discount_overrides values must be 1-99")
+                    raise ValueError('discount_overrides values must be 1-99')
         return self
 
 
@@ -516,7 +468,7 @@ class LandingListItem(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    @field_validator("title", mode="before")
+    @field_validator('title', mode='before')
     @classmethod
     def coerce_title(cls, v: dict[str, str] | str | None) -> dict[str, str]:
         return ensure_locale_dict(v)
@@ -556,13 +508,13 @@ class LandingDetailResponse(BaseModel):
     updated_at: datetime | None = None
 
     @field_validator(
-        "title",
-        "subtitle",
-        "footer_text",
-        "meta_title",
-        "meta_description",
-        "discount_badge_text",
-        mode="before",
+        'title',
+        'subtitle',
+        'footer_text',
+        'meta_title',
+        'meta_description',
+        'discount_badge_text',
+        mode='before',
     )
     @classmethod
     def coerce_to_dict(cls, v: dict[str, str] | str | None) -> dict[str, str] | None:
@@ -654,22 +606,22 @@ class LandingPurchaseListResponse(BaseModel):
 # parsed as a landing_id path parameter.
 
 
-@router.get("", response_model=list[LandingListItem])
+@router.get('', response_model=list[LandingListItem])
 async def list_landings(
-    admin: User = Depends(require_permission("landings:read")),
+    admin: User = Depends(require_permission('landings:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List all landing pages with purchase stats."""
     landings = await get_all_landings(db)
     all_stats = await get_all_landing_purchase_stats(db)
     empty_stats = {
-        "total": 0,
-        "pending": 0,
-        "paid": 0,
-        "delivered": 0,
-        "pending_activation": 0,
-        "failed": 0,
-        "expired": 0,
+        'total': 0,
+        'pending': 0,
+        'paid': 0,
+        'delivered': 0,
+        'pending_activation': 0,
+        'failed': 0,
+        'expired': 0,
     }
 
     now = datetime.now(UTC)
@@ -693,13 +645,13 @@ async def list_landings(
                 tariff_count=len(landing.allowed_tariff_ids or []),
                 method_count=len(landing.payment_methods or []),
                 purchase_stats=PurchaseStats(
-                    total=stats.get("total", 0),
-                    pending=stats.get("pending", 0),
-                    paid=stats.get("paid", 0),
-                    delivered=stats.get("delivered", 0),
-                    pending_activation=stats.get("pending_activation", 0),
-                    failed=stats.get("failed", 0),
-                    expired=stats.get("expired", 0),
+                    total=stats.get('total', 0),
+                    pending=stats.get('pending', 0),
+                    paid=stats.get('paid', 0),
+                    delivered=stats.get('delivered', 0),
+                    pending_activation=stats.get('pending_activation', 0),
+                    failed=stats.get('failed', 0),
+                    expired=stats.get('expired', 0),
                 ),
                 has_active_discount=discount_active,
                 created_at=landing.created_at,
@@ -709,12 +661,10 @@ async def list_landings(
     return items
 
 
-@router.post(
-    "", response_model=LandingDetailResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post('', response_model=LandingDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_landing_page(
     request: LandingCreateRequest,
-    admin: User = Depends(require_permission("landings:create")),
+    admin: User = Depends(require_permission('landings:create')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new landing page."""
@@ -760,7 +710,7 @@ async def create_landing_page(
     )
 
     logger.info(
-        "Admin created landing page",
+        'Admin created landing page',
         admin_id=admin.id,
         slug=landing.slug,
         landing_id=landing.id,
@@ -769,26 +719,26 @@ async def create_landing_page(
     return _landing_to_detail(landing)
 
 
-@router.put("/order")
+@router.put('/order')
 async def update_landings_order(
     request: OrderRequest,
-    admin: User = Depends(require_permission("landings:edit")),
+    admin: User = Depends(require_permission('landings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Batch update display order for landing pages."""
     await update_landing_order(db, request.landing_ids)
     logger.info(
-        "Admin updated landing page order",
+        'Admin updated landing page order',
         admin_id=admin.id,
         landing_ids=request.landing_ids,
     )
-    return {"success": True}
+    return {'success': True}
 
 
-@router.get("/{landing_id}", response_model=LandingDetailResponse)
+@router.get('/{landing_id}', response_model=LandingDetailResponse)
 async def get_landing_detail(
     landing_id: int,
-    admin: User = Depends(require_permission("landings:read")),
+    admin: User = Depends(require_permission('landings:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get a single landing page with full details."""
@@ -796,29 +746,29 @@ async def get_landing_detail(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Landing page not found",
+            detail='Landing page not found',
         )
     return _landing_to_detail(landing)
 
 
-@router.put("/{landing_id}", response_model=LandingDetailResponse)
+@router.put('/{landing_id}', response_model=LandingDetailResponse)
 async def update_landing_page(
     landing_id: int,
     request: LandingUpdateRequest,
-    admin: User = Depends(require_permission("landings:edit")),
+    admin: User = Depends(require_permission('landings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update a landing page."""
     data = request.model_dump(exclude_unset=True)
 
     # If slug is being changed, check reserved and uniqueness
-    if "slug" in data:
-        if data["slug"] in _RESERVED_SLUGS:
+    if 'slug' in data:
+        if data['slug'] in _RESERVED_SLUGS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f'Slug "{data["slug"]}" is reserved and cannot be used',
             )
-        existing = await get_landing_by_slug(db, data["slug"])
+        existing = await get_landing_by_slug(db, data['slug'])
         if existing is not None and existing.id != landing_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -826,52 +776,39 @@ async def update_landing_page(
             )
 
     # Serialize nested Pydantic models to dicts for JSON storage
-    if "features" in data and data["features"] is not None:
-        data["features"] = [
-            f.model_dump() if hasattr(f, "model_dump") else f for f in data["features"]
-        ]
-    if "payment_methods" in data and data["payment_methods"] is not None:
-        data["payment_methods"] = [
-            m.model_dump() if hasattr(m, "model_dump") else m
-            for m in data["payment_methods"]
-        ]
+    if 'features' in data and data['features'] is not None:
+        data['features'] = [f.model_dump() if hasattr(f, 'model_dump') else f for f in data['features']]
+    if 'payment_methods' in data and data['payment_methods'] is not None:
+        data['payment_methods'] = [m.model_dump() if hasattr(m, 'model_dump') else m for m in data['payment_methods']]
 
     # Cascade-clear all discount fields when discount_percent is explicitly set to None
-    if "discount_percent" in data and data["discount_percent"] is None:
-        data["discount_overrides"] = None
-        data["discount_starts_at"] = None
-        data["discount_ends_at"] = None
-        data["discount_badge_text"] = None
+    if 'discount_percent' in data and data['discount_percent'] is None:
+        data['discount_overrides'] = None
+        data['discount_starts_at'] = None
+        data['discount_ends_at'] = None
+        data['discount_badge_text'] = None
 
     # Validate merged discount dates on partial update
-    if "discount_starts_at" in data or "discount_ends_at" in data:
+    if 'discount_starts_at' in data or 'discount_ends_at' in data:
         existing_landing = await get_landing_by_id(db, landing_id)
         if existing_landing is not None:
-            effective_starts = data.get(
-                "discount_starts_at", existing_landing.discount_starts_at
-            )
-            effective_ends = data.get(
-                "discount_ends_at", existing_landing.discount_ends_at
-            )
-            if (
-                effective_starts
-                and effective_ends
-                and effective_starts >= effective_ends
-            ):
+            effective_starts = data.get('discount_starts_at', existing_landing.discount_starts_at)
+            effective_ends = data.get('discount_ends_at', existing_landing.discount_ends_at)
+            if effective_starts and effective_ends and effective_starts >= effective_ends:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="discount_starts_at must be before discount_ends_at",
+                    detail='discount_starts_at must be before discount_ends_at',
                 )
 
     landing = await update_landing(db, landing_id, data)
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Landing page not found",
+            detail='Landing page not found',
         )
 
     logger.info(
-        "Admin updated landing page",
+        'Admin updated landing page',
         admin_id=admin.id,
         slug=landing.slug,
         landing_id=landing.id,
@@ -880,10 +817,10 @@ async def update_landing_page(
     return _landing_to_detail(landing)
 
 
-@router.delete("/{landing_id}")
+@router.delete('/{landing_id}')
 async def delete_landing_page(
     landing_id: int,
-    admin: User = Depends(require_permission("landings:delete")),
+    admin: User = Depends(require_permission('landings:delete')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete a landing page."""
@@ -891,16 +828,16 @@ async def delete_landing_page(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Landing page not found",
+            detail='Landing page not found',
         )
-    logger.info("Admin deleted landing page", admin_id=admin.id, landing_id=landing_id)
-    return {"success": True}
+    logger.info('Admin deleted landing page', admin_id=admin.id, landing_id=landing_id)
+    return {'success': True}
 
 
-@router.post("/{landing_id}/toggle", response_model=LandingDetailResponse)
+@router.post('/{landing_id}/toggle', response_model=LandingDetailResponse)
 async def toggle_landing_active(
     landing_id: int,
-    admin: User = Depends(require_permission("landings:edit")),
+    admin: User = Depends(require_permission('landings:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle active/inactive state of a landing page."""
@@ -908,14 +845,14 @@ async def toggle_landing_active(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Landing page not found",
+            detail='Landing page not found',
         )
 
     new_active = not landing.is_active
-    landing = await update_landing(db, landing_id, {"is_active": new_active})
+    landing = await update_landing(db, landing_id, {'is_active': new_active})
 
     logger.info(
-        "Admin toggled landing page",
+        'Admin toggled landing page',
         admin_id=admin.id,
         landing_id=landing_id,
         is_active=new_active,
@@ -933,10 +870,10 @@ _SUCCESSFUL_STATUSES = (
 _STATS_PERIOD_DAYS = 30
 
 
-@router.get("/{landing_id}/stats", response_model=LandingStatsResponse)
+@router.get('/{landing_id}/stats', response_model=LandingStatsResponse)
 async def get_landing_stats(
     landing_id: int,
-    admin: User = Depends(require_permission("landings:read")),
+    admin: User = Depends(require_permission('landings:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LandingStatsResponse:
     """Get daily statistics and tariff breakdown for a landing page."""
@@ -944,20 +881,18 @@ async def get_landing_stats(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Landing page not found",
+            detail='Landing page not found',
         )
 
     # -- Summary stats (single query) --
     is_successful = GuestPurchase.status.in_(_SUCCESSFUL_STATUSES)
     summary_result = await db.execute(
         select(
-            func.count(GuestPurchase.id).label("total_created"),
-            func.count(case((is_successful, GuestPurchase.id))).label(
-                "total_successful"
+            func.count(GuestPurchase.id).label('total_created'),
+            func.count(case((is_successful, GuestPurchase.id))).label('total_successful'),
+            func.coalesce(func.sum(case((is_successful, GuestPurchase.amount_kopeks))), 0).label(
+                'total_revenue_kopeks'
             ),
-            func.coalesce(
-                func.sum(case((is_successful, GuestPurchase.amount_kopeks))), 0
-            ).label("total_revenue_kopeks"),
             func.count(
                 case(
                     (
@@ -965,7 +900,7 @@ async def get_landing_stats(
                         GuestPurchase.id,
                     )
                 )
-            ).label("total_gifts"),
+            ).label('total_gifts'),
             func.count(
                 case(
                     (
@@ -976,7 +911,7 @@ async def get_landing_stats(
                         GuestPurchase.id,
                     )
                 )
-            ).label("total_gifts_claimed"),
+            ).label('total_gifts_claimed'),
         ).where(GuestPurchase.landing_id == landing_id)
     )
     row = summary_result.one()
@@ -986,27 +921,19 @@ async def get_landing_stats(
     total_gifts: int = row.total_gifts
     total_gifts_claimed: int = row.total_gifts_claimed
     total_regular = total_successful - total_gifts
-    avg_purchase_kopeks = (
-        total_revenue_kopeks // total_successful if total_successful > 0 else 0
-    )
-    conversion_rate = (
-        round(total_successful / total_created * 100, 1) if total_created > 0 else 0.0
-    )
+    avg_purchase_kopeks = total_revenue_kopeks // total_successful if total_successful > 0 else 0
+    conversion_rate = round(total_successful / total_created * 100, 1) if total_created > 0 else 0.0
 
     # -- Daily stats for last N days --
     now = datetime.now(UTC)
     cutoff = now - timedelta(days=_STATS_PERIOD_DAYS)
-    day_at_utc = func.date(func.timezone("UTC", GuestPurchase.paid_at))
+    day_at_utc = func.date(func.timezone('UTC', GuestPurchase.paid_at))
     daily_result = await db.execute(
         select(
-            day_at_utc.label("day"),
-            func.count(GuestPurchase.id).label("purchases"),
-            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label(
-                "revenue_kopeks"
-            ),
-            func.count(case((GuestPurchase.is_gift.is_(True), GuestPurchase.id))).label(
-                "gifts"
-            ),
+            day_at_utc.label('day'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
+            func.count(case((GuestPurchase.is_gift.is_(True), GuestPurchase.id))).label('gifts'),
         )
         .where(
             GuestPurchase.landing_id == landing_id,
@@ -1019,11 +946,11 @@ async def get_landing_stats(
     daily_rows = {str(r.day): r for r in daily_result.all()}
 
     # Created per day (all statuses, by created_at)
-    day_created_utc = func.date(func.timezone("UTC", GuestPurchase.created_at))
+    day_created_utc = func.date(func.timezone('UTC', GuestPurchase.created_at))
     created_result = await db.execute(
         select(
-            day_created_utc.label("day"),
-            func.count(GuestPurchase.id).label("created"),
+            day_created_utc.label('day'),
+            func.count(GuestPurchase.id).label('created'),
         )
         .where(
             GuestPurchase.landing_id == landing_id,
@@ -1067,11 +994,9 @@ async def get_landing_stats(
     tariff_result = await db.execute(
         select(
             GuestPurchase.tariff_id,
-            func.coalesce(Tariff.name, "Unknown").label("tariff_name"),
-            func.count(GuestPurchase.id).label("purchases"),
-            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label(
-                "revenue_kopeks"
-            ),
+            func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
         )
         .outerjoin(Tariff, GuestPurchase.tariff_id == Tariff.id)
         .where(
@@ -1094,20 +1019,16 @@ async def get_landing_stats(
     # -- Payment method breakdown (successful purchases) --
     pm_result = await db.execute(
         select(
-            func.coalesce(GuestPurchase.payment_method, "unknown").label("method"),
-            func.count(GuestPurchase.id).label("purchases"),
-            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label(
-                "revenue_kopeks"
-            ),
+            func.coalesce(GuestPurchase.payment_method, 'unknown').label('method'),
+            func.count(GuestPurchase.id).label('purchases'),
+            func.coalesce(func.sum(GuestPurchase.amount_kopeks), 0).label('revenue_kopeks'),
         )
         .where(GuestPurchase.landing_id == landing_id, is_successful)
         .group_by(GuestPurchase.payment_method)
         .order_by(func.count(GuestPurchase.id).desc())
     )
     payment_method_stats = [
-        LandingPaymentMethodStat(
-            method=r.method, purchases=r.purchases, revenue_kopeks=r.revenue_kopeks
-        )
+        LandingPaymentMethodStat(method=r.method, purchases=r.purchases, revenue_kopeks=r.revenue_kopeks)
         for r in pm_result.all()
     ]
 
@@ -1115,7 +1036,7 @@ async def get_landing_stats(
     source_result = await db.execute(
         select(
             GuestPurchase.referrer,
-            func.count(GuestPurchase.id).label("purchases"),
+            func.count(GuestPurchase.id).label('purchases'),
         )
         .where(GuestPurchase.landing_id == landing_id, is_successful)
         .group_by(GuestPurchase.referrer)
@@ -1124,16 +1045,14 @@ async def get_landing_stats(
     for r in source_result.all():
         ref = r.referrer
         if not ref:
-            host = "direct"
+            host = 'direct'
         else:
             try:
                 host = urlparse(ref).hostname or ref
             except ValueError:
                 host = ref
         host_counts[host] += r.purchases
-    source_stats = [
-        LandingSourceStat(source=h, purchases=c) for h, c in host_counts.most_common(8)
-    ]
+    source_stats = [LandingSourceStat(source=h, purchases=c) for h, c in host_counts.most_common(8)]
 
     return LandingStatsResponse(
         total_purchases=total_created,
@@ -1157,15 +1076,13 @@ _PURCHASE_LIST_DEFAULT_LIMIT = 20
 _PURCHASE_TOKEN_VISIBLE_CHARS = 8
 
 
-@router.get("/{landing_id}/purchases", response_model=LandingPurchaseListResponse)
+@router.get('/{landing_id}/purchases', response_model=LandingPurchaseListResponse)
 async def get_landing_purchases(
     landing_id: int,
     offset: int = Query(default=0, ge=0),
-    limit: int = Query(
-        default=_PURCHASE_LIST_DEFAULT_LIMIT, ge=1, le=_PURCHASE_LIST_MAX_LIMIT
-    ),
-    status_filter: GuestPurchaseStatus | None = Query(default=None, alias="status"),
-    admin: User = Depends(require_permission("landings:read")),
+    limit: int = Query(default=_PURCHASE_LIST_DEFAULT_LIMIT, ge=1, le=_PURCHASE_LIST_MAX_LIMIT),
+    status_filter: GuestPurchaseStatus | None = Query(default=None, alias='status'),
+    admin: User = Depends(require_permission('landings:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LandingPurchaseListResponse:
     """Get paginated list of purchases for a landing page."""
@@ -1173,7 +1090,7 @@ async def get_landing_purchases(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Landing page not found",
+            detail='Landing page not found',
         )
 
     # Base filter conditions
@@ -1184,11 +1101,7 @@ async def get_landing_purchases(
     where_clause = and_(*conditions)
 
     # Total count
-    count_result = await db.execute(
-        select(func.count(GuestPurchase.id))
-        .select_from(GuestPurchase)
-        .where(where_clause)
-    )
+    count_result = await db.execute(select(func.count(GuestPurchase.id)).select_from(GuestPurchase).where(where_clause))
     total: int = count_result.scalar_one()
 
     # Fetch page with tariff name join
@@ -1201,7 +1114,7 @@ async def get_landing_purchases(
             GuestPurchase.is_gift,
             GuestPurchase.gift_recipient_type,
             GuestPurchase.gift_recipient_value,
-            func.coalesce(Tariff.name, "Unknown").label("tariff_name"),
+            func.coalesce(Tariff.name, 'Unknown').label('tariff_name'),
             GuestPurchase.period_days,
             GuestPurchase.amount_kopeks,
             GuestPurchase.currency,
@@ -1221,11 +1134,7 @@ async def get_landing_purchases(
     items = [
         LandingPurchaseItem(
             id=row.id,
-            token=(
-                (row.token[:_PURCHASE_TOKEN_VISIBLE_CHARS] + "...")
-                if row.token
-                else "???"
-            ),
+            token=((row.token[:_PURCHASE_TOKEN_VISIBLE_CHARS] + '...') if row.token else '???'),
             contact_type=row.contact_type,
             contact_value=row.contact_value,
             is_gift=row.is_gift,
@@ -1257,25 +1166,25 @@ def _landing_to_detail(landing: LandingPage) -> LandingDetailResponse:
     """
     features = [
         LandingFeatureInput(
-            icon=f.get("icon", ""),
-            title=f.get("title", {}),
-            description=f.get("description", {}),
+            icon=f.get('icon', ''),
+            title=f.get('title', {}),
+            description=f.get('description', {}),
         )
         for f in (landing.features or [])
     ]
 
     payment_methods = [
         LandingPaymentMethodInput(
-            method_id=m.get("method_id", ""),
-            display_name=m.get("display_name", ""),
-            description=m.get("description"),
-            icon_url=m.get("icon_url"),
-            sort_order=m.get("sort_order", 0),
-            min_amount_kopeks=m.get("min_amount_kopeks"),
-            max_amount_kopeks=m.get("max_amount_kopeks"),
-            currency=m.get("currency"),
-            return_url=m.get("return_url"),
-            sub_options=m.get("sub_options"),
+            method_id=m.get('method_id', ''),
+            display_name=m.get('display_name', ''),
+            description=m.get('description'),
+            icon_url=m.get('icon_url'),
+            sort_order=m.get('sort_order', 0),
+            min_amount_kopeks=m.get('min_amount_kopeks'),
+            max_amount_kopeks=m.get('max_amount_kopeks'),
+            currency=m.get('currency'),
+            return_url=m.get('return_url'),
+            sub_options=m.get('sub_options'),
         )
         for m in (landing.payment_methods or [])
     ]

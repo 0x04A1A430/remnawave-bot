@@ -82,14 +82,14 @@ def _serialize_markup(markup: InlineKeyboardMarkup | None) -> Any | None:
     if markup is None:
         return None
 
-    model_dump = getattr(markup, "model_dump", None)
+    model_dump = getattr(markup, 'model_dump', None)
     if callable(model_dump):
         try:
             return model_dump(exclude_none=True)
         except TypeError:
             return model_dump()
 
-    to_python = getattr(markup, "to_python", None)
+    to_python = getattr(markup, 'to_python', None)
     if callable(to_python):
         return to_python()
 
@@ -101,12 +101,12 @@ def _message_needs_update(
     new_text: str,
     new_markup: InlineKeyboardMarkup | None,
 ) -> bool:
-    current_text = getattr(message, "text", None)
+    current_text = getattr(message, 'text', None)
 
     if current_text != new_text:
         return True
 
-    current_markup = getattr(message, "reply_markup", None)
+    current_markup = getattr(message, 'reply_markup', None)
 
     return _serialize_markup(current_markup) != _serialize_markup(new_markup)
 
@@ -193,9 +193,7 @@ from .traffic import (
 )
 
 
-async def show_subscription_info(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def show_subscription_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Multi-tariff: redirect to "My subscriptions" list
     if settings.is_multi_tariff_enabled():
         from app.handlers.subscription.my_subscriptions import show_my_subscriptions
@@ -217,9 +215,7 @@ async def show_subscription_info(
     subscription = db_user.subscription
 
     if not subscription:
-        await callback.message.edit_text(
-            texts.SUBSCRIPTION_NONE, reply_markup=get_back_keyboard(db_user.language)
-        )
+        await callback.message.edit_text(texts.SUBSCRIPTION_NONE, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
 
@@ -231,12 +227,10 @@ async def show_subscription_info(
     await subscription_service.sync_subscription_usage(db, subscription)
 
     # Проверяем и синхронизируем подписку с RemnaWave если необходимо
-    sync_success, sync_error = await subscription_service.ensure_subscription_synced(
-        db, subscription
-    )
+    sync_success, sync_error = await subscription_service.ensure_subscription_synced(db, subscription)
     if not sync_success:
         logger.warning(
-            "Не удалось синхронизировать подписку с RemnaWave",
+            'Не удалось синхронизировать подписку с RemnaWave',
             subscription_id=subscription.id,
             sync_error=sync_error,
         )
@@ -246,98 +240,88 @@ async def show_subscription_info(
 
     current_time = datetime.now(UTC)
 
-    if subscription.status == "limited":
-        actual_status = "limited"
-        status_display = texts.t("SUBSCRIPTION_STATUS_LIMITED", "Трафик исчерпан")
-        status_emoji = ""
-    elif subscription.status == "disabled":
-        actual_status = "disabled"
-        status_display = texts.t("SUBSCRIPTION_STATUS_DISABLED", "Приостановлена")
-        status_emoji = ""
-    elif subscription.status == "expired" or subscription.end_date <= current_time:
-        actual_status = "expired"
-        status_display = texts.t("SUBSCRIPTION_STATUS_EXPIRED", "Истекла")
-        status_emoji = ""
-    elif subscription.status == "active" and subscription.end_date > current_time:
+    if subscription.status == 'limited':
+        actual_status = 'limited'
+        status_display = texts.t('SUBSCRIPTION_STATUS_LIMITED', 'Трафик исчерпан')
+        status_emoji = ''
+    elif subscription.status == 'disabled':
+        actual_status = 'disabled'
+        status_display = texts.t('SUBSCRIPTION_STATUS_DISABLED', 'Приостановлена')
+        status_emoji = ''
+    elif subscription.status == 'expired' or subscription.end_date <= current_time:
+        actual_status = 'expired'
+        status_display = texts.t('SUBSCRIPTION_STATUS_EXPIRED', 'Истекла')
+        status_emoji = ''
+    elif subscription.status == 'active' and subscription.end_date > current_time:
         if subscription.is_trial:
-            actual_status = "trial_active"
-            status_display = texts.t("SUBSCRIPTION_STATUS_TRIAL", "Тестовая")
-            status_emoji = ""
+            actual_status = 'trial_active'
+            status_display = texts.t('SUBSCRIPTION_STATUS_TRIAL', 'Тестовая')
+            status_emoji = ''
         else:
-            actual_status = "paid_active"
-            status_display = texts.t("SUBSCRIPTION_STATUS_ACTIVE", "Активна")
-            status_emoji = ""
+            actual_status = 'paid_active'
+            status_display = texts.t('SUBSCRIPTION_STATUS_ACTIVE', 'Активна')
+            status_emoji = ''
     else:
-        actual_status = "unknown"
-        status_display = texts.t("SUBSCRIPTION_STATUS_UNKNOWN", "Неизвестно")
-        status_emoji = ""
+        actual_status = 'unknown'
+        status_display = texts.t('SUBSCRIPTION_STATUS_UNKNOWN', 'Неизвестно')
+        status_emoji = ''
 
     if subscription.end_date <= current_time:
         days_left = 0
-        time_left_text = texts.t("SUBSCRIPTION_TIME_LEFT_EXPIRED", "истёк")
-        warning_text = ""
+        time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_EXPIRED', 'истёк')
+        warning_text = ''
     else:
         delta = subscription.end_date - current_time
         days_left = delta.days
         hours_left = delta.seconds // 3600
 
         if days_left > 1:
-            time_left_text = texts.t(
-                "SUBSCRIPTION_TIME_LEFT_DAYS", "{days} дн."
-            ).format(days=days_left)
-            warning_text = ""
+            time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_DAYS', '{days} дн.').format(days=days_left)
+            warning_text = ''
         elif days_left == 1:
-            time_left_text = texts.t(
-                "SUBSCRIPTION_TIME_LEFT_DAYS", "{days} дн."
-            ).format(days=days_left)
-            warning_text = texts.t(
-                "SUBSCRIPTION_WARNING_TOMORROW", "\n истекает завтра!"
-            )
+            time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_DAYS', '{days} дн.').format(days=days_left)
+            warning_text = texts.t('SUBSCRIPTION_WARNING_TOMORROW', '\n истекает завтра!')
         elif hours_left > 0:
-            time_left_text = texts.t(
-                "SUBSCRIPTION_TIME_LEFT_HOURS", "{hours} ч."
-            ).format(hours=hours_left)
-            warning_text = texts.t("SUBSCRIPTION_WARNING_TODAY", "\n истекает сегодня!")
+            time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_HOURS', '{hours} ч.').format(hours=hours_left)
+            warning_text = texts.t('SUBSCRIPTION_WARNING_TODAY', '\n истекает сегодня!')
         else:
             minutes_left = (delta.seconds % 3600) // 60
-            time_left_text = texts.t(
-                "SUBSCRIPTION_TIME_LEFT_MINUTES", "{minutes} мин."
-            ).format(minutes=minutes_left)
+            time_left_text = texts.t('SUBSCRIPTION_TIME_LEFT_MINUTES', '{minutes} мин.').format(minutes=minutes_left)
             warning_text = texts.t(
-                "SUBSCRIPTION_WARNING_MINUTES",
-                "\n истекает через несколько минут!",
+                'SUBSCRIPTION_WARNING_MINUTES',
+                '\n истекает через несколько минут!',
             )
 
     subscription_type = (
-        texts.t("SUBSCRIPTION_TYPE_TRIAL", "Триал")
+        texts.t('SUBSCRIPTION_TYPE_TRIAL', 'Триал')
         if subscription.is_trial
-        else texts.t("SUBSCRIPTION_TYPE_PAID", "Платная")
+        else texts.t('SUBSCRIPTION_TYPE_PAID', 'Платная')
     )
 
-    used_traffic = f"{subscription.traffic_used_gb:.1f}"
+    used_traffic = f'{subscription.traffic_used_gb:.1f}'
     if subscription.traffic_limit_gb == 0:
         traffic_used_display = texts.t(
-            "SUBSCRIPTION_TRAFFIC_UNLIMITED",
-            "∞ (безлимит) | Использовано: {used} ГБ",
+            'SUBSCRIPTION_TRAFFIC_UNLIMITED',
+            '∞ (безлимит) | Использовано: {used} ГБ',
         ).format(used=used_traffic)
     else:
         traffic_used_display = texts.t(
-            "SUBSCRIPTION_TRAFFIC_LIMITED",
-            "{used} / {limit} ГБ",
+            'SUBSCRIPTION_TRAFFIC_LIMITED',
+            '{used} / {limit} ГБ',
         ).format(used=used_traffic, limit=subscription.traffic_limit_gb)
 
-    devices_used_str = "—"
+    devices_used_str = '—'
     devices_list = []
     devices_count = 0
 
     show_devices = settings.is_devices_selection_enabled()
-    devices_used_str = ""
+    devices_used_str = ''
     devices_list: list[dict[str, Any]] = []
 
     if show_devices:
         try:
             _device_uuid = (
-                getattr(subscription, "remnawave_uuid", None)
+                getattr(subscription, 'remnawave_uuid', None)
                 if settings.is_multi_tariff_enabled() and subscription
                 else None
             ) or db_user.remnawave_uuid
@@ -347,38 +331,34 @@ async def show_subscription_info(
                 service = RemnaWaveService()
 
                 async with service.get_api_client() as api:
-                    response = await api._make_request(
-                        "GET", f"/api/hwid/devices/{_device_uuid}"
-                    )
+                    response = await api._make_request('GET', f'/api/hwid/devices/{_device_uuid}')
 
-                    if response and "response" in response:
-                        devices_info = response["response"]
-                        devices_count = devices_info.get("total", 0)
-                        devices_list = devices_info.get("devices", [])
+                    if response and 'response' in response:
+                        devices_info = response['response']
+                        devices_count = devices_info.get('total', 0)
+                        devices_list = devices_info.get('devices', [])
                         devices_used_str = str(devices_count)
                         logger.info(
-                            "Найдено устройств для пользователя",
+                            'Найдено устройств для пользователя',
                             devices_count=devices_count,
                             telegram_id=db_user.telegram_id,
                         )
                     else:
                         logger.warning(
-                            "Не удалось получить информацию об устройствах для",
+                            'Не удалось получить информацию об устройствах для',
                             telegram_id=db_user.telegram_id,
                         )
 
         except Exception as e:
-            logger.error("Ошибка получения устройств для отображения", error=e)
+            logger.error('Ошибка получения устройств для отображения', error=e)
             devices_used = await get_current_devices_count(db_user)
             devices_used_str = str(devices_used)
 
     servers_names = await get_servers_display_names(subscription.connected_squads)
-    servers_display = servers_names or texts.t(
-        "SUBSCRIPTION_NO_SERVERS", "Нет серверов"
-    )
+    servers_display = servers_names or texts.t('SUBSCRIPTION_NO_SERVERS', 'Нет серверов')
 
     # Получаем информацию о тарифе для режима тарифов
-    tariff_info_block = ""
+    tariff_info_block = ''
     tariff = None
     if settings.is_tariffs_mode() and subscription.tariff_id:
         try:
@@ -390,33 +370,23 @@ async def show_subscription_info(
                 subscription.tariff = tariff
 
                 # Формируем блок информации о тарифе
-                is_daily = getattr(tariff, "is_daily", False)
-                tariff_type_str = "Суточный" if is_daily else "Периодный"
+                is_daily = getattr(tariff, 'is_daily', False)
+                tariff_type_str = 'Суточный' if is_daily else 'Периодный'
 
                 tariff_info_lines = [
-                    f"<b> {html.escape(tariff.name)}</b>",
-                    f"Тип: {tariff_type_str}",
-                    (
-                        f"Трафик: {tariff.traffic_limit_gb} ГБ"
-                        if tariff.traffic_limit_gb > 0
-                        else "Трафик: ∞ Безлимит"
-                    ),
-                    f"Устройства: {tariff.device_limit}",
+                    f'<b> {html.escape(tariff.name)}</b>',
+                    f'Тип: {tariff_type_str}',
+                    (f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит'),
+                    f'Устройства: {tariff.device_limit}',
                 ]
 
                 if is_daily:
                     # Для суточного тарифа показываем цену с учётом скидки промогруппы + promo-offer
-                    raw_daily_kopeks = getattr(tariff, "daily_price_kopeks", 0)
+                    raw_daily_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
                     promo_group = (
-                        db_user.get_primary_promo_group()
-                        if hasattr(db_user, "get_primary_promo_group")
-                        else None
+                        db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
                     )
-                    daily_group_pct = (
-                        promo_group.get_discount_percent("period", 1)
-                        if promo_group
-                        else 0
-                    )
+                    daily_group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
                     from app.services.pricing_engine import PricingEngine
                     from app.utils.promo_offer import (
                         get_user_active_promo_discount_percent,
@@ -430,15 +400,15 @@ async def show_subscription_info(
                     else:
                         daily_kopeks = raw_daily_kopeks
                     daily_price = daily_kopeks / 100
-                    tariff_info_lines.append(f"Цена: {daily_price:.2f} ₽/день")
+                    tariff_info_lines.append(f'Цена: {daily_price:.2f} ₽/день')
 
                     # Прогресс-бар до следующего списания
-                    last_charge = getattr(subscription, "last_daily_charge_at", None)
-                    is_paused = getattr(subscription, "is_daily_paused", False)
+                    last_charge = getattr(subscription, 'last_daily_charge_at', None)
+                    is_paused = getattr(subscription, 'is_daily_paused', False)
 
                     if is_paused:
-                        tariff_info_lines.append("")
-                        tariff_info_lines.append("<b>Подписка приостановлена</b>")
+                        tariff_info_lines.append('')
+                        tariff_info_lines.append('<b>Подписка приостановлена</b>')
                         # Показываем оставшееся время даже при паузе
                         if last_charge:
                             next_charge = last_charge + timedelta(hours=24)
@@ -447,10 +417,8 @@ async def show_subscription_info(
                                 time_until = next_charge - now
                                 hours_left = time_until.seconds // 3600
                                 minutes_left = (time_until.seconds % 3600) // 60
-                                tariff_info_lines.append(
-                                    f"Осталось: {hours_left}ч {minutes_left}мин"
-                                )
-                                tariff_info_lines.append("Списание приостановлено")
+                                tariff_info_lines.append(f'Осталось: {hours_left}ч {minutes_left}мин')
+                                tariff_info_lines.append('Списание приостановлено')
                     elif last_charge:
                         next_charge = last_charge + timedelta(hours=24)
                         now = datetime.now(UTC)
@@ -463,41 +431,33 @@ async def show_subscription_info(
                             # Процент оставшегося времени (24 часа = 100%)
                             total_seconds = 24 * 3600
                             remaining_seconds = time_until.total_seconds()
-                            percent = min(
-                                100, max(0, (remaining_seconds / total_seconds) * 100)
-                            )
+                            percent = min(100, max(0, (remaining_seconds / total_seconds) * 100))
 
                             # Генерируем прогресс-бар
                             bar_length = 10
                             filled = int(bar_length * percent / 100)
                             empty = bar_length - filled
-                            progress_bar = "▓" * filled + "░" * empty
+                            progress_bar = '▓' * filled + '░' * empty
 
-                            tariff_info_lines.append("")
-                            tariff_info_lines.append(
-                                f"До списания: {hours_left}ч {minutes_left}мин"
-                            )
-                            tariff_info_lines.append(f"[{progress_bar}] {percent:.0f}%")
+                            tariff_info_lines.append('')
+                            tariff_info_lines.append(f'До списания: {hours_left}ч {minutes_left}мин')
+                            tariff_info_lines.append(f'[{progress_bar}] {percent:.0f}%')
                     else:
-                        tariff_info_lines.append("")
-                        tariff_info_lines.append("Первое списание скоро")
+                        tariff_info_lines.append('')
+                        tariff_info_lines.append('Первое списание скоро')
 
-                tariff_info_block = (
-                    "\n<blockquote expandable>"
-                    + "\n".join(tariff_info_lines)
-                    + "</blockquote>"
-                )
+                tariff_info_block = '\n<blockquote expandable>' + '\n'.join(tariff_info_lines) + '</blockquote>'
 
         except Exception as e:
-            logger.warning("Ошибка получения тарифа", error=e, exc_info=True)
+            logger.warning('Ошибка получения тарифа', error=e, exc_info=True)
 
     # Определяем, суточный ли тариф для выбора шаблона
-    is_daily_tariff = tariff and getattr(tariff, "is_daily", False)
+    is_daily_tariff = tariff and getattr(tariff, 'is_daily', False)
 
     if is_daily_tariff:
         # Для суточных тарифов другой шаблон без "Действует до" и "Осталось"
         message_template = texts.t(
-            "SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE",
+            'SUBSCRIPTION_DAILY_OVERVIEW_TEMPLATE',
             """{full_name}
 💰 Баланс: {balance}
 📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
@@ -510,7 +470,7 @@ async def show_subscription_info(
         )
     else:
         message_template = texts.t(
-            "SUBSCRIPTION_OVERVIEW_TEMPLATE",
+            'SUBSCRIPTION_OVERVIEW_TEMPLATE',
             """{full_name}
 💰 Баланс: {balance}
 📱 Подписка: {status_emoji} {status_display}{warning}{tariff_info_block}
@@ -526,21 +486,21 @@ async def show_subscription_info(
 
     if not show_devices:
         message_template = message_template.replace(
-            "\n Устройства: {devices_used} / {device_limit}",
-            "",
+            '\n Устройства: {devices_used} / {device_limit}',
+            '',
         )
 
     device_limit_display = str(subscription.device_limit)
 
     message = message_template.format(
-        full_name=html.escape(db_user.full_name or ""),
+        full_name=html.escape(db_user.full_name or ''),
         balance=settings.format_price(db_user.balance_kopeks),
         status_emoji=status_emoji,
         status_display=status_display,
         warning=warning_text,
         tariff_info_block=tariff_info_block,
         subscription_type=subscription_type,
-        end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
+        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
         time_left=time_left_text,
         traffic=traffic_used_display,
         servers=servers_display,
@@ -549,19 +509,19 @@ async def show_subscription_info(
     )
 
     if show_devices and devices_list:
-        message += "\n\n" + texts.t(
-            "SUBSCRIPTION_CONNECTED_DEVICES_TITLE",
-            "<blockquote> <b>Подключенные устройства:</b>\n",
+        message += '\n\n' + texts.t(
+            'SUBSCRIPTION_CONNECTED_DEVICES_TITLE',
+            '<blockquote> <b>Подключенные устройства:</b>\n',
         )
         for device in devices_list[:5]:
-            platform = device.get("platform", "Unknown")
-            device_model = device.get("deviceModel", "Unknown")
+            platform = device.get('platform', 'Unknown')
+            device_model = device.get('deviceModel', 'Unknown')
             device_info = format_device_label(platform, device_model)
 
             if len(device_info) > 35:
-                device_info = device_info[:32] + "..."
-            message += f"• {device_info}\n"
-        message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
+                device_info = device_info[:32] + '...'
+            message += f'• {device_info}\n'
+        message += texts.t('SUBSCRIPTION_CONNECTED_DEVICES_FOOTER', '</blockquote>')
 
     # Отображаем докупленный трафик
     if subscription.traffic_limit_gb > 0:  # Только для лимитированных тарифов
@@ -580,9 +540,9 @@ async def show_subscription_info(
         purchases = purchases_result.scalars().all()
 
         if purchases:
-            message += "\n\n" + texts.t(
-                "SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE",
-                "<blockquote> <b>Докупленный трафик:</b>\n",
+            message += '\n\n' + texts.t(
+                'SUBSCRIPTION_PURCHASED_TRAFFIC_TITLE',
+                '<blockquote> <b>Докупленный трафик:</b>\n',
             )
 
             for purchase in purchases:
@@ -590,64 +550,52 @@ async def show_subscription_info(
                 days_remaining = max(0, int(time_remaining.total_seconds() / 86400))
 
                 # Генерируем прогресс-бар
-                total_duration_seconds = (
-                    purchase.expires_at - purchase.created_at
-                ).total_seconds()
+                total_duration_seconds = (purchase.expires_at - purchase.created_at).total_seconds()
                 elapsed_seconds = (now - purchase.created_at).total_seconds()
                 progress_percent = min(
                     100.0,
                     max(
                         0.0,
-                        (
-                            (elapsed_seconds / total_duration_seconds * 100)
-                            if total_duration_seconds > 0
-                            else 0
-                        ),
+                        ((elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
                     ),
                 )
 
                 bar_length = 10
                 filled = int((progress_percent / 100) * bar_length)
-                bar = "▰" * filled + "▱" * (bar_length - filled)
+                bar = '▰' * filled + '▱' * (bar_length - filled)
 
                 # Форматируем дату истечения
-                expire_date = purchase.expires_at.strftime("%d.%m.%Y")
+                expire_date = purchase.expires_at.strftime('%d.%m.%Y')
 
                 # Формируем текст о времени
                 if days_remaining == 0:
-                    time_text = "истекает сегодня"
+                    time_text = 'истекает сегодня'
                 elif days_remaining == 1:
-                    time_text = "остался 1 день"
+                    time_text = 'остался 1 день'
                 elif days_remaining < 5:
-                    time_text = f"осталось {days_remaining} дня"
+                    time_text = f'осталось {days_remaining} дня'
                 else:
-                    time_text = f"осталось {days_remaining} дней"
+                    time_text = f'осталось {days_remaining} дней'
 
-                message += f"• {purchase.traffic_gb} ГБ — {time_text}\n"
-                message += f"  {bar} {progress_percent:.0f}% | до {expire_date}\n"
+                message += f'• {purchase.traffic_gb} ГБ — {time_text}\n'
+                message += f'  {bar} {progress_percent:.0f}% | до {expire_date}\n'
 
-            message += texts.t("SUBSCRIPTION_PURCHASED_TRAFFIC_FOOTER", "</blockquote>")
+            message += texts.t('SUBSCRIPTION_PURCHASED_TRAFFIC_FOOTER', '</blockquote>')
 
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
 
-    if (
-        subscription_link
-        and actual_status in ["trial_active", "paid_active"]
-        and not hide_subscription_link
-    ):
+    if subscription_link and actual_status in ['trial_active', 'paid_active'] and not hide_subscription_link:
         subscription_link_display = subscription_link
 
         if settings.is_happ_cryptolink_mode():
-            subscription_link_display = (
-                f"<blockquote expandable><code>{subscription_link}</code></blockquote>"
-            )
+            subscription_link_display = f'<blockquote expandable><code>{subscription_link}</code></blockquote>'
         else:
-            subscription_link_display = f"<code>{subscription_link}</code>"
+            subscription_link_display = f'<code>{subscription_link}</code>'
 
-        message += "\n\n" + texts.t(
-            "SUBSCRIPTION_CONNECT_LINK_SECTION",
-            "<b>Ссылка для подключения:</b>\n{subscription_url}",
+        message += '\n\n' + texts.t(
+            'SUBSCRIPTION_CONNECT_LINK_SECTION',
+            '<b>Ссылка для подключения:</b>\n{subscription_url}',
         ).format(subscription_url=subscription_link_display)
 
     await callback.message.edit_text(
@@ -658,14 +606,12 @@ async def show_subscription_info(
             is_trial=subscription.is_trial,
             subscription=subscription,
         ),
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
     await callback.answer()
 
 
-async def show_trial_offer(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
@@ -675,10 +621,10 @@ async def show_trial_offer(
 
     # Триал отключён глобально (нулевая длительность) либо для этого типа пользователя
     if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_disabled_for_user(
-        getattr(db_user, "auth_type", "telegram")
+        getattr(db_user, 'auth_type', 'telegram')
     ):
         await callback.message.edit_text(
-            texts.t("TRIAL_DISABLED_FOR_USER_TYPE", "Пробный период недоступен"),
+            texts.t('TRIAL_DISABLED_FOR_USER_TYPE', 'Пробный период недоступен'),
             reply_markup=get_back_keyboard(db_user.language),
         )
         await callback.answer()
@@ -690,9 +636,7 @@ async def show_trial_offer(
     # subscription. In multi-tariff mode a user can have multiple subscriptions, but
     # trial eligibility is still "has any subscription" so this check is correct.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(
-            texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language)
-        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
 
@@ -701,7 +645,7 @@ async def show_trial_offer(
     trial_traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
     trial_device_limit = settings.TRIAL_DEVICE_LIMIT
     trial_tariff = None
-    trial_server_name = texts.t("TRIAL_SERVER_DEFAULT_NAME", "Тестовый сервер")
+    trial_server_name = texts.t('TRIAL_SERVER_DEFAULT_NAME', 'Тестовый сервер')
 
     # Проверяем триальный тариф
     if settings.is_tariffs_mode():
@@ -720,14 +664,12 @@ async def show_trial_offer(
             if trial_tariff:
                 trial_traffic = trial_tariff.traffic_limit_gb
                 trial_device_limit = trial_tariff.device_limit
-                tariff_trial_days = getattr(trial_tariff, "trial_duration_days", None)
+                tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                 if tariff_trial_days:
                     trial_days = tariff_trial_days
-                logger.info(
-                    "Показываем триал с тарифом", trial_tariff_name=trial_tariff.name
-                )
+                logger.info('Показываем триал с тарифом', trial_tariff_name=trial_tariff.name)
         except Exception as e:
-            logger.error("Ошибка получения триального тарифа", error=e)
+            logger.error('Ошибка получения триального тарифа', error=e)
 
     try:
         from app.database.crud.server_squad import get_trial_eligible_server_squads
@@ -736,207 +678,136 @@ async def show_trial_offer(
         if trial_tariff and trial_tariff.allowed_squads:
             from app.database.crud.server_squad import get_server_squads_by_uuids
 
-            tariff_squads = await get_server_squads_by_uuids(
-                db, trial_tariff.allowed_squads
-            )
+            tariff_squads = await get_server_squads_by_uuids(db, trial_tariff.allowed_squads)
             if tariff_squads:
                 if len(tariff_squads) == 1:
                     trial_server_name = html.escape(tariff_squads[0].display_name)
                 else:
                     trial_server_name = texts.t(
-                        "TRIAL_SERVER_RANDOM_POOL",
-                        "Случайный из {count} серверов",
+                        'TRIAL_SERVER_RANDOM_POOL',
+                        'Случайный из {count} серверов',
                     ).format(count=len(tariff_squads))
         else:
-            trial_squads = await get_trial_eligible_server_squads(
-                db, include_unavailable=True
-            )
+            trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
             if trial_squads:
                 if len(trial_squads) == 1:
                     trial_server_name = html.escape(trial_squads[0].display_name)
                 else:
                     trial_server_name = texts.t(
-                        "TRIAL_SERVER_RANDOM_POOL",
-                        "Случайный из {count} серверов",
+                        'TRIAL_SERVER_RANDOM_POOL',
+                        'Случайный из {count} серверов',
                     ).format(count=len(trial_squads))
             else:
-                logger.warning("Не настроены сквады для выдачи триалов")
+                logger.warning('Не настроены сквады для выдачи триалов')
 
     except Exception as e:
-        logger.error("Ошибка получения триального сервера", error=e)
+        logger.error('Ошибка получения триального сервера', error=e)
 
     if not settings.is_devices_selection_enabled():
         forced_limit = settings.get_disabled_mode_device_limit()
         if forced_limit is not None:
             trial_device_limit = forced_limit
 
-    devices_line = ""
+    devices_line = ''
     if settings.is_devices_selection_enabled() or trial_tariff:
         devices_line_template = texts.t(
-            "TRIAL_AVAILABLE_DEVICES_LINE",
-            "\n <b>Устройства:</b> {devices} шт.",
+            'TRIAL_AVAILABLE_DEVICES_LINE',
+            '\n <b>Устройства:</b> {devices} шт.',
         )
         devices_line = devices_line_template.format(
             devices=trial_device_limit,
         )
 
-    price_line = ""
+    price_line = ''
     if settings.is_trial_paid_activation_enabled():
         trial_price = settings.get_trial_activation_price()
         if trial_price > 0:
             price_line = texts.t(
-                "TRIAL_PAYMENT_PRICE_LINE",
-                "\n <b>Стоимость активации:</b> {price}",
+                'TRIAL_PAYMENT_PRICE_LINE',
+                '\n <b>Стоимость активации:</b> {price}',
             ).format(price=settings.format_price(trial_price))
 
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=trial_days,
         traffic=texts.format_traffic(trial_traffic),
-        devices=trial_device_limit if trial_device_limit is not None else "",
+        devices=trial_device_limit if trial_device_limit is not None else '',
         devices_line=devices_line,
         server_name=trial_server_name,
         price_line=price_line,
     )
 
-    await callback.message.edit_text(
-        trial_text, reply_markup=get_trial_keyboard(db_user.language)
-    )
+    await callback.message.edit_text(trial_text, reply_markup=get_trial_keyboard(db_user.language))
     await callback.answer()
 
 
-def _get_trial_payment_keyboard(
-    language: str, can_pay_from_balance: bool = False
-) -> types.InlineKeyboardMarkup:
+def _get_trial_payment_keyboard(language: str, can_pay_from_balance: bool = False) -> types.InlineKeyboardMarkup:
     """Создает клавиатуру с методами оплаты для платного триала."""
     texts = get_texts(language)
     keyboard = []
 
     # Кнопка оплаты с баланса (если хватает средств)
     if can_pay_from_balance:
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text="Оплатить с баланса", callback_data="trial_pay_with_balance"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='Оплатить с баланса', callback_data='trial_pay_with_balance')])
 
     # Добавляем доступные методы оплаты
     if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text="Telegram Stars", callback_data="trial_payment_stars"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='Telegram Stars', callback_data='trial_payment_stars')])
 
     if settings.is_yookassa_enabled():
         yookassa_methods = []
         if settings.YOOKASSA_SBP_ENABLED:
             yookassa_methods.append(
-                types.InlineKeyboardButton(
-                    text="YooKassa (СБП)", callback_data="trial_payment_yookassa_sbp"
-                )
+                types.InlineKeyboardButton(text='YooKassa (СБП)', callback_data='trial_payment_yookassa_sbp')
             )
         yookassa_methods.append(
-            types.InlineKeyboardButton(
-                text="YooKassa (Карта)", callback_data="trial_payment_yookassa"
-            )
+            types.InlineKeyboardButton(text='YooKassa (Карта)', callback_data='trial_payment_yookassa')
         )
         if yookassa_methods:
             keyboard.append(yookassa_methods)
 
     if settings.is_cryptobot_enabled():
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text="CryptoBot", callback_data="trial_payment_cryptobot"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='CryptoBot', callback_data='trial_payment_cryptobot')])
 
     if settings.is_heleket_enabled():
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text="Heleket", callback_data="trial_payment_heleket"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='Heleket', callback_data='trial_payment_heleket')])
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f"{mulenpay_name}", callback_data="trial_payment_mulenpay"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text=f'{mulenpay_name}', callback_data='trial_payment_mulenpay')])
 
     if settings.is_pal24_enabled():
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text="PayPalych", callback_data="trial_payment_pal24"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='PayPalych', callback_data='trial_payment_pal24')])
 
     if settings.is_wata_enabled():
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text="WATA", callback_data="trial_payment_wata"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text='WATA', callback_data='trial_payment_wata')])
 
     if settings.is_platega_enabled():
         platega_name = settings.get_platega_display_name()
-        keyboard.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f"{platega_name}", callback_data="trial_payment_platega"
-                )
-            ]
-        )
+        keyboard.append([types.InlineKeyboardButton(text=f'{platega_name}', callback_data='trial_payment_platega')])
 
     # Кнопка назад
-    keyboard.append(
-        [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_trial")]
-    )
+    keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_trial')])
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def activate_trial(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def activate_trial(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     from app.services.trial_activation_service import get_trial_activation_charge_amount
 
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на покупку/продление подписки
-    if getattr(db_user, "restriction_subscription", False):
-        reason = html.escape(
-            getattr(db_user, "restriction_reason", None)
-            or "Действие ограничено администратором"
-        )
+    if getattr(db_user, 'restriction_subscription', False):
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append(
-                [types.InlineKeyboardButton(text="Обжаловать", url=support_url)]
-            )
-        keyboard.append(
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription")]
-        )
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
 
         await callback.message.edit_text(
-            f"<b>Активация подписки ограничена</b>\n\n{reason}\n\n"
-            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            f'<b>Активация подписки ограничена</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -944,10 +815,10 @@ async def activate_trial(
 
     # Триал отключён глобально (нулевая длительность) либо для этого типа пользователя
     if settings.TRIAL_DURATION_DAYS <= 0 or settings.is_trial_disabled_for_user(
-        getattr(db_user, "auth_type", "telegram")
+        getattr(db_user, 'auth_type', 'telegram')
     ):
         await callback.message.edit_text(
-            texts.t("TRIAL_DISABLED_FOR_USER_TYPE", "Пробный период недоступен"),
+            texts.t('TRIAL_DISABLED_FOR_USER_TYPE', 'Пробный период недоступен'),
             reply_markup=get_back_keyboard(db_user.language),
         )
         await callback.answer()
@@ -958,9 +829,7 @@ async def activate_trial(
     # Multi-tariff note: db_user.subscription returns the first active/most recent
     # subscription. Trial eligibility is "has any subscription" so this check is correct.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(
-            texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language)
-        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
 
@@ -969,7 +838,7 @@ async def activate_trial(
 
     if trial_price_kopeks > 0:
         # Платный триал - показываем экран с выбором метода оплаты
-        user_balance_kopeks = getattr(db_user, "balance_kopeks", 0) or 0
+        user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0) or 0
         can_pay_from_balance = user_balance_kopeks >= trial_price_kopeks
 
         # Берём параметры из триального тарифа если доступен
@@ -991,52 +860,40 @@ async def activate_trial(
                 if paid_trial_tariff:
                     paid_trial_traffic = paid_trial_tariff.traffic_limit_gb
                     paid_trial_devices = paid_trial_tariff.device_limit
-                    tariff_trial_days = getattr(
-                        paid_trial_tariff, "trial_duration_days", None
-                    )
+                    tariff_trial_days = getattr(paid_trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
                         paid_trial_days = tariff_trial_days
             except Exception as e:
-                logger.error(
-                    "Ошибка получения триального тарифа для платного триала", error=e
-                )
+                logger.error('Ошибка получения триального тарифа для платного триала', error=e)
 
-        traffic_label = (
-            "Безлимит" if paid_trial_traffic == 0 else f"{paid_trial_traffic} ГБ"
-        )
+        traffic_label = 'Безлимит' if paid_trial_traffic == 0 else f'{paid_trial_traffic} ГБ'
 
         message_lines = [
-            texts.t("PAID_TRIAL_HEADER", "<b>Пробная подписка</b>"),
-            "",
+            texts.t('PAID_TRIAL_HEADER', '<b>Пробная подписка</b>'),
+            '',
             f'{texts.t("PERIOD", "Период")}: {paid_trial_days} {texts.t("DAYS", "дней")}',
             f'{texts.t("TRAFFIC", "Трафик")}: {traffic_label}',
             f'{texts.t("DEVICES", "Устройства")}: {paid_trial_devices}',
-            "",
+            '',
             f'{texts.t("PRICE", "Стоимость")}: {settings.format_price(trial_price_kopeks)}',
             f'{texts.t("YOUR_BALANCE", "Ваш баланс")}: {settings.format_price(user_balance_kopeks)}',
-            "",
+            '',
         ]
 
         if can_pay_from_balance:
             message_lines.append(
                 texts.t(
-                    "PAID_TRIAL_CAN_PAY_BALANCE",
-                    "Вы можете оплатить пробную подписку с баланса или выбрать другой способ оплаты.",
+                    'PAID_TRIAL_CAN_PAY_BALANCE',
+                    'Вы можете оплатить пробную подписку с баланса или выбрать другой способ оплаты.',
                 )
             )
         else:
-            message_lines.append(
-                texts.t(
-                    "PAID_TRIAL_SELECT_PAYMENT", "Выберите подходящий способ оплаты:"
-                )
-            )
+            message_lines.append(texts.t('PAID_TRIAL_SELECT_PAYMENT', 'Выберите подходящий способ оплаты:'))
 
-        message_text = "\n".join(message_lines)
+        message_text = '\n'.join(message_lines)
         keyboard = _get_trial_payment_keyboard(db_user.language, can_pay_from_balance)
 
-        await callback.message.edit_text(
-            message_text, reply_markup=keyboard, parse_mode="HTML"
-        )
+        await callback.message.edit_text(message_text, reply_markup=keyboard, parse_mode='HTML')
         await callback.answer()
         return
 
@@ -1079,22 +936,18 @@ async def activate_trial(
 
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
                     trial_device_limit = trial_tariff.device_limit
-                    trial_squads = await get_effective_tariff_squad_uuids(
-                        db, trial_tariff.allowed_squads
-                    )
+                    trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                     tariff_id_for_trial = trial_tariff.id
-                    tariff_trial_days = getattr(
-                        trial_tariff, "trial_duration_days", None
-                    )
+                    tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
                         trial_duration = tariff_trial_days
                     logger.info(
-                        "Используем триальный тариф (ID: )",
+                        'Используем триальный тариф (ID: )',
                         trial_tariff_name=trial_tariff.name,
                         trial_tariff_id=trial_tariff.id,
                     )
             except Exception as e:
-                logger.error("Ошибка получения триального тарифа", error=e)
+                logger.error('Ошибка получения триального тарифа', error=e)
 
         # No trial tariff configured, use the legacy random trial squad fallback.
         if not trial_squads:
@@ -1119,43 +972,35 @@ async def activate_trial(
             charged_amount = await charge_trial_activation_if_required(
                 db,
                 db_user,
-                description="Активация триала через бота",
+                description='Активация триала через бота',
             )
         except TrialPaymentInsufficientFunds as error:
-            rollback_success = await rollback_trial_subscription_activation(
-                db, subscription
-            )
+            rollback_success = await rollback_trial_subscription_activation(db, subscription)
             await db.refresh(db_user)
             if not rollback_success:
                 await callback.answer(
                     texts.t(
-                        "TRIAL_ROLLBACK_FAILED",
-                        "Не удалось отменить активацию триала. Попробуйте позже.",
+                        'TRIAL_ROLLBACK_FAILED',
+                        'Не удалось отменить активацию триала. Попробуйте позже.',
                     ),
                     show_alert=True,
                 )
                 return
 
             logger.error(
-                "Insufficient funds detected after trial creation for user",
+                'Insufficient funds detected after trial creation for user',
                 db_user_id=db_user.id,
                 error=error,
             )
             # Без округления — копейки критичны, чтобы юзер понял что именно не хватает.
-            required_label = settings.format_price(
-                error.required_amount, round_kopeks=False
-            )
-            balance_label = settings.format_price(
-                error.balance_amount, round_kopeks=False
-            )
-            missing_label = settings.format_price(
-                error.missing_amount, round_kopeks=False
-            )
+            required_label = settings.format_price(error.required_amount, round_kopeks=False)
+            balance_label = settings.format_price(error.balance_amount, round_kopeks=False)
+            missing_label = settings.format_price(error.missing_amount, round_kopeks=False)
             message = texts.t(
-                "TRIAL_PAYMENT_INSUFFICIENT_FUNDS",
-                "Недостаточно средств для активации триала.\n"
-                "Необходимо: {required}\nНа балансе: {balance}\n"
-                "Не хватает: {missing}\n\nПополните баланс и попробуйте снова.",
+                'TRIAL_PAYMENT_INSUFFICIENT_FUNDS',
+                'Недостаточно средств для активации триала.\n'
+                'Необходимо: {required}\nНа балансе: {balance}\n'
+                'Не хватает: {missing}\n\nПополните баланс и попробуйте снова.',
             ).format(
                 required=required_label,
                 balance=balance_label,
@@ -1172,15 +1017,13 @@ async def activate_trial(
             await callback.answer()
             return
         except TrialPaymentChargeFailed:
-            rollback_success = await rollback_trial_subscription_activation(
-                db, subscription
-            )
+            rollback_success = await rollback_trial_subscription_activation(db, subscription)
             await db.refresh(db_user)
             if not rollback_success:
                 await callback.answer(
                     texts.t(
-                        "TRIAL_ROLLBACK_FAILED",
-                        "Не удалось отменить активацию триала. Попробуйте позже.",
+                        'TRIAL_ROLLBACK_FAILED',
+                        'Не удалось отменить активацию триала. Попробуйте позже.',
                     ),
                     show_alert=True,
                 )
@@ -1188,8 +1031,8 @@ async def activate_trial(
 
             await callback.answer(
                 texts.t(
-                    "TRIAL_PAYMENT_FAILED",
-                    "Не удалось списать средства для активации триала. Попробуйте позже.",
+                    'TRIAL_PAYMENT_FAILED',
+                    'Не удалось списать средства для активации триала. Попробуйте позже.',
                 ),
                 show_alert=True,
             )
@@ -1202,30 +1045,28 @@ async def activate_trial(
                 subscription,
             )
         except RemnaWaveConfigurationError as error:
-            logger.error(
-                "RemnaWave update skipped due to configuration error", error=error
-            )
+            logger.error('RemnaWave update skipped due to configuration error', error=error)
             revert_result = await revert_trial_activation(
                 db,
                 db_user,
                 subscription,
                 charged_amount,
-                refund_description="Возврат оплаты за активацию триала через бота",
+                refund_description='Возврат оплаты за активацию триала через бота',
             )
             if not revert_result.subscription_rolled_back:
                 failure_text = texts.t(
-                    "TRIAL_ROLLBACK_FAILED",
-                    "Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.",
+                    'TRIAL_ROLLBACK_FAILED',
+                    'Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.',
                 )
             elif charged_amount > 0 and not revert_result.refunded:
                 failure_text = texts.t(
-                    "TRIAL_REFUND_FAILED",
-                    "Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.",
+                    'TRIAL_REFUND_FAILED',
+                    'Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.',
                 )
             else:
                 failure_text = texts.t(
-                    "TRIAL_PROVISIONING_FAILED",
-                    "Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.",
+                    'TRIAL_PROVISIONING_FAILED',
+                    'Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.',
                 )
 
             await callback.message.edit_text(
@@ -1236,8 +1077,8 @@ async def activate_trial(
             return
         except Exception as error:
             logger.error(
-                "Failed to create RemnaWave user for trial subscription",
-                getattr=getattr(subscription, "id", "<unknown>"),
+                'Failed to create RemnaWave user for trial subscription',
+                getattr=getattr(subscription, 'id', '<unknown>'),
                 error=error,
             )
             revert_result = await revert_trial_activation(
@@ -1245,22 +1086,22 @@ async def activate_trial(
                 db_user,
                 subscription,
                 charged_amount,
-                refund_description="Возврат оплаты за активацию триала через бота",
+                refund_description='Возврат оплаты за активацию триала через бота',
             )
             if not revert_result.subscription_rolled_back:
                 failure_text = texts.t(
-                    "TRIAL_ROLLBACK_FAILED",
-                    "Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.",
+                    'TRIAL_ROLLBACK_FAILED',
+                    'Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.',
                 )
             elif charged_amount > 0 and not revert_result.refunded:
                 failure_text = texts.t(
-                    "TRIAL_REFUND_FAILED",
-                    "Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.",
+                    'TRIAL_REFUND_FAILED',
+                    'Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.',
                 )
             else:
                 failure_text = texts.t(
-                    "TRIAL_PROVISIONING_FAILED",
-                    "Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.",
+                    'TRIAL_PROVISIONING_FAILED',
+                    'Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.',
                 )
 
             await callback.message.edit_text(
@@ -1281,50 +1122,48 @@ async def activate_trial(
                 charged_amount_kopeks=charged_amount,
             )
         except Exception as e:
-            logger.error("Ошибка отправки уведомления о триале", error=e)
+            logger.error('Ошибка отправки уведомления о триале', error=e)
 
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
 
-        payment_note = ""
+        payment_note = ''
         if charged_amount > 0:
-            payment_note = "\n\n" + texts.t(
-                "TRIAL_PAYMENT_CHARGED_NOTE",
-                "С вашего баланса списано {amount}.",
+            payment_note = '\n\n' + texts.t(
+                'TRIAL_PAYMENT_CHARGED_NOTE',
+                'С вашего баланса списано {amount}.',
             ).format(amount=settings.format_price(charged_amount))
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
-                trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n" + texts.t(
-                    "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_HAPP_LINK_PROMPT',
                     'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
-                trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n" + texts.t(
-                    "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                     'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 subscription_import_link = texts.t(
-                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                    "<b>Ваша ссылка для подключения:</b>\n<code>{subscription_url}</code>",
+                    'SUBSCRIPTION_IMPORT_LINK_SECTION',
+                    '<b>Ваша ссылка для подключения:</b>\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
-                trial_success_text = (
-                    f"{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}\n\n"
-                )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}\n\n'
 
             trial_success_text += payment_note
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
-            if connect_mode == "miniapp_subscription":
+            if connect_mode == 'miniapp_subscription':
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             make_button(
                                 text=texts.t(
-                                    "CONNECT_BUTTON",
+                                    'CONNECT_BUTTON',
                                     "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                                 ),
                                 web_app=types.WebAppInfo(url=subscription_link),
@@ -1332,20 +1171,18 @@ async def activate_trial(
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t(
-                                    "BACK_TO_MAIN_MENU_BUTTON", "В главное меню"
-                                ),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
                 )
-            elif connect_mode == "miniapp_custom":
+            elif connect_mode == 'miniapp_custom':
                 if not settings.MINIAPP_CUSTOM_URL:
                     await callback.answer(
                         texts.t(
-                            "CUSTOM_MINIAPP_URL_NOT_SET",
-                            "Кастомная ссылка для мини-приложения не настроена",
+                            'CUSTOM_MINIAPP_URL_NOT_SET',
+                            'Кастомная ссылка для мини-приложения не настроена',
                         ),
                         show_alert=True,
                     )
@@ -1356,30 +1193,26 @@ async def activate_trial(
                         [
                             make_button(
                                 text=texts.t(
-                                    "CONNECT_BUTTON",
+                                    'CONNECT_BUTTON',
                                     "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                                 ),
-                                web_app=types.WebAppInfo(
-                                    url=settings.MINIAPP_CUSTOM_URL
-                                ),
+                                web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t(
-                                    "BACK_TO_MAIN_MENU_BUTTON", "В главное меню"
-                                ),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
                 )
-            elif connect_mode == "link":
+            elif connect_mode == 'link':
                 rows = [
                     [
                         make_button(
                             text=texts.t(
-                                "CONNECT_BUTTON",
+                                'CONNECT_BUTTON',
                                 "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                             ),
                             url=subscription_link,
@@ -1392,21 +1225,21 @@ async def activate_trial(
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                            callback_data="back_to_menu",
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            callback_data='back_to_menu',
                         )
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-            elif connect_mode == "happ_cryptolink":
+            elif connect_mode == 'happ_cryptolink':
                 rows = [
                     [
                         make_button(
                             text=texts.t(
-                                "CONNECT_BUTTON",
+                                'CONNECT_BUTTON',
                                 "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                             ),
-                            callback_data="open_subscription_link",
+                            callback_data='open_subscription_link',
                         )
                     ]
                 ]
@@ -1416,8 +1249,8 @@ async def activate_trial(
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                            callback_data="back_to_menu",
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            callback_data='back_to_menu',
                         )
                     ]
                 )
@@ -1428,18 +1261,16 @@ async def activate_trial(
                         [
                             make_button(
                                 text=texts.t(
-                                    "CONNECT_BUTTON",
+                                    'CONNECT_BUTTON',
                                     "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                                 ),
-                                callback_data="subscription_connect",
+                                callback_data='subscription_connect',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t(
-                                    "BACK_TO_MAIN_MENU_BUTTON", "В главное меню"
-                                ),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
@@ -1448,7 +1279,7 @@ async def activate_trial(
             await callback.message.edit_text(
                 trial_success_text,
                 reply_markup=connect_keyboard,
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
         else:
             trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд."
@@ -1459,12 +1290,12 @@ async def activate_trial(
             )
 
         logger.info(
-            "Активирована тестовая подписка для пользователя",
+            'Активирована тестовая подписка для пользователя',
             telegram_id=db_user.telegram_id,
         )
 
     except Exception as e:
-        logger.error("Ошибка активации триала", error=e)
+        logger.error('Ошибка активации триала', error=e)
         failure_text = texts.ERROR
 
         if subscription and remnawave_user is None:
@@ -1473,27 +1304,25 @@ async def activate_trial(
                 db_user,
                 subscription,
                 charged_amount,
-                refund_description="Возврат оплаты за активацию триала через бота",
+                refund_description='Возврат оплаты за активацию триала через бота',
             )
             if not revert_result.subscription_rolled_back:
                 failure_text = texts.t(
-                    "TRIAL_ROLLBACK_FAILED",
-                    "Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.",
+                    'TRIAL_ROLLBACK_FAILED',
+                    'Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.',
                 )
             elif charged_amount > 0 and not revert_result.refunded:
                 failure_text = texts.t(
-                    "TRIAL_REFUND_FAILED",
-                    "Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.",
+                    'TRIAL_REFUND_FAILED',
+                    'Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.',
                 )
             else:
                 failure_text = texts.t(
-                    "TRIAL_PROVISIONING_FAILED",
-                    "Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.",
+                    'TRIAL_PROVISIONING_FAILED',
+                    'Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.',
                 )
 
-        await callback.message.edit_text(
-            failure_text, reply_markup=get_back_keyboard(db_user.language)
-        )
+        await callback.message.edit_text(failure_text, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
 
@@ -1526,14 +1355,12 @@ async def start_subscription_purchase(
 
     # Multi-tariff note: this path is only reached in classic (non-tariff) mode.
     # Tariff mode redirects to show_tariffs_list above. db_user.subscription is safe.
-    subscription = getattr(db_user, "subscription", None)
+    subscription = getattr(db_user, 'subscription', None)
 
     if settings.is_devices_selection_enabled():
         initial_devices = settings.DEFAULT_DEVICE_LIMIT
-        if subscription and getattr(subscription, "device_limit", None) is not None:
-            initial_devices = max(
-                settings.DEFAULT_DEVICE_LIMIT, subscription.device_limit
-            )
+        if subscription and getattr(subscription, 'device_limit', None) is not None:
+            initial_devices = max(settings.DEFAULT_DEVICE_LIMIT, subscription.device_limit)
     else:
         forced_limit = settings.get_disabled_mode_device_limit()
         if forced_limit is None:
@@ -1542,16 +1369,16 @@ async def start_subscription_purchase(
             initial_devices = forced_limit
 
     initial_data = {
-        "period_days": None,
-        "countries": [],
-        "devices": initial_devices,
-        "total_price": 0,
+        'period_days': None,
+        'countries': [],
+        'devices': initial_devices,
+        'total_price': 0,
     }
 
     if settings.is_traffic_fixed():
-        initial_data["traffic_gb"] = settings.get_fixed_traffic_limit()
+        initial_data['traffic_gb'] = settings.get_fixed_traffic_limit()
     else:
-        initial_data["traffic_gb"] = None
+        initial_data['traffic_gb'] = None
 
     await state.set_data(initial_data)
     await state.set_state(SubscriptionStates.selecting_period)
@@ -1562,7 +1389,7 @@ async def _edit_message_text_or_caption(
     message: types.Message,
     text: str,
     reply_markup: InlineKeyboardMarkup,
-    parse_mode: str | None = "HTML",
+    parse_mode: str | None = 'HTML',
 ) -> None:
     """Edits message text when possible, falls back to caption or re-sends message."""
 
@@ -1584,10 +1411,10 @@ async def _edit_message_text_or_caption(
     except TelegramBadRequest as error:
         error_message = str(error).lower()
 
-        if "message is not modified" in error_message:
+        if 'message is not modified' in error_message:
             return
 
-        if "there is no text in the message to edit" in error_message:
+        if 'there is no text in the message to edit' in error_message:
             if message.caption is not None:
                 await message.edit_caption(
                     caption=text,
@@ -1616,86 +1443,78 @@ async def save_cart_and_redirect_to_topup(
     # Сохраняем данные корзины в Redis
     cart_data = {
         **data,
-        "saved_cart": True,
-        "missing_amount": missing_amount,
-        "return_to_cart": True,
-        "user_id": db_user.id,
+        'saved_cart': True,
+        'missing_amount': missing_amount,
+        'return_to_cart': True,
+        'user_id': db_user.id,
     }
 
     await user_cart_service.save_user_cart(db_user.id, cart_data)
 
     await callback.message.edit_text(
-        f"Недостаточно средств для оформления подписки\n\n"
-        f"Требуется: {texts.format_price(missing_amount, round_kopeks=False)}\n"
-        f"У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n\n"
-        f"Ваша корзина сохранена!\n"
-        f"После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n"
-        f"Выберите способ пополнения:",
+        f'Недостаточно средств для оформления подписки\n\n'
+        f'Требуется: {texts.format_price(missing_amount, round_kopeks=False)}\n'
+        f'У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n\n'
+        f'Ваша корзина сохранена!\n'
+        f'После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n'
+        f'Выберите способ пополнения:',
         reply_markup=get_payment_methods_keyboard_with_cart(
             db_user.language,
             missing_amount,
         ),
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
 
 
-async def return_to_saved_cart(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
+async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     # Получаем данные корзины из Redis
     cart_data = await user_cart_service.get_user_cart(db_user.id)
 
     if not cart_data:
-        await callback.answer("Сохраненная корзина не найдена", show_alert=True)
+        await callback.answer('Сохраненная корзина не найдена', show_alert=True)
         return
 
     texts = get_texts(db_user.language)
 
     # Проверяем режим корзины - если это тарифная корзина, перенаправляем на соответствующий обработчик
-    cart_mode = cart_data.get("cart_mode")
+    cart_mode = cart_data.get('cart_mode')
     if cart_mode in (
-        "tariff_purchase",
-        "daily_tariff_purchase",
-        "extend",
-    ) and cart_data.get("tariff_id"):
+        'tariff_purchase',
+        'daily_tariff_purchase',
+        'extend',
+    ) and cart_data.get('tariff_id'):
         from .tariff_purchase import return_to_saved_tariff_cart
 
         await return_to_saved_tariff_cart(callback, state, db_user, db, cart_data)
         return
 
     preserved_metadata_keys = {
-        "saved_cart",
-        "missing_amount",
-        "return_to_cart",
-        "user_id",
+        'saved_cart',
+        'missing_amount',
+        'return_to_cart',
+        'user_id',
     }
-    preserved_metadata = {
-        key: cart_data[key] for key in preserved_metadata_keys if key in cart_data
-    }
+    preserved_metadata = {key: cart_data[key] for key in preserved_metadata_keys if key in cart_data}
 
     prepared_cart_data = dict(cart_data)
 
-    if "period_days" not in prepared_cart_data:
-        await callback.answer(
-            "Корзина повреждена. Оформите подписку заново.", show_alert=True
-        )
+    if 'period_days' not in prepared_cart_data:
+        await callback.answer('Корзина повреждена. Оформите подписку заново.', show_alert=True)
         # Multi-tariff safe: try per-subscription deletion to avoid nuking other carts
         corrupted_sub_id = None
         try:
-            raw = cart_data.get("subscription_id")
+            raw = cart_data.get('subscription_id')
             if raw is not None:
                 corrupted_sub_id = int(raw)
         except (TypeError, ValueError):
             pass
 
         if corrupted_sub_id is not None:
-            await user_cart_service.delete_subscription_cart(
-                db_user.id, corrupted_sub_id
-            )
+            await user_cart_service.delete_subscription_cart(db_user.id, corrupted_sub_id)
             global_cart = await user_cart_service.get_user_cart(db_user.id)
-            if global_cart and global_cart.get("subscription_id") is not None:
+            if global_cart and global_cart.get('subscription_id') is not None:
                 try:
-                    if int(global_cart["subscription_id"]) == corrupted_sub_id:
+                    if int(global_cart['subscription_id']) == corrupted_sub_id:
                         await user_cart_service.delete_global_cart_only(db_user.id)
                 except (TypeError, ValueError):
                     pass
@@ -1715,26 +1534,24 @@ async def return_to_saved_cart(
             )
         except ValueError as recalculation_error:
             logger.error(
-                "Не удалось пересчитать сохраненную корзину пользователя",
+                'Не удалось пересчитать сохраненную корзину пользователя',
                 telegram_id=db_user.telegram_id,
                 recalculation_error=recalculation_error,
             )
             forced_limit = settings.get_disabled_mode_device_limit()
             if forced_limit is None:
                 forced_limit = settings.DEFAULT_DEVICE_LIMIT
-            prepared_cart_data["devices"] = forced_limit
-            removed_devices_total = (
-                prepared_cart_data.pop("total_devices_price", 0) or 0
-            )
+            prepared_cart_data['devices'] = forced_limit
+            removed_devices_total = prepared_cart_data.pop('total_devices_price', 0) or 0
             if removed_devices_total:
-                prepared_cart_data["total_price"] = max(
+                prepared_cart_data['total_price'] = max(
                     0,
-                    prepared_cart_data.get("total_price", 0) - removed_devices_total,
+                    prepared_cart_data.get('total_price', 0) - removed_devices_total,
                 )
-            prepared_cart_data.pop("devices_discount_percent", None)
-            prepared_cart_data.pop("devices_discount_total", None)
-            prepared_cart_data.pop("devices_discounted_price_per_month", None)
-            prepared_cart_data.pop("devices_price_per_month", None)
+            prepared_cart_data.pop('devices_discount_percent', None)
+            prepared_cart_data.pop('devices_discount_total', None)
+            prepared_cart_data.pop('devices_discounted_price_per_month', None)
+            prepared_cart_data.pop('devices_price_per_month', None)
         else:
             normalized_cart_data = dict(prepared_cart_data)
             normalized_cart_data.update(recalculated_data)
@@ -1747,7 +1564,7 @@ async def return_to_saved_cart(
         if prepared_cart_data != cart_data:
             await user_cart_service.save_user_cart(db_user.id, prepared_cart_data)
 
-    total_price = prepared_cart_data.get("total_price", 0)
+    total_price = prepared_cart_data.get('total_price', 0)
 
     if total_price > 0 and db_user.balance_kopeks < total_price:
         missing_amount = total_price - db_user.balance_kopeks
@@ -1756,74 +1573,70 @@ async def return_to_saved_cart(
             missing_amount,
         )
         insufficient_text = (
-            f"Все еще недостаточно средств\n\n"
-            f"Требуется: {texts.format_price(total_price, round_kopeks=False)}\n"
-            f"У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n"
-            f"Не хватает: {texts.format_price(missing_amount, round_kopeks=False)}"
+            f'Все еще недостаточно средств\n\n'
+            f'Требуется: {texts.format_price(total_price, round_kopeks=False)}\n'
+            f'У вас: {texts.format_price(db_user.balance_kopeks, round_kopeks=False)}\n'
+            f'Не хватает: {texts.format_price(missing_amount, round_kopeks=False)}'
         )
 
-        if _message_needs_update(
-            callback.message, insufficient_text, insufficient_keyboard
-        ):
+        if _message_needs_update(callback.message, insufficient_text, insufficient_keyboard):
             await callback.message.edit_text(
                 insufficient_text,
                 reply_markup=insufficient_keyboard,
             )
         else:
-            await callback.answer("Пополните баланс, чтобы завершить оформление.")
+            await callback.answer('Пополните баланс, чтобы завершить оформление.')
         return
 
     countries = await _get_available_countries(db_user.promo_group_id)
     selected_countries_names = []
 
-    period_display = format_period_description(
-        prepared_cart_data["period_days"], db_user.language
-    )
+    period_display = format_period_description(prepared_cart_data['period_days'], db_user.language)
 
     # Проверяем наличие ключа 'countries' в данных корзины
-    cart_countries = prepared_cart_data.get("countries", [])
+    cart_countries = prepared_cart_data.get('countries', [])
     for country in countries:
-        if country["uuid"] in cart_countries:
-            selected_countries_names.append(country["name"])
+        if country['uuid'] in cart_countries:
+            selected_countries_names.append(country['name'])
 
     if settings.is_traffic_fixed():
-        traffic_value = prepared_cart_data.get("traffic_gb")
+        traffic_value = prepared_cart_data.get('traffic_gb')
         if traffic_value is None:
-            traffic_value = prepared_cart_data.get("traffic_limit_gb")
+            traffic_value = prepared_cart_data.get('traffic_limit_gb')
         if traffic_value is None:
             traffic_value = settings.get_fixed_traffic_limit()
-        traffic_display = "Безлимитный" if traffic_value == 0 else f"{traffic_value} ГБ"
+        traffic_display = 'Безлимитный' if traffic_value == 0 else f'{traffic_value} ГБ'
     else:
-        traffic_value = prepared_cart_data.get("traffic_gb")
+        traffic_value = prepared_cart_data.get('traffic_gb')
         if traffic_value is None:
-            traffic_value = prepared_cart_data.get("traffic_limit_gb", 0)
-        traffic_display = "Безлимитный" if traffic_value == 0 else f"{traffic_value} ГБ"
+            traffic_value = prepared_cart_data.get('traffic_limit_gb', 0)
+        traffic_display = 'Безлимитный' if traffic_value == 0 else f'{traffic_value} ГБ'
 
     summary_lines = [
-        "Восстановленная корзина",
-        "",
-        f"Период: {period_display}",
-        f"Трафик: {traffic_display}",
+        'Восстановленная корзина',
+        '',
+        f'Период: {period_display}',
+        f'Трафик: {traffic_display}',
         f'Страны: {", ".join(selected_countries_names)}',
     ]
 
     if settings.is_devices_selection_enabled():
-        devices_value = prepared_cart_data.get("devices")
+        devices_value = prepared_cart_data.get('devices')
         if devices_value is None:
-            devices_value = prepared_cart_data.get("device_limit")
+            devices_value = prepared_cart_data.get('device_limit')
         if devices_value is not None:
-            summary_lines.append(f"Устройства: {devices_value}")
+            summary_lines.append(f'Устройства: {devices_value}')
 
     summary_lines.extend(
         [
-            "",
-            f"Общая стоимость: {texts.format_price(total_price)}",
-            "",
-            "Подтверждаете покупку?",
+            '',
+            f'Общая стоимость: {texts.format_price(total_price)}',
+            '',
+            'Подтверждаете покупку?',
         ]
     )
 
-    summary_text = "\n".join(summary_lines)
+    summary_text = '\n'.join(summary_lines)
 
     # Устанавливаем данные в FSM для продолжения процесса
     await state.set_data(prepared_cart_data)
@@ -1832,11 +1645,9 @@ async def return_to_saved_cart(
     confirm_keyboard = get_subscription_confirm_keyboard_with_cart(db_user.language)
 
     if _message_needs_update(callback.message, summary_text, confirm_keyboard):
-        await callback.message.edit_text(
-            summary_text, reply_markup=confirm_keyboard, parse_mode="HTML"
-        )
+        await callback.message.edit_text(summary_text, reply_markup=confirm_keyboard, parse_mode='HTML')
 
-    await callback.answer("Корзина восстановлена!")
+    await callback.answer('Корзина восстановлена!')
 
 
 async def handle_extend_subscription(
@@ -1853,9 +1664,7 @@ async def handle_extend_subscription(
     texts = get_texts(db_user.language)
 
     if settings.is_multi_tariff_enabled():
-        subscription, _sub_id = await _resolve_subscription(
-            callback, db_user, db, state
-        )
+        subscription, _sub_id = await _resolve_subscription(callback, db_user, db, state)
         if subscription is None:
             return
     else:
@@ -1863,23 +1672,19 @@ async def handle_extend_subscription(
 
     if not subscription:
         await callback.message.edit_text(
-            "<b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.",
+            '<b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.MENU_BUY_SUBSCRIPTION, callback_data="menu_buy"
-                        )
-                    ],
-                    [
-                        types.InlineKeyboardButton(
-                            text=texts.t("WEBHOOK_CLOSE_BUTTON", "Закрыть"),
-                            callback_data="webhook:close",
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', 'Закрыть'),
+                            callback_data='webhook:close',
                         )
                     ],
                 ]
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -1893,23 +1698,19 @@ async def handle_extend_subscription(
             return
         # Триал без тарифа — предлагаем выбрать
         await callback.message.edit_text(
-            "<b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.",
+            '<b>Пробный период заканчивается</b>\n\nЧтобы продолжить пользоваться VPN, выберите подходящий тариф.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data='menu_buy')],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.MENU_BUY_SUBSCRIPTION, callback_data="menu_buy"
-                        )
-                    ],
-                    [
-                        types.InlineKeyboardButton(
-                            text=texts.t("WEBHOOK_CLOSE_BUTTON", "Закрыть"),
-                            callback_data="webhook:close",
+                            text=texts.t('WEBHOOK_CLOSE_BUTTON', 'Закрыть'),
+                            callback_data='webhook:close',
                         )
                     ],
                 ]
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -1921,7 +1722,7 @@ async def handle_extend_subscription(
         from app.database.crud.tariff import get_tariff_by_id
 
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
-        if tariff and getattr(tariff, "is_daily", False):
+        if tariff and getattr(tariff, 'is_daily', False):
             # Суточный тариф: перенаправляем на страницу подписки (там кнопка «Возобновить»)
             await show_subscription_info(callback, db_user, db)
             return
@@ -1936,25 +1737,17 @@ async def handle_extend_subscription(
     if settings.is_tariffs_mode():
         # У подписки нет тарифа, но режим тарифов включён - предлагаем выбрать тариф
         await callback.message.edit_text(
-            "<b>Выберите тариф для продления</b>\n\n"
-            "Ваша текущая подписка была создана до введения тарифов.\n"
-            "Для продления необходимо выбрать один из доступных тарифов.\n\n"
-            "Ваша текущая подписка продолжит действовать до окончания срока.",
+            '<b>Выберите тариф для продления</b>\n\n'
+            'Ваша текущая подписка была создана до введения тарифов.\n'
+            'Для продления необходимо выбрать один из доступных тарифов.\n\n'
+            'Ваша текущая подписка продолжит действовать до окончания срока.',
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text="Выбрать тариф", callback_data="tariff_switch"
-                        )
-                    ],
-                    [
-                        types.InlineKeyboardButton(
-                            text=texts.BACK, callback_data="menu_subscription"
-                        )
-                    ],
+                    [types.InlineKeyboardButton(text='Выбрать тариф', callback_data='tariff_switch')],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_subscription')],
                 ]
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -1982,19 +1775,19 @@ async def handle_extend_subscription(
                 continue
 
             renewal_prices[days] = {
-                "final": pricing.final_total,
-                "original": total_original_price,
+                'final': pricing.final_total,
+                'original': total_original_price,
             }
 
         except Exception as e:
-            logger.error("Ошибка расчета цены для периода", days=days, error=e)
+            logger.error('Ошибка расчета цены для периода', days=days, error=e)
             continue
 
     if not renewal_prices:
-        await callback.answer("Нет доступных периодов для продления", show_alert=True)
+        await callback.answer('Нет доступных периодов для продления', show_alert=True)
         return
 
-    prices_text = ""
+    prices_text = ''
 
     for days in available_periods:
         if days not in renewal_prices:
@@ -2003,10 +1796,10 @@ async def handle_extend_subscription(
         price_info = renewal_prices[days]
 
         if isinstance(price_info, dict):
-            final_price = price_info.get("final")
+            final_price = price_info.get('final')
             if final_price is None:
-                final_price = price_info.get("original", 0)
-            original_price = price_info.get("original", final_price)
+                final_price = price_info.get('original', 0)
+            original_price = price_info.get('original', final_price)
         else:
             final_price = price_info
             original_price = final_price
@@ -2031,7 +1824,7 @@ async def handle_extend_subscription(
                 price_info=price_info_obj,
                 format_price_func=texts.format_price,
             )
-            + "\n"
+            + '\n'
         )
 
     promo_discounts_text = await _build_promo_group_discount_text(
@@ -2041,31 +1834,31 @@ async def handle_extend_subscription(
     )
 
     renewal_lines = [
-        "Продление подписки",
-        "",
-        f"Осталось дней: {subscription.days_left}",
-        "",
-        "<b>Ваша текущая конфигурация:</b>",
-        f"Серверов: {len(subscription.connected_squads or [])}",
-        f"Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}",
+        'Продление подписки',
+        '',
+        f'Осталось дней: {subscription.days_left}',
+        '',
+        '<b>Ваша текущая конфигурация:</b>',
+        f'Серверов: {len(subscription.connected_squads or [])}',
+        f'Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}',
     ]
 
     if settings.is_devices_selection_enabled():
-        renewal_lines.append(f"Устройств: {subscription.device_limit}")
+        renewal_lines.append(f'Устройств: {subscription.device_limit}')
 
     renewal_lines.extend(
         [
-            "",
-            "<b>Выберите период продления:</b>",
+            '',
+            '<b>Выберите период продления:</b>',
             prices_text.rstrip(),
-            "",
+            '',
         ]
     )
 
-    message_text = "\n".join(renewal_lines)
+    message_text = '\n'.join(renewal_lines)
 
     if promo_discounts_text:
-        message_text += f"{promo_discounts_text}\n\n"
+        message_text += f'{promo_discounts_text}\n\n'
 
     promo_offer_hint = await _get_promo_offer_hint(
         db,
@@ -2074,16 +1867,14 @@ async def handle_extend_subscription(
         promo_offer_percent,
     )
     if promo_offer_hint:
-        message_text += f"{promo_offer_hint}\n\n"
+        message_text += f'{promo_offer_hint}\n\n'
 
-    message_text += "<i>Цена включает все ваши текущие серверы и настройки</i>"
+    message_text += '<i>Цена включает все ваши текущие серверы и настройки</i>'
 
     await callback.message.edit_text(
         message_text,
-        reply_markup=get_extend_subscription_keyboard_with_prices(
-            db_user.language, renewal_prices
-        ),
-        parse_mode="HTML",
+        reply_markup=get_extend_subscription_keyboard_with_prices(db_user.language, renewal_prices),
+        parse_mode='HTML',
     )
 
     await callback.answer()
@@ -2096,17 +1887,17 @@ async def confirm_extend_subscription(
     state: FSMContext = None,
 ):
     if not callback.data:
-        await callback.answer("Ошибка данных", show_alert=True)
+        await callback.answer('Ошибка данных', show_alert=True)
         return
-    days = int(callback.data.split("_")[2])
+    days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
 
     # Block classic subscription renewal when tariff mode is active
     if settings.is_tariffs_mode():
         await callback.answer(
             texts.t(
-                "TARIFF_MODE_RENEWAL_BLOCKED",
-                "Продление в этом режиме недоступно. Выберите тариф.",
+                'TARIFF_MODE_RENEWAL_BLOCKED',
+                'Продление в этом режиме недоступно. Выберите тариф.',
             ),
             show_alert=True,
         )
@@ -2117,8 +1908,8 @@ async def confirm_extend_subscription(
     if days not in available_renewal_periods:
         await callback.answer(
             texts.t(
-                "RENEWAL_PERIOD_NOT_AVAILABLE",
-                "Этот период больше недоступен для продления",
+                'RENEWAL_PERIOD_NOT_AVAILABLE',
+                'Этот период больше недоступен для продления',
             ),
             show_alert=True,
         )
@@ -2128,22 +1919,18 @@ async def confirm_extend_subscription(
         from app.database.crud.subscription import get_subscription_by_id_for_user
 
         _state_data = await state.get_data() if state else {}
-        _fsm_sub_id = _state_data.get("active_subscription_id")
+        _fsm_sub_id = _state_data.get('active_subscription_id')
         if _fsm_sub_id:
-            subscription = await get_subscription_by_id_for_user(
-                db, _fsm_sub_id, db_user.id
-            )
+            subscription = await get_subscription_by_id_for_user(db, _fsm_sub_id, db_user.id)
         else:
             # Multi-tariff without FSM state — cannot determine which subscription
-            await callback.answer(
-                'Выберите подписку через "Мои подписки"', show_alert=True
-            )
+            await callback.answer('Выберите подписку через "Мои подписки"', show_alert=True)
             return
     else:
         subscription = db_user.subscription
 
     if not subscription:
-        await callback.answer("У вас нет активной подписки", show_alert=True)
+        await callback.answer('У вас нет активной подписки', show_alert=True)
         return
 
     from app.database.crud.user import lock_user_for_pricing
@@ -2175,10 +1962,10 @@ async def confirm_extend_subscription(
 
         # Promo offer discount info for downstream consume_promo_offer flag
         promo_offer_discount = pricing.promo_offer_discount
-        offer_pct = pricing.breakdown.get("offer_discount_pct", 0)
+        offer_pct = pricing.breakdown.get('offer_discount_pct', 0)
 
         logger.info(
-            "Расчет продления подписки (PricingEngine)",
+            'Расчет продления подписки (PricingEngine)',
             subscription_id=subscription.id,
             days=days,
             months_in_period=months_in_period,
@@ -2190,24 +1977,24 @@ async def confirm_extend_subscription(
             offer_discount=pricing.promo_offer_discount,
             final_total=pricing.final_total,
         )
-        logger.info("ИТОГО: ₽", price=price / 100)
+        logger.info('ИТОГО: ₽', price=price / 100)
 
     except Exception as e:
-        logger.error("ОШИБКА РАСЧЕТА ЦЕНЫ", error=e)
-        await callback.answer("Ошибка расчета стоимости", show_alert=True)
+        logger.error('ОШИБКА РАСЧЕТА ЦЕНЫ', error=e)
+        await callback.answer('Ошибка расчета стоимости', show_alert=True)
         return
 
     if price > 0 and db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         required_text = texts.format_price(price)
         message_text = texts.t(
-            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                "<b>Недостаточно средств</b>\n\n"
-                "Стоимость услуги: {required}\n"
-                "На балансе: {balance}\n"
-                "Не хватает: {missing}\n\n"
-                "Выберите способ пополнения. Сумма подставится автоматически."
+                '<b>Недостаточно средств</b>\n\n'
+                'Стоимость услуги: {required}\n'
+                'На балансе: {balance}\n'
+                'Не хватает: {missing}\n\n'
+                'Выберите способ пополнения. Сумма подставится автоматически.'
             ),
         ).format(
             required=required_text,
@@ -2217,21 +2004,21 @@ async def confirm_extend_subscription(
 
         # Подготовим данные для сохранения в корзину
         cart_data = {
-            "cart_mode": "extend",
-            "subscription_id": subscription.id,
-            "period_days": days,
-            "total_price": price,
-            "user_id": db_user.id,
-            "saved_cart": True,
-            "missing_amount": missing_kopeks,
-            "return_to_cart": True,
-            "description": f"Продление подписки на {days} дней",
-            "consume_promo_offer": bool(promo_offer_discount > 0),
-            "device_limit": device_limit,
-            "devices": device_limit,
-            "traffic_limit_gb": renewal_traffic_gb,
-            "traffic_gb": renewal_traffic_gb,
-            "countries": list(subscription.connected_squads or []),
+            'cart_mode': 'extend',
+            'subscription_id': subscription.id,
+            'period_days': days,
+            'total_price': price,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing_kopeks,
+            'return_to_cart': True,
+            'description': f'Продление подписки на {days} дней',
+            'consume_promo_offer': bool(promo_offer_discount > 0),
+            'device_limit': device_limit,
+            'devices': device_limit,
+            'traffic_limit_gb': renewal_traffic_gb,
+            'traffic_gb': renewal_traffic_gb,
+            'countries': list(subscription.connected_squads or []),
         }
 
         await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -2243,13 +2030,13 @@ async def confirm_extend_subscription(
                 amount_kopeks=missing_kopeks,
                 has_saved_cart=True,  # Указываем, что есть сохраненная корзина
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await callback.answer()
         return
 
     old_traffic_gb = subscription.traffic_limit_gb
-    renewal_description = f"Продление подписки на {days} дней ({months_in_period} мес)"
+    renewal_description = f'Продление подписки на {days} дней ({months_in_period} мес)'
 
     try:
         renewal_service = SubscriptionRenewalService()
@@ -2262,12 +2049,12 @@ async def confirm_extend_subscription(
             payment_method=PaymentMethod.BALANCE,
         )
     except SubscriptionRenewalChargeError:
-        await callback.answer("Ошибка списания средств", show_alert=True)
+        await callback.answer('Ошибка списания средств', show_alert=True)
         return
     except Exception as e:
-        logger.error("КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ", error=e)
+        logger.error('КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ', error=e)
         await callback.message.edit_text(
-            "Произошла ошибка при продлении подписки. Обратитесь в поддержку.",
+            'Произошла ошибка при продлении подписки. Обратитесь в поддержку.',
             reply_markup=get_back_keyboard(db_user.language),
         )
         await callback.answer()
@@ -2277,29 +2064,24 @@ async def confirm_extend_subscription(
     await db.refresh(db_user)
 
     success_message = (
-        "Подписка успешно продлена!\n\n"
-        f"Добавлено: {days} дней\n"
+        'Подписка успешно продлена!\n\n'
+        f'Добавлено: {days} дней\n'
         f'Действует до: {format_local_datetime(refreshed_end_date, "%d.%m.%Y %H:%M")}\n\n'
-        f"Списано: {texts.format_price(price)}"
+        f'Списано: {texts.format_price(price)}'
     )
 
     # Добавляем уведомление о сбросе трафика
-    if (
-        settings.is_traffic_fixed()
-        and result.subscription.traffic_limit_gb != old_traffic_gb
-    ):
+    if settings.is_traffic_fixed() and result.subscription.traffic_limit_gb != old_traffic_gb:
         fixed_limit = settings.get_fixed_traffic_limit()
-        success_message += f"\n\n Трафик сброшен до {fixed_limit} ГБ"
+        success_message += f'\n\n Трафик сброшен до {fixed_limit} ГБ'
 
     if promo_offer_discount > 0:
-        success_message += f" (включая доп. скидку {offer_pct}%: -{texts.format_price(promo_offer_discount)})"
+        success_message += f' (включая доп. скидку {offer_pct}%: -{texts.format_price(promo_offer_discount)})'
 
-    await callback.message.edit_text(
-        success_message, reply_markup=get_back_keyboard(db_user.language)
-    )
+    await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        "Пользователь продлил подписку на дней за ₽",
+        'Пользователь продлил подписку на дней за ₽',
         telegram_id=db_user.telegram_id,
         days=days,
         price=price / 100,
@@ -2308,47 +2090,43 @@ async def confirm_extend_subscription(
     await callback.answer()
 
 
-async def select_period(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
-    period_days = int(callback.data.split("_")[1])
+async def select_period(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
+    period_days = int(callback.data.split('_')[1])
     texts = get_texts(db_user.language)
 
     # Валидация что период доступен
     available_periods = settings.get_available_subscription_periods()
     if period_days not in available_periods:
         await callback.answer(
-            texts.t("PERIOD_NOT_AVAILABLE", "Этот период больше недоступен"),
+            texts.t('PERIOD_NOT_AVAILABLE', 'Этот период больше недоступен'),
             show_alert=True,
         )
         return
 
     data = await state.get_data()
-    data["period_days"] = period_days
+    data['period_days'] = period_days
 
     if settings.is_traffic_fixed():
-        data["traffic_gb"] = settings.get_fixed_traffic_limit()
+        data['traffic_gb'] = settings.get_fixed_traffic_limit()
 
     # Вычисляем промежуточную цену через PricingEngine (countries/devices ещё не выбраны)
     pricing_result = await pricing_engine.calculate_classic_new_subscription_price(
         db,
         period_days,
-        list(data.get("countries", [])),
-        data.get("traffic_gb", 0) or 0,
-        data.get("devices", settings.DEFAULT_DEVICE_LIMIT),
+        list(data.get('countries', [])),
+        data.get('traffic_gb', 0) or 0,
+        data.get('devices', settings.DEFAULT_DEVICE_LIMIT),
         user=db_user,
     )
-    data["total_price"] = pricing_result.final_total
+    data['total_price'] = pricing_result.final_total
 
     await state.set_data(data)
 
     if settings.is_traffic_selectable():
-        available_packages = [
-            pkg for pkg in settings.get_traffic_packages() if pkg["enabled"]
-        ]
+        available_packages = [pkg for pkg in settings.get_traffic_packages() if pkg['enabled']]
 
         if not available_packages:
-            await callback.answer("Пакеты трафика не настроены", show_alert=True)
+            await callback.answer('Пакеты трафика не настроены', show_alert=True)
             return
 
         await callback.message.edit_text(
@@ -2363,30 +2141,26 @@ async def select_period(
         countries = await _get_available_countries(db_user.promo_group_id)
         # Автоматически предвыбираем бесплатные серверы
         preselected = _get_preselected_free_countries(countries)
-        data["countries"] = preselected
+        data['countries'] = preselected
         await state.set_data(data)
         # Формируем текст с описаниями сквадов
-        selection_text = _build_countries_selection_text(
-            countries, texts.SELECT_COUNTRIES
-        )
+        selection_text = _build_countries_selection_text(countries, texts.SELECT_COUNTRIES)
         await callback.message.edit_text(
             selection_text,
-            reply_markup=get_countries_keyboard(
-                countries, preselected, db_user.language
-            ),
-            parse_mode="HTML",
+            reply_markup=get_countries_keyboard(countries, preselected, db_user.language),
+            parse_mode='HTML',
         )
         await state.set_state(SubscriptionStates.selecting_countries)
         await callback.answer()
         return
 
     countries = await _get_available_countries(db_user.promo_group_id)
-    available_countries = [c for c in countries if c.get("is_available", True)]
-    data["countries"] = [available_countries[0]["uuid"]] if available_countries else []
+    available_countries = [c for c in countries if c.get('is_available', True)]
+    data['countries'] = [available_countries[0]['uuid']] if available_countries else []
     await state.set_data(data)
 
     if settings.is_devices_selection_enabled():
-        selected_devices = data.get("devices", settings.DEFAULT_DEVICE_LIMIT)
+        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
         await callback.message.edit_text(
             texts.SELECT_DEVICES,
@@ -2400,111 +2174,90 @@ async def select_period(
         await callback.answer()
 
 
-async def select_devices(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
+async def select_devices(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     texts = get_texts(db_user.language)
 
     if not settings.is_devices_selection_enabled():
         await callback.answer(
-            texts.t(
-                "DEVICES_SELECTION_DISABLED", "Выбор количества устройств недоступен"
-            ),
+            texts.t('DEVICES_SELECTION_DISABLED', 'Выбор количества устройств недоступен'),
             show_alert=True,
         )
         return
 
-    if not callback.data.startswith("devices_") or callback.data == "devices_continue":
-        await callback.answer(
-            texts.t("DEVICES_INVALID_REQUEST", "Некорректный запрос"), show_alert=True
-        )
+    if not callback.data.startswith('devices_') or callback.data == 'devices_continue':
+        await callback.answer(texts.t('DEVICES_INVALID_REQUEST', 'Некорректный запрос'), show_alert=True)
         return
 
     try:
-        devices = int(callback.data.split("_")[1])
+        devices = int(callback.data.split('_')[1])
     except (ValueError, IndexError):
         await callback.answer(
-            texts.t("DEVICES_INVALID_COUNT", "Некорректное количество устройств"),
+            texts.t('DEVICES_INVALID_COUNT', 'Некорректное количество устройств'),
             show_alert=True,
         )
         return
 
     data = await state.get_data()
 
-    period_days = data.get("period_days")
+    period_days = data.get('period_days')
     if not period_days:
         await callback.answer(
-            texts.t("PERIOD_NOT_AVAILABLE", "Период больше недоступен, начните заново"),
+            texts.t('PERIOD_NOT_AVAILABLE', 'Период больше недоступен, начните заново'),
             show_alert=True,
         )
         return
 
-    previous_devices = data.get("devices", settings.DEFAULT_DEVICE_LIMIT)
+    previous_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
-    data["devices"] = devices
+    data['devices'] = devices
 
     # Вычисляем цену через PricingEngine с актуальными FSM-данными
     pricing_result = await pricing_engine.calculate_classic_new_subscription_price(
         db,
         period_days,
-        list(data.get("countries", [])),
-        data.get("traffic_gb", 0) or 0,
+        list(data.get('countries', [])),
+        data.get('traffic_gb', 0) or 0,
         devices,
         user=db_user,
     )
-    data["total_price"] = pricing_result.final_total
+    data['total_price'] = pricing_result.final_total
     await state.set_data(data)
 
     if devices != previous_devices:
         try:
-            await callback.message.edit_reply_markup(
-                reply_markup=get_devices_keyboard(devices, db_user.language)
-            )
+            await callback.message.edit_reply_markup(reply_markup=get_devices_keyboard(devices, db_user.language))
         except TelegramBadRequest as error:
-            if "message is not modified" in str(error).lower():
-                logger.debug(
-                    "Пропускаем обновление клавиатуры устройств: содержимое не изменилось"
-                )
+            if 'message is not modified' in str(error).lower():
+                logger.debug('Пропускаем обновление клавиатуры устройств: содержимое не изменилось')
             else:
                 raise
 
     await callback.answer()
 
 
-async def devices_continue(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
-    if callback.data != "devices_continue":
-        await callback.answer("Некорректный запрос", show_alert=True)
+async def devices_continue(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
+    if callback.data != 'devices_continue':
+        await callback.answer('Некорректный запрос', show_alert=True)
         return
 
     if await present_subscription_summary(callback, state, db_user):
         await callback.answer()
 
 
-async def confirm_purchase(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
+async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     # Проверка ограничения на покупку/продление подписки
-    if getattr(db_user, "restriction_subscription", False):
-        reason = html.escape(
-            getattr(db_user, "restriction_reason", None)
-            or "Действие ограничено администратором"
-        )
+    if getattr(db_user, 'restriction_subscription', False):
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         texts = get_texts(db_user.language)
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append(
-                [types.InlineKeyboardButton(text="Обжаловать", url=support_url)]
-            )
-        keyboard.append(
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription")]
-        )
+            keyboard.append([types.InlineKeyboardButton(text='Обжаловать', url=support_url)])
+        keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription')])
 
         await callback.message.edit_text(
-            f"<b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\n"
-            "Если вы считаете это ошибкой, вы можете обжаловать решение.",
+            f'<b>Покупка/продление подписки ограничено</b>\n\n{reason}\n\n'
+            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -2514,18 +2267,14 @@ async def confirm_purchase(
     texts = get_texts(db_user.language)
 
     await save_subscription_checkout_draft(db_user.id, dict(data))
-    resume_callback = (
-        "subscription_resume_checkout"
-        if should_offer_checkout_resume(db_user, True)
-        else None
-    )
+    resume_callback = 'subscription_resume_checkout' if should_offer_checkout_resume(db_user, True) else None
 
-    period_days = data.get("period_days")
+    period_days = data.get('period_days')
     if period_days is None:
         await callback.message.edit_text(
             texts.t(
-                "SUBSCRIPTION_PURCHASE_ERROR",
-                "Ошибка при оформлении подписки. Попробуйте начать сначала.",
+                'SUBSCRIPTION_PURCHASE_ERROR',
+                'Ошибка при оформлении подписки. Попробуйте начать сначала.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -2537,9 +2286,9 @@ async def confirm_purchase(
     forced_disabled_limit: int | None = None
     if devices_selection_enabled:
         # Для extend-корзины ключ может быть 'device_limit' вместо 'devices'
-        devices_selected = data.get("devices")
+        devices_selected = data.get('devices')
         if devices_selected is None:
-            devices_selected = data.get("device_limit")
+            devices_selected = data.get('device_limit')
         if devices_selected is None:
             devices_selected = settings.DEFAULT_DEVICE_LIMIT
     else:
@@ -2553,12 +2302,12 @@ async def confirm_purchase(
     if settings.is_traffic_fixed():
         final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        final_traffic_gb = data.get("final_traffic_gb", data.get("traffic_gb", 0))
+        final_traffic_gb = data.get('final_traffic_gb', data.get('traffic_gb', 0))
 
     # --- Resolve connected squads ---
-    connected_squads = list(data.get("countries", []))
+    connected_squads = list(data.get('countries', []))
 
-    cached_total_price = data.get("total_price", 0)
+    cached_total_price = data.get('total_price', 0)
 
     # Lock user BEFORE promo-offer read to prevent TOCTOU
     from app.database.crud.user import lock_user_for_pricing
@@ -2579,10 +2328,10 @@ async def confirm_purchase(
     details = PricingEngine.classic_pricing_to_purchase_details(pricing_result)
 
     final_price = pricing_result.final_total
-    server_prices = details["servers_individual_prices"]
-    months_in_period = details["months_in_period"]
+    server_prices = details['servers_individual_prices']
+    months_in_period = details['months_in_period']
     promo_offer_discount_value = pricing_result.promo_offer_discount
-    promo_offer_discount_percent = pricing_result.breakdown.get("offer_discount_pct", 0)
+    promo_offer_discount_percent = pricing_result.breakdown.get('offer_discount_pct', 0)
 
     # --- Price validation: block if price increased significantly vs cached FSM price ---
     price_difference = final_price - cached_total_price
@@ -2590,7 +2339,7 @@ async def confirm_purchase(
         max_allowed_increase = max(500, int(final_price * 0.05))  # 5% или минимум 5₽
         if price_difference > max_allowed_increase:
             logger.error(
-                "Цена выросла для пользователя кэш=₽, пересчет=₽, разница=+₽ (>₽). Покупка заблокирована.",
+                'Цена выросла для пользователя кэш=₽, пересчет=₽, разница=+₽ (>₽). Покупка заблокирована.',
                 telegram_id=db_user.telegram_id,
                 cached_total_price=cached_total_price / 100,
                 final_price=final_price / 100,
@@ -2598,82 +2347,88 @@ async def confirm_purchase(
                 max_allowed_increase=max_allowed_increase / 100,
             )
             await callback.answer(
-                "Цена изменилась. Пожалуйста, начните оформление заново.",
+                'Цена изменилась. Пожалуйста, начните оформление заново.',
                 show_alert=True,
             )
             return
         if price_difference > 100:  # допуск 1₽
             logger.warning(
-                "Небольшой рост цены для пользователя кэш=₽, пересчет=₽. Используем пересчитанную цену.",
+                'Небольшой рост цены для пользователя кэш=₽, пересчет=₽. Используем пересчитанную цену.',
                 telegram_id=db_user.telegram_id,
                 cached_total_price=cached_total_price / 100,
                 final_price=final_price / 100,
             )
     elif price_difference < -100:  # цена снизилась более чем на 1₽
         logger.info(
-            "Цена снизилась для пользователя кэш=₽, пересчет=₽. Применяем новую цену.",
+            'Цена снизилась для пользователя кэш=₽, пересчет=₽. Применяем новую цену.',
             telegram_id=db_user.telegram_id,
             cached_total_price=cached_total_price / 100,
             final_price=final_price / 100,
         )
 
     # --- Logging ---
-    base_price_original = details["base_price_original"]
-    base_price = details["base_price"]
-    base_discount_total = details["base_discount_total"]
-    base_discount_percent = details["base_discount_percent"]
+    base_price_original = details['base_price_original']
+    base_price = details['base_price']
+    base_discount_total = details['base_discount_total']
+    base_discount_percent = details['base_discount_percent']
 
     logger.info(
-        "Расчет покупки подписки на дней ( мес)",
-        data=data["period_days"],
+        'Расчет покупки подписки на дней ( мес)',
+        data=data['period_days'],
         months_in_period=months_in_period,
     )
-    base_log = f"   Период: {base_price_original / 100}₽"
+    base_log = f'   Период: {base_price_original / 100}₽'
     if base_discount_total and base_discount_total > 0:
-        base_log += f" → {base_price / 100}₽ (скидка {base_discount_percent}%: -{base_discount_total / 100}₽)"
+        base_log += f' → {base_price / 100}₽ (скидка {base_discount_percent}%: -{base_discount_total / 100}₽)'
     logger.info(base_log)
-    if details["total_traffic_price"] > 0:
+    if details['total_traffic_price'] > 0:
         traffic_msg = (
             f'   Трафик: {details["traffic_price_per_month"] / 100}₽/мес'
             f' × {months_in_period} = {details["total_traffic_price"] / 100}₽'
         )
-        if details["traffic_discount_total"] > 0:
-            traffic_msg += f' (скидка {details["traffic_discount_percent"]}%: -{details["traffic_discount_total"] / 100}₽)'
+        if details['traffic_discount_total'] > 0:
+            traffic_msg += (
+                f' (скидка {details["traffic_discount_percent"]}%: -{details["traffic_discount_total"] / 100}₽)'
+            )
         logger.info(traffic_msg)
-    if details["total_servers_price"] > 0:
+    if details['total_servers_price'] > 0:
         servers_msg = (
             f'   Серверы: {details["servers_price_per_month"] / 100}₽/мес'
             f' × {months_in_period} = {details["total_servers_price"] / 100}₽'
         )
-        if details["servers_discount_total"] > 0:
-            servers_msg += f' (скидка {details["servers_discount_percent"]}%: -{details["servers_discount_total"] / 100}₽)'
+        if details['servers_discount_total'] > 0:
+            servers_msg += (
+                f' (скидка {details["servers_discount_percent"]}%: -{details["servers_discount_total"] / 100}₽)'
+            )
         logger.info(servers_msg)
-    if details["total_devices_price"] > 0:
+    if details['total_devices_price'] > 0:
         devices_msg = (
             f'   Устройства: {details["devices_price_per_month"] / 100}₽/мес'
             f' × {months_in_period} = {details["total_devices_price"] / 100}₽'
         )
-        if details["devices_discount_total"] > 0:
-            devices_msg += f' (скидка {details["devices_discount_percent"]}%: -{details["devices_discount_total"] / 100}₽)'
+        if details['devices_discount_total'] > 0:
+            devices_msg += (
+                f' (скидка {details["devices_discount_percent"]}%: -{details["devices_discount_total"] / 100}₽)'
+            )
         logger.info(devices_msg)
     if promo_offer_discount_value > 0:
         logger.info(
-            "Промо-предложение: -₽ (%)",
+            'Промо-предложение: -₽ (%)',
             promo_offer_discount_value=promo_offer_discount_value / 100,
             promo_offer_discount_percent=promo_offer_discount_percent,
         )
-    logger.info("ИТОГО: ₽", final_price=final_price / 100)
+    logger.info('ИТОГО: ₽', final_price=final_price / 100)
 
     if final_price > 0 and db_user.balance_kopeks < final_price:
         missing_kopeks = final_price - db_user.balance_kopeks
         message_text = texts.t(
-            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                "<b>Недостаточно средств</b>\n\n"
-                "Стоимость услуги: {required}\n"
-                "На балансе: {balance}\n"
-                "Не хватает: {missing}\n\n"
-                "Выберите способ пополнения. Сумма подставится автоматически."
+                '<b>Недостаточно средств</b>\n\n'
+                'Стоимость услуги: {required}\n'
+                'На балансе: {balance}\n'
+                'Не хватает: {missing}\n\n'
+                'Выберите способ пополнения. Сумма подставится автоматически.'
             ),
         ).format(
             required=texts.format_price(final_price, round_kopeks=False),
@@ -2684,10 +2439,10 @@ async def confirm_purchase(
         # Сохраняем данные корзины в Redis перед переходом к пополнению
         cart_data = {
             **data,
-            "saved_cart": True,
-            "missing_amount": missing_kopeks,
-            "return_to_cart": True,
-            "user_id": db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing_kopeks,
+            'return_to_cart': True,
+            'user_id': db_user.id,
         }
 
         await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -2700,7 +2455,7 @@ async def confirm_purchase(
                 amount_kopeks=missing_kopeks,
                 has_saved_cart=True,  # Указываем, что есть сохраненная корзина
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -2720,13 +2475,13 @@ async def confirm_purchase(
         if not success:
             missing_kopeks = final_price - db_user.balance_kopeks
             message_text = texts.t(
-                "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+                'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
                 (
-                    "<b>Недостаточно средств</b>\n\n"
-                    "Стоимость услуги: {required}\n"
-                    "На балансе: {balance}\n"
-                    "Не хватает: {missing}\n\n"
-                    "Выберите способ пополнения. Сумма подставится автоматически."
+                    '<b>Недостаточно средств</b>\n\n'
+                    'Стоимость услуги: {required}\n'
+                    'На балансе: {balance}\n'
+                    'Не хватает: {missing}\n\n'
+                    'Выберите способ пополнения. Сумма подставится автоматически.'
                 ),
             ).format(
                 required=texts.format_price(final_price, round_kopeks=False),
@@ -2741,7 +2496,7 @@ async def confirm_purchase(
                     resume_callback=resume_callback,
                     amount_kopeks=missing_kopeks,
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
             await callback.answer()
             return
@@ -2762,7 +2517,7 @@ async def confirm_purchase(
 
         if existing_subscription:
             logger.info(
-                "Обновляем существующую подписку пользователя",
+                'Обновляем существующую подписку пользователя',
                 telegram_id=db_user.telegram_id,
             )
 
@@ -2770,24 +2525,19 @@ async def confirm_purchase(
 
             if existing_subscription.is_trial:
                 logger.info(
-                    "Конверсия из триала в платную для пользователя",
+                    'Конверсия из триала в платную для пользователя',
                     telegram_id=db_user.telegram_id,
                 )
                 was_trial_conversion = True
 
                 trial_duration = (current_time - existing_subscription.start_date).days
 
-                if (
-                    settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID
-                    and existing_subscription.end_date
-                ):
-                    remaining_trial_delta = (
-                        existing_subscription.end_date - current_time
-                    )
+                if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID and existing_subscription.end_date:
+                    remaining_trial_delta = existing_subscription.end_date - current_time
                     if remaining_trial_delta.total_seconds() > 0:
                         bonus_period = remaining_trial_delta
                         logger.info(
-                            "Добавляем оставшееся время триала к новой подписке пользователя",
+                            'Добавляем оставшееся время триала к новой подписке пользователя',
                             bonus_period=bonus_period,
                             telegram_id=db_user.telegram_id,
                         )
@@ -2801,20 +2551,18 @@ async def confirm_purchase(
                         db=db,
                         user_id=db_user.id,
                         trial_duration_days=trial_duration,
-                        payment_method="balance",
+                        payment_method='balance',
                         first_payment_amount_kopeks=final_price,
                         first_paid_period_days=period_days,
                     )
                     logger.info(
-                        "Записана конверсия: дн. триал → дн. платная за ₽",
+                        'Записана конверсия: дн. триал → дн. платная за ₽',
                         trial_duration=trial_duration,
                         period_days=period_days,
                         final_price=final_price / 100,
                     )
                 except Exception as conversion_error:
-                    logger.error(
-                        "Ошибка записи конверсии", conversion_error=conversion_error
-                    )
+                    logger.error('Ошибка записи конверсии', conversion_error=conversion_error)
 
             existing_subscription.is_trial = False
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
@@ -2822,22 +2570,20 @@ async def confirm_purchase(
             if should_update_devices:
                 existing_subscription.device_limit = selected_devices
             # Проверяем, что при обновлении существующей подписки есть хотя бы одна страна
-            selected_countries = data.get("countries")
+            selected_countries = data.get('countries')
             if not selected_countries:
                 # Иногда после возврата к оформлению из сохраненной корзины список стран не передается.
                 # В таком случае повторно используем текущие подключенные страны подписки.
                 selected_countries = existing_subscription.connected_squads or []
                 if selected_countries:
-                    data["countries"] = (
-                        selected_countries  # чтобы далее использовать фактический список стран
-                    )
+                    data['countries'] = selected_countries  # чтобы далее использовать фактический список стран
 
             if not selected_countries:
                 texts = get_texts(db_user.language)
                 await callback.message.edit_text(
                     texts.t(
-                        "COUNTRIES_MINIMUM_REQUIRED",
-                        "Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.",
+                        'COUNTRIES_MINIMUM_REQUIRED',
+                        'Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
                     ),
                     reply_markup=get_back_keyboard(db_user.language),
                 )
@@ -2849,17 +2595,12 @@ async def confirm_purchase(
             # Если подписка еще активна, продлеваем от текущей даты окончания,
             # иначе начинаем новый период с текущего момента
             extension_base_date = current_time
-            if (
-                existing_subscription.end_date
-                and existing_subscription.end_date > current_time
-            ):
+            if existing_subscription.end_date and existing_subscription.end_date > current_time:
                 extension_base_date = existing_subscription.end_date
             else:
                 existing_subscription.start_date = current_time
 
-            existing_subscription.end_date = (
-                extension_base_date + timedelta(days=period_days) + bonus_period
-            )
+            existing_subscription.end_date = extension_base_date + timedelta(days=period_days) + bonus_period
             existing_subscription.updated_at = current_time
 
             existing_subscription.traffic_used_gb = 0.0
@@ -2870,10 +2611,10 @@ async def confirm_purchase(
 
         else:
             logger.info(
-                "Создаем новую подписку для пользователя",
+                'Создаем новую подписку для пользователя',
                 telegram_id=db_user.telegram_id,
             )
-            default_device_limit = getattr(settings, "DEFAULT_DEVICE_LIMIT", 1)
+            default_device_limit = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
             resolved_device_limit = selected_devices
 
             if resolved_device_limit is None:
@@ -2888,7 +2629,7 @@ async def confirm_purchase(
                 resolved_device_limit = default_device_limit
 
             # Проверяем, что для новой подписки также есть хотя бы одна страна, если пользователь проходит через интерфейс стран
-            new_subscription_countries = data.get("countries")
+            new_subscription_countries = data.get('countries')
             if not new_subscription_countries:
                 # Проверяем, была ли это покупка через интерфейс стран, и если да, то требуем хотя бы одну страну
                 # Если в данных явно указано, что это интерфейс стран, или есть другие признаки - требуем страну
@@ -2896,8 +2637,8 @@ async def confirm_purchase(
                 texts = get_texts(db_user.language)
                 await callback.message.edit_text(
                     texts.t(
-                        "COUNTRIES_MINIMUM_REQUIRED",
-                        "Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.",
+                        'COUNTRIES_MINIMUM_REQUIRED',
+                        'Нельзя отключить все страны. Должна быть подключена хотя бы одна страна.',
                     ),
                     reply_markup=get_back_keyboard(db_user.language),
                 )
@@ -2919,15 +2660,13 @@ async def confirm_purchase(
         )
         from app.database.crud.subscription import add_subscription_servers
 
-        server_ids = await get_server_ids_by_uuids(db, data.get("countries", []))
+        server_ids = await get_server_ids_by_uuids(db, data.get('countries', []))
 
         if server_ids:
             await add_subscription_servers(db, subscription, server_ids, server_prices)
             await add_user_to_servers(db, server_ids)
 
-            logger.info(
-                "Сохранены цены серверов за весь период", server_prices=server_prices
-            )
+            logger.info('Сохранены цены серверов за весь период', server_prices=server_prices)
 
         await db.refresh(db_user)
 
@@ -2936,27 +2675,27 @@ async def confirm_purchase(
         if settings.is_multi_tariff_enabled():
             _should_create = not subscription.remnawave_uuid
         else:
-            _should_create = not getattr(db_user, "remnawave_uuid", None)
+            _should_create = not getattr(db_user, 'remnawave_uuid', None)
 
         if _should_create:
             remnawave_user = await subscription_service.create_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
-                reset_reason="покупка подписки",
+                reset_reason='покупка подписки',
             )
         else:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
                 subscription,
                 reset_traffic=True,
-                reset_reason="покупка подписки",
+                reset_reason='покупка подписки',
                 sync_squads=True,
             )
 
         if not remnawave_user:
             logger.error(
-                "Не удалось создать/обновить RemnaWave пользователя",
+                'Не удалось создать/обновить RemnaWave пользователя',
                 telegram_id=db_user.telegram_id,
             )
             try:
@@ -2964,11 +2703,11 @@ async def confirm_purchase(
                     db,
                     subscription,
                     reset_traffic=True,
-                    reset_reason="покупка подписки (повторная попытка)",
+                    reset_reason='покупка подписки (повторная попытка)',
                 )
             except Exception as retry_error:
                 logger.error(
-                    "Повторная попытка создания RemnaWave пользователя не удалась",
+                    'Повторная попытка создания RemnaWave пользователя не удалась',
                     error=retry_error,
                 )
                 from app.services.remnawave_retry_queue import remnawave_retry_queue
@@ -2976,7 +2715,7 @@ async def confirm_purchase(
                 remnawave_retry_queue.enqueue(
                     subscription_id=subscription.id,
                     user_id=db_user.id,
-                    action="create",
+                    action='create',
                 )
 
         transaction = await create_transaction(
@@ -2984,7 +2723,7 @@ async def confirm_purchase(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f"Подписка на {period_days} дней ({months_in_period} мес)",
+            description=f'Подписка на {period_days} дней ({months_in_period} мес)',
         )
 
         try:
@@ -2996,10 +2735,10 @@ async def confirm_purchase(
                 transaction,
                 period_days,
                 was_trial_conversion,
-                purchase_type="renewal" if existing_subscription else "first_purchase",
+                purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
         except Exception as e:
-            logger.error("Ошибка отправки уведомления о покупке", error=e)
+            logger.error('Ошибка отправки уведомления о покупке', error=e)
 
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -3007,11 +2746,11 @@ async def confirm_purchase(
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
 
-        discount_note = ""
+        discount_note = ''
         if promo_offer_discount_value > 0:
             discount_note = texts.t(
-                "SUBSCRIPTION_PROMO_DISCOUNT_NOTE",
-                "Доп. скидка {percent}%: -{amount}",
+                'SUBSCRIPTION_PROMO_DISCOUNT_NOTE',
+                'Доп. скидка {percent}%: -{amount}',
             ).format(
                 percent=promo_offer_discount_percent,
                 amount=texts.format_price(promo_offer_discount_value),
@@ -3020,54 +2759,54 @@ async def confirm_purchase(
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 success_text = (
-                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                    f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
                     + texts.t(
-                        "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                        'SUBSCRIPTION_HAPP_LINK_PROMPT',
                         'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                     )
-                    + "\n\n"
+                    + '\n\n'
                     + texts.t(
-                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
-                        "Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
+                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             elif hide_subscription_link:
                 success_text = (
-                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                    f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
                     + texts.t(
-                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                         'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                     )
-                    + "\n\n"
+                    + '\n\n'
                     + texts.t(
-                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
-                        "Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
+                        'Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
                     )
                 )
             else:
                 import_link_section = texts.t(
-                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                    "<b>Ваша ссылка для подключения:</b>\\n<code>{subscription_url}</code>",
+                    'SUBSCRIPTION_IMPORT_LINK_SECTION',
+                    '<b>Ваша ссылка для подключения:</b>\\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
                 success_text = (
-                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-                    f"{import_link_section}\n\n"
+                    f'{texts.SUBSCRIPTION_PURCHASED}\n\n'
+                    f'{import_link_section}\n\n'
                     f'{texts.t("SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT", " Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве")}'
                 )
 
             if discount_note:
-                success_text = f"{success_text}\n\n{discount_note}"
+                success_text = f'{success_text}\n\n{discount_note}'
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
-            if connect_mode == "miniapp_subscription":
+            if connect_mode == 'miniapp_subscription':
                 connect_keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             make_button(
                                 text=texts.t(
-                                    "CONNECT_BUTTON",
+                                    'CONNECT_BUTTON',
                                     "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                                 ),
                                 web_app=types.WebAppInfo(url=subscription_link),
@@ -3075,20 +2814,18 @@ async def confirm_purchase(
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t(
-                                    "BACK_TO_MAIN_MENU_BUTTON", "В главное меню"
-                                ),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
                 )
-            elif connect_mode == "miniapp_custom":
+            elif connect_mode == 'miniapp_custom':
                 if not settings.MINIAPP_CUSTOM_URL:
                     await callback.answer(
                         texts.t(
-                            "CUSTOM_MINIAPP_URL_NOT_SET",
-                            "Кастомная ссылка для мини-приложения не настроена",
+                            'CUSTOM_MINIAPP_URL_NOT_SET',
+                            'Кастомная ссылка для мини-приложения не настроена',
                         ),
                         show_alert=True,
                     )
@@ -3099,30 +2836,26 @@ async def confirm_purchase(
                         [
                             make_button(
                                 text=texts.t(
-                                    "CONNECT_BUTTON",
+                                    'CONNECT_BUTTON',
                                     "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                                 ),
-                                web_app=types.WebAppInfo(
-                                    url=settings.MINIAPP_CUSTOM_URL
-                                ),
+                                web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t(
-                                    "BACK_TO_MAIN_MENU_BUTTON", "В главное меню"
-                                ),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
                 )
-            elif connect_mode == "link":
+            elif connect_mode == 'link':
                 rows = [
                     [
                         make_button(
                             text=texts.t(
-                                "CONNECT_BUTTON",
+                                'CONNECT_BUTTON',
                                 "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                             ),
                             url=subscription_link,
@@ -3135,21 +2868,21 @@ async def confirm_purchase(
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                            callback_data="back_to_menu",
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            callback_data='back_to_menu',
                         )
                     ]
                 )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
-            elif connect_mode == "happ_cryptolink":
+            elif connect_mode == 'happ_cryptolink':
                 rows = [
                     [
                         make_button(
                             text=texts.t(
-                                "CONNECT_BUTTON",
+                                'CONNECT_BUTTON',
                                 "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                             ),
-                            callback_data="open_subscription_link",
+                            callback_data='open_subscription_link',
                         )
                     ]
                 ]
@@ -3159,8 +2892,8 @@ async def confirm_purchase(
                 rows.append(
                     [
                         InlineKeyboardButton(
-                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                            callback_data="back_to_menu",
+                            text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                            callback_data='back_to_menu',
                         )
                     ]
                 )
@@ -3171,33 +2904,29 @@ async def confirm_purchase(
                         [
                             make_button(
                                 text=texts.t(
-                                    "CONNECT_BUTTON",
+                                    'CONNECT_BUTTON',
                                     "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                                 ),
-                                callback_data="subscription_connect",
+                                callback_data='subscription_connect',
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                text=texts.t(
-                                    "BACK_TO_MAIN_MENU_BUTTON", "В главное меню"
-                                ),
-                                callback_data="back_to_menu",
+                                text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                                callback_data='back_to_menu',
                             )
                         ],
                     ]
                 )
 
-            await callback.message.edit_text(
-                success_text, reply_markup=connect_keyboard, parse_mode="HTML"
-            )
+            await callback.message.edit_text(success_text, reply_markup=connect_keyboard, parse_mode='HTML')
         else:
             purchase_text = texts.SUBSCRIPTION_PURCHASED
             if discount_note:
-                purchase_text = f"{purchase_text}\n\n{discount_note}"
+                purchase_text = f'{purchase_text}\n\n{discount_note}'
             await callback.message.edit_text(
                 texts.t(
-                    "SUBSCRIPTION_LINK_GENERATING_NOTICE",
+                    'SUBSCRIPTION_LINK_GENERATING_NOTICE',
                     "{purchase_text}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
                 ).format(purchase_text=purchase_text),
                 reply_markup=get_back_keyboard(db_user.language),
@@ -3205,17 +2934,15 @@ async def confirm_purchase(
 
         purchase_completed = True
         logger.info(
-            "Пользователь купил подписку на дней за ₽",
+            'Пользователь купил подписку на дней за ₽',
             telegram_id=db_user.telegram_id,
-            data=data["period_days"],
+            data=data['period_days'],
             final_price=final_price / 100,
         )
 
     except Exception as e:
-        logger.error("Ошибка покупки подписки", error=e)
-        await callback.message.edit_text(
-            texts.ERROR, reply_markup=get_back_keyboard(db_user.language)
-        )
+        logger.error('Ошибка покупки подписки', error=e)
+        await callback.message.edit_text(texts.ERROR, reply_markup=get_back_keyboard(db_user.language))
 
     if purchase_completed:
         await clear_subscription_checkout_draft(db_user.id)
@@ -3238,12 +2965,10 @@ async def resume_subscription_checkout(
         return
 
     try:
-        summary_text, prepared_data = await _prepare_subscription_summary(
-            db_user, draft, texts
-        )
+        summary_text, prepared_data = await _prepare_subscription_summary(db_user, draft, texts)
     except ValueError as exc:
         logger.error(
-            "Ошибка восстановления заказа подписки для пользователя",
+            'Ошибка восстановления заказа подписки для пользователя',
             telegram_id=db_user.telegram_id,
             error=exc,
         )
@@ -3258,7 +2983,7 @@ async def resume_subscription_checkout(
     await callback.message.edit_text(
         summary_text,
         reply_markup=get_subscription_confirm_keyboard(db_user.language),
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
 
     await callback.answer()
@@ -3292,12 +3017,12 @@ async def create_paid_subscription_with_traffic_mode(
     )
 
     if device_limit is not None:
-        create_kwargs["device_limit"] = device_limit
+        create_kwargs['device_limit'] = device_limit
 
     subscription = await create_paid_subscription(**create_kwargs)
 
     logger.info(
-        "Создана подписка с трафиком: ГБ (режим: )",
+        'Создана подписка с трафиком: ГБ (режим: )',
         traffic_limit_gb=traffic_limit_gb,
         TRAFFIC_SELECTION_MODE=settings.TRAFFIC_SELECTION_MODE,
     )
@@ -3305,9 +3030,7 @@ async def create_paid_subscription_with_traffic_mode(
     return subscription
 
 
-async def handle_subscription_settings(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def handle_subscription_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Проверяем, доступно ли сообщение для редактирования
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer()
@@ -3316,9 +3039,7 @@ async def handle_subscription_settings(
     texts = get_texts(db_user.language)
 
     if settings.is_multi_tariff_enabled():
-        await callback.answer(
-            'Настройки доступны через "Мои подписки"', show_alert=True
-        )
+        await callback.answer('Настройки доступны через "Мои подписки"', show_alert=True)
         return
 
     subscription = db_user.subscription
@@ -3333,8 +3054,8 @@ async def handle_subscription_settings(
     if not subscription or subscription.is_trial:
         await callback.answer(
             texts.t(
-                "SUBSCRIPTION_SETTINGS_PAID_ONLY",
-                "Настройки доступны только для платных подписок",
+                'SUBSCRIPTION_SETTINGS_PAID_ONLY',
+                'Настройки доступны только для платных подписок',
             ),
             show_alert=True,
         )
@@ -3348,38 +3069,32 @@ async def handle_subscription_settings(
         devices_used = 0
 
     settings_template = texts.t(
-        "SUBSCRIPTION_SETTINGS_OVERVIEW",
+        'SUBSCRIPTION_SETTINGS_OVERVIEW',
         (
-            "<b>Настройки подписки</b>\n\n"
-            "Израсходовано: {traffic_used} / {traffic_limit}\n"
-            "Истекает: {end_date}\n"
-            "Устройства: {devices_used} / {devices_limit}\n\n"
-            "До перевыпуска: {revoke_cooldown}"
+            '<b>Настройки подписки</b>\n\n'
+            'Израсходовано: {traffic_used} / {traffic_limit}\n'
+            'Истекает: {end_date}\n'
+            'Устройства: {devices_used} / {devices_limit}\n\n'
+            'До перевыпуска: {revoke_cooldown}'
         ),
     )
 
     if not show_devices:
         settings_template = settings_template.replace(
-            "\nУстройства: {devices_used} / {devices_limit}",
-            "",
+            '\nУстройства: {devices_used} / {devices_limit}',
+            '',
         )
 
     devices_limit_display = str(subscription.device_limit)
 
     settings_text = settings_template.format(
         traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
-        traffic_limit=texts.format_traffic(
-            subscription.traffic_limit_gb, is_limit=True
-        ),
-        end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
+        traffic_limit=texts.format_traffic(subscription.traffic_limit_gb, is_limit=True),
+        end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
         devices_used=devices_used,
         devices_limit=devices_limit_display,
-        time_left=subscription.time_until_revoke_available(
-            settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS
-        ),
-        revoke_cooldown=subscription.time_until_revoke_available(
-            settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS
-        ),
+        time_left=subscription.time_until_revoke_available(settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS),
+        revoke_cooldown=subscription.time_until_revoke_available(settings.SUBSCRIPTION_REVOKE_COOLDOWN_SECONDS),
     )
 
     show_countries = await _should_show_countries_management(db_user)
@@ -3389,14 +3104,12 @@ async def handle_subscription_settings(
         reply_markup=get_updated_subscription_settings_keyboard(
             db_user.language, show_countries, tariff=tariff, subscription=subscription
         ),
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
     await callback.answer()
 
 
-async def clear_saved_cart(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession
-):
+async def clear_saved_cart(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     # Очищаем как FSM, так и Redis.
     # NOTE: Intentionally deletes ALL carts (global + per-subscription cascade)
     # because this is an explicit user action ("clear my cart").  In multi-tariff
@@ -3408,15 +3121,13 @@ async def clear_saved_cart(
 
     await show_main_menu(callback, db_user, db)
 
-    await callback.answer("Корзина очищена")
+    await callback.answer('Корзина очищена')
 
 
 # ============== ХЕНДЛЕР ПАУЗЫ СУТОЧНОЙ ПОДПИСКИ ==============
 
 
-async def handle_toggle_daily_subscription_pause(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Переключает паузу суточной подписки."""
     from app.database.crud.subscription import toggle_daily_subscription_pause
     from app.database.crud.tariff import get_tariff_by_id
@@ -3426,7 +3137,7 @@ async def handle_toggle_daily_subscription_pause(
     if settings.is_multi_tariff_enabled():
         await callback.answer(
             texts.t(
-                "DAILY_PAUSE_MULTI_TARIFF_REDIRECT",
+                'DAILY_PAUSE_MULTI_TARIFF_REDIRECT',
                 'Управление суточными подписками доступно через "Мои подписки"',
             ),
             show_alert=True,
@@ -3437,7 +3148,7 @@ async def handle_toggle_daily_subscription_pause(
 
     if not subscription:
         await callback.answer(
-            texts.t("NO_SUBSCRIPTION_ERROR", "У вас нет активной подписки"),
+            texts.t('NO_SUBSCRIPTION_ERROR', 'У вас нет активной подписки'),
             show_alert=True,
         )
         return
@@ -3447,11 +3158,11 @@ async def handle_toggle_daily_subscription_pause(
     if subscription.tariff_id:
         tariff = await get_tariff_by_id(db, subscription.tariff_id)
 
-    if not tariff or not getattr(tariff, "is_daily", False):
+    if not tariff or not getattr(tariff, 'is_daily', False):
         await callback.answer(
             texts.t(
-                "NOT_DAILY_TARIFF_ERROR",
-                "Эта функция доступна только для суточных тарифов",
+                'NOT_DAILY_TARIFF_ERROR',
+                'Эта функция доступна только для суточных тарифов',
             ),
             show_alert=True,
         )
@@ -3463,7 +3174,7 @@ async def handle_toggle_daily_subscription_pause(
     # Определяем, нужно ли возобновление: пауза пользователя ИЛИ остановка системой (disabled/expired)
     from app.database.models import SubscriptionStatus
 
-    was_paused = getattr(subscription, "is_daily_paused", False)
+    was_paused = getattr(subscription, 'is_daily_paused', False)
     is_inactive = subscription.status in (
         SubscriptionStatus.DISABLED.value,
         SubscriptionStatus.EXPIRED.value,
@@ -3473,25 +3184,21 @@ async def handle_toggle_daily_subscription_pause(
 
     # При возобновлении проверяем баланс
     if needs_resume:
-        raw_daily_price = getattr(tariff, "daily_price_kopeks", 0)
+        raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
         from app.database.crud.user import lock_user_for_pricing
         from app.services.pricing_engine import PricingEngine
 
         db_user = await lock_user_for_pricing(db, db_user.id)
         promo_group = PricingEngine.resolve_promo_group(db_user)
-        daily_group_pct = (
-            promo_group.get_discount_percent("period", 1) if promo_group else 0
-        )
+        daily_group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
         daily_price = (
-            PricingEngine.apply_discount(raw_daily_price, daily_group_pct)
-            if daily_group_pct > 0
-            else raw_daily_price
+            PricingEngine.apply_discount(raw_daily_price, daily_group_pct) if daily_group_pct > 0 else raw_daily_price
         )
         if daily_price > 0 and db_user.balance_kopeks < daily_price:
             await callback.answer(
                 texts.t(
-                    "INSUFFICIENT_BALANCE_FOR_RESUME",
-                    f"Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}",
+                    'INSUFFICIENT_BALANCE_FOR_RESUME',
+                    f'Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}',
                 ),
                 show_alert=True,
             )
@@ -3507,14 +3214,14 @@ async def handle_toggle_daily_subscription_pause(
                 db,
                 db_user,
                 daily_price,
-                f"Суточная оплата тарифа «{tariff.name}» (возобновление)",
+                f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
                 mark_as_paid_subscription=True,
             )
             if not deducted:
                 await callback.answer(
                     texts.t(
-                        "INSUFFICIENT_BALANCE_FOR_RESUME",
-                        f"Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}",
+                        'INSUFFICIENT_BALANCE_FOR_RESUME',
+                        f'Недостаточно средств для возобновления. Требуется: {settings.format_price(daily_price)}',
                     ),
                     show_alert=True,
                 )
@@ -3529,18 +3236,16 @@ async def handle_toggle_daily_subscription_pause(
                     user_id=db_user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=f"Суточная оплата тарифа «{tariff.name}» (возобновление)",
+                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
                 )
             except Exception as tx_error:
-                logger.warning(
-                    "Не удалось создать транзакцию при возобновлении", error=tx_error
-                )
+                logger.warning('Не удалось создать транзакцию при возобновлении', error=tx_error)
 
         # Принудительный resume: снимаем паузу + восстанавливаем статус ACTIVE
         from app.database.crud.subscription import resume_daily_subscription
 
         subscription = await resume_daily_subscription(db, subscription)
-        message = texts.t("DAILY_SUBSCRIPTION_RESUMED", "Подписка возобновлена!")
+        message = texts.t('DAILY_SUBSCRIPTION_RESUMED', 'Подписка возобновлена!')
         # Восстанавливаем connected_squads из тарифа, если очищены деактивацией
         try:
             if not subscription.connected_squads:
@@ -3548,23 +3253,21 @@ async def handle_toggle_daily_subscription_pause(
                 if not squads:
                     from app.database.crud.server_squad import get_all_server_squads
 
-                    all_servers, _ = await get_all_server_squads(
-                        db, available_only=True, limit=10000
-                    )
+                    all_servers, _ = await get_all_server_squads(db, available_only=True, limit=10000)
                     squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
                 if squads:
                     subscription.connected_squads = squads
                     await db.commit()
                     await db.refresh(subscription)
         except Exception as sq_err:
-            logger.warning("Не удалось восстановить connected_squads", error=sq_err)
+            logger.warning('Не удалось восстановить connected_squads', error=sq_err)
 
         # Синхронизируем с Remnawave - активируем пользователя
         try:
             from app.services.subscription_service import SubscriptionService
 
             subscription_service = SubscriptionService()
-            if getattr(db_user, "remnawave_uuid", None):
+            if getattr(db_user, 'remnawave_uuid', None):
                 await subscription_service.update_remnawave_user(
                     db,
                     subscription,
@@ -3581,10 +3284,7 @@ async def handle_toggle_daily_subscription_pause(
                 )
                 # POST может игнорировать activeInternalSquads — отправляем PATCH
                 await db.refresh(db_user)
-                if (
-                    getattr(db_user, "remnawave_uuid", None)
-                    and subscription.connected_squads
-                ):
+                if getattr(db_user, 'remnawave_uuid', None) and subscription.connected_squads:
                     try:
                         await subscription_service.update_remnawave_user(
                             db,
@@ -3594,21 +3294,21 @@ async def handle_toggle_daily_subscription_pause(
                         )
                     except Exception as patch_err:
                         logger.warning(
-                            "Не удалось синхронизировать сквады после создания",
+                            'Не удалось синхронизировать сквады после создания',
                             error=patch_err,
                         )
             logger.info(
-                "Синхронизировано с Remnawave после возобновления суточной подписки",
+                'Синхронизировано с Remnawave после возобновления суточной подписки',
                 subscription_id=subscription.id,
             )
         except Exception as e:
-            logger.error("Ошибка синхронизации с Remnawave при возобновлении", error=e)
+            logger.error('Ошибка синхронизации с Remnawave при возобновлении', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
 
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
-                action="update",
+                action='update',
             )
 
         # Отправляем уведомление администраторам о возобновлении суточной подписки
@@ -3618,10 +3318,7 @@ async def handle_toggle_daily_subscription_pause(
                     AdminNotificationService,
                 )
 
-                if (
-                    getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False)
-                    and settings.BOT_TOKEN
-                ):
+                if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
                     notification_service = AdminNotificationService(callback.bot)
                     await notification_service.send_subscription_purchase_notification(
                         db=db,
@@ -3631,17 +3328,17 @@ async def handle_toggle_daily_subscription_pause(
                         period_days=1,
                         was_trial_conversion=False,
                         amount_kopeks=daily_price,
-                        purchase_type="renewal",
+                        purchase_type='renewal',
                     )
             except Exception as notif_err:
                 logger.error(
-                    "Не удалось отправить уведомление администраторам при возобновлении",
+                    'Не удалось отправить уведомление администраторам при возобновлении',
                     error=notif_err,
                 )
     else:
         # Подписка активна, ставим на паузу
         subscription = await toggle_daily_subscription_pause(db, subscription)
-        message = texts.t("DAILY_SUBSCRIPTION_PAUSED", "Подписка приостановлена!")
+        message = texts.t('DAILY_SUBSCRIPTION_PAUSED', 'Подписка приостановлена!')
 
     await callback.answer(message, show_alert=True)
 
@@ -3654,9 +3351,7 @@ async def handle_toggle_daily_subscription_pause(
 
 
 @error_handler
-async def handle_trial_pay_with_balance(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def handle_trial_pay_with_balance(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Обрабатывает оплату триала с баланса."""
     from app.services.trial_activation_service import get_trial_activation_charge_amount
 
@@ -3667,24 +3362,22 @@ async def handle_trial_pay_with_balance(
     # Multi-tariff note: trial eligibility is "has any subscription", so checking
     # db_user.subscription (first active/most recent) is correct in all modes.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(
-            texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language)
-        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
 
     trial_price_kopeks = get_trial_activation_charge_amount()
     if trial_price_kopeks <= 0:
-        await callback.answer("Ошибка: триал бесплатный", show_alert=True)
+        await callback.answer('Ошибка: триал бесплатный', show_alert=True)
         return
 
-    user_balance_kopeks = getattr(db_user, "balance_kopeks", 0) or 0
+    user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0) or 0
     if user_balance_kopeks < trial_price_kopeks:
         topup_needed_kopeks = trial_price_kopeks - user_balance_kopeks
         await callback.answer(
             texts.t(
-                "INSUFFICIENT_BALANCE",
-                "Недостаточно средств на балансе. Пополните баланс на {amount} и попробуйте снова.",
+                'INSUFFICIENT_BALANCE',
+                'Недостаточно средств на балансе. Пополните баланс на {amount} и попробуйте снова.',
             ).format(amount=settings.format_price(topup_needed_kopeks)),
             show_alert=True,
         )
@@ -3695,18 +3388,16 @@ async def handle_trial_pay_with_balance(
         db,
         db_user,
         trial_price_kopeks,
-        texts.t("TRIAL_PAYMENT_DESCRIPTION", "Оплата пробной подписки"),
+        texts.t('TRIAL_PAYMENT_DESCRIPTION', 'Оплата пробной подписки'),
         mark_as_paid_subscription=True,
     )
 
     if not success:
-        await callback.answer(
-            texts.t("PAYMENT_FAILED", "Не удалось списать средства"), show_alert=True
-        )
+        await callback.answer(texts.t('PAYMENT_FAILED', 'Не удалось списать средства'), show_alert=True)
         return
 
     # Создаём транзакцию для учёта списания за триал
-    trial_description = texts.t("TRIAL_PAYMENT_DESCRIPTION", "Оплата пробной подписки")
+    trial_description = texts.t('TRIAL_PAYMENT_DESCRIPTION', 'Оплата пробной подписки')
     await create_transaction(
         db,
         user_id=db_user.id,
@@ -3757,24 +3448,18 @@ async def handle_trial_pay_with_balance(
 
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
                     trial_device_limit = trial_tariff.device_limit
-                    trial_squads = await get_effective_tariff_squad_uuids(
-                        db, trial_tariff.allowed_squads
-                    )
+                    trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                     tariff_id_for_trial = trial_tariff.id
-                    tariff_trial_days = getattr(
-                        trial_tariff, "trial_duration_days", None
-                    )
+                    tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
                         trial_duration = tariff_trial_days
                     logger.info(
-                        "Платный триал с баланса: используем тариф",
+                        'Платный триал с баланса: используем тариф',
                         trial_tariff_name=trial_tariff.name,
                         trial_tariff_id=trial_tariff.id,
                     )
             except Exception as e:
-                logger.error(
-                    "Ошибка получения триального тарифа для платного триала", error=e
-                )
+                logger.error('Ошибка получения триального тарифа для платного триала', error=e)
 
         # No trial tariff configured, use the legacy random trial squad fallback.
         if not trial_squads:
@@ -3802,9 +3487,7 @@ async def handle_trial_pay_with_balance(
                 subscription,
             )
         except RemnaWaveConfigurationError as error:
-            logger.error(
-                "RemnaWave update skipped due to configuration error", error=error
-            )
+            logger.error('RemnaWave update skipped due to configuration error', error=error)
             # Откатываем подписку и возвращаем деньги
             await rollback_trial_subscription_activation(db, subscription)
             from app.database.crud.user import add_user_balance
@@ -3813,17 +3496,15 @@ async def handle_trial_pay_with_balance(
                 db,
                 db_user,
                 trial_price_kopeks,
-                texts.t(
-                    "TRIAL_REFUND_DESCRIPTION", "Возврат за неудачную активацию триала"
-                ),
+                texts.t('TRIAL_REFUND_DESCRIPTION', 'Возврат за неудачную активацию триала'),
                 transaction_type=TransactionType.REFUND,
             )
             await db.refresh(db_user)
 
             await callback.message.edit_text(
                 texts.t(
-                    "TRIAL_PROVISIONING_FAILED",
-                    "Не удалось завершить активацию триала. Средства возвращены на баланс.",
+                    'TRIAL_PROVISIONING_FAILED',
+                    'Не удалось завершить активацию триала. Средства возвращены на баланс.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language),
             )
@@ -3831,8 +3512,8 @@ async def handle_trial_pay_with_balance(
             return
         except Exception as error:
             logger.error(
-                "Failed to create RemnaWave user for trial subscription",
-                getattr=getattr(subscription, "id", "<unknown>"),
+                'Failed to create RemnaWave user for trial subscription',
+                getattr=getattr(subscription, 'id', '<unknown>'),
                 error=error,
             )
             # Откатываем подписку и возвращаем деньги
@@ -3843,17 +3524,15 @@ async def handle_trial_pay_with_balance(
                 db,
                 db_user,
                 trial_price_kopeks,
-                texts.t(
-                    "TRIAL_REFUND_DESCRIPTION", "Возврат за неудачную активацию триала"
-                ),
+                texts.t('TRIAL_REFUND_DESCRIPTION', 'Возврат за неудачную активацию триала'),
                 transaction_type=TransactionType.REFUND,
             )
             await db.refresh(db_user)
 
             await callback.message.edit_text(
                 texts.t(
-                    "TRIAL_PROVISIONING_FAILED",
-                    "Не удалось завершить активацию триала. Средства возвращены на баланс.",
+                    'TRIAL_PROVISIONING_FAILED',
+                    'Не удалось завершить активацию триала. Средства возвращены на баланс.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language),
             )
@@ -3870,49 +3549,45 @@ async def handle_trial_pay_with_balance(
                 charged_amount_kopeks=trial_price_kopeks,
             )
         except Exception as e:
-            logger.error("Ошибка отправки уведомления о триале", error=e)
+            logger.error('Ошибка отправки уведомления о триале', error=e)
 
         # Показываем успешное сообщение с ссылкой
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
 
-        payment_note = "\n\n" + texts.t(
-            "TRIAL_PAYMENT_CHARGED_NOTE",
-            "С вашего баланса списано {amount}.",
+        payment_note = '\n\n' + texts.t(
+            'TRIAL_PAYMENT_CHARGED_NOTE',
+            'С вашего баланса списано {amount}.',
         ).format(amount=settings.format_price(trial_price_kopeks))
 
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
-                trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n" + texts.t(
-                    "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_HAPP_LINK_PROMPT',
                     'Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
                 )
             elif hide_subscription_link:
-                trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n" + texts.t(
-                    "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n' + texts.t(
+                    'SUBSCRIPTION_LINK_HIDDEN_NOTICE',
                     'Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".',
                 )
             else:
                 subscription_import_link = texts.t(
-                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                    "<b>Ваша ссылка для подключения:</b>\n<code>{subscription_url}</code>",
+                    'SUBSCRIPTION_IMPORT_LINK_SECTION',
+                    '<b>Ваша ссылка для подключения:</b>\n<code>{subscription_url}</code>',
                 ).format(subscription_url=subscription_link)
 
-                trial_success_text = (
-                    f"{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}\n\n"
-                )
+                trial_success_text = f'{texts.TRIAL_ACTIVATED}\n\n{subscription_import_link}\n\n'
 
             trial_success_text += payment_note
 
             connect_mode = settings.CONNECT_BUTTON_MODE
-            connect_keyboard = _build_trial_success_keyboard(
-                texts, subscription_link, connect_mode
-            )
+            connect_keyboard = _build_trial_success_keyboard(texts, subscription_link, connect_mode)
 
             await callback.message.edit_text(
                 trial_success_text,
                 reply_markup=connect_keyboard,
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
         else:
             trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд."
@@ -3921,14 +3596,14 @@ async def handle_trial_pay_with_balance(
             await callback.message.edit_text(
                 trial_success_text,
                 reply_markup=get_back_keyboard(db_user.language),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
         await callback.answer()
 
     except Exception as error:
         logger.error(
-            "Unexpected error during paid trial activation for user",
+            'Unexpected error during paid trial activation for user',
             user_id_snapshot=user_id_snapshot,
             error=error,
         )
@@ -3946,41 +3621,37 @@ async def handle_trial_pay_with_balance(
                 db,
                 db_user,
                 trial_price_kopeks,
-                texts.t(
-                    "TRIAL_REFUND_DESCRIPTION", "Возврат за неудачную активацию триала"
-                ),
+                texts.t('TRIAL_REFUND_DESCRIPTION', 'Возврат за неудачную активацию триала'),
                 transaction_type=TransactionType.REFUND,
             )
             await db.refresh(db_user)
         except Exception as refund_error:
             logger.error(
-                "Failed to refund trial payment for user",
+                'Failed to refund trial payment for user',
                 user_id_snapshot=user_id_snapshot,
                 refund_error=refund_error,
             )
 
         await callback.message.edit_text(
             texts.t(
-                "TRIAL_ACTIVATION_ERROR",
-                "Произошла ошибка при активации триала. Средства возвращены на баланс.",
+                'TRIAL_ACTIVATION_ERROR',
+                'Произошла ошибка при активации триала. Средства возвращены на баланс.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
         await callback.answer()
 
 
-def _build_trial_success_keyboard(
-    texts, subscription_link: str, connect_mode: str
-) -> InlineKeyboardMarkup:
+def _build_trial_success_keyboard(texts, subscription_link: str, connect_mode: str) -> InlineKeyboardMarkup:
     """Создает клавиатуру успешной активации триала."""
 
-    if connect_mode == "miniapp_subscription":
+    if connect_mode == 'miniapp_subscription':
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     make_button(
                         text=texts.t(
-                            "CONNECT_BUTTON",
+                            'CONNECT_BUTTON',
                             "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                         ),
                         web_app=types.WebAppInfo(url=subscription_link),
@@ -3988,24 +3659,22 @@ def _build_trial_success_keyboard(
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                        callback_data="back_to_menu",
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                        callback_data='back_to_menu',
                     )
                 ],
             ]
         )
-    if connect_mode == "miniapp_custom":
+    if connect_mode == 'miniapp_custom':
         if not settings.MINIAPP_CUSTOM_URL:
-            return get_back_keyboard(
-                texts.language if hasattr(texts, "language") else "ru"
-            )
+            return get_back_keyboard(texts.language if hasattr(texts, 'language') else 'ru')
 
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     make_button(
                         text=texts.t(
-                            "CONNECT_BUTTON",
+                            'CONNECT_BUTTON',
                             "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                         ),
                         web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
@@ -4013,18 +3682,18 @@ def _build_trial_success_keyboard(
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                        callback_data="back_to_menu",
+                        text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                        callback_data='back_to_menu',
                     )
                 ],
             ]
         )
-    if connect_mode == "link":
+    if connect_mode == 'link':
         rows = [
             [
                 make_button(
                     text=texts.t(
-                        "CONNECT_BUTTON",
+                        'CONNECT_BUTTON',
                         "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                     ),
                     url=subscription_link,
@@ -4037,21 +3706,21 @@ def _build_trial_success_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                    callback_data="back_to_menu",
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    callback_data='back_to_menu',
                 )
             ]
         )
         return InlineKeyboardMarkup(inline_keyboard=rows)
-    if connect_mode == "happ_cryptolink":
+    if connect_mode == 'happ_cryptolink':
         rows = [
             [
                 make_button(
                     text=texts.t(
-                        "CONNECT_BUTTON",
+                        'CONNECT_BUTTON',
                         "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                     ),
-                    callback_data="open_subscription_link",
+                    callback_data='open_subscription_link',
                 )
             ]
         ]
@@ -4061,8 +3730,8 @@ def _build_trial_success_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                    callback_data="back_to_menu",
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    callback_data='back_to_menu',
                 )
             ]
         )
@@ -4072,16 +3741,16 @@ def _build_trial_success_keyboard(
             [
                 make_button(
                     text=texts.t(
-                        "CONNECT_BUTTON",
+                        'CONNECT_BUTTON',
                         "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Подключиться",
                     ),
-                    callback_data="subscription_connect",
+                    callback_data='subscription_connect',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "В главное меню"),
-                    callback_data="back_to_menu",
+                    text=texts.t('BACK_TO_MAIN_MENU_BUTTON', 'В главное меню'),
+                    callback_data='back_to_menu',
                 )
             ],
         ]
@@ -4089,9 +3758,7 @@ def _build_trial_success_keyboard(
 
 
 @error_handler
-async def handle_trial_payment_method(
-    callback: types.CallbackQuery, db_user: User, db: AsyncSession
-):
+async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Обрабатывает выбор метода оплаты для платного триала."""
     from app.services.payment_service import PaymentService
     from app.services.trial_activation_service import get_trial_activation_charge_amount
@@ -4103,19 +3770,17 @@ async def handle_trial_payment_method(
     # Multi-tariff note: trial eligibility is "has any subscription", so checking
     # db_user.subscription (first active/most recent) is correct in all modes.
     if db_user.is_trial_already_used():
-        await callback.message.edit_text(
-            texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language)
-        )
+        await callback.message.edit_text(texts.TRIAL_ALREADY_USED, reply_markup=get_back_keyboard(db_user.language))
         await callback.answer()
         return
 
     trial_price_kopeks = get_trial_activation_charge_amount()
     if trial_price_kopeks <= 0:
-        await callback.answer("Ошибка: триал бесплатный", show_alert=True)
+        await callback.answer('Ошибка: триал бесплатный', show_alert=True)
         return
 
     # Определяем метод оплаты
-    payment_method = callback.data.replace("trial_payment_", "")
+    payment_method = callback.data.replace('trial_payment_', '')
 
     try:
         payment_service = PaymentService(callback.bot)
@@ -4146,24 +3811,18 @@ async def handle_trial_payment_method(
 
                     trial_traffic = trial_tariff.traffic_limit_gb
                     trial_devices = trial_tariff.device_limit
-                    trial_squads_list = await get_effective_tariff_squad_uuids(
-                        db, trial_tariff.allowed_squads
-                    )
+                    trial_squads_list = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
                     tariff_id_for_trial = trial_tariff.id
-                    tariff_trial_days = getattr(
-                        trial_tariff, "trial_duration_days", None
-                    )
+                    tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None)
                     if tariff_trial_days:
                         trial_duration = tariff_trial_days
                     logger.info(
-                        "Платный триал через платёжку: используем тариф",
+                        'Платный триал через платёжку: используем тариф',
                         trial_tariff_name=trial_tariff.name,
                         trial_tariff_id=trial_tariff.id,
                     )
             except Exception as e:
-                logger.error(
-                    "Ошибка получения триального тарифа для платного триала", error=e
-                )
+                logger.error('Ошибка получения триального тарифа для платного триала', error=e)
 
         # Если триальный тариф не найден, используем legacy fallback со случайным сквадом.
         if not trial_squads_list:
@@ -4180,41 +3839,37 @@ async def handle_trial_payment_method(
             traffic_limit_gb=trial_traffic,
             device_limit=trial_devices,
             connected_squads=trial_squads_list,
-            payment_method=f"trial_{payment_method}",
+            payment_method=f'trial_{payment_method}',
             total_price_kopeks=trial_price_kopeks,
             tariff_id=tariff_id_for_trial,
         )
 
         if not pending_subscription:
-            await callback.answer(
-                "Не удалось подготовить заказ. Попробуйте позже.", show_alert=True
-            )
+            await callback.answer('Не удалось подготовить заказ. Попробуйте позже.', show_alert=True)
             return
 
-        traffic_label = "Безлимит" if trial_traffic == 0 else f"{trial_traffic} ГБ"
+        traffic_label = 'Безлимит' if trial_traffic == 0 else f'{trial_traffic} ГБ'
 
-        if payment_method == "stars":
+        if payment_method == 'stars':
             # Оплата через Telegram Stars
-            stars_count = settings.rubles_to_stars(
-                settings.kopeks_to_rubles(trial_price_kopeks)
-            )
+            stars_count = settings.rubles_to_stars(settings.kopeks_to_rubles(trial_price_kopeks))
 
             await callback.bot.send_invoice(
                 chat_id=callback.from_user.id,
-                title=texts.t(
-                    "PAID_TRIAL_INVOICE_TITLE", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                title=texts.t('PAID_TRIAL_INVOICE_TITLE', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 description=(
                     f'{texts.t("PERIOD", "Период")}: {trial_duration} {texts.t("DAYS", "дней")}\n'
                     f'{texts.t("DEVICES", "Устройства")}: {trial_devices}\n'
                     f'{texts.t("TRAFFIC", "Трафик")}: {traffic_label}'
                 ),
-                payload=f"trial_{pending_subscription.id}",
-                provider_token="",
-                currency="XTR",
+                payload=f'trial_{pending_subscription.id}',
+                provider_token='',
+                currency='XTR',
                 prices=[
                     types.LabeledPrice(
-                        label=texts.t("PAID_TRIAL_STARS_LABEL", "Пробная подписка"),
+                        label=texts.t('PAID_TRIAL_STARS_LABEL', 'Пробная подписка'),
                         amount=stars_count,
                     )
                 ],
@@ -4222,105 +3877,87 @@ async def handle_trial_payment_method(
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_STARS_WAITING",
-                    "Для оплаты пробной подписки нажмите кнопку оплаты в сообщении выше.\n\n"
-                    "После успешной оплаты подписка будет активирована автоматически.",
+                    'PAID_TRIAL_STARS_WAITING',
+                    'Для оплаты пробной подписки нажмите кнопку оплаты в сообщении выше.\n\n'
+                    'После успешной оплаты подписка будет активирована автоматически.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "yookassa_sbp":
+        elif payment_method == 'yookassa_sbp':
             # Оплата через YooKassa СБП
             payment_result = await payment_service.create_yookassa_sbp_payment(
                 db=db,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 user_id=db_user.id,
                 metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
+                    'type': 'trial',
+                    'subscription_id': pending_subscription.id,
+                    'user_id': db_user.id,
                 },
             )
 
-            if not payment_result or not payment_result.get("confirmation_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('confirmation_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
-            qr_url = payment_result.get("qr_code_url") or payment_result.get(
-                "confirmation_url"
-            )
+            qr_url = payment_result.get('qr_code_url') or payment_result.get('confirmation_url')
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_YOOKASSA_SBP",
-                    "<b>Оплата через СБП</b>\n\n"
-                    "Отсканируйте QR-код или перейдите по ссылке для оплаты.\n\n"
-                    "Сумма: {amount}",
+                    'PAID_TRIAL_YOOKASSA_SBP',
+                    '<b>Оплата через СБП</b>\n\n'
+                    'Отсканируйте QR-код или перейдите по ссылке для оплаты.\n\n'
+                    'Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text="Оплатить", url=qr_url)],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text='Оплатить', url=qr_url)],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "yookassa":
+        elif payment_method == 'yookassa':
             # Оплата через YooKassa карта
             payment_result = await payment_service.create_yookassa_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 metadata={
-                    "type": "trial",
-                    "subscription_id": pending_subscription.id,
-                    "user_id": db_user.id,
+                    'type': 'trial',
+                    'subscription_id': pending_subscription.id,
+                    'user_id': db_user.id,
                 },
             )
 
-            if not payment_result or not payment_result.get("confirmation_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('confirmation_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_YOOKASSA_CARD",
-                    "<b>Оплата картой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n Сумма: {amount}",
+                    'PAID_TRIAL_YOOKASSA_CARD',
+                    '<b>Оплата картой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [
-                            InlineKeyboardButton(
-                                text="Оплатить", url=payment_result["confirmation_url"]
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['confirmation_url'])],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "cryptobot":
+        elif payment_method == 'cryptobot':
             # Оплата через CryptoBot
             # Конвертируем копейки в USD
             from app.utils.currency_converter import currency_converter
@@ -4328,7 +3965,7 @@ async def handle_trial_payment_method(
             try:
                 usd_rate = await currency_converter.get_usd_to_rub_rate()
             except Exception as rate_error:
-                logger.warning("Не удалось получить курс USD", rate_error=rate_error)
+                logger.warning('Не удалось получить курс USD', rate_error=rate_error)
                 usd_rate = 95.0
 
             amount_rubles = trial_price_kopeks / 100
@@ -4341,246 +3978,198 @@ async def handle_trial_payment_method(
                 user_id=db_user.id,
                 amount_usd=amount_usd,
                 asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
-                payload=f"trial_{pending_subscription.id}_{db_user.id}",
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
+                payload=f'trial_{pending_subscription.id}_{db_user.id}',
             )
 
             payment_url = (
                 (
-                    payment_result.get("mini_app_invoice_url")
-                    or payment_result.get("bot_invoice_url")
-                    or payment_result.get("web_app_invoice_url")
+                    payment_result.get('mini_app_invoice_url')
+                    or payment_result.get('bot_invoice_url')
+                    or payment_result.get('web_app_invoice_url')
                 )
                 if payment_result
                 else None
             )
 
             if not payment_result or not payment_url:
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_CRYPTOBOT",
-                    "<b>Оплата криптовалютой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\nСумма: {amount}",
+                    'PAID_TRIAL_CRYPTOBOT',
+                    '<b>Оплата криптовалютой</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\nСумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text="Оплатить", url=payment_url)],
+                        [InlineKeyboardButton(text='Оплатить', url=payment_url)],
                         [
                             InlineKeyboardButton(
-                                text=texts.t("CHECK_PAYMENT", "Проверить оплату"),
-                                callback_data=f"check_trial_cryptobot_{pending_subscription.id}",
+                                text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
+                                callback_data=f'check_trial_cryptobot_{pending_subscription.id}',
                             )
                         ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "heleket":
+        elif payment_method == 'heleket':
             # Оплата через Heleket
             payment_result = await payment_service.create_heleket_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("payment_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('payment_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_HELEKET",
-                    "<b>Оплата криптовалютой (Heleket)</b>\n\n"
-                    "Нажмите кнопку ниже для перехода к оплате.\n\n"
-                    "Сумма: {amount}",
+                    'PAID_TRIAL_HELEKET',
+                    '<b>Оплата криптовалютой (Heleket)</b>\n\n'
+                    'Нажмите кнопку ниже для перехода к оплате.\n\n'
+                    'Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['payment_url'])],
                         [
                             InlineKeyboardButton(
-                                text="Оплатить", url=payment_result["payment_url"]
+                                text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
+                                callback_data=f'check_trial_heleket_{pending_subscription.id}',
                             )
                         ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t("CHECK_PAYMENT", "Проверить оплату"),
-                                callback_data=f"check_trial_heleket_{pending_subscription.id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "mulenpay":
+        elif payment_method == 'mulenpay':
             # Оплата через MulenPay
             payment_result = await payment_service.create_mulenpay_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("payment_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('payment_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             mulenpay_name = settings.get_mulenpay_display_name()
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_MULENPAY",
-                    "<b>Оплата через {name}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n Сумма: {amount}",
-                ).format(
-                    name=mulenpay_name, amount=settings.format_price(trial_price_kopeks)
-                ),
+                    'PAID_TRIAL_MULENPAY',
+                    '<b>Оплата через {name}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n Сумма: {amount}',
+                ).format(name=mulenpay_name, amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['payment_url'])],
                         [
                             InlineKeyboardButton(
-                                text="Оплатить", url=payment_result["payment_url"]
+                                text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
+                                callback_data=f'check_trial_mulenpay_{pending_subscription.id}',
                             )
                         ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t("CHECK_PAYMENT", "Проверить оплату"),
-                                callback_data=f"check_trial_mulenpay_{pending_subscription.id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "pal24":
+        elif payment_method == 'pal24':
             # Оплата через PAL24
             payment_result = await payment_service.create_pal24_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("payment_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('payment_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_PAL24",
-                    "<b>Оплата через PayPalych</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\nСумма: {amount}",
+                    'PAID_TRIAL_PAL24',
+                    '<b>Оплата через PayPalych</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\nСумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['payment_url'])],
                         [
                             InlineKeyboardButton(
-                                text="Оплатить", url=payment_result["payment_url"]
+                                text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
+                                callback_data=f'check_trial_pal24_{pending_subscription.id}',
                             )
                         ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t("CHECK_PAYMENT", "Проверить оплату"),
-                                callback_data=f"check_trial_pal24_{pending_subscription.id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "wata":
+        elif payment_method == 'wata':
             # Оплата через WATA
             payment_result = await payment_service.create_wata_payment(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 language=db_user.language,
             )
 
-            if not payment_result or not payment_result.get("payment_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('payment_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_WATA",
-                    "<b>Оплата через WATA</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n Сумма: {amount}",
+                    'PAID_TRIAL_WATA',
+                    '<b>Оплата через WATA</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\n Сумма: {amount}',
                 ).format(amount=settings.format_price(trial_price_kopeks)),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['payment_url'])],
                         [
                             InlineKeyboardButton(
-                                text="Оплатить", url=payment_result["payment_url"]
+                                text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
+                                callback_data=f'check_trial_wata_{pending_subscription.id}',
                             )
                         ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t("CHECK_PAYMENT", "Проверить оплату"),
-                                callback_data=f"check_trial_wata_{pending_subscription.id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
-        elif payment_method == "platega":
+        elif payment_method == 'platega':
             # Оплата через Platega
             active_methods = settings.get_platega_active_methods()
             if not active_methods:
-                await callback.answer("Platega не настроена", show_alert=True)
+                await callback.answer('Platega не настроена', show_alert=True)
                 return
 
             # Используем первый активный метод
@@ -4590,74 +4179,60 @@ async def handle_trial_payment_method(
                 db=db,
                 user_id=db_user.id,
                 amount_kopeks=trial_price_kopeks,
-                description=texts.t(
-                    "PAID_TRIAL_PAYMENT_DESC", "Пробная подписка на {days} дней"
-                ).format(days=trial_duration),
+                description=texts.t('PAID_TRIAL_PAYMENT_DESC', 'Пробная подписка на {days} дней').format(
+                    days=trial_duration
+                ),
                 language=db_user.language,
                 payment_method_code=method_code,
             )
 
-            if not payment_result or not payment_result.get("redirect_url"):
-                await callback.answer(
-                    "Не удалось создать платеж. Попробуйте позже.", show_alert=True
-                )
+            if not payment_result or not payment_result.get('redirect_url'):
+                await callback.answer('Не удалось создать платеж. Попробуйте позже.', show_alert=True)
                 return
 
             platega_name = settings.get_platega_display_name()
             await callback.message.edit_text(
                 texts.t(
-                    "PAID_TRIAL_PLATEGA",
-                    "<b>Оплата через {provider}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\nСумма: {amount}",
+                    'PAID_TRIAL_PLATEGA',
+                    '<b>Оплата через {provider}</b>\n\nНажмите кнопку ниже для перехода к оплате.\n\nСумма: {amount}',
                 ).format(
                     provider=platega_name,
                     amount=settings.format_price(trial_price_kopeks),
                 ),
                 reply_markup=InlineKeyboardMarkup(
                     inline_keyboard=[
+                        [InlineKeyboardButton(text='Оплатить', url=payment_result['redirect_url'])],
                         [
                             InlineKeyboardButton(
-                                text="Оплатить", url=payment_result["redirect_url"]
+                                text=texts.t('CHECK_PAYMENT', 'Проверить оплату'),
+                                callback_data=f'check_trial_platega_{pending_subscription.id}',
                             )
                         ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.t("CHECK_PAYMENT", "Проверить оплату"),
-                                callback_data=f"check_trial_platega_{pending_subscription.id}",
-                            )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text=texts.BACK, callback_data="trial_activate"
-                            )
-                        ],
+                        [InlineKeyboardButton(text=texts.BACK, callback_data='trial_activate')],
                     ]
                 ),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
 
         else:
-            await callback.answer(
-                f"Неизвестный метод оплаты: {payment_method}", show_alert=True
-            )
+            await callback.answer(f'Неизвестный метод оплаты: {payment_method}', show_alert=True)
             return
 
         await callback.answer()
 
     except Exception as error:
         logger.error(
-            "Error processing trial payment method",
+            'Error processing trial payment method',
             payment_method=payment_method,
             error=error,
         )
-        await callback.answer(
-            "Произошла ошибка при создании платежа. Попробуйте позже.", show_alert=True
-        )
+        await callback.answer('Произошла ошибка при создании платежа. Попробуйте позже.', show_alert=True)
 
 
 def register_handlers(dp: Dispatcher):
     update_traffic_prices()
 
-    dp.callback_query.register(show_subscription_info, F.data == "menu_subscription")
+    dp.callback_query.register(show_subscription_info, F.data == 'menu_subscription')
 
     # Multi-tariff: "My subscriptions" list and detail views
     from app.handlers.subscription.my_subscriptions import (
@@ -4665,8 +4240,8 @@ def register_handlers(dp: Dispatcher):
         show_subscription_detail,
     )
 
-    dp.callback_query.register(show_my_subscriptions, F.data == "my_subscriptions")
-    dp.callback_query.register(show_subscription_detail, F.data.startswith("sm:"))
+    dp.callback_query.register(show_my_subscriptions, F.data == 'my_subscriptions')
+    dp.callback_query.register(show_subscription_detail, F.data.startswith('sm:'))
 
     # Multi-tariff delegation handlers from subscription detail view
     from app.handlers.subscription.my_subscriptions import (
@@ -4680,22 +4255,14 @@ def register_handlers(dp: Dispatcher):
         handle_subscription_traffic,
     )
 
-    dp.callback_query.register(handle_subscription_link, F.data.startswith("sl:"))
-    dp.callback_query.register(handle_subscription_extend, F.data.startswith("se:"))
-    dp.callback_query.register(handle_subscription_traffic, F.data.startswith("st:"))
-    dp.callback_query.register(handle_subscription_devices, F.data.startswith("sd:"))
-    dp.callback_query.register(
-        handle_subscription_delete_confirm, F.data.startswith("sub_del:")
-    )
-    dp.callback_query.register(
-        handle_subscription_delete_execute, F.data.startswith("sub_del_yes:")
-    )
-    dp.callback_query.register(
-        handle_change_devices_menu, F.data.startswith("change_devices_menu:")
-    )
-    dp.callback_query.register(
-        handle_device_management_menu, F.data.startswith("device_management:")
-    )
+    dp.callback_query.register(handle_subscription_link, F.data.startswith('sl:'))
+    dp.callback_query.register(handle_subscription_extend, F.data.startswith('se:'))
+    dp.callback_query.register(handle_subscription_traffic, F.data.startswith('st:'))
+    dp.callback_query.register(handle_subscription_devices, F.data.startswith('sd:'))
+    dp.callback_query.register(handle_subscription_delete_confirm, F.data.startswith('sub_del:'))
+    dp.callback_query.register(handle_subscription_delete_execute, F.data.startswith('sub_del_yes:'))
+    dp.callback_query.register(handle_change_devices_menu, F.data.startswith('change_devices_menu:'))
+    dp.callback_query.register(handle_device_management_menu, F.data.startswith('device_management:'))
 
     # Subscription revoke (reissue)
     from app.handlers.subscription.revoke import (
@@ -4704,238 +4271,178 @@ def register_handlers(dp: Dispatcher):
         start_subscription_revoke,
     )
 
-    dp.callback_query.register(
-        start_subscription_revoke, F.data == "subscription_revoke"
-    )
-    dp.callback_query.register(
-        confirm_subscription_revoke, F.data == "subscription_revoke_confirm"
-    )
-    dp.callback_query.register(start_multi_revoke, F.data.startswith("sr:"))
+    dp.callback_query.register(start_subscription_revoke, F.data == 'subscription_revoke')
+    dp.callback_query.register(confirm_subscription_revoke, F.data == 'subscription_revoke_confirm')
+    dp.callback_query.register(start_multi_revoke, F.data.startswith('sr:'))
 
-    dp.callback_query.register(show_trial_offer, F.data == "menu_trial")
+    dp.callback_query.register(show_trial_offer, F.data == 'menu_trial')
 
-    dp.callback_query.register(activate_trial, F.data == "trial_activate")
+    dp.callback_query.register(activate_trial, F.data == 'trial_activate')
 
     # Хендлеры платного триала
-    dp.callback_query.register(
-        handle_trial_pay_with_balance, F.data == "trial_pay_with_balance"
-    )
+    dp.callback_query.register(handle_trial_pay_with_balance, F.data == 'trial_pay_with_balance')
 
-    dp.callback_query.register(
-        handle_trial_payment_method, F.data.startswith("trial_payment_")
-    )
+    dp.callback_query.register(handle_trial_payment_method, F.data.startswith('trial_payment_'))
 
     dp.callback_query.register(
         start_subscription_purchase,
-        F.data.in_(["menu_buy", "subscription_upgrade", "subscription_purchase"]),
+        F.data.in_(['menu_buy', 'subscription_upgrade', 'subscription_purchase']),
     )
 
-    dp.callback_query.register(
-        handle_add_countries, F.data == "subscription_add_countries"
-    )
+    dp.callback_query.register(handle_add_countries, F.data == 'subscription_add_countries')
 
-    dp.callback_query.register(
-        handle_switch_traffic, F.data == "subscription_switch_traffic"
-    )
+    dp.callback_query.register(handle_switch_traffic, F.data == 'subscription_switch_traffic')
 
-    dp.callback_query.register(
-        confirm_switch_traffic, F.data.startswith("switch_traffic_")
-    )
+    dp.callback_query.register(confirm_switch_traffic, F.data.startswith('switch_traffic_'))
 
-    dp.callback_query.register(
-        execute_switch_traffic, F.data.startswith("confirm_switch_traffic_")
-    )
+    dp.callback_query.register(execute_switch_traffic, F.data.startswith('confirm_switch_traffic_'))
 
-    dp.callback_query.register(
-        handle_change_devices, F.data == "subscription_change_devices"
-    )
+    dp.callback_query.register(handle_change_devices, F.data == 'subscription_change_devices')
 
-    dp.callback_query.register(
-        confirm_change_devices, F.data.startswith("change_devices_")
-    )
+    dp.callback_query.register(confirm_change_devices, F.data.startswith('change_devices_'))
 
-    dp.callback_query.register(
-        execute_change_devices, F.data.startswith("confirm_change_devices_")
-    )
+    dp.callback_query.register(execute_change_devices, F.data.startswith('confirm_change_devices_'))
 
-    dp.callback_query.register(
-        handle_extend_subscription, F.data == "subscription_extend"
-    )
+    dp.callback_query.register(handle_extend_subscription, F.data == 'subscription_extend')
 
-    dp.callback_query.register(
-        handle_reset_traffic, F.data == "subscription_reset_traffic"
-    )
+    dp.callback_query.register(handle_reset_traffic, F.data == 'subscription_reset_traffic')
 
-    dp.callback_query.register(confirm_add_devices, F.data.startswith("add_devices_"))
+    dp.callback_query.register(confirm_add_devices, F.data.startswith('add_devices_'))
 
-    dp.callback_query.register(
-        confirm_extend_subscription, F.data.startswith("extend_period_")
-    )
+    dp.callback_query.register(confirm_extend_subscription, F.data.startswith('extend_period_'))
 
-    dp.callback_query.register(confirm_reset_traffic, F.data == "confirm_reset_traffic")
+    dp.callback_query.register(confirm_reset_traffic, F.data == 'confirm_reset_traffic')
 
-    dp.callback_query.register(
-        handle_reset_devices, F.data == "subscription_reset_devices"
-    )
+    dp.callback_query.register(handle_reset_devices, F.data == 'subscription_reset_devices')
 
-    dp.callback_query.register(confirm_reset_devices, F.data == "confirm_reset_devices")
+    dp.callback_query.register(confirm_reset_devices, F.data == 'confirm_reset_devices')
 
-    dp.callback_query.register(
-        select_period, F.data.startswith("period_"), SubscriptionStates.selecting_period
-    )
+    dp.callback_query.register(select_period, F.data.startswith('period_'), SubscriptionStates.selecting_period)
 
     dp.callback_query.register(
         select_traffic,
-        F.data.startswith("traffic_"),
+        F.data.startswith('traffic_'),
         SubscriptionStates.selecting_traffic,
     )
 
     dp.callback_query.register(
         select_devices,
-        F.data.startswith("devices_") & ~F.data.in_(["devices_continue"]),
+        F.data.startswith('devices_') & ~F.data.in_(['devices_continue']),
         SubscriptionStates.selecting_devices,
     )
 
     dp.callback_query.register(
         devices_continue,
-        F.data == "devices_continue",
+        F.data == 'devices_continue',
         SubscriptionStates.selecting_devices,
     )
 
     dp.callback_query.register(
         confirm_purchase,
-        F.data == "subscription_confirm",
+        F.data == 'subscription_confirm',
         SubscriptionStates.confirming_purchase,
     )
 
     dp.callback_query.register(
         resume_subscription_checkout,
-        F.data == "subscription_resume_checkout",
+        F.data == 'subscription_resume_checkout',
     )
 
     dp.callback_query.register(
         return_to_saved_cart,
-        F.data == "return_to_saved_cart",
+        F.data == 'return_to_saved_cart',
     )
 
     dp.callback_query.register(
         clear_saved_cart,
-        F.data == "clear_saved_cart",
+        F.data == 'clear_saved_cart',
     )
 
-    dp.callback_query.register(handle_autopay_menu, F.data == "subscription_autopay")
+    dp.callback_query.register(handle_autopay_menu, F.data == 'subscription_autopay')
 
-    dp.callback_query.register(
-        toggle_autopay, F.data.in_(["autopay_enable", "autopay_disable"])
-    )
+    dp.callback_query.register(toggle_autopay, F.data.in_(['autopay_enable', 'autopay_disable']))
 
-    dp.callback_query.register(show_autopay_days, F.data == "autopay_set_days")
+    dp.callback_query.register(show_autopay_days, F.data == 'autopay_set_days')
 
-    dp.callback_query.register(show_autopay_period, F.data == "autopay_set_period")
+    dp.callback_query.register(show_autopay_period, F.data == 'autopay_set_period')
 
-    dp.callback_query.register(
-        handle_subscription_config_back, F.data == "subscription_config_back"
-    )
+    dp.callback_query.register(handle_subscription_config_back, F.data == 'subscription_config_back')
 
-    dp.callback_query.register(
-        handle_subscription_cancel, F.data == "subscription_cancel"
-    )
+    dp.callback_query.register(handle_subscription_cancel, F.data == 'subscription_cancel')
 
-    dp.callback_query.register(set_autopay_days, F.data.startswith("autopay_days_"))
+    dp.callback_query.register(set_autopay_days, F.data.startswith('autopay_days_'))
 
-    dp.callback_query.register(set_autopay_period, F.data.startswith("autopay_period_"))
+    dp.callback_query.register(set_autopay_period, F.data.startswith('autopay_period_'))
 
     dp.callback_query.register(
         select_country,
-        F.data.startswith("country_"),
+        F.data.startswith('country_'),
         SubscriptionStates.selecting_countries,
     )
 
     dp.callback_query.register(
         countries_continue,
-        F.data == "countries_continue",
+        F.data == 'countries_continue',
         SubscriptionStates.selecting_countries,
     )
 
-    dp.callback_query.register(
-        handle_manage_country, F.data.startswith("country_manage_")
-    )
+    dp.callback_query.register(handle_manage_country, F.data.startswith('country_manage_'))
 
-    dp.callback_query.register(apply_countries_changes, F.data == "countries_apply")
+    dp.callback_query.register(apply_countries_changes, F.data == 'countries_apply')
 
-    dp.callback_query.register(
-        claim_discount_offer, F.data.startswith("claim_discount_")
-    )
+    dp.callback_query.register(claim_discount_offer, F.data.startswith('claim_discount_'))
 
     dp.callback_query.register(
         handle_promo_offer_close,
-        F.data == "promo_offer_close",
+        F.data == 'promo_offer_close',
     )
 
-    dp.callback_query.register(
-        handle_happ_download_request, F.data == "subscription_happ_download"
-    )
+    dp.callback_query.register(handle_happ_download_request, F.data == 'subscription_happ_download')
 
     dp.callback_query.register(
         handle_happ_download_platform_choice,
         F.data.in_(
             [
-                "happ_download_ios",
-                "happ_download_android",
-                "happ_download_pc",
-                "happ_download_macos",
-                "happ_download_windows",
+                'happ_download_ios',
+                'happ_download_android',
+                'happ_download_pc',
+                'happ_download_macos',
+                'happ_download_windows',
             ]
         ),
     )
 
-    dp.callback_query.register(
-        handle_happ_download_close, F.data == "happ_download_close"
-    )
+    dp.callback_query.register(handle_happ_download_close, F.data == 'happ_download_close')
 
-    dp.callback_query.register(
-        handle_happ_download_back, F.data == "happ_download_back"
-    )
+    dp.callback_query.register(handle_happ_download_back, F.data == 'happ_download_back')
 
-    dp.callback_query.register(
-        handle_connect_subscription, F.data.startswith("subscription_connect")
-    )
+    dp.callback_query.register(handle_connect_subscription, F.data.startswith('subscription_connect'))
 
-    dp.callback_query.register(handle_device_guide, F.data.startswith("device_guide_"))
+    dp.callback_query.register(handle_device_guide, F.data.startswith('device_guide_'))
 
-    dp.callback_query.register(handle_app_selection, F.data.startswith("app_list_"))
+    dp.callback_query.register(handle_app_selection, F.data.startswith('app_list_'))
 
     dp.callback_query.register(
         handle_specific_app_guide,
-        F.data.startswith("app_") & ~F.data.startswith("app_list_"),
+        F.data.startswith('app_') & ~F.data.startswith('app_list_'),
     )
 
-    dp.callback_query.register(
-        handle_open_subscription_link, F.data.startswith("open_subscription_link")
-    )
+    dp.callback_query.register(handle_open_subscription_link, F.data.startswith('open_subscription_link'))
 
-    dp.callback_query.register(
-        handle_subscription_settings, F.data == "subscription_settings"
-    )
+    dp.callback_query.register(handle_subscription_settings, F.data == 'subscription_settings')
 
     dp.callback_query.register(
         handle_toggle_daily_subscription_pause,
-        F.data == "toggle_daily_subscription_pause",
+        F.data == 'toggle_daily_subscription_pause',
     )
 
-    dp.callback_query.register(
-        handle_no_traffic_packages, F.data == "no_traffic_packages"
-    )
+    dp.callback_query.register(handle_no_traffic_packages, F.data == 'no_traffic_packages')
 
-    dp.callback_query.register(
-        handle_device_management, F.data == "subscription_manage_devices"
-    )
+    dp.callback_query.register(handle_device_management, F.data == 'subscription_manage_devices')
 
-    dp.callback_query.register(handle_devices_page, F.data.startswith("devices_page_"))
+    dp.callback_query.register(handle_devices_page, F.data.startswith('devices_page_'))
 
-    dp.callback_query.register(
-        handle_single_device_reset, F.data.regexp(r"^reset_device_\d+_\d+$")
-    )
+    dp.callback_query.register(handle_single_device_reset, F.data.regexp(r'^reset_device_\d+_\d+$'))
 
     # Локальное переименование устройства (alias). Callback пускает FSM-prompt,
     # текстовый handler ловит ответ юзера (см. process_device_rename ниже).
@@ -4948,24 +4455,16 @@ def register_handlers(dp: Dispatcher):
         start_device_rename,
     )
 
-    dp.callback_query.register(
-        start_device_rename, F.data.regexp(r"^device_rename_\d+_\d+$")
-    )
+    dp.callback_query.register(start_device_rename, F.data.regexp(r'^device_rename_\d+_\d+$'))
     # Кнопка «Отмена» в промпте переименования — чистит FSM и возвращает список.
-    dp.callback_query.register(cancel_device_rename, F.data == "device_rename_cancel")
+    dp.callback_query.register(cancel_device_rename, F.data == 'device_rename_cancel')
     # F.text — игнорируем стикеры/фото/voice пока юзер в FSM, иначе
     # message.text==None трактуется как пустая строка и очищает alias.
-    dp.message.register(
-        process_device_rename, SubscriptionStates.renaming_device, F.text
-    )
+    dp.message.register(process_device_rename, SubscriptionStates.renaming_device, F.text)
 
-    dp.callback_query.register(
-        handle_all_devices_reset_from_management, F.data == "reset_all_devices"
-    )
+    dp.callback_query.register(handle_all_devices_reset_from_management, F.data == 'reset_all_devices')
 
-    dp.callback_query.register(
-        show_device_connection_help, F.data == "device_connection_help"
-    )
+    dp.callback_query.register(show_device_connection_help, F.data == 'device_connection_help')
 
     # Регистрируем обработчики покупки по тарифам
     from .tariff_purchase import register_tariff_purchase_handlers
@@ -4973,9 +4472,7 @@ def register_handlers(dp: Dispatcher):
     register_tariff_purchase_handlers(dp)
 
     # Регистрируем обработчик для простой покупки
-    dp.callback_query.register(
-        handle_simple_subscription_purchase, F.data == "simple_subscription_purchase"
-    )
+    dp.callback_query.register(handle_simple_subscription_purchase, F.data == 'simple_subscription_purchase')
 
 
 async def handle_simple_subscription_purchase(
@@ -4988,9 +4485,7 @@ async def handle_simple_subscription_purchase(
     texts = get_texts(db_user.language)
 
     if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
-        await callback.answer(
-            "Простая покупка подписки временно недоступна", show_alert=True
-        )
+        await callback.answer('Простая покупка подписки временно недоступна', show_alert=True)
         return
 
     # Определяем ограничение по устройствам для текущего режима
@@ -5023,45 +4518,43 @@ async def handle_simple_subscription_purchase(
 
     # Подготовим параметры простой подписки
     subscription_params = {
-        "period_days": settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
-        "device_limit": simple_device_limit,
-        "traffic_limit_gb": settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
-        "squad_uuid": settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID,
+        'period_days': settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
+        'device_limit': simple_device_limit,
+        'traffic_limit_gb': settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
+        'squad_uuid': settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID,
     }
 
     # Сохраняем параметры в состояние
     await state.update_data(subscription_params=subscription_params)
 
     # Проверяем баланс пользователя
-    user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
+    user_balance_kopeks = getattr(db_user, 'balance_kopeks', 0)
     # Рассчитываем цену подписки
     price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
         db,
         subscription_params,
         user=db_user,
-        resolved_squad_uuid=subscription_params.get("squad_uuid"),
+        resolved_squad_uuid=subscription_params.get('squad_uuid'),
     )
     logger.debug(
-        "SIMPLE_SUBSCRIPTION_PURCHASE_PRICE | user= | total= | base= | traffic= | devices= | servers= | discount",
+        'SIMPLE_SUBSCRIPTION_PURCHASE_PRICE | user= | total= | base= | traffic= | devices= | servers= | discount',
         db_user_id=db_user.id,
         price_kopeks=price_kopeks,
-        price_breakdown=price_breakdown.get("base_price", 0),
-        price_breakdown_2=price_breakdown.get("traffic_price", 0),
-        price_breakdown_3=price_breakdown.get("devices_price", 0),
-        price_breakdown_4=price_breakdown.get("servers_price", 0),
-        price_breakdown_5=price_breakdown.get("total_discount", 0),
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
     )
     traffic_text = (
-        "Безлимит"
-        if subscription_params["traffic_limit_gb"] == 0
-        else f'{subscription_params["traffic_limit_gb"]} ГБ'
+        'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params["traffic_limit_gb"]} ГБ'
     )
 
     if user_balance_kopeks >= price_kopeks:
         # Если баланс достаточный, предлагаем оплатить с баланса
         simple_lines = [
-            "<b>Простая покупка подписки</b>",
-            "",
+            '<b>Простая покупка подписки</b>',
+            '',
             f'Период: {subscription_params["period_days"]} дней',
         ]
 
@@ -5070,44 +4563,40 @@ async def handle_simple_subscription_purchase(
 
         simple_lines.extend(
             [
-                f"Трафик: {traffic_text}",
+                f'Трафик: {traffic_text}',
                 f'Сервер: {"Любой доступный" if not subscription_params["squad_uuid"] else "Выбранный"}',
-                "",
-                f"Стоимость: {settings.format_price(price_kopeks)}",
-                f"Ваш баланс: {settings.format_price(user_balance_kopeks)}",
-                "",
-                "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты.",
+                '',
+                f'Стоимость: {settings.format_price(price_kopeks)}',
+                f'Ваш баланс: {settings.format_price(user_balance_kopeks)}',
+                '',
+                'Вы можете оплатить подписку с баланса или выбрать другой способ оплаты.',
             ]
         )
 
-        message_text = "\n".join(simple_lines)
+        message_text = '\n'.join(simple_lines)
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text="Оплатить с баланса",
-                        callback_data="simple_subscription_pay_with_balance",
+                        text='Оплатить с баланса',
+                        callback_data='simple_subscription_pay_with_balance',
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text="Другие способы оплаты",
-                        callback_data="simple_subscription_other_payment_methods",
+                        text='Другие способы оплаты',
+                        callback_data='simple_subscription_other_payment_methods',
                     )
                 ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.BACK, callback_data="subscription_purchase"
-                    )
-                ],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_purchase')],
             ]
         )
     else:
         # Если баланс недостаточный, предлагаем внешние способы оплаты
         simple_lines = [
-            "<b>Простая покупка подписки</b>",
-            "",
+            '<b>Простая покупка подписки</b>',
+            '',
             f'Период: {subscription_params["period_days"]} дней',
         ]
 
@@ -5116,27 +4605,23 @@ async def handle_simple_subscription_purchase(
 
         simple_lines.extend(
             [
-                f"Трафик: {traffic_text}",
+                f'Трафик: {traffic_text}',
                 f'Сервер: {"Любой доступный" if not subscription_params["squad_uuid"] else "Выбранный"}',
-                "",
-                f"Стоимость: {settings.format_price(price_kopeks)}",
-                f"Ваш баланс: {settings.format_price(user_balance_kopeks)}",
-                "",
-                "Выберите способ оплаты:",
+                '',
+                f'Стоимость: {settings.format_price(price_kopeks)}',
+                f'Ваш баланс: {settings.format_price(user_balance_kopeks)}',
+                '',
+                'Выберите способ оплаты:',
             ]
         )
 
-        message_text = "\n".join(simple_lines)
+        message_text = '\n'.join(simple_lines)
 
         keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
 
-    await callback.message.edit_text(
-        message_text, reply_markup=keyboard, parse_mode="HTML"
-    )
+    await callback.message.edit_text(message_text, reply_markup=keyboard, parse_mode='HTML')
 
-    await state.set_state(
-        SubscriptionStates.waiting_for_simple_subscription_payment_method
-    )
+    await state.set_state(SubscriptionStates.waiting_for_simple_subscription_payment_method)
     await callback.answer()
 
 
@@ -5161,10 +4646,10 @@ async def _extend_existing_subscription(
 
     # Рассчитываем цену подписки (group discounts per-category)
     subscription_params = {
-        "period_days": period_days,
-        "device_limit": device_limit,
-        "traffic_limit_gb": traffic_limit_gb,
-        "squad_uuid": squad_uuid,
+        'period_days': period_days,
+        'device_limit': device_limit,
+        'traffic_limit_gb': traffic_limit_gb,
+        'squad_uuid': squad_uuid,
     }
     price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
         db,
@@ -5179,14 +4664,14 @@ async def _extend_existing_subscription(
 
     consume_promo = get_user_active_promo_discount_percent(db_user) > 0
     logger.warning(
-        "SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user= | total= | base= | traffic= | devices= | servers= | discount= | device_limit",
+        'SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user= | total= | base= | traffic= | devices= | servers= | discount= | device_limit',
         db_user_id=db_user.id,
         price_kopeks=price_kopeks,
-        price_breakdown=price_breakdown.get("base_price", 0),
-        price_breakdown_2=price_breakdown.get("traffic_price", 0),
-        price_breakdown_3=price_breakdown.get("devices_price", 0),
-        price_breakdown_4=price_breakdown.get("servers_price", 0),
-        price_breakdown_5=price_breakdown.get("total_discount", 0),
+        price_breakdown=price_breakdown.get('base_price', 0),
+        price_breakdown_2=price_breakdown.get('traffic_price', 0),
+        price_breakdown_3=price_breakdown.get('devices_price', 0),
+        price_breakdown_4=price_breakdown.get('servers_price', 0),
+        price_breakdown_5=price_breakdown.get('total_discount', 0),
         device_limit=device_limit,
     )
 
@@ -5194,13 +4679,13 @@ async def _extend_existing_subscription(
     if price_kopeks > 0 and db_user.balance_kopeks < price_kopeks:
         missing_kopeks = price_kopeks - db_user.balance_kopeks
         message_text = texts.t(
-            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            'ADDON_INSUFFICIENT_FUNDS_MESSAGE',
             (
-                "<b>Недостаточно средств</b>\n\n"
-                "Стоимость услуги: {required}\n"
-                "На балансе: {balance}\n"
-                "Не хватает: {missing}\n\n"
-                "Выберите способ пополнения. Сумма подставится автоматически."
+                '<b>Недостаточно средств</b>\n\n'
+                'Стоимость услуги: {required}\n'
+                'На балансе: {balance}\n'
+                'Не хватает: {missing}\n\n'
+                'Выберите способ пополнения. Сумма подставится автоматически.'
             ),
         ).format(
             required=texts.format_price(price_kopeks, round_kopeks=False),
@@ -5212,22 +4697,22 @@ async def _extend_existing_subscription(
         from app.services.user_cart_service import user_cart_service
 
         cart_data = {
-            "cart_mode": "extend",
-            "subscription_id": current_subscription.id,
-            "period_days": period_days,
-            "total_price": price_kopeks,
-            "user_id": db_user.id,
-            "saved_cart": True,
-            "missing_amount": missing_kopeks,
-            "return_to_cart": True,
-            "description": f"Продление подписки на {period_days} дней",
-            "device_limit": device_limit,
-            "devices": device_limit,
-            "traffic_limit_gb": traffic_limit_gb,
-            "traffic_gb": traffic_limit_gb,
-            "squad_uuid": squad_uuid,
-            "countries": [squad_uuid] if squad_uuid else [],
-            "consume_promo_offer": consume_promo,
+            'cart_mode': 'extend',
+            'subscription_id': current_subscription.id,
+            'period_days': period_days,
+            'total_price': price_kopeks,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing_kopeks,
+            'return_to_cart': True,
+            'description': f'Продление подписки на {period_days} дней',
+            'device_limit': device_limit,
+            'devices': device_limit,
+            'traffic_limit_gb': traffic_limit_gb,
+            'traffic_gb': traffic_limit_gb,
+            'squad_uuid': squad_uuid,
+            'countries': [squad_uuid] if squad_uuid else [],
+            'consume_promo_offer': consume_promo,
         }
 
         await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -5237,7 +4722,7 @@ async def _extend_existing_subscription(
             reply_markup=get_insufficient_balance_keyboard(
                 db_user.language, amount_kopeks=missing_kopeks, has_saved_cart=True
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await callback.answer()
         return
@@ -5247,13 +4732,13 @@ async def _extend_existing_subscription(
         db,
         db_user,
         price_kopeks,
-        f"Продление подписки на {period_days} дней",
+        f'Продление подписки на {period_days} дней',
         consume_promo_offer=consume_promo,
         mark_as_paid_subscription=True,
     )
 
     if not success:
-        await callback.answer("Ошибка списания средств", show_alert=True)
+        await callback.answer('Ошибка списания средств', show_alert=True)
         return
 
     # Обновляем параметры подписки
@@ -5264,30 +4749,24 @@ async def _extend_existing_subscription(
     if current_subscription.is_trial:
         # При продлении триальной подписки переводим её в обычную
         current_subscription.is_trial = False
-        current_subscription.status = "active"
+        current_subscription.status = 'active'
         # Убираем ограничения с триальной подписки
         current_subscription.traffic_limit_gb = traffic_limit_gb
         current_subscription.device_limit = device_limit
         # Если указан squad_uuid, добавляем его к существующим серверам
         if squad_uuid and squad_uuid not in current_subscription.connected_squads:
             # Используем += для безопасного добавления в список SQLAlchemy
-            current_subscription.connected_squads = (
-                current_subscription.connected_squads + [squad_uuid]
-            )
+            current_subscription.connected_squads = current_subscription.connected_squads + [squad_uuid]
     else:
         # Для обычной подписки просто продлеваем
         # Обновляем трафик и устройства, если нужно
         if traffic_limit_gb != 0:  # Если не безлимит, обновляем
             current_subscription.traffic_limit_gb = traffic_limit_gb
-        current_subscription.device_limit = max(
-            current_subscription.device_limit, device_limit
-        )
+        current_subscription.device_limit = max(current_subscription.device_limit, device_limit)
         # Если указан squad_uuid и его ещё нет в подписке, добавляем
         if squad_uuid and squad_uuid not in current_subscription.connected_squads:
             # Используем += для безопасного добавления в список SQLAlchemy
-            current_subscription.connected_squads = (
-                current_subscription.connected_squads + [squad_uuid]
-            )
+            current_subscription.connected_squads = current_subscription.connected_squads + [squad_uuid]
 
     # Продлеваем подписку
     if current_subscription.end_date > current_time:
@@ -5304,9 +4783,7 @@ async def _extend_existing_subscription(
     try:
         await db.commit()
     except Exception as commit_error:
-        logger.error(
-            "Ошибка сохранения продления подписки", error=commit_error, exc_info=True
-        )
+        logger.error('Ошибка сохранения продления подписки', error=commit_error, exc_info=True)
         await db.rollback()
         # Compensating refund: balance was already committed by subtract_user_balance
         try:
@@ -5316,18 +4793,18 @@ async def _extend_existing_subscription(
                 db,
                 db_user,
                 price_kopeks,
-                "Возврат: ошибка продления подписки",
+                'Возврат: ошибка продления подписки',
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
             )
         except Exception as refund_error:
             logger.critical(
-                "CRITICAL: не удалось вернуть средства после ошибки продления",
+                'CRITICAL: не удалось вернуть средства после ошибки продления',
                 user_id=db_user.id,
                 price_kopeks=price_kopeks,
                 refund_error=refund_error,
             )
-        await callback.answer("Ошибка продления подписки", show_alert=True)
+        await callback.answer('Ошибка продления подписки', show_alert=True)
         return
     await db.refresh(current_subscription)
     await db.refresh(db_user)
@@ -5339,20 +4816,20 @@ async def _extend_existing_subscription(
             db,
             current_subscription,
             reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
-            reset_reason="продление подписки",
+            reset_reason='продление подписки',
         )
         if remnawave_result:
-            logger.info("RemnaWave обновлен успешно")
+            logger.info('RemnaWave обновлен успешно')
         else:
-            logger.error("ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
+            logger.error('ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE')
     except Exception as e:
-        logger.error("ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE", error=e)
+        logger.error('ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         remnawave_retry_queue.enqueue(
             subscription_id=current_subscription.id,
             user_id=db_user.id,
-            action="update",
+            action='update',
         )
 
     # Создаём транзакцию
@@ -5361,7 +4838,7 @@ async def _extend_existing_subscription(
         user_id=db_user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
         amount_kopeks=price_kopeks,
-        description=f"Продление подписки на {period_days} дней",
+        description=f'Продление подписки на {period_days} дней',
     )
 
     # Отправляем уведомление админу
@@ -5378,26 +4855,24 @@ async def _extend_existing_subscription(
             balance_after=db_user.balance_kopeks,
         )
     except Exception as e:
-        logger.error("Ошибка отправки уведомления о продлении", error=e)
+        logger.error('Ошибка отправки уведомления о продлении', error=e)
 
     # Отправляем сообщение пользователю
     success_message = (
-        "Подписка успешно продлена!\n\n"
-        f"Добавлено: {period_days} дней\n"
+        'Подписка успешно продлена!\n\n'
+        f'Добавлено: {period_days} дней\n'
         f'Действует до: {format_local_datetime(new_end_date, "%d.%m.%Y %H:%M")}\n\n'
-        f"Списано: {texts.format_price(price_kopeks)}"
+        f'Списано: {texts.format_price(price_kopeks)}'
     )
 
     # Если это была триальная подписка, добавляем информацию о преобразовании
     if current_subscription.is_trial:
-        success_message += "\n Триальная подписка преобразована в платную"
+        success_message += '\n Триальная подписка преобразована в платную'
 
-    await callback.message.edit_text(
-        success_message, reply_markup=get_back_keyboard(db_user.language)
-    )
+    await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        "Пользователь продлил подписку на дней за ₽",
+        'Пользователь продлил подписку на дней за ₽',
         telegram_id=db_user.telegram_id,
         period_days=period_days,
         price_kopeks=price_kopeks / 100,

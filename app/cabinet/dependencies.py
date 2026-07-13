@@ -60,27 +60,27 @@ async def get_current_cabinet_user(
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail='Authentication required',
+            headers={'WWW-Authenticate': 'Bearer'},
         )
 
     token = credentials.credentials
-    payload = get_token_payload(token, expected_type="access")
+    payload = get_token_payload(token, expected_type='access')
 
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail='Invalid or expired token',
+            headers={'WWW-Authenticate': 'Bearer'},
         )
 
     try:
-        user_id = int(payload.get("sub"))
+        user_id = int(payload.get('sub'))
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail='Invalid token payload',
+            headers={'WWW-Authenticate': 'Bearer'},
         )
 
     user = await get_user_by_id(db, user_id)
@@ -88,14 +88,14 @@ async def get_current_cabinet_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            detail='User not found',
         )
 
     # Validate Telegram initData first — we need its outcome both for the
     # cross-account guard (existing) and for the DELETED auto-revival
     # (new). Reading the header always; verification only when it's
     # present.
-    init_data_raw = request.headers.get("X-Telegram-Init-Data")
+    init_data_raw = request.headers.get('X-Telegram-Init-Data')
     init_data_telegram_id: int | None = None
     init_data_matches_user = False
     if init_data_raw and user.telegram_id is not None:
@@ -104,11 +104,11 @@ async def get_current_cabinet_user(
         tg_user = validate_telegram_init_data(init_data_raw, max_age_seconds=86400 * 30)
         if tg_user is None:
             logger.warning(
-                "Telegram initData validation failed but header was present",
+                'Telegram initData validation failed but header was present',
                 jwt_user_id=user.id,
             )
         else:
-            init_data_telegram_id = tg_user.get("id")
+            init_data_telegram_id = tg_user.get('id')
             init_data_matches_user = init_data_telegram_id == user.telegram_id
             if not init_data_matches_user:
                 # Defense in depth: cross-validate Telegram identity.
@@ -117,15 +117,15 @@ async def get_current_cabinet_user(
                 # WebView shares localStorage across accounts on the
                 # same device.
                 logger.warning(
-                    "Telegram identity mismatch: JWT belongs to different user than current Telegram account",
+                    'Telegram identity mismatch: JWT belongs to different user than current Telegram account',
                     jwt_user_id=user.id,
                     jwt_telegram_id=user.telegram_id,
                     init_data_telegram_id=init_data_telegram_id,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Session belongs to a different Telegram account. Please restart the app.",
-                    headers={"WWW-Authenticate": "Bearer"},
+                    detail='Session belongs to a different Telegram account. Please restart the app.',
+                    headers={'WWW-Authenticate': 'Bearer'},
                 )
 
     # Blacklist check happens BEFORE the status branching: a blacklisted
@@ -134,15 +134,13 @@ async def get_current_cabinet_user(
     # leaking the existence of a DELETED-but-banned row via the friendly
     # `account_deleted` error code (security audit recommendation).
     if user.telegram_id is not None:
-        is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(
-            user.telegram_id, user.username
-        )
+        is_blacklisted, blacklist_reason = await blacklist_service.is_user_blacklisted(user.telegram_id, user.username)
         if is_blacklisted:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
-                    "code": "blacklisted",
-                    "message": blacklist_reason or "Доступ запрещен",
+                    'code': 'blacklisted',
+                    'message': blacklist_reason or 'Доступ запрещен',
                 },
             )
 
@@ -151,13 +149,11 @@ async def get_current_cabinet_user(
         # proving the same Telegram identity may be auto-revived: the
         # signature on initData is the moral equivalent of a fresh login.
         can_auto_revive = (
-            user.status == UserStatus.DELETED.value
-            and user.telegram_id is not None
-            and init_data_matches_user
+            user.status == UserStatus.DELETED.value and user.telegram_id is not None and init_data_matches_user
         )
         if can_auto_revive:
             try:
-                await revive_deleted_user(db, user, source="cabinet_dependencies")
+                await revive_deleted_user(db, user, source='cabinet_dependencies')
                 # revive_deleted_user no longer commits — caller owns
                 # the transaction. Persist before further checks (the
                 # downstream `cabinet_last_login` throttle will commit
@@ -167,7 +163,7 @@ async def get_current_cabinet_user(
             except NotDeletedError:
                 # Raced — another request already revived. Treat as success.
                 logger.info(
-                    "Auto-revival race: user already revived by concurrent request",
+                    'Auto-revival race: user already revived by concurrent request',
                     user_id=user.id,
                 )
         elif user.status == UserStatus.DELETED.value:
@@ -176,14 +172,12 @@ async def get_current_cabinet_user(
             # show the "open bot" screen.
             bot_username = settings.get_bot_username()
             detail: dict[str, str | None] = {
-                "code": "account_deleted",
-                "message": "Account was deactivated for inactivity. Open the bot and press /start to restore access.",
+                'code': 'account_deleted',
+                'message': 'Account was deactivated for inactivity. Open the bot and press /start to restore access.',
             }
             if bot_username:
-                detail["bot_username"] = bot_username
-                detail["telegram_deep_link"] = (
-                    f"https://t.me/{bot_username}?start=revive"
-                )
+                detail['bot_username'] = bot_username
+                detail['telegram_deep_link'] = f'https://t.me/{bot_username}?start=revive'
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=detail,
@@ -193,7 +187,7 @@ async def get_current_cabinet_user(
             # message — these are admin actions, not user-recoverable.
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is not active",
+                detail='User account is not active',
             )
 
     # Blacklist check was hoisted ABOVE the status-branching block (see
@@ -213,10 +207,9 @@ async def get_current_cabinet_user(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={
-                    "code": "maintenance",
-                    "message": maintenance_service.get_maintenance_message()
-                    or "Service is under maintenance",
-                    "reason": status_info.get("reason"),
+                    'code': 'maintenance',
+                    'message': maintenance_service.get_maintenance_message() or 'Service is under maintenance',
+                    'reason': status_info.get('reason'),
                 },
             )
 
@@ -234,33 +227,24 @@ async def get_current_cabinet_user(
                     channel_subscription_service,
                 )
 
-                channels_with_status = (
-                    await channel_subscription_service.get_channels_with_status(
-                        user.telegram_id
-                    )
-                )
+                channels_with_status = await channel_subscription_service.get_channels_with_status(user.telegram_id)
                 is_subscribed = (
-                    all(ch["is_subscribed"] for ch in channels_with_status)
-                    if channels_with_status
-                    else True
+                    all(ch['is_subscribed'] for ch in channels_with_status) if channels_with_status else True
                 )
 
                 if not is_subscribed:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail={
-                            "code": "channel_subscription_required",
-                            "message": "Please subscribe to the required channels to continue",
-                            "channels": channels_with_status,
+                            'code': 'channel_subscription_required',
+                            'message': 'Please subscribe to the required channels to continue',
+                            'channels': channels_with_status,
                         },
                     )
 
     # Throttled update of cabinet_last_login (at most every 5 minutes)
     now = datetime.now(UTC)
-    if (
-        not user.cabinet_last_login
-        or (now - user.cabinet_last_login).total_seconds() > 300
-    ):
+    if not user.cabinet_last_login or (now - user.cabinet_last_login).total_seconds() > 300:
         try:
             user.cabinet_last_login = now
             await db.commit()
@@ -284,31 +268,31 @@ async def get_optional_cabinet_user(
         return None
 
     token = credentials.credentials
-    payload = get_token_payload(token, expected_type="access")
+    payload = get_token_payload(token, expected_type='access')
 
     if not payload:
         return None
 
     try:
-        user_id = int(payload.get("sub"))
+        user_id = int(payload.get('sub'))
     except (TypeError, ValueError):
         return None
 
     user = await get_user_by_id(db, user_id)
 
-    if not user or user.status != "active":
+    if not user or user.status != 'active':
         return None
 
     # Cross-validate Telegram identity (same as get_current_cabinet_user)
-    init_data_raw = request.headers.get("X-Telegram-Init-Data")
+    init_data_raw = request.headers.get('X-Telegram-Init-Data')
     if init_data_raw and user.telegram_id is not None:
         tg_user = validate_telegram_init_data(init_data_raw, max_age_seconds=86400 * 30)
-        if tg_user and tg_user.get("id") != user.telegram_id:
+        if tg_user and tg_user.get('id') != user.telegram_id:
             logger.warning(
-                "Telegram identity mismatch in optional auth",
+                'Telegram identity mismatch in optional auth',
                 jwt_user_id=user.id,
                 jwt_telegram_id=user.telegram_id,
-                init_data_telegram_id=tg_user.get("id"),
+                init_data_telegram_id=tg_user.get('id'),
             )
             return None
 
@@ -349,15 +333,13 @@ async def get_current_admin_user(
     # RBAC check: user has any active role with level > 0
     from app.database.crud.rbac import UserRoleCRUD
 
-    _permissions, _role_names, max_level = await UserRoleCRUD.get_user_permissions(
-        db, user.id
-    )
+    _permissions, _role_names, max_level = await UserRoleCRUD.get_user_permissions(db, user.id)
     if max_level > 0:
         return user
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Admin access required",
+        detail='Admin access required',
     )
 
 
@@ -375,9 +357,7 @@ def require_permission(*permissions: str):
         async def list_users(user: User = Depends(require_permission("users:read"))): ...
     """
     if not permissions:
-        raise ValueError(
-            "require_permission() requires at least one permission argument"
-        )
+        raise ValueError('require_permission() requires at least one permission argument')
 
     async def dependency(
         request: Request,
@@ -389,16 +369,16 @@ def require_permission(*permissions: str):
         try:
             client_ip = get_client_ip(request)
         except HTTPException:
-            logger.warning("Unable to determine client IP in require_permission")
-            client_ip = "unknown"
-        user_agent = request.headers.get("user-agent", "")
+            logger.warning('Unable to determine client IP in require_permission')
+            client_ip = 'unknown'
+        user_agent = request.headers.get('user-agent', '')
 
         # Extract resource_type from the first permission (section before ':')
         resource_type = None
         if permissions:
             first_perm = permissions[0]
-            if ":" in first_perm:
-                resource_type = first_perm.split(":", maxsplit=1)[0]
+            if ':' in first_perm:
+                resource_type = first_perm.split(':', maxsplit=1)[0]
 
         for perm in permissions:
             allowed, reason = await PermissionService.check_permission(
@@ -413,34 +393,34 @@ def require_permission(*permissions: str):
                     user_id=user.id,
                     action=perm,
                     resource_type=resource_type,
-                    status="denied",
+                    status='denied',
                     ip_address=client_ip,
                     user_agent=user_agent,
                     request_method=request.method,
                     request_path=str(request.url.path),
-                    details={"reason": reason},
+                    details={'reason': reason},
                 )
                 await db.commit()
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Permission denied: {reason}",
+                    detail=f'Permission denied: {reason}',
                 )
 
         # Capture request details
         details: dict = {
-            "method": request.method,
-            "path": str(request.url.path),
+            'method': request.method,
+            'path': str(request.url.path),
         }
         query_params = dict(request.query_params)
         if query_params:
-            details["query_params"] = query_params
-        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            details['query_params'] = query_params
+        if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
             try:
                 body = await request.body()
                 if body:
                     import json
 
-                    details["request_body"] = json.loads(body)
+                    details['request_body'] = json.loads(body)
             except Exception:
                 pass
 
@@ -448,9 +428,9 @@ def require_permission(*permissions: str):
         await PermissionService.log_action(
             db,
             user_id=user.id,
-            action=",".join(permissions),
+            action=','.join(permissions),
             resource_type=resource_type,
-            status="success",
+            status='success',
             ip_address=client_ip,
             user_agent=user_agent,
             request_method=request.method,

@@ -35,20 +35,14 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-TARIFF_PURCHASE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "app"
-    / "handlers"
-    / "subscription"
-    / "tariff_purchase.py"
-)
+TARIFF_PURCHASE_PATH = Path(__file__).resolve().parents[2] / 'app' / 'handlers' / 'subscription' / 'tariff_purchase.py'
 
 
 def _find_async_function(tree: ast.Module, name: str) -> ast.AsyncFunctionDef:
     for node in ast.walk(tree):
         if isinstance(node, ast.AsyncFunctionDef) and node.name == name:
             return node
-    raise AssertionError(f"async function {name!r} not found in tariff_purchase.py")
+    raise AssertionError(f'async function {name!r} not found in tariff_purchase.py')
 
 
 def _function_source(source: str, func: ast.AsyncFunctionDef) -> str:
@@ -60,7 +54,7 @@ def _function_source(source: str, func: ast.AsyncFunctionDef) -> str:
     """
     lines = source.splitlines(keepends=True)
     end_line = func.end_lineno or len(lines)
-    return "".join(lines[func.lineno - 1 : end_line])
+    return ''.join(lines[func.lineno - 1 : end_line])
 
 
 # ---------------------------------------------------------------------------
@@ -75,23 +69,23 @@ def test_select_tariff_period_resolves_and_pins_target_subscription_id() -> None
     ``confirm_tariff_purchase`` falls back to a race-vulnerable
     tariff-level lookup.
     """
-    source = TARIFF_PURCHASE_PATH.read_text(encoding="utf-8")
+    source = TARIFF_PURCHASE_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
-    func = _find_async_function(tree, "select_tariff_period")
+    func = _find_async_function(tree, 'select_tariff_period')
     body = _function_source(source, func)
 
     # Must look up the existing sub by (user, tariff) inside the preview.
-    assert "get_subscription_by_user_and_tariff" in body, (
-        "select_tariff_period must resolve the target subscription at preview time "
-        "so confirm_tariff_purchase can pin it"
+    assert 'get_subscription_by_user_and_tariff' in body, (
+        'select_tariff_period must resolve the target subscription at preview time '
+        'so confirm_tariff_purchase can pin it'
     )
 
     # Must store target_subscription_id in FSM. Pin the literal kwarg
     # name so a refactor that renames it (and breaks the confirm-side
     # reader) trips this test.
-    assert "target_subscription_id=" in body, (
-        "select_tariff_period must write target_subscription_id into FSM state — "
-        "confirm_tariff_purchase reads this key to pin the exact subscription user "
+    assert 'target_subscription_id=' in body, (
+        'select_tariff_period must write target_subscription_id into FSM state — '
+        'confirm_tariff_purchase reads this key to pin the exact subscription user '
         'clicked on, avoiding the race that produced the "Тариф уже активен" bug'
     )
 
@@ -106,24 +100,24 @@ def test_confirm_tariff_purchase_reads_target_subscription_id_from_fsm() -> None
     ``target_subscription_id`` from FSM state BEFORE falling back to
     ``get_subscription_by_user_and_tariff``.
     """
-    source = TARIFF_PURCHASE_PATH.read_text(encoding="utf-8")
+    source = TARIFF_PURCHASE_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
-    func = _find_async_function(tree, "confirm_tariff_purchase")
+    func = _find_async_function(tree, 'confirm_tariff_purchase')
     body = _function_source(source, func)
 
-    assert "target_subscription_id" in body, (
-        "confirm_tariff_purchase must read target_subscription_id from FSM state to "
-        "pin the exact subscription user confirmed on — without it, this handler "
-        "races with concurrent panel webhooks and produces the duplicate-key bug"
+    assert 'target_subscription_id' in body, (
+        'confirm_tariff_purchase must read target_subscription_id from FSM state to '
+        'pin the exact subscription user confirmed on — without it, this handler '
+        'races with concurrent panel webhooks and produces the duplicate-key bug'
     )
 
     # Must call the ownership-checked lookup, not the unscoped one.
     # ``get_subscription_by_id_for_user`` enforces ``Subscription.user_id == user_id``
     # which is the IDOR protection we want at the FSM-deserialization
     # boundary (the pinned id could in principle be stale or tampered).
-    assert "get_subscription_by_id_for_user" in body, (
-        "confirm_tariff_purchase must look up the pinned subscription via "
-        "get_subscription_by_id_for_user (IDOR-safe), not the unscoped variant"
+    assert 'get_subscription_by_id_for_user' in body, (
+        'confirm_tariff_purchase must look up the pinned subscription via '
+        'get_subscription_by_id_for_user (IDOR-safe), not the unscoped variant'
     )
 
     # The order must be: pinned-id FIRST, fallback SECOND. We compare
@@ -133,15 +127,13 @@ def test_confirm_tariff_purchase_reads_target_subscription_id_from_fsm() -> None
     pinned_idx = body.find("'target_subscription_id'")
     if pinned_idx < 0:
         pinned_idx = body.find('"target_subscription_id"')
-    fallback_call_idx = body.find("get_subscription_by_user_and_tariff(")
-    assert pinned_idx >= 0, "target_subscription_id read not found in confirm body"
-    assert (
-        fallback_call_idx >= 0
-    ), "tariff-level fallback CALL not found in confirm body"
+    fallback_call_idx = body.find('get_subscription_by_user_and_tariff(')
+    assert pinned_idx >= 0, 'target_subscription_id read not found in confirm body'
+    assert fallback_call_idx >= 0, 'tariff-level fallback CALL not found in confirm body'
     assert pinned_idx < fallback_call_idx, (
-        f"confirm_tariff_purchase must READ target_subscription_id from FSM "
-        f"BEFORE calling get_subscription_by_user_and_tariff. Reversing the "
-        f"order re-introduces the race. (pinned_idx={pinned_idx}, call_idx={fallback_call_idx})"
+        f'confirm_tariff_purchase must READ target_subscription_id from FSM '
+        f'BEFORE calling get_subscription_by_user_and_tariff. Reversing the '
+        f'order re-introduces the race. (pinned_idx={pinned_idx}, call_idx={fallback_call_idx})'
     )
 
 
@@ -151,20 +143,17 @@ def test_confirm_tariff_purchase_guards_against_tariff_divergence() -> None:
     and confirm), we must fall back rather than extend a subscription
     of a different tariff with the new tariff's parameters.
     """
-    source = TARIFF_PURCHASE_PATH.read_text(encoding="utf-8")
+    source = TARIFF_PURCHASE_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
-    func = _find_async_function(tree, "confirm_tariff_purchase")
+    func = _find_async_function(tree, 'confirm_tariff_purchase')
     body = _function_source(source, func)
 
     # The divergence guard must compare tariff_ids. Pin the exact
     # pattern so a refactor that drops this check trips the test.
-    assert (
-        "tariff_id != tariff_id" in body
-        or "existing_sub.tariff_id != tariff_id" in body
-    ), (
-        "confirm_tariff_purchase must guard against the pinned subscription "
-        "pointing to a different tariff than the confirm carries — otherwise "
-        "extending it with the wrong tariff parameters would corrupt state"
+    assert 'tariff_id != tariff_id' in body or 'existing_sub.tariff_id != tariff_id' in body, (
+        'confirm_tariff_purchase must guard against the pinned subscription '
+        'pointing to a different tariff than the confirm carries — otherwise '
+        'extending it with the wrong tariff parameters would corrupt state'
     )
 
 
@@ -180,14 +169,14 @@ def test_confirm_tariff_purchase_does_not_use_only_tariff_lookup() -> None:
     ``get_subscription_by_user_and_tariff`` call with no FSM-pinned
     override. Detect a regression to that shape.
     """
-    source = TARIFF_PURCHASE_PATH.read_text(encoding="utf-8")
+    source = TARIFF_PURCHASE_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
-    func = _find_async_function(tree, "confirm_tariff_purchase")
+    func = _find_async_function(tree, 'confirm_tariff_purchase')
     body = _function_source(source, func)
 
     # If `target_subscription_id` is absent, the fix has been removed.
-    assert "target_subscription_id" in body, (
-        "confirm_tariff_purchase no longer pins the FSM target_subscription_id — "
-        "this re-opens the race-condition bug fixed by commit handling the "
-        "two-subscriptions-same-tariff renewal scenario"
+    assert 'target_subscription_id' in body, (
+        'confirm_tariff_purchase no longer pins the FSM target_subscription_id — '
+        'this re-opens the race-condition bug fixed by commit handling the '
+        'two-subscriptions-same-tariff renewal scenario'
     )

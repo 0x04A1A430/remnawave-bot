@@ -39,7 +39,7 @@ class EventEmitter:
         """Зарегистрировать WebSocket подключение."""
         self._websocket_connections.add(websocket)
         logger.debug(
-            "WebSocket connection registered. Total",
+            'WebSocket connection registered. Total',
             websocket_connections_count=len(self._websocket_connections),
         )
 
@@ -47,7 +47,7 @@ class EventEmitter:
         """Отменить регистрацию WebSocket подключения."""
         self._websocket_connections.discard(websocket)
         logger.debug(
-            "WebSocket connection unregistered. Total",
+            'WebSocket connection unregistered. Total',
             websocket_connections_count=len(self._websocket_connections),
         )
 
@@ -59,9 +59,9 @@ class EventEmitter:
     ) -> None:
         """Отправить событие всем подписчикам."""
         event_data = {
-            "type": event_type,
-            "payload": payload,
-            "timestamp": str(datetime.now(UTC)),
+            'type': event_type,
+            'payload': payload,
+            'timestamp': str(datetime.now(UTC)),
         }
 
         # Вызываем локальные слушатели
@@ -73,9 +73,7 @@ class EventEmitter:
                     else:
                         callback(event_data)
                 except Exception as error:
-                    logger.exception(
-                        "Error in event listener", event_type=event_type, error=error
-                    )
+                    logger.exception('Error in event listener', event_type=event_type, error=error)
 
         # Отправляем через WebSocket
         await self._broadcast_to_websockets(event_data)
@@ -96,7 +94,7 @@ class EventEmitter:
             try:
                 await ws.send_text(message)
             except Exception as error:
-                logger.warning("Failed to send WebSocket message", error=error)
+                logger.warning('Failed to send WebSocket message', error=error)
                 disconnected.add(ws)
 
         # Удаляем отключенные соединения

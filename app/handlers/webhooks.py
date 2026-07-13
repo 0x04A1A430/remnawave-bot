@@ -26,37 +26,37 @@ def set_webhook_bot(bot: Bot) -> None:
 
 async def tribute_webhook(request):
     try:
-        signature = request.headers.get("trbt-signature", "")
+        signature = request.headers.get('trbt-signature', '')
         payload = await request.text()
 
         tribute_service = TributeService()
 
         if not tribute_service.verify_webhook_signature(payload, signature):
-            logger.warning("Неверная подпись Tribute webhook")
-            return web.Response(status=400, text="Invalid signature")
+            logger.warning('Неверная подпись Tribute webhook')
+            return web.Response(status=400, text='Invalid signature')
 
         webhook_data = await request.json()
         processed_data = await tribute_service.process_webhook(webhook_data)
 
         if not processed_data:
-            logger.error("Ошибка обработки Tribute webhook")
-            return web.Response(status=400, text="Invalid webhook data")
+            logger.error('Ошибка обработки Tribute webhook')
+            return web.Response(status=400, text='Invalid webhook data')
 
         async with AsyncSessionLocal() as db:
             try:
                 existing_transaction = await get_transaction_by_external_id(
-                    db, processed_data["payment_id"], PaymentMethod.TRIBUTE
+                    db, processed_data['payment_id'], PaymentMethod.TRIBUTE
                 )
 
                 if existing_transaction:
                     logger.info(
-                        "Платеж уже обработан",
-                        processed_data=processed_data["payment_id"],
+                        'Платеж уже обработан',
+                        processed_data=processed_data['payment_id'],
                     )
-                    return web.Response(status=200, text="Already processed")
+                    return web.Response(status=200, text='Already processed')
 
-                if processed_data["status"] == "completed":
-                    user = await get_user_by_id(db, processed_data["user_id"])
+                if processed_data['status'] == 'completed':
+                    user = await get_user_by_id(db, processed_data['user_id'])
 
                     if user:
                         # Атомарно: баланс и единственная DEPOSIT-транзакция (с external_id)
@@ -67,7 +67,7 @@ async def tribute_webhook(request):
                         await add_user_balance(
                             db,
                             user,
-                            processed_data["amount_kopeks"],
+                            processed_data['amount_kopeks'],
                             f'Пополнение через Tribute: {processed_data["payment_id"]}',
                             create_transaction=False,
                             commit=False,
@@ -77,37 +77,37 @@ async def tribute_webhook(request):
                             db=db,
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
-                            amount_kopeks=processed_data["amount_kopeks"],
-                            description="Пополнение через Tribute",
+                            amount_kopeks=processed_data['amount_kopeks'],
+                            description='Пополнение через Tribute',
                             payment_method=PaymentMethod.TRIBUTE,
-                            external_id=processed_data["payment_id"],
+                            external_id=processed_data['payment_id'],
                             commit=False,
                         )
 
                         logger.info(
-                            "Обработан Tribute платеж",
-                            processed_data=processed_data["payment_id"],
+                            'Обработан Tribute платеж',
+                            processed_data=processed_data['payment_id'],
                         )
 
                 await db.commit()
-                return web.Response(status=200, text="OK")
+                return web.Response(status=200, text='OK')
 
             except Exception as e:
-                logger.error("Ошибка обработки Tribute webhook", error=e)
+                logger.error('Ошибка обработки Tribute webhook', error=e)
                 await db.rollback()
-                return web.Response(status=500, text="Internal error")
+                return web.Response(status=500, text='Internal error')
 
     except Exception as e:
-        logger.error("Ошибка в Tribute webhook", error=e)
-        return web.Response(status=500, text="Internal error")
+        logger.error('Ошибка в Tribute webhook', error=e)
+        return web.Response(status=500, text='Internal error')
 
 
 async def handle_successful_payment(message: types.Message):
     try:
         payment = message.successful_payment
 
-        payload_parts = payment.invoice_payload.split("_")
-        if len(payload_parts) >= 3 and payload_parts[0] == "balance":
+        payload_parts = payment.invoice_payload.split('_')
+        if len(payload_parts) >= 3 and payload_parts[0] == 'balance':
             user_id = int(payload_parts[1])
             amount_kopeks = int(payload_parts[2])
 
@@ -121,7 +121,7 @@ async def handle_successful_payment(message: types.Message):
 
                     if existing_transaction:
                         logger.info(
-                            "Stars платеж уже обработан",
+                            'Stars платеж уже обработан',
                             telegram_payment_charge_id=payment.telegram_payment_charge_id,
                         )
                         return
@@ -136,7 +136,7 @@ async def handle_successful_payment(message: types.Message):
                             db,
                             user,
                             amount_kopeks,
-                            "Пополнение через Telegram Stars",
+                            'Пополнение через Telegram Stars',
                             create_transaction=False,
                             commit=False,
                         )
@@ -146,41 +146,37 @@ async def handle_successful_payment(message: types.Message):
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=amount_kopeks,
-                            description="Пополнение через Telegram Stars",
+                            description='Пополнение через Telegram Stars',
                             payment_method=PaymentMethod.TELEGRAM_STARS,
                             external_id=payment.telegram_payment_charge_id,
                             commit=False,
                         )
 
                         await message.answer(
-                            f"Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n"
-                            "Средства зачислены на ваш баланс!"
+                            f'Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n'
+                            'Средства зачислены на ваш баланс!'
                         )
 
                         logger.info(
-                            "Обработан Stars платеж",
+                            'Обработан Stars платеж',
                             telegram_payment_charge_id=payment.telegram_payment_charge_id,
                         )
 
                     await db.commit()
 
                 except Exception as e:
-                    logger.error("Ошибка обработки Stars платежа", error=e)
+                    logger.error('Ошибка обработки Stars платежа', error=e)
                     await db.rollback()
 
     except Exception as e:
-        logger.error("Ошибка в обработчике Stars платежа", error=e)
+        logger.error('Ошибка в обработчике Stars платежа', error=e)
 
 
 async def handle_pre_checkout_query(pre_checkout_query: types.PreCheckoutQuery):
     try:
         await pre_checkout_query.answer(ok=True)
-        logger.info(
-            "Pre-checkout query принят", pre_checkout_query_id=pre_checkout_query.id
-        )
+        logger.info('Pre-checkout query принят', pre_checkout_query_id=pre_checkout_query.id)
 
     except Exception as e:
-        logger.error("Ошибка в pre-checkout query", error=e)
-        await pre_checkout_query.answer(
-            ok=False, error_message="Ошибка обработки платежа"
-        )
+        logger.error('Ошибка в pre-checkout query', error=e)
+        await pre_checkout_query.answer(ok=False, error_message='Ошибка обработки платежа')

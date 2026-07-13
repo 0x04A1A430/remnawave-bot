@@ -20,7 +20,7 @@ class DisposableEmailService:
     If the download fails, the service falls back to an empty set (no blocking).
     """
 
-    DOMAINS_URL = "https://raw.githubusercontent.com/disposable/disposable-email-domains/master/domains.txt"
+    DOMAINS_URL = 'https://raw.githubusercontent.com/disposable/disposable-email-domains/master/domains.txt'
     UPDATE_INTERVAL_HOURS = 24
 
     def __init__(self) -> None:
@@ -34,7 +34,7 @@ class DisposableEmailService:
         await self._update_domains()
         self._task = asyncio.create_task(self._periodic_loop())
         logger.info(
-            "DisposableEmailService started (domains loaded)",
+            'DisposableEmailService started (domains loaded)',
             domain_count=self._domain_count,
         )
 
@@ -47,7 +47,7 @@ class DisposableEmailService:
             except asyncio.CancelledError:
                 pass
             self._task = None
-        logger.info("DisposableEmailService stopped")
+        logger.info('DisposableEmailService stopped')
 
     async def _update_domains(self) -> None:
         """Fetch domains.txt from GitHub and swap the in-memory set."""
@@ -58,7 +58,7 @@ class DisposableEmailService:
             ):
                 if resp.status != 200:
                     logger.error(
-                        "Failed to fetch disposable domains: HTTP",
+                        'Failed to fetch disposable domains: HTTP',
                         resp_status=resp.status,
                     )
                     return
@@ -66,21 +66,19 @@ class DisposableEmailService:
                 text = await resp.text()
 
             domains = frozenset(
-                line.strip().lower()
-                for line in text.splitlines()
-                if line.strip() and not line.startswith("#")
+                line.strip().lower() for line in text.splitlines() if line.strip() and not line.startswith('#')
             )
 
             self._domains = domains
             self._domain_count = len(domains)
             self._last_updated = datetime.now(UTC)
             logger.info(
-                "Disposable email domains updated: domains",
+                'Disposable email domains updated: domains',
                 domain_count=self._domain_count,
             )
 
         except Exception:
-            logger.exception("Error updating disposable email domains")
+            logger.exception('Error updating disposable email domains')
 
     async def _periodic_loop(self) -> None:
         """Sleep then refresh, repeating forever until cancelled."""
@@ -93,14 +91,14 @@ class DisposableEmailService:
 
         Returns False when the feature is disabled via settings.
         """
-        if not getattr(settings, "DISPOSABLE_EMAIL_CHECK_ENABLED", True):
+        if not getattr(settings, 'DISPOSABLE_EMAIL_CHECK_ENABLED', True):
             return False
 
         if not self._domains:
             return False
 
         try:
-            domain = email.rsplit("@", 1)[1].lower()
+            domain = email.rsplit('@', 1)[1].lower()
         except IndexError:
             return False
 
@@ -109,12 +107,10 @@ class DisposableEmailService:
     def get_status(self) -> dict:
         """Return service status for monitoring / health checks."""
         return {
-            "enabled": getattr(settings, "DISPOSABLE_EMAIL_CHECK_ENABLED", True),
-            "domain_count": self._domain_count,
-            "last_updated": (
-                self._last_updated.isoformat() if self._last_updated else None
-            ),
-            "running": self._task is not None and not self._task.done(),
+            'enabled': getattr(settings, 'DISPOSABLE_EMAIL_CHECK_ENABLED', True),
+            'domain_count': self._domain_count,
+            'last_updated': (self._last_updated.isoformat() if self._last_updated else None),
+            'running': self._task is not None and not self._task.done(),
         }
 
 

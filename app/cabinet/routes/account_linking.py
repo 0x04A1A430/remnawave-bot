@@ -60,14 +60,14 @@ from .auth import _create_auth_response, _store_refresh_token, _user_to_response
 logger = structlog.get_logger(__name__)
 
 
-OAuthProviderName = Literal["google", "yandex", "discord", "vk"]
+OAuthProviderName = Literal['google', 'yandex', 'discord', 'vk']
 
 # Ensure OAuthProviderName Literal stays in sync with OAUTH_PROVIDER_COLUMNS
-_EXPECTED_PROVIDERS = {"google", "yandex", "discord", "vk"}
+_EXPECTED_PROVIDERS = {'google', 'yandex', 'discord', 'vk'}
 if set(OAUTH_PROVIDER_COLUMNS.keys()) != _EXPECTED_PROVIDERS:
     raise RuntimeError(
-        f"OAuthProviderName Literal is out of sync with OAUTH_PROVIDER_COLUMNS: "
-        f"{set(OAUTH_PROVIDER_COLUMNS.keys())} != {_EXPECTED_PROVIDERS}"
+        f'OAuthProviderName Literal is out of sync with OAUTH_PROVIDER_COLUMNS: '
+        f'{set(OAUTH_PROVIDER_COLUMNS.keys())} != {_EXPECTED_PROVIDERS}'
     )
 
 
@@ -82,9 +82,9 @@ class OAuthStateData(TypedDict):
 
 def _get_active_providers() -> list[str]:
     """Вернуть список активных провайдеров аутентификации (только включённые)."""
-    providers: list[str] = ["telegram"]
+    providers: list[str] = ['telegram']
     if settings.is_cabinet_email_auth_enabled():
-        providers.append("email")
+        providers.append('email')
     providers.extend(settings.get_enabled_oauth_provider_names())
     return providers
 
@@ -114,14 +114,10 @@ class LinkCallbackRequest(BaseModel):
         ...,
         min_length=1,
         max_length=2048,
-        description="Authorization code from provider",
+        description='Authorization code from provider',
     )
-    state: str = Field(
-        ..., min_length=1, max_length=128, description="CSRF state token"
-    )
-    device_id: str | None = Field(
-        None, max_length=256, description="Device ID from VK ID callback"
-    )
+    state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
+    device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
 
 
 class LinkCallbackResponse(BaseModel):
@@ -139,51 +135,35 @@ class LinkTelegramRequest(BaseModel):
     """Request for linking Telegram account. Supply EITHER init_data, id_token, OR widget fields."""
 
     # Mini App: Telegram WebApp initData
-    init_data: str | None = Field(
-        None, max_length=4096, description="Telegram WebApp initData string"
-    )
+    init_data: str | None = Field(None, max_length=4096, description='Telegram WebApp initData string')
     # OIDC: id_token from Telegram Login popup
-    id_token: str | None = Field(
-        None, max_length=4096, description="Telegram OIDC id_token (JWT)"
-    )
+    id_token: str | None = Field(None, max_length=4096, description='Telegram OIDC id_token (JWT)')
     # Login Widget fields
-    id: int | None = Field(None, description="Telegram user ID from Login Widget")
-    first_name: str | None = Field(
-        None, max_length=256, description="User's first name"
-    )
+    id: int | None = Field(None, description='Telegram user ID from Login Widget')
+    first_name: str | None = Field(None, max_length=256, description="User's first name")
     last_name: str | None = Field(None, max_length=256, description="User's last name")
     username: str | None = Field(None, max_length=256, description="User's username")
     photo_url: str | None = Field(None, max_length=2048, description="User's photo URL")
-    auth_date: int | None = Field(None, description="Unix timestamp of authentication")
+    auth_date: int | None = Field(None, description='Unix timestamp of authentication')
     hash: str | None = Field(
         None,
         min_length=64,
         max_length=64,
-        description="Authentication hash (SHA-256 hex)",
+        description='Authentication hash (SHA-256 hex)',
     )
 
-    @model_validator(mode="after")
-    def check_exclusive(self) -> "LinkTelegramRequest":
+    @model_validator(mode='after')
+    def check_exclusive(self) -> 'LinkTelegramRequest':
         has_init = self.init_data is not None
         has_oidc = self.id_token is not None
-        has_widget = (
-            self.id is not None or self.hash is not None or self.auth_date is not None
-        )
+        has_widget = self.id is not None or self.hash is not None or self.auth_date is not None
         modes = sum([has_init, has_oidc, has_widget])
         if modes > 1:
-            raise ValueError(
-                "Provide exactly one of: init_data, id_token, or Login Widget fields"
-            )
+            raise ValueError('Provide exactly one of: init_data, id_token, or Login Widget fields')
         if modes == 0:
-            raise ValueError(
-                "Provide one of: init_data, id_token, or Login Widget fields (id, auth_date, hash)"
-            )
-        if has_widget and not (
-            self.id is not None and self.auth_date is not None and self.hash is not None
-        ):
-            raise ValueError(
-                "Login Widget mode requires id, auth_date, and hash fields"
-            )
+            raise ValueError('Provide one of: init_data, id_token, or Login Widget fields (id, auth_date, hash)')
+        if has_widget and not (self.id is not None and self.auth_date is not None and self.hash is not None):
+            raise ValueError('Login Widget mode requires id, auth_date, and hash fields')
         return self
 
 
@@ -216,9 +196,7 @@ class MergePreviewResponse(BaseModel):
 
 
 class MergeRequest(BaseModel):
-    keep_subscription_from: int = Field(
-        ..., description="User ID whose subscription to keep"
-    )
+    keep_subscription_from: int = Field(..., description='User ID whose subscription to keep')
 
 
 class MergeResponse(BaseModel):
@@ -236,9 +214,9 @@ class MergeResponse(BaseModel):
 def _get_provider_identifier(user: User, provider: str) -> str | None:
     """Return the identifier (provider_id or email) for a given provider, or None."""
     match provider:
-        case "telegram":
+        case 'telegram':
             return str(user.telegram_id) if user.telegram_id else None
-        case "email":
+        case 'email':
             return user.email if user.email and user.password_hash else None
         case _:
             column = OAUTH_PROVIDER_COLUMNS.get(provider)
@@ -272,29 +250,29 @@ async def _exchange_and_link_oauth(
     if not oauth_provider:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Requested OAuth provider is not available",
+            detail='Requested OAuth provider is not available',
         )
 
     # Exchange code for tokens
-    exchange_kwargs: dict[str, str] = {"state": state}
-    code_verifier = state_data.get("code_verifier")
+    exchange_kwargs: dict[str, str] = {'state': state}
+    code_verifier = state_data.get('code_verifier')
     if code_verifier:
-        exchange_kwargs["code_verifier"] = code_verifier
+        exchange_kwargs['code_verifier'] = code_verifier
     if device_id:
-        exchange_kwargs["device_id"] = device_id
+        exchange_kwargs['device_id'] = device_id
 
     try:
         token_data = await oauth_provider.exchange_code(code, **exchange_kwargs)
     except Exception as exc:
         logger.error(
-            "OAuth code exchange failed",
+            'OAuth code exchange failed',
             context=log_context,
             provider=provider,
             exc_info=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to exchange authorization code",
+            detail='Failed to exchange authorization code',
         ) from exc
 
     # Fetch user info from provider
@@ -302,21 +280,21 @@ async def _exchange_and_link_oauth(
         user_info = await oauth_provider.get_user_info(token_data)
     except Exception as exc:
         logger.error(
-            "OAuth user info fetch failed",
+            'OAuth user info fetch failed',
             context=log_context,
             provider=provider,
             exc_info=True,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to fetch user information from provider",
+            detail='Failed to fetch user information from provider',
         ) from exc
 
     # Check if provider_id is already linked to THIS user
     column = OAUTH_PROVIDER_COLUMNS[provider]
     current_value = getattr(user, column, None)
     if current_value and str(current_value) == user_info.provider_id:
-        return LinkCallbackResponse(success=True, message="already_linked")
+        return LinkCallbackResponse(success=True, message='already_linked')
 
     if current_value:
         # The user already has a DIFFERENT account of this provider linked.
@@ -324,7 +302,7 @@ async def _exchange_and_link_oauth(
         # and quietly swaps which external identity can sign in). Require an
         # explicit unlink first.
         logger.info(
-            "Account linking rejected: provider slot already occupied by a different account",
+            'Account linking rejected: provider slot already occupied by a different account',
             context=log_context,
             provider=provider,
             user_id=user.id,
@@ -332,14 +310,12 @@ async def _exchange_and_link_oauth(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"A {provider} account is already linked to your account. Unlink it first to link a different one."
+                f'A {provider} account is already linked to your account. Unlink it first to link a different one.'
             ),
         )
 
     # Check if provider_id is linked to ANOTHER account.
-    existing_user = await get_user_by_oauth_provider(
-        db, provider, user_info.provider_id
-    )
+    existing_user = await get_user_by_oauth_provider(db, provider, user_info.provider_id)
     if existing_user and existing_user.id != user.id:
         # A social login belongs to exactly ONE account. This used to silently
         # offer an account MERGE (absorb the other account) — surprising and
@@ -350,7 +326,7 @@ async def _exchange_and_link_oauth(
         # provider account, so this is not a takeover — but it must not be a
         # silent merge either.)
         logger.info(
-            "Account linking rejected: provider already linked to another account",
+            'Account linking rejected: provider already linked to another account',
             context=log_context,
             provider=provider,
             current_user_id=user.id,
@@ -358,9 +334,7 @@ async def _exchange_and_link_oauth(
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "This social account is already linked to a different account. Unlink it from that account first."
-            ),
+            detail=('This social account is already linked to a different account. Unlink it from that account first.'),
         )
 
     # Backfill the account email from the provider when a Telegram-first (or any
@@ -375,7 +349,7 @@ async def _exchange_and_link_oauth(
         email_owner = await get_user_by_email(db, normalized_email)
         if email_owner is not None and email_owner.id != user.id:
             logger.info(
-                "OAuth link: email backfill skipped, address already owned by another account",
+                'OAuth link: email backfill skipped, address already owned by another account',
                 context=log_context,
                 provider=provider,
                 user_id=user.id,
@@ -385,7 +359,7 @@ async def _exchange_and_link_oauth(
             user.email = normalized_email
             user.email_verified = True
             user.email_verified_at = datetime.now(UTC)
-            user.email_verification_source = f"oauth_{provider}"
+            user.email_verification_source = f'oauth_{provider}'
 
     # Link the provider to current user
     await set_user_oauth_provider_id(db, user, provider, user_info.provider_id)
@@ -395,27 +369,27 @@ async def _exchange_and_link_oauth(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This provider account was just linked to another user",
+            detail='This provider account was just linked to another user',
         ) from exc
 
     logger.info(
-        "OAuth provider linked to account",
+        'OAuth provider linked to account',
         context=log_context,
         provider=provider,
         provider_id=user_info.provider_id,
         user_id=user.id,
     )
-    return LinkCallbackResponse(success=True, message="linked")
+    return LinkCallbackResponse(success=True, message='linked')
 
 
 # ---------------------------------------------------------------------------
 # Router 1: Account linking (JWT required)
 # ---------------------------------------------------------------------------
 
-router = APIRouter(prefix="/auth/account", tags=["Cabinet Account Linking"])
+router = APIRouter(prefix='/auth/account', tags=['Cabinet Account Linking'])
 
 
-@router.get("/linked-providers", response_model=LinkedProvidersResponse)
+@router.get('/linked-providers', response_model=LinkedProvidersResponse)
 async def get_linked_providers(
     user: User = Depends(get_current_cabinet_user),
 ) -> LinkedProvidersResponse:
@@ -433,7 +407,7 @@ async def get_linked_providers(
     return LinkedProvidersResponse(providers=providers)
 
 
-@router.get("/link/{provider}/init", response_model=LinkInitResponse)
+@router.get('/link/{provider}/init', response_model=LinkInitResponse)
 async def link_provider_init(
     provider: OAuthProviderName,
     user: User = Depends(get_current_cabinet_user),
@@ -445,36 +419,34 @@ async def link_provider_init(
     if getattr(user, column, None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provider is already linked to your account",
+            detail='Provider is already linked to your account',
         )
 
     oauth_provider = get_provider(provider)
     if not oauth_provider:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Requested OAuth provider is not available",
+            detail='Requested OAuth provider is not available',
         )
 
     # Generate PKCE data for VK (and potentially future providers)
     auth_extra = oauth_provider.prepare_auth_state()
     extra_data: dict[str, str] = {
-        "linking": "true",
-        "user_id": str(user.id),
+        'linking': 'true',
+        'user_id': str(user.id),
     }
     if auth_extra:
         extra_data.update(auth_extra)
 
     state = await generate_oauth_state(provider, extra_data=extra_data)
     # Only pass URL-safe params (prefixed with _) to authorize URL; exclude secrets like code_verifier
-    url_params = (
-        {k: v for k, v in auth_extra.items() if k.startswith("_")} if auth_extra else {}
-    )
+    url_params = {k: v for k, v in auth_extra.items() if k.startswith('_')} if auth_extra else {}
     authorize_url = oauth_provider.get_authorization_url(state, **url_params)
 
     return LinkInitResponse(authorize_url=authorize_url, state=state)
 
 
-@router.post("/link/{provider}/callback", response_model=LinkCallbackResponse)
+@router.post('/link/{provider}/callback', response_model=LinkCallbackResponse)
 async def link_provider_callback(
     provider: OAuthProviderName,
     request: LinkCallbackRequest,
@@ -487,28 +459,28 @@ async def link_provider_callback(
     if not state_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired OAuth state",
+            detail='Invalid or expired OAuth state',
         )
 
     # 1b. Validate that this state was created for account linking (not login)
-    if state_data.get("linking") != "true" or not state_data.get("user_id"):
+    if state_data.get('linking') != 'true' or not state_data.get('user_id'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OAuth state was not initiated for account linking",
+            detail='OAuth state was not initiated for account linking',
         )
 
     # 1c. Validate that the user who initiated the link flow is the same user completing it
-    state_user_id = state_data["user_id"]
+    state_user_id = state_data['user_id']
     if str(user.id) != state_user_id:
         logger.warning(
-            "OAuth state user_id mismatch in link callback",
+            'OAuth state user_id mismatch in link callback',
             state_user_id=state_user_id,
             current_user_id=user.id,
             provider=provider,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OAuth state was initiated by a different user",
+            detail='OAuth state was initiated by a different user',
         )
 
     # 2-7. Exchange code, fetch user info, link or merge
@@ -520,11 +492,11 @@ async def link_provider_callback(
         state=request.state,
         state_data=state_data,
         device_id=request.device_id,
-        log_context="link-callback",
+        log_context='link-callback',
     )
 
 
-@router.post("/unlink/{provider}", response_model=UnlinkResponse)
+@router.post('/unlink/{provider}', response_model=UnlinkResponse)
 async def unlink_provider(
     provider: OAuthProviderName,
     user: User = Depends(get_current_cabinet_user),
@@ -535,14 +507,14 @@ async def unlink_provider(
     if not getattr(user, column, None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provider is not linked to your account",
+            detail='Provider is not linked to your account',
         )
 
     # Ensure at least one auth method remains
     if _count_auth_methods(user) <= 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot unlink last authentication method",
+            detail='Cannot unlink last authentication method',
         )
 
     await clear_user_oauth_provider_id(db, user, provider)
@@ -550,7 +522,7 @@ async def unlink_provider(
     return UnlinkResponse(success=True)
 
 
-@router.post("/link/telegram", response_model=LinkCallbackResponse)
+@router.post('/link/telegram', response_model=LinkCallbackResponse)
 async def link_telegram(
     request: LinkTelegramRequest,
     raw_request: Request,
@@ -560,20 +532,18 @@ async def link_telegram(
     """Link Telegram account via WebApp initData, OIDC id_token, or Login Widget."""
     # Rate limit
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(
-        client_ip, "link_telegram", limit=10, window=60, fail_closed=True
-    ):
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'link_telegram', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests",
-            headers={"Retry-After": "60"},
+            detail='Too many requests',
+            headers={'Retry-After': '60'},
         )
 
     # 1. Already has Telegram linked?
     if user.telegram_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Telegram is already linked to your account",
+            detail='Telegram is already linked to your account',
         )
 
     # 2. Validate and extract telegram_id
@@ -585,104 +555,92 @@ async def link_telegram(
     if request.init_data:
         # Mini App flow: validate initData
         # Generous max_age: Telegram Desktop/iOS cache initData with stale auth_date
-        user_data = validate_telegram_init_data(
-            request.init_data, max_age_seconds=86400 * 30
-        )
-        if not user_data or not user_data.get("id"):
+        user_data = validate_telegram_init_data(request.init_data, max_age_seconds=86400 * 30)
+        if not user_data or not user_data.get('id'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired Telegram initData",
+                detail='Invalid or expired Telegram initData',
             )
-        telegram_id = int(user_data["id"])
-        telegram_username = user_data.get("username")
-        telegram_first_name = user_data.get("first_name")
-        telegram_last_name = user_data.get("last_name")
+        telegram_id = int(user_data['id'])
+        telegram_username = user_data.get('username')
+        telegram_first_name = user_data.get('first_name')
+        telegram_last_name = user_data.get('last_name')
     elif request.id_token:
         # OIDC flow: validate id_token via JWKS
-        oidc_enabled_val = await get_setting_value(db, "TELEGRAM_OIDC_ENABLED")
-        oidc_client_id_val = await get_setting_value(db, "TELEGRAM_OIDC_CLIENT_ID")
+        oidc_enabled_val = await get_setting_value(db, 'TELEGRAM_OIDC_ENABLED')
+        oidc_client_id_val = await get_setting_value(db, 'TELEGRAM_OIDC_CLIENT_ID')
         oidc_client_id = oidc_client_id_val or settings.TELEGRAM_OIDC_CLIENT_ID
         oidc_enabled = (
-            oidc_enabled_val.lower() == "true"
-            if oidc_enabled_val is not None
-            else settings.TELEGRAM_OIDC_ENABLED
+            oidc_enabled_val.lower() == 'true' if oidc_enabled_val is not None else settings.TELEGRAM_OIDC_ENABLED
         ) and bool(oidc_client_id)
 
         if not oidc_enabled:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Telegram OIDC is not configured",
+                detail='Telegram OIDC is not configured',
             )
 
         claims = await validate_telegram_oidc_token(request.id_token, oidc_client_id)
         if not claims:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired Telegram OIDC token",
+                detail='Invalid or expired Telegram OIDC token',
             )
 
         # Replay detection
         token_hash = hashlib.sha256(request.id_token.encode()).hexdigest()
-        token_ttl = max(int(claims.get("exp", 0) - datetime.now(UTC).timestamp()), 60)
-        if await TokenReplayCache.is_token_replayed(
-            token_hash, ttl=min(token_ttl, 600)
-        ):
+        token_ttl = max(int(claims.get('exp', 0) - datetime.now(UTC).timestamp()), 60)
+        if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired Telegram OIDC token",
+                detail='Invalid or expired Telegram OIDC token',
             )
 
         try:
-            telegram_id = int(claims.get("id", claims.get("sub", 0)))
+            telegram_id = int(claims.get('id', claims.get('sub', 0)))
         except (ValueError, TypeError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid user ID in OIDC claims",
+                detail='Invalid user ID in OIDC claims',
             ) from exc
         if not telegram_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing user ID in OIDC claims",
+                detail='Missing user ID in OIDC claims',
             )
 
-        telegram_username = claims.get("preferred_username")
-        telegram_first_name = claims.get("name", claims.get("given_name", ""))
-        telegram_last_name = claims.get("family_name")
-    elif (
-        request.id is not None
-        and request.hash is not None
-        and request.auth_date is not None
-    ):
+        telegram_username = claims.get('preferred_username')
+        telegram_first_name = claims.get('name', claims.get('given_name', ''))
+        telegram_last_name = claims.get('family_name')
+    elif request.id is not None and request.hash is not None and request.auth_date is not None:
         # Login Widget flow: validate widget hash
         widget_data = {
-            "id": request.id,
-            "auth_date": request.auth_date,
-            "hash": request.hash,
+            'id': request.id,
+            'auth_date': request.auth_date,
+            'hash': request.hash,
         }
         if request.first_name is not None:
-            widget_data["first_name"] = request.first_name
+            widget_data['first_name'] = request.first_name
         if request.last_name is not None:
-            widget_data["last_name"] = request.last_name
+            widget_data['last_name'] = request.last_name
         if request.username is not None:
-            widget_data["username"] = request.username
+            widget_data['username'] = request.username
         if request.photo_url is not None:
-            widget_data["photo_url"] = request.photo_url
+            widget_data['photo_url'] = request.photo_url
 
         # Login Widget auth is fresh per click (24h is already very generous).
         if not validate_telegram_login_widget(widget_data, max_age_seconds=86400):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired Telegram Login Widget data",
+                detail='Invalid or expired Telegram Login Widget data',
             )
         # SECURITY: one-time use — a captured widget payload (it can travel in the
         # redirect URL) must not be replayable to link a Telegram account.
-        widget_replay = hashlib.sha256(
-            f'tg_widget:{widget_data.get("hash", "")}'.encode()
-        ).hexdigest()
+        widget_replay = hashlib.sha256(f'tg_widget:{widget_data.get("hash", "")}'.encode()).hexdigest()
         if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This Telegram authorization has already been used.",
+                detail='This Telegram authorization has already been used.',
             )
         telegram_id = request.id
         telegram_username = request.username
@@ -691,14 +649,14 @@ async def link_telegram(
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provide init_data (Mini App), id_token (OIDC), or Login Widget fields (id, auth_date, hash)",
+            detail='Provide init_data (Mini App), id_token (OIDC), or Login Widget fields (id, auth_date, hash)',
         )
 
     # 3. Check if telegram_id is linked to ANOTHER user
     existing_user = await get_user_by_telegram_id(db, telegram_id)
     if existing_user and existing_user.id != user.id:
         logger.info(
-            "Telegram linking conflict: telegram_id already linked to another user",
+            'Telegram linking conflict: telegram_id already linked to another user',
             telegram_id=telegram_id,
             current_user_id=user.id,
             existing_user_id=existing_user.id,
@@ -706,7 +664,7 @@ async def link_telegram(
         merge_token = await create_merge_token(
             primary_user_id=user.id,
             secondary_user_id=existing_user.id,
-            provider="telegram",
+            provider='telegram',
             provider_id=str(telegram_id),
         )
         return LinkCallbackResponse(
@@ -731,11 +689,11 @@ async def link_telegram(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This Telegram account was just linked to another user",
+            detail='This Telegram account was just linked to another user',
         ) from exc
 
     logger.info(
-        "Telegram linked to account",
+        'Telegram linked to account',
         telegram_id=telegram_id,
         user_id=user.id,
     )
@@ -747,19 +705,19 @@ async def link_telegram(
 
         resync_result = await resync_user_subscriptions_with_panel(db, user)
         logger.info(
-            "Post-TG-link resync completed",
+            'Post-TG-link resync completed',
             user_id=user.id,
             telegram_id=telegram_id,
-            synced=resync_result["synced"],
-            failed=resync_result["failed"],
+            synced=resync_result['synced'],
+            failed=resync_result['failed'],
         )
     except Exception as resync_error:
         logger.error(
-            "Post-TG-link resync failed (non-fatal)",
+            'Post-TG-link resync failed (non-fatal)',
             user_id=user.id,
             error=resync_error,
         )
-    return LinkCallbackResponse(success=True, message="linked")
+    return LinkCallbackResponse(success=True, message='linked')
 
 
 # ---------------------------------------------------------------------------
@@ -773,24 +731,18 @@ class ServerCompleteRequest(BaseModel):
         ...,
         min_length=1,
         max_length=2048,
-        description="Authorization code from provider",
+        description='Authorization code from provider',
     )
-    state: str = Field(
-        ..., min_length=1, max_length=128, description="CSRF state token"
-    )
-    provider: OAuthProviderName | None = Field(
-        None, description="OAuth provider name (resolved from state if omitted)"
-    )
-    device_id: str | None = Field(
-        None, max_length=256, description="Device ID from VK ID callback"
-    )
+    state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
+    provider: OAuthProviderName | None = Field(None, description='OAuth provider name (resolved from state if omitted)')
+    device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
 
 
 class ServerCompleteResponse(LinkCallbackResponse):
     provider: str
 
 
-@router.post("/link/server-complete", response_model=ServerCompleteResponse)
+@router.post('/link/server-complete', response_model=ServerCompleteResponse)
 async def link_server_complete(
     request: ServerCompleteRequest,
     raw_request: Request,
@@ -804,12 +756,8 @@ async def link_server_complete(
     """
     # Rate limit by IP (unauthenticated endpoint)
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(
-        client_ip, "server_complete", limit=10, window=60, fail_closed=True
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
-        )
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'server_complete', limit=10, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     # 1. Validate and consume state from Redis (one-time use).
     #    Provider may be None — validate_oauth_state will skip provider check,
@@ -818,45 +766,45 @@ async def link_server_complete(
     if not state_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired OAuth state",
+            detail='Invalid or expired OAuth state',
         )
 
     # Resolve provider from state data (canonical source)
-    state_provider: str = state_data.get("provider", "")
+    state_provider: str = state_data.get('provider', '')
     if not state_provider or state_provider not in OAUTH_PROVIDER_COLUMNS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not determine OAuth provider",
+            detail='Could not determine OAuth provider',
         )
 
     # If request explicitly provides a provider, ensure it matches the state
     if request.provider and request.provider != state_provider:
         logger.warning(
-            "Provider mismatch in server-complete",
+            'Provider mismatch in server-complete',
             request_provider=request.provider,
             state_provider=state_provider,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provider does not match OAuth state",
+            detail='Provider does not match OAuth state',
         )
 
     provider_name: str = state_provider
 
     # 2. Must be a linking state (not login)
-    if state_data.get("linking") != "true" or not state_data.get("user_id"):
+    if state_data.get('linking') != 'true' or not state_data.get('user_id'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OAuth state was not initiated for account linking",
+            detail='OAuth state was not initiated for account linking',
         )
 
     # 3. Parse and validate user_id from state
     try:
-        user_id = int(state_data["user_id"])
+        user_id = int(state_data['user_id'])
     except (ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid user_id in OAuth state",
+            detail='Invalid user_id in OAuth state',
         ) from exc
 
     # 4. Load user from DB
@@ -864,7 +812,7 @@ async def link_server_complete(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User not found",
+            detail='User not found',
         )
 
     # 5-9. Exchange code, fetch user info, link or merge
@@ -876,7 +824,7 @@ async def link_server_complete(
         state=request.state,
         state_data=state_data,
         device_id=request.device_id,
-        log_context="server-complete",
+        log_context='server-complete',
     )
 
     return ServerCompleteResponse(
@@ -892,10 +840,10 @@ async def link_server_complete(
 # Router 2: Merge (JWT required — bound to the authenticated initiator)
 # ---------------------------------------------------------------------------
 
-merge_router = APIRouter(prefix="/auth/merge", tags=["Cabinet Account Merge"])
+merge_router = APIRouter(prefix='/auth/merge', tags=['Cabinet Account Merge'])
 
 
-@merge_router.get("/{merge_token}", response_model=MergePreviewResponse)
+@merge_router.get('/{merge_token}', response_model=MergePreviewResponse)
 async def get_merge_preview_endpoint(
     raw_request: Request,
     merge_token: str = Path(..., min_length=32, max_length=64),
@@ -904,42 +852,38 @@ async def get_merge_preview_endpoint(
 ) -> MergePreviewResponse:
     """Preview the result of merging two accounts before confirming."""
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(
-        client_ip, "merge_preview", limit=15, window=60, fail_closed=True
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
-        )
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'merge_preview', limit=15, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     token_data = await get_merge_token_data(merge_token)
     if not token_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Merge token is invalid or expired",
+            detail='Merge token is invalid or expired',
         )
 
-    primary_user_id: int = token_data["primary_user_id"]
-    secondary_user_id: int = token_data["secondary_user_id"]
+    primary_user_id: int = token_data['primary_user_id']
+    secondary_user_id: int = token_data['secondary_user_id']
 
     # SECURITY: bind to the authenticated initiator — a leaked token alone must
     # not let a third party preview the two accounts or run the merge.
     if user.id != primary_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This merge can only be completed by the account that started it.",
+            detail='This merge can only be completed by the account that started it.',
         )
 
     try:
         preview = await get_merge_preview(db, primary_user_id, secondary_user_id)
     except ValueError as exc:
-        logger.error("Merge preview failed", error=str(exc))
+        logger.error('Merge preview failed', error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="One or both users not found",
+            detail='One or both users not found',
         ) from exc
 
     # Calculate remaining TTL
-    created_at_str: str = token_data.get("created_at", "")
+    created_at_str: str = token_data.get('created_at', '')
     try:
         created_at = datetime.fromisoformat(created_at_str)
         if created_at.tzinfo is None:
@@ -950,13 +894,13 @@ async def get_merge_preview_endpoint(
         expires_in_seconds = 0
 
     return MergePreviewResponse(
-        primary=MergePreviewUser(**preview["primary"]),
-        secondary=MergePreviewUser(**preview["secondary"]),
+        primary=MergePreviewUser(**preview['primary']),
+        secondary=MergePreviewUser(**preview['secondary']),
         expires_in_seconds=expires_in_seconds,
     )
 
 
-@merge_router.post("/{merge_token}", response_model=MergeResponse)
+@merge_router.post('/{merge_token}', response_model=MergeResponse)
 async def execute_merge_endpoint(
     request: MergeRequest,
     raw_request: Request,
@@ -966,25 +910,21 @@ async def execute_merge_endpoint(
 ) -> MergeResponse:
     """Execute account merge. Consumes the merge token (one-time use)."""
     client_ip = get_client_ip(raw_request)
-    if await RateLimitCache.is_ip_rate_limited(
-        client_ip, "merge_execute", limit=5, window=60, fail_closed=True
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
-        )
+    if await RateLimitCache.is_ip_rate_limited(client_ip, 'merge_execute', limit=5, window=60, fail_closed=True):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     # 1. Consume token atomically first (GETDEL — one-time use, no TOCTOU)
     consumed = await consume_merge_token(merge_token)
     if not consumed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Merge token is invalid, expired, or already consumed",
+            detail='Merge token is invalid, expired, or already consumed',
         )
 
-    primary_user_id: int = consumed["primary_user_id"]
-    secondary_user_id: int = consumed["secondary_user_id"]
-    provider: str = consumed.get("provider", "")
-    provider_id: str = consumed.get("provider_id", "")
+    primary_user_id: int = consumed['primary_user_id']
+    secondary_user_id: int = consumed['secondary_user_id']
+    provider: str = consumed.get('provider', '')
+    provider_id: str = consumed.get('provider_id', '')
 
     # SECURITY: bind execution to the authenticated initiator (the primary). A
     # leaked token alone (e.g. from a URL in logs/history) must not let a third
@@ -993,7 +933,7 @@ async def execute_merge_endpoint(
         await restore_merge_token(merge_token, consumed)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This merge can only be completed by the account that started it.",
+            detail='This merge can only be completed by the account that started it.',
         )
 
     # 2. Validate keep_subscription_from — restore token if invalid
@@ -1001,12 +941,12 @@ async def execute_merge_endpoint(
         await restore_merge_token(merge_token, consumed)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="keep_subscription_from must be one of the two user IDs being merged",
+            detail='keep_subscription_from must be one of the two user IDs being merged',
         )
 
     # Convert user_id to 'primary'/'secondary' string for execute_merge()
-    keep_from: Literal["primary", "secondary"] = (
-        "primary" if request.keep_subscription_from == primary_user_id else "secondary"
+    keep_from: Literal['primary', 'secondary'] = (
+        'primary' if request.keep_subscription_from == primary_user_id else 'secondary'
     )
 
     # 3. Execute merge.
@@ -1028,18 +968,18 @@ async def execute_merge_endpoint(
     except ValueError as exc:
         await db.rollback()
         await restore_merge_token(merge_token, consumed)
-        logger.error("Merge execution failed (ValueError)", error=str(exc))
+        logger.error('Merge execution failed (ValueError)', error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Account merge cannot be completed. The accounts may have already been merged or deleted.",
+            detail='Account merge cannot be completed. The accounts may have already been merged or deleted.',
         ) from exc
     except Exception as exc:
         await db.rollback()
         await restore_merge_token(merge_token, consumed)
-        logger.exception("Merge execution failed")
+        logger.exception('Merge execution failed')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Account merge failed due to an internal error",
+            detail='Account merge failed due to an internal error',
         ) from exc
 
     # Commit succeeded — only now drop the discarded subscription's panel user.
@@ -1050,7 +990,7 @@ async def execute_merge_endpoint(
     if not merged_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to load merged user",
+            detail='Failed to load merged user',
         )
 
     # BUG-7 fix: Resync merged user's subscriptions with RemnaWave panel
@@ -1061,15 +1001,15 @@ async def execute_merge_endpoint(
 
         resync_result = await resync_user_subscriptions_with_panel(db, merged_user)
         logger.info(
-            "Post-merge resync completed",
+            'Post-merge resync completed',
             primary_user_id=primary_user_id,
             secondary_user_id=secondary_user_id,
-            synced=resync_result["synced"],
-            failed=resync_result["failed"],
+            synced=resync_result['synced'],
+            failed=resync_result['failed'],
         )
     except Exception as resync_error:
         logger.error(
-            "Post-merge resync failed (non-fatal)",
+            'Post-merge resync failed (non-fatal)',
             primary_user_id=primary_user_id,
             error=resync_error,
         )
@@ -1077,18 +1017,16 @@ async def execute_merge_endpoint(
     # 5. Create auth tokens for the merged user
     try:
         auth_response = await _create_auth_response(merged_user, db)
-        await _store_refresh_token(
-            db, merged_user.id, auth_response.refresh_token, device_info="merge"
-        )
+        await _store_refresh_token(db, merged_user.id, auth_response.refresh_token, device_info='merge')
     except Exception as exc:
-        logger.exception("Failed to create auth tokens after merge")
+        logger.exception('Failed to create auth tokens after merge')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Merge succeeded but failed to create new session",
+            detail='Merge succeeded but failed to create new session',
         ) from exc
 
     logger.info(
-        "Account merge completed successfully",
+        'Account merge completed successfully',
         primary_user_id=primary_user_id,
         secondary_user_id=secondary_user_id,
         provider=provider,

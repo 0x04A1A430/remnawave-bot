@@ -14,7 +14,7 @@ async def create_saved_payment_method(
     db: AsyncSession,
     user_id: int,
     yookassa_payment_method_id: str,
-    method_type: str = "bank_card",
+    method_type: str = 'bank_card',
     card_first6: str | None = None,
     card_last4: str | None = None,
     card_type: str | None = None,
@@ -48,7 +48,7 @@ async def create_saved_payment_method(
     if reactivated:
         await db.commit()
         logger.info(
-            "Реактивирован сохранённый метод оплаты",
+            'Реактивирован сохранённый метод оплаты',
             saved_method_id=reactivated.id,
             user_id=user_id,
             method_type=method_type,
@@ -74,7 +74,7 @@ async def create_saved_payment_method(
     except IntegrityError as e:
         await db.rollback()
         logger.error(
-            "Ошибка создания сохранённого метода оплаты",
+            'Ошибка создания сохранённого метода оплаты',
             yookassa_payment_method_id=yookassa_payment_method_id,
             user_id=user_id,
             e=e,
@@ -83,7 +83,7 @@ async def create_saved_payment_method(
     await db.refresh(method)
 
     logger.info(
-        "Создан сохранённый метод оплаты",
+        'Создан сохранённый метод оплаты',
         saved_method_id=method.id,
         user_id=user_id,
         method_type=method_type,
@@ -160,7 +160,7 @@ async def deactivate_payment_method(
 
     if result.rowcount > 0:
         logger.info(
-            "Метод оплаты деактивирован",
+            'Метод оплаты деактивирован',
             saved_method_id=saved_method_id,
             user_id=user_id,
         )
@@ -185,7 +185,7 @@ async def deactivate_all_user_payment_methods(
 
     if result.rowcount > 0:
         logger.info(
-            "Все методы оплаты пользователя деактивированы",
+            'Все методы оплаты пользователя деактивированы',
             user_id=user_id,
             count=result.rowcount,
         )

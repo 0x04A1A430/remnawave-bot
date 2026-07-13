@@ -31,13 +31,9 @@ PERIOD_COMPARISON_DAYS = 7
 def _calc_change(current_val: int, previous_val: int) -> dict[str, Any]:
     """Calculate period-over-period change metrics."""
     diff = current_val - previous_val
-    pct = (
-        round((diff / previous_val * 100), 2)
-        if previous_val > 0
-        else (100.0 if current_val > 0 else 0.0)
-    )
-    trend = "up" if diff > 0 else "down" if diff < 0 else "stable"
-    return {"absolute": diff, "percent": pct, "trend": trend}
+    pct = round((diff / previous_val * 100), 2) if previous_val > 0 else (100.0 if current_val > 0 else 0.0)
+    trend = 'up' if diff > 0 else 'down' if diff < 0 else 'stable'
+    return {'absolute': diff, 'percent': pct, 'trend': trend}
 
 
 class PartnerStatsService:
@@ -59,18 +55,12 @@ class PartnerStatsService:
         # Агрегированная статистика рефералов одним запросом (без загрузки всех User в память)
         referral_counts_result = await db.execute(
             select(
-                func.count(User.id).label("total"),
-                func.sum(case((User.has_made_first_topup.is_(True), 1), else_=0)).label(
-                    "paid"
-                ),
-                func.sum(case((User.created_at >= today_start, 1), else_=0)).label(
-                    "today"
-                ),
-                func.sum(case((User.created_at >= week_ago, 1), else_=0)).label("week"),
-                func.sum(case((User.created_at >= month_ago, 1), else_=0)).label(
-                    "month"
-                ),
-                func.sum(case((User.created_at >= year_ago, 1), else_=0)).label("year"),
+                func.count(User.id).label('total'),
+                func.sum(case((User.has_made_first_topup.is_(True), 1), else_=0)).label('paid'),
+                func.sum(case((User.created_at >= today_start, 1), else_=0)).label('today'),
+                func.sum(case((User.created_at >= week_ago, 1), else_=0)).label('week'),
+                func.sum(case((User.created_at >= month_ago, 1), else_=0)).label('month'),
+                func.sum(case((User.created_at >= year_ago, 1), else_=0)).label('year'),
             ).where(User.referred_by_id == user_id)
         )
         ref_row = referral_counts_result.one()
@@ -101,9 +91,7 @@ class PartnerStatsService:
         # Заработки по периодам - один запрос с CASE WHEN
         earnings_result = await db.execute(
             select(
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label(
-                    "all_time"
-                ),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('all_time'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -115,7 +103,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("today"),
+                ).label('today'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -127,7 +115,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("week"),
+                ).label('week'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -139,7 +127,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("month"),
+                ).label('month'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -151,7 +139,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("year"),
+                ).label('year'),
             ).where(ReferralEarning.user_id == user_id)
         )
         earnings_row = earnings_result.one()
@@ -162,45 +150,35 @@ class PartnerStatsService:
         earnings_year = int(earnings_row.year)
 
         # Конверсии
-        conversion_to_paid = (
-            round((paid_referrals / total_referrals * 100), 2)
-            if total_referrals > 0
-            else 0
-        )
-        conversion_to_active = (
-            round((active_referrals / total_referrals * 100), 2)
-            if total_referrals > 0
-            else 0
-        )
+        conversion_to_paid = round((paid_referrals / total_referrals * 100), 2) if total_referrals > 0 else 0
+        conversion_to_active = round((active_referrals / total_referrals * 100), 2) if total_referrals > 0 else 0
 
         # Средний доход с реферала
-        avg_earnings_per_referral = (
-            round(earnings_all_time / paid_referrals, 2) if paid_referrals > 0 else 0
-        )
+        avg_earnings_per_referral = round(earnings_all_time / paid_referrals, 2) if paid_referrals > 0 else 0
 
         return {
-            "user_id": user_id,
-            "summary": {
-                "total_referrals": total_referrals,
-                "paid_referrals": paid_referrals,
-                "active_referrals": active_referrals,
-                "conversion_to_paid_percent": conversion_to_paid,
-                "conversion_to_active_percent": conversion_to_active,
-                "avg_earnings_per_referral_kopeks": avg_earnings_per_referral,
+            'user_id': user_id,
+            'summary': {
+                'total_referrals': total_referrals,
+                'paid_referrals': paid_referrals,
+                'active_referrals': active_referrals,
+                'conversion_to_paid_percent': conversion_to_paid,
+                'conversion_to_active_percent': conversion_to_active,
+                'avg_earnings_per_referral_kopeks': avg_earnings_per_referral,
             },
-            "earnings": {
-                "all_time_kopeks": earnings_all_time,
-                "year_kopeks": earnings_year,
-                "month_kopeks": earnings_month,
-                "week_kopeks": earnings_week,
-                "today_kopeks": earnings_today,
+            'earnings': {
+                'all_time_kopeks': earnings_all_time,
+                'year_kopeks': earnings_year,
+                'month_kopeks': earnings_month,
+                'week_kopeks': earnings_week,
+                'today_kopeks': earnings_today,
             },
-            "referrals_count": {
-                "all_time": total_referrals,
-                "year": referrals_year,
-                "month": referrals_month,
-                "week": referrals_week,
-                "today": referrals_today,
+            'referrals_count': {
+                'all_time': total_referrals,
+                'year': referrals_year,
+                'month': referrals_month,
+                'week': referrals_week,
+                'today': referrals_today,
             },
         }
 
@@ -218,8 +196,8 @@ class PartnerStatsService:
         # Рефералы по дням
         referrals_by_day = await db.execute(
             select(
-                func.date(User.created_at).label("date"),
-                func.count(User.id).label("referrals_count"),
+                func.date(User.created_at).label('date'),
+                func.count(User.id).label('referrals_count'),
             )
             .where(
                 and_(
@@ -230,15 +208,13 @@ class PartnerStatsService:
             .group_by(func.date(User.created_at))
             .order_by(func.date(User.created_at))
         )
-        referrals_dict = {
-            str(row.date): row.referrals_count for row in referrals_by_day.all()
-        }
+        referrals_dict = {str(row.date): row.referrals_count for row in referrals_by_day.all()}
 
         # Заработки по дням (из ReferralEarning)
         earnings_by_day = await db.execute(
             select(
-                func.date(ReferralEarning.created_at).label("date"),
-                func.sum(ReferralEarning.amount_kopeks).label("earnings"),
+                func.date(ReferralEarning.created_at).label('date'),
+                func.sum(ReferralEarning.amount_kopeks).label('earnings'),
             )
             .where(
                 and_(
@@ -248,9 +224,7 @@ class PartnerStatsService:
             )
             .group_by(func.date(ReferralEarning.created_at))
         )
-        earnings_dict = {
-            str(row.date): int(row.earnings or 0) for row in earnings_by_day.all()
-        }
+        earnings_dict = {str(row.date): int(row.earnings or 0) for row in earnings_by_day.all()}
 
         # Формируем массив за все дни
         result = []
@@ -259,9 +233,9 @@ class PartnerStatsService:
             date_str = str(date)
             result.append(
                 {
-                    "date": date_str,
-                    "referrals_count": referrals_dict.get(date_str, 0),
-                    "earnings_kopeks": earnings_dict.get(date_str, 0),
+                    'date': date_str,
+                    'referrals_count': referrals_dict.get(date_str, 0),
+                    'earnings_kopeks': earnings_dict.get(date_str, 0),
                 }
             )
 
@@ -287,9 +261,7 @@ class PartnerStatsService:
                 User.last_name,
                 User.created_at,
                 User.has_made_first_topup,
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label(
-                    "total_earnings"
-                ),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_earnings'),
             )
             .outerjoin(ReferralEarning, ReferralEarning.referral_id == User.id)
             .where(User.referred_by_id == user_id)
@@ -321,18 +293,18 @@ class PartnerStatsService:
         for row in rows:
             referrals.append(
                 {
-                    "id": row.id,
-                    "telegram_id": row.telegram_id,
-                    "username": row.username,
-                    "first_name": row.first_name,
-                    "last_name": row.last_name,
-                    "full_name": f'{row.first_name or ""} {row.last_name or ""}'.strip()
-                    or (row.telegram_id and f"User {row.telegram_id}")
-                    or f"User #{row.id}",
-                    "created_at": row.created_at,
-                    "has_made_first_topup": row.has_made_first_topup,
-                    "is_active": row.id in active_user_ids,
-                    "total_earnings_kopeks": int(row.total_earnings),
+                    'id': row.id,
+                    'telegram_id': row.telegram_id,
+                    'username': row.username,
+                    'first_name': row.first_name,
+                    'last_name': row.last_name,
+                    'full_name': f'{row.first_name or ""} {row.last_name or ""}'.strip()
+                    or (row.telegram_id and f'User {row.telegram_id}')
+                    or f'User #{row.id}',
+                    'created_at': row.created_at,
+                    'has_made_first_topup': row.has_made_first_topup,
+                    'is_active': row.id in active_user_ids,
+                    'total_earnings_kopeks': int(row.total_earnings),
                 }
             )
 
@@ -376,63 +348,45 @@ class PartnerStatsService:
         previous_referrals_count = previous_referrals.scalar() or 0
 
         # Заработки за текущий период
-        current_earnings = await cls._get_earnings_for_period(
-            db, user_id, current_start
-        )
+        current_earnings = await cls._get_earnings_for_period(db, user_id, current_start)
 
         # Заработки за предыдущий период
-        previous_earnings = await cls._get_earnings_for_period(
-            db, user_id, previous_start, previous_end
-        )
+        previous_earnings = await cls._get_earnings_for_period(db, user_id, previous_start, previous_end)
 
         # Расчёт изменений
         referrals_change = current_referrals_count - previous_referrals_count
         referrals_change_percent = (
-            round((referrals_change / previous_referrals_count * 100), 2)
-            if previous_referrals_count > 0
-            else 0
+            round((referrals_change / previous_referrals_count * 100), 2) if previous_referrals_count > 0 else 0
         )
 
         earnings_change = current_earnings - previous_earnings
-        earnings_change_percent = (
-            round((earnings_change / previous_earnings * 100), 2)
-            if previous_earnings > 0
-            else 0
-        )
+        earnings_change_percent = round((earnings_change / previous_earnings * 100), 2) if previous_earnings > 0 else 0
 
         return {
-            "current_period": {
-                "days": current_days,
-                "start": current_start.isoformat(),
-                "end": now.isoformat(),
-                "referrals_count": current_referrals_count,
-                "earnings_kopeks": current_earnings,
+            'current_period': {
+                'days': current_days,
+                'start': current_start.isoformat(),
+                'end': now.isoformat(),
+                'referrals_count': current_referrals_count,
+                'earnings_kopeks': current_earnings,
             },
-            "previous_period": {
-                "days": previous_days,
-                "start": previous_start.isoformat(),
-                "end": previous_end.isoformat(),
-                "referrals_count": previous_referrals_count,
-                "earnings_kopeks": previous_earnings,
+            'previous_period': {
+                'days': previous_days,
+                'start': previous_start.isoformat(),
+                'end': previous_end.isoformat(),
+                'referrals_count': previous_referrals_count,
+                'earnings_kopeks': previous_earnings,
             },
-            "change": {
-                "referrals": {
-                    "absolute": referrals_change,
-                    "percent": referrals_change_percent,
-                    "trend": (
-                        "up"
-                        if referrals_change > 0
-                        else "down" if referrals_change < 0 else "stable"
-                    ),
+            'change': {
+                'referrals': {
+                    'absolute': referrals_change,
+                    'percent': referrals_change_percent,
+                    'trend': ('up' if referrals_change > 0 else 'down' if referrals_change < 0 else 'stable'),
                 },
-                "earnings": {
-                    "absolute": earnings_change,
-                    "percent": earnings_change_percent,
-                    "trend": (
-                        "up"
-                        if earnings_change > 0
-                        else "down" if earnings_change < 0 else "stable"
-                    ),
+                'earnings': {
+                    'absolute': earnings_change,
+                    'percent': earnings_change_percent,
+                    'trend': ('up' if earnings_change > 0 else 'down' if earnings_change < 0 else 'stable'),
                 },
             },
         }
@@ -452,16 +406,12 @@ class PartnerStatsService:
 
         # Всего рефереров (у кого есть рефералы)
         total_referrers = await db.execute(
-            select(func.count(func.distinct(User.referred_by_id))).where(
-                User.referred_by_id.isnot(None)
-            )
+            select(func.count(func.distinct(User.referred_by_id))).where(User.referred_by_id.isnot(None))
         )
         total_referrers_count = total_referrers.scalar() or 0
 
         # Всего рефералов
-        total_referrals = await db.execute(
-            select(func.count(User.id)).where(User.referred_by_id.isnot(None))
-        )
+        total_referrals = await db.execute(select(func.count(User.id)).where(User.referred_by_id.isnot(None)))
         total_referrals_count = total_referrals.scalar() or 0
 
         # Рефералы которые заплатили
@@ -478,9 +428,7 @@ class PartnerStatsService:
         # Всего выплачено - один запрос с CASE WHEN
         payouts_result = await db.execute(
             select(
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label(
-                    "all_time"
-                ),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('all_time'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -492,7 +440,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("today"),
+                ).label('today'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -504,7 +452,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("week"),
+                ).label('week'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -516,7 +464,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("month"),
+                ).label('month'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -528,7 +476,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("year"),
+                ).label('year'),
             )
         )
         payouts_row = payouts_result.one()
@@ -541,13 +489,9 @@ class PartnerStatsService:
         # Новые рефералы по периодам - один запрос с CASE WHEN
         new_referrals_result = await db.execute(
             select(
-                func.sum(case((User.created_at >= today_start, 1), else_=0)).label(
-                    "today"
-                ),
-                func.sum(case((User.created_at >= week_ago, 1), else_=0)).label("week"),
-                func.sum(case((User.created_at >= month_ago, 1), else_=0)).label(
-                    "month"
-                ),
+                func.sum(case((User.created_at >= today_start, 1), else_=0)).label('today'),
+                func.sum(case((User.created_at >= week_ago, 1), else_=0)).label('week'),
+                func.sum(case((User.created_at >= month_ago, 1), else_=0)).label('month'),
             ).where(User.referred_by_id.isnot(None))
         )
         new_referrals_row = new_referrals_result.one()
@@ -557,37 +501,31 @@ class PartnerStatsService:
 
         # Конверсия
         conversion_rate = (
-            round((paid_referrals_count / total_referrals_count * 100), 2)
-            if total_referrals_count > 0
-            else 0
+            round((paid_referrals_count / total_referrals_count * 100), 2) if total_referrals_count > 0 else 0
         )
 
         # Средний доход с реферала
-        avg_per_referral = (
-            round(total_paid / paid_referrals_count, 2)
-            if paid_referrals_count > 0
-            else 0
-        )
+        avg_per_referral = round(total_paid / paid_referrals_count, 2) if paid_referrals_count > 0 else 0
 
         return {
-            "summary": {
-                "total_referrers": total_referrers_count,
-                "total_referrals": total_referrals_count,
-                "paid_referrals": paid_referrals_count,
-                "conversion_rate_percent": conversion_rate,
-                "avg_earnings_per_referral_kopeks": avg_per_referral,
+            'summary': {
+                'total_referrers': total_referrers_count,
+                'total_referrals': total_referrals_count,
+                'paid_referrals': paid_referrals_count,
+                'conversion_rate_percent': conversion_rate,
+                'avg_earnings_per_referral_kopeks': avg_per_referral,
             },
-            "payouts": {
-                "all_time_kopeks": total_paid,
-                "year_kopeks": year_paid,
-                "month_kopeks": month_paid,
-                "week_kopeks": week_paid,
-                "today_kopeks": today_paid,
+            'payouts': {
+                'all_time_kopeks': total_paid,
+                'year_kopeks': year_paid,
+                'month_kopeks': month_paid,
+                'week_kopeks': week_paid,
+                'today_kopeks': today_paid,
             },
-            "new_referrals": {
-                "today": new_referrals_today_count,
-                "week": new_referrals_week_count,
-                "month": new_referrals_month_count,
+            'new_referrals': {
+                'today': new_referrals_today_count,
+                'week': new_referrals_week_count,
+                'month': new_referrals_month_count,
             },
         }
 
@@ -604,8 +542,8 @@ class PartnerStatsService:
         # Рефералы по дням
         referrals_by_day = await db.execute(
             select(
-                func.date(User.created_at).label("date"),
-                func.count(User.id).label("referrals_count"),
+                func.date(User.created_at).label('date'),
+                func.count(User.id).label('referrals_count'),
             )
             .where(
                 and_(
@@ -615,22 +553,18 @@ class PartnerStatsService:
             )
             .group_by(func.date(User.created_at))
         )
-        referrals_dict = {
-            str(row.date): row.referrals_count for row in referrals_by_day.all()
-        }
+        referrals_dict = {str(row.date): row.referrals_count for row in referrals_by_day.all()}
 
         # Выплаты по дням
         earnings_by_day = await db.execute(
             select(
-                func.date(ReferralEarning.created_at).label("date"),
-                func.sum(ReferralEarning.amount_kopeks).label("earnings"),
+                func.date(ReferralEarning.created_at).label('date'),
+                func.sum(ReferralEarning.amount_kopeks).label('earnings'),
             )
             .where(ReferralEarning.created_at >= start_date)
             .group_by(func.date(ReferralEarning.created_at))
         )
-        earnings_dict = {
-            str(row.date): int(row.earnings or 0) for row in earnings_by_day.all()
-        }
+        earnings_dict = {str(row.date): int(row.earnings or 0) for row in earnings_by_day.all()}
 
         result = []
         for i in range(days):
@@ -638,9 +572,9 @@ class PartnerStatsService:
             date_str = str(date)
             result.append(
                 {
-                    "date": date_str,
-                    "referrals_count": referrals_dict.get(date_str, 0),
-                    "earnings_kopeks": earnings_dict.get(date_str, 0),
+                    'date': date_str,
+                    'referrals_count': referrals_dict.get(date_str, 0),
+                    'earnings_kopeks': earnings_dict.get(date_str, 0),
                 }
             )
 
@@ -660,23 +594,19 @@ class PartnerStatsService:
         # Подсчёт рефералов и заработков
         earnings_query = select(
             ReferralEarning.user_id,
-            func.sum(ReferralEarning.amount_kopeks).label("total_earnings"),
+            func.sum(ReferralEarning.amount_kopeks).label('total_earnings'),
         ).group_by(ReferralEarning.user_id)
         if start_date:
-            earnings_query = earnings_query.where(
-                ReferralEarning.created_at >= start_date
-            )
+            earnings_query = earnings_query.where(ReferralEarning.created_at >= start_date)
 
         earnings_result = await db.execute(earnings_query)
-        earnings_dict = {
-            row.user_id: int(row.total_earnings or 0) for row in earnings_result.all()
-        }
+        earnings_dict = {row.user_id: int(row.total_earnings or 0) for row in earnings_result.all()}
 
         # Подсчёт рефералов
         referrals_query = (
             select(
                 User.referred_by_id,
-                func.count(User.id).label("referrals_count"),
+                func.count(User.id).label('referrals_count'),
             )
             .where(User.referred_by_id.isnot(None))
             .group_by(User.referred_by_id)
@@ -685,9 +615,7 @@ class PartnerStatsService:
             referrals_query = referrals_query.where(User.created_at >= start_date)
 
         referrals_result = await db.execute(referrals_query)
-        referrals_dict = {
-            row.referred_by_id: row.referrals_count for row in referrals_result.all()
-        }
+        referrals_dict = {row.referred_by_id: row.referrals_count for row in referrals_result.all()}
 
         # Объединяем данные
         all_referrer_ids = set(earnings_dict.keys()) | set(referrals_dict.keys())
@@ -696,43 +624,43 @@ class PartnerStatsService:
         for referrer_id in all_referrer_ids:
             referrers_data.append(
                 {
-                    "user_id": referrer_id,
-                    "referrals_count": referrals_dict.get(referrer_id, 0),
-                    "total_earnings": earnings_dict.get(referrer_id, 0),
+                    'user_id': referrer_id,
+                    'referrals_count': referrals_dict.get(referrer_id, 0),
+                    'total_earnings': earnings_dict.get(referrer_id, 0),
                 }
             )
 
         # Сортируем по заработку
-        referrers_data.sort(key=lambda x: x["total_earnings"], reverse=True)
+        referrers_data.sort(key=lambda x: x['total_earnings'], reverse=True)
         top_referrers = referrers_data[:limit]
 
         if not top_referrers:
             return []
 
         # Получаем данные всех пользователей одним запросом
-        top_user_ids = [data["user_id"] for data in top_referrers]
+        top_user_ids = [data['user_id'] for data in top_referrers]
         users_result = await db.execute(select(User).where(User.id.in_(top_user_ids)))
         users_dict = {user.id: user for user in users_result.scalars().all()}
 
         # Формируем результат с сохранением порядка сортировки
         result = []
         for data in top_referrers:
-            user = users_dict.get(data["user_id"])
+            user = users_dict.get(data['user_id'])
             if user:
                 result.append(
                     {
-                        "id": user.id,
-                        "telegram_id": user.telegram_id,
-                        "username": user.username,
-                        "first_name": user.first_name,
-                        "last_name": user.last_name,
-                        "full_name": f'{user.first_name or ""} {user.last_name or ""}'.strip()
-                        or (user.telegram_id and f"User {user.telegram_id}")
+                        'id': user.id,
+                        'telegram_id': user.telegram_id,
+                        'username': user.username,
+                        'first_name': user.first_name,
+                        'last_name': user.last_name,
+                        'full_name': f'{user.first_name or ""} {user.last_name or ""}'.strip()
+                        or (user.telegram_id and f'User {user.telegram_id}')
                         or user.email
-                        or f"User #{user.id}",
-                        "referral_code": user.referral_code,
-                        "referrals_count": data["referrals_count"],
-                        "total_earnings_kopeks": data["total_earnings"],
+                        or f'User #{user.id}',
+                        'referral_code': user.referral_code,
+                        'referrals_count': data['referrals_count'],
+                        'total_earnings_kopeks': data['total_earnings'],
                     }
                 )
 
@@ -757,7 +685,7 @@ class PartnerStatsService:
         reg_result = await db.execute(
             select(
                 AdvertisingCampaignRegistration.campaign_id,
-                func.count(AdvertisingCampaignRegistration.id).label("count"),
+                func.count(AdvertisingCampaignRegistration.id).label('count'),
             )
             .join(User, User.id == AdvertisingCampaignRegistration.user_id)
             .where(
@@ -768,20 +696,14 @@ class PartnerStatsService:
             )
             .group_by(AdvertisingCampaignRegistration.campaign_id)
         )
-        registrations_map = {
-            row.campaign_id: int(row.count) for row in reg_result.all()
-        }
+        registrations_map = {row.campaign_id: int(row.count) for row in reg_result.all()}
 
         # Referral earnings per campaign (only for this partner)
         earnings_result = await db.execute(
             select(
                 ReferralEarning.campaign_id,
-                func.count(func.distinct(ReferralEarning.referral_id)).label(
-                    "referrals"
-                ),
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label(
-                    "earnings"
-                ),
+                func.count(func.distinct(ReferralEarning.referral_id)).label('referrals'),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('earnings'),
             )
             .where(
                 and_(
@@ -793,19 +715,19 @@ class PartnerStatsService:
         )
         earnings_map = {
             row.campaign_id: {
-                "referrals": int(row.referrals),
-                "earnings": int(row.earnings),
+                'referrals': int(row.referrals),
+                'earnings': int(row.earnings),
             }
             for row in earnings_result.all()
         }
 
         result: dict[int, dict[str, int]] = {}
         for cid in campaign_ids:
-            earning_data = earnings_map.get(cid, {"referrals": 0, "earnings": 0})
+            earning_data = earnings_map.get(cid, {'referrals': 0, 'earnings': 0})
             result[cid] = {
-                "registrations_count": registrations_map.get(cid, 0),
-                "referrals_count": earning_data["referrals"],
-                "earnings_kopeks": earning_data["earnings"],
+                'registrations_count': registrations_map.get(cid, 0),
+                'referrals_count': earning_data['referrals'],
+                'earnings_kopeks': earning_data['earnings'],
             }
 
         return result
@@ -827,7 +749,7 @@ class PartnerStatsService:
         basic = await cls.get_per_campaign_stats(db, user_id, [campaign_id])
         summary = basic.get(
             campaign_id,
-            {"registrations_count": 0, "referrals_count": 0, "earnings_kopeks": 0},
+            {'registrations_count': 0, 'referrals_count': 0, 'earnings_kopeks': 0},
         )
 
         # --- Period earnings (today / week / month) ---
@@ -844,7 +766,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("today"),
+                ).label('today'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -856,7 +778,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("week"),
+                ).label('week'),
                 func.coalesce(
                     func.sum(
                         case(
@@ -868,7 +790,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("month"),
+                ).label('month'),
             ).where(
                 and_(
                     ReferralEarning.user_id == user_id,
@@ -883,8 +805,8 @@ class PartnerStatsService:
 
         referrals_by_day = await db.execute(
             select(
-                func.date(User.created_at).label("date"),
-                func.count(User.id).label("count"),
+                func.date(User.created_at).label('date'),
+                func.count(User.id).label('count'),
             )
             .join(
                 AdvertisingCampaignRegistration,
@@ -899,14 +821,12 @@ class PartnerStatsService:
             )
             .group_by(func.date(User.created_at))
         )
-        referrals_dict = {
-            str(row.date): int(row.count) for row in referrals_by_day.all()
-        }
+        referrals_dict = {str(row.date): int(row.count) for row in referrals_by_day.all()}
 
         earnings_by_day = await db.execute(
             select(
-                func.date(ReferralEarning.created_at).label("date"),
-                func.sum(ReferralEarning.amount_kopeks).label("earnings"),
+                func.date(ReferralEarning.created_at).label('date'),
+                func.sum(ReferralEarning.amount_kopeks).label('earnings'),
             )
             .where(
                 and_(
@@ -917,9 +837,7 @@ class PartnerStatsService:
             )
             .group_by(func.date(ReferralEarning.created_at))
         )
-        earnings_dict = {
-            str(row.date): int(row.earnings or 0) for row in earnings_by_day.all()
-        }
+        earnings_dict = {str(row.date): int(row.earnings or 0) for row in earnings_by_day.all()}
 
         daily_stats = []
         for i in range(DAILY_STATS_DAYS):
@@ -927,9 +845,9 @@ class PartnerStatsService:
             date_str = str(date)
             daily_stats.append(
                 {
-                    "date": date_str,
-                    "referrals_count": referrals_dict.get(date_str, 0),
-                    "earnings_kopeks": earnings_dict.get(date_str, 0),
+                    'date': date_str,
+                    'referrals_count': referrals_dict.get(date_str, 0),
+                    'earnings_kopeks': earnings_dict.get(date_str, 0),
                 }
             )
 
@@ -993,18 +911,18 @@ class PartnerStatsService:
         previous_earnings = int(previous_earn.scalar() or 0)
 
         period_comparison = {
-            "current": {
-                "days": PERIOD_COMPARISON_DAYS,
-                "referrals_count": current_referrals,
-                "earnings_kopeks": current_earnings,
+            'current': {
+                'days': PERIOD_COMPARISON_DAYS,
+                'referrals_count': current_referrals,
+                'earnings_kopeks': current_earnings,
             },
-            "previous": {
-                "days": PERIOD_COMPARISON_DAYS,
-                "referrals_count": previous_referrals,
-                "earnings_kopeks": previous_earnings,
+            'previous': {
+                'days': PERIOD_COMPARISON_DAYS,
+                'referrals_count': previous_referrals,
+                'earnings_kopeks': previous_earnings,
             },
-            "referrals_change": _calc_change(current_referrals, previous_referrals),
-            "earnings_change": _calc_change(current_earnings, previous_earnings),
+            'referrals_change': _calc_change(current_referrals, previous_referrals),
+            'earnings_change': _calc_change(current_earnings, previous_earnings),
         }
 
         # --- Top referrals for this campaign ---
@@ -1016,9 +934,7 @@ class PartnerStatsService:
                 User.last_name,
                 User.created_at,
                 User.has_made_first_topup,
-                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label(
-                    "total_earnings"
-                ),
+                func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('total_earnings'),
             )
             .join(
                 AdvertisingCampaignRegistration,
@@ -1061,41 +977,35 @@ class PartnerStatsService:
 
         top_referrals = []
         for row in top_rows:
-            full_name = (
-                f'{row.first_name or ""} {row.last_name or ""}'.strip()
-                or row.username
-                or f"User #{row.id}"
-            )
+            full_name = f'{row.first_name or ""} {row.last_name or ""}'.strip() or row.username or f'User #{row.id}'
             top_referrals.append(
                 {
-                    "id": row.id,
-                    "full_name": full_name,
-                    "created_at": row.created_at,
-                    "has_paid": row.has_made_first_topup,
-                    "is_active": row.id in active_subs,
-                    "total_earnings_kopeks": int(row.total_earnings),
+                    'id': row.id,
+                    'full_name': full_name,
+                    'created_at': row.created_at,
+                    'has_paid': row.has_made_first_topup,
+                    'is_active': row.id in active_subs,
+                    'total_earnings_kopeks': int(row.total_earnings),
                 }
             )
 
         # --- Conversion rate ---
-        reg_count = summary["registrations_count"]
-        ref_count = summary["referrals_count"]
-        conversion_rate = (
-            round((ref_count / reg_count * 100), 2) if reg_count > 0 else 0.0
-        )
+        reg_count = summary['registrations_count']
+        ref_count = summary['referrals_count']
+        conversion_rate = round((ref_count / reg_count * 100), 2) if reg_count > 0 else 0.0
 
         return {
-            "campaign_id": campaign_id,
-            "registrations_count": reg_count,
-            "referrals_count": ref_count,
-            "earnings_kopeks": summary["earnings_kopeks"],
-            "conversion_rate": conversion_rate,
-            "earnings_today": int(pe_row.today),
-            "earnings_week": int(pe_row.week),
-            "earnings_month": int(pe_row.month),
-            "daily_stats": daily_stats,
-            "period_comparison": period_comparison,
-            "top_referrals": top_referrals,
+            'campaign_id': campaign_id,
+            'registrations_count': reg_count,
+            'referrals_count': ref_count,
+            'earnings_kopeks': summary['earnings_kopeks'],
+            'conversion_rate': conversion_rate,
+            'earnings_today': int(pe_row.today),
+            'earnings_week': int(pe_row.week),
+            'earnings_month': int(pe_row.month),
+            'daily_stats': daily_stats,
+            'period_comparison': period_comparison,
+            'top_referrals': top_referrals,
         }
 
     @classmethod
@@ -1126,8 +1036,8 @@ class PartnerStatsService:
         # --- Daily registrations (DAILY_STATS_DAYS days) ---
         registrations_by_day = await db.execute(
             select(
-                func.date(AdvertisingCampaignRegistration.created_at).label("date"),
-                func.count(AdvertisingCampaignRegistration.id).label("count"),
+                func.date(AdvertisingCampaignRegistration.created_at).label('date'),
+                func.count(AdvertisingCampaignRegistration.id).label('count'),
             )
             .where(
                 and_(
@@ -1137,9 +1047,7 @@ class PartnerStatsService:
             )
             .group_by(func.date(AdvertisingCampaignRegistration.created_at))
         )
-        registrations_dict = {
-            str(row.date): int(row.count) for row in registrations_by_day.all()
-        }
+        registrations_dict = {str(row.date): int(row.count) for row in registrations_by_day.all()}
 
         # --- Daily revenue (DAILY_STATS_DAYS days) ---
         # Revenue = real deposits only (exclude bonus/promo balance spending on subscriptions)
@@ -1161,8 +1069,8 @@ class PartnerStatsService:
 
         revenue_by_day = await db.execute(
             select(
-                func.date(Transaction.created_at).label("date"),
-                revenue_amount_expr.label("revenue"),
+                func.date(Transaction.created_at).label('date'),
+                revenue_amount_expr.label('revenue'),
             )
             .where(
                 and_(
@@ -1184,9 +1092,9 @@ class PartnerStatsService:
             date_str = str(date)
             daily_stats.append(
                 {
-                    "date": date_str,
-                    "referrals_count": registrations_dict.get(date_str, 0),
-                    "earnings_kopeks": revenue_dict.get(date_str, 0),
+                    'date': date_str,
+                    'referrals_count': registrations_dict.get(date_str, 0),
+                    'earnings_kopeks': revenue_dict.get(date_str, 0),
                 }
             )
 
@@ -1216,7 +1124,7 @@ class PartnerStatsService:
 
         # Current period revenue
         current_rev_result = await db.execute(
-            select(revenue_amount_expr.label("revenue")).where(
+            select(revenue_amount_expr.label('revenue')).where(
                 and_(
                     Transaction.user_id.in_(campaign_user_ids_sq),
                     Transaction.is_completed.is_(True),
@@ -1230,7 +1138,7 @@ class PartnerStatsService:
 
         # Previous period revenue
         previous_rev_result = await db.execute(
-            select(revenue_amount_expr.label("revenue")).where(
+            select(revenue_amount_expr.label('revenue')).where(
                 and_(
                     Transaction.user_id.in_(campaign_user_ids_sq),
                     Transaction.is_completed.is_(True),
@@ -1244,20 +1152,18 @@ class PartnerStatsService:
         previous_revenue = int(previous_rev_result.scalar() or 0)
 
         period_comparison = {
-            "current": {
-                "days": PERIOD_COMPARISON_DAYS,
-                "referrals_count": current_registrations,
-                "earnings_kopeks": current_revenue,
+            'current': {
+                'days': PERIOD_COMPARISON_DAYS,
+                'referrals_count': current_registrations,
+                'earnings_kopeks': current_revenue,
             },
-            "previous": {
-                "days": PERIOD_COMPARISON_DAYS,
-                "referrals_count": previous_registrations,
-                "earnings_kopeks": previous_revenue,
+            'previous': {
+                'days': PERIOD_COMPARISON_DAYS,
+                'referrals_count': previous_registrations,
+                'earnings_kopeks': previous_revenue,
             },
-            "referrals_change": _calc_change(
-                current_registrations, previous_registrations
-            ),
-            "earnings_change": _calc_change(current_revenue, previous_revenue),
+            'referrals_change': _calc_change(current_registrations, previous_registrations),
+            'earnings_change': _calc_change(current_revenue, previous_revenue),
         }
 
         # --- Total deposits & spending (separate aggregates) ---
@@ -1269,9 +1175,7 @@ class PartnerStatsService:
                             (
                                 and_(
                                     Transaction.type == TransactionType.DEPOSIT.value,
-                                    Transaction.payment_method.in_(
-                                        REAL_PAYMENT_METHODS
-                                    ),
+                                    Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                                 ),
                                 Transaction.amount_kopeks,
                             ),
@@ -1279,20 +1183,19 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("deposits"),
+                ).label('deposits'),
                 func.coalesce(
                     func.sum(
                         case(
                             (
-                                Transaction.type
-                                == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
                                 func.abs(Transaction.amount_kopeks),
                             ),
                             else_=0,
                         )
                     ),
                     0,
-                ).label("spending"),
+                ).label('spending'),
             ).where(
                 and_(
                     Transaction.user_id.in_(campaign_user_ids_sq),
@@ -1325,9 +1228,7 @@ class PartnerStatsService:
                             (
                                 and_(
                                     Transaction.type == TransactionType.DEPOSIT.value,
-                                    Transaction.payment_method.in_(
-                                        REAL_PAYMENT_METHODS
-                                    ),
+                                    Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                                 ),
                                 Transaction.amount_kopeks,
                             ),
@@ -1335,7 +1236,7 @@ class PartnerStatsService:
                         )
                     ),
                     0,
-                ).label("total_spending"),
+                ).label('total_spending'),
             )
             .join(
                 AdvertisingCampaignRegistration,
@@ -1359,11 +1260,8 @@ class PartnerStatsService:
                             case(
                                 (
                                     and_(
-                                        Transaction.type
-                                        == TransactionType.DEPOSIT.value,
-                                        Transaction.payment_method.in_(
-                                            REAL_PAYMENT_METHODS
-                                        ),
+                                        Transaction.type == TransactionType.DEPOSIT.value,
+                                        Transaction.payment_method.in_(REAL_PAYMENT_METHODS),
                                     ),
                                     Transaction.amount_kopeks,
                                 ),
@@ -1395,29 +1293,25 @@ class PartnerStatsService:
 
         top_registrations: list[dict[str, Any]] = []
         for row in top_rows:
-            full_name = (
-                f'{row.first_name or ""} {row.last_name or ""}'.strip()
-                or row.username
-                or f"User #{row.id}"
-            )
+            full_name = f'{row.first_name or ""} {row.last_name or ""}'.strip() or row.username or f'User #{row.id}'
             top_registrations.append(
                 {
-                    "id": row.id,
-                    "full_name": full_name,
-                    "created_at": row.created_at,
-                    "has_paid": row.has_had_paid_subscription,
-                    "is_active": row.id in active_subs,
-                    "total_earnings_kopeks": int(row.total_spending),
+                    'id': row.id,
+                    'full_name': full_name,
+                    'created_at': row.created_at,
+                    'has_paid': row.has_had_paid_subscription,
+                    'is_active': row.id in active_subs,
+                    'total_earnings_kopeks': int(row.total_spending),
                 }
             )
 
         return {
-            "campaign_id": campaign_id,
-            "total_deposits_kopeks": total_deposits_kopeks,
-            "total_spending_kopeks": total_spending_kopeks,
-            "daily_stats": daily_stats,
-            "period_comparison": period_comparison,
-            "top_registrations": top_registrations,
+            'campaign_id': campaign_id,
+            'total_deposits_kopeks': total_deposits_kopeks,
+            'total_spending_kopeks': total_spending_kopeks,
+            'daily_stats': daily_stats,
+            'period_comparison': period_comparison,
+            'top_registrations': top_registrations,
         }
 
     @classmethod

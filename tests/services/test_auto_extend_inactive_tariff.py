@@ -37,7 +37,7 @@ async def test_try_auto_extend_skips_when_target_tariff_is_inactive(
 
     inactive_tariff = SimpleNamespace(
         id=99,
-        name="ТЕСТОВЫЙ",
+        name='ТЕСТОВЫЙ',
         is_active=False,
         get_shortest_period=lambda: 1,
     )
@@ -50,15 +50,13 @@ async def test_try_auto_extend_skips_when_target_tariff_is_inactive(
     )
 
     # Single-tariff branch (multi-tariff branch is exercised by the next test).
-    monkeypatch.setattr(
-        type(svc.settings), "is_multi_tariff_enabled", lambda _self: False
-    )
+    monkeypatch.setattr(type(svc.settings), 'is_multi_tariff_enabled', lambda _self: False)
 
     async def fake_get_subscription_by_user_id(_db, _user_id):
         return subscription
 
     monkeypatch.setattr(
-        "app.database.crud.subscription.get_subscription_by_user_id",
+        'app.database.crud.subscription.get_subscription_by_user_id',
         fake_get_subscription_by_user_id,
     )
 
@@ -67,10 +65,8 @@ async def test_try_auto_extend_skips_when_target_tariff_is_inactive(
     # never reached — that is exactly the bug we're guarding against.
     pricing_engine_spy = AsyncMock()
     subtract_balance_spy = AsyncMock()
-    monkeypatch.setattr(
-        svc.pricing_engine, "calculate_renewal_price", pricing_engine_spy
-    )
-    monkeypatch.setattr(svc, "subtract_user_balance", subtract_balance_spy)
+    monkeypatch.setattr(svc.pricing_engine, 'calculate_renewal_price', pricing_engine_spy)
+    monkeypatch.setattr(svc, 'subtract_user_balance', subtract_balance_spy)
 
     user = MagicMock()
     user.id = 7
@@ -79,7 +75,7 @@ async def test_try_auto_extend_skips_when_target_tariff_is_inactive(
 
     result = await svc.try_auto_extend_expired_after_topup(db, user, bot=None)
 
-    assert result is False, "must refuse to extend onto an inactive tariff"
+    assert result is False, 'must refuse to extend onto an inactive tariff'
     pricing_engine_spy.assert_not_called()
     subtract_balance_spy.assert_not_called()
 
@@ -93,7 +89,7 @@ async def test_try_auto_extend_skips_inactive_tariff_in_multi_tariff_mode(
 
     inactive_tariff = SimpleNamespace(
         id=99,
-        name="ТЕСТОВЫЙ",
+        name='ТЕСТОВЫЙ',
         is_active=False,
         get_shortest_period=lambda: 1,
     )
@@ -105,24 +101,20 @@ async def test_try_auto_extend_skips_inactive_tariff_in_multi_tariff_mode(
         tariff=inactive_tariff,
     )
 
-    monkeypatch.setattr(
-        type(svc.settings), "is_multi_tariff_enabled", lambda _self: True
-    )
+    monkeypatch.setattr(type(svc.settings), 'is_multi_tariff_enabled', lambda _self: True)
 
     async def fake_get_all_subs(_db, _user_id):
         return [expired_sub]
 
     monkeypatch.setattr(
-        "app.database.crud.subscription.get_all_subscriptions_by_user_id",
+        'app.database.crud.subscription.get_all_subscriptions_by_user_id',
         fake_get_all_subs,
     )
 
     pricing_engine_spy = AsyncMock()
     subtract_balance_spy = AsyncMock()
-    monkeypatch.setattr(
-        svc.pricing_engine, "calculate_renewal_price", pricing_engine_spy
-    )
-    monkeypatch.setattr(svc, "subtract_user_balance", subtract_balance_spy)
+    monkeypatch.setattr(svc.pricing_engine, 'calculate_renewal_price', pricing_engine_spy)
+    monkeypatch.setattr(svc, 'subtract_user_balance', subtract_balance_spy)
 
     user = MagicMock()
     user.id = 7
@@ -145,7 +137,7 @@ async def test_prepare_auto_extend_context_skips_inactive_target_tariff(
 
     inactive_tariff = SimpleNamespace(
         id=99,
-        name="ТЕСТОВЫЙ",
+        name='ТЕСТОВЫЙ',
         is_active=False,
         is_daily=False,
         period_prices={1: 30_000, 30: 300_000},
@@ -161,10 +153,8 @@ async def test_prepare_auto_extend_context_skips_inactive_target_tariff(
         traffic_limit_gb=0,
     )
 
-    monkeypatch.setattr(
-        type(svc.settings), "is_multi_tariff_enabled", lambda _self: False
-    )
-    monkeypatch.setattr(type(svc.settings), "is_tariffs_mode", lambda _self: False)
+    monkeypatch.setattr(type(svc.settings), 'is_multi_tariff_enabled', lambda _self: False)
+    monkeypatch.setattr(type(svc.settings), 'is_tariffs_mode', lambda _self: False)
 
     async def fake_get_subscription_by_user_id(_db, _user_id):
         return subscription
@@ -173,26 +163,24 @@ async def test_prepare_auto_extend_context_skips_inactive_target_tariff(
         return inactive_tariff
 
     monkeypatch.setattr(
-        "app.database.crud.subscription.get_subscription_by_user_id",
+        'app.database.crud.subscription.get_subscription_by_user_id',
         fake_get_subscription_by_user_id,
     )
     monkeypatch.setattr(
-        "app.database.crud.tariff.get_tariff_by_id",
+        'app.database.crud.tariff.get_tariff_by_id',
         fake_get_tariff_by_id,
     )
 
     # The guard short-circuits before any pricing call — these spies must stay clean.
     pricing_engine_spy = AsyncMock()
-    monkeypatch.setattr(
-        svc.pricing_engine, "calculate_renewal_price", pricing_engine_spy
-    )
+    monkeypatch.setattr(svc.pricing_engine, 'calculate_renewal_price', pricing_engine_spy)
 
     user = MagicMock()
     user.id = 7
     db = AsyncMock()
-    cart_data = {"period_days": 1, "tariff_id": 99, "subscription_id": 1}
+    cart_data = {'period_days': 1, 'tariff_id': 99, 'subscription_id': 1}
 
     ctx = await svc._prepare_auto_extend_context(db, user, cart_data)
 
-    assert ctx is None, "cart-driven auto-extend must refuse inactive target tariff"
+    assert ctx is None, 'cart-driven auto-extend must refuse inactive target tariff'
     pricing_engine_spy.assert_not_called()

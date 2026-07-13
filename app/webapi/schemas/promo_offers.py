@@ -53,11 +53,11 @@ class PromoOfferCreateRequest(BaseModel):
     user_id: int | None = Field(None, ge=1)
     telegram_id: int | None = Field(None, ge=1)
     notification_type: str = Field(..., min_length=1)
-    valid_hours: int = Field(..., ge=1, description="Срок действия предложения в часах")
+    valid_hours: int = Field(..., ge=1, description='Срок действия предложения в часах')
     discount_percent: int = Field(0, ge=0)
     bonus_amount_kopeks: int = Field(0, ge=0)
     subscription_id: int | None = None
-    effect_type: str = Field("percent_discount", min_length=1)
+    effect_type: str = Field('percent_discount', min_length=1)
     extra_data: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -65,50 +65,50 @@ class PromoOfferBroadcastRequest(PromoOfferCreateRequest):
     target: str | None = Field(
         None,
         description=(
-            "Категория пользователей для рассылки. Поддерживает те же сегменты, что "
-            "и API рассылок (all, active, trial, custom_today и т.д.)."
+            'Категория пользователей для рассылки. Поддерживает те же сегменты, что '
+            'и API рассылок (all, active, trial, custom_today и т.д.).'
         ),
     )
 
     _ALLOWED_TARGETS: ClassVar[set[str]] = {
-        "all",
-        "active",
-        "trial",
-        "trial_ending",
-        "trial_expired",
-        "no",
-        "expiring",
-        "expiring_subscribers",
-        "expired",
-        "expired_subscribers",
-        "canceled_subscribers",
-        "active_zero",
-        "trial_zero",
-        "zero",
-        "autopay_failed",
-        "low_balance",
-        "inactive_30d",
-        "inactive_60d",
-        "inactive_90d",
+        'all',
+        'active',
+        'trial',
+        'trial_ending',
+        'trial_expired',
+        'no',
+        'expiring',
+        'expiring_subscribers',
+        'expired',
+        'expired_subscribers',
+        'canceled_subscribers',
+        'active_zero',
+        'trial_zero',
+        'zero',
+        'autopay_failed',
+        'low_balance',
+        'inactive_30d',
+        'inactive_60d',
+        'inactive_90d',
     }
     _CUSTOM_TARGETS: ClassVar[set[str]] = {
-        "today",
-        "week",
-        "month",
-        "active_today",
-        "inactive_week",
-        "inactive_month",
-        "referrals",
-        "direct",
+        'today',
+        'week',
+        'month',
+        'active_today',
+        'inactive_week',
+        'inactive_month',
+        'referrals',
+        'direct',
     }
     _TARGET_ALIASES: ClassVar[dict[str, str]] = {
-        "no_sub": "no",
-        "all_users": "all",
-        "active_subscribers": "active",
-        "trial_users": "trial",
+        'no_sub': 'no',
+        'all_users': 'all',
+        'active_subscribers': 'active',
+        'trial_users': 'trial',
     }
 
-    @validator("target")
+    @validator('target')
     def validate_target(cls, value: str | None) -> str | None:
         if value is None:
             return None
@@ -119,12 +119,12 @@ class PromoOfferBroadcastRequest(PromoOfferCreateRequest):
         if normalized in cls._ALLOWED_TARGETS:
             return normalized
 
-        if normalized.startswith("custom_"):
-            criteria = normalized[len("custom_") :]
+        if normalized.startswith('custom_'):
+            criteria = normalized[len('custom_') :]
             if criteria in cls._CUSTOM_TARGETS:
                 return normalized
 
-        raise ValueError("Unsupported target value")
+        raise ValueError('Unsupported target value')
 
 
 class PromoOfferBroadcastResponse(BaseModel):

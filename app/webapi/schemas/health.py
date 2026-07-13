@@ -11,7 +11,7 @@ class HealthFeatureFlags(BaseModel):
     reporting: bool
     webhooks: bool
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class HealthCheckResponse(BaseModel):
@@ -22,4 +22,4 @@ class HealthCheckResponse(BaseModel):
     bot_version: str | None
     features: HealthFeatureFlags
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')

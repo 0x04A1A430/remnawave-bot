@@ -17,10 +17,10 @@ async def handle_delete_ban_notification(
     """Удаляет уведомление о бане при нажатии на кнопку"""
     try:
         await callback.message.delete()
-        await callback.answer("Уведомление удалено")
+        await callback.answer('Уведомление удалено')
     except Exception as e:
-        logger.warning("Не удалось удалить уведомление", error=e)
-        await callback.answer("Не удалось удалить", show_alert=False)
+        logger.warning('Не удалось удалить уведомление', error=e)
+        await callback.answer('Не удалось удалить', show_alert=False)
 
 
 async def handle_webhook_notification_close(
@@ -34,7 +34,7 @@ async def handle_webhook_notification_close(
     try:
         await callback.message.delete()
     except Exception as e:
-        logger.warning("Не удалось удалить webhook-уведомление", e=e)
+        logger.warning('Не удалось удалить webhook-уведомление', e=e)
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
@@ -42,18 +42,18 @@ async def handle_webhook_notification_close(
 
 
 async def handle_unknown_callback(callback: types.CallbackQuery, db_user: User):
-    texts = get_texts(db_user.language if db_user else "ru")
+    texts = get_texts(db_user.language if db_user else 'ru')
 
     await callback.answer(
         texts.t(
-            "UNKNOWN_CALLBACK_ALERT",
-            "Неизвестная команда. Попробуйте ещё раз.",
+            'UNKNOWN_CALLBACK_ALERT',
+            'Неизвестная команда. Попробуйте ещё раз.',
         ),
         show_alert=True,
     )
 
     logger.warning(
-        "Неизвестный callback от пользователя",
+        'Неизвестный callback от пользователя',
         callback_data=callback.data,
         from_user_id=callback.from_user.id,
     )
@@ -73,15 +73,11 @@ async def handle_current_page(callback: types.CallbackQuery, db_user: User):
         pass
 
 
-async def handle_cancel(
-    callback: types.CallbackQuery, state: FSMContext, db_user: User
-):
+async def handle_cancel(callback: types.CallbackQuery, state: FSMContext, db_user: User):
     texts = get_texts(db_user.language)
 
     await state.clear()
-    await callback.message.edit_text(
-        texts.OPERATION_CANCELLED, reply_markup=get_back_keyboard(db_user.language)
-    )
+    await callback.message.edit_text(texts.OPERATION_CANCELLED, reply_markup=get_back_keyboard(db_user.language))
     await callback.answer()
 
 
@@ -89,14 +85,14 @@ async def handle_unknown_message(
     message: types.Message,
     db_user: User | None = None,
 ):
-    texts = get_texts(db_user.language if db_user else "ru")
+    texts = get_texts(db_user.language if db_user else 'ru')
 
     await message.answer(
         texts.t(
-            "UNKNOWN_COMMAND_MESSAGE",
-            "Не понимаю эту команду. Используйте кнопки меню.",
+            'UNKNOWN_COMMAND_MESSAGE',
+            'Не понимаю эту команду. Используйте кнопки меню.',
         ),
-        reply_markup=get_back_keyboard(db_user.language if db_user else "ru"),
+        reply_markup=get_back_keyboard(db_user.language if db_user else 'ru'),
     )
 
 
@@ -105,30 +101,22 @@ async def show_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSess
 
     rules_text = await get_rules(db_user.language)
 
-    await callback.message.edit_text(
-        rules_text, reply_markup=get_back_keyboard(db_user.language)
-    )
+    await callback.message.edit_text(rules_text, reply_markup=get_back_keyboard(db_user.language))
     await callback.answer()
 
 
 def register_handlers(dp: Dispatcher):
     # Удаление уведомлений
-    dp.callback_query.register(
-        handle_delete_ban_notification, F.data == "ban_notify:delete"
-    )
-    dp.callback_query.register(
-        handle_webhook_notification_close, F.data == "webhook:close"
-    )
+    dp.callback_query.register(handle_delete_ban_notification, F.data == 'ban_notify:delete')
+    dp.callback_query.register(handle_webhook_notification_close, F.data == 'webhook:close')
 
-    dp.callback_query.register(show_rules, F.data == "menu_rules")
+    dp.callback_query.register(show_rules, F.data == 'menu_rules')
 
     # No-op utility handlers used in many keyboards
-    dp.callback_query.register(handle_noop, F.data == "noop")
-    dp.callback_query.register(handle_current_page, F.data == "current_page")
+    dp.callback_query.register(handle_noop, F.data == 'noop')
+    dp.callback_query.register(handle_current_page, F.data == 'current_page')
 
-    dp.callback_query.register(
-        handle_cancel, F.data.in_(["cancel", "subscription_cancel"])
-    )
+    dp.callback_query.register(handle_cancel, F.data.in_(['cancel', 'subscription_cancel']))
 
     # Самый последний: ловим любые неизвестные текстовые сообщения
     # Исключаем специальные сервисные события (например, успешные платежи)
@@ -139,7 +127,7 @@ def register_handlers(dp: Dispatcher):
         F.from_user.is_bot.is_(False),
         F.successful_payment.is_(None),
         F.text.is_not(None),
-        ~F.text.startswith("/"),
+        ~F.text.startswith('/'),
     )
 
     # Ловим медиа-сообщения (фото, видео, документы, стикеры и т.д.)

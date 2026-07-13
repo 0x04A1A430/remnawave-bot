@@ -44,9 +44,7 @@ class ThrottlingMiddleware(BaseMiddleware):
             return
         self._last_cleanup = now
         cleanup_threshold = now - 60
-        self.user_buckets = {
-            uid: ts for uid, ts in self.user_buckets.items() if ts > cleanup_threshold
-        }
+        self.user_buckets = {uid: ts for uid, ts in self.user_buckets.items() if ts > cleanup_threshold}
         self.start_buckets = {
             uid: [ts for ts in tss if now - ts < self.start_window]
             for uid, tss in self.start_buckets.items()
@@ -72,27 +70,21 @@ class ThrottlingMiddleware(BaseMiddleware):
         self._maybe_cleanup(now)
 
         # --- /start burst rate-limit ---
-        if (
-            isinstance(event, Message)
-            and event.text
-            and event.text.split(maxsplit=1)[0] == "/start"
-        ):
+        if isinstance(event, Message) and event.text and event.text.split(maxsplit=1)[0] == '/start':
             timestamps = self.start_buckets.get(user_id, [])
             timestamps = [ts for ts in timestamps if now - ts < self.start_window]
 
             if len(timestamps) >= self.start_max_calls:
                 cooldown = max(1, int(self.start_window - (now - timestamps[0])) + 1)
                 logger.warning(
-                    "Rate-limit /start burst exceeded",
+                    'Rate-limit /start burst exceeded',
                     user_id=user_id,
                     call_count=len(timestamps),
                     window_sec=int(self.start_window),
                     max_calls=self.start_max_calls,
                 )
                 try:
-                    await event.answer(
-                        f"Слишком много запросов. Попробуйте через {cooldown} сек."
-                    )
+                    await event.answer(f'Слишком много запросов. Попробуйте через {cooldown} сек.')
                 except TelegramAPIError:
                     pass
                 self.start_buckets[user_id] = timestamps
@@ -105,38 +97,31 @@ class ThrottlingMiddleware(BaseMiddleware):
         last_call = self.user_buckets.get(user_id, 0)
 
         if now - last_call < self.rate_limit:
-            logger.debug("Throttling user", user_id=user_id)
+            logger.debug('Throttling user', user_id=user_id)
 
             # Для сообщений: молчим только если это состояние работы с тикетами; иначе показываем блок
             if isinstance(event, Message):
                 try:
-                    fsm: FSMContext | None = data.get("state")
+                    fsm: FSMContext | None = data.get('state')
                     current = await fsm.get_state() if fsm else None
                 except Exception:
                     current = None
                 if current:
                     state_str = str(current)
-                    is_ticket_state = (
-                        ":waiting_for_message" in state_str
-                        or ":waiting_for_reply" in state_str
-                    ) and (
-                        "TicketStates" in state_str or "AdminTicketStates" in state_str
+                    is_ticket_state = (':waiting_for_message' in state_str or ':waiting_for_reply' in state_str) and (
+                        'TicketStates' in state_str or 'AdminTicketStates' in state_str
                     )
                     if is_ticket_state:
                         return None
                 try:
-                    await event.answer(
-                        "Пожалуйста, не отправляйте сообщения так часто!"
-                    )
+                    await event.answer('Пожалуйста, не отправляйте сообщения так часто!')
                 except TelegramAPIError:
                     pass
                 return None
             # Для callback допустим краткое уведомление
             if isinstance(event, CallbackQuery):
                 try:
-                    await event.answer(
-                        "Слишком быстро! Подождите немного.", show_alert=True
-                    )
+                    await event.answer('Слишком быстро! Подождите немного.', show_alert=True)
                 except TelegramAPIError:
                     pass
                 return None

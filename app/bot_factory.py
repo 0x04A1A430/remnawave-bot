@@ -18,11 +18,11 @@ def create_bot(token: str | None = None, **kwargs) -> Bot:
 
         session_kwargs: dict = {}
         if proxy_url:
-            session_kwargs["proxy"] = proxy_url
+            session_kwargs['proxy'] = proxy_url
         if telegram_api_url:
-            session_kwargs["api"] = TelegramAPIServer.from_base(telegram_api_url)
+            session_kwargs['api'] = TelegramAPIServer.from_base(telegram_api_url)
 
         session = AiohttpSession(**session_kwargs)
 
-    kwargs.setdefault("default", DefaultBotProperties(parse_mode=ParseMode.HTML))
+    kwargs.setdefault('default', DefaultBotProperties(parse_mode=ParseMode.HTML))
     return Bot(token=token or settings.BOT_TOKEN, session=session, **kwargs)

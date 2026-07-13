@@ -37,38 +37,36 @@ class _FakeSMTP:
 def _send_and_capture(monkeypatch, from_name: str) -> str:
     from app.config import settings
 
-    monkeypatch.setattr(type(settings), "is_smtp_configured", lambda self: True)
-    monkeypatch.setattr(
-        type(settings), "get_smtp_from_email", lambda self: "sender@gmail.com"
-    )
-    monkeypatch.setattr(settings, "SMTP_FROM_NAME", from_name, raising=False)
+    monkeypatch.setattr(type(settings), 'is_smtp_configured', lambda self: True)
+    monkeypatch.setattr(type(settings), 'get_smtp_from_email', lambda self: 'sender@gmail.com')
+    monkeypatch.setattr(settings, 'SMTP_FROM_NAME', from_name, raising=False)
 
     fake = _FakeSMTP()
-    monkeypatch.setattr(email_service, "_get_smtp_connection", lambda: fake)
+    monkeypatch.setattr(email_service, '_get_smtp_connection', lambda: fake)
 
-    ok = email_service.send_email("to@example.com", "Subj", "<b>hi</b>")
+    ok = email_service.send_email('to@example.com', 'Subj', '<b>hi</b>')
     assert ok is True
-    assert fake.messages, "send_email did not hand a message to sendmail"
+    assert fake.messages, 'send_email did not hand a message to sendmail'
 
     parsed = email_mod.message_from_string(fake.messages[0])
-    return parsed["From"]
+    return parsed['From']
 
 
 def test_non_ascii_from_name_keeps_single_valid_address(monkeypatch):
-    from_hdr = _send_and_capture(monkeypatch, "Василиса Стор❤️")
+    from_hdr = _send_and_capture(monkeypatch, 'Василиса Стор❤️')
 
     name, addr = parseaddr(from_hdr)
     # A valid addr-spec survives (the whole header was NOT swallowed into one word).
-    assert addr == "sender@gmail.com"
+    assert addr == 'sender@gmail.com'
     # …exactly once — no duplication appended by the client/MTA.
-    assert from_hdr.count("sender@gmail.com") == 1
+    assert from_hdr.count('sender@gmail.com') == 1
     # …and the display name round-trips to the original Cyrillic brand.
-    assert str(make_header(decode_header(name))) == "Василиса Стор❤️"
+    assert str(make_header(decode_header(name))) == 'Василиса Стор❤️'
 
 
 def test_ascii_from_name_unaffected(monkeypatch):
-    from_hdr = _send_and_capture(monkeypatch, "Support")
+    from_hdr = _send_and_capture(monkeypatch, 'Support')
     name, addr = parseaddr(from_hdr)
-    assert addr == "sender@gmail.com"
-    assert name == "Support"
-    assert from_hdr.count("sender@gmail.com") == 1
+    assert addr == 'sender@gmail.com'
+    assert name == 'Support'
+    assert from_hdr.count('sender@gmail.com') == 1

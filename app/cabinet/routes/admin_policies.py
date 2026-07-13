@@ -17,7 +17,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/rbac/policies", tags=["Admin RBAC Policies"])
+router = APIRouter(prefix='/admin/rbac/policies', tags=['Admin RBAC Policies'])
 
 
 # ============ Schemas ============
@@ -48,7 +48,7 @@ class PolicyCreateRequest(BaseModel):
     description: str | None = None
     role_id: int | None = None
     priority: int = Field(default=0, ge=0, le=1000)
-    effect: str = Field(pattern=r"^(allow|deny)$")
+    effect: str = Field(pattern=r'^(allow|deny)$')
     conditions: dict[str, Any] = Field(default_factory=dict)
     resource: str = Field(min_length=1, max_length=100)
     actions: list[str] = Field(default_factory=list)
@@ -61,7 +61,7 @@ class PolicyUpdateRequest(BaseModel):
     description: str | None = None
     role_id: int | None = None
     priority: int | None = Field(default=None, ge=0, le=1000)
-    effect: str | None = Field(default=None, pattern=r"^(allow|deny)$")
+    effect: str | None = Field(default=None, pattern=r'^(allow|deny)$')
     conditions: dict[str, Any] | None = None
     resource: str | None = Field(default=None, min_length=1, max_length=100)
     actions: list[str] | None = None
@@ -99,9 +99,9 @@ async def _policy_to_response(db: AsyncSession, policy) -> PolicyResponse:
 # ============ Routes ============
 
 
-@router.get("", response_model=list[PolicyResponse])
+@router.get('', response_model=list[PolicyResponse])
 async def list_policies(
-    admin: User = Depends(require_permission("roles:read")),
+    admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
     role_id: int | None = None,
 ):
@@ -110,10 +110,10 @@ async def list_policies(
     return [await _policy_to_response(db, p) for p in policies]
 
 
-@router.post("", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
 async def create_policy(
     payload: PolicyCreateRequest,
-    admin: User = Depends(require_permission("roles:create")),
+    admin: User = Depends(require_permission('roles:create')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new access policy (ABAC rule)."""
@@ -123,7 +123,7 @@ async def create_policy(
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Referenced role not found",
+                detail='Referenced role not found',
             )
 
     policy = await AccessPolicyCRUD.create(
@@ -141,7 +141,7 @@ async def create_policy(
     await db.commit()
 
     logger.info(
-        "Admin created access policy",
+        'Admin created access policy',
         admin_id=admin.id,
         policy_id=policy.id,
         policy_name=policy.name,
@@ -150,11 +150,11 @@ async def create_policy(
     return await _policy_to_response(db, policy)
 
 
-@router.put("/{policy_id}", response_model=PolicyResponse)
+@router.put('/{policy_id}', response_model=PolicyResponse)
 async def update_policy(
     policy_id: int,
     payload: PolicyUpdateRequest,
-    admin: User = Depends(require_permission("roles:edit")),
+    admin: User = Depends(require_permission('roles:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing access policy."""
@@ -162,31 +162,31 @@ async def update_policy(
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            detail='Policy not found',
         )
 
     update_data = payload.model_dump(exclude_unset=True)
 
     # Validate role_id if changing
-    if "role_id" in update_data and update_data["role_id"] is not None:
-        role = await AdminRoleCRUD.get_by_id(db, update_data["role_id"])
+    if 'role_id' in update_data and update_data['role_id'] is not None:
+        role = await AdminRoleCRUD.get_by_id(db, update_data['role_id'])
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Referenced role not found",
+                detail='Referenced role not found',
             )
 
     updated = await AccessPolicyCRUD.update(db, policy_id, **update_data)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            detail='Policy not found',
         )
 
     await db.commit()
 
     logger.info(
-        "Admin updated access policy",
+        'Admin updated access policy',
         admin_id=admin.id,
         policy_id=policy_id,
         fields=list(update_data.keys()),
@@ -194,10 +194,10 @@ async def update_policy(
     return await _policy_to_response(db, updated)
 
 
-@router.delete("/{policy_id}")
+@router.delete('/{policy_id}')
 async def delete_policy(
     policy_id: int,
-    admin: User = Depends(require_permission("roles:delete")),
+    admin: User = Depends(require_permission('roles:delete')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete an access policy."""
@@ -205,22 +205,22 @@ async def delete_policy(
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Policy not found",
+            detail='Policy not found',
         )
 
     deleted = await AccessPolicyCRUD.delete(db, policy_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to delete policy",
+            detail='Failed to delete policy',
         )
 
     await db.commit()
 
     logger.info(
-        "Admin deleted access policy",
+        'Admin deleted access policy',
         admin_id=admin.id,
         policy_id=policy_id,
         policy_name=existing.name,
     )
-    return {"message": "Policy deleted", "policy_id": policy_id}
+    return {'message': 'Policy deleted', 'policy_id': policy_id}

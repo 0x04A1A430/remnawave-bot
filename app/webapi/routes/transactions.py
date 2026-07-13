@@ -31,14 +31,14 @@ def _serialize(transaction: Transaction) -> TransactionResponse:
     )
 
 
-@router.get("", response_model=TransactionListResponse)
+@router.get('', response_model=TransactionListResponse)
 async def list_transactions(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user_id: int | None = Query(default=None),
-    type_filter: str | None = Query(default=None, alias="type"),
+    type_filter: str | None = Query(default=None, alias='type'),
     payment_method: str | None = Query(default=None),
     is_completed: bool | None = Query(default=None),
     date_from: datetime | None = Query(default=None),
@@ -66,9 +66,7 @@ async def list_transactions(
     total_query = base_query.with_only_columns(func.count()).order_by(None)
     total = await db.scalar(total_query) or 0
 
-    result = await db.execute(
-        base_query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit)
-    )
+    result = await db.execute(base_query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit))
     transactions = result.scalars().all()
 
     return TransactionListResponse(

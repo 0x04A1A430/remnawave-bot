@@ -16,7 +16,7 @@ async def create_cryptobot_payment(
     invoice_id: str,
     amount: str,
     asset: str,
-    status: str = "active",
+    status: str = 'active',
     description: str | None = None,
     payload: str | None = None,
     bot_invoice_url: str | None = None,
@@ -41,7 +41,7 @@ async def create_cryptobot_payment(
     await db.refresh(payment)
 
     logger.info(
-        "Создан CryptoBot платеж",
+        'Создан CryptoBot платеж',
         invoice_id=invoice_id,
         amount=amount,
         asset=asset,
@@ -50,9 +50,7 @@ async def create_cryptobot_payment(
     return payment
 
 
-async def get_cryptobot_payment_by_invoice_id(
-    db: AsyncSession, invoice_id: str
-) -> CryptoBotPayment | None:
+async def get_cryptobot_payment_by_invoice_id(db: AsyncSession, invoice_id: str) -> CryptoBotPayment | None:
     result = await db.execute(
         select(CryptoBotPayment)
         .options(selectinload(CryptoBotPayment.user))
@@ -61,20 +59,14 @@ async def get_cryptobot_payment_by_invoice_id(
     return result.scalar_one_or_none()
 
 
-async def get_cryptobot_payment_by_id(
-    db: AsyncSession, payment_id: int
-) -> CryptoBotPayment | None:
+async def get_cryptobot_payment_by_id(db: AsyncSession, payment_id: int) -> CryptoBotPayment | None:
     result = await db.execute(
-        select(CryptoBotPayment)
-        .options(selectinload(CryptoBotPayment.user))
-        .where(CryptoBotPayment.id == payment_id)
+        select(CryptoBotPayment).options(selectinload(CryptoBotPayment.user)).where(CryptoBotPayment.id == payment_id)
     )
     return result.scalar_one_or_none()
 
 
-async def get_cryptobot_payment_by_invoice_id_for_update(
-    db: AsyncSession, invoice_id: str
-) -> CryptoBotPayment | None:
+async def get_cryptobot_payment_by_invoice_id_for_update(db: AsyncSession, invoice_id: str) -> CryptoBotPayment | None:
     result = await db.execute(
         select(CryptoBotPayment)
         .options(selectinload(CryptoBotPayment.user))
@@ -85,9 +77,7 @@ async def get_cryptobot_payment_by_invoice_id_for_update(
     return result.scalar_one_or_none()
 
 
-async def get_cryptobot_payment_by_id_for_update(
-    db: AsyncSession, payment_id: int
-) -> CryptoBotPayment | None:
+async def get_cryptobot_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> CryptoBotPayment | None:
     result = await db.execute(
         select(CryptoBotPayment)
         .where(CryptoBotPayment.id == payment_id)
@@ -113,7 +103,7 @@ async def update_cryptobot_payment_status(
     payment.status = status
     payment.updated_at = datetime.now(UTC)
 
-    if status == "paid" and paid_at:
+    if status == 'paid' and paid_at:
         payment.paid_at = paid_at
 
     if commit:
@@ -122,9 +112,7 @@ async def update_cryptobot_payment_status(
     else:
         await db.flush()
 
-    logger.info(
-        "Обновлен статус CryptoBot платежа", invoice_id=invoice_id, status=status
-    )
+    logger.info('Обновлен статус CryptoBot платежа', invoice_id=invoice_id, status=status)
     return payment
 
 
@@ -143,7 +131,7 @@ async def link_cryptobot_payment_to_transaction(
     await db.refresh(payment)
 
     logger.info(
-        "Связан CryptoBot платеж с транзакцией",
+        'Связан CryptoBot платеж с транзакцией',
         invoice_id=invoice_id,
         transaction_id=transaction_id,
     )
@@ -163,9 +151,7 @@ async def get_user_cryptobot_payments(
     return result.scalars().all()
 
 
-async def get_pending_cryptobot_payments(
-    db: AsyncSession, older_than_hours: int = 24
-) -> list[CryptoBotPayment]:
+async def get_pending_cryptobot_payments(db: AsyncSession, older_than_hours: int = 24) -> list[CryptoBotPayment]:
     cutoff_time = datetime.now(UTC) - timedelta(hours=older_than_hours)
 
     result = await db.execute(
@@ -173,7 +159,7 @@ async def get_pending_cryptobot_payments(
         .options(selectinload(CryptoBotPayment.user))
         .where(
             and_(
-                CryptoBotPayment.status == "active",
+                CryptoBotPayment.status == 'active',
                 CryptoBotPayment.created_at < cutoff_time,
             )
         )

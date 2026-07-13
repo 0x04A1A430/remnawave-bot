@@ -17,7 +17,7 @@ async def create_severpay_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = "RUB",
+    currency: str = 'RUB',
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -39,49 +39,35 @@ async def create_severpay_payment(
         severpay_uid=severpay_uid,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status="pending",
+        status='pending',
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info("Создан платеж SeverPay", order_id=order_id, user_id=user_id)
+    logger.info('Создан платеж SeverPay', order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_severpay_payment_by_order_id(
-    db: AsyncSession, order_id: str
-) -> SeverPayPayment | None:
+async def get_severpay_payment_by_order_id(db: AsyncSession, order_id: str) -> SeverPayPayment | None:
     """Получает платеж по order_id (internal)."""
-    result = await db.execute(
-        select(SeverPayPayment).where(SeverPayPayment.order_id == order_id)
-    )
+    result = await db.execute(select(SeverPayPayment).where(SeverPayPayment.order_id == order_id))
     return result.scalar_one_or_none()
 
 
-async def get_severpay_payment_by_severpay_id(
-    db: AsyncSession, severpay_id: str
-) -> SeverPayPayment | None:
+async def get_severpay_payment_by_severpay_id(db: AsyncSession, severpay_id: str) -> SeverPayPayment | None:
     """Получает платеж по ID от SeverPay."""
-    result = await db.execute(
-        select(SeverPayPayment).where(SeverPayPayment.severpay_id == severpay_id)
-    )
+    result = await db.execute(select(SeverPayPayment).where(SeverPayPayment.severpay_id == severpay_id))
     return result.scalar_one_or_none()
 
 
-async def get_severpay_payment_by_id(
-    db: AsyncSession, payment_id: int
-) -> SeverPayPayment | None:
+async def get_severpay_payment_by_id(db: AsyncSession, payment_id: int) -> SeverPayPayment | None:
     """Получает платеж по ID."""
-    result = await db.execute(
-        select(SeverPayPayment).where(SeverPayPayment.id == payment_id)
-    )
+    result = await db.execute(select(SeverPayPayment).where(SeverPayPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_severpay_payment_by_id_for_update(
-    db: AsyncSession, payment_id: int
-) -> SeverPayPayment | None:
+async def get_severpay_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> SeverPayPayment | None:
     """Получает платеж по ID с блокировкой FOR UPDATE."""
     result = await db.execute(
         select(SeverPayPayment)
@@ -126,7 +112,7 @@ async def update_severpay_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        "Обновлен статус платежа SeverPay",
+        'Обновлен статус платежа SeverPay',
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -134,14 +120,12 @@ async def update_severpay_payment_status(
     return payment
 
 
-async def get_pending_severpay_payments(
-    db: AsyncSession, user_id: int
-) -> list[SeverPayPayment]:
+async def get_pending_severpay_payments(db: AsyncSession, user_id: int) -> list[SeverPayPayment]:
     """Получает незавершенные платежи пользователя."""
     result = await db.execute(
         select(SeverPayPayment).where(
             SeverPayPayment.user_id == user_id,
-            SeverPayPayment.status == "pending",
+            SeverPayPayment.status == 'pending',
             SeverPayPayment.is_paid == False,
         )
     )
@@ -155,7 +139,7 @@ async def get_expired_pending_severpay_payments(
     now = datetime.now(UTC)
     result = await db.execute(
         select(SeverPayPayment).where(
-            SeverPayPayment.status == "pending",
+            SeverPayPayment.status == 'pending',
             SeverPayPayment.is_paid == False,
             SeverPayPayment.expires_at < now,
         )

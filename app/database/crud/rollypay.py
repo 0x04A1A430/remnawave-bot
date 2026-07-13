@@ -17,7 +17,7 @@ async def create_rollypay_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = "RUB",
+    currency: str = 'RUB',
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -37,51 +37,35 @@ async def create_rollypay_payment(
         rollypay_payment_id=rollypay_payment_id,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status="pending",
+        status='pending',
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info("Создан платеж RollyPay", order_id=order_id, user_id=user_id)
+    logger.info('Создан платеж RollyPay', order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_rollypay_payment_by_order_id(
-    db: AsyncSession, order_id: str
-) -> RollyPayPayment | None:
+async def get_rollypay_payment_by_order_id(db: AsyncSession, order_id: str) -> RollyPayPayment | None:
     """Получает платеж по order_id (internal)."""
-    result = await db.execute(
-        select(RollyPayPayment).where(RollyPayPayment.order_id == order_id)
-    )
+    result = await db.execute(select(RollyPayPayment).where(RollyPayPayment.order_id == order_id))
     return result.scalar_one_or_none()
 
 
-async def get_rollypay_payment_by_rollypay_id(
-    db: AsyncSession, rollypay_payment_id: str
-) -> RollyPayPayment | None:
+async def get_rollypay_payment_by_rollypay_id(db: AsyncSession, rollypay_payment_id: str) -> RollyPayPayment | None:
     """Получает платеж по ID от RollyPay."""
-    result = await db.execute(
-        select(RollyPayPayment).where(
-            RollyPayPayment.rollypay_payment_id == rollypay_payment_id
-        )
-    )
+    result = await db.execute(select(RollyPayPayment).where(RollyPayPayment.rollypay_payment_id == rollypay_payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_rollypay_payment_by_id(
-    db: AsyncSession, payment_id: int
-) -> RollyPayPayment | None:
+async def get_rollypay_payment_by_id(db: AsyncSession, payment_id: int) -> RollyPayPayment | None:
     """Получает платеж по ID."""
-    result = await db.execute(
-        select(RollyPayPayment).where(RollyPayPayment.id == payment_id)
-    )
+    result = await db.execute(select(RollyPayPayment).where(RollyPayPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_rollypay_payment_by_id_for_update(
-    db: AsyncSession, payment_id: int
-) -> RollyPayPayment | None:
+async def get_rollypay_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> RollyPayPayment | None:
     """Получает платеж по ID с блокировкой FOR UPDATE."""
     result = await db.execute(
         select(RollyPayPayment)
@@ -123,7 +107,7 @@ async def update_rollypay_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        "Обновлен статус платежа RollyPay",
+        'Обновлен статус платежа RollyPay',
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -131,14 +115,12 @@ async def update_rollypay_payment_status(
     return payment
 
 
-async def get_pending_rollypay_payments(
-    db: AsyncSession, user_id: int
-) -> list[RollyPayPayment]:
+async def get_pending_rollypay_payments(db: AsyncSession, user_id: int) -> list[RollyPayPayment]:
     """Получает незавершенные платежи пользователя."""
     result = await db.execute(
         select(RollyPayPayment).where(
             RollyPayPayment.user_id == user_id,
-            RollyPayPayment.status == "pending",
+            RollyPayPayment.status == 'pending',
             RollyPayPayment.is_paid == False,
         )
     )
@@ -152,7 +134,7 @@ async def get_expired_pending_rollypay_payments(
     now = datetime.now(UTC)
     result = await db.execute(
         select(RollyPayPayment).where(
-            RollyPayPayment.status == "pending",
+            RollyPayPayment.status == 'pending',
             RollyPayPayment.is_paid == False,
             RollyPayPayment.expires_at < now,
         )

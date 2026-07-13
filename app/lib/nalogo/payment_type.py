@@ -34,7 +34,7 @@ class PaymentTypeAPI:
         Raises:
             DomainException: For API errors
         """
-        response = await self.http.get("/payment-type/table")
+        response = await self.http.get('/payment-type/table')
         return response.json()  # type: ignore[no-any-return]
 
     async def favorite(self) -> dict[str, Any] | None:
@@ -54,7 +54,7 @@ class PaymentTypeAPI:
 
         # Find first payment type with favorite=True
         for payment_type in payment_types:
-            if payment_type.get("favorite", False):
+            if payment_type.get('favorite', False):
                 return payment_type
 
         return None

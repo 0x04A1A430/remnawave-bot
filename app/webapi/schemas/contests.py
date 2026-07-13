@@ -127,15 +127,15 @@ class ReferralContestCreateRequest(BaseModel):
     title: str
     description: str | None = None
     prize_text: str | None = None
-    contest_type: str = Field("referral_paid", min_length=1)
+    contest_type: str = Field('referral_paid', min_length=1)
     start_at: datetime
     end_at: datetime
     daily_summary_time: time = Field(default=time(hour=12))
     daily_summary_times: str | None = Field(
         default=None,
-        description="Список времён ЧЧ:ММ через запятую (например, 12:00,18:00)",
+        description='Список времён ЧЧ:ММ через запятую (например, 12:00,18:00)',
     )
-    timezone: str = Field(default="UTC")
+    timezone: str = Field(default='UTC')
     is_active: bool = True
     created_by: int | None = None
 
@@ -148,9 +148,7 @@ class ReferralContestUpdateRequest(BaseModel):
     start_at: datetime | None = None
     end_at: datetime | None = None
     daily_summary_time: time | None = None
-    daily_summary_times: str | None = Field(
-        default=None, description="Список времён ЧЧ:ММ через запятую"
-    )
+    daily_summary_times: str | None = Field(default=None, description='Список времён ЧЧ:ММ через запятую')
     timezone: str | None = None
     is_active: bool | None = None
     final_summary_sent: bool | None = None

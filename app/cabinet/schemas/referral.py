@@ -10,7 +10,7 @@ class ReferralInfoResponse(BaseModel):
 
     referral_code: str
     referral_link: str
-    bot_referral_link: str = ""
+    bot_referral_link: str = ''
     total_referrals: int
     active_referrals: int
     total_earnings_kopeks: int
@@ -76,7 +76,7 @@ class ReferralTermsResponse(BaseModel):
     is_enabled: bool
     commission_percent: int
     first_payment_commission_percent: int | None = None
-    recurring_commission_tiers: str = ""
+    recurring_commission_tiers: str = ''
     minimum_topup_kopeks: int
     minimum_topup_rubles: float
     first_topup_bonus_kopeks: int

@@ -16,7 +16,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/apps", tags=["Cabinet Admin Apps"])
+router = APIRouter(prefix='/admin/apps', tags=['Cabinet Admin Apps'])
 
 
 # ============ Schemas ============
@@ -37,15 +37,13 @@ class UpdateRemnaWaveUuidRequest(BaseModel):
 
 # ============ Helpers ============
 
-_UUID_PATTERN = re.compile(
-    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
+_UUID_PATTERN = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
 
 
 def _get_remnawave_config_uuid() -> str | None:
     """Get RemnaWave config UUID from system settings or env."""
     try:
-        return bot_configuration_service.get_current_value("CABINET_REMNA_SUB_CONFIG")
+        return bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
     except Exception:
         return settings.CABINET_REMNA_SUB_CONFIG
 
@@ -53,9 +51,9 @@ def _get_remnawave_config_uuid() -> str | None:
 # ============ Routes ============
 
 
-@router.get("/remnawave/status", response_model=RemnaWaveConfigStatus)
+@router.get('/remnawave/status', response_model=RemnaWaveConfigStatus)
 async def get_remnawave_config_status(
-    admin: User = Depends(require_permission("apps:read")),
+    admin: User = Depends(require_permission('apps:read')),
 ):
     """Get RemnaWave config integration status."""
     config_uuid = _get_remnawave_config_uuid()
@@ -65,10 +63,10 @@ async def get_remnawave_config_status(
     )
 
 
-@router.put("/remnawave/uuid", response_model=RemnaWaveConfigStatus)
+@router.put('/remnawave/uuid', response_model=RemnaWaveConfigStatus)
 async def set_remnawave_config_uuid(
     request: UpdateRemnaWaveUuidRequest,
-    admin: User = Depends(require_permission("apps:edit")),
+    admin: User = Depends(require_permission('apps:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Set RemnaWave subscription config UUID."""
@@ -77,28 +75,26 @@ async def set_remnawave_config_uuid(
     if uuid_value and not _UUID_PATTERN.match(uuid_value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid UUID format",
+            detail='Invalid UUID format',
         )
 
     try:
-        await bot_configuration_service.set_value(
-            db, "CABINET_REMNA_SUB_CONFIG", uuid_value
-        )
+        await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', uuid_value)
         await db.commit()
 
         from app.handlers.subscription.common import invalidate_app_config_cache
 
         invalidate_app_config_cache()
         logger.info(
-            "Admin updated CABINET_REMNA_SUB_CONFIG",
+            'Admin updated CABINET_REMNA_SUB_CONFIG',
             admin_id=admin.id,
             uuid_value=uuid_value,
         )
     except Exception as e:
-        logger.error("Error saving RemnaWave config UUID", error=e)
+        logger.error('Error saving RemnaWave config UUID', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save configuration",
+            detail='Failed to save configuration',
         )
 
     return RemnaWaveConfigStatus(
@@ -107,16 +103,16 @@ async def set_remnawave_config_uuid(
     )
 
 
-@router.get("/remnawave/config")
+@router.get('/remnawave/config')
 async def get_remnawave_subscription_config(
-    admin: User = Depends(require_permission("apps:read")),
+    admin: User = Depends(require_permission('apps:read')),
 ):
     """Fetch subscription page config from RemnaWave panel."""
     config_uuid = _get_remnawave_config_uuid()
     if not config_uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="RemnaWave subscription config is not configured",
+            detail='RemnaWave subscription config is not configured',
         )
 
     try:
@@ -126,28 +122,28 @@ async def get_remnawave_subscription_config(
             if not config:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Subscription config not found",
+                    detail='Subscription config not found',
                 )
 
             return {
-                "uuid": config.uuid,
-                "name": config.name,
-                "view_position": config.view_position,
-                "config": config.config,
+                'uuid': config.uuid,
+                'name': config.name,
+                'view_position': config.view_position,
+                'config': config.config,
             }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error fetching RemnaWave config", error=e)
+        logger.error('Error fetching RemnaWave config', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch config from RemnaWave",
+            detail='Failed to fetch config from RemnaWave',
         )
 
 
-@router.get("/remnawave/configs")
+@router.get('/remnawave/configs')
 async def list_remnawave_subscription_configs(
-    admin: User = Depends(require_permission("apps:read")),
+    admin: User = Depends(require_permission('apps:read')),
 ):
     """List available subscription page configs from RemnaWave panel."""
     try:
@@ -156,15 +152,15 @@ async def list_remnawave_subscription_configs(
             configs = await api.get_subscription_page_configs()
             return [
                 {
-                    "uuid": c.uuid,
-                    "name": c.name,
-                    "view_position": c.view_position,
+                    'uuid': c.uuid,
+                    'name': c.name,
+                    'view_position': c.view_position,
                 }
                 for c in configs
             ]
     except Exception as e:
-        logger.error("Error listing RemnaWave configs", error=e)
+        logger.error('Error listing RemnaWave configs', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch configs from RemnaWave",
+            detail='Failed to fetch configs from RemnaWave',
         )

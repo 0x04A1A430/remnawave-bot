@@ -94,25 +94,21 @@ class IncomeAPI:
             DomainException: For other API errors
         """
         if not services:
-            raise ValueError("Services cannot be empty")
+            raise ValueError('Services cannot be empty')
 
         # Validate client for legal entity (mirrors PHP validation)
         if client and client.income_type == IncomeType.FROM_LEGAL_ENTITY:
             if not client.inn:
-                raise ValueError("Client INN cannot be empty for legal entity")
+                raise ValueError('Client INN cannot be empty for legal entity')
             if not client.display_name:
-                raise ValueError("Client DisplayName cannot be empty for legal entity")
+                raise ValueError('Client DisplayName cannot be empty for legal entity')
 
         # Calculate total amount (mirrors PHP BigDecimal logic)
         total_amount = sum(item.get_total_amount() for item in services)
 
         # Create request object
         request = IncomeRequest(
-            operation_time=(
-                AtomDateTime.from_datetime(operation_time)
-                if operation_time
-                else AtomDateTime.now()
-            ),
+            operation_time=(AtomDateTime.from_datetime(operation_time) if operation_time else AtomDateTime.now()),
             request_time=AtomDateTime.now(),
             services=services,
             total_amount=str(total_amount),
@@ -122,7 +118,7 @@ class IncomeAPI:
         )
 
         # Make API request
-        response = await self.http.post("/income", json_data=request.model_dump())
+        response = await self.http.post('/income', json_data=request.model_dump())
         return response.json()  # type: ignore[no-any-return]
 
     async def cancel(
@@ -154,7 +150,7 @@ class IncomeAPI:
         """
         # Validate receipt UUID
         if not receipt_uuid.strip():
-            raise ValueError("Receipt UUID cannot be empty")
+            raise ValueError('Receipt UUID cannot be empty')
 
         # Convert comment to enum if string
         if isinstance(comment, str):
@@ -167,31 +163,21 @@ class IncomeAPI:
 
             if comment_enum is None:
                 valid_comments = [e.value for e in CancelCommentType]
-                raise ValueError(
-                    f"Comment is invalid. Must be one of: {valid_comments}"
-                )
+                raise ValueError(f'Comment is invalid. Must be one of: {valid_comments}')
 
             comment = comment_enum
 
         # Create request object
         request = CancelRequest(
-            operation_time=(
-                AtomDateTime.from_datetime(operation_time)
-                if operation_time
-                else AtomDateTime.now()
-            ),
-            request_time=(
-                AtomDateTime.from_datetime(request_time)
-                if request_time
-                else AtomDateTime.now()
-            ),
+            operation_time=(AtomDateTime.from_datetime(operation_time) if operation_time else AtomDateTime.now()),
+            request_time=(AtomDateTime.from_datetime(request_time) if request_time else AtomDateTime.now()),
             comment=comment,
             receipt_uuid=receipt_uuid.strip(),
             partner_code=partner_code,
         )
 
         # Make API request
-        response = await self.http.post("/cancel", json_data=request.model_dump())
+        response = await self.http.post('/cancel', json_data=request.model_dump())
         return response.json()  # type: ignore[no-any-return]
 
     async def get_list(
@@ -225,15 +211,15 @@ class IncomeAPI:
 
         # API использует GET с query параметрами
         params = {
-            "from": from_date.isoformat(),
-            "to": to_date.isoformat(),
-            "limit": str(limit),
-            "offset": str(offset),
-            "sortBy": "OPERATION_TIME",
-            "sortOrder": "DESC",
+            'from': from_date.isoformat(),
+            'to': to_date.isoformat(),
+            'limit': str(limit),
+            'offset': str(offset),
+            'sortBy': 'OPERATION_TIME',
+            'sortOrder': 'DESC',
         }
 
         # Формируем query string
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        response = await self.http.get(f"/incomes?{query}")
+        query = '&'.join(f'{k}={v}' for k, v in params.items())
+        response = await self.http.get(f'/incomes?{query}')
         return response.json()  # type: ignore[no-any-return]
