@@ -576,10 +576,10 @@ class SubscriptionService:
         Только для действующих подписок: пересоздавать DISABLED-юзера ради
         истёкшей подписки не нужно — админ удалил его намеренно.
         """
-        is_actually_active = (
-            subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
-            and subscription.end_date > datetime.now(UTC)
-        )
+        is_actually_active = subscription.status in (
+            SubscriptionStatus.ACTIVE.value,
+            SubscriptionStatus.TRIAL.value,
+        ) and subscription.end_date > datetime.now(UTC)
         if not is_actually_active:
             logger.info(
                 'Панель-юзер удалён из RemnaWave, подписка неактивна — пересоздание не требуется',
@@ -593,7 +593,9 @@ class SubscriptionService:
             subscription_id=subscription.id,
             user_id=subscription.user_id,
         )
-        return await self.create_remnawave_user(db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason)
+        return await self.create_remnawave_user(
+            db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+        )
 
     @staticmethod
     def _format_user_log(user) -> str:
