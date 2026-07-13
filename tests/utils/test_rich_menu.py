@@ -472,12 +472,7 @@ async def test_multi_tariff_table_is_fully_localized(monkeypatch):
         ),
     ]
 
-    async def fake_get_all(db, user_id):
-        return subs
-
-    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
-
-    html_out = await rich_menu._build_subscriptions_table(_make_user(subs[0]), MarkerTexts(), AsyncMock())
+    html_out = rich_menu._build_subscriptions_table(subs, MarkerTexts())
 
     assert '[MAIN_MENU_RICH_DAYS_LEFT]' in html_out
     assert '[MAIN_MENU_RICH_TARIFF_FALLBACK]' in html_out
@@ -841,3 +836,66 @@ async def test_trial_offer_absent_when_trial_used(monkeypatch):
     html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
 
     assert 'Активировать триал' not in html_out
+
+
+async def test_multiple_subscriptions_collapse_into_details(monkeypatch):
+    """При >1 подписки таблица сворачивается в details со счётчиком в summary."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+    now = datetime.now(UTC)
+    subs = [_make_subscription(now), _make_subscription(now, status='expired', days_left=-3)]
+
+    async def fake_get_all(db, user_id):
+        return subs
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(subs[0]), DummyTexts(), AsyncMock())
+
+    assert '<details><summary><b>📱 Подписки (2)</b></summary>' in html_out
+    assert '<table bordered striped>' in html_out
+    # Заголовок не дублируется: summary заменяет h6
+    assert '<h6>' not in html_out
+
+
+async def test_single_multi_tariff_subscription_stays_expanded(monkeypatch):
+    """Одна подписка — обычный заголовок и таблица без сворачивания."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+    now = datetime.now(UTC)
+    sub = _make_subscription(now)
+
+    async def fake_get_all(db, user_id):
+        return [sub]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(sub), DummyTexts(), AsyncMock())
+
+    assert '<h6>📱 Подписки</h6>' in html_out
+    assert '<details><summary>' not in html_out
+
+
+async def test_collapsible_disabled_keeps_plain_table(monkeypatch):
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(settings, 'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE', False, raising=False)
+
+    now = datetime.now(UTC)
+    subs = [_make_subscription(now), _make_subscription(now)]
+
+    async def fake_get_all(db, user_id):
+        return subs
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(subs[0]), DummyTexts(), AsyncMock())
+
+    assert '<h6>📱 Подписки</h6>' in html_out
+    assert '<details><summary>' not in html_out
+
+
+def test_collapsible_flag_default_is_enabled():
+    assert Settings.model_fields['MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE'].default is True

@@ -284,8 +284,7 @@ def _trial_offer_link(user: User, texts) -> str:
     return f'<a href="{html.escape(url, quote=True)}"><b>{label}</b></a>'
 
 
-async def _build_subscriptions_table(user: User, texts, db: AsyncSession) -> str:
-    subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+def _build_subscriptions_table(subscriptions, texts) -> str:
     if not subscriptions:
         return f'<p>{html.escape(texts.t("SUB_STATUS_NONE", "❌ Отсутствует"))}</p>'
 
@@ -415,12 +414,20 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
 
     if settings.is_multi_tariff_enabled():
         heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTIONS_HEADING', '📱 Подписки')
-        subscription_block = await _build_subscriptions_table(user, texts, db)
+        subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+        subscription_block = _build_subscriptions_table(subscriptions, texts)
+        if len(subscriptions) > 1 and settings.MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE:
+            # Несколько подписок раздувают меню — сворачиваем таблицу в details;
+            # summary служит заголовком (h6 не дублируем), счётчик — вместо содержимого.
+            summary = f'<b>{html.escape(heading)} ({len(subscriptions)})</b>'
+            blocks.append(f'<details><summary>{summary}</summary>{subscription_block}</details>')
+        else:
+            blocks.append(f'<h6>{html.escape(heading)}</h6>')
+            blocks.append(subscription_block)
     else:
         heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTION_HEADING', '📱 Подписка')
-        subscription_block = await _build_single_subscription_block(user, texts, db)
-    blocks.append(f'<h6>{html.escape(heading)}</h6>')
-    blocks.append(subscription_block)
+        blocks.append(f'<h6>{html.escape(heading)}</h6>')
+        blocks.append(await _build_single_subscription_block(user, texts, db))
 
     trial_link = _trial_offer_link(user, texts)
     if trial_link:
