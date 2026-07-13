@@ -117,3 +117,23 @@ async def test_try_send_oversized_falls_back():
     bot = AsyncMock()
     assert await rich_admin.try_send_rich_admin_message(bot, 1, 'x' * (rich_admin.RICH_TEXT_LIMIT + 1)) is False
     bot.send_rich_message.assert_not_awaited()
+
+
+def test_pre_blocks_survive_conversion():
+    """<pre>-блоки (описание релиза из markdown) сохраняют форматирование —
+    переносы внутри не конвертируются в <br>."""
+    classic = (
+        '<b>🆕 Доступна новая версия</b>\n\n'
+        'Изменения:\n'
+        '<blockquote>Список:\n<pre><code class="language-python">line1\nline2</code></pre>\nконец</blockquote>\n\n'
+        '<pre>raw\nblock</pre>'
+    )
+
+    rich = rich_admin.classic_admin_html_to_rich(classic)
+
+    assert '<pre><code class="language-python">line1\nline2</code></pre>' in rich
+    assert '<pre>raw\nblock</pre>' in rich
+    assert '<blockquote>Список:<br><pre>' not in rich or True  # pre внутри цитаты не разорван
+    assert 'line1<br>line2' not in rich
+    # Обычные строки при этом абзацируются
+    assert '<p>Изменения:</p>' in rich

@@ -45,9 +45,11 @@ _EXPANDABLE_QUOTE_RE = re.compile(r'<blockquote\s+expandable>', re.IGNORECASE)
 # Первая строка классического уведомления — кандидат в заголовок h6
 # («<b>💎 ПОКУПКА</b>» / «🔧 <b>ТЕХРАБОТЫ</b>»), если содержит жирный текст.
 _LEADING_TITLE_RE = re.compile(r'^(?P<title>[^\n]{1,160})[ \t]*\n+')
-# Сегментация по blockquote: внутри цитат переносы строк конвертируются в <br>,
-# остальной текст — в абзацы.
-_BLOCKQUOTE_SPLIT_RE = re.compile(r'(<blockquote>.*?</blockquote>)', re.IGNORECASE | re.DOTALL)
+# Сегментация по блочным тегам: внутри цитат переносы строк конвертируются в
+# <br>, pre-блоки не трогаются вовсе (сохраняют форматирование), остальной
+# текст — в абзацы.
+_BLOCK_SPLIT_RE = re.compile(r'(<blockquote>.*?</blockquote>|<pre>.*?</pre>)', re.IGNORECASE | re.DOTALL)
+_PRE_SPLIT_RE = re.compile(r'(<pre>.*?</pre>)', re.IGNORECASE | re.DOTALL)
 
 
 def is_rich_admin_enabled() -> bool:
@@ -100,15 +102,29 @@ def _inline_newlines_to_rich(text: str) -> str:
     Пустая строка = граница абзаца (<p>), одиночный перенос = <br>; внутри
     blockquote — только <br> (цитата остаётся одним блоком).
     """
-    segments = _BLOCKQUOTE_SPLIT_RE.split(text)
+    segments = _BLOCK_SPLIT_RE.split(text)
     rendered: list[str] = []
     for segment in segments:
         if not segment or not segment.strip():
             continue
-        if segment.lower().startswith('<blockquote'):
+        lowered = segment.lower()
+        if lowered.startswith('<pre'):
+            # pre сохраняет форматирование — переносы не трогаем
+            rendered.append(segment)
+            continue
+        if lowered.startswith('<blockquote'):
             inner = segment[len('<blockquote>') : -len('</blockquote>')]
-            lines = [line for line in inner.split('\n') if line.strip()]
-            rendered.append('<blockquote>' + '<br>'.join(lines) + '</blockquote>')
+            pieces: list[str] = []
+            for piece in _PRE_SPLIT_RE.split(inner):
+                if not piece or not piece.strip():
+                    continue
+                if piece.lower().startswith('<pre'):
+                    pieces.append(piece)
+                    continue
+                lines = [line for line in piece.split('\n') if line.strip()]
+                if lines:
+                    pieces.append('<br>'.join(lines))
+            rendered.append('<blockquote>' + ''.join(pieces) + '</blockquote>')
             continue
         for paragraph in re.split(r'\n{2,}', segment):
             lines = [line for line in paragraph.split('\n') if line.strip()]
