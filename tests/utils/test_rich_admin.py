@@ -133,7 +133,8 @@ def test_pre_blocks_survive_conversion():
 
     assert '<pre><code class="language-python">line1\nline2</code></pre>' in rich
     assert '<pre>raw\nblock</pre>' in rich
-    assert '<blockquote>Список:<br><pre>' not in rich or True  # pre внутри цитаты не разорван
+    # pre внутри цитаты не разорван и примыкает к тексту как блок
+    assert '<blockquote>Список:<pre><code' in rich
     assert 'line1<br>line2' not in rich
     # Обычные строки при этом абзацируются
     assert '<p>Изменения:</p>' in rich
