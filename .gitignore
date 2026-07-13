@@ -18,6 +18,7 @@
 !alembic.ini
 !release-please-config.json
 !.release-please-manifest.json
+!.pre-commit-config.yaml
 
 # Документация
 !README.md
