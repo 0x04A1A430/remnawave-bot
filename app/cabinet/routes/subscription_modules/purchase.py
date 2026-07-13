@@ -376,6 +376,14 @@ async def get_purchase_options(
                 subscription_status = subscription.actual_status
                 subscription_is_expired = subscription_status == 'expired'
 
+            # Free (0₽) source tariff: switching is blocked (free_tariff_cannot_switch,
+            # TARIFF_SWITCH_RESET_FREE_DAYS) — frontend must offer the purchase flow
+            # instead of the prorated switch.
+            subscription_on_free_tariff = False
+            if current_tariff_id and settings.TARIFF_SWITCH_RESET_FREE_DAYS:
+                _current_tariff = await get_tariff_by_id(db, current_tariff_id)
+                subscription_on_free_tariff = bool(_current_tariff is not None and _current_tariff.is_free)
+
             tariff_responses = []
             for tariff in tariffs:
                 tariff_data = await _build_tariff_response(db, tariff, current_tariff_id, language, user, subscription)
@@ -395,6 +403,7 @@ async def get_purchase_options(
                 # Include subscription status info for frontend decision making
                 'subscription_status': subscription_status,
                 'subscription_is_expired': subscription_is_expired,
+                'subscription_on_free_tariff': subscription_on_free_tariff,
                 'has_subscription': subscription is not None,
                 # Multi-tariff: all tariffs purchased flag for frontend fallback
                 'all_tariffs_purchased': len(purchased_tariff_ids) >= len(tariffs)
