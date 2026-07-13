@@ -34,7 +34,7 @@ for dir_path in runtime_dirs:
         for root, dirs, files in os.walk(dir_path):
             for name in dirs:
                 try:
-                    os.chown(
+                    os.chown(  # noqa: PTH118
                         os.path.join(root, name),
                         APP_UID,
                         APP_GID,
@@ -44,7 +44,7 @@ for dir_path in runtime_dirs:
                     pass
             for name in files:
                 try:
-                    os.chown(
+                    os.chown(  # noqa: PTH118
                         os.path.join(root, name),
                         APP_UID,
                         APP_GID,
@@ -54,16 +54,16 @@ for dir_path in runtime_dirs:
                     pass
     except PermissionError:
         try:
-            os.chmod(p, 0o777)
+            os.chmod(p, 0o777)  # noqa: PTH101, S103
             for root, dirs, files in os.walk(dir_path):
                 for name in dirs:
                     try:
-                        os.chmod(os.path.join(root, name), 0o777)
+                        os.chmod(os.path.join(root, name), 0o777)  # noqa: PTH101, PTH118, S103
                     except PermissionError:
                         pass
                 for name in files:
                     try:
-                        os.chmod(os.path.join(root, name), 0o777)
+                        os.chmod(os.path.join(root, name), 0o777)  # noqa: PTH101, PTH118, S103
                     except PermissionError:
                         pass
         except PermissionError:
@@ -72,4 +72,4 @@ for dir_path in runtime_dirs:
 os.setgid(APP_GID)
 os.setuid(APP_UID)
 
-os.execvp(sys.argv[1], sys.argv[1:])
+os.execvp(sys.argv[1], sys.argv[1:])  # noqa: S606

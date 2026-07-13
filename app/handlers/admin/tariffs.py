@@ -305,7 +305,6 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
     # Форматируем список серверов
     squads_list = tariff.allowed_squads or []
-    squads_display = f'{len(squads_list)} серверов' if squads_list else 'Все серверы'
 
     # Форматируем промогруппы
     promo_groups = tariff.allowed_promo_groups or []

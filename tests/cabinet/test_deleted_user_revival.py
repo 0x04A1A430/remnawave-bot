@@ -71,7 +71,7 @@ def _make_request(init_data: str | None = None) -> MagicMock:
 
 
 def _credentials(
-    token: str = 'fake.jwt.token',
+    token: str = 'fake.jwt.token',  # noqa: S107
 ) -> MagicMock:
     return MagicMock(credentials=token)
 

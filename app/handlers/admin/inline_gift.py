@@ -408,7 +408,7 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
     sub_info_lines: list[str] = []
     db_user_found = False
     sub = None
-    cur_days, cur_traffic, cur_devices = 0, 0, 1
+    cur_days, cur_devices = 0, 1
 
     async with AsyncSessionLocal() as db:
         from sqlalchemy import func as sql_func
@@ -420,7 +420,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         db_user = result.scalars().first()
 
         if db_user:
-            db_user_found = True
             if db_user.username:
                 full = ' '.join(p for p in [db_user.first_name or '', db_user.last_name or ''] if p).strip()
                 recipient_display = f'{full} (@{db_user.username})' if full else f'@{db_user.username}'
@@ -431,7 +430,6 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
             sub = await get_subscription_by_user_id(db, db_user.id)
             if sub:
                 cur_days = max(0, sub.days_left) if hasattr(sub, 'days_left') else 0
-                cur_traffic = sub.traffic_limit_gb or 0
                 cur_devices = sub.device_limit or 1
                 gb = sub.traffic_limit_gb
                 traffic_str = texts.t('INLINE_GIFT_TRAFFIC_UNLIMITED', 'Безлимит') if gb == 0 else f'{gb} ГБ'
