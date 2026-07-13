@@ -24,6 +24,7 @@ from app.database.models import (
 )
 from app.utils.timezone import format_local_datetime
 
+
 logger = structlog.get_logger(__name__)
 
 # Статусы, при которых подписка считается «живой» (индекс uq_subscriptions_user_tariff_active

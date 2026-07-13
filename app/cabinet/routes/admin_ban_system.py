@@ -44,6 +44,7 @@ from ..schemas.ban_system import (
     UnbanResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/ban-system', tags=['Cabinet Admin Ban System'])

@@ -14,6 +14,7 @@ from app.services.server_status_service import (
     ServerStatusService,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 _status_service = ServerStatusService()

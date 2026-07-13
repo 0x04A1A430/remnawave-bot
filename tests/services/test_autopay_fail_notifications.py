@@ -14,6 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -32,6 +33,7 @@ from app.services.monitoring_service import (
     apply_autopay_fail_notification,
     decide_autopay_fail_notification,
 )
+
 
 DEFAULTS = dict(max_notifications=2, final_reminder_hours=3, repeat_interval_hours=0)
 

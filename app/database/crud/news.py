@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import NewsArticle
 
+
 logger = structlog.get_logger(__name__)
 
 # Fields that can be set via update_news_article

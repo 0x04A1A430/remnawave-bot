@@ -20,6 +20,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
+
 OAUTH_FILE = Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'oauth.py'
 
 

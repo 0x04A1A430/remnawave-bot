@@ -25,6 +25,7 @@ from app.cabinet.services.email_template_overrides import (
     substitute_context_vars,
 )
 
+
 ALL_TYPE_KEYS = [t['type'] for t in TEMPLATE_TYPES]
 
 

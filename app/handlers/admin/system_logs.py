@@ -11,6 +11,7 @@ from app.config import settings
 from app.database.models import User
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 LOG_PREVIEW_LIMIT = 2300

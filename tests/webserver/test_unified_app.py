@@ -9,6 +9,7 @@ from fastapi import FastAPI, status
 from app.config import settings
 from app.services.payment_service import PaymentService
 
+
 # ensure backup directory exists before importing the unified app to avoid side effects during module import
 _backup_dir = Path('data/backups')
 _backup_dir.mkdir(parents=True, exist_ok=True)

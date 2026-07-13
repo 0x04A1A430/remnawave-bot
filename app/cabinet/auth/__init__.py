@@ -14,6 +14,7 @@ from .telegram_auth import (
     validate_telegram_oidc_token,
 )
 
+
 __all__ = [
     'create_access_token',
     'create_auto_login_token',

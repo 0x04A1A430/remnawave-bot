@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import RequiredChannel, UserChannelSubscription
 
+
 logger = structlog.get_logger(__name__)
 
 # Explicit allowlist of fields that can be updated via update_channel()

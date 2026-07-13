@@ -18,6 +18,7 @@ import structlog
 
 from app.utils.cache import cache, cache_key
 
+
 logger = structlog.get_logger(__name__)
 
 WEB_AUTH_TOKEN_TTL = 300  # 5 minutes

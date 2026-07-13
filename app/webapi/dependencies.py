@@ -10,6 +10,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import WebApiToken
 from app.services.web_api_token_service import web_api_token_service
 
+
 api_key_header_scheme = APIKeyHeader(name='X-API-Key', auto_error=False)
 
 

@@ -57,6 +57,7 @@ from ..ip_utils import get_client_ip
 from ..schemas.auth import UserResponse
 from .auth import _create_auth_response, _store_refresh_token, _user_to_response
 
+
 logger = structlog.get_logger(__name__)
 
 

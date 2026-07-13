@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+
 CampaignBonusType = Literal['balance', 'subscription', 'none', 'tariff']
 
 

@@ -30,6 +30,7 @@ from ..schemas.traffic import (
     UserTrafficItem,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/traffic', tags=['Admin Traffic'])

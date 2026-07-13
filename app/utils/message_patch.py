@@ -12,6 +12,7 @@ from aiogram.types import FSInputFile, InaccessibleMessage, InputMediaPhoto, Mes
 from app.config import settings
 from app.localization.texts import get_texts
 
+
 logger = structlog.get_logger(__name__)
 
 LOGO_PATH = Path(settings.LOGO_FILE)

@@ -12,6 +12,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import GuestPurchase
 from app.services.guest_purchase_service import GuestPurchaseError, activate_purchase
 
+
 logger = structlog.get_logger(__name__)
 
 _GIFT_NOT_FOUND = 'Подарок не найден или недоступен.'

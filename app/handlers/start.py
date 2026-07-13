@@ -65,8 +65,9 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
-from app.utils.user_utils import generate_unique_referral_code
 from app.utils.button_emoji import make_button
+from app.utils.user_utils import generate_unique_referral_code
+
 
 logger = structlog.get_logger(__name__)
 
@@ -2610,7 +2611,7 @@ def _insert_random_message(base_text: str, random_message: str) -> str:
 
 
 def get_referral_code_keyboard(language: str):
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
     texts = get_texts(language)
     return InlineKeyboardMarkup(

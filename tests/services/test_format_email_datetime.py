@@ -34,6 +34,7 @@ import pytest
 from app.config import settings
 from app.utils.timezone import format_email_datetime
 
+
 # ---------------------------------------------------------------------------
 # Resolution order & basic formatting.
 # ---------------------------------------------------------------------------

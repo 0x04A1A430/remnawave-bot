@@ -28,6 +28,7 @@ from app.database.models import User
 
 from ..dependencies import get_current_cabinet_user
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/media', tags=['Cabinet Media'])

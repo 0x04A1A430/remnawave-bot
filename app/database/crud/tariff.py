@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff
 
+
 logger = structlog.get_logger(__name__)
 
 

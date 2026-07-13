@@ -27,6 +27,7 @@ from app.services.menu_layout import (
     MenuLayoutStatsService,
 )
 
+
 __all__ = [
     'AVAILABLE_CALLBACKS',
     'BUILTIN_BUTTONS_INFO',

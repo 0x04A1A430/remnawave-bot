@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+
 LOCALE_DIR = Path(__file__).resolve().parents[1] / 'app' / 'localization' / 'locales'
 APP_DIR = Path(__file__).resolve().parents[1] / 'app'
 LANGS = ['ru', 'en', 'ua', 'fa', 'zh']

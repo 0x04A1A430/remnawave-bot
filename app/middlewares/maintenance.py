@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject, User as TgUser
 from app.config import settings
 from app.services.maintenance_service import maintenance_service
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -17,6 +17,7 @@ from app.database.crud.webhook import (
     update_webhook_stats,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

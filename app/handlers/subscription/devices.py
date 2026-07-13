@@ -56,6 +56,7 @@ from .common import (
 )
 from .countries import _get_available_countries
 
+
 _PLATFORM_EMOJI = {
     'Windows': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",
     'macOS': "<tg-emoji emoji-id='5818956713507689486'>🪟</tg-emoji>",

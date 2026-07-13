@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import DiscountOffer
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, TelegramObject
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 
+
 logger = structlog.get_logger(__name__)
 
 # Известные builtin callback_data из меню

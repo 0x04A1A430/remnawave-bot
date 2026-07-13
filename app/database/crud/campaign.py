@@ -18,6 +18,7 @@ from app.database.models import (
     User,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

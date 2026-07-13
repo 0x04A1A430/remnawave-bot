@@ -14,6 +14,7 @@ from app.database.crud.faq import (
 )
 from app.database.models import FaqPage, FaqSetting
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -19,6 +19,7 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 T = TypeVar('T')

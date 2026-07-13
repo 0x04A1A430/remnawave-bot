@@ -48,6 +48,7 @@ from app.services.payment_verification_service import (
     _parse_cryptobot_amount_kopeks,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

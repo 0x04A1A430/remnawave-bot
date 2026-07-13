@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import aiohttp
 import structlog
 
+
 logger = structlog.get_logger(__name__)
 
 

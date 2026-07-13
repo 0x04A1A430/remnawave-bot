@@ -127,6 +127,7 @@ from app.database.models import (
     tariff_promo_groups,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

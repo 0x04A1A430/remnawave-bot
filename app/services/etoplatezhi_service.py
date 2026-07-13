@@ -10,6 +10,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 PAYMENT_PAGE_BASE_URL = 'https://paymentpage.etoplatezhi.ru/payment'

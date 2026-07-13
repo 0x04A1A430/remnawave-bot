@@ -196,6 +196,7 @@ from ..schemas.miniapp import (
     MiniAppTransaction,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

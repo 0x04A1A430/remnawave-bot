@@ -14,6 +14,7 @@ from app.services.system_settings_service import bot_configuration_service
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/apps', tags=['Cabinet Admin Apps'])

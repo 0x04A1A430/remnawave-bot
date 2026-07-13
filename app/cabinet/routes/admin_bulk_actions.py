@@ -44,6 +44,7 @@ from ..schemas.bulk_actions import (
 )
 from .admin_users import _sync_subscription_to_panel
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/bulk', tags=['Cabinet Admin Bulk Actions'])

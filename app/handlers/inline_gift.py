@@ -38,6 +38,7 @@ from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 from app.utils.button_emoji import make_button
 
+
 logger = structlog.get_logger(__name__)
 
 _FOREVER_DAYS = (2099 - 2025) * 365
@@ -332,9 +333,10 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         try:
             if gift_type == 'discount':
+                import secrets as _secrets
+
                 from app.database.crud.promocode import create_promocode
                 from app.database.models import PromoCodeType
-                import secrets as _secrets
 
                 pct = gift.discount_percent or 0
                 promo_code_str = _secrets.token_hex(4).upper()

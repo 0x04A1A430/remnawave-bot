@@ -21,6 +21,7 @@ from app.database.models import SubscriptionStatus, User
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/subscriptions', tags=['Cabinet Multi-Tariff'], redirect_slashes=False)

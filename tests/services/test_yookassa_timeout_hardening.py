@@ -41,6 +41,7 @@ import pytest
 
 from app.services import yookassa_service
 
+
 YOOKASSA_SERVICE_PATH = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'yookassa_service.py'
 YOOKASSA_PAYMENT_PATH = Path(__file__).resolve().parents[2] / 'app' / 'services' / 'payment' / 'yookassa.py'
 

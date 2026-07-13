@@ -9,6 +9,7 @@ import structlog
 
 from app.config import settings
 
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +19,7 @@ from ...schemas.subscription import (
     ServerInfo,
     SubscriptionResponse,
 )
+
 
 logger = structlog.get_logger(__name__)
 

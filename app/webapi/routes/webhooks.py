@@ -26,6 +26,7 @@ from ..schemas.webhooks import (
     WebhookUpdateRequest,
 )
 
+
 router = APIRouter()
 
 

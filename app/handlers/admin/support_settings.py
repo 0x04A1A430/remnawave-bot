@@ -15,6 +15,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.states import SupportSettingsStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

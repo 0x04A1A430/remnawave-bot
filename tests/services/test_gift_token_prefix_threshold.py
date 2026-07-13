@@ -12,6 +12,7 @@ from __future__ import annotations
 from app.database.crud.landing import generate_purchase_token
 from app.services.guest_purchase_service import GIFT_TOKEN_MIN_PREFIX_LENGTH
 
+
 TELEGRAM_START_PARAM_MAX = 64
 
 

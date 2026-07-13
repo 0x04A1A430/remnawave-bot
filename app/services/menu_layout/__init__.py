@@ -21,6 +21,7 @@ from .history_service import MenuLayoutHistoryService
 from .service import MenuLayoutService
 from .stats_service import MenuLayoutStatsService
 
+
 __all__ = [
     'AVAILABLE_CALLBACKS',
     'BUILTIN_BUTTONS_INFO',

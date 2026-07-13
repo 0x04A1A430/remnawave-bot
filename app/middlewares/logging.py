@@ -6,6 +6,7 @@ import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+
 logger = structlog.get_logger(__name__)
 
 

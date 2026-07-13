@@ -7,6 +7,7 @@ from pathlib import Path
 
 import structlog
 
+
 sys.path.append(str(Path(__file__).parent))
 
 from app.bot import setup_bot

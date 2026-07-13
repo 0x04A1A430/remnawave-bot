@@ -19,6 +19,7 @@ from app.cabinet.routes.media import (
     make_media_token,
 )
 
+
 FID = 'BAADAgADabcdef_-1234567890'
 OTHER = 'BQADdifferent_-9876543210zy'
 

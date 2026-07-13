@@ -22,6 +22,7 @@ from app.cabinet.routes.admin_email_templates import (
 from app.cabinet.services.email_service import EmailService
 from app.cabinet.services.email_templates import EmailNotificationTemplates
 
+
 ALL_TYPE_KEYS = [t['type'] for t in TEMPLATE_TYPES]
 
 

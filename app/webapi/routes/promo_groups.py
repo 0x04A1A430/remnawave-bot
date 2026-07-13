@@ -25,6 +25,7 @@ from ..schemas.promo_groups import (
     PromoGroupUpdateRequest,
 )
 
+
 router = APIRouter()
 
 

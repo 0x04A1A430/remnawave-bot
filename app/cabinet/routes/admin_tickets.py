@@ -24,6 +24,7 @@ from ..schemas.tickets import (
     _validate_media_bundle,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/tickets', tags=['Cabinet Admin Tickets'])

@@ -15,6 +15,7 @@ from app.services.paypear_service import paypear_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг статусов PayPear -> internal
 PAYPEAR_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'NEW': ('pending', False),

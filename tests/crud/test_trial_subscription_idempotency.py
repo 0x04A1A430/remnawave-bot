@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from app.database.crud import subscription as sub_crud
 from app.database.models import SubscriptionStatus
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

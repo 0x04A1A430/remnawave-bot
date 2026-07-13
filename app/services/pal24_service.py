@@ -11,6 +11,7 @@ import structlog
 from app.config import settings
 from app.external.pal24_client import Pal24APIError, Pal24Client
 
+
 logger = structlog.get_logger(__name__)
 
 

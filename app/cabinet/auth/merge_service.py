@@ -13,6 +13,7 @@ import structlog
 
 from app.utils.cache import cache, cache_key
 
+
 logger = structlog.get_logger(__name__)
 
 MERGE_TOKEN_TTL_SECONDS = 1800  # 30 minutes

@@ -61,6 +61,9 @@ from app.handlers.admin import (
     users as admin_users,
     welcome_text as admin_welcome_text,
 )
+from app.handlers.admin.inline_gift import (
+    register_handlers as register_admin_inline_gift_handlers,
+)
 from app.handlers.channel_member import (
     register_handlers as register_channel_member_handlers,
 )
@@ -68,9 +71,6 @@ from app.handlers.gift_activation import (
     register_handlers as register_gift_activation_handlers,
 )
 from app.handlers.inline_gift import register_handlers as register_inline_gift_handlers
-from app.handlers.admin.inline_gift import (
-    register_handlers as register_admin_inline_gift_handlers,
-)
 from app.handlers.stars_payments import register_stars_handlers
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.blacklist import BlacklistMiddleware
@@ -86,6 +86,7 @@ from app.middlewares.throttling import ThrottlingMiddleware
 from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache
 from app.utils.message_patch import patch_message_methods
+
 
 patch_message_methods()
 

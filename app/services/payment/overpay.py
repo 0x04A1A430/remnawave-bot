@@ -15,6 +15,7 @@ from app.services.overpay_service import overpay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 OVERPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'charged': ('success', True),
     'authorized': ('authorized', False),

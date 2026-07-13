@@ -27,6 +27,7 @@ from app.services.subscription_service import SubscriptionService
 from app.utils.cache import cache
 from app.utils.check_reg_process import is_registration_process
 
+
 logger = structlog.get_logger(__name__)
 
 # Redis key prefix and TTL for pending /start payload backup

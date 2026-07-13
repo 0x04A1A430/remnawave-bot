@@ -29,6 +29,7 @@ from ..schemas.servers import (
     ServerUpdateRequest,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/servers', tags=['Cabinet Admin Servers'])

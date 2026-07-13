@@ -35,6 +35,7 @@ from app.database.models import (
 from ..dependencies import get_cabinet_db, require_permission
 from .branding import ALLOWED_BG_TYPES, _validate_settings
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/landings', tags=['Cabinet Admin Landings'])

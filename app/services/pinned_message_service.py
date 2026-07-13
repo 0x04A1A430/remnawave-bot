@@ -16,6 +16,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import PinnedMessage, User, UserStatus
 from app.utils.validators import sanitize_html, validate_html_tags
 
+
 logger = structlog.get_logger(__name__)
 
 

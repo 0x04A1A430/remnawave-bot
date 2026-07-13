@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import AccessPolicy, AdminAuditLog, AdminRole, User, UserRole
 
+
 logger = structlog.get_logger(__name__)
 
 # Fields allowed for AdminRole.update()

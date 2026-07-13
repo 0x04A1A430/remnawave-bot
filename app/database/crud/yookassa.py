@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import YooKassaPayment
 
+
 logger = structlog.get_logger(__name__)
 
 

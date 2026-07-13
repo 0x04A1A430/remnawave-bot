@@ -14,6 +14,7 @@ from app.utils.display_mode import is_visible_in_web
 from ..dependencies import get_cabinet_db
 from ..schemas.info_pages import InfoPageListItem, InfoPageResponse
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/info-pages', tags=['Cabinet Info Pages'])

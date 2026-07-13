@@ -9,6 +9,7 @@ to the supported tags.
 
 import re
 
+
 # HTML tags that Telegram Bot API supports (case-insensitive tag names)
 _ALLOWED_TAGS: frozenset[str] = frozenset(
     {

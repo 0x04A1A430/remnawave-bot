@@ -34,6 +34,7 @@ from app.utils.menu_layout_cache import (
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/menu-layout', tags=['Admin Menu Layout'])

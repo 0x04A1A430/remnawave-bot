@@ -128,6 +128,7 @@ from .traffic import (
     select_traffic,
 )
 
+
 __all__ = [
     'activate_trial',
     'add_traffic',

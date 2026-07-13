@@ -31,6 +31,7 @@ from ...schemas.subscription import (
 )
 from .helpers import _subscription_to_response, resolve_subscription
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

@@ -8,6 +8,7 @@ from aiogram.types import TelegramObject
 
 from app.database.models import SubscriptionStatus
 
+
 logger = structlog.get_logger(__name__)
 
 # Буфер времени перед деактивацией (защита от race condition при продлении)

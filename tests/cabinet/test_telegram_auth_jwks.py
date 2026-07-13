@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from app.cabinet.auth.telegram_auth import _build_public_keys
 
+
 # Real Telegram JWKS as observed at 2026-05-15 (4 keys: RSA + EC P-256 + Ed25519 + EC secp256k1)
 _TELEGRAM_JWKS_SNAPSHOT = {
     'keys': [

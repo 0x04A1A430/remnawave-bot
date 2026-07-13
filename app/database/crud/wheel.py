@@ -16,6 +16,7 @@ from app.database.models import (
     WheelSpin,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

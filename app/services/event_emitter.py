@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.webhook_service import webhook_service
 
+
 logger = structlog.get_logger(__name__)
 
 

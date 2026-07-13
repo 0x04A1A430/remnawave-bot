@@ -15,6 +15,7 @@ from app.services.menu_layout_service import (
     MenuLayoutService,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 from ..dependencies import get_db_session, require_api_token
@@ -67,6 +68,7 @@ from ..schemas.menu_layout import (
     WeekdayStats,
     WeekdayStatsResponse,
 )
+
 
 router = APIRouter()
 

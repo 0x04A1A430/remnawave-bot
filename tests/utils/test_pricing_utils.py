@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from app.localization.texts import _build_dynamic_values
 
+
 # DEPRECATED: format_period_option_label tests removed - function replaced with unified price_display system
 
 

@@ -25,6 +25,7 @@ from ..schemas.info_pages import (
     ReorderRequest,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/info-pages', tags=['Cabinet Admin Info Pages'])

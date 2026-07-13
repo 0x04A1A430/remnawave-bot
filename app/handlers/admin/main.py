@@ -24,6 +24,7 @@ from app.localization.texts import clear_rules_cache, get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

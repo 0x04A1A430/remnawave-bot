@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import MulenPayPayment
 
+
 logger = structlog.get_logger(__name__)
 
 

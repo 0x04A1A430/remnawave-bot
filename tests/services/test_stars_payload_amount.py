@@ -26,6 +26,7 @@ import pytest
 
 from app.services.payment.stars import TelegramStarsMixin
 
+
 parse = TelegramStarsMixin._parse_balance_topup_kopeks
 plausible = TelegramStarsMixin._is_payload_amount_plausible
 

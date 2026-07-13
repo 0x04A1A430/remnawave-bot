@@ -54,6 +54,7 @@ from app.utils.miniapp_buttons import (
     build_miniapp_or_callback_button,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

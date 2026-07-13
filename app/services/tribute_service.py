@@ -18,6 +18,7 @@ from app.external.tribute import TributeService as TributeAPI
 from app.services.payment_service import PaymentService
 from app.utils.user_utils import format_referrer_info
 
+
 logger = structlog.get_logger(__name__)
 
 

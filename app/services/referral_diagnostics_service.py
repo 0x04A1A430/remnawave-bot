@@ -22,6 +22,7 @@ from app.database.crud.referral import create_referral_earning, get_user_campaig
 from app.database.crud.user import add_user_balance
 from app.database.models import ReferralEarning, User
 
+
 logger = structlog.get_logger(__name__)
 
 

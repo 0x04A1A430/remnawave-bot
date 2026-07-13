@@ -22,6 +22,7 @@ from app.states import AdminTicketStates
 from app.utils.cache import RateLimitCache
 from app.utils.photo_message import safe_edit_or_resend
 
+
 logger = structlog.get_logger(__name__)
 
 # Максимальная длина сообщения Telegram (с запасом)

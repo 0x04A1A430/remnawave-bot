@@ -4,6 +4,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 try:

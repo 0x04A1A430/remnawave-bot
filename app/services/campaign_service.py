@@ -14,6 +14,7 @@ from app.database.crud.user import add_user_balance
 from app.database.models import AdvertisingCampaign, User
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 

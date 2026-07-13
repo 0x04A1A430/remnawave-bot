@@ -15,6 +15,7 @@ from app.services.aurapay_service import aurapay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг статусов AuraPay -> internal
 AURAPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'PENDING': ('pending', False),

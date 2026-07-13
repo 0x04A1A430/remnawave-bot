@@ -10,6 +10,7 @@ from app.database.crud.subscription import get_active_subscriptions_by_user_id
 from app.database.models import User
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 

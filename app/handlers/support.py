@@ -7,6 +7,7 @@ from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 from app.utils.photo_message import edit_or_answer_photo
 
+
 logger = structlog.get_logger(__name__)
 
 

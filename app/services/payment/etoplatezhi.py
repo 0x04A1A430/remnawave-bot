@@ -15,6 +15,7 @@ from app.services.etoplatezhi_service import etoplatezhi_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг статусов Etoplatezhi -> internal
 ETOPLATEZHI_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'success': ('success', True),

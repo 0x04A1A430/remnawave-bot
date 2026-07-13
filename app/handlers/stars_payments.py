@@ -13,6 +13,7 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -36,6 +36,7 @@ from app.utils.formatters import format_days_declension
 from app.utils.pricing_utils import format_period_description
 from app.utils.timezone import format_email_datetime, format_local_datetime
 
+
 logger = structlog.get_logger(__name__)
 
 

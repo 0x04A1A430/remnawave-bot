@@ -67,6 +67,7 @@ from ..schemas.remnawave import (
     TrafficPeriods,
 )
 
+
 try:
     from app.services.remnawave_service import (
         RemnaWaveConfigurationError,

@@ -3,6 +3,7 @@ import json
 import re
 from html.parser import HTMLParser
 
+
 TELEGRAM_ALLOWED_TAGS = frozenset({'b', 'i', 'u', 's', 'a', 'code', 'pre', 'blockquote'})
 
 _TAG_ALIASES = {'strong': 'b', 'em': 'i', 'ins': 'u', 'strike': 's', 'del': 's'}

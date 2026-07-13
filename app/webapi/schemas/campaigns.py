@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, validator
 
+
 CampaignBonusType = Annotated[
     Literal['balance', 'subscription', 'none', 'tariff'],
     Field(

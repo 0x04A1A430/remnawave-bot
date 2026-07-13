@@ -61,6 +61,7 @@ from app.utils.subscription_utils import (
 )
 from app.utils.user_utils import get_effective_referral_commission_percent
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -40,6 +40,7 @@ from ..schemas.servers import (
 )
 from ..schemas.users import PromoGroupSummary
 
+
 try:  # pragma: no cover - импорт может провалиться без optional-зависимостей
     from app.services.remnawave_service import RemnaWaveService  # type: ignore
 except Exception:  # pragma: no cover - скрываем функционал, если сервис недоступен

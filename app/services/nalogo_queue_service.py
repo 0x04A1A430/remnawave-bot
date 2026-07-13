@@ -15,6 +15,7 @@ from app.config import settings
 from app.services.nalogo_service import NaloGoService
 from app.utils.cache import cache
 
+
 logger = structlog.get_logger(__name__)
 
 

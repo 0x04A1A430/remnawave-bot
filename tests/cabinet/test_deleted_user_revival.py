@@ -28,6 +28,7 @@ from fastapi import HTTPException, status
 from app.cabinet.dependencies import get_current_cabinet_user
 from app.database.models import UserStatus
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ def _make_request(init_data: str | None = None) -> MagicMock:
 
 def _credentials(
     token: str = 'fake.jwt.token',
-) -> MagicMock:  # noqa: S107 — pytest fixture sentinel, not a real secret
+) -> MagicMock:
     return MagicMock(credentials=token)
 
 

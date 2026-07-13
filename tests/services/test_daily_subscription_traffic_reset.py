@@ -16,12 +16,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.services.daily_subscription_service import DailySubscriptionService
 from app.services.subscription_service import SubscriptionService
+
 
 _GB = 1024 * 1024 * 1024
 

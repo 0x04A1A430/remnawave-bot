@@ -17,6 +17,7 @@ from app.services.user_service import UserService
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_percentage
 
+
 logger = structlog.get_logger(__name__)
 
 

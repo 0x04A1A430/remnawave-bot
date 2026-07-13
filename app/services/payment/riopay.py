@@ -24,6 +24,7 @@ from app.services.riopay_service import riopay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг статусов RioPay → internal
 RIOPAY_STATUS_MAP = {
     'COMPLETED': ('success', True),

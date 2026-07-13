@@ -31,6 +31,7 @@ from ..schemas.pinned_messages import (
     PinnedMessageUpdateRequest,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/pinned-messages', tags=['Cabinet Admin Pinned Messages'])

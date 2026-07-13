@@ -31,6 +31,7 @@ from app.utils.decorators import error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
+
 logger = structlog.get_logger(__name__)
 
 

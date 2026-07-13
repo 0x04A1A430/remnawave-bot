@@ -30,6 +30,7 @@ from app.database.models import (
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/stats/sales', tags=['Cabinet Admin Sales Stats'])

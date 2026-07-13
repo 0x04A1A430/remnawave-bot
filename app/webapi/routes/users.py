@@ -52,6 +52,7 @@ from ._subscription_state import (
     snapshot_subscription_state as _snapshot_subscription_state,
 )
 
+
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 

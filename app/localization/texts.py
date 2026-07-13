@@ -12,6 +12,7 @@ from app.localization.loader import (
     load_locale,
 )
 
+
 _logger = structlog.get_logger(__name__)
 
 _cached_rules: dict[str, str] = {}

@@ -11,6 +11,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 API_BASE_URL = 'https://api.paypear.ru/v1'

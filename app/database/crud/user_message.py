@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import User, UserMessage
 from app.utils.validators import sanitize_html, validate_html_tags
 
+
 logger = structlog.get_logger(__name__)
 
 

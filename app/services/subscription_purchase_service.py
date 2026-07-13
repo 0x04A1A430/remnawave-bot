@@ -39,6 +39,7 @@ from app.utils.pricing_utils import (
     validate_pricing_calculation,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

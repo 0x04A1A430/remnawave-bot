@@ -24,6 +24,7 @@ from .message_patch import (
     prepare_privacy_safe_kwargs,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 MAX_RETRIES = 3

@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from structlog.contextvars import bound_contextvars
 
+
 logger = structlog.get_logger('web_api')
 
 

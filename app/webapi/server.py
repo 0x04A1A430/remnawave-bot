@@ -9,6 +9,7 @@ from app.config import settings
 
 from .app import create_web_api_app
 
+
 logger = structlog.get_logger(__name__)
 
 

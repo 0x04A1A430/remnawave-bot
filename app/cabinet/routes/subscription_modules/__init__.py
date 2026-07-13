@@ -16,6 +16,7 @@ from .status import router as status_router
 from .tariff_switch import router as tariff_switch_router
 from .traffic import router as traffic_router
 
+
 __all__ = [
     'autopay_router',
     'daily_router',

@@ -38,6 +38,7 @@ from ..schemas.remnawave import (
     RemnaWaveUserTrafficResponse,
 )
 
+
 try:  # pragma: no cover - импорт может не работать без optional-зависимостей
     from app.services.remnawave_service import (  # type: ignore
         RemnaWaveConfigurationError,

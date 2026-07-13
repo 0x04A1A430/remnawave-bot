@@ -59,6 +59,7 @@ from app.database.models import (
 )
 from app.services.remnawave_service import RemnaWaveService
 
+
 logger = structlog.get_logger(__name__)
 
 

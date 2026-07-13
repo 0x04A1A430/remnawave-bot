@@ -13,6 +13,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

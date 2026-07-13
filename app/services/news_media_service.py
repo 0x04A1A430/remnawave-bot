@@ -16,6 +16,7 @@ from typing import Literal
 import structlog
 from PIL import Image, ImageOps
 
+
 logger = structlog.get_logger(__name__)
 
 # Hard limit on decompressed image pixels to prevent decompression bombs.

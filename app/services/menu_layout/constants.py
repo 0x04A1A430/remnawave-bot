@@ -2,6 +2,7 @@
 
 from typing import Any
 
+
 # Ключ для хранения конфигурации в SystemSetting
 MENU_LAYOUT_CONFIG_KEY = 'menu_layout_config'
 

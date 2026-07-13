@@ -33,6 +33,7 @@ from app.database.models import PromoCode, PromoCodeType, PromoCodeUse, PromoGro
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 router = APIRouter(prefix='/admin/promocodes', tags=['Admin Promocodes'])
 
 

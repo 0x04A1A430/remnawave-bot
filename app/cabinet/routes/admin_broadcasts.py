@@ -45,6 +45,7 @@ from ..schemas.broadcasts import (
     TariffForBroadcast,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/broadcasts', tags=['Cabinet Admin Broadcasts'])

@@ -17,6 +17,7 @@ from app.config import settings
 from app.database.models import User, UserStatus
 from app.utils.timezone import format_email_datetime
 
+
 logger = structlog.get_logger(__name__)
 
 

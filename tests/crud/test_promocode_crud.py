@@ -11,6 +11,7 @@ from app.database.crud.promocode import (
 )
 from app.database.models import PromoCodeType
 
+
 # Import fixtures
 
 

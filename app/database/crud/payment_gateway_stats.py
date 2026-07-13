@@ -42,6 +42,7 @@ from app.database.models import (
     YooKassaPayment,
 )
 
+
 # (PaymentMethod value, payment model, "successfully paid" SQL predicate).
 # 19 gateways use the is_paid Boolean column; CryptoBot/Heleket match status.
 _GATEWAY_REGISTRY: list[tuple[str, type, object]] = [

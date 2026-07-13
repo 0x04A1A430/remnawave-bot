@@ -33,6 +33,7 @@ from app.services.pricing_engine import RenewalPricing
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 # Cap the inline RemnaWave panel sync during renewal. The charge + extension are

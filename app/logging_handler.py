@@ -32,6 +32,7 @@ from typing import Any, Final
 
 from aiogram import Bot
 
+
 # Constants
 RECENT_HASHES_MAX_SIZE: Final[int] = 256
 RECENT_HASH_TTL_SECONDS: Final[float] = 300.0  # 5 min — matches cooldown in global_error

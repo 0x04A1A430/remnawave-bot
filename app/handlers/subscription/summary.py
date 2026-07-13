@@ -9,6 +9,7 @@ from app.localization.texts import get_texts
 from app.services.subscription_checkout_service import save_subscription_checkout_draft
 from app.states import SubscriptionStates
 
+
 logger = structlog.get_logger(__name__)
 
 

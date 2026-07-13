@@ -102,6 +102,7 @@ from ..schemas.auth import (
 from ..services.email_service import email_service
 from ..services.email_template_overrides import get_rendered_override
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/auth', tags=['Cabinet Auth'])

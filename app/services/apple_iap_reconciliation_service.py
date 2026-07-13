@@ -16,6 +16,7 @@ from app.database.crud.apple_iap import (
 from app.database.models import AppleTransaction
 from app.external.apple_iap import AppleIAPService
 
+
 logger = structlog.get_logger(__name__)
 
 

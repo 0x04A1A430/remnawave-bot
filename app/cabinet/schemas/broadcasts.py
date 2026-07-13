@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+
 # ============ Channel Types ============
 
 BroadcastChannel = Literal['telegram', 'email', 'both']

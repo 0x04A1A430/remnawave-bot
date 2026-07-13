@@ -27,6 +27,7 @@ from .subscription_modules import (
 )
 from .subscription_modules.status import get_subscription as _get_subscription_handler
 
+
 router = APIRouter(prefix='/subscription', tags=['Cabinet Subscription'])
 
 

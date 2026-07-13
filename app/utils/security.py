@@ -7,6 +7,7 @@ import hmac
 import secrets
 from typing import Literal
 
+
 HashAlgorithm = Literal['sha256', 'sha384', 'sha512']
 
 

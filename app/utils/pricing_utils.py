@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
+
 if TYPE_CHECKING:  # pragma: no cover
     from app.database.models import PromoGroup, User
     from app.services.pricing_engine import RenewalPricing

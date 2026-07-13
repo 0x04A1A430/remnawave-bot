@@ -52,6 +52,7 @@ from app.utils.formatters import format_datetime, format_duration
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.subscription_utils import get_display_subscription_link
 
+
 logger = structlog.get_logger(__name__)
 
 

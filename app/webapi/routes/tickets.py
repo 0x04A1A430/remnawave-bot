@@ -23,6 +23,7 @@ from ..schemas.tickets import (
     TicketStatusUpdateRequest,
 )
 
+
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 

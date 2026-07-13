@@ -49,6 +49,7 @@ from app.utils.telegram_html import (
 )
 from app.utils.timezone import format_local_datetime
 
+
 logger = structlog.get_logger(__name__)
 
 
@@ -1353,9 +1354,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
         tariff_name = html.escape(sub.tariff.name) if sub.tariff else 'Подписка'
         actual = sub.actual_status
 
-        if actual in ('active', 'trial'):
-            emoji = ''
-        elif actual == 'limited':
+        if actual in ('active', 'trial') or actual == 'limited':
             emoji = ''
         else:
             emoji = ''

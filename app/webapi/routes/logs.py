@@ -28,6 +28,7 @@ from ..schemas.logs import (
     SystemLogPreviewResponse,
 )
 
+
 router = APIRouter()
 
 logger = structlog.get_logger(__name__)

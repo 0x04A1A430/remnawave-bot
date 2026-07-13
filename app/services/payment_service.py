@@ -49,6 +49,7 @@ from app.services.wata_service import WataService
 from app.services.yookassa_service import YooKassaService
 from app.utils.currency_converter import currency_converter
 
+
 logger = structlog.get_logger(__name__)
 
 

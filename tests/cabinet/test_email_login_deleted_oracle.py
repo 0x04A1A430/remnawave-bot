@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 AUTH_FILE = Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'auth.py'
 
 

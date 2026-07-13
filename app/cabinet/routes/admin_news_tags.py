@@ -17,6 +17,7 @@ from app.database.models import User
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.news_tags import NewsTagCreate, NewsTagResponse, NewsTagUpdate
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/news/tags', tags=['Cabinet Admin News Tags'])

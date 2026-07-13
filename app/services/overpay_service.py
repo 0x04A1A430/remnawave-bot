@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.serialization import (
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 

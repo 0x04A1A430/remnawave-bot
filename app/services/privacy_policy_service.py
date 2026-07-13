@@ -9,6 +9,7 @@ from app.database.crud.privacy_policy import (
 )
 from app.database.models import PrivacyPolicy
 
+
 logger = structlog.get_logger(__name__)
 
 

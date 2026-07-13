@@ -25,6 +25,7 @@ from aiogram.types import FSInputFile
 from app.config import settings
 from app.utils.timezone import get_local_timezone
 
+
 logger = structlog.get_logger(__name__)
 
 

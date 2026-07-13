@@ -23,6 +23,7 @@ from app.utils.subscription_utils import (
     get_happ_cryptolink_redirect_link,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

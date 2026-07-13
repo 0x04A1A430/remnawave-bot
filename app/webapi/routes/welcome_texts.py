@@ -22,6 +22,7 @@ from ..schemas.welcome_texts import (
     WelcomeTextUpdateRequest,
 )
 
+
 router = APIRouter()
 
 

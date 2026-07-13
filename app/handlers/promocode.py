@@ -11,8 +11,9 @@ from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.promocode_service import PromoCodeService
 from app.states import PromoCodeStates
-from app.utils.decorators import error_handler
 from app.utils.button_emoji import make_button
+from app.utils.decorators import error_handler
+
 
 logger = structlog.get_logger(__name__)
 

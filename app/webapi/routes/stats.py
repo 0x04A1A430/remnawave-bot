@@ -29,6 +29,7 @@ from app.database.models import (
 
 from ..dependencies import get_db_session, require_api_token
 
+
 router = APIRouter()
 
 

@@ -14,6 +14,7 @@ from app.services.system_settings_service import (
     bot_configuration_service,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

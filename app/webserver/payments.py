@@ -21,6 +21,7 @@ from app.services.pal24_service import Pal24Service
 from app.services.payment_service import PaymentService
 from app.services.tribute_service import TributeService
 
+
 logger = structlog.get_logger(__name__)
 
 

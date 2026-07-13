@@ -18,6 +18,7 @@ from app.states import RegistrationStates
 from app.utils.check_reg_process import is_registration_process
 from app.utils.validators import sanitize_telegram_name
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -11,6 +11,7 @@ from app.keyboards.admin import get_admin_trials_keyboard
 from app.localization.texts import get_texts
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

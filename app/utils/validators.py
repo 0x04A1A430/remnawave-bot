@@ -2,6 +2,7 @@ import html as html_module
 import re
 from datetime import datetime
 
+
 ALLOWED_HTML_TAGS = {
     'b',
     'strong',  # жирный

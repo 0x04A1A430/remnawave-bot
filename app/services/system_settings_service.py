@@ -24,6 +24,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import SystemSetting
 from app.services.web_api_token_service import ensure_default_web_api_token
 
+
 logger = structlog.get_logger(__name__)
 
 

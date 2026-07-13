@@ -4,6 +4,7 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+
 _HEX_COLOR_RE: re.Pattern[str] = re.compile(r'^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
 
 

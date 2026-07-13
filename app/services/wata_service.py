@@ -12,6 +12,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 # WATA API rejects expirationDateTime <= now + 10 minutes (exclusive lower bound).

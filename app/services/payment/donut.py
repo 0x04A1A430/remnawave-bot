@@ -15,6 +15,7 @@ from app.services.donut_service import donut_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг description при PayIn (Donut) <-> наш sub-method id
 DONUT_METHOD_DESCRIPTIONS: dict[str | None, str] = {
     None: 'CARD',

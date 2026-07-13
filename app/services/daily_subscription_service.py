@@ -37,6 +37,7 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

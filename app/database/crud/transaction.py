@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import PaymentMethod, Transaction, TransactionType, User
 
+
 logger = structlog.get_logger(__name__)
 
 # Реальные платёжные методы для подсчёта дохода.

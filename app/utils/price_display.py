@@ -14,6 +14,7 @@ import structlog
 from app.config import settings
 from app.database.models import User
 
+
 logger = structlog.get_logger(__name__)
 
 
