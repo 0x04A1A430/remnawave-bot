@@ -11,7 +11,14 @@ from app.config import settings
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User
-from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, RemnaWaveUser, TrafficLimitStrategy, UserStatus
+from app.external.remnawave_api import (
+    RemnaWaveAPI,
+    RemnaWaveAPIError,
+    RemnaWaveUser,
+    TrafficLimitStrategy,
+    UserStatus,
+    is_user_not_found_error,
+)
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -543,11 +550,50 @@ class SubscriptionService:
                 return updated_user
 
         except RemnaWaveAPIError as e:
+            if is_user_not_found_error(e):
+                # Пользователя удалили из панели, пока подписка жива в боте, —
+                # пересоздаём вместо ошибки (create-флоу сам найдёт/создаст
+                # панель-юзера и сохранит новый UUID и ссылки в подписку).
+                return await self.recreate_deleted_panel_user(
+                    db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+                )
             logger.error('Ошибка RemnaWave API', error=e)
             return None
         except Exception as e:
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)
             return None
+
+    async def recreate_deleted_panel_user(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        *,
+        reset_traffic: bool = False,
+        reset_reason: str | None = None,
+    ) -> RemnaWaveUser | None:
+        """Пересоздаёт панель-юзера, удалённого из RemnaWave при живой подписке.
+
+        Только для действующих подписок: пересоздавать DISABLED-юзера ради
+        истёкшей подписки не нужно — админ удалил его намеренно.
+        """
+        is_actually_active = (
+            subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+            and subscription.end_date > datetime.now(UTC)
+        )
+        if not is_actually_active:
+            logger.info(
+                'Панель-юзер удалён из RemnaWave, подписка неактивна — пересоздание не требуется',
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+            )
+            return None
+
+        logger.warning(
+            '⚠️ Панель-юзер удалён из RemnaWave при активной подписке — пересоздаём',
+            subscription_id=subscription.id,
+            user_id=subscription.user_id,
+        )
+        return await self.create_remnawave_user(db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason)
 
     @staticmethod
     def _format_user_log(user) -> str:
