@@ -195,7 +195,9 @@ class FreekassaService:
         """
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
-        expected_sign = hashlib.md5(f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode()).hexdigest()  # provider-defined algorithm
+        expected_sign = hashlib.md5(
+            f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode()
+        ).hexdigest()  # provider-defined algorithm
         return hmac.compare_digest(sign.lower(), expected_sign.lower())
 
     def verify_webhook_ip(self, ip: str) -> bool:
