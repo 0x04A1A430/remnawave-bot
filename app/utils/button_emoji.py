@@ -5,7 +5,7 @@ from typing import Any
 from aiogram.types import InlineKeyboardButton
 
 
-_TG_EMOJI_RE = re.compile(r"<tg-emoji\s+emoji-id=['\"](\d+)['\"]>(.*?)</tg-emoji>", re.DOTALL)
+_TG_EMOJI_RE = re.compile(r"<tg-emoji\s+emoji-id=['\"](\d+)['\"]>([^<]*)</tg-emoji>")
 
 
 @dataclass

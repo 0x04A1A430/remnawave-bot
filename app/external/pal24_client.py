@@ -190,7 +190,7 @@ class Pal24Client:
         if not token:
             raise Pal24APIError('Pal24 signature token is not configured')
         raw = f'{out_sum}:{inv_id}:{token}'.encode()
-        return hashlib.md5(raw).hexdigest().upper()
+        return hashlib.md5(raw).hexdigest().upper()  # provider-defined algorithm
 
     @staticmethod
     def verify_signature(

@@ -57,7 +57,7 @@ class HeleketService:
         api_key = self.api_key or ''
         encoded = base64.b64encode(body.encode('utf-8')).decode('utf-8')
         raw = f'{encoded}{api_key}'
-        return hashlib.md5(raw.encode('utf-8')).hexdigest()
+        return hashlib.md5(raw.encode('utf-8')).hexdigest()  # provider-defined algorithm
 
     async def _request(
         self,

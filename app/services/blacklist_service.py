@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import re
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -64,7 +65,7 @@ class BlacklistService:
 
             try:
                 # Заменяем github.com на raw.githubusercontent.com для получения raw содержимого
-                if 'github.com' in github_url:
+                if re.match(r'https?://github\.com/', github_url):
                     raw_url = github_url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
                 else:
                     raw_url = github_url

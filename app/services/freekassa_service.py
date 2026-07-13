@@ -186,7 +186,7 @@ class FreekassaService:
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
         sign_string = f'{self.shop_id}:{final_amount}:{self.secret1}:{currency}:{order_id}'
-        return hashlib.md5(sign_string.encode()).hexdigest()
+        return hashlib.md5(sign_string.encode()).hexdigest()  # provider-defined algorithm
 
     def verify_webhook_signature(self, shop_id: int, amount: float, order_id: str, sign: str) -> bool:
         """
@@ -195,7 +195,7 @@ class FreekassaService:
         """
         # Приводим amount к int, если это целое число
         final_amount = int(amount) if float(amount).is_integer() else amount
-        expected_sign = hashlib.md5(f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode()).hexdigest()
+        expected_sign = hashlib.md5(f'{shop_id}:{final_amount}:{self.secret2}:{order_id}'.encode()).hexdigest()  # provider-defined algorithm
         return hmac.compare_digest(sign.lower(), expected_sign.lower())
 
     def verify_webhook_ip(self, ip: str) -> bool:
