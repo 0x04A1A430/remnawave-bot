@@ -32,6 +32,7 @@ from starlette.requests import Request
 from app.config import settings
 from app.webserver.payments import _verify_mulenpay_signature, create_payment_router
 
+
 SECRET = 'test-secret-key'
 
 

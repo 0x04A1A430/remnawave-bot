@@ -44,6 +44,7 @@ from ..schemas.pages import (
     ServiceRulesUpdateRequest,
 )
 
+
 router = APIRouter()
 
 

@@ -13,6 +13,7 @@ from aiogram.types import (
 
 from app.services.blacklist_service import blacklist_service
 
+
 logger = structlog.get_logger(__name__)
 
 

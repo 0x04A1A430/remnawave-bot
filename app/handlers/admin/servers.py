@@ -24,6 +24,7 @@ from app.states import AdminStates
 from app.utils.cache import cache
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

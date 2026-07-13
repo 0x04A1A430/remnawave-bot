@@ -11,6 +11,7 @@ from app.database.crud.public_offer import (
 )
 from app.database.models import PublicOffer
 
+
 logger = structlog.get_logger(__name__)
 
 

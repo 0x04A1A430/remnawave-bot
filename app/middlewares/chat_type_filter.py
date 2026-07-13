@@ -17,6 +17,7 @@ from aiogram import BaseMiddleware
 from aiogram.enums import ChatType
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+
 logger = structlog.get_logger(__name__)
 
 

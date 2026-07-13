@@ -68,6 +68,7 @@ from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
 from app.utils.device_display import format_device_label
 
+
 logger = structlog.get_logger(__name__)
 
 

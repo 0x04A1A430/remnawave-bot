@@ -11,6 +11,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 # Sub-method to payment_system_id mapping

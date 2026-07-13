@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardMarkup, LabeledPrice
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -18,6 +18,7 @@ from ..schemas.withdrawals import (
     WithdrawalListResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/referral/withdrawal', tags=['Cabinet Withdrawal'])

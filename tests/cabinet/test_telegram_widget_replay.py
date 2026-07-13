@@ -20,6 +20,7 @@ from app.cabinet.routes.account_linking import LinkTelegramRequest, link_telegra
 from app.cabinet.routes.auth import auth_telegram_widget
 from app.cabinet.schemas.auth import TelegramWidgetAuthRequest
 
+
 H = 'a' * 64
 
 

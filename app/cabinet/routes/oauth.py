@@ -29,6 +29,7 @@ from ..routes.account_linking import OAuthProviderName
 from ..schemas.auth import AuthResponse
 from .auth import _create_auth_response, _process_campaign_bonus, _store_refresh_token
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/auth/oauth', tags=['Cabinet OAuth'])

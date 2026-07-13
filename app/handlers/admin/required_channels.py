@@ -23,6 +23,7 @@ from app.database.database import AsyncSessionLocal
 from app.services.channel_subscription_service import channel_subscription_service
 from app.utils.decorators import admin_required
 
+
 logger = structlog.get_logger(__name__)
 
 router = Router(name='admin_required_channels')

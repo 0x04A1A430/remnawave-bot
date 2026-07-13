@@ -12,6 +12,7 @@ from app.services.version_service import version_service
 
 from ..dependencies import require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/updates', tags=['Cabinet Admin Updates'])

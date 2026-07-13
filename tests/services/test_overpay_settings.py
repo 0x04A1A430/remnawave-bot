@@ -5,6 +5,7 @@ import pytest
 from app.config import settings
 from app.services.system_settings_service import BotConfigurationService
 
+
 NEW_KEYS = (
     'OVERPAY_SBP_TERMINAL_ID',
     'OVERPAY_CARD_TERMINAL_ID',

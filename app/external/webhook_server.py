@@ -7,6 +7,7 @@ from aiohttp import web
 from app.config import settings
 from app.services.tribute_service import TributeService
 
+
 logger = structlog.get_logger(__name__)
 
 

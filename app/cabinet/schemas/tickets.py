@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
+
 ALLOWED_MEDIA_TYPES = {'photo', 'video', 'document'}
 MAX_MEDIA_ITEMS = 10
 

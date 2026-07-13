@@ -3,6 +3,7 @@ import shutil
 import sys
 from pathlib import Path
 
+
 APP_UID = 1000
 APP_GID = 1000
 APP_HOME = '/home/app'

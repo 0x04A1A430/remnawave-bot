@@ -50,6 +50,7 @@ from ..schemas.tariffs import (
     TariffUpdateRequest,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/tariffs', tags=['Cabinet Admin Tariffs'])

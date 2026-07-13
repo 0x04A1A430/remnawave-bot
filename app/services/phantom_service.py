@@ -22,6 +22,7 @@ from app.services.subscription_service import SubscriptionService
 from app.utils.user_utils import generate_unique_referral_code
 from app.utils.validators import sanitize_telegram_name
 
+
 logger = structlog.get_logger(__name__)
 
 

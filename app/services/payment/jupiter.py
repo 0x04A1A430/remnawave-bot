@@ -15,6 +15,7 @@ from app.services.jupiter_service import jupiter_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг статусов Jupiter -> internal
 JUPITER_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'success': ('success', True),

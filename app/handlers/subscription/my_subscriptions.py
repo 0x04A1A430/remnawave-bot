@@ -22,6 +22,7 @@ from app.database.models import Subscription, SubscriptionStatus, User
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 router = Router()

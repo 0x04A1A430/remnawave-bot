@@ -33,6 +33,7 @@ from ..schemas.tickets import (
     TicketResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/tickets', tags=['Cabinet Tickets'])

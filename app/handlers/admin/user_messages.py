@@ -23,6 +23,7 @@ from app.utils.validators import (
     validate_html_tags,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

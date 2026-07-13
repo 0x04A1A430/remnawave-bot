@@ -34,6 +34,7 @@ from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/promo-offers', tags=['Admin Promo Offers'])

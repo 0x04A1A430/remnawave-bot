@@ -19,6 +19,7 @@ from app.database.models import ContestTemplate, SubscriptionStatus, User
 from app.services.contests.enums import GameType, PrizeType
 from app.services.contests.games import get_game_strategy
 
+
 logger = structlog.get_logger(__name__)
 
 # Legacy aliases for backward compatibility

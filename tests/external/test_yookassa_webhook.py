@@ -12,6 +12,7 @@ from app.external.yookassa_webhook import (
     resolve_yookassa_ip,
 )
 
+
 ALLOWED_IP = '185.71.76.10'
 
 

@@ -20,6 +20,7 @@ from ..schemas.subscription_events import (
     SubscriptionEventResponse,
 )
 
+
 router = APIRouter()
 
 

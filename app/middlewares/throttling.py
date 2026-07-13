@@ -8,6 +8,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+
 logger = structlog.get_logger(__name__)
 
 

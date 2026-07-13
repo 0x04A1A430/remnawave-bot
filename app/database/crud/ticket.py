@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import SupportAuditLog, Ticket, TicketMessage, TicketStatus
 
+
 logger = structlog.get_logger(__name__)
 
 

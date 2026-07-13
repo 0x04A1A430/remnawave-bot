@@ -47,6 +47,7 @@ from app.database.models import InlineGiftSubscription, User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 
+
 logger = structlog.get_logger(__name__)
 
 _GIFT_PREFIX = 'bs_'

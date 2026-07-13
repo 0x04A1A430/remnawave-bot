@@ -2,6 +2,7 @@
 
 from typing import Any
 
+
 __all__ = ['WebAPIServer', 'create_web_api_app']
 
 

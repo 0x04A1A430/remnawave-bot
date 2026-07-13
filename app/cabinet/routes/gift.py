@@ -52,6 +52,7 @@ from ..schemas.gift import (
     SentGiftResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/gift', tags=['Cabinet Gift'])

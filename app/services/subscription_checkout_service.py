@@ -4,6 +4,7 @@ from sqlalchemy.exc import MissingGreenlet
 from app.database.models import Subscription, User
 from app.utils.cache import UserCache
 
+
 logger = structlog.get_logger(__name__)
 
 

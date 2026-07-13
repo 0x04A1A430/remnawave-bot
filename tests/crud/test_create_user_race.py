@@ -34,6 +34,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database.crud.user import _violated_constraint, create_user
 
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────

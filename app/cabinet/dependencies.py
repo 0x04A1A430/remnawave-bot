@@ -19,6 +19,7 @@ from .auth.jwt_handler import get_token_payload
 from .auth.telegram_auth import validate_telegram_init_data
 from .ip_utils import get_client_ip
 
+
 logger = structlog.get_logger(__name__)
 
 security = HTTPBearer(auto_error=False)

@@ -20,6 +20,7 @@ from app.services.notification_delivery_service import (
 )
 from app.utils.user_utils import get_effective_referral_commission_percent
 
+
 logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------

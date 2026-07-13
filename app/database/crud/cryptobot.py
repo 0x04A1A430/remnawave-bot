@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import CryptoBotPayment
 
+
 logger = structlog.get_logger(__name__)
 
 

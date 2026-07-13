@@ -21,6 +21,7 @@ from app.utils.promo_offer import (
     get_user_active_promo_discount_percent,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()

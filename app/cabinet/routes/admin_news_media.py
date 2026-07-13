@@ -21,6 +21,7 @@ from app.services.news_media_service import (
 from ..dependencies import require_permission
 from ..schemas.news_media import NewsMediaUploadResponse
 
+
 logger = structlog.get_logger(__name__)
 
 _BYTES_PER_MB = 1024 * 1024

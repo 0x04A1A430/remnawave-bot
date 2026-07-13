@@ -14,6 +14,7 @@ from yookassa.domain.request.payment_request_builder import PaymentRequestBuilde
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 

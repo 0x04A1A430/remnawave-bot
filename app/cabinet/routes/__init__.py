@@ -81,6 +81,7 @@ from .websocket import router as websocket_router
 from .wheel import router as wheel_router
 from .withdrawal import router as withdrawal_router
 
+
 # Main cabinet router
 router = APIRouter(prefix='/cabinet', tags=['Cabinet'], redirect_slashes=False)
 

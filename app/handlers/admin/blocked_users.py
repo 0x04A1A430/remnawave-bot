@@ -26,6 +26,7 @@ from app.services.blocked_users_service import (
 )
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

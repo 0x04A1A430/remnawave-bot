@@ -15,6 +15,7 @@ from app.webapi.schemas.ban_notifications import (
     BanNotificationResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

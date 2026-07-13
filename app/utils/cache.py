@@ -9,6 +9,7 @@ from redis.exceptions import NoScriptError
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 

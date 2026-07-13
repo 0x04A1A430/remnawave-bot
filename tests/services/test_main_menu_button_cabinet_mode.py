@@ -41,6 +41,7 @@ from app.utils.miniapp_buttons import (
     build_miniapp_or_callback_button,
 )
 
+
 # ---------------------------------------------------------------------------
 # Layer 1: mapping defence.
 # ---------------------------------------------------------------------------

@@ -36,6 +36,7 @@ import pytest
 
 from app.logging_config import _resolve_log_level
 
+
 # ---------------------------------------------------------------------------
 # Common levels — case-insensitive (the original repro).
 # ---------------------------------------------------------------------------

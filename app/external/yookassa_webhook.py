@@ -19,6 +19,7 @@ from aiohttp import web
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 
+
 if TYPE_CHECKING:
     from app.services.payment_service import PaymentService
 

@@ -12,6 +12,7 @@ from app.lib.nalogo.dto.income import IncomeClient, IncomeType
 from app.utils.cache import cache
 from app.utils.proxy import mask_proxy_url, sanitize_proxy_error
 
+
 logger = structlog.get_logger(__name__)
 
 NALOGO_QUEUE_KEY = 'nalogo:receipt_queue'

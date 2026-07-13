@@ -34,6 +34,7 @@ from app.database.crud.wheel import (
 from app.database.models import User
 from app.services.wheel_service import wheel_service
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/wheel', tags=['Admin Fortune Wheel'])

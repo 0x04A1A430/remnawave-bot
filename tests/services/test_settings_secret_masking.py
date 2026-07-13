@@ -13,6 +13,7 @@ import pytest
 
 from app.services.system_settings_service import bot_configuration_service as svc
 
+
 MASK = svc.SECRET_MASK
 
 

@@ -68,6 +68,7 @@ from app.database.models import (
 )
 from app.external.remnawave_api import RemnaWaveAPI
 
+
 logger = structlog.get_logger(__name__)
 
 # OAuth-поля, которые можно перенести между аккаунтами (источник — OAUTH_PROVIDER_COLUMNS)

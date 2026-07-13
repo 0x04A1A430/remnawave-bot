@@ -24,6 +24,7 @@ from app.utils.subscription_utils import (
     resolve_simple_subscription_device_limit,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

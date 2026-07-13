@@ -32,6 +32,7 @@ from app.handlers.admin.messages import (
     get_target_users,
 )
 
+
 if TYPE_CHECKING:
     from app.cabinet.services.email_service import EmailService
 

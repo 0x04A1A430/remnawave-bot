@@ -31,6 +31,7 @@ from .schemas.apple_iap import (
     ApplePurchaseResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 APPLE_IAP_REDIS_STATE_KEY = 'apple_iap_redis_client'
 

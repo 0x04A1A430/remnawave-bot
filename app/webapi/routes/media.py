@@ -23,6 +23,7 @@ from app.config import settings
 from ..dependencies import require_api_token
 from ..schemas.media import MediaUploadResponse
 
+
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 

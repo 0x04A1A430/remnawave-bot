@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import Ticket, TicketNotification
 
+
 logger = structlog.get_logger(__name__)
 
 

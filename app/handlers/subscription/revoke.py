@@ -9,7 +9,6 @@ from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     InaccessibleMessage,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +20,7 @@ from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 from app.utils.button_emoji import make_button
 from app.utils.decorators import error_handler
+
 
 logger = structlog.get_logger(__name__)
 

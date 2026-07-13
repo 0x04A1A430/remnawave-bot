@@ -1583,7 +1583,6 @@ class Subscription(Base):
         """Return formatted time until next revoke is available."""
         if not self.last_revoke_at:
             return 'доступно'
-        from app.config import settings
 
         cooldown_end = self.last_revoke_at + timedelta(seconds=cooldown_seconds)
         current_time = datetime.now(UTC)

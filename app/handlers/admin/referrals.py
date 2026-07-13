@@ -26,6 +26,7 @@ from app.services.referral_withdrawal_service import referral_withdrawal_service
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 
@@ -239,11 +240,7 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
                     display_text = f'ID{id_display}'
 
                 emoji = ''
-                if i == 1:
-                    emoji = ''
-                elif i == 2:
-                    emoji = ''
-                elif i == 3:
+                if i == 1 or i == 2 or i == 3:
                     emoji = ''
 
                 # Выделяем основную метрику в зависимости от сортировки

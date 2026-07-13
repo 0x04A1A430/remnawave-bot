@@ -24,6 +24,7 @@ from ..schemas.main_menu_buttons import (
     MainMenuButtonUpdateRequest,
 )
 
+
 router = APIRouter()
 
 

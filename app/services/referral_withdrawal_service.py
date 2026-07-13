@@ -21,6 +21,7 @@ from app.database.models import (
     WithdrawalRequestStatus,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -29,6 +29,7 @@ from app.database.models import (
 )
 from app.utils.validators import sanitize_telegram_name
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -16,7 +16,7 @@ from typing import Any
 
 import structlog
 from aiogram import Bot
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy import delete, inspect as sa_inspect
 from sqlalchemy.exc import PendingRollbackError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +50,7 @@ from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
+
 
 logger = structlog.get_logger(__name__)
 

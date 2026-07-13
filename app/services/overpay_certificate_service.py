@@ -10,6 +10,7 @@ from app.config import settings
 from app.services.overpay_service import overpay_service
 from app.services.system_settings_service import bot_configuration_service
 
+
 logger = structlog.get_logger(__name__)
 
 CERTS_DIR = Path('/app/data/certs')

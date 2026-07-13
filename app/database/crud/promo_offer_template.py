@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import PromoOfferTemplate
 
+
 UPDATED_TEMPLATE_MESSAGES = {
     'extend_discount': (
         'Экономия {discount_percent}% при продлении\n\n'

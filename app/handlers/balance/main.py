@@ -25,6 +25,7 @@ from app.localization.texts import get_texts
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 TRANSACTIONS_PER_PAGE = 10

@@ -25,6 +25,7 @@ from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import ReferralContest, User
 
+
 logger = structlog.get_logger(__name__)
 
 

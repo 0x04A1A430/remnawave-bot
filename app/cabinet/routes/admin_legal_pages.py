@@ -33,6 +33,7 @@ from app.utils.display_mode import normalize_display_mode
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/legal-pages', tags=['Cabinet Admin Legal Pages'])

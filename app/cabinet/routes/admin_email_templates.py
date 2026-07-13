@@ -22,6 +22,7 @@ from ..services.email_template_overrides import (
 )
 from ..services.email_templates import EmailNotificationTemplates
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/email-templates', tags=['Admin Email Templates'])

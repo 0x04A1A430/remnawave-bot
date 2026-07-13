@@ -12,6 +12,7 @@ from app.database.models import User
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/notifications', tags=['Cabinet Notifications'])

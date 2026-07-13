@@ -8,6 +8,7 @@ from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_rules, get_texts
 
+
 logger = structlog.get_logger(__name__)
 
 

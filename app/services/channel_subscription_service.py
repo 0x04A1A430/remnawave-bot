@@ -27,6 +27,7 @@ from app.database.crud.required_channel import (
 from app.database.database import AsyncSessionLocal
 from app.utils.cache import ChannelSubCache
 
+
 logger = structlog.get_logger(__name__)
 
 # Rate limiting for Telegram API calls

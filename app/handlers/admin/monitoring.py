@@ -28,6 +28,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 
+
 logger = structlog.get_logger(__name__)
 router = Router()
 

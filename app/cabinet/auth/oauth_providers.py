@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.utils.cache import cache, cache_key
 
+
 logger = structlog.get_logger(__name__)
 
 STATE_TTL_SECONDS = 600  # 10 minutes

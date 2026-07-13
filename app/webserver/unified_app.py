@@ -19,6 +19,7 @@ from app.webapi.docs import add_redoc_endpoint
 
 from . import payments, telegram
 
+
 logger = structlog.get_logger(__name__)
 
 

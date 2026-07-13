@@ -20,6 +20,7 @@ from app.database.models import (
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
 
+
 logger = structlog.get_logger(__name__)
 
 

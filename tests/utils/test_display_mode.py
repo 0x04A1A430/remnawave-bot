@@ -9,6 +9,7 @@ from app.utils.display_mode import (
     normalize_display_mode,
 )
 
+
 DISPLAY_MODE_KEYS = (
     'PRIVACY_POLICY_DISPLAY_MODE',
     'PUBLIC_OFFER_DISPLAY_MODE',

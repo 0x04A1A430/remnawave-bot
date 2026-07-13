@@ -10,6 +10,7 @@ from typing import Any
 
 from app.database.models import User
 
+
 # Defaults match the frontend and cabinet/routes/notifications.py
 _DEFAULTS: dict[str, Any] = {
     'subscription_expiry_enabled': True,

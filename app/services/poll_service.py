@@ -22,6 +22,7 @@ from app.database.models import (
 )
 from app.localization.texts import get_texts
 
+
 logger = structlog.get_logger(__name__)
 
 

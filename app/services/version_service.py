@@ -8,6 +8,7 @@ from packaging import version
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 
@@ -270,9 +271,7 @@ class VersionService:
 
     def format_version_display(self, version_info: VersionInfo) -> str:
         status_icon = ''
-        if version_info.prerelease:
-            status_icon = ''
-        elif version_info.is_dev:
+        if version_info.prerelease or version_info.is_dev:
             status_icon = ''
         else:
             status_icon = ''

@@ -31,6 +31,7 @@ from ..schemas.news import (
     NewsUpdateRequest,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/news', tags=['Cabinet Admin News'])

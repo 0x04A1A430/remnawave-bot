@@ -23,6 +23,7 @@ from app.services.poll_service import (
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/polls', tags=['Cabinet Polls'])

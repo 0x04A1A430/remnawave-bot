@@ -3,6 +3,7 @@ from fastapi import HTTPException
 
 from app.config import settings
 
+
 DISPLAY_KEYS = (
     'PRIVACY_POLICY_DISPLAY_MODE',
     'PUBLIC_OFFER_DISPLAY_MODE',

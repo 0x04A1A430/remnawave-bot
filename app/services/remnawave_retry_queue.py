@@ -17,6 +17,7 @@ import structlog
 
 from app.database.database import AsyncSessionLocal
 
+
 logger = structlog.get_logger(__name__)
 
 

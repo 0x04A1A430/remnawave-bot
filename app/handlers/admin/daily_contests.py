@@ -22,6 +22,7 @@ from app.services.contest_rotation_service import contest_rotation_service
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 EDITABLE_FIELDS: dict[str, dict] = {

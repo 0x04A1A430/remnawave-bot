@@ -25,6 +25,7 @@ from app.database.models import PromoCode, PromoCodeType, User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 

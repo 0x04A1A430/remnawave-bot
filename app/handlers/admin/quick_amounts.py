@@ -21,6 +21,7 @@ from app.services.payment_method_config_service import (
 )
 from app.utils.decorators import admin_required
 
+
 logger = structlog.get_logger(__name__)
 
 router = Router(name='admin_quick_amounts')

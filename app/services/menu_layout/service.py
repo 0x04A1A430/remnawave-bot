@@ -15,10 +15,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.utils.button_emoji import make_button
 from app.database.crud.system_setting import upsert_system_setting
 from app.database.models import SystemSetting
 from app.localization.texts import get_texts
+from app.utils.button_emoji import make_button
 
 from .constants import (
     AVAILABLE_CALLBACKS,
@@ -30,6 +30,7 @@ from .constants import (
 from .context import MenuContext
 from .history_service import MenuLayoutHistoryService
 from .stats_service import MenuLayoutStatsService
+
 
 logger = structlog.get_logger(__name__)
 

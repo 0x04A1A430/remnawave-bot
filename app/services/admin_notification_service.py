@@ -36,6 +36,7 @@ from app.database.models import (
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.timezone import format_local_datetime
 
+
 # Стандартный формат Telegram bot token: `<numeric_id>:<random_35chars>`.
 # Может появиться в str(e) от aiogram при сетевых ошибках, если транспорт
 # (httpx/aiohttp) сериализует URL `https://api.telegram.org/bot<TOKEN>/...`.

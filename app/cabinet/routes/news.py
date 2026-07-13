@@ -23,6 +23,7 @@ from ..schemas.news import (
     NewsListResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 # Slug constraint: alphanumeric, hyphens, underscores, max 500 chars

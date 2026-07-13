@@ -63,6 +63,7 @@ from ...schemas.subscription import (
 )
 from .helpers import _subscription_to_response
 
+
 logger = structlog.get_logger(__name__)
 
 # Cap inline RemnaWave panel sync on user-facing cabinet requests. The product is

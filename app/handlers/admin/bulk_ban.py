@@ -12,6 +12,7 @@ from app.services.bulk_ban_service import bulk_ban_service
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

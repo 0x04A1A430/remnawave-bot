@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import InfoPage
 
+
 logger = structlog.get_logger(__name__)
 
 # Fields that can be set via update_info_page

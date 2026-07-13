@@ -45,6 +45,7 @@ from .routes import (
     welcome_texts,
 )
 
+
 OPENAPI_TAGS = [
     {
         'name': 'health',

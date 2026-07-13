@@ -13,6 +13,7 @@ import pytest
 
 from app.services.system_settings_service import BotConfigurationService
 
+
 EXCLUDED_AUTH_KEYS = [
     'ADMIN_EMAILS',
     'CABINET_JWT_SECRET',

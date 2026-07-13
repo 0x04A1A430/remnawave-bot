@@ -16,6 +16,7 @@ from aiogram.types import (
 from app.config import settings
 from app.localization.texts import get_texts
 
+
 logger = structlog.get_logger(__name__)
 
 

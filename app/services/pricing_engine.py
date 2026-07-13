@@ -11,6 +11,7 @@ from app.database.crud.server_squad import get_server_squads_by_uuids
 from app.utils.pricing_utils import calculate_months_from_days
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 

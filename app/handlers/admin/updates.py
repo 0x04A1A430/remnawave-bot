@@ -7,6 +7,7 @@ from app.database.models import User
 from app.services.version_service import version_service
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 
@@ -170,9 +171,7 @@ async def show_version_info(callback: types.CallbackQuery, db_user: User, db: As
 
             for i, release in enumerate(newer_releases):
                 icon = '' if i == 0 else ''
-                if release.prerelease:
-                    icon = ''
-                elif release.is_dev:
+                if release.prerelease or release.is_dev:
                     icon = ''
 
                 updates_info += f'{icon} <b>{release.tag_name}</b>\n'

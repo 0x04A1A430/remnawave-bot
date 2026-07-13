@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+
 # Pre-compiled regex for hex color validation (reused across validators)
 _HEX_COLOR_RE: re.Pattern[str] = re.compile(r'^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
 

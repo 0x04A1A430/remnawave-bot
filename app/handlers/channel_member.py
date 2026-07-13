@@ -29,6 +29,7 @@ from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 router = Router(name='channel_member')

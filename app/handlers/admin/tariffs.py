@@ -27,6 +27,7 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_period, format_price_kopeks, format_traffic
 
+
 logger = structlog.get_logger(__name__)
 
 ITEMS_PER_PAGE = 10

@@ -15,6 +15,7 @@ from app.utils.display_mode import is_visible_in_web
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/info', tags=['Cabinet Info'])

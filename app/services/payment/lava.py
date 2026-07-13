@@ -15,6 +15,7 @@ from app.services.lava_service import lava_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг sub-method -> includeService для фильтрации методов на странице оплаты Lava
 LAVA_INCLUDE_SERVICE_MAP: dict[str | None, list[str] | None] = {
     None: None,

@@ -25,6 +25,7 @@ from ..schemas.partners import (
     PeriodStats,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/referral/partner', tags=['Cabinet Partner'])

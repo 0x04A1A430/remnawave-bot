@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import YandexClientIdMap
 
+
 logger = structlog.get_logger(__name__)
 
 

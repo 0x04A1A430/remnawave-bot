@@ -8,6 +8,7 @@ from app.config import settings
 from app.utils.button_emoji import parse_button_label
 from app.utils.button_styles_cache import CALLBACK_TO_SECTION, get_cached_button_styles
 
+
 # Юникод-диапазоны для одиночного emoji в начале строки + модификаторы (skin tone,
 # variation selector, zero-width joiner-цепочки) + опциональный пробел после.
 # Используется когда у кнопки задан icon_custom_emoji_id — Telegram сам рендерит

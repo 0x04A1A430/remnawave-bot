@@ -11,6 +11,7 @@ from app.database.crud.user import lock_user_for_update
 from app.database.models import PromoGroup, User
 from app.services.admin_notification_service import AdminNotificationService
 
+
 logger = structlog.get_logger(__name__)
 
 

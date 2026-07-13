@@ -19,6 +19,7 @@ from app.database.models import SystemSetting, User
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/branding', tags=['Branding'])

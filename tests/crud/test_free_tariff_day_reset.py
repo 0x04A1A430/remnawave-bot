@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock
 import app.database.crud.subscription as sub_crud
 from app.database.models import Tariff
 
+
 # ── Tariff.is_free ──
 
 

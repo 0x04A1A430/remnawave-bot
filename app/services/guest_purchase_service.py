@@ -40,6 +40,7 @@ from app.database.models import (
 )
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 # GuestPurchase.token is a unique 64-char value. A gift deep-link (``GIFT_<token>`` /

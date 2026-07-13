@@ -28,6 +28,7 @@ from ...schemas.subscription import (
     RenewalRequest,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

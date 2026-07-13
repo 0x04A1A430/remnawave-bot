@@ -21,6 +21,7 @@ from app.services.promo_offer_service import promo_offer_service
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/promo', tags=['Cabinet Promo'])

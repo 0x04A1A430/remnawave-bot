@@ -16,6 +16,7 @@ from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 OVERPAY_PAYMENT_METHODS = {'overpay', 'overpay_fps', 'overpay_card', 'overpay_int'}

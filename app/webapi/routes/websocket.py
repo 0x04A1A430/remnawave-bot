@@ -10,6 +10,7 @@ from app.database.database import AsyncSessionLocal
 from app.services.event_emitter import event_emitter
 from app.services.web_api_token_service import web_api_token_service
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

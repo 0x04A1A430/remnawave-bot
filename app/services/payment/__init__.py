@@ -24,6 +24,7 @@ from .tribute import TributePaymentMixin
 from .wata import WataPaymentMixin
 from .yookassa import YooKassaPaymentMixin
 
+
 __all__ = [
     'AuraPayPaymentMixin',
     'CloudPaymentsPaymentMixin',

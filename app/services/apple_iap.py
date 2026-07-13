@@ -47,6 +47,7 @@ from app.external.apple_iap import (
 )
 from app.utils.user_utils import format_referrer_info
 
+
 logger = structlog.get_logger(__name__)
 
 

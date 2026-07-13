@@ -23,6 +23,7 @@ import pytest
 from app.cabinet.routes.subscription_modules import devices, purchase, traffic
 from app.services import subscription_renewal_service
 
+
 MODULES = [traffic, devices, purchase, subscription_renewal_service]
 
 # The cabinet axios client aborts at 30s (TIMEOUT_MS); the inline sync budget must

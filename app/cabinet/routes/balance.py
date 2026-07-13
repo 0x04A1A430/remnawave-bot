@@ -46,6 +46,7 @@ from ..schemas.balance import (
     TransactionResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/balance', tags=['Cabinet Balance'])

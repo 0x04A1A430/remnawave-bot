@@ -19,6 +19,7 @@ from ..schemas.config import (
     SettingUpdateRequest,
 )
 
+
 router = APIRouter()
 
 

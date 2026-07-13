@@ -20,6 +20,7 @@ from app.services.subscription_service import SubscriptionService
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from .helpers import resolve_subscription
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

@@ -12,6 +12,7 @@ import structlog
 
 from app.config import settings
 
+
 _logger = structlog.get_logger(__name__)
 
 _FALLBACK_LANGUAGE = 'ru'

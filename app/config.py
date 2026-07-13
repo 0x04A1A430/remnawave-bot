@@ -12,6 +12,7 @@ import structlog
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
+
 DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
     # Пустой по умолчанию - администратор может добавить ключевые слова через DISPLAY_NAME_BANNED_KEYWORDS
     # Примеры: "tme", "joingroup", "support", "admin"

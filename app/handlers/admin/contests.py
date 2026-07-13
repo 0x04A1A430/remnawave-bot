@@ -35,6 +35,7 @@ from app.localization.texts import get_texts
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 PAGE_SIZE = 5

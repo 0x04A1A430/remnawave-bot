@@ -10,8 +10,6 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     TelegramObject,
 )
 from sqlalchemy.exc import InterfaceError, OperationalError
@@ -19,6 +17,7 @@ from sqlalchemy.exc import InterfaceError, OperationalError
 from app.config import settings
 from app.services.startup_notification_service import _get_error_recommendations
 from app.utils.timezone import format_local_datetime
+
 
 logger = structlog.get_logger(__name__)
 

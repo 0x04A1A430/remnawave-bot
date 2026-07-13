@@ -14,6 +14,7 @@ from app.services.blacklist_service import blacklist_service
 from app.states import BlacklistStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

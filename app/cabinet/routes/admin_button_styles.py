@@ -19,6 +19,7 @@ from app.utils.button_styles_cache import (
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/button-styles', tags=['Admin Button Styles'])

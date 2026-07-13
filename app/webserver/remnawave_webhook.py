@@ -20,6 +20,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
+
 logger = structlog.get_logger(__name__)
 
 # Max accepted webhook payload size (64 KB) to prevent memory exhaustion DoS

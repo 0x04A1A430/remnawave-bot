@@ -10,6 +10,7 @@ from app.services.payment_method_config_service import (
     get_effective_quick_amounts,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 METHOD_CONFIG_IDS = {

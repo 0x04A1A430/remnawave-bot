@@ -27,6 +27,7 @@ from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import TariffPurchaseRequest
 from .helpers import _subscription_to_response, resolve_subscription
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

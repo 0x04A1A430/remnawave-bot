@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 from app.webserver.payments import _resolve_proxied_client_ip
 
+
 PAYPEAR_IP = '158.160.85.101'  # the single documented PayPear source IP
 
 

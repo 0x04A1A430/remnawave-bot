@@ -29,6 +29,7 @@ from ..schemas.referral import (
     ReferralTermsResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/referral', tags=['Cabinet Referral'])

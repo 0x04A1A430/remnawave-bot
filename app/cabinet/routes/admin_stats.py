@@ -37,6 +37,7 @@ from app.services.version_service import version_service
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 _start_time = time.time()

@@ -15,6 +15,7 @@ from app.database.models import User
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/rbac/policies', tags=['Admin RBAC Policies'])

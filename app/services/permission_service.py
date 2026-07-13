@@ -21,6 +21,7 @@ from app.database.crud.rbac import (
     UserRoleCRUD,
 )
 
+
 if TYPE_CHECKING:
     from app.database.models import AccessPolicy, User
 

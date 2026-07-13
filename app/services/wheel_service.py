@@ -34,6 +34,7 @@ from app.database.models import (
 )
 from app.services.subscription_service import SubscriptionService
 
+
 logger = structlog.get_logger(__name__)
 
 

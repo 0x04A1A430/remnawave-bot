@@ -28,6 +28,7 @@ from app.services.payment_method_config_service import _get_method_defaults
 from app.services.payment_service import PaymentService
 from app.utils.cache import RateLimitCache, cache
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/landing', tags=['Landing Pages'])

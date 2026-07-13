@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User, WelcomeText
 
+
 logger = structlog.get_logger(__name__)
 
 WELCOME_TEXT_KEY = 'welcome_text'

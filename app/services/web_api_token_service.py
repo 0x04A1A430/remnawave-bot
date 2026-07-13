@@ -12,6 +12,7 @@ from app.database.crud import web_api_token as crud
 from app.database.models import WebApiToken
 from app.utils.security import generate_api_token, hash_api_token
 
+
 logger = structlog.get_logger(__name__)
 
 

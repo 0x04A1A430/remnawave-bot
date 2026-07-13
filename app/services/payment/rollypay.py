@@ -15,6 +15,7 @@ from app.services.rollypay_service import rollypay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
 
+
 # Маппинг статусов RollyPay -> internal
 ROLLYPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
     'created': ('pending', False),

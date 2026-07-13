@@ -49,6 +49,7 @@ from ..schemas.partners import (
     TopReferrersResponse,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()

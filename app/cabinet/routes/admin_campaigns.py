@@ -50,6 +50,7 @@ from ..schemas.campaigns import (
 )
 from ..schemas.tariffs import TariffListItem
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/campaigns', tags=['Cabinet Admin Campaigns'])

@@ -17,6 +17,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.services.payment_service import PaymentService
 
+
 logger = structlog.get_logger(__name__)
 
 

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.database import AsyncSessionLocal
 
+
 logger = structlog.get_logger(__name__)
 
 # Placeholders available in EVERY template regardless of notification type.

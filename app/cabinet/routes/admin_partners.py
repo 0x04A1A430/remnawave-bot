@@ -33,6 +33,7 @@ from ..schemas.partners import (
     CampaignSummary,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/partners', tags=['Cabinet Admin Partners'])

@@ -13,6 +13,7 @@ from app.database.models import (
     AppleTransaction,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

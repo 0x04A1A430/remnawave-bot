@@ -25,6 +25,7 @@ from . import (
     welcome_texts,
 )
 
+
 __all__ = [
     'config',
     'contests',

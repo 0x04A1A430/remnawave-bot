@@ -12,6 +12,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService
 
+
 logger = structlog.get_logger(__name__)
 
 # Глобальная ссылка на бота для отправки уведомлений

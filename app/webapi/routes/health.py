@@ -9,6 +9,7 @@ from app.services.version_service import version_service
 from ..dependencies import require_api_token
 from ..schemas.health import HealthCheckResponse, HealthFeatureFlags
 
+
 router = APIRouter()
 
 

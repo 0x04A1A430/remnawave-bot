@@ -37,6 +37,7 @@ from app.states import (
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_bytes, format_datetime
 
+
 logger = structlog.get_logger(__name__)
 
 squad_inbound_selections = {}
@@ -916,9 +917,7 @@ async def show_remnawave_menu(callback: types.CallbackQuery, db_user: User, db: 
     connection_test = await remnawave_service.test_api_connection()
 
     status = connection_test.get('status')
-    if status == 'connected':
-        status_emoji = ''
-    elif status == 'not_configured':
+    if status == 'connected' or status == 'not_configured':
         status_emoji = ''
     else:
         status_emoji = ''

@@ -30,6 +30,7 @@ from sqlalchemy import select
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, SubscriptionStatus
 
+
 logger = structlog.get_logger(__name__)
 
 # Lower rank = better survivor. Statuses not listed (e.g. disabled/pending) sort last.

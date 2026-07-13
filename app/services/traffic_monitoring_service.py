@@ -19,6 +19,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
 from app.utils.cache import cache, cache_key
 
+
 logger = structlog.get_logger(__name__)
 
 # Ключи для хранения snapshot в Redis

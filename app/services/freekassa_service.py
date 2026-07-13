@@ -13,6 +13,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 # Email-заглушки для Freekassa API (test@example.com вызывает ошибку OP-SP-7)

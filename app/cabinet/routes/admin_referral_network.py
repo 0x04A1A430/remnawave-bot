@@ -27,6 +27,7 @@ from app.utils.cache import RateLimitCache
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/referral-network', tags=['Cabinet Admin Referral Network'])

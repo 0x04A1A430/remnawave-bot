@@ -10,6 +10,7 @@ import structlog
 
 from app.config import settings
 
+
 logger = structlog.get_logger(__name__)
 
 API_BASE_URL = 'https://rollypay.io/api/v1'

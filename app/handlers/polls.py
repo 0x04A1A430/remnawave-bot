@@ -20,6 +20,7 @@ from app.services.poll_service import (
     reward_user_for_poll,
 )
 
+
 logger = structlog.get_logger(__name__)
 
 

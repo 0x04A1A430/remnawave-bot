@@ -14,6 +14,7 @@ from app.database.models import (
 )
 from app.utils.user_utils import generate_unique_referral_code
 
+
 logger = structlog.get_logger(__name__)
 
 

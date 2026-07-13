@@ -17,6 +17,7 @@ from app.keyboards.admin import get_welcome_text_keyboard
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
+
 logger = structlog.get_logger(__name__)
 
 

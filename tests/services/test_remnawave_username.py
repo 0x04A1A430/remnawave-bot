@@ -13,6 +13,7 @@ import pytest
 
 from app.config import settings
 
+
 # Note: эти тесты дёргают `format_remnawave_username` напрямую, поэтому
 # template управляется через monkeypatch (а не env), чтобы не мешать другим
 # тестам в той же сессии.

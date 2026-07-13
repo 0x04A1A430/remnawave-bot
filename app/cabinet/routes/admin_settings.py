@@ -15,6 +15,7 @@ from app.services.system_settings_service import (
 
 from ..dependencies import get_cabinet_db, require_permission
 
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix='/admin/settings', tags=['Admin Settings'])
