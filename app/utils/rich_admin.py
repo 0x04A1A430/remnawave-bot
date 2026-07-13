@@ -42,9 +42,12 @@ _rich_unavailable = False
 # Классические админ-тексты используют <blockquote expandable> — rich-HTML
 # такого атрибута не знает и отклонил бы всё сообщение.
 _EXPANDABLE_QUOTE_RE = re.compile(r'<blockquote\s+expandable>', re.IGNORECASE)
-# Первая жирная строка классического уведомления («<b>💎 ПОКУПКА</b>\n…») —
-# становится заголовком rich-сообщения.
-_LEADING_BOLD_RE = re.compile(r'^<b>(?P<title>[^<]{1,120})</b>\s*\n+')
+# Первая строка классического уведомления — кандидат в заголовок h6
+# («<b>💎 ПОКУПКА</b>» / «🔧 <b>ТЕХРАБОТЫ</b>»), если содержит жирный текст.
+_LEADING_TITLE_RE = re.compile(r'^(?P<title>[^\n]{1,160})[ \t]*\n+')
+# Сегментация по blockquote: внутри цитат переносы строк конвертируются в <br>,
+# остальной текст — в абзацы.
+_BLOCKQUOTE_SPLIT_RE = re.compile(r'(<blockquote>.*?</blockquote>)', re.IGNORECASE | re.DOTALL)
 
 
 def is_rich_admin_enabled() -> bool:
@@ -89,22 +92,52 @@ def rich_traceback_details(summary: str, traceback_text: str, *, open_by_default
     )
 
 
+def _inline_newlines_to_rich(text: str) -> str:
+    """Переносы строк классического текста → rich-разметка.
+
+    Rich-HTML живёт по правилам HTML: `\\n` схлопывается в пробел, и без
+    конвертации многострочное уведомление превращается в одну кашу-строку.
+    Пустая строка = граница абзаца (<p>), одиночный перенос = <br>; внутри
+    blockquote — только <br> (цитата остаётся одним блоком).
+    """
+    segments = _BLOCKQUOTE_SPLIT_RE.split(text)
+    rendered: list[str] = []
+    for segment in segments:
+        if not segment or not segment.strip():
+            continue
+        if segment.lower().startswith('<blockquote'):
+            inner = segment[len('<blockquote>') : -len('</blockquote>')]
+            lines = [line for line in inner.split('\n') if line.strip()]
+            rendered.append('<blockquote>' + '<br>'.join(lines) + '</blockquote>')
+            continue
+        for paragraph in re.split(r'\n{2,}', segment):
+            lines = [line for line in paragraph.split('\n') if line.strip()]
+            if lines:
+                rendered.append(f'<p>{"<br>".join(lines)}</p>')
+    return ''.join(rendered)
+
+
 def classic_admin_html_to_rich(text: str, *, footer_label: str | None = None) -> str:
     """Конвертирует классическое HTML-уведомление в rich-разметку.
 
     Консервативно: содержимое не переписывается, только оформление —
-    первая жирная строка становится заголовком h6 с разделителем,
+    первая строка с жирным заголовком становится h6 с разделителем,
     неподдерживаемый rich-HTML атрибут expandable у blockquote убирается,
-    в конец добавляется footer с временем.
+    переносы строк конвертируются в абзацы/<br> (в rich-HTML голый `\\n`
+    схлопывается), в конец добавляется footer с временем.
     """
     rich = _EXPANDABLE_QUOTE_RE.sub('<blockquote>', text.strip())
 
-    match = _LEADING_BOLD_RE.match(rich)
-    if match:
-        rich = f'<h6>{match.group("title").strip()}</h6><hr/>{rich[match.end() :]}'
+    header = ''
+    match = _LEADING_TITLE_RE.match(rich)
+    if match and '<b>' in match.group('title'):
+        header = f'<h6>{match.group("title").strip()}</h6><hr/>'
+        rich = rich[match.end() :]
+
+    body = _inline_newlines_to_rich(rich)
 
     footer = rich_footer_now(footer_label) if footer_label else rich_footer_now()
-    return f'{rich}\n<hr/>{footer}'
+    return f'{header}{body}<hr/>{footer}'
 
 
 async def try_send_rich_admin_message(

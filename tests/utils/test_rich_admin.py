@@ -28,19 +28,32 @@ def test_classic_html_to_rich_conversion():
     rich = rich_admin.classic_admin_html_to_rich(classic)
 
     # Первая жирная строка вынесена в заголовок
-    assert rich.startswith('<h6>💎 ПОКУПКА ПОДПИСКИ</h6><hr/>')
-    # Неподдерживаемый rich-HTML атрибут expandable убран, содержимое цело
+    assert rich.startswith('<h6><b>💎 ПОКУПКА ПОДПИСКИ</b></h6><hr/>')
+    # Неподдерживаемый rich-HTML атрибут expandable убран, переносы стали <br>
     assert '<blockquote expandable>' not in rich
-    assert '<blockquote>детали\nстрока</blockquote>' in rich
+    assert '<blockquote>детали<br>строка</blockquote>' in rich
+    # Тело — абзацами (в rich-HTML голый \n схлопывается)
+    assert '<p>👤 <b>Юзер:</b> Егор</p>' in rich
     # Футер с tg-time
     assert '<footer>' in rich
     assert '<tg-time' in rich
 
 
+def test_classic_html_emoji_before_bold_becomes_header():
+    """Заголовки вида «🔧 <b>ВКЛЮЧЕНИЕ ТЕХРАБОТ</b>» (эмодзи до тега) тоже выносятся в h6."""
+    classic = '🔧 <b>ВКЛЮЧЕНИЕ ТЕХРАБОТ</b>\n\n📋 <b>Причина:</b> настройки\n🤖 <b>Автоматически:</b> Нет'
+
+    rich = rich_admin.classic_admin_html_to_rich(classic)
+
+    assert rich.startswith('<h6>🔧 <b>ВКЛЮЧЕНИЕ ТЕХРАБОТ</b></h6><hr/>')
+    # Строки не склеиваются в кашу — каждая на своём месте
+    assert '<p>📋 <b>Причина:</b> настройки<br>🤖 <b>Автоматически:</b> Нет</p>' in rich
+
+
 def test_classic_html_without_bold_header_kept_as_is():
     rich = rich_admin.classic_admin_html_to_rich('просто текст уведомления')
     assert '<h6>' not in rich
-    assert rich.startswith('просто текст уведомления')
+    assert rich.startswith('<p>просто текст уведомления</p>')
     assert '<footer>' in rich
 
 
