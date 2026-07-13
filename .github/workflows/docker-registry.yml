@@ -47,7 +47,7 @@ jobs:
           echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
 
           # Read base version from release-please manifest (single source of truth)
-          BASE_VERSION=$(jq -r '."."' .release-please-manifest.json)
+          BASE_VERSION=$(jq -r '.packages.".".release-version // ."."' release-please-manifest.json)
 
           if [[ $GITHUB_REF == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
