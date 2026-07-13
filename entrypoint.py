@@ -34,8 +34,8 @@ for dir_path in runtime_dirs:
         for root, dirs, files in os.walk(dir_path):
             for name in dirs:
                 try:
-                    os.chown(  # noqa: PTH118
-                        os.path.join(root, name),
+                    os.chown(
+                        os.path.join(root, name),  # noqa: PTH118
                         APP_UID,
                         APP_GID,
                         follow_symlinks=False,
@@ -44,8 +44,8 @@ for dir_path in runtime_dirs:
                     pass
             for name in files:
                 try:
-                    os.chown(  # noqa: PTH118
-                        os.path.join(root, name),
+                    os.chown(
+                        os.path.join(root, name),  # noqa: PTH118
                         APP_UID,
                         APP_GID,
                         follow_symlinks=False,
