@@ -1,7 +1,7 @@
 """
 Ban System API Client.
 
-Client for interacting with the BedolagaBan monitoring system.
+Client for interacting with the ban monitoring system.
 """
 
 from typing import Any

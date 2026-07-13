@@ -1,4 +1,4 @@
-name: BedolagaBot
+name: Build and Push Docker Image
 
 on:
   push:
@@ -87,7 +87,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.created=${{ steps.version.outputs.build_date }}
             org.opencontainers.image.revision=${{ steps.version.outputs.short_sha }}
-            org.opencontainers.image.title=Bedolaga RemnaWave Bot
+            org.opencontainers.image.title=RemnaWave Telegram Bot
             org.opencontainers.image.description=Telegram bot for RemnaWave VPN service
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
