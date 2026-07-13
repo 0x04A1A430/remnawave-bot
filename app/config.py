@@ -923,6 +923,30 @@ class Settings(BaseSettings):
     ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'Карта (Etoplatezhi)'
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
+    # Rich-меню (Bot API 10.1): заголовки, таблица подписок, details-блоки, tg-time.
+    # Требует telegram-bot-api с Bot API 10.1+; при недоступности бот сам откатывается
+    # на классический рендер до рестарта. В rich-режиме главное меню идёт без логотипа.
+    MAIN_MENU_RICH_ENABLED: bool = True
+    # Эффект сообщения при отправке rich-меню (только личные чаты). Известные id:
+    # 🎉 5046509860389126442, ❤️ 5044134455711629726, 🔥 5104841245755180586,
+    # 👍 5107584321108051014, 👎 5104858069142078462, 💩 5046589136895476101.
+    # Пусто — без эффекта. При отказе сервера эффект отключается сам до рестарта.
+    MAIN_MENU_RICH_EFFECT_ID: str = '5046509860389126442'
+    # Сворачивать таблицу подписок в раскрываемый details-блок, когда у юзера
+    # больше одной подписки (мультитариф) — меню компактнее.
+    MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
+    # Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. Пусто — авто-режим:
+    # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
+    # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не
+    # сможет скачать картинку, меню продолжит отправляться без логотипа до рестарта.
+    MAIN_MENU_RICH_LOGO_URL: str = ''
+
+    # Лог действий пользователя (нажатия кнопок в боте + мутационные запросы в
+    # кабинете) в button_click_logs — источник таймлайна «Активность» в карточке
+    # юзера админ-кабинета.
+    USER_ACTION_LOG_ENABLED: bool = True
+    # Сколько дней хранить записи логов действий (0 = не чистить).
+    USER_ACTION_LOG_RETENTION_DAYS: int = 90
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'

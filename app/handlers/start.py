@@ -1,3 +1,4 @@
+import asyncio
 import html
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -66,6 +67,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
 from app.utils.long_messages import answer_long_text, edit_long_text, send_long_text
+from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -287,6 +289,118 @@ async def _redeem_pending_coupon(
             token_prefix=(coupon_token or '')[:5],
             user_id=user.id,
         )
+
+
+async def _delete_message_later(bot, chat_id: int, message_id: int, delay: int = 30) -> None:
+    try:
+        await asyncio.sleep(delay)
+        await bot.delete_message(chat_id, message_id)
+    except Exception as error:  # pragma: no cover - best-effort cleanup
+        logger.debug('Не удалось удалить эфемерное сообщение', message_id=message_id, error=str(error))
+
+
+async def _activate_pending_trial(
+    db: AsyncSession,
+    state: FSMContext,
+    user: 'User',
+    answer_func: Callable[..., Any],
+) -> None:
+    """Активирует БЕСПЛАТНЫЙ триал по диплинку /start trial (rich-меню).
+
+    Вызывается перед показом главного меню, чтобы меню сразу отрисовало новую
+    подписку. Все гейты повторяют cabinet POST /trial и activate_trial бота:
+    триал включён, не отключён для auth_type юзера, не использован ранее.
+    Платный триал (TRIAL_PAYMENT_ENABLED + цена) этим путём не активируется —
+    rich-меню для него ведёт на оплату в миниапп. Must be called BEFORE
+    state.clear().
+    """
+    try:
+        fresh_state = await state.get_data()
+        if not fresh_state.get('pending_trial'):
+            return
+        await state.update_data(pending_trial=None)
+
+        if settings.TRIAL_DURATION_DAYS <= 0 or settings.TRIAL_DISABLED_FOR == 'all':
+            return
+        if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', None)):
+            return
+        if settings.is_trial_paid_activation_enabled():
+            return
+        if user.is_trial_already_used():
+            return
+
+        # Параметры триала: из триального тарифа (is_trial_available / TRIAL_TARIFF_ID),
+        # иначе — из настроек; сквады — из тарифа, иначе случайный триальный сквад.
+        from app.database.crud.server_squad import get_effective_tariff_squad_uuids, get_random_trial_squad_uuid
+        from app.database.crud.subscription import create_trial_subscription
+        from app.database.crud.tariff import get_tariff_by_id, get_trial_tariff
+
+        trial_traffic_limit = settings.TRIAL_TRAFFIC_LIMIT_GB
+        trial_device_limit = settings.TRIAL_DEVICE_LIMIT
+        trial_squads: list[str] = []
+        tariff_id_for_trial = None
+
+        trial_tariff = await get_trial_tariff(db)
+        if not trial_tariff:
+            trial_tariff_id = settings.get_trial_tariff_id()
+            if trial_tariff_id > 0:
+                trial_tariff = await get_tariff_by_id(db, trial_tariff_id)
+        if trial_tariff:
+            trial_traffic_limit = trial_tariff.traffic_limit_gb
+            trial_device_limit = trial_tariff.device_limit
+            trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
+            tariff_id_for_trial = trial_tariff.id
+        if not trial_squads:
+            trial_squad_uuid = await get_random_trial_squad_uuid(db)
+            trial_squads = [trial_squad_uuid] if trial_squad_uuid else []
+
+        subscription = await create_trial_subscription(
+            db=db,
+            user_id=user.id,
+            duration_days=settings.TRIAL_DURATION_DAYS,
+            traffic_limit_gb=trial_traffic_limit,
+            device_limit=trial_device_limit,
+            connected_squads=trial_squads or None,
+            tariff_id=tariff_id_for_trial,
+        )
+        logger.info('Триал активирован по диплинку rich-меню', user_id=user.id, subscription_id=subscription.id)
+
+        subscription_service = SubscriptionService()
+        panel_user = None
+        try:
+            if subscription_service.is_configured:
+                panel_user = await subscription_service.create_remnawave_user(db, subscription)
+                await db.refresh(subscription)
+        except Exception as error:
+            logger.error('Не удалось создать Remnawave-пользователя для триала по диплинку', error=error)
+        if subscription_service.is_configured and panel_user is None:
+            # create_remnawave_user проглатывает ошибки и возвращает None — без
+            # ретрая юзер не появился бы в панели (паттерн cabinet POST /trial).
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='create')
+            logger.warning(
+                'Триал по диплинку без Remnawave-пользователя — поставлен в очередь ретраев',
+                user_id=user.id,
+                subscription_id=subscription.id,
+            )
+    except Exception:
+        logger.exception('Не удалось активировать триал по диплинку', user_id=getattr(user, 'id', None))
+        return
+
+    try:
+        texts = get_texts(user.language)
+        confirmation = await answer_func(
+            texts.t('MAIN_MENU_RICH_TRIAL_ACTIVATED', '🎉 <b>Тестовая подписка активирована!</b>'),
+            parse_mode=ParseMode.HTML,
+        )
+        # Подтверждение эфемерное: новая подписка и так видна в меню ниже.
+        if confirmation is not None and getattr(confirmation, 'bot', None) is not None:
+            asyncio.create_task(
+                _delete_message_later(confirmation.bot, confirmation.chat.id, confirmation.message_id, delay=30)
+            )
+    except Exception:
+        logger.exception('Триал активирован, но подтверждение не отправилось', user_id=user.id)
 
 
 async def _claim_phantom_user(
@@ -951,6 +1065,16 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         # Unregistered → fall through to normal /start (contests need a subscription anyway).
         start_parameter = None
 
+    # Диплинк «активировать триал» из rich-меню: /start trial.
+    # Зарегистрированному юзеру бесплатный триал выдаётся ниже
+    # (_activate_pending_trial) перед показом меню — меню сразу отрисует новую
+    # подписку. Новый юзер получает предложение триала после регистрации штатно.
+    # Платный триал (TRIAL_PAYMENT_ENABLED) этим путём не активируется — только
+    # оплата в миниаппе.
+    if start_parameter == 'trial':
+        await state.update_data(pending_trial=True)
+        start_parameter = None
+
     # Keitaro/affiliate click ID rides on /start as `{campaign}_subid_{click_id}`
     # (64 chars total). Pull the click_id into FSM state and continue campaign
     # lookup with the bare campaign portion.
@@ -1154,12 +1278,15 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             except Exception as e:
                 logger.error('Ошибка отправки уведомления о рекламной кампании', error=e)
 
-        # Auto-activate pending gift/coupon if deep link contained GIFT_/coupon_
+        # Auto-activate pending gift/coupon/trial if deep link contained GIFT_/coupon_/trial
         if user:
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
             await _redeem_pending_coupon(db, state, user, message.answer)
+            await _activate_pending_trial(db, state, user, message.answer)
             await _persist_pending_subid_after_registration(db, state, user)
-            await state.update_data(pending_gift_token=None, pending_coupon_token=None, pending_subid=None)
+            await state.update_data(
+                pending_gift_token=None, pending_coupon_token=None, pending_subid=None, pending_trial=None
+            )
             # Refresh user to pick up newly created subscriptions
             await db.refresh(user, attribute_names=['subscriptions'])
 
@@ -1173,8 +1300,6 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
 
         if pinned_message and pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
-
-        menu_text = await get_main_menu_text(user, texts, db)
 
         is_admin = settings.is_admin(user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
@@ -1203,7 +1328,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             is_moderator=is_moderator,
             custom_buttons=custom_buttons,
         )
-        await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+        if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
+            menu_text = await get_main_menu_text(user, texts, db)
+            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
 
         if pinned_message and not pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -1832,8 +1959,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         )
         has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_existing_sub)
 
-        menu_text = await get_main_menu_text(existing_user, texts, db)
-
         is_admin = settings.is_admin(existing_user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
 
@@ -1863,7 +1988,9 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            if not await try_answer_rich_main_menu(callback.message, existing_user, texts, db, keyboard):
+                menu_text = await get_main_menu_text(existing_user, texts, db)
+                await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2092,8 +2219,6 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         first_sub_menu = next((s for s in user_subs_menu if s.is_active), user_subs_menu[0] if user_subs_menu else None)
         has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_menu)
 
-        menu_text = await get_main_menu_text(user, texts, db)
-
         is_admin = settings.is_admin(user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -2122,7 +2247,9 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            if not await try_answer_rich_main_menu(callback.message, user, texts, db, keyboard):
+                menu_text = await get_main_menu_text(user, texts, db)
+                await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
@@ -2164,8 +2291,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         )
         has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_existing_sub)
 
-        menu_text = await get_main_menu_text(existing_user, texts, db)
-
         is_admin = settings.is_admin(existing_user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(existing_user.telegram_id)
 
@@ -2195,7 +2320,9 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            if not await try_answer_rich_main_menu(message, existing_user, texts, db, keyboard):
+                menu_text = await get_main_menu_text(existing_user, texts, db)
+                await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2459,8 +2586,6 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         first_sub_menu = next((s for s in user_subs_menu if s.is_active), user_subs_menu[0] if user_subs_menu else None)
         has_active_subscription, subscription_is_active = _calculate_subscription_flags(first_sub_menu)
 
-        menu_text = await get_main_menu_text(user, texts, db)
-
         is_admin = settings.is_admin(user.telegram_id)
         is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -2489,7 +2614,9 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
+                menu_text = await get_main_menu_text(user, texts, db)
+                await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2736,8 +2863,6 @@ async def required_sub_channel_check(
             # Uses primary subscription (multi-tariff compatible via property)
             has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
 
-            menu_text = await get_main_menu_text(user, texts, db)
-
             is_admin = settings.is_admin(user.telegram_id)
             is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -2766,22 +2891,24 @@ async def required_sub_channel_check(
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(bot, db, user, pinned_message)
 
-            if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                _result = await bot.send_photo(
-                    chat_id=query.from_user.id,
-                    photo=get_logo_media(),
-                    caption=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-                _cache_logo_file_id(_result)
-            else:
-                await bot.send_message(
-                    chat_id=query.from_user.id,
-                    text=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
+            if not await try_send_rich_main_menu(bot, query.from_user.id, user, texts, db, keyboard):
+                menu_text = await get_main_menu_text(user, texts, db)
+                if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
+                    _result = await bot.send_photo(
+                        chat_id=query.from_user.id,
+                        photo=get_logo_media(),
+                        caption=menu_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
+                    _cache_logo_file_id(_result)
+                else:
+                    await bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=menu_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(bot, db, user, pinned_message)
         else:
@@ -2904,8 +3031,6 @@ async def required_sub_channel_check(
                     # Uses primary subscription (multi-tariff compatible via property)
                     has_active_subscription, subscription_is_active = _calculate_subscription_flags(user.subscription)
 
-                    menu_text = await get_main_menu_text(user, texts, db)
-
                     is_admin = settings.is_admin(user.telegram_id)
                     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(user.telegram_id)
 
@@ -2934,22 +3059,24 @@ async def required_sub_channel_check(
                     if pinned_message and pinned_message.send_before_menu:
                         await _send_pinned_message(bot, db, user, pinned_message)
 
-                    if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                        _result = await bot.send_photo(
-                            chat_id=query.from_user.id,
-                            photo=get_logo_media(),
-                            caption=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
-                        _cache_logo_file_id(_result)
-                    else:
-                        await bot.send_message(
-                            chat_id=query.from_user.id,
-                            text=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
+                    if not await try_send_rich_main_menu(bot, query.from_user.id, user, texts, db, keyboard):
+                        menu_text = await get_main_menu_text(user, texts, db)
+                        if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
+                            _result = await bot.send_photo(
+                                chat_id=query.from_user.id,
+                                photo=get_logo_media(),
+                                caption=menu_text,
+                                reply_markup=keyboard,
+                                parse_mode='HTML',
+                            )
+                            _cache_logo_file_id(_result)
+                        else:
+                            await bot.send_message(
+                                chat_id=query.from_user.id,
+                                text=menu_text,
+                                reply_markup=keyboard,
+                                parse_mode='HTML',
+                            )
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(bot, db, user, pinned_message)
                 else:
