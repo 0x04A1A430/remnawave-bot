@@ -1,4 +1,4 @@
-# Сквозная корзина (Persistent Cart) для Remnawave Bedolaga Telegram Bot
+# Сквозная корзина (Persistent Cart) для Remnawave Telegram Bot
 
 ## Общее описание
 

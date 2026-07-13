@@ -51,7 +51,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
         app = create_web_api_app(lifespan=lifespan)
     else:
         app = FastAPI(
-            title='Bedolaga Unified Server',
+            title='RemnaWave Unified Server',
             version=settings.WEB_API_VERSION,
             docs_url=docs_config.get('docs_url'),
             redoc_url=None,
@@ -63,7 +63,7 @@ def _create_base_app(lifespan: Any = None) -> FastAPI:
             app,
             redoc_url=docs_config.get('redoc_url'),
             openapi_url=docs_config.get('openapi_url'),
-            title='Bedolaga Unified Server',
+            title='RemnaWave Unified Server',
         )
 
         # Add cabinet routes even when web API is disabled

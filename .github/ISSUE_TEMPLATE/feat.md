@@ -1,6 +1,6 @@
 ---
-name: Feat Bedolage
-about: Создать запрос на фичу «Бедолаге»
+name: Feature Request
+about: Создать запрос на фичу
 title: "[FEAT] Заголовок"
 labels: ""
 assignees: ""

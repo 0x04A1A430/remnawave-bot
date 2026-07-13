@@ -1,6 +1,6 @@
 ---
-name: Bug Bedolage
-about: Создать баг-репорт «Бедолаге»
+name: Bug Report
+about: Создать баг-репорт
 title: "[BUG] Заголовок"
 labels: ""
 assignees: ""
