@@ -14,22 +14,16 @@ class PaymentType(BaseModel):
     Maps to PHP Model\\PaymentType\\PaymentType.
     """
 
-    id: int = Field(..., description="Payment type ID")
-    type: str = Field(..., description="Payment type")
-    bank_name: str = Field(..., alias="bankName", description="Bank name")
-    bank_bik: str = Field(..., alias="bankBik", description="Bank BIK")
-    corr_account: str = Field(
-        ..., alias="corrAccount", description="Correspondent account"
-    )
-    favorite: bool = Field(..., description="Is favorite payment type")
-    phone: str | None = Field(None, description="Phone number")
-    bank_id: str | None = Field(None, alias="bankId", description="Bank ID")
-    current_account: str = Field(
-        ..., alias="currentAccount", description="Current account"
-    )
-    available_for_pa: bool = Field(
-        ..., alias="availableForPa", description="Available for PA"
-    )
+    id: int = Field(..., description='Payment type ID')
+    type: str = Field(..., description='Payment type')
+    bank_name: str = Field(..., alias='bankName', description='Bank name')
+    bank_bik: str = Field(..., alias='bankBik', description='Bank BIK')
+    corr_account: str = Field(..., alias='corrAccount', description='Correspondent account')
+    favorite: bool = Field(..., description='Is favorite payment type')
+    phone: str | None = Field(None, description='Phone number')
+    bank_id: str | None = Field(None, alias='bankId', description='Bank ID')
+    current_account: str = Field(..., alias='currentAccount', description='Current account')
+    available_for_pa: bool = Field(..., alias='availableForPa', description='Available for PA')
 
     def is_favorite(self) -> bool:
         """Check if this payment type is marked as favorite."""
@@ -39,16 +33,16 @@ class PaymentType(BaseModel):
         """Custom serialization to match API format."""
         _ = kwargs
         return {
-            "id": self.id,
-            "type": self.type,
-            "bankName": self.bank_name,
-            "bankBik": self.bank_bik,
-            "corrAccount": self.corr_account,
-            "favorite": self.favorite,
-            "phone": self.phone,
-            "bankId": self.bank_id,
-            "currentAccount": self.current_account,
-            "availableForPa": self.available_for_pa,
+            'id': self.id,
+            'type': self.type,
+            'bankName': self.bank_name,
+            'bankBik': self.bank_bik,
+            'corrAccount': self.corr_account,
+            'favorite': self.favorite,
+            'phone': self.phone,
+            'bankId': self.bank_id,
+            'currentAccount': self.current_account,
+            'availableForPa': self.available_for_pa,
         }
 
 

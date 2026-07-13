@@ -146,20 +146,20 @@ async def _terminate_competing_backends(conn) -> int:
     try:
         result = await conn.execute(
             text(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = current_database() AND pid <> pg_backend_pid()"
+                'SELECT pg_terminate_backend(pid) FROM pg_stat_activity '
+                'WHERE datname = current_database() AND pid <> pg_backend_pid()'
             )
         )
         terminated = len(result.fetchall())
         if terminated:
             logger.info(
-                "Завершены конкурирующие сессии БД перед TRUNCATE",
+                'Завершены конкурирующие сессии БД перед TRUNCATE',
                 terminated=terminated,
             )
         return terminated
     except Exception as e:
         logger.warning(
-            "Не удалось завершить конкурирующие сессии БД перед TRUNCATE (best-effort)",
+            'Не удалось завершить конкурирующие сессии БД перед TRUNCATE (best-effort)',
             error=e,
         )
         return 0
@@ -168,9 +168,9 @@ async def _terminate_competing_backends(conn) -> int:
 @dataclass
 class BackupMetadata:
     timestamp: str
-    version: str = "1.2"
-    database_type: str = "postgresql"
-    backup_type: str = "full"
+    version: str = '1.2'
+    database_type: str = 'postgresql'
+    backup_type: str = 'full'
     tables_count: int = 0
     total_records: int = 0
     compressed: bool = True
@@ -182,11 +182,11 @@ class BackupMetadata:
 class BackupSettings:
     auto_backup_enabled: bool = True
     backup_interval_hours: int = 24
-    backup_time: str = "03:00"
+    backup_time: str = '03:00'
     max_backups_keep: int = 7
     compression_enabled: bool = True
     include_logs: bool = False
-    backup_location: str = "/app/data/backups"
+    backup_location: str = '/app/data/backups'
 
 
 class BackupService:
@@ -195,7 +195,7 @@ class BackupService:
         self.backup_dir = Path(settings.BACKUP_LOCATION).expanduser().resolve()
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         self.data_dir = self.backup_dir.parent
-        self.archive_format_version = "2.0"
+        self.archive_format_version = '2.0'
         self._auto_backup_task = None
         self._settings = self._load_settings()
 
@@ -316,9 +316,9 @@ class BackupService:
             self.backup_models_ordered.append(MonitoringLog)
 
         self.association_tables = {
-            "server_squad_promo_groups": server_squad_promo_groups,
-            "tariff_promo_groups": tariff_promo_groups,
-            "payment_method_promo_groups": payment_method_promo_groups,
+            'server_squad_promo_groups': server_squad_promo_groups,
+            'tariff_promo_groups': tariff_promo_groups,
+            'payment_method_promo_groups': payment_method_promo_groups,
         }
 
     def _load_settings(self) -> BackupSettings:
@@ -332,11 +332,11 @@ class BackupService:
         return BackupSettings(
             auto_backup_enabled=bool(settings.BACKUP_AUTO_ENABLED),
             backup_interval_hours=int(settings.BACKUP_INTERVAL_HOURS or 24),
-            backup_time=str(settings.BACKUP_TIME or "03:00"),
+            backup_time=str(settings.BACKUP_TIME or '03:00'),
             max_backups_keep=int(settings.BACKUP_MAX_KEEP or 7),
             compression_enabled=bool(settings.BACKUP_COMPRESSION),
             include_logs=bool(settings.BACKUP_INCLUDE_LOGS),
-            backup_location=str(settings.BACKUP_LOCATION or "/app/data/backups"),
+            backup_location=str(settings.BACKUP_LOCATION or '/app/data/backups'),
         )
 
     def reload_settings_from_db(self) -> BackupSettings:
@@ -371,17 +371,17 @@ class BackupService:
         return self._settings
 
     def _parse_backup_time(self) -> tuple[int, int]:
-        time_str = (self._settings.backup_time or "").strip()
+        time_str = (self._settings.backup_time or '').strip()
 
         try:
-            parts = time_str.split(":")
+            parts = time_str.split(':')
             if len(parts) != 2:
-                raise ValueError("Invalid time format")
+                raise ValueError('Invalid time format')
 
             hours, minutes = map(int, parts)
 
             if not (0 <= hours < 24 and 0 <= minutes < 60):
-                raise ValueError("Hours or minutes out of range")
+                raise ValueError('Hours or minutes out of range')
 
             return hours, minutes
 
@@ -391,18 +391,14 @@ class BackupService:
                 "Некорректное значение BACKUP_TIME=''. Используется значение по умолчанию 03:00.",
                 backup_time=self._settings.backup_time,
             )
-            self._settings.backup_time = "03:00"
+            self._settings.backup_time = '03:00'
             return default_hours, default_minutes
 
-    def _calculate_next_backup_datetime(
-        self, reference: datetime | None = None
-    ) -> datetime:
+    def _calculate_next_backup_datetime(self, reference: datetime | None = None) -> datetime:
         reference = reference or datetime.now(UTC)
         hours, minutes = self._parse_backup_time()
 
-        next_run = reference.replace(
-            hour=hours, minute=minutes, second=0, microsecond=0
-        )
+        next_run = reference.replace(hour=hours, minute=minutes, second=0, microsecond=0)
         if next_run <= reference:
             next_run += timedelta(days=1)
 
@@ -413,7 +409,7 @@ class BackupService:
 
         if hours <= 0:
             logger.warning(
-                "Некорректное значение BACKUP_INTERVAL_HOURS. Используется значение по умолчанию 24.",
+                'Некорректное значение BACKUP_INTERVAL_HOURS. Используется значение по умолчанию 24.',
                 hours=hours,
             )
             hours = 24
@@ -422,9 +418,7 @@ class BackupService:
         return timedelta(hours=hours)
 
     @staticmethod
-    def _next_future_run(
-        next_run: datetime, interval: timedelta, now: datetime
-    ) -> datetime:
+    def _next_future_run(next_run: datetime, interval: timedelta, now: datetime) -> datetime:
         """Advance next_run by one interval, skipping any already-missed slots.
 
         A stale schedule (downtime, a first run computed in the past, or an interval
@@ -456,7 +450,7 @@ class BackupService:
             if override_path.exists() and os.access(override_path, os.X_OK):
                 return str(override_path)
             logger.warning(
-                "Путь из недоступен или не является исполняемым",
+                'Путь из недоступен или не является исполняемым',
                 override=override,
                 env_var=env_var,
             )
@@ -474,65 +468,49 @@ class BackupService:
         include_logs: bool = None,
     ) -> tuple[bool, str, str | None]:
         try:
-            logger.info("Начинаем создание бекапа...")
+            logger.info('Начинаем создание бекапа...')
 
             if include_logs is None:
                 include_logs = self._settings.include_logs
 
             overview = await self._collect_database_overview()
 
-            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-            archive_suffix = ".tar.gz" if compress else ".tar"
-            filename = f"backup_{timestamp}{archive_suffix}"
+            timestamp = datetime.now(UTC).strftime('%Y%m%d_%H%M%S')
+            archive_suffix = '.tar.gz' if compress else '.tar'
+            filename = f'backup_{timestamp}{archive_suffix}'
             backup_path = self.backup_dir / filename
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
-                staging_dir = temp_path / "backup"
-                await asyncio.to_thread(
-                    lambda: staging_dir.mkdir(parents=True, exist_ok=True)
-                )
+                staging_dir = temp_path / 'backup'
+                await asyncio.to_thread(lambda: staging_dir.mkdir(parents=True, exist_ok=True))
 
-                database_info = await self._dump_database(
-                    staging_dir, include_logs=include_logs
-                )
-                database_info.setdefault(
-                    "tables_count", overview.get("tables_count", 0)
-                )
-                database_info.setdefault(
-                    "total_records", overview.get("total_records", 0)
-                )
-                files_info = await self._collect_files(
-                    staging_dir, include_logs=include_logs
-                )
+                database_info = await self._dump_database(staging_dir, include_logs=include_logs)
+                database_info.setdefault('tables_count', overview.get('tables_count', 0))
+                database_info.setdefault('total_records', overview.get('total_records', 0))
+                files_info = await self._collect_files(staging_dir, include_logs=include_logs)
                 data_snapshot_info = await self._collect_data_snapshot(staging_dir)
 
                 metadata = {
-                    "format_version": self.archive_format_version,
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "database_type": (
-                        "postgresql" if settings.is_postgresql() else "sqlite"
-                    ),
-                    "backup_type": "full",
-                    "tables_count": overview.get("tables_count", 0),
-                    "total_records": overview.get("total_records", 0),
-                    "compressed": True,
-                    "created_by": created_by,
-                    "database": database_info,
-                    "files": files_info,
-                    "data_snapshot": data_snapshot_info,
-                    "settings": asdict(self._settings),
+                    'format_version': self.archive_format_version,
+                    'timestamp': datetime.now(UTC).isoformat(),
+                    'database_type': ('postgresql' if settings.is_postgresql() else 'sqlite'),
+                    'backup_type': 'full',
+                    'tables_count': overview.get('tables_count', 0),
+                    'total_records': overview.get('total_records', 0),
+                    'compressed': True,
+                    'created_by': created_by,
+                    'database': database_info,
+                    'files': files_info,
+                    'data_snapshot': data_snapshot_info,
+                    'settings': asdict(self._settings),
                 }
 
-                metadata_path = staging_dir / "metadata.json"
-                async with aiofiles.open(
-                    metadata_path, "w", encoding="utf-8"
-                ) as meta_file:
-                    await meta_file.write(
-                        json_lib.dumps(metadata, ensure_ascii=False, indent=2)
-                    )
+                metadata_path = staging_dir / 'metadata.json'
+                async with aiofiles.open(metadata_path, 'w', encoding='utf-8') as meta_file:
+                    await meta_file.write(json_lib.dumps(metadata, ensure_ascii=False, indent=2))
 
-                mode = "w:gz" if compress else "w"
+                mode = 'w:gz' if compress else 'w'
 
                 def _write_archive() -> None:
                     # tar.add reads + gzip-compresses each file; running it inline froze the
@@ -549,109 +527,93 @@ class BackupService:
 
             size_mb = file_size / 1024 / 1024
             message = (
-                f"Бекап успешно создан!\n"
-                f"Файл: {filename}\n"
+                f'Бекап успешно создан!\n'
+                f'Файл: {filename}\n'
                 f'Таблиц: {overview.get("tables_count", 0)}\n'
                 f'Записей: {overview.get("total_records", 0):,}\n'
-                f"Размер: {size_mb:.2f} MB"
+                f'Размер: {size_mb:.2f} MB'
             )
 
             logger.info(message)
 
             if self.bot:
-                await self._send_backup_notification(
-                    "success", message, str(backup_path)
-                )
+                await self._send_backup_notification('success', message, str(backup_path))
 
                 await self._send_backup_file_to_chat(str(backup_path))
 
             return True, message, str(backup_path)
 
         except Exception as e:
-            error_msg = f"Ошибка создания бекапа: {e!s}"
+            error_msg = f'Ошибка создания бекапа: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
-                await self._send_backup_notification("error", error_msg)
+                await self._send_backup_notification('error', error_msg)
 
             return False, error_msg, None
 
-    async def restore_backup(
-        self, backup_file_path: str, clear_existing: bool = False
-    ) -> tuple[bool, str]:
+    async def restore_backup(self, backup_file_path: str, clear_existing: bool = False) -> tuple[bool, str]:
         try:
-            logger.info(
-                "Начинаем восстановление из файла", backup_file_path=backup_file_path
-            )
+            logger.info('Начинаем восстановление из файла', backup_file_path=backup_file_path)
 
             backup_path = Path(backup_file_path)
             if not await asyncio.to_thread(backup_path.exists):
-                return False, f"Файл бекапа не найден: {backup_file_path}"
+                return False, f'Файл бекапа не найден: {backup_file_path}'
 
             if self._is_archive_backup(backup_path):
-                success, message = await self._restore_from_archive(
-                    backup_path, clear_existing
-                )
+                success, message = await self._restore_from_archive(backup_path, clear_existing)
             else:
-                success, message = await self._restore_from_legacy(
-                    backup_path, clear_existing
-                )
+                success, message = await self._restore_from_legacy(backup_path, clear_existing)
 
             if success and self.bot:
-                await self._send_backup_notification("restore_success", message)
+                await self._send_backup_notification('restore_success', message)
             elif not success and self.bot:
-                await self._send_backup_notification("restore_error", message)
+                await self._send_backup_notification('restore_error', message)
 
             return success, message
 
         except Exception as e:
-            error_msg = f"Ошибка восстановления: {e!s}"
+            error_msg = f'Ошибка восстановления: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
-                await self._send_backup_notification("restore_error", error_msg)
+                await self._send_backup_notification('restore_error', error_msg)
 
             return False, error_msg
 
     async def _collect_database_overview(self) -> dict[str, Any]:
         overview: dict[str, Any] = {
-            "tables_count": 0,
-            "total_records": 0,
-            "tables": [],
+            'tables_count': 0,
+            'total_records': 0,
+            'tables': [],
         }
 
         try:
             async with engine.begin() as conn:
-                table_names = await conn.run_sync(
-                    lambda sync_conn: inspect(sync_conn).get_table_names()
-                )
+                table_names = await conn.run_sync(lambda sync_conn: inspect(sync_conn).get_table_names())
 
                 for table_name in table_names:
                     try:
-                        result = await conn.execute(
-                            text(f"SELECT COUNT(*) FROM {table_name}")
-                        )
+                        result = await conn.execute(text(f'SELECT COUNT(*) FROM {table_name}'))
                         count = result.scalar_one()
                     except Exception:
                         count = 0
 
-                    overview["tables"].append({"name": table_name, "rows": count})
-                    overview["total_records"] += count
+                    overview['tables'].append({'name': table_name, 'rows': count})
+                    overview['total_records'] += count
 
-                overview["tables_count"] = len(table_names)
+                overview['tables_count'] = len(table_names)
         except Exception as exc:
-            logger.warning("Не удалось собрать статистику по БД", exc=exc)
+            logger.warning('Не удалось собрать статистику по БД', exc=exc)
 
         return overview
 
-    async def _dump_database(
-        self, staging_dir: Path, include_logs: bool
-    ) -> dict[str, Any]:
+    async def _dump_database(self, staging_dir: Path, include_logs: bool) -> dict[str, Any]:
         if settings.is_postgresql():
-            pg_dump_path = self._resolve_command_path("pg_dump", "PG_DUMP_PATH")
+            pg_dump_path = self._resolve_command_path('pg_dump', 'PG_DUMP_PATH')
 
             if pg_dump_path:
-                dump_path = staging_dir / "database.sql"
+                dump_path = staging_dir / 'database.sql'
                 await self._dump_postgres(dump_path, pg_dump_path)
                 size = (
                     (await asyncio.to_thread(dump_path.stat)).st_size
@@ -659,58 +621,50 @@ class BackupService:
                     else 0
                 )
                 return {
-                    "type": "postgresql",
-                    "path": dump_path.name,
-                    "size_bytes": size,
-                    "format": "sql",
-                    "tool": pg_dump_path,
+                    'type': 'postgresql',
+                    'path': dump_path.name,
+                    'size_bytes': size,
+                    'format': 'sql',
+                    'tool': pg_dump_path,
                 }
 
-            logger.info(
-                "pg_dump не найден в PATH. Используется ORM-дамп в формате JSON"
-            )
+            logger.info('pg_dump не найден в PATH. Используется ORM-дамп в формате JSON')
             json_info = await self._dump_postgres_json(staging_dir, include_logs)
             return json_info
 
-        dump_path = staging_dir / "database.sqlite"
+        dump_path = staging_dir / 'database.sqlite'
         await self._dump_sqlite(dump_path)
-        size = (
-            (await asyncio.to_thread(dump_path.stat)).st_size
-            if await asyncio.to_thread(dump_path.exists)
-            else 0
-        )
+        size = (await asyncio.to_thread(dump_path.stat)).st_size if await asyncio.to_thread(dump_path.exists) else 0
         return {
-            "type": "sqlite",
-            "path": dump_path.name,
-            "size_bytes": size,
-            "format": "file",
+            'type': 'sqlite',
+            'path': dump_path.name,
+            'size_bytes': size,
+            'format': 'file',
         }
 
     async def _dump_postgres(self, dump_path: Path, pg_dump_path: str):
         env = os.environ.copy()
         env.update(
             {
-                "PGHOST": settings.POSTGRES_HOST,
-                "PGPORT": str(settings.POSTGRES_PORT),
-                "PGUSER": settings.POSTGRES_USER,
-                "PGPASSWORD": settings.POSTGRES_PASSWORD,
+                'PGHOST': settings.POSTGRES_HOST,
+                'PGPORT': str(settings.POSTGRES_PORT),
+                'PGUSER': settings.POSTGRES_USER,
+                'PGPASSWORD': settings.POSTGRES_PASSWORD,
             }
         )
 
         command = [
             pg_dump_path,
-            "--format=plain",
-            "--no-owner",
-            "--no-privileges",
+            '--format=plain',
+            '--no-owner',
+            '--no-privileges',
             settings.POSTGRES_DB,
         ]
 
-        logger.info("Экспорт PostgreSQL через pg_dump ...", pg_dump_path=pg_dump_path)
-        await asyncio.to_thread(
-            lambda: dump_path.parent.mkdir(parents=True, exist_ok=True)
-        )
+        logger.info('Экспорт PostgreSQL через pg_dump ...', pg_dump_path=pg_dump_path)
+        await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
 
-        with open(dump_path, "wb") as dump_file:
+        with open(dump_path, 'wb') as dump_file:
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=dump_file,
@@ -720,14 +674,12 @@ class BackupService:
             _, stderr = await process.communicate()
 
         if process.returncode != 0:
-            error_text = stderr.decode() if stderr else "pg_dump error"
-            raise RuntimeError(f"pg_dump завершился с ошибкой: {error_text}")
+            error_text = stderr.decode() if stderr else 'pg_dump error'
+            raise RuntimeError(f'pg_dump завершился с ошибкой: {error_text}')
 
-        logger.info("PostgreSQL dump создан", dump_path=dump_path)
+        logger.info('PostgreSQL dump создан', dump_path=dump_path)
 
-    async def _dump_postgres_json(
-        self, staging_dir: Path, include_logs: bool
-    ) -> dict[str, Any]:
+    async def _dump_postgres_json(self, staging_dir: Path, include_logs: bool) -> dict[str, Any]:
         models_to_backup = self._get_models_for_backup(include_logs)
         (
             backup_data,
@@ -736,62 +688,50 @@ class BackupService:
             tables_count,
         ) = await self._export_database_via_orm(models_to_backup)
 
-        dump_path = staging_dir / "database.json"
+        dump_path = staging_dir / 'database.json'
         dump_structure = {
-            "metadata": {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "version": "orm-1.0",
-                "database_type": "postgresql",
-                "tables_count": tables_count,
-                "total_records": total_records,
+            'metadata': {
+                'timestamp': datetime.now(UTC).isoformat(),
+                'version': 'orm-1.0',
+                'database_type': 'postgresql',
+                'tables_count': tables_count,
+                'total_records': total_records,
             },
-            "data": backup_data,
-            "associations": association_data,
+            'data': backup_data,
+            'associations': association_data,
         }
 
-        async with aiofiles.open(dump_path, "w", encoding="utf-8") as dump_file:
-            await dump_file.write(
-                json_lib.dumps(dump_structure, ensure_ascii=False, indent=2)
-            )
+        async with aiofiles.open(dump_path, 'w', encoding='utf-8') as dump_file:
+            await dump_file.write(json_lib.dumps(dump_structure, ensure_ascii=False, indent=2))
 
-        size = (
-            (await asyncio.to_thread(dump_path.stat)).st_size
-            if await asyncio.to_thread(dump_path.exists)
-            else 0
-        )
+        size = (await asyncio.to_thread(dump_path.stat)).st_size if await asyncio.to_thread(dump_path.exists) else 0
 
-        logger.info("PostgreSQL экспортирован через ORM в JSON", dump_path=dump_path)
+        logger.info('PostgreSQL экспортирован через ORM в JSON', dump_path=dump_path)
 
         return {
-            "type": "postgresql",
-            "path": dump_path.name,
-            "size_bytes": size,
-            "format": "json",
-            "tool": "orm",
-            "format_version": "orm-1.0",
-            "tables_count": tables_count,
-            "total_records": total_records,
+            'type': 'postgresql',
+            'path': dump_path.name,
+            'size_bytes': size,
+            'format': 'json',
+            'tool': 'orm',
+            'format_version': 'orm-1.0',
+            'tables_count': tables_count,
+            'total_records': total_records,
         }
 
     async def _dump_sqlite(self, dump_path: Path):
         sqlite_path = Path(settings.SQLITE_PATH)
         if not await asyncio.to_thread(sqlite_path.exists):
-            raise FileNotFoundError(
-                f"SQLite база данных не найдена по пути {sqlite_path}"
-            )
+            raise FileNotFoundError(f'SQLite база данных не найдена по пути {sqlite_path}')
 
-        await asyncio.to_thread(
-            lambda: dump_path.parent.mkdir(parents=True, exist_ok=True)
-        )
+        await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
         await asyncio.to_thread(shutil.copy2, sqlite_path, dump_path)
-        logger.info("SQLite база данных скопирована", dump_path=dump_path)
+        logger.info('SQLite база данных скопирована', dump_path=dump_path)
 
     async def _export_database_via_orm(
         self,
         models_to_backup: list[Any],
-    ) -> tuple[
-        dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]], int, int
-    ]:
+    ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]], int, int]:
         backup_data: dict[str, list[dict[str, Any]]] = {}
         total_records = 0
 
@@ -799,17 +739,13 @@ class BackupService:
             try:
                 for model in models_to_backup:
                     table_name = model.__tablename__
-                    logger.info("Экспортируем таблицу", table_name=table_name)
+                    logger.info('Экспортируем таблицу', table_name=table_name)
 
                     try:
                         query = select(model)
 
                         if model == User:
-                            query = query.options(
-                                selectinload(User.subscriptions).selectinload(
-                                    Subscription.tariff
-                                )
-                            )
+                            query = query.options(selectinload(User.subscriptions).selectinload(Subscription.tariff))
                         elif model == Subscription:
                             query = query.options(selectinload(Subscription.user))
                         elif model == Transaction:
@@ -819,7 +755,7 @@ class BackupService:
                         records = result.scalars().all()
                     except Exception as table_exc:
                         logger.warning(
-                            "Ошибка экспорта таблицы, пропускаем",
+                            'Ошибка экспорта таблицы, пропускаем',
                             table_name=table_name,
                             error=str(table_exc),
                         )
@@ -839,20 +775,14 @@ class BackupService:
                                 record_dict[column.name] = value.isoformat()
                             elif isinstance(value, Decimal):
                                 record_dict[column.name] = float(value)
-                            elif isinstance(value, float) and (
-                                math.isnan(value) or math.isinf(value)
-                            ):
+                            elif isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
                                 record_dict[column.name] = 0.0
                             elif isinstance(value, (list, dict)):
                                 try:
-                                    record_dict[column.name] = (
-                                        json_lib.dumps(value)
-                                        if value is not None
-                                        else None
-                                    )
+                                    record_dict[column.name] = json_lib.dumps(value) if value is not None else None
                                 except TypeError:
                                     record_dict[column.name] = str(value)
-                            elif hasattr(value, "__dict__"):
+                            elif hasattr(value, '__dict__'):
                                 record_dict[column.name] = str(value)
                             else:
                                 record_dict[column.name] = value
@@ -863,7 +793,7 @@ class BackupService:
                     total_records += len(table_data)
 
                     logger.info(
-                        "Экспортировано записей из таблицы",
+                        'Экспортировано записей из таблицы',
                         table_data_count=len(table_data),
                         table_name=table_name,
                     )
@@ -876,14 +806,12 @@ class BackupService:
                 return backup_data, association_data, total_records, tables_count
 
             except Exception as exc:
-                logger.error("Ошибка при экспорте данных", exc=exc)
+                logger.error('Ошибка при экспорте данных', exc=exc)
                 raise
 
-    async def _collect_files(
-        self, staging_dir: Path, include_logs: bool
-    ) -> list[dict[str, Any]]:
+    async def _collect_files(self, staging_dir: Path, include_logs: bool) -> list[dict[str, Any]]:
         files_info: list[dict[str, Any]] = []
-        files_dir = staging_dir / "files"
+        files_dir = staging_dir / 'files'
         await asyncio.to_thread(lambda: files_dir.mkdir(parents=True, exist_ok=True))
 
         if include_logs and settings.LOG_FILE:
@@ -893,8 +821,8 @@ class BackupService:
                 await asyncio.to_thread(shutil.copy2, log_path, dest)
                 files_info.append(
                     {
-                        "path": str(log_path),
-                        "relative_path": f"files/{log_path.name}",
+                        'path': str(log_path),
+                        'relative_path': f'files/{log_path.name}',
                     }
                 )
 
@@ -904,16 +832,16 @@ class BackupService:
         return files_info
 
     async def _collect_data_snapshot(self, staging_dir: Path) -> dict[str, Any]:
-        data_dir = staging_dir / "data"
+        data_dir = staging_dir / 'data'
         snapshot_info: dict[str, Any] = {
-            "path": str(self.data_dir),
-            "items": 0,
+            'path': str(self.data_dir),
+            'items': 0,
         }
 
         if not await asyncio.to_thread(self.data_dir.exists):
             return snapshot_info
 
-        counter = {"items": 0}
+        counter = {'items': 0}
 
         def _copy_data():
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -926,17 +854,15 @@ class BackupService:
                     shutil.copytree(item, destination, dirs_exist_ok=True)
                 else:
                     shutil.copy2(item, destination)
-                counter["items"] += 1
+                counter['items'] += 1
 
         await asyncio.to_thread(_copy_data)
-        snapshot_info["items"] = counter["items"]
+        snapshot_info['items'] = counter['items']
         return snapshot_info
 
     def _is_archive_backup(self, backup_path: Path) -> bool:
         suffixes = backup_path.suffixes
-        if (len(suffixes) >= 2 and suffixes[-2:] == [".tar", ".gz"]) or (
-            suffixes and suffixes[-1] == ".tar"
-        ):
+        if (len(suffixes) >= 2 and suffixes[-2:] == ['.tar', '.gz']) or (suffixes and suffixes[-1] == '.tar'):
             return True
         try:
             return tarfile.is_tarfile(backup_path)
@@ -951,51 +877,45 @@ class BackupService:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
-            mode = (
-                "r:gz"
-                if backup_path.suffixes and backup_path.suffixes[-1] == ".gz"
-                else "r"
-            )
+            mode = 'r:gz' if backup_path.suffixes and backup_path.suffixes[-1] == '.gz' else 'r'
 
             def _extract_archive() -> None:
                 # Decompress + extract off the event loop so a large restore doesn't freeze the bot.
                 with tarfile.open(backup_path, mode) as tar:
-                    tar.extractall(temp_path, filter="data")
+                    tar.extractall(temp_path, filter='data')
 
             await asyncio.to_thread(_extract_archive)
 
-            metadata_path = temp_path / "metadata.json"
+            metadata_path = temp_path / 'metadata.json'
             if not await asyncio.to_thread(metadata_path.exists):
-                return False, "Метаданные бекапа отсутствуют"
+                return False, 'Метаданные бекапа отсутствуют'
 
-            async with aiofiles.open(metadata_path, encoding="utf-8") as meta_file:
+            async with aiofiles.open(metadata_path, encoding='utf-8') as meta_file:
                 metadata = json_lib.loads(await meta_file.read())
 
             logger.info(
-                "Загружен бекап формата",
-                metadata=metadata.get("format_version", "unknown"),
+                'Загружен бекап формата',
+                metadata=metadata.get('format_version', 'unknown'),
             )
 
-            database_info = metadata.get("database", {})
-            metadata.get("data_snapshot", {})
-            files_info = metadata.get("files", [])
+            database_info = metadata.get('database', {})
+            metadata.get('data_snapshot', {})
+            files_info = metadata.get('files', [])
 
-            if database_info.get("type") == "postgresql":
-                db_format = database_info.get("format", "sql")
-                default_name = (
-                    "database.json" if db_format == "json" else "database.sql"
-                )
-                dump_file = temp_path / database_info.get("path", default_name)
+            if database_info.get('type') == 'postgresql':
+                db_format = database_info.get('format', 'sql')
+                default_name = 'database.json' if db_format == 'json' else 'database.sql'
+                dump_file = temp_path / database_info.get('path', default_name)
 
-                if db_format == "json":
+                if db_format == 'json':
                     await self._restore_postgres_json(dump_file, clear_existing)
                 else:
                     await self._restore_postgres(dump_file, clear_existing)
             else:
-                dump_file = temp_path / database_info.get("path", "database.sqlite")
+                dump_file = temp_path / database_info.get('path', 'database.sqlite')
                 await self._restore_sqlite(dump_file, clear_existing)
 
-            data_dir = temp_path / "data"
+            data_dir = temp_path / 'data'
             if await asyncio.to_thread(data_dir.exists):
                 await self._restore_data_snapshot(data_dir, clear_existing)
 
@@ -1003,7 +923,7 @@ class BackupService:
                 await self._restore_files(files_info, temp_path)
 
             message = (
-                f"Восстановление завершено!\n"
+                f'Восстановление завершено!\n'
                 f'Таблиц: {metadata.get("tables_count", 0)}\n'
                 f'Записей: {metadata.get("total_records", 0):,}\n'
                 f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
@@ -1014,31 +934,31 @@ class BackupService:
 
     async def _restore_postgres(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
-            raise FileNotFoundError(f"Dump PostgreSQL не найден: {dump_path}")
+            raise FileNotFoundError(f'Dump PostgreSQL не найден: {dump_path}')
 
-        psql_path = self._resolve_command_path("psql", "PSQL_PATH")
+        psql_path = self._resolve_command_path('psql', 'PSQL_PATH')
         if not psql_path:
             raise FileNotFoundError(
-                "psql не найден в PATH. Установите клиент PostgreSQL или выполните восстановление из JSON дампа"
+                'psql не найден в PATH. Установите клиент PostgreSQL или выполните восстановление из JSON дампа'
             )
 
         env = os.environ.copy()
         env.update(
             {
-                "PGHOST": settings.POSTGRES_HOST,
-                "PGPORT": str(settings.POSTGRES_PORT),
-                "PGUSER": settings.POSTGRES_USER,
-                "PGPASSWORD": settings.POSTGRES_PASSWORD,
+                'PGHOST': settings.POSTGRES_HOST,
+                'PGPORT': str(settings.POSTGRES_PORT),
+                'PGUSER': settings.POSTGRES_USER,
+                'PGPASSWORD': settings.POSTGRES_PASSWORD,
             }
         )
 
         if clear_existing:
-            logger.info("Полная очистка схемы PostgreSQL перед восстановлением")
+            logger.info('Полная очистка схемы PostgreSQL перед восстановлением')
             drop_command = [
                 psql_path,
                 settings.POSTGRES_DB,
-                "-c",
-                "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;",
+                '-c',
+                'DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;',
             ]
             proc = await asyncio.create_subprocess_exec(
                 *drop_command,
@@ -1048,13 +968,13 @@ class BackupService:
             )
             _, stderr = await proc.communicate()
             if proc.returncode != 0:
-                raise RuntimeError(f"Не удалось очистить схему: {stderr.decode()}")
+                raise RuntimeError(f'Не удалось очистить схему: {stderr.decode()}')
 
-        logger.info("Восстановление PostgreSQL через psql ...", psql_path=psql_path)
+        logger.info('Восстановление PostgreSQL через psql ...', psql_path=psql_path)
         restore_command = [
             psql_path,
             settings.POSTGRES_DB,
-            "-f",
+            '-f',
             str(dump_path),
         ]
         proc = await asyncio.create_subprocess_exec(
@@ -1066,20 +986,20 @@ class BackupService:
         stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise RuntimeError(f"Ошибка psql: {stderr.decode()}")
+            raise RuntimeError(f'Ошибка psql: {stderr.decode()}')
 
-        logger.info("PostgreSQL восстановлен", dump_path=dump_path)
+        logger.info('PostgreSQL восстановлен', dump_path=dump_path)
 
     async def _restore_postgres_json(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
-            raise FileNotFoundError(f"JSON дамп PostgreSQL не найден: {dump_path}")
+            raise FileNotFoundError(f'JSON дамп PostgreSQL не найден: {dump_path}')
 
-        async with aiofiles.open(dump_path, encoding="utf-8") as dump_file:
+        async with aiofiles.open(dump_path, encoding='utf-8') as dump_file:
             dump_data = json_lib.loads(await dump_file.read())
 
-        metadata = dump_data.get("metadata", {})
-        backup_data = dump_data.get("data", {})
-        association_data = dump_data.get("associations", {})
+        metadata = dump_data.get('metadata', {})
+        backup_data = dump_data.get('data', {})
+        association_data = dump_data.get('associations', {})
 
         await self._restore_database_payload(
             backup_data,
@@ -1088,22 +1008,20 @@ class BackupService:
             clear_existing,
         )
 
-        logger.info("PostgreSQL восстановлен из ORM JSON", dump_path=dump_path)
+        logger.info('PostgreSQL восстановлен из ORM JSON', dump_path=dump_path)
 
     async def _restore_sqlite(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
-            raise FileNotFoundError(f"SQLite файл не найден: {dump_path}")
+            raise FileNotFoundError(f'SQLite файл не найден: {dump_path}')
 
         target_path = Path(settings.SQLITE_PATH)
-        await asyncio.to_thread(
-            lambda: target_path.parent.mkdir(parents=True, exist_ok=True)
-        )
+        await asyncio.to_thread(lambda: target_path.parent.mkdir(parents=True, exist_ok=True))
 
         if clear_existing and await asyncio.to_thread(target_path.exists):
             await asyncio.to_thread(target_path.unlink)
 
         await asyncio.to_thread(shutil.copy2, dump_path, target_path)
-        logger.info("SQLite база восстановлена", target_path=target_path)
+        logger.info('SQLite база восстановлена', target_path=target_path)
 
     async def _restore_data_snapshot(self, source_dir: Path, clear_existing: bool):
         if not await asyncio.to_thread(source_dir.exists):
@@ -1128,24 +1046,21 @@ class BackupService:
                     shutil.copy2(item, destination)
 
         await asyncio.to_thread(_restore)
-        logger.info("Снимок директории data восстановлен")
+        logger.info('Снимок директории data восстановлен')
 
     async def _restore_files(self, files_info: list[dict[str, Any]], temp_path: Path):
         allowed_base = await asyncio.to_thread(self.data_dir.resolve)
 
         for file_info in files_info:
-            relative_path = file_info.get("relative_path")
-            target_path = Path(file_info.get("path", ""))
+            relative_path = file_info.get('relative_path')
+            target_path = Path(file_info.get('path', ''))
             if not relative_path or not target_path:
                 continue
 
             target_resolved = await asyncio.to_thread(target_path.resolve)
-            if (
-                not str(target_resolved).startswith(str(allowed_base) + os.sep)
-                and target_resolved != allowed_base
-            ):
+            if not str(target_resolved).startswith(str(allowed_base) + os.sep) and target_resolved != allowed_base:
                 logger.warning(
-                    "Заблокирована запись за пределами data_dir",
+                    'Заблокирована запись за пределами data_dir',
                     target_path=target_path,
                 )
                 continue
@@ -1153,20 +1068,16 @@ class BackupService:
             source_file = await asyncio.to_thread((temp_path / relative_path).resolve)
             temp_path_resolved = await asyncio.to_thread(temp_path.resolve)
             if not str(source_file).startswith(str(temp_path_resolved) + os.sep):
-                logger.warning(
-                    "Path traversal в relative_path", relative_path=relative_path
-                )
+                logger.warning('Path traversal в relative_path', relative_path=relative_path)
                 continue
 
             if not await asyncio.to_thread(source_file.exists):
-                logger.warning("Файл отсутствует в архиве", relative_path=relative_path)
+                logger.warning('Файл отсутствует в архиве', relative_path=relative_path)
                 continue
 
-            await asyncio.to_thread(
-                lambda: target_resolved.parent.mkdir(parents=True, exist_ok=True)
-            )
+            await asyncio.to_thread(lambda: target_resolved.parent.mkdir(parents=True, exist_ok=True))
             await asyncio.to_thread(shutil.copy2, source_file, target_resolved)
-            logger.info("Файл восстановлен", target_resolved=target_resolved)
+            logger.info('Файл восстановлен', target_resolved=target_resolved)
 
     async def _restore_database_payload(
         self,
@@ -1176,20 +1087,16 @@ class BackupService:
         clear_existing: bool,
     ) -> tuple[int, int]:
         if not backup_data:
-            raise ValueError("Файл бекапа не содержит данных")
+            raise ValueError('Файл бекапа не содержит данных')
 
-        logger.info(
-            "Загружен дамп", metadata=metadata.get("timestamp", "неизвестная дата")
-        )
+        logger.info('Загружен дамп', metadata=metadata.get('timestamp', 'неизвестная дата'))
 
-        estimated_records = metadata.get("total_records")
+        estimated_records = metadata.get('total_records')
         if estimated_records is None:
             estimated_records = sum(len(records) for records in backup_data.values())
-            estimated_records += sum(
-                len(records) for records in association_data.values()
-            )
+            estimated_records += sum(len(records) for records in association_data.values())
 
-        logger.info("Содержит записей", estimated_records=estimated_records)
+        logger.info('Содержит записей', estimated_records=estimated_records)
 
         restored_records = 0
         restored_tables = 0
@@ -1197,15 +1104,13 @@ class BackupService:
         async with AsyncSessionLocal() as db:
             try:
                 if clear_existing:
-                    logger.warning("Очищаем существующие данные...")
+                    logger.warning('Очищаем существующие данные...')
                     await self._clear_database_tables(db, backup_data)
 
                 models_for_restore = self._get_models_for_backup(True)
-                models_by_table = {
-                    model.__tablename__: model for model in models_for_restore
-                }
+                models_by_table = {model.__tablename__: model for model in models_for_restore}
 
-                pre_restore_tables = {"promo_groups", "tariffs"}
+                pre_restore_tables = {'promo_groups', 'tariffs'}
                 for table_name in pre_restore_tables:
                     model = models_by_table.get(table_name)
                     if not model:
@@ -1216,7 +1121,7 @@ class BackupService:
                         continue
 
                     logger.info(
-                        "Восстанавливаем таблицу (записей)",
+                        'Восстанавливаем таблицу (записей)',
                         table_name=table_name,
                         records_count=len(records),
                     )
@@ -1231,7 +1136,7 @@ class BackupService:
 
                     if restored:
                         restored_tables += 1
-                        logger.info("Таблица восстановлена", table_name=table_name)
+                        logger.info('Таблица восстановлена', table_name=table_name)
 
                 await self._restore_users_without_referrals(
                     db,
@@ -1242,7 +1147,7 @@ class BackupService:
                 for model in models_for_restore:
                     table_name = model.__tablename__
 
-                    if table_name == "users" or table_name in pre_restore_tables:
+                    if table_name == 'users' or table_name in pre_restore_tables:
                         continue
 
                     records = backup_data.get(table_name, [])
@@ -1250,7 +1155,7 @@ class BackupService:
                         continue
 
                     logger.info(
-                        "Восстанавливаем таблицу (записей)",
+                        'Восстанавливаем таблицу (записей)',
                         table_name=table_name,
                         records_count=len(records),
                     )
@@ -1265,7 +1170,7 @@ class BackupService:
 
                     if restored:
                         restored_tables += 1
-                        logger.info("Таблица восстановлена", table_name=table_name)
+                        logger.info('Таблица восстановлена', table_name=table_name)
 
                 # Flush все изменения перед обновлением реферальных связей
                 await db.flush()
@@ -1286,15 +1191,13 @@ class BackupService:
                 # чтобы auto-increment ID не конфликтовали с восстановленными данными
                 try:
                     await sync_postgres_sequences()
-                    logger.info("Последовательности PostgreSQL синхронизированы")
+                    logger.info('Последовательности PostgreSQL синхронизированы')
                 except Exception as seq_err:
-                    logger.warning(
-                        "Не удалось синхронизировать sequences", error=seq_err
-                    )
+                    logger.warning('Не удалось синхронизировать sequences', error=seq_err)
 
             except Exception as exc:
                 await db.rollback()
-                logger.error("Ошибка при восстановлении", exc=exc)
+                logger.error('Ошибка при восстановлении', exc=exc)
                 raise
 
         return restored_tables, restored_records
@@ -1304,20 +1207,20 @@ class BackupService:
         backup_path: Path,
         clear_existing: bool,
     ) -> tuple[bool, str]:
-        if backup_path.suffix == ".gz":
-            async with aiofiles.open(backup_path, "rb") as f:
+        if backup_path.suffix == '.gz':
+            async with aiofiles.open(backup_path, 'rb') as f:
                 compressed_data = await f.read()
-                uncompressed_data = gzip.decompress(compressed_data).decode("utf-8")
+                uncompressed_data = gzip.decompress(compressed_data).decode('utf-8')
                 backup_structure = json_lib.loads(uncompressed_data)
         else:
-            async with aiofiles.open(backup_path, encoding="utf-8") as f:
+            async with aiofiles.open(backup_path, encoding='utf-8') as f:
                 file_content = await f.read()
                 backup_structure = json_lib.loads(file_content)
 
-        metadata = backup_structure.get("metadata", {})
-        backup_data = backup_structure.get("data", {})
-        association_data = backup_structure.get("associations", {})
-        file_snapshots = backup_structure.get("files", {})
+        metadata = backup_structure.get('metadata', {})
+        backup_data = backup_structure.get('data', {})
+        association_data = backup_structure.get('associations', {})
+        file_snapshots = backup_structure.get('files', {})
 
         try:
             restored_tables, restored_records = await self._restore_database_payload(
@@ -1332,58 +1235,52 @@ class BackupService:
         if file_snapshots:
             restored_files = await self._restore_file_snapshots(file_snapshots)
             if restored_files:
-                logger.info(
-                    "Восстановлено файлов конфигурации", restored_files=restored_files
-                )
+                logger.info('Восстановлено файлов конфигурации', restored_files=restored_files)
 
         message = (
-            f"Восстановление завершено!\n"
-            f"Таблиц: {restored_tables}\n"
-            f"Записей: {restored_records:,}\n"
+            f'Восстановление завершено!\n'
+            f'Таблиц: {restored_tables}\n'
+            f'Записей: {restored_records:,}\n'
             f'Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
         )
 
         logger.info(message)
         return True, message
 
-    async def _restore_users_without_referrals(
-        self, db: AsyncSession, backup_data: dict, models_by_table: dict
-    ):
-        users_data = backup_data.get("users", [])
+    async def _restore_users_without_referrals(self, db: AsyncSession, backup_data: dict, models_by_table: dict):
+        users_data = backup_data.get('users', [])
         if not users_data:
             return
 
         logger.info(
-            "Восстанавливаем пользователей без реферальных связей",
+            'Восстанавливаем пользователей без реферальных связей',
             users_data_count=len(users_data),
         )
 
-        User = models_by_table["users"]
+        User = models_by_table['users']
 
         for user_data in users_data:
             try:
-                processed_data = self._process_record_data(user_data, User, "users")
-                processed_data["referred_by_id"] = None
+                processed_data = self._process_record_data(user_data, User, 'users')
+                processed_data['referred_by_id'] = None
 
-                if "id" in processed_data:
-                    existing_user = await db.execute(
-                        select(User).where(User.id == processed_data["id"])
-                    )
+                if 'id' in processed_data:
+                    existing_user = await db.execute(select(User).where(User.id == processed_data['id']))
                     existing = existing_user.scalar_one_or_none()
 
                     if existing:
                         try:
                             async with db.begin_nested():
                                 for key, value in processed_data.items():
-                                    if key != "id":
+                                    if key != 'id':
                                         setattr(existing, key, value)
                                 await db.flush()
                         except IntegrityError:
                             db.expire(existing)
                             logger.warning(
-                                "Конфликт уникального ключа при обновлении пользователя, пропускаем",
-                                user_id=processed_data.get("id"),
-                                telegram_id=processed_data.get("telegram_id"),
+                                'Конфликт уникального ключа при обновлении пользователя, пропускаем',
+                                user_id=processed_data.get('id'),
+                                telegram_id=processed_data.get('telegram_id'),
                             )
                             continue
                     else:
@@ -1394,9 +1291,9 @@ class BackupService:
                                 await db.flush()
                         except IntegrityError:
                             logger.warning(
-                                "Дубликат пользователя, пропускаем",
-                                processed_data=processed_data.get("id"),
-                                processed_data_2=processed_data.get("telegram_id"),
+                                'Дубликат пользователя, пропускаем',
+                                processed_data=processed_data.get('id'),
+                                processed_data_2=processed_data.get('telegram_id'),
                             )
                             continue
                 else:
@@ -1407,68 +1304,62 @@ class BackupService:
                             await db.flush()
                     except IntegrityError:
                         logger.warning(
-                            "Дубликат пользователя, пропускаем",
-                            processed_data=processed_data.get("telegram_id"),
+                            'Дубликат пользователя, пропускаем',
+                            processed_data=processed_data.get('telegram_id'),
                         )
                         continue
 
             except Exception as e:
-                logger.error("Ошибка при восстановлении пользователя", error=e)
+                logger.error('Ошибка при восстановлении пользователя', error=e)
                 raise
 
         try:
             async with db.begin_nested():
                 await db.flush()
         except IntegrityError as e:
-            logger.warning(
-                "IntegrityError при flush пользователей, savepoint откачен", e=e
-            )
-        logger.info("Пользователи без реферальных связей восстановлены")
+            logger.warning('IntegrityError при flush пользователей, savepoint откачен', e=e)
+        logger.info('Пользователи без реферальных связей восстановлены')
 
     async def _update_user_referrals(self, db: AsyncSession, backup_data: dict):
-        users_data = backup_data.get("users", [])
+        users_data = backup_data.get('users', [])
         if not users_data:
             return
 
-        logger.info("Обновляем реферальные связи пользователей")
+        logger.info('Обновляем реферальные связи пользователей')
 
         for user_data in users_data:
             try:
-                referred_by_id = user_data.get("referred_by_id")
-                user_id = user_data.get("id")
+                referred_by_id = user_data.get('referred_by_id')
+                user_id = user_data.get('id')
 
                 if referred_by_id and user_id:
-                    referrer_result = await db.execute(
-                        select(User).where(User.id == referred_by_id)
-                    )
+                    referrer_result = await db.execute(select(User).where(User.id == referred_by_id))
                     referrer = referrer_result.scalar_one_or_none()
 
                     if referrer:
-                        user_result = await db.execute(
-                            select(User).where(User.id == user_id)
-                        )
+                        user_result = await db.execute(select(User).where(User.id == user_id))
                         user = user_result.scalar_one_or_none()
 
                         if user:
                             user.referred_by_id = referred_by_id
                         else:
                             logger.warning(
-                                "Пользователь не найден для обновления реферальной связи",
+                                'Пользователь не найден для обновления реферальной связи',
                                 user_id=user_id,
                             )
                     else:
                         logger.warning(
-                            "Реферер не найден для пользователя",
+                            'Реферер не найден для пользователя',
                             referred_by_id=referred_by_id,
                             user_id=user_id,
                         )
 
             except Exception as e:
-                logger.error("Ошибка при обновлении реферальной связи", error=e)
+                logger.error('Ошибка при обновлении реферальной связи', error=e)
                 continue
 
         await db.flush()
-        logger.info("Реферальные связи обновлены")
+        logger.info('Реферальные связи обновлены')
 
     def _process_record_data(self, record_data: dict, model, table_name: str) -> dict:
         processed_data = {}
@@ -1480,78 +1371,64 @@ class BackupService:
 
             column = getattr(model.__table__.columns, key, None)
             if column is None:
-                logger.warning(
-                    "Колонка не найдена в модели", key=key, table_name=table_name
-                )
+                logger.warning('Колонка не найдена в модели', key=key, table_name=table_name)
                 continue
 
             column_type_str = str(column.type).upper()
 
-            if (
-                "DATETIME" in column_type_str or "TIMESTAMP" in column_type_str
-            ) and isinstance(value, str):
+            if ('DATETIME' in column_type_str or 'TIMESTAMP' in column_type_str) and isinstance(value, str):
                 try:
-                    if "T" in value:
-                        processed_data[key] = datetime.fromisoformat(
-                            value.replace("Z", "+00:00")
-                        )
+                    if 'T' in value:
+                        processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                     else:
-                        processed_data[key] = datetime.strptime(
-                            value, "%Y-%m-%d %H:%M:%S"
-                        ).replace(tzinfo=UTC)
+                        processed_data[key] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S').replace(tzinfo=UTC)
                 except (ValueError, TypeError) as e:
                     logger.warning(
-                        "Не удалось парсить дату для поля",
+                        'Не удалось парсить дату для поля',
                         value=value,
                         key=key,
                         error=e,
                     )
                     processed_data[key] = datetime.now(UTC)
-            elif column_type_str == "TIME" and isinstance(value, str):
+            elif column_type_str == 'TIME' and isinstance(value, str):
                 try:
                     processed_data[key] = dt_time.fromisoformat(value)
                 except (ValueError, TypeError) as e:
                     logger.warning(
-                        "Не удалось парсить время для поля",
+                        'Не удалось парсить время для поля',
                         value=value,
                         key=key,
                         error=e,
                     )
                     processed_data[key] = dt_time(hour=12, minute=0)
-            elif column_type_str == "DATE" and isinstance(value, str):
+            elif column_type_str == 'DATE' and isinstance(value, str):
                 try:
                     processed_data[key] = dt_date.fromisoformat(value)
                 except (ValueError, TypeError) as e:
                     logger.warning(
-                        "Не удалось парсить дату для поля",
+                        'Не удалось парсить дату для поля',
                         value=value,
                         key=key,
                         error=e,
                     )
                     processed_data[key] = None
+            elif ('BOOLEAN' in column_type_str or 'BOOL' in column_type_str) and isinstance(value, str):
+                processed_data[key] = value.lower() in ('true', '1', 'yes', 'on')
             elif (
-                "BOOLEAN" in column_type_str or "BOOL" in column_type_str
-            ) and isinstance(value, str):
-                processed_data[key] = value.lower() in ("true", "1", "yes", "on")
-            elif (
-                "INTEGER" in column_type_str
-                or "INT" in column_type_str
-                or "BIGINT" in column_type_str
+                'INTEGER' in column_type_str or 'INT' in column_type_str or 'BIGINT' in column_type_str
             ) and isinstance(value, str):
                 try:
                     processed_data[key] = int(value)
                 except ValueError:
                     processed_data[key] = 0
             elif (
-                "FLOAT" in column_type_str
-                or "REAL" in column_type_str
-                or "NUMERIC" in column_type_str
+                'FLOAT' in column_type_str or 'REAL' in column_type_str or 'NUMERIC' in column_type_str
             ) and isinstance(value, str):
                 try:
                     processed_data[key] = float(value)
                 except ValueError:
                     processed_data[key] = 0.0
-            elif "JSON" in column_type_str:
+            elif 'JSON' in column_type_str:
                 if isinstance(value, str) and value.strip():
                     try:
                         processed_data[key] = json_lib.loads(value)
@@ -1569,26 +1446,22 @@ class BackupService:
     def _get_primary_key_columns(self, model) -> list[str]:
         return [col.name for col in model.__table__.columns if col.primary_key]
 
-    async def _export_association_tables(
-        self, db: AsyncSession
-    ) -> dict[str, list[dict[str, Any]]]:
+    async def _export_association_tables(self, db: AsyncSession) -> dict[str, list[dict[str, Any]]]:
         association_data: dict[str, list[dict[str, Any]]] = {}
 
         for table_name, table_obj in self.association_tables.items():
             try:
-                logger.info("Экспортируем таблицу связей", table_name=table_name)
+                logger.info('Экспортируем таблицу связей', table_name=table_name)
                 result = await db.execute(select(table_obj))
                 rows = result.mappings().all()
                 association_data[table_name] = [dict(row) for row in rows]
                 logger.info(
-                    "Экспортировано связей из таблицы",
+                    'Экспортировано связей из таблицы',
                     rows_count=len(rows),
                     table_name=table_name,
                 )
             except Exception as e:
-                logger.error(
-                    "Ошибка экспорта таблицы связей", table_name=table_name, error=e
-                )
+                logger.error('Ошибка экспорта таблицы связей', table_name=table_name, error=e)
 
         return association_data
 
@@ -1643,7 +1516,7 @@ class BackupService:
 
             if any(v is None for v in values.values()):
                 logger.warning(
-                    "Пропущена некорректная запись",
+                    'Пропущена некорректная запись',
                     table_name=table_name,
                     record=record,
                 )
@@ -1659,9 +1532,7 @@ class BackupService:
                 existing = await db.execute(exists_stmt)
 
                 if existing.scalar_one_or_none() is not None:
-                    logger.debug(
-                        "Запись уже существует", table_name=table_name, values=values
-                    )
+                    logger.debug('Запись уже существует', table_name=table_name, values=values)
                     continue
 
                 try:
@@ -1670,14 +1541,14 @@ class BackupService:
                     restored += 1
                 except IntegrityError:
                     logger.warning(
-                        "Пропускаем связь (FK или дубликат)",
+                        'Пропускаем связь (FK или дубликат)',
                         table_name=table_name,
                         values=values,
                     )
                     continue
             except Exception as e:
                 logger.error(
-                    "Ошибка при восстановлении связи",
+                    'Ошибка при восстановлении связи',
                     table_name=table_name,
                     values=values,
                     e=e,
@@ -1698,42 +1569,36 @@ class BackupService:
 
         # Кешируем существующие tariff_id для проверки FK
         existing_tariff_ids = set()
-        if table_name == "subscriptions":
+        if table_name == 'subscriptions':
             try:
                 result = await db.execute(select(Tariff.id))
                 existing_tariff_ids = {row[0] for row in result.fetchall()}
                 logger.info(
-                    "Найдено существующих тарифов для валидации FK",
+                    'Найдено существующих тарифов для валидации FK',
                     existing_tariff_ids_count=len(existing_tariff_ids),
                 )
             except Exception as e:
-                logger.warning("Не удалось получить список тарифов", error=e)
+                logger.warning('Не удалось получить список тарифов', error=e)
 
         for record_data in records:
             try:
-                processed_data = self._process_record_data(
-                    record_data, model, table_name
-                )
+                processed_data = self._process_record_data(record_data, model, table_name)
 
                 # Валидация FK для subscriptions.tariff_id
-                if table_name == "subscriptions" and "tariff_id" in processed_data:
-                    tariff_id = processed_data.get("tariff_id")
+                if table_name == 'subscriptions' and 'tariff_id' in processed_data:
+                    tariff_id = processed_data.get('tariff_id')
                     if tariff_id is not None and tariff_id not in existing_tariff_ids:
                         logger.warning(
-                            "Тариф не найден, устанавливаем tariff_id=NULL для подписки",
+                            'Тариф не найден, устанавливаем tariff_id=NULL для подписки',
                             tariff_id=tariff_id,
                         )
-                        processed_data["tariff_id"] = None
+                        processed_data['tariff_id'] = None
 
                 pk_cols = self._get_primary_key_columns(model)
 
                 if pk_cols and all(col in processed_data for col in pk_cols):
-                    where_clause = [
-                        getattr(model, col) == processed_data[col] for col in pk_cols
-                    ]
-                    existing_record = await db.execute(
-                        select(model).where(*where_clause)
-                    )
+                    where_clause = [getattr(model, col) == processed_data[col] for col in pk_cols]
+                    existing_record = await db.execute(select(model).where(*where_clause))
                     existing = existing_record.scalar_one_or_none()
 
                     if existing:
@@ -1746,7 +1611,7 @@ class BackupService:
                         except IntegrityError:
                             db.expire(existing)
                             logger.warning(
-                                "Конфликт уникального ключа при обновлении записи, пропускаем",
+                                'Конфликт уникального ключа при обновлении записи, пропускаем',
                                 table_name=table_name,
                                 pk={col: processed_data.get(col) for col in pk_cols},
                             )
@@ -1760,7 +1625,7 @@ class BackupService:
                         except IntegrityError:
                             # Unique constraint conflict — record exists with different PK
                             logger.warning(
-                                "Дубликат по уникальному ключу в %s (PK=%s), пропускаем",
+                                'Дубликат по уникальному ключу в %s (PK=%s), пропускаем',
                                 table_name,
                                 {col: processed_data.get(col) for col in pk_cols},
                             )
@@ -1773,144 +1638,142 @@ class BackupService:
 
             except Exception as e:
                 logger.error(
-                    "Ошибка восстановления записи в таблицу",
+                    'Ошибка восстановления записи в таблицу',
                     table_name=table_name,
                     error=e,
                 )
-                logger.error("Проблемные данные", record_data=record_data)
+                logger.error('Проблемные данные', record_data=record_data)
                 raise
 
         return restored_count
 
-    async def _clear_database_tables(
-        self, db: AsyncSession, backup_data: dict[str, Any] | None = None
-    ):
+    async def _clear_database_tables(self, db: AsyncSession, backup_data: dict[str, Any] | None = None):
         # Все таблицы, которые нужно очистить при восстановлении.
         # TRUNCATE CASCADE автоматически обработает FK зависимости,
         # поэтому порядок не критичен, но перечисляем все для полноты.
         all_tables = [
             # --- Association tables ---
-            "server_squad_promo_groups",
-            "tariff_promo_groups",
-            "payment_method_promo_groups",
+            'server_squad_promo_groups',
+            'tariff_promo_groups',
+            'payment_method_promo_groups',
             # --- Polls ---
-            "poll_answers",
-            "poll_responses",
-            "poll_options",
-            "poll_questions",
-            "polls",
+            'poll_answers',
+            'poll_responses',
+            'poll_options',
+            'poll_questions',
+            'polls',
             # --- Wheel ---
-            "wheel_spins",
-            "wheel_prizes",
-            "wheel_configs",
+            'wheel_spins',
+            'wheel_prizes',
+            'wheel_configs',
             # --- Contests ---
-            "contest_attempts",
-            "contest_rounds",
-            "contest_templates",
-            "referral_contest_virtual_participants",
-            "referral_contest_events",
-            "referral_contests",
+            'contest_attempts',
+            'contest_rounds',
+            'contest_templates',
+            'referral_contest_virtual_participants',
+            'referral_contest_events',
+            'referral_contests',
             # --- Webhooks ---
-            "webhook_deliveries",
-            "webhooks",
+            'webhook_deliveries',
+            'webhooks',
             # --- Promo offers ---
-            "promo_offer_logs",
-            "promo_offer_templates",
-            "subscription_temporary_access",
+            'promo_offer_logs',
+            'promo_offer_templates',
+            'subscription_temporary_access',
             # --- User engagement ---
-            "subscription_events",
-            "traffic_purchases",
-            "user_promo_groups",
-            "withdrawal_requests",
+            'subscription_events',
+            'traffic_purchases',
+            'user_promo_groups',
+            'withdrawal_requests',
             # --- Support extras ---
-            "ticket_notifications",
-            "button_click_logs",
+            'ticket_notifications',
+            'button_click_logs',
             # --- Payment providers ---
-            "heleket_payments",
-            "wata_payments",
-            "platega_payments",
-            "cloudpayments_payments",
-            "freekassa_payments",
-            "kassa_ai_payments",
-            "riopay_payments",
-            "severpay_payments",
-            "paypear_payments",
-            "rollypay_payments",
-            "overpay_payments",
-            "aurapay_payments",
-            "etoplatezhi_payments",
-            "antilopay_payments",
-            "apple_transactions",
-            "saved_payment_methods",
+            'heleket_payments',
+            'wata_payments',
+            'platega_payments',
+            'cloudpayments_payments',
+            'freekassa_payments',
+            'kassa_ai_payments',
+            'riopay_payments',
+            'severpay_payments',
+            'paypear_payments',
+            'rollypay_payments',
+            'overpay_payments',
+            'aurapay_payments',
+            'etoplatezhi_payments',
+            'antilopay_payments',
+            'apple_transactions',
+            'saved_payment_methods',
             # --- Content/config ---
-            "pinned_messages",
-            "main_menu_buttons",
-            "menu_layout_history",
-            "faq_pages",
-            "faq_settings",
-            "privacy_policies",
-            "public_offers",
-            "payment_method_configs",
-            "email_templates",
-            "info_pages",
+            'pinned_messages',
+            'main_menu_buttons',
+            'menu_layout_history',
+            'faq_pages',
+            'faq_settings',
+            'privacy_policies',
+            'public_offers',
+            'payment_method_configs',
+            'email_templates',
+            'info_pages',
             # --- News ---
-            "news_articles",
-            "news_categories",
-            "news_tags",
+            'news_articles',
+            'news_categories',
+            'news_tags',
             # --- Landing / Guest purchases ---
-            "guest_purchases",
-            "landing_pages",
+            'guest_purchases',
+            'landing_pages',
             # --- Yandex analytics ---
-            "yandex_client_id_map",
+            'yandex_client_id_map',
             # --- Support ---
-            "support_audit_logs",
-            "ticket_messages",
-            "tickets",
-            "cabinet_refresh_tokens",
+            'support_audit_logs',
+            'ticket_messages',
+            'tickets',
+            'cabinet_refresh_tokens',
             # --- Campaigns ---
-            "advertising_campaign_registrations",
-            "advertising_campaigns",
+            'advertising_campaign_registrations',
+            'advertising_campaigns',
             # --- Subscriptions ---
-            "subscription_servers",
-            "sent_notifications",
-            "discount_offers",
-            "user_messages",
-            "broadcast_history",
-            "subscription_conversions",
-            "referral_earnings",
-            "promocode_uses",
-            "yookassa_payments",
-            "cryptobot_payments",
-            "mulenpay_payments",
-            "pal24_payments",
-            "transactions",
-            "welcome_texts",
-            "subscriptions",
-            "promocodes",
+            'subscription_servers',
+            'sent_notifications',
+            'discount_offers',
+            'user_messages',
+            'broadcast_history',
+            'subscription_conversions',
+            'referral_earnings',
+            'promocode_uses',
+            'yookassa_payments',
+            'cryptobot_payments',
+            'mulenpay_payments',
+            'pal24_payments',
+            'transactions',
+            'welcome_texts',
+            'subscriptions',
+            'promocodes',
             # --- RBAC / Admin (FK → users, must be before users) ---
-            "access_policies",
-            "user_roles",
-            "admin_audit_log",
-            "admin_roles",
+            'access_policies',
+            'user_roles',
+            'admin_audit_log',
+            'admin_roles',
             # --- Channels / Partners ---
-            "partner_applications",
-            "required_channels",
-            "user_channel_subscriptions",
+            'partner_applications',
+            'required_channels',
+            'user_channel_subscriptions',
             # --- Core ---
-            "users",
-            "promo_groups",
-            "tariffs",
-            "server_squads",
-            "squads",
-            "service_rules",
-            "system_settings",
-            "web_api_tokens",
-            "monitoring_logs",
+            'users',
+            'promo_groups',
+            'tariffs',
+            'server_squads',
+            'squads',
+            'service_rules',
+            'system_settings',
+            'web_api_tokens',
+            'monitoring_logs',
         ]
 
         # Таблицы, которые не нужно очищать если в бекапе нет данных для них
         # (чтобы сохранить существующие настройки)
-        preserve_if_no_backup = {"tariffs", "promo_groups", "server_squads", "squads"}
+        preserve_if_no_backup = {'tariffs', 'promo_groups', 'server_squads', 'squads'}
 
         # Фильтруем таблицы, которые нужно сохранить
         tables_to_truncate = []
@@ -1918,7 +1781,7 @@ class BackupService:
             if backup_data and table_name in preserve_if_no_backup:
                 if not backup_data.get(table_name):
                     logger.info(
-                        "Пропускаем очистку (нет данных в бекапе)",
+                        'Пропускаем очистку (нет данных в бекапе)',
                         table_name=table_name,
                     )
                     continue
@@ -1935,26 +1798,24 @@ class BackupService:
         truncate_engine = create_async_engine(
             DATABASE_URL,
             connect_args={
-                "server_settings": {
-                    "statement_timeout": "300000",  # 5 минут
-                    "lock_timeout": "120000",  # 2 минуты ожидания блокировок
+                'server_settings': {
+                    'statement_timeout': '300000',  # 5 минут
+                    'lock_timeout': '120000',  # 2 минуты ожидания блокировок
                 },
-                "command_timeout": 300,
+                'command_timeout': 300,
             },
             poolclass=NullPool,
         )
         try:
-            tables_str = ", ".join(tables_to_truncate)
+            tables_str = ', '.join(tables_to_truncate)
             async with truncate_engine.begin() as conn:
                 # Free table locks held by the live app so TRUNCATE doesn't wait out
                 # lock_timeout and fail with LockNotAvailableError (#649289).
                 await _terminate_competing_backends(conn)
-                await conn.execute(
-                    text(f"TRUNCATE {tables_str} RESTART IDENTITY CASCADE")
-                )
-            logger.info("Очищены все таблицы", tables_count=len(tables_to_truncate))
+                await conn.execute(text(f'TRUNCATE {tables_str} RESTART IDENTITY CASCADE'))
+            logger.info('Очищены все таблицы', tables_count=len(tables_to_truncate))
         except Exception as e:
-            logger.error("Ошибка TRUNCATE CASCADE, пробуем поштучно", error=e)
+            logger.error('Ошибка TRUNCATE CASCADE, пробуем поштучно', error=e)
             # The most common cause is lock contention with the live app. Free the locks
             # once before the per-table retries (no point repeating it per table — killed
             # sessions reconnect, and re-killing 80× just thrashes).
@@ -1963,7 +1824,7 @@ class BackupService:
                     await _terminate_competing_backends(conn)
             except Exception as term_err:
                 logger.warning(
-                    "Не удалось завершить сессии перед поштучной очисткой",
+                    'Не удалось завершить сессии перед поштучной очисткой',
                     error=term_err,
                 )
             # Fallback: поштучная очистка, каждая в отдельном соединении
@@ -1972,18 +1833,18 @@ class BackupService:
             for table_name in tables_to_truncate:
                 try:
                     async with truncate_engine.begin() as conn:
-                        await conn.execute(text(f"TRUNCATE {table_name} CASCADE"))
-                    logger.info("Очищена таблица", table_name=table_name)
+                        await conn.execute(text(f'TRUNCATE {table_name} CASCADE'))
+                    logger.info('Очищена таблица', table_name=table_name)
                 except Exception as table_err:
                     logger.warning(
-                        "Не удалось очистить таблицу",
+                        'Не удалось очистить таблицу',
                         table_name=table_name,
                         error=table_err,
                     )
                     failed_tables.append(table_name)
             if failed_tables:
                 logger.warning(
-                    "Не удалось очистить таблицы",
+                    'Не удалось очистить таблицы',
                     failed_tables=failed_tables,
                     count=len(failed_tables),
                 )
@@ -1993,32 +1854,26 @@ class BackupService:
     async def _collect_file_snapshots(self) -> dict[str, dict[str, Any]]:
         return {}
 
-    async def _restore_file_snapshots(
-        self, file_snapshots: dict[str, dict[str, Any]]
-    ) -> int:
+    async def _restore_file_snapshots(self, file_snapshots: dict[str, dict[str, Any]]) -> int:
         return 0
 
     @staticmethod
-    def _build_corrupted_backup_entry(
-        backup_file: Path, file_stats: os.stat_result, *, reason: str
-    ) -> dict[str, Any]:
+    def _build_corrupted_backup_entry(backup_file: Path, file_stats: os.stat_result, *, reason: str) -> dict[str, Any]:
         """Build a list-entry placeholder for a backup file we can't read."""
         return {
-            "filename": backup_file.name,
-            "filepath": str(backup_file),
-            "timestamp": datetime.fromtimestamp(
-                file_stats.st_mtime, tz=UTC
-            ).isoformat(),
-            "tables_count": "?",
-            "total_records": "?",
-            "compressed": backup_file.suffix == ".gz",
-            "file_size_bytes": file_stats.st_size,
-            "file_size_mb": round(file_stats.st_size / 1024 / 1024, 2),
-            "created_by": None,
-            "database_type": "unknown",
-            "version": "unknown",
-            "error": reason,
-            "corrupted": True,
+            'filename': backup_file.name,
+            'filepath': str(backup_file),
+            'timestamp': datetime.fromtimestamp(file_stats.st_mtime, tz=UTC).isoformat(),
+            'tables_count': '?',
+            'total_records': '?',
+            'compressed': backup_file.suffix == '.gz',
+            'file_size_bytes': file_stats.st_size,
+            'file_size_mb': round(file_stats.st_size / 1024 / 1024, 2),
+            'created_by': None,
+            'database_type': 'unknown',
+            'version': 'unknown',
+            'error': reason,
+            'corrupted': True,
         }
 
     async def get_backup_list(self) -> list[dict[str, Any]]:
@@ -2026,7 +1881,7 @@ class BackupService:
 
         try:
             for backup_file in sorted(
-                await asyncio.to_thread(lambda: list(self.backup_dir.glob("backup_*"))),
+                await asyncio.to_thread(lambda: list(self.backup_dir.glob('backup_*'))),
                 reverse=True,
             ):
                 if not await asyncio.to_thread(backup_file.is_file):
@@ -2038,13 +1893,9 @@ class BackupService:
                 # его открыть, иначе tarfile/gzip/json валятся с ReadError и логируют
                 # ERROR (а через TelegramNotifierProcessor — заливают админ-чат).
                 if file_stats.st_size == 0:
-                    logger.warning(
-                        "Skipping empty backup file", backup_file=str(backup_file)
-                    )
+                    logger.warning('Skipping empty backup file', backup_file=str(backup_file))
                     backups.append(
-                        self._build_corrupted_backup_entry(
-                            backup_file, file_stats, reason="Файл пуст (0 байт)"
-                        )
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason='Файл пуст (0 байт)')
                     )
                     continue
 
@@ -2052,57 +1903,47 @@ class BackupService:
                     metadata: dict[str, Any] = {}
 
                     if self._is_archive_backup(backup_file):
-                        mode = (
-                            "r:gz"
-                            if backup_file.suffixes
-                            and backup_file.suffixes[-1] == ".gz"
-                            else "r"
-                        )
+                        mode = 'r:gz' if backup_file.suffixes and backup_file.suffixes[-1] == '.gz' else 'r'
                         with tarfile.open(backup_file, mode) as tar:
                             try:
-                                member = tar.getmember("metadata.json")
+                                member = tar.getmember('metadata.json')
                                 with tar.extractfile(member) as meta_file:
                                     metadata = json_lib.load(meta_file)
                             except KeyError:
                                 metadata = {}
                     else:
-                        if backup_file.suffix == ".gz":
-                            with gzip.open(backup_file, "rt", encoding="utf-8") as f:
+                        if backup_file.suffix == '.gz':
+                            with gzip.open(backup_file, 'rt', encoding='utf-8') as f:
                                 backup_structure = json_lib.load(f)
                         else:
-                            with open(backup_file, encoding="utf-8") as f:
+                            with open(backup_file, encoding='utf-8') as f:
                                 backup_structure = json_lib.load(f)
-                        metadata = backup_structure.get("metadata", {})
+                        metadata = backup_structure.get('metadata', {})
 
                     backup_info = {
-                        "filename": backup_file.name,
-                        "filepath": str(backup_file),
-                        "timestamp": metadata.get(
-                            "timestamp",
-                            datetime.fromtimestamp(
-                                file_stats.st_mtime, tz=UTC
-                            ).isoformat(),
+                        'filename': backup_file.name,
+                        'filepath': str(backup_file),
+                        'timestamp': metadata.get(
+                            'timestamp',
+                            datetime.fromtimestamp(file_stats.st_mtime, tz=UTC).isoformat(),
                         ),
-                        "tables_count": metadata.get(
-                            "tables_count",
-                            metadata.get("database", {}).get("tables_count", 0),
+                        'tables_count': metadata.get(
+                            'tables_count',
+                            metadata.get('database', {}).get('tables_count', 0),
                         ),
-                        "total_records": metadata.get(
-                            "total_records",
-                            metadata.get("database", {}).get("total_records", 0),
+                        'total_records': metadata.get(
+                            'total_records',
+                            metadata.get('database', {}).get('total_records', 0),
                         ),
-                        "compressed": self._is_archive_backup(backup_file)
-                        or backup_file.suffix == ".gz",
-                        "file_size_bytes": file_stats.st_size,
-                        "file_size_mb": round(file_stats.st_size / 1024 / 1024, 2),
-                        "created_by": metadata.get("created_by"),
-                        "database_type": metadata.get(
-                            "database_type",
-                            metadata.get("database", {}).get("type", "unknown"),
+                        'compressed': self._is_archive_backup(backup_file) or backup_file.suffix == '.gz',
+                        'file_size_bytes': file_stats.st_size,
+                        'file_size_mb': round(file_stats.st_size / 1024 / 1024, 2),
+                        'created_by': metadata.get('created_by'),
+                        'database_type': metadata.get(
+                            'database_type',
+                            metadata.get('database', {}).get('type', 'unknown'),
                         ),
-                        "version": metadata.get(
-                            "format_version", metadata.get("version", "1.0")
-                        ),
+                        'version': metadata.get('format_version', metadata.get('version', '1.0')),
                     }
 
                     backups.append(backup_info)
@@ -2119,7 +1960,7 @@ class BackupService:
                     # архив. Логируем как warning, чтобы не уезжало через
                     # TelegramNotifierProcessor в админ-чат на каждом list-вызове.
                     logger.warning(
-                        "Backup file appears corrupted",
+                        'Backup file appears corrupted',
                         backup_file=str(backup_file),
                         error=str(corruption_error)[:200],
                         error_type=type(corruption_error).__name__,
@@ -2128,49 +1969,43 @@ class BackupService:
                         self._build_corrupted_backup_entry(
                             backup_file,
                             file_stats,
-                            reason=f"{type(corruption_error).__name__}: {corruption_error!s}"[
-                                :200
-                            ],
+                            reason=f'{type(corruption_error).__name__}: {corruption_error!s}'[:200],
                         )
                     )
                 except Exception as e:
                     # Реально неожиданное — оставляем error для расследования.
                     logger.error(
-                        "Ошибка чтения метаданных",
+                        'Ошибка чтения метаданных',
                         backup_file=str(backup_file),
                         error=e,
                     )
                     backups.append(
-                        self._build_corrupted_backup_entry(
-                            backup_file, file_stats, reason=f"Ошибка чтения: {e!s}"
-                        )
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason=f'Ошибка чтения: {e!s}')
                     )
 
         except Exception as e:
-            logger.error("Ошибка получения списка бекапов", error=e)
+            logger.error('Ошибка получения списка бекапов', error=e)
 
         return backups
 
     async def delete_backup(self, backup_filename: str) -> tuple[bool, str]:
         try:
-            backup_path = await asyncio.to_thread(
-                (self.backup_dir / backup_filename).resolve
-            )
+            backup_path = await asyncio.to_thread((self.backup_dir / backup_filename).resolve)
             backup_dir_resolved = await asyncio.to_thread(self.backup_dir.resolve)
             if not str(backup_path).startswith(str(backup_dir_resolved) + os.sep):
-                return False, "Недопустимое имя файла бекапа"
+                return False, 'Недопустимое имя файла бекапа'
 
             if not await asyncio.to_thread(backup_path.is_file):
-                return False, f"Файл бекапа не найден: {backup_filename}"
+                return False, f'Файл бекапа не найден: {backup_filename}'
 
             await asyncio.to_thread(backup_path.unlink)
-            message = f"Бекап {backup_filename} удален"
+            message = f'Бекап {backup_filename} удален'
             logger.info(message)
 
             return True, message
 
         except Exception as e:
-            error_msg = f"Ошибка удаления бекапа: {e!s}"
+            error_msg = f'Ошибка удаления бекапа: {e!s}'
             logger.error(error_msg)
             return False, error_msg
 
@@ -2179,21 +2014,21 @@ class BackupService:
             backups = await self.get_backup_list()
 
             if len(backups) > self._settings.max_backups_keep:
-                backups.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+                backups.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
 
                 for backup in backups[self._settings.max_backups_keep :]:
                     try:
-                        await self.delete_backup(backup["filename"])
-                        logger.info("Удален старый бекап", backup=backup["filename"])
+                        await self.delete_backup(backup['filename'])
+                        logger.info('Удален старый бекап', backup=backup['filename'])
                     except Exception as e:
                         logger.error(
-                            "Ошибка удаления старого бекапа",
-                            backup=backup["filename"],
+                            'Ошибка удаления старого бекапа',
+                            backup=backup['filename'],
                             error=e,
                         )
 
         except Exception as e:
-            logger.error("Ошибка очистки старых бекапов", error=e)
+            logger.error('Ошибка очистки старых бекапов', error=e)
 
     async def get_backup_settings(self) -> BackupSettings:
         return self._settings
@@ -2212,7 +2047,7 @@ class BackupService:
             return True
 
         except Exception as e:
-            logger.error("Ошибка обновления настроек бекапов", error=e)
+            logger.error('Ошибка обновления настроек бекапов', error=e)
             return False
 
     async def start_auto_backup(self):
@@ -2228,13 +2063,11 @@ class BackupService:
         if self._settings.auto_backup_enabled:
             next_run = self._calculate_next_backup_datetime()
             interval = self._get_backup_interval()
-            self._auto_backup_task = asyncio.create_task(
-                self._auto_backup_loop(next_run)
-            )
+            self._auto_backup_task = asyncio.create_task(self._auto_backup_loop(next_run))
             logger.info(
-                "Автобекапы включены, интервал: ч, ближайший запуск",
+                'Автобекапы включены, интервал: ч, ближайший запуск',
                 total_seconds=interval.total_seconds() / 3600,
-                next_run=next_run.strftime("%d.%m.%Y %H:%M:%S"),
+                next_run=next_run.strftime('%d.%m.%Y %H:%M:%S'),
             )
 
     async def stop_auto_backup(self):
@@ -2244,7 +2077,7 @@ class BackupService:
 
             with contextlib.suppress(asyncio.CancelledError):
                 await self._auto_backup_task
-            logger.info("Автобекапы остановлены")
+            logger.info('Автобекапы остановлены')
 
     async def _auto_backup_loop(self, next_run: datetime | None = None):
         # Перечитываем настройки в начале цикла — на случай если admin изменил
@@ -2259,24 +2092,24 @@ class BackupService:
 
                 if delay > 0:
                     logger.info(
-                        "Запланирован следующий автоматический бекап",
-                        next_run=next_run.strftime("%d.%m.%Y %H:%M:%S"),
+                        'Запланирован следующий автоматический бекап',
+                        next_run=next_run.strftime('%d.%m.%Y %H:%M:%S'),
                         delay=delay / 3600,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.info(
-                        "Время автоматического бекапа уже наступило, запускаем немедленно",
-                        next_run=next_run.strftime("%d.%m.%Y %H:%M:%S"),
+                        'Время автоматического бекапа уже наступило, запускаем немедленно',
+                        next_run=next_run.strftime('%d.%m.%Y %H:%M:%S'),
                     )
 
-                logger.info("Запуск автоматического бекапа...")
+                logger.info('Запуск автоматического бекапа...')
                 success, message, _ = await self.create_backup()
 
                 if success:
-                    logger.info("Автобекап завершен", message=message)
+                    logger.info('Автобекап завершен', message=message)
                 else:
-                    logger.error("Ошибка автобекапа", message=message)
+                    logger.error('Ошибка автобекапа', message=message)
 
                 # Перед расчётом следующего запуска перечитываем настройки —
                 # admin мог изменить BACKUP_TIME / BACKUP_INTERVAL_HOURS из кабинета,
@@ -2284,9 +2117,7 @@ class BackupService:
                 # после рестарта бота.
                 self.reload_settings_from_db()
                 if not self._settings.auto_backup_enabled:
-                    logger.info(
-                        "Автобекапы отключены через настройки, останавливаем цикл"
-                    )
+                    logger.info('Автобекапы отключены через настройки, останавливаем цикл')
                     break
                 interval = self._get_backup_interval()
                 # Skip missed slots so a stale/past next_run doesn't trigger a burst of
@@ -2296,37 +2127,31 @@ class BackupService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Ошибка в цикле автобекапов", error=e)
+                logger.error('Ошибка в цикле автобекапов', error=e)
                 self.reload_settings_from_db()
                 interval = self._get_backup_interval()
                 next_run = datetime.now(UTC) + interval
 
-    async def _send_backup_notification(
-        self, event_type: str, message: str, file_path: str = None
-    ):
+    async def _send_backup_notification(self, event_type: str, message: str, file_path: str = None):
         try:
             if not settings.is_admin_notifications_enabled():
                 return
 
             icons = {
-                "success": "",
-                "error": "",
-                "restore_success": "",
-                "restore_error": "",
+                'success': '',
+                'error': '',
+                'restore_success': '',
+                'restore_error': '',
             }
 
-            icon = icons.get(event_type, "")
-            safe_message = (
-                html_lib.escape(message) if "error" in event_type else message
-            )
-            notification_text = f"{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{safe_message}"
+            icon = icons.get(event_type, '')
+            safe_message = html_lib.escape(message) if 'error' in event_type else message
+            notification_text = f'{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{safe_message}'
 
             if file_path:
-                notification_text += f"\n <code>{Path(file_path).name}</code>"
+                notification_text += f'\n <code>{Path(file_path).name}</code>'
 
-            notification_text += (
-                f'\n\n <i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
-            )
+            notification_text += f'\n\n <i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
 
             try:
                 from app.services.admin_notification_service import (
@@ -2340,12 +2165,12 @@ class BackupService:
                 )
             except Exception as e:
                 logger.error(
-                    "Ошибка отправки уведомления через AdminNotificationService",
+                    'Ошибка отправки уведомления через AdminNotificationService',
                     error=e,
                 )
 
         except Exception as e:
-            logger.error("Ошибка отправки уведомления о бекапе", error=e)
+            logger.error('Ошибка отправки уведомления о бекапе', error=e)
 
     async def _send_backup_file_to_chat(self, file_path: str):
         try:
@@ -2361,70 +2186,66 @@ class BackupService:
             temp_zip_path = None
 
             if password:
-                temp_zip_path = await self._create_password_protected_archive(
-                    file_path, password
-                )
+                temp_zip_path = await self._create_password_protected_archive(file_path, password)
                 if temp_zip_path:
                     file_to_send = temp_zip_path
 
-            caption = "<b>Резервная копия</b>\n\n"
+            caption = '<b>Резервная копия</b>\n\n'
             if temp_zip_path:
-                caption += "<b>Архив защищён паролем</b>\n\n"
+                caption += '<b>Архив защищён паролем</b>\n\n'
             caption += f'<i>{datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")}</i>'
 
             send_kwargs = {
-                "chat_id": chat_id,
-                "document": FSInputFile(file_to_send),
-                "caption": caption,
-                "parse_mode": "HTML",
+                'chat_id': chat_id,
+                'document': FSInputFile(file_to_send),
+                'caption': caption,
+                'parse_mode': 'HTML',
             }
 
             if settings.BACKUP_SEND_TOPIC_ID:
-                send_kwargs["message_thread_id"] = settings.BACKUP_SEND_TOPIC_ID
+                send_kwargs['message_thread_id'] = settings.BACKUP_SEND_TOPIC_ID
 
             await self.bot.send_document(**send_kwargs)
-            logger.info("Бекап отправлен в чат", chat_id=chat_id)
+            logger.info('Бекап отправлен в чат', chat_id=chat_id)
 
             if temp_zip_path and await asyncio.to_thread(Path(temp_zip_path).exists):
                 try:
                     await asyncio.to_thread(Path(temp_zip_path).unlink)
                 except Exception as cleanup_error:
                     logger.warning(
-                        "Не удалось удалить временный архив",
+                        'Не удалось удалить временный архив',
                         cleanup_error=cleanup_error,
                     )
 
         except Exception as e:
-            logger.error("Ошибка отправки бекапа в чат", error=e)
+            logger.error('Ошибка отправки бекапа в чат', error=e)
 
-    async def _create_password_protected_archive(
-        self, file_path: str, password: str
-    ) -> str | None:
+    async def _create_password_protected_archive(self, file_path: str, password: str) -> str | None:
         try:
             source_path = Path(file_path)
             if not await asyncio.to_thread(source_path.exists):
-                logger.error("Исходный файл бекапа не найден", file_path=file_path)
+                logger.error('Исходный файл бекапа не найден', file_path=file_path)
                 return None
 
-            zip_filename = source_path.stem + ".zip"
+            zip_filename = source_path.stem + '.zip'
             zip_path = source_path.parent / zip_filename
 
             def create_zip():
                 with pyzipper.AESZipFile(
                     zip_path,
-                    "w",
+                    'w',
                     compression=pyzipper.ZIP_DEFLATED,
                     encryption=pyzipper.WZ_AES,
                 ) as zf:
-                    zf.setpassword(password.encode("utf-8"))
+                    zf.setpassword(password.encode('utf-8'))
                     zf.write(source_path, arcname=source_path.name)
 
             await asyncio.to_thread(create_zip)
-            logger.info("Создан защищённый паролем архив", zip_path=zip_path)
+            logger.info('Создан защищённый паролем архив', zip_path=zip_path)
             return str(zip_path)
 
         except Exception as e:
-            logger.error("Ошибка создания защищённого архива", error=e)
+            logger.error('Ошибка создания защищённого архива', error=e)
             return None
 
 

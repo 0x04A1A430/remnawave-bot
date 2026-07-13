@@ -20,9 +20,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-OAUTH_FILE = (
-    Path(__file__).resolve().parents[2] / "app" / "cabinet" / "routes" / "oauth.py"
-)
+OAUTH_FILE = Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'oauth.py'
 
 
 def test_email_merge_requires_local_user_email_verified() -> None:
@@ -34,21 +32,21 @@ def test_email_merge_requires_local_user_email_verified() -> None:
     source-level pin is sufficient to catch a regression where someone
     deletes the `user.email_verified` guard and reopens the bug.
     """
-    source = OAUTH_FILE.read_text(encoding="utf-8")
+    source = OAUTH_FILE.read_text(encoding='utf-8')
 
     # Find the email-merge branch block.
-    assert (
-        "get_user_by_email(db, user_info.email)" in source
-    ), "email-merge branch helper call missing — test obsolete or oauth.py refactored"
+    assert 'get_user_by_email(db, user_info.email)' in source, (
+        'email-merge branch helper call missing — test obsolete or oauth.py refactored'
+    )
 
     # The line establishing the local user must also enforce
     # `user.email_verified` before any provider-link or revival action.
     # We assert the precise condition shape — adding the local guard
     # was the security audit fix.
-    assert "if user and user.email_verified:" in source, (
-        "oauth.py email-merge branch must guard on local user.email_verified "
-        "— without it, an IdP-verified attacker email can take over an "
-        "unverified-email DELETED row (HIGH severity audit finding)."
+    assert 'if user and user.email_verified:' in source, (
+        'oauth.py email-merge branch must guard on local user.email_verified '
+        '— without it, an IdP-verified attacker email can take over an '
+        'unverified-email DELETED row (HIGH severity audit finding).'
     )
 
 
@@ -61,15 +59,15 @@ def test_revived_log_field_uses_pre_revival_snapshot() -> None:
     Post-fix we capture `was_deleted = user.status == UserStatus.DELETED.value`
     BEFORE the revive call and pass `revived=was_deleted` to the logger.
     """
-    source = OAUTH_FILE.read_text(encoding="utf-8")
+    source = OAUTH_FILE.read_text(encoding='utf-8')
 
-    assert (
-        "was_deleted = user.status == UserStatus.DELETED.value" in source
-    ), "oauth.py must capture was_deleted BEFORE revive_deleted_user mutates status"
+    assert 'was_deleted = user.status == UserStatus.DELETED.value' in source, (
+        'oauth.py must capture was_deleted BEFORE revive_deleted_user mutates status'
+    )
     # No more `revived=user.status == UserStatus.ACTIVE.value` (the broken pattern).
-    assert (
-        "revived=user.status == UserStatus.ACTIVE.value" not in source
-    ), "oauth.py must NOT compute `revived` from post-mutation status — use the captured was_deleted snapshot instead"
+    assert 'revived=user.status == UserStatus.ACTIVE.value' not in source, (
+        'oauth.py must NOT compute `revived` from post-mutation status — use the captured was_deleted snapshot instead'
+    )
 
 
 def test_revive_called_without_commit_kwarg() -> None:
@@ -79,17 +77,13 @@ def test_revive_called_without_commit_kwarg() -> None:
     now always own the commit. This pin keeps oauth.py from regressing
     back to the two-mode pattern.
     """
-    source = OAUTH_FILE.read_text(encoding="utf-8")
-    revive_calls = [
-        line for line in source.splitlines() if "revive_deleted_user(" in line
-    ]
-    assert (
-        revive_calls
-    ), "oauth.py is expected to call revive_deleted_user — test obsolete"
+    source = OAUTH_FILE.read_text(encoding='utf-8')
+    revive_calls = [line for line in source.splitlines() if 'revive_deleted_user(' in line]
+    assert revive_calls, 'oauth.py is expected to call revive_deleted_user — test obsolete'
     for call_line in revive_calls:
-        assert "commit=" not in call_line, (
-            f"revive_deleted_user must NOT be called with a commit= kwarg ({call_line.strip()!r}); "
-            "the parameter was removed in favour of caller-owns-commit"
+        assert 'commit=' not in call_line, (
+            f'revive_deleted_user must NOT be called with a commit= kwarg ({call_line.strip()!r}); '
+            'the parameter was removed in favour of caller-owns-commit'
         )
 
 
@@ -111,9 +105,5 @@ def test_revive_service_does_not_commit() -> None:
         if second > first:
             src = src[:first] + src[second + 3 :]
 
-    assert (
-        "await db.commit" not in src
-    ), "revive_deleted_user must not commit — caller owns the transaction"
-    assert (
-        "await db.refresh" not in src
-    ), "revive_deleted_user must not refresh — caller owns the session"
+    assert 'await db.commit' not in src, 'revive_deleted_user must not commit — caller owns the transaction'
+    assert 'await db.refresh' not in src, 'revive_deleted_user must not refresh — caller owns the session'

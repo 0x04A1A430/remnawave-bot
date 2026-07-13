@@ -17,12 +17,12 @@ from app.utils.user_utils import format_referrer_info
 
 # Маппинг статусов RollyPay -> internal
 ROLLYPAY_STATUS_MAP: dict[str, tuple[str, bool]] = {
-    "created": ("pending", False),
-    "processing": ("processing", False),
-    "paid": ("success", True),
-    "expired": ("expired", False),
-    "canceled": ("canceled", False),
-    "chargeback": ("chargeback", False),
+    'created': ('pending', False),
+    'processing': ('processing', False),
+    'paid': ('success', True),
+    'expired': ('expired', False),
+    'canceled': ('canceled', False),
+    'chargeback': ('chargeback', False),
 }
 
 
@@ -35,9 +35,9 @@ class RollyPayPaymentMixin:
         *,
         user_id: int | None,
         amount_kopeks: int,
-        description: str = "Пополнение баланса",
+        description: str = 'Пополнение баланса',
         email: str | None = None,
-        language: str = "ru",
+        language: str = 'ru',
         payment_method_type: str | None = None,
         return_url: str | None = None,
     ) -> dict[str, Any] | None:
@@ -48,13 +48,13 @@ class RollyPayPaymentMixin:
             Словарь с данными платежа или None при ошибке
         """
         if not settings.is_rollypay_enabled():
-            logger.error("RollyPay не настроен")
+            logger.error('RollyPay не настроен')
             return None
 
         # Валидация лимитов
         if amount_kopeks < settings.ROLLYPAY_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                "RollyPay: сумма меньше минимальной",
+                'RollyPay: сумма меньше минимальной',
                 amount_kopeks=amount_kopeks,
                 ROLLYPAY_MIN_AMOUNT_KOPEKS=settings.ROLLYPAY_MIN_AMOUNT_KOPEKS,
             )
@@ -62,34 +62,34 @@ class RollyPayPaymentMixin:
 
         if amount_kopeks > settings.ROLLYPAY_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                "RollyPay: сумма больше максимальной",
+                'RollyPay: сумма больше максимальной',
                 amount_kopeks=amount_kopeks,
                 ROLLYPAY_MAX_AMOUNT_KOPEKS=settings.ROLLYPAY_MAX_AMOUNT_KOPEKS,
             )
             return None
 
         # Получаем telegram_id пользователя для order_id
-        payment_module = import_module("app.services.payment_service")
+        payment_module = import_module('app.services.payment_service')
         if user_id is not None:
             user = await payment_module.get_user_by_id(db, user_id)
             tg_id = user.telegram_id if user else user_id
         else:
             user = None
-            tg_id = "guest"
+            tg_id = 'guest'
 
         # Генерируем уникальный order_id с telegram_id для удобного поиска
-        order_id = f"rp{tg_id}_{uuid.uuid4().hex[:6]}"
+        order_id = f'rp{tg_id}_{uuid.uuid4().hex[:6]}'
         amount_rubles = amount_kopeks / 100
-        amount_value = f"{amount_rubles:.2f}"
+        amount_value = f'{amount_rubles:.2f}'
         currency = settings.ROLLYPAY_CURRENCY
 
         # Метаданные
         metadata = {
-            "user_id": user_id,
-            "amount_kopeks": amount_kopeks,
-            "description": description,
-            "language": language,
-            "type": "balance_topup",
+            'user_id': user_id,
+            'amount_kopeks': amount_kopeks,
+            'description': description,
+            'language': language,
+            'type': 'balance_topup',
         }
 
         try:
@@ -105,22 +105,22 @@ class RollyPayPaymentMixin:
                 metadata=metadata,
             )
 
-            payment_url = result.get("pay_url")
-            rollypay_payment_id = result.get("payment_id")
+            payment_url = result.get('pay_url')
+            rollypay_payment_id = result.get('payment_id')
 
             if not payment_url:
-                logger.error("RollyPay API не вернул URL платежа", result=result)
+                logger.error('RollyPay API не вернул URL платежа', result=result)
                 return None
 
             logger.info(
-                "RollyPay API: создан платеж",
+                'RollyPay API: создан платеж',
                 order_id=order_id,
                 rollypay_payment_id=rollypay_payment_id,
                 payment_url=payment_url,
             )
 
             # Срок действия из expires_at ответа или 30 минут по умолчанию
-            expires_at_str = result.get("expires_at")
+            expires_at_str = result.get('expires_at')
             if expires_at_str:
                 try:
                     expires_at = datetime.fromisoformat(expires_at_str)
@@ -132,7 +132,7 @@ class RollyPayPaymentMixin:
                 expires_at = datetime.now(UTC) + timedelta(minutes=30)
 
             # Сохраняем в БД
-            rollypay_crud = import_module("app.database.crud.rollypay")
+            rollypay_crud = import_module('app.database.crud.rollypay')
             local_payment = await rollypay_crud.create_rollypay_payment(
                 db=db,
                 user_id=user_id,
@@ -141,14 +141,14 @@ class RollyPayPaymentMixin:
                 currency=currency,
                 description=description,
                 payment_url=payment_url,
-                payment_method=payment_method_type or "sbp",
+                payment_method=payment_method_type or 'sbp',
                 rollypay_payment_id=rollypay_payment_id,
                 expires_at=expires_at,
                 metadata_json=metadata,
             )
 
             logger.info(
-                "RollyPay: создан платеж",
+                'RollyPay: создан платеж',
                 order_id=order_id,
                 user_id=user_id,
                 amount_rubles=amount_rubles,
@@ -156,18 +156,18 @@ class RollyPayPaymentMixin:
             )
 
             return {
-                "order_id": order_id,
-                "rollypay_payment_id": rollypay_payment_id,
-                "amount_kopeks": amount_kopeks,
-                "amount_rubles": amount_rubles,
-                "currency": currency,
-                "payment_url": payment_url,
-                "expires_at": expires_at.isoformat(),
-                "local_payment_id": local_payment.id,
+                'order_id': order_id,
+                'rollypay_payment_id': rollypay_payment_id,
+                'amount_kopeks': amount_kopeks,
+                'amount_rubles': amount_rubles,
+                'currency': currency,
+                'payment_url': payment_url,
+                'expires_at': expires_at.isoformat(),
+                'local_payment_id': local_payment.id,
             }
 
         except Exception as e:
-            logger.exception("RollyPay: ошибка создания платежа", error=e)
+            logger.exception('RollyPay: ошибка создания платежа', error=e)
             return None
 
     async def process_rollypay_webhook(
@@ -188,84 +188,72 @@ class RollyPayPaymentMixin:
             True если платеж успешно обработан
         """
         try:
-            event_type = payload.get("event_type")
-            rollypay_payment_id = payload.get("payment_id")
-            order_id = payload.get("order_id")
-            rollypay_status = payload.get("status")
+            event_type = payload.get('event_type')
+            rollypay_payment_id = payload.get('payment_id')
+            order_id = payload.get('order_id')
+            rollypay_status = payload.get('status')
 
             if not rollypay_payment_id or not rollypay_status:
-                logger.warning(
-                    "RollyPay webhook: отсутствуют обязательные поля", payload=payload
-                )
+                logger.warning('RollyPay webhook: отсутствуют обязательные поля', payload=payload)
                 return False
 
             # Определяем is_paid по event
-            is_confirmed = event_type == "payment.paid"
+            is_confirmed = event_type == 'payment.paid'
 
             # Ищем платеж по order_id (наш) или rollypay_payment_id
-            rollypay_crud = import_module("app.database.crud.rollypay")
+            rollypay_crud = import_module('app.database.crud.rollypay')
             payment = None
             if order_id:
-                payment = await rollypay_crud.get_rollypay_payment_by_order_id(
-                    db, order_id
-                )
+                payment = await rollypay_crud.get_rollypay_payment_by_order_id(db, order_id)
             if not payment and rollypay_payment_id:
-                payment = await rollypay_crud.get_rollypay_payment_by_rollypay_id(
-                    db, rollypay_payment_id
-                )
+                payment = await rollypay_crud.get_rollypay_payment_by_rollypay_id(db, rollypay_payment_id)
 
             if not payment:
                 logger.warning(
-                    "RollyPay webhook: платеж не найден",
+                    'RollyPay webhook: платеж не найден',
                     order_id=order_id,
                     rollypay_payment_id=rollypay_payment_id,
                 )
                 return False
 
             # Lock payment row immediately to prevent concurrent webhook processing (TOCTOU race)
-            locked = await rollypay_crud.get_rollypay_payment_by_id_for_update(
-                db, payment.id
-            )
+            locked = await rollypay_crud.get_rollypay_payment_by_id_for_update(db, payment.id)
             if not locked:
-                logger.error(
-                    "RollyPay: не удалось заблокировать платёж", payment_id=payment.id
-                )
+                logger.error('RollyPay: не удалось заблокировать платёж', payment_id=payment.id)
                 return False
             payment = locked
 
             # Проверка дублирования (re-check from locked row)
             if payment.is_paid:
-                logger.info(
-                    "RollyPay webhook: платеж уже обработан", order_id=payment.order_id
-                )
+                logger.info('RollyPay webhook: платеж уже обработан', order_id=payment.order_id)
                 return True
 
             # Маппинг статуса
-            status_info = ROLLYPAY_STATUS_MAP.get(rollypay_status, ("pending", False))
+            status_info = ROLLYPAY_STATUS_MAP.get(rollypay_status, ('pending', False))
             internal_status, is_paid = status_info
 
             # Если event = payment.paid, принудительно считаем оплаченным
             if is_confirmed:
                 is_paid = True
-                internal_status = "success"
+                internal_status = 'success'
 
             callback_payload = {
-                "rollypay_payment_id": rollypay_payment_id,
-                "order_id": order_id,
-                "status": rollypay_status,
-                "event_type": event_type,
-                "amount": payload.get("amount"),
-                "currency": payload.get("currency"),
+                'rollypay_payment_id': rollypay_payment_id,
+                'order_id': order_id,
+                'status': rollypay_status,
+                'event_type': event_type,
+                'amount': payload.get('amount'),
+                'currency': payload.get('currency'),
             }
 
             # Проверка суммы ДО обновления статуса
             if is_paid:
-                amount_value = payload.get("amount")
+                amount_value = payload.get('amount')
                 if amount_value is not None:
                     received_kopeks = round(float(amount_value) * 100)
                     if abs(received_kopeks - payment.amount_kopeks) > 1:
                         logger.error(
-                            "RollyPay amount mismatch",
+                            'RollyPay amount mismatch',
                             expected_kopeks=payment.amount_kopeks,
                             received_kopeks=received_kopeks,
                             order_id=payment.order_id,
@@ -273,7 +261,7 @@ class RollyPayPaymentMixin:
                         await rollypay_crud.update_rollypay_payment_status(
                             db=db,
                             payment=payment,
-                            status="amount_mismatch",
+                            status='amount_mismatch',
                             is_paid=False,
                             rollypay_payment_id=rollypay_payment_id,
                             callback_payload=callback_payload,
@@ -286,9 +274,7 @@ class RollyPayPaymentMixin:
                 payment.status = internal_status
                 payment.is_paid = True
                 payment.paid_at = datetime.now(UTC)
-                payment.rollypay_payment_id = (
-                    rollypay_payment_id or payment.rollypay_payment_id
-                )
+                payment.rollypay_payment_id = rollypay_payment_id or payment.rollypay_payment_id
                 payment.callback_payload = callback_payload
                 payment.updated_at = datetime.now(UTC)
                 await db.flush()
@@ -296,7 +282,7 @@ class RollyPayPaymentMixin:
                     db,
                     payment,
                     rollypay_payment_id=rollypay_payment_id,
-                    trigger="webhook",
+                    trigger='webhook',
                 )
 
             # Для не-success статусов можно безопасно коммитить
@@ -312,7 +298,7 @@ class RollyPayPaymentMixin:
             return True
 
         except Exception as e:
-            logger.exception("RollyPay webhook: ошибка обработки", error=e)
+            logger.exception('RollyPay webhook: ошибка обработки', error=e)
             return False
 
     async def _finalize_rollypay_payment(
@@ -327,13 +313,13 @@ class RollyPayPaymentMixin:
 
         FOR UPDATE lock must be acquired by the caller before invoking this method.
         """
-        payment_module = import_module("app.services.payment_service")
-        rollypay_crud = import_module("app.database.crud.rollypay")
+        payment_module = import_module('app.services.payment_service')
+        rollypay_crud = import_module('app.database.crud.rollypay')
 
         # FOR UPDATE lock already acquired by caller — just check idempotency
         if payment.transaction_id:
             logger.info(
-                "RollyPay платеж уже связан с транзакцией",
+                'RollyPay платеж уже связан с транзакцией',
                 order_id=payment.order_id,
                 transaction_id=payment.transaction_id,
                 trigger=trigger,
@@ -341,7 +327,7 @@ class RollyPayPaymentMixin:
             return True
 
         # Read fresh metadata AFTER lock to avoid stale data
-        metadata = dict(getattr(payment, "metadata_json", {}) or {})
+        metadata = dict(getattr(payment, 'metadata_json', {}) or {})
 
         # --- Guest purchase flow ---
         from app.services.payment.common import try_fulfill_guest_purchase
@@ -350,40 +336,36 @@ class RollyPayPaymentMixin:
             db,
             metadata=metadata,
             payment_amount_kopeks=payment.amount_kopeks,
-            provider_payment_id=(
-                str(rollypay_payment_id) if rollypay_payment_id else payment.order_id
-            ),
-            provider_name="rollypay",
+            provider_payment_id=(str(rollypay_payment_id) if rollypay_payment_id else payment.order_id),
+            provider_name='rollypay',
         )
         if guest_result is not None:
             return True
 
         # Ensure paid fields are set (idempotent — caller may have already set them)
         if not payment.is_paid:
-            payment.status = "success"
+            payment.status = 'success'
             payment.is_paid = True
             payment.paid_at = datetime.now(UTC)
             payment.updated_at = datetime.now(UTC)
 
-        balance_already_credited = bool(metadata.get("balance_credited"))
+        balance_already_credited = bool(metadata.get('balance_credited'))
 
         user = await payment_module.get_user_by_id(db, payment.user_id)
         if not user:
-            logger.error("Пользователь не найден для RollyPay", user_id=payment.user_id)
+            logger.error('Пользователь не найден для RollyPay', user_id=payment.user_id)
             return False
 
         # Загружаем промогруппы в асинхронном контексте
-        await db.refresh(user, attribute_names=["promo_group", "user_promo_groups"])
-        for user_promo_group in getattr(user, "user_promo_groups", []):
-            await db.refresh(user_promo_group, attribute_names=["promo_group"])
+        await db.refresh(user, attribute_names=['promo_group', 'user_promo_groups'])
+        for user_promo_group in getattr(user, 'user_promo_groups', []):
+            await db.refresh(user_promo_group, attribute_names=['promo_group'])
 
         promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, "subscription", None)
+        subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
 
-        transaction_external_id = (
-            str(rollypay_payment_id) if rollypay_payment_id else payment.order_id
-        )
+        transaction_external_id = str(rollypay_payment_id) if rollypay_payment_id else payment.order_id
 
         # Проверяем дупликат транзакции
         existing_transaction = None
@@ -395,7 +377,7 @@ class RollyPayPaymentMixin:
             )
 
         display_name = settings.get_rollypay_display_name()
-        description = f"Пополнение через {display_name}"
+        description = f'Пополнение через {display_name}'
 
         transaction = existing_transaction
         created_transaction = False
@@ -410,21 +392,17 @@ class RollyPayPaymentMixin:
                 payment_method=PaymentMethod.ROLLYPAY,
                 external_id=transaction_external_id,
                 is_completed=True,
-                created_at=getattr(payment, "created_at", None),
+                created_at=getattr(payment, 'created_at', None),
                 commit=False,
             )
             created_transaction = True
 
-        await rollypay_crud.link_rollypay_payment_to_transaction(
-            db, payment=payment, transaction_id=transaction.id
-        )
+        await rollypay_crud.link_rollypay_payment_to_transaction(db, payment=payment, transaction_id=transaction.id)
 
         should_credit_balance = created_transaction or not balance_already_credited
 
         if not should_credit_balance:
-            logger.info(
-                "RollyPay платеж уже зачислил баланс ранее", order_id=payment.order_id
-            )
+            logger.info('RollyPay платеж уже зачислил баланс ранее', order_id=payment.order_id)
             return True
 
         # Lock user row to prevent concurrent balance race conditions
@@ -453,11 +431,7 @@ class RollyPayPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        topup_status = (
-            "\U0001f195 Первое пополнение"
-            if was_first_topup
-            else "\U0001f504 Пополнение"
-        )
+        topup_status = '\U0001f195 Первое пополнение' if was_first_topup else '\U0001f504 Пополнение'
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -466,23 +440,17 @@ class RollyPayPaymentMixin:
                 db,
                 user.id,
                 payment.amount_kopeks,
-                getattr(self, "bot", None),
+                getattr(self, 'bot', None),
             )
         except Exception as error:
-            logger.error(
-                "Ошибка обработки реферального пополнения RollyPay", error=error
-            )
+            logger.error('Ошибка обработки реферального пополнения RollyPay', error=error)
 
-        if (
-            was_first_topup
-            and not user.has_made_first_topup
-            and not user.referred_by_id
-        ):
+        if was_first_topup and not user.has_made_first_topup and not user.referred_by_id:
             user.has_made_first_topup = True
             await db.commit()
             await db.refresh(user)
 
-        if getattr(self, "bot", None):
+        if getattr(self, 'bot', None):
             try:
                 from app.services.admin_notification_service import (
                     AdminNotificationService,
@@ -500,52 +468,48 @@ class RollyPayPaymentMixin:
                     db=db,
                 )
             except Exception as error:
-                logger.error("Ошибка отправки админ уведомления RollyPay", error=error)
+                logger.error('Ошибка отправки админ уведомления RollyPay', error=error)
 
-        if getattr(self, "bot", None) and user.telegram_id:
+        if getattr(self, 'bot', None) and user.telegram_id:
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
                     (
-                        "\u2705 <b>Пополнение успешно!</b>\n\n"
-                        f"\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
-                        f"\U0001f4b3 Способ: {display_name}\n"
-                        f"\U0001f194 Транзакция: {transaction.id}"
+                        '\u2705 <b>Пополнение успешно!</b>\n\n'
+                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
+                        f'\U0001f4b3 Способ: {display_name}\n'
+                        f'\U0001f194 Транзакция: {transaction.id}'
                     ),
-                    parse_mode="HTML",
+                    parse_mode='HTML',
                     reply_markup=keyboard,
                 )
             except Exception as error:
-                logger.error(
-                    "Ошибка отправки уведомления пользователю RollyPay", error=error
-                )
+                logger.error('Ошибка отправки уведомления пользователю RollyPay', error=error)
 
         try:
             from app.services.payment.common import send_cart_notification_after_topup
 
-            await send_cart_notification_after_topup(
-                user, payment.amount_kopeks, db, getattr(self, "bot", None)
-            )
+            await send_cart_notification_after_topup(user, payment.amount_kopeks, db, getattr(self, 'bot', None))
         except Exception as error:
             logger.error(
-                "Ошибка при работе с сохраненной корзиной для пользователя",
+                'Ошибка при работе с сохраненной корзиной для пользователя',
                 user_id=payment.user_id,
                 error=error,
                 exc_info=True,
             )
 
-        metadata["balance_change"] = {
-            "old_balance": old_balance,
-            "new_balance": user.balance_kopeks,
-            "credited_at": datetime.now(UTC).isoformat(),
+        metadata['balance_change'] = {
+            'old_balance': old_balance,
+            'new_balance': user.balance_kopeks,
+            'credited_at': datetime.now(UTC).isoformat(),
         }
-        metadata["balance_credited"] = True
+        metadata['balance_credited'] = True
         payment.metadata_json = metadata
         await db.commit()
 
         logger.info(
-            "Обработан RollyPay платеж",
+            'Обработан RollyPay платеж',
             order_id=payment.order_id,
             user_id=payment.user_id,
             trigger=trigger,
@@ -560,41 +524,37 @@ class RollyPayPaymentMixin:
     ) -> dict[str, Any] | None:
         """Проверяет статус платежа через API."""
         try:
-            rollypay_crud = import_module("app.database.crud.rollypay")
+            rollypay_crud = import_module('app.database.crud.rollypay')
             payment = await rollypay_crud.get_rollypay_payment_by_order_id(db, order_id)
             if not payment:
-                logger.warning("RollyPay payment not found", order_id=order_id)
+                logger.warning('RollyPay payment not found', order_id=order_id)
                 return None
 
             if payment.is_paid:
                 return {
-                    "payment": payment,
-                    "status": "success",
-                    "is_paid": True,
+                    'payment': payment,
+                    'status': 'success',
+                    'is_paid': True,
                 }
 
             # Проверяем через API по rollypay_payment_id
             if payment.rollypay_payment_id:
                 try:
-                    order_data = await rollypay_service.get_payment(
-                        payment.rollypay_payment_id
-                    )
-                    rollypay_status = order_data.get("status")
+                    order_data = await rollypay_service.get_payment(payment.rollypay_payment_id)
+                    rollypay_status = order_data.get('status')
 
                     if rollypay_status:
-                        status_info = ROLLYPAY_STATUS_MAP.get(
-                            rollypay_status, ("pending", False)
-                        )
+                        status_info = ROLLYPAY_STATUS_MAP.get(rollypay_status, ('pending', False))
                         internal_status, is_paid = status_info
 
                         if is_paid:
                             # Проверка суммы
-                            api_amount = order_data.get("amount")
+                            api_amount = order_data.get('amount')
                             if api_amount is not None:
                                 received_kopeks = round(float(api_amount) * 100)
                                 if abs(received_kopeks - payment.amount_kopeks) > 1:
                                     logger.error(
-                                        "RollyPay amount mismatch (API check)",
+                                        'RollyPay amount mismatch (API check)',
                                         expected_kopeks=payment.amount_kopeks,
                                         received_kopeks=received_kopeks,
                                         order_id=payment.order_id,
@@ -602,27 +562,25 @@ class RollyPayPaymentMixin:
                                     await rollypay_crud.update_rollypay_payment_status(
                                         db=db,
                                         payment=payment,
-                                        status="amount_mismatch",
+                                        status='amount_mismatch',
                                         is_paid=False,
                                         rollypay_payment_id=payment.rollypay_payment_id,
                                         callback_payload={
-                                            "check_source": "api",
-                                            "rollypay_order_data": order_data,
+                                            'check_source': 'api',
+                                            'rollypay_order_data': order_data,
                                         },
                                     )
                                     return {
-                                        "payment": payment,
-                                        "status": "amount_mismatch",
-                                        "is_paid": False,
+                                        'payment': payment,
+                                        'status': 'amount_mismatch',
+                                        'is_paid': False,
                                     }
 
                             # Acquire FOR UPDATE lock before finalization
-                            locked = await rollypay_crud.get_rollypay_payment_by_id_for_update(
-                                db, payment.id
-                            )
+                            locked = await rollypay_crud.get_rollypay_payment_by_id_for_update(db, payment.id)
                             if not locked:
                                 logger.error(
-                                    "RollyPay: не удалось заблокировать платёж",
+                                    'RollyPay: не удалось заблокировать платёж',
                                     payment_id=payment.id,
                                 )
                                 return None
@@ -630,27 +588,27 @@ class RollyPayPaymentMixin:
 
                             if payment.is_paid:
                                 logger.info(
-                                    "RollyPay платеж уже обработан (api_check)",
+                                    'RollyPay платеж уже обработан (api_check)',
                                     order_id=payment.order_id,
                                 )
                                 return {
-                                    "payment": payment,
-                                    "status": "success",
-                                    "is_paid": True,
+                                    'payment': payment,
+                                    'status': 'success',
+                                    'is_paid': True,
                                 }
 
                             logger.info(
-                                "RollyPay payment confirmed via API",
+                                'RollyPay payment confirmed via API',
                                 order_id=payment.order_id,
                             )
 
                             # Inline field updates — NO intermediate commit that would release FOR UPDATE lock
-                            payment.status = "success"
+                            payment.status = 'success'
                             payment.is_paid = True
                             payment.paid_at = datetime.now(UTC)
                             payment.callback_payload = {
-                                "check_source": "api",
-                                "rollypay_order_data": order_data,
+                                'check_source': 'api',
+                                'rollypay_order_data': order_data,
                             }
                             payment.updated_at = datetime.now(UTC)
                             await db.flush()
@@ -659,29 +617,25 @@ class RollyPayPaymentMixin:
                                 db,
                                 payment,
                                 rollypay_payment_id=payment.rollypay_payment_id,
-                                trigger="api_check",
+                                trigger='api_check',
                             )
                         elif internal_status != payment.status:
                             # Обновляем статус если изменился
-                            payment = (
-                                await rollypay_crud.update_rollypay_payment_status(
-                                    db=db,
-                                    payment=payment,
-                                    status=internal_status,
-                                )
+                            payment = await rollypay_crud.update_rollypay_payment_status(
+                                db=db,
+                                payment=payment,
+                                status=internal_status,
                             )
 
                 except Exception as e:
-                    logger.error(
-                        "Error checking RollyPay payment status via API", error=e
-                    )
+                    logger.error('Error checking RollyPay payment status via API', error=e)
 
             return {
-                "payment": payment,
-                "status": payment.status or "pending",
-                "is_paid": payment.is_paid,
+                'payment': payment,
+                'status': payment.status or 'pending',
+                'is_paid': payment.is_paid,
             }
 
         except Exception as e:
-            logger.exception("RollyPay: ошибка проверки статуса", error=e)
+            logger.exception('RollyPay: ошибка проверки статуса', error=e)
             return None

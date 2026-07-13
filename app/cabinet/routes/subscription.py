@@ -27,21 +27,17 @@ from .subscription_modules import (
 )
 from .subscription_modules.status import get_subscription as _get_subscription_handler
 
-router = APIRouter(prefix="/subscription", tags=["Cabinet Subscription"])
+router = APIRouter(prefix='/subscription', tags=['Cabinet Subscription'])
 
 
 # Root endpoint: GET /subscription (empty path — must be on this router directly)
-@router.get("", response_model=SubscriptionStatusResponse)
+@router.get('', response_model=SubscriptionStatusResponse)
 async def get_subscription(
     user=Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None, description="Subscription ID for multi-tariff"
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
-    return await _get_subscription_handler(
-        user=user, db=db, subscription_id=subscription_id
-    )
+    return await _get_subscription_handler(user=user, db=db, subscription_id=subscription_id)
 
 
 # Include all sub-routers

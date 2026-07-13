@@ -30,24 +30,24 @@ from app.database.models import UserStatus
 
 def _user_info(
     *,
-    provider_id: str = "google-uid-42",
-    email: str = "alice@example.com",
+    provider_id: str = 'google-uid-42',
+    email: str = 'alice@example.com',
     email_verified: bool = True,
 ) -> MagicMock:
     info = MagicMock()
     info.provider_id = provider_id
     info.email = email
     info.email_verified = email_verified
-    info.first_name = "Alice"
-    info.last_name = "Returner"
-    info.username = "alice"
+    info.first_name = 'Alice'
+    info.last_name = 'Returner'
+    info.username = 'alice'
     return info
 
 
 def _local_user(
     *,
     user_id: int = 200,
-    email: str = "alice@example.com",
+    email: str = 'alice@example.com',
     email_verified: bool = True,
     status_value: str = UserStatus.DELETED.value,
 ) -> SimpleNamespace:
@@ -61,7 +61,7 @@ def _local_user(
         balance_kopeks=12345,
         last_activity=datetime(2024, 6, 1, tzinfo=UTC),
         updated_at=datetime(2024, 6, 1, tzinfo=UTC),
-        referral_code="ALICE-OG",
+        referral_code='ALICE-OG',
         referred_by_id=None,
         remnawave_uuid=None,
     )
@@ -69,8 +69,8 @@ def _local_user(
 
 def _callback_request() -> MagicMock:
     req = MagicMock()
-    req.code = "auth-code"
-    req.state = "csrf-state"
+    req.code = 'auth-code'
+    req.state = 'csrf-state'
     req.device_id = None
     req.campaign_slug = None
     req.referral_code = None
@@ -89,32 +89,32 @@ def _common_oauth_patches(local_user_to_return: SimpleNamespace | None) -> list:
     """Patches shared across email-merge tests so we don't repeat 7 mocks per case."""
     return [
         patch(
-            "app.cabinet.routes.oauth.validate_oauth_state",
-            AsyncMock(return_value={"linking": "false"}),
+            'app.cabinet.routes.oauth.validate_oauth_state',
+            AsyncMock(return_value={'linking': 'false'}),
         ),
         patch(
-            "app.cabinet.routes.oauth.get_provider",
+            'app.cabinet.routes.oauth.get_provider',
             return_value=MagicMock(
-                exchange_code=AsyncMock(return_value={"access_token": "tok"}),
+                exchange_code=AsyncMock(return_value={'access_token': 'tok'}),
                 get_user_info=AsyncMock(return_value=_user_info()),
             ),
         ),
         # No provider_id match → falls into the email-merge branch (step 6).
         patch(
-            "app.cabinet.routes.oauth.get_user_by_oauth_provider",
+            'app.cabinet.routes.oauth.get_user_by_oauth_provider',
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.cabinet.routes.oauth.get_user_by_email",
+            'app.cabinet.routes.oauth.get_user_by_email',
             AsyncMock(return_value=local_user_to_return),
         ),
         patch(
-            "app.cabinet.routes.oauth.set_user_oauth_provider_id",
+            'app.cabinet.routes.oauth.set_user_oauth_provider_id',
             AsyncMock(return_value=None),
         ),
         patch(
-            "app.cabinet.routes.oauth._finalize_oauth_login",
-            AsyncMock(return_value=MagicMock(name="AuthResponse")),
+            'app.cabinet.routes.oauth._finalize_oauth_login',
+            AsyncMock(return_value=MagicMock(name='AuthResponse')),
         ),
     ]
 
@@ -130,18 +130,16 @@ async def test_email_merge_revives_deleted_user_when_both_verified(
     a future ordering bug between the email_verified guard and the
     revive call shows up here.
     """
-    deleted_user = _local_user(
-        status_value=UserStatus.DELETED.value, email_verified=True
-    )
+    deleted_user = _local_user(status_value=UserStatus.DELETED.value, email_verified=True)
     request = _callback_request()
 
     patches = _common_oauth_patches(local_user_to_return=deleted_user)
     with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
-        await oauth_callback(provider="google", request=request, db=db)
+        await oauth_callback(provider='google', request=request, db=db)
 
     assert deleted_user.status == UserStatus.ACTIVE.value, (
-        "DELETED row found by verified-email match must be revived in-place — "
-        "otherwise the cabinet creates a duplicate account on next login"
+        'DELETED row found by verified-email match must be revived in-place — '
+        'otherwise the cabinet creates a duplicate account on next login'
     )
 
 
@@ -166,11 +164,11 @@ async def test_email_merge_blocks_409_when_local_email_unverified(
     patches = _common_oauth_patches(local_user_to_return=unverified)
     with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
         with pytest.raises(HTTPException) as exc:
-            await oauth_callback(provider="google", request=request, db=db)
+            await oauth_callback(provider='google', request=request, db=db)
 
     assert exc.value.status_code == status.HTTP_409_CONFLICT
     assert isinstance(exc.value.detail, dict)
-    assert exc.value.detail["code"] == "email_unverified_local"
+    assert exc.value.detail['code'] == 'email_unverified_local'
     # Status must NOT have been mutated (no takeover via IdP attestation alone).
     assert unverified.status == UserStatus.ACTIVE.value
 
@@ -189,7 +187,7 @@ async def test_email_merge_active_user_links_without_revive(db: AsyncMock) -> No
     captured_logs: list[dict] = []
 
     def _log_capture(message: str, **kwargs: object) -> None:
-        if message == "OAuth provider linked to existing email user":
+        if message == 'OAuth provider linked to existing email user':
             captured_logs.append(dict(kwargs))
 
     patches = _common_oauth_patches(local_user_to_return=active_user)
@@ -200,12 +198,12 @@ async def test_email_merge_active_user_links_without_revive(db: AsyncMock) -> No
         patches[3],
         patches[4],
         patches[5],
-        patch("app.cabinet.routes.oauth.logger.info", side_effect=_log_capture),
+        patch('app.cabinet.routes.oauth.logger.info', side_effect=_log_capture),
     ):
-        await oauth_callback(provider="google", request=request, db=db)
+        await oauth_callback(provider='google', request=request, db=db)
 
     assert active_user.status == UserStatus.ACTIVE.value
-    assert captured_logs, "logger.info for the email-merge branch must fire"
-    assert (
-        captured_logs[0].get("revived") is False
-    ), "revived= must be False for ACTIVE users — audit log grep depends on this"
+    assert captured_logs, 'logger.info for the email-merge branch must fire'
+    assert captured_logs[0].get('revived') is False, (
+        'revived= must be False for ACTIVE users — audit log grep depends on this'
+    )

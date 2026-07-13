@@ -84,8 +84,8 @@ async def revive_deleted_user(
     """
     if user.status != UserStatus.DELETED.value:
         raise NotDeletedError(
-            f"revive_deleted_user called on user {user.id} with status={user.status!r}; "
-            "caller must verify status==DELETED before invoking"
+            f'revive_deleted_user called on user {user.id} with status={user.status!r}; '
+            'caller must verify status==DELETED before invoking'
         )
 
     # Touch the session ref so a static analyser doesn't flag `db` as
@@ -99,13 +99,11 @@ async def revive_deleted_user(
     user.updated_at = now
 
     logger.info(
-        "User revived from DELETED → ACTIVE",
+        'User revived from DELETED → ACTIVE',
         user_id=user.id,
         telegram_id=user.telegram_id,
         email=user.email if user.email_verified else None,
         source=source,
-        previous_updated_at=(
-            previous_updated_at.isoformat() if previous_updated_at else None
-        ),
+        previous_updated_at=(previous_updated_at.isoformat() if previous_updated_at else None),
     )
     return user

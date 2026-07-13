@@ -17,7 +17,7 @@ from app.database.models import SubscriptionStatus
 
 def _set_multi_tariff(monkeypatch, enabled: bool):
     # is_multi_tariff_enabled is a method on the pydantic Settings class.
-    monkeypatch.setattr(Settings, "is_multi_tariff_enabled", lambda self: enabled)
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: enabled)
 
 
 def _sub(**kw) -> SimpleNamespace:
@@ -25,12 +25,11 @@ def _sub(**kw) -> SimpleNamespace:
         id=7,
         user_id=1,
         status=SubscriptionStatus.ACTIVE.value,
-        end_date=datetime.now(UTC)
-        + timedelta(days=1000),  # spammed far into the future
-        connected_squads=["sq1", "sq2"],
+        end_date=datetime.now(UTC) + timedelta(days=1000),  # spammed far into the future
+        connected_squads=['sq1', 'sq2'],
         traffic_used_gb=42.5,
         autopay_enabled=True,
-        remnawave_uuid="SUB_UUID",
+        remnawave_uuid='SUB_UUID',
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -57,16 +56,16 @@ async def test_reset_with_panel_disables_subscription_uuid(monkeypatch):
         disabled.append(uuid)
         return True
 
-    monkeypatch.setattr(ss.SubscriptionService, "disable_remnawave_user", fake_disable)
+    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
     _set_multi_tariff(monkeypatch, True)
 
-    sub = _sub(remnawave_uuid="SUB_UUID")
-    user = SimpleNamespace(id=1, remnawave_uuid="USER_UUID")
+    sub = _sub(remnawave_uuid='SUB_UUID')
+    user = SimpleNamespace(id=1, remnawave_uuid='USER_UUID')
 
     result = await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
 
-    assert disabled == ["SUB_UUID"]  # per-subscription uuid (never the user-level one)
-    assert result["panel_disabled"] is True
+    assert disabled == ['SUB_UUID']  # per-subscription uuid (never the user-level one)
+    assert result['panel_disabled'] is True
     assert sub.status == SubscriptionStatus.DISABLED.value  # DB reset applied too
 
 
@@ -79,19 +78,17 @@ async def test_reset_with_panel_multitariff_no_sub_uuid_skips_panel(monkeypatch)
         disabled.append(uuid)
         return True
 
-    monkeypatch.setattr(ss.SubscriptionService, "disable_remnawave_user", fake_disable)
+    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
     _set_multi_tariff(monkeypatch, True)
 
     sub = _sub(remnawave_uuid=None)
-    user = SimpleNamespace(id=1, remnawave_uuid="USER_UUID")
+    user = SimpleNamespace(id=1, remnawave_uuid='USER_UUID')
 
     result = await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
 
     assert disabled == []  # no fallback in multi-tariff
-    assert result["panel_disabled"] is False
-    assert (
-        sub.status == SubscriptionStatus.DISABLED.value
-    )  # bot-side reset still applied
+    assert result['panel_disabled'] is False
+    assert sub.status == SubscriptionStatus.DISABLED.value  # bot-side reset still applied
 
 
 async def test_reset_with_panel_singletariff_falls_back_to_user_uuid(monkeypatch):
@@ -101,15 +98,15 @@ async def test_reset_with_panel_singletariff_falls_back_to_user_uuid(monkeypatch
         disabled.append(uuid)
         return True
 
-    monkeypatch.setattr(ss.SubscriptionService, "disable_remnawave_user", fake_disable)
+    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
     _set_multi_tariff(monkeypatch, False)
 
     sub = _sub(remnawave_uuid=None)
-    user = SimpleNamespace(id=1, remnawave_uuid="USER_UUID")
+    user = SimpleNamespace(id=1, remnawave_uuid='USER_UUID')
 
     await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
 
-    assert disabled == ["USER_UUID"]  # legacy single-tariff fallback is correct here
+    assert disabled == ['USER_UUID']  # legacy single-tariff fallback is correct here
 
 
 async def test_reset_with_panel_no_uuid_skips_panel(monkeypatch):
@@ -119,7 +116,7 @@ async def test_reset_with_panel_no_uuid_skips_panel(monkeypatch):
         called.append(uuid)
         return True
 
-    monkeypatch.setattr(ss.SubscriptionService, "disable_remnawave_user", fake_disable)
+    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', fake_disable)
 
     sub = _sub(remnawave_uuid=None)
     user = SimpleNamespace(id=1, remnawave_uuid=None)
@@ -127,26 +124,24 @@ async def test_reset_with_panel_no_uuid_skips_panel(monkeypatch):
     result = await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
 
     assert called == []  # nothing to disable
-    assert result["panel_disabled"] is False
-    assert (
-        sub.status == SubscriptionStatus.DISABLED.value
-    )  # bot-side reset still applied
+    assert result['panel_disabled'] is False
+    assert sub.status == SubscriptionStatus.DISABLED.value  # bot-side reset still applied
 
 
 async def test_reset_with_panel_survives_panel_error(monkeypatch):
     """A panel disable failure must not block the bot-side reset (best effort)."""
 
     async def boom(self, uuid):
-        raise RuntimeError("panel down")
+        raise RuntimeError('panel down')
 
-    monkeypatch.setattr(ss.SubscriptionService, "disable_remnawave_user", boom)
+    monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', boom)
 
-    sub = _sub(remnawave_uuid="SUB_UUID")
+    sub = _sub(remnawave_uuid='SUB_UUID')
     user = SimpleNamespace(id=1, remnawave_uuid=None)
 
     result = await ss.reset_subscription_with_panel(AsyncMock(), user, sub)
 
-    assert result["panel_disabled"] is False
+    assert result['panel_disabled'] is False
     assert sub.status == SubscriptionStatus.DISABLED.value
 
 
@@ -168,12 +163,12 @@ async def test_user_modified_does_not_resurrect_disabled_end_date():
         traffic_limit_gb=0,
         traffic_used_gb=0.0,
         connected_squads=[],
-        subscription_url="https://x",
-        subscription_crypto_link="crypto",
+        subscription_url='https://x',
+        subscription_crypto_link='crypto',
         updated_at=now,
     )
     user = SimpleNamespace(id=1, telegram_id=123)
-    data = {"expireAt": (now + timedelta(days=900)).isoformat(), "status": "DISABLED"}
+    data = {'expireAt': (now + timedelta(days=900)).isoformat(), 'status': 'DISABLED'}
 
     await svc._handle_user_modified(AsyncMock(), user, sub, data)
 
@@ -196,13 +191,13 @@ async def test_user_modified_still_syncs_end_date_for_active():
         traffic_limit_gb=0,
         traffic_used_gb=0.0,
         connected_squads=[],
-        subscription_url="https://x",
-        subscription_crypto_link="crypto",
+        subscription_url='https://x',
+        subscription_crypto_link='crypto',
         updated_at=now,
     )
     user = SimpleNamespace(id=1, telegram_id=123)
     new_expiry = now + timedelta(days=30)
-    data = {"expireAt": new_expiry.isoformat(), "status": "ACTIVE"}
+    data = {'expireAt': new_expiry.isoformat(), 'status': 'ACTIVE'}
 
     await svc._handle_user_modified(AsyncMock(), user, sub, data)
 

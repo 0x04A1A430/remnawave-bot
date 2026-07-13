@@ -17,10 +17,10 @@ async def show_support_info(callback: types.CallbackQuery, db_user: User):
         callback=callback,
         caption=support_info,
         keyboard=get_support_keyboard(db_user.language),
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
     await callback.answer()
 
 
 def register_handlers(dp: Dispatcher):
-    dp.callback_query.register(show_support_info, F.data == "menu_support")
+    dp.callback_query.register(show_support_info, F.data == 'menu_support')

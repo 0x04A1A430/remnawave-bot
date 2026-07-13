@@ -32,12 +32,12 @@ def test_default_stars_rate_is_one_ruble_per_star() -> None:
     150 ₽ top-up credited as 149.50 ₽).
     """
     assert settings.TELEGRAM_STARS_RATE_RUB == 1.0, (
-        f"Default TELEGRAM_STARS_RATE_RUB must be 1.0 to match Telegram cash-out and "
-        f"round-trip losslessly. Got {settings.TELEGRAM_STARS_RATE_RUB!r}."
+        f'Default TELEGRAM_STARS_RATE_RUB must be 1.0 to match Telegram cash-out and '
+        f'round-trip losslessly. Got {settings.TELEGRAM_STARS_RATE_RUB!r}.'
     )
 
 
-@pytest.mark.parametrize("rubles", [50, 100, 150, 200, 500, 1000, 5000])
+@pytest.mark.parametrize('rubles', [50, 100, 150, 200, 500, 1000, 5000])
 def test_integer_ruble_amounts_round_trip_losslessly(
     rubles: int,
     monkeypatch: pytest.MonkeyPatch,
@@ -50,26 +50,24 @@ def test_integer_ruble_amounts_round_trip_losslessly(
 
     Post-fix at rate=1.0 this loss is gone for any integer ruble input.
     """
-    monkeypatch.setattr(settings, "TELEGRAM_STARS_RATE_RUB", 1.0, raising=False)
+    monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 1.0, raising=False)
 
     stars = settings.rubles_to_stars(float(rubles))
     rubles_back = settings.stars_to_rubles(stars)
 
-    assert (
-        stars == rubles
-    ), f"{rubles} ₽ must quote {rubles} ⭐ at rate=1.0, got {stars}"
-    assert rubles_back == float(
-        rubles
-    ), f"{rubles} ₽ → {stars} ⭐ → {rubles_back} ₽ is not lossless (delta {rubles_back - rubles:+.2f} ₽)"
+    assert stars == rubles, f'{rubles} ₽ must quote {rubles} ⭐ at rate=1.0, got {stars}'
+    assert rubles_back == float(rubles), (
+        f'{rubles} ₽ → {stars} ⭐ → {rubles_back} ₽ is not lossless (delta {rubles_back - rubles:+.2f} ₽)'
+    )
 
 
 def test_rubles_to_stars_rejects_invalid_rate(monkeypatch: pytest.MonkeyPatch) -> None:
     """Defensive check: zero/negative rate must raise rather than divide-by-zero."""
-    monkeypatch.setattr(settings, "TELEGRAM_STARS_RATE_RUB", 0, raising=False)
+    monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 0, raising=False)
     with pytest.raises(ValueError):
         settings.rubles_to_stars(100)
 
-    monkeypatch.setattr(settings, "TELEGRAM_STARS_RATE_RUB", -1, raising=False)
+    monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', -1, raising=False)
     with pytest.raises(ValueError):
         settings.rubles_to_stars(100)
 
@@ -78,7 +76,7 @@ def test_rubles_to_stars_clamps_to_minimum_one_star(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Even at rate=1.0, a 0 ₽ request must return ≥1 ⭐ (Telegram requires positive amount)."""
-    monkeypatch.setattr(settings, "TELEGRAM_STARS_RATE_RUB", 1.0, raising=False)
+    monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 1.0, raising=False)
     assert settings.rubles_to_stars(0) == 1
     # Negative inputs are caller-error but should not return <1.
     assert settings.rubles_to_stars(-50) == 1
@@ -94,12 +92,10 @@ def test_rate_change_is_propagated_through_telegram_stars_service(
     hardcoded a rate and the other used settings, the invoice quote
     and the post-payment credit would diverge silently.
     """
-    monkeypatch.setattr(settings, "TELEGRAM_STARS_RATE_RUB", 2.5, raising=False)
+    monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 2.5, raising=False)
 
     from app.external.telegram_stars import TelegramStarsService
 
-    assert TelegramStarsService.calculate_stars_from_rubles(
-        100.0
-    ) == settings.rubles_to_stars(100.0)
+    assert TelegramStarsService.calculate_stars_from_rubles(100.0) == settings.rubles_to_stars(100.0)
     rubles_back = TelegramStarsService.calculate_rubles_from_stars(40)
     assert float(rubles_back) == settings.stars_to_rubles(40)

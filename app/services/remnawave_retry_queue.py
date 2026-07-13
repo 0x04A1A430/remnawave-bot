@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 class RetryItem:
     subscription_id: int
     user_id: int
-    action: Literal["create", "update"]
+    action: Literal['create', 'update']
     attempts: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_error: str | None = None
@@ -45,7 +45,7 @@ class RemnaWaveRetryQueue:
         self,
         subscription_id: int,
         user_id: int,
-        action: Literal["create", "update"] = "create",
+        action: Literal['create', 'update'] = 'create',
     ) -> None:
         # Deduplicate by subscription_id
         for item in self._queue:
@@ -59,7 +59,7 @@ class RemnaWaveRetryQueue:
             )
         )
         logger.info(
-            "Enqueued RemnaWave retry",
+            'Enqueued RemnaWave retry',
             subscription_id=subscription_id,
             user_id=user_id,
             action=action,
@@ -83,17 +83,17 @@ class RemnaWaveRetryQueue:
                     sub = await get_subscription_by_id(db, item.subscription_id)
                     if not sub:
                         logger.warning(
-                            "Retry: subscription not found, dropping",
+                            'Retry: subscription not found, dropping',
                             subscription_id=item.subscription_id,
                         )
                         continue
 
                     service = SubscriptionService()
                     if not service.is_configured:
-                        self._requeue(item, "RemnaWave not configured")
+                        self._requeue(item, 'RemnaWave not configured')
                         continue
 
-                    if item.action == "create":
+                    if item.action == 'create':
                         result = await service.create_remnawave_user(db, sub)
                     else:
                         result = await service.update_remnawave_user(db, sub)
@@ -104,13 +104,11 @@ class RemnaWaveRetryQueue:
                     # провал успехом и выбросил бы элемент из очереди после
                     # первого тика — подписка осталась бы без юзера в панели.
                     if result is None:
-                        self._requeue(
-                            item, f"{item.action}_remnawave_user returned None"
-                        )
+                        self._requeue(item, f'{item.action}_remnawave_user returned None')
                         continue
 
                     logger.info(
-                        "Retry succeeded",
+                        'Retry succeeded',
                         subscription_id=item.subscription_id,
                         attempts=item.attempts,
                     )
@@ -123,7 +121,7 @@ class RemnaWaveRetryQueue:
         if item.attempts < self._max_retries:
             self._queue.append(item)
             logger.warning(
-                "Retry failed, re-enqueued",
+                'Retry failed, re-enqueued',
                 subscription_id=item.subscription_id,
                 attempts=item.attempts,
                 max_retries=self._max_retries,
@@ -131,7 +129,7 @@ class RemnaWaveRetryQueue:
             )
         else:
             logger.error(
-                "Retry exhausted, dropping (MANUAL INTERVENTION NEEDED)",
+                'Retry exhausted, dropping (MANUAL INTERVENTION NEEDED)',
                 subscription_id=item.subscription_id,
                 user_id=item.user_id,
                 attempts=item.attempts,

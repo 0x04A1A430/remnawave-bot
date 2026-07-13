@@ -27,28 +27,28 @@ from ..schemas.withdrawals import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/withdrawals", tags=["Cabinet Admin Withdrawals"])
+router = APIRouter(prefix='/admin/withdrawals', tags=['Cabinet Admin Withdrawals'])
 
 
 def _get_risk_level(risk_score: int) -> str:
     """Get risk level from score."""
     if risk_score >= 70:
-        return "critical"
+        return 'critical'
     if risk_score >= 50:
-        return "high"
+        return 'high'
     if risk_score >= 30:
-        return "medium"
-    return "low"
+        return 'medium'
+    return 'low'
 
 
-@router.get("", response_model=AdminWithdrawalListResponse)
+@router.get('', response_model=AdminWithdrawalListResponse)
 async def list_withdrawals(
-    withdrawal_status: (
-        Literal["pending", "approved", "rejected", "completed", "cancelled"] | None
-    ) = Query(None, alias="status"),
+    withdrawal_status: (Literal['pending', 'approved', 'rejected', 'completed', 'cancelled'] | None) = Query(
+        None, alias='status'
+    ),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    admin: User = Depends(require_permission("withdrawals:read")),
+    admin: User = Depends(require_permission('withdrawals:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List all withdrawal requests."""
@@ -77,9 +77,7 @@ async def list_withdrawals(
     )
     pending_total = pending_total_result.scalar() or 0
 
-    query = (
-        query.order_by(desc(WithdrawalRequest.created_at)).offset(offset).limit(limit)
-    )
+    query = query.order_by(desc(WithdrawalRequest.created_at)).offset(offset).limit(limit)
     result = await db.execute(query)
     withdrawals = result.scalars().all()
 
@@ -121,10 +119,10 @@ async def list_withdrawals(
     )
 
 
-@router.get("/{withdrawal_id}", response_model=AdminWithdrawalDetailResponse)
+@router.get('/{withdrawal_id}', response_model=AdminWithdrawalDetailResponse)
 async def get_withdrawal_detail(
     withdrawal_id: int,
-    admin: User = Depends(require_permission("withdrawals:read")),
+    admin: User = Depends(require_permission('withdrawals:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed withdrawal request with risk analysis."""
@@ -132,7 +130,7 @@ async def get_withdrawal_detail(
     if not withdrawal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Заявка не найдена",
+            detail='Заявка не найдена',
         )
 
     user = await db.get(User, withdrawal.user_id)
@@ -147,9 +145,7 @@ async def get_withdrawal_detail(
 
     # Get referral stats
     referral_count = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.referred_by_id == withdrawal.user_id)
+        select(func.count()).select_from(User).where(User.referred_by_id == withdrawal.user_id)
     )
     total_earnings = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(
@@ -179,11 +175,11 @@ async def get_withdrawal_detail(
     )
 
 
-@router.post("/{withdrawal_id}/approve")
+@router.post('/{withdrawal_id}/approve')
 async def approve_withdrawal(
     withdrawal_id: int,
     request: AdminApproveWithdrawalRequest,
-    admin: User = Depends(require_permission("withdrawals:approve")),
+    admin: User = Depends(require_permission('withdrawals:approve')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Approve a withdrawal request."""
@@ -213,10 +209,8 @@ async def approve_withdrawal(
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = f"\n{request.comment}" if request.comment else ""
-                tg_message = (
-                    f"Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}"
-                )
+                comment_text = f'\n{request.comment}' if request.comment else ''
+                tg_message = f'Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_approved(
@@ -229,16 +223,16 @@ async def approve_withdrawal(
                 finally:
                     await bot.session.close()
     except Exception as e:
-        logger.error("Failed to send withdrawal approval notification", error=e)
+        logger.error('Failed to send withdrawal approval notification', error=e)
 
-    return {"success": True}
+    return {'success': True}
 
 
-@router.post("/{withdrawal_id}/reject")
+@router.post('/{withdrawal_id}/reject')
 async def reject_withdrawal(
     withdrawal_id: int,
     request: AdminRejectWithdrawalRequest,
-    admin: User = Depends(require_permission("withdrawals:reject")),
+    admin: User = Depends(require_permission('withdrawals:reject')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reject a withdrawal request."""
@@ -252,7 +246,7 @@ async def reject_withdrawal(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or "Не удалось отклонить заявку",
+            detail=error or 'Не удалось отклонить заявку',
         )
 
     # Notify user about rejection
@@ -268,12 +262,8 @@ async def reject_withdrawal(
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = (
-                    f"\nПричина: {request.comment}" if request.comment else ""
-                )
-                tg_message = (
-                    f"Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}"
-                )
+                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
+                tg_message = f'Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_rejected(
@@ -286,15 +276,15 @@ async def reject_withdrawal(
                 finally:
                     await bot.session.close()
     except Exception as e:
-        logger.error("Failed to send withdrawal rejection notification", error=e)
+        logger.error('Failed to send withdrawal rejection notification', error=e)
 
-    return {"success": True}
+    return {'success': True}
 
 
-@router.post("/{withdrawal_id}/complete")
+@router.post('/{withdrawal_id}/complete')
 async def complete_withdrawal(
     withdrawal_id: int,
-    admin: User = Depends(require_permission("withdrawals:approve")),
+    admin: User = Depends(require_permission('withdrawals:approve')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark a withdrawal as completed (money transferred)."""
@@ -307,7 +297,7 @@ async def complete_withdrawal(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or "Не удалось завершить заявку",
+            detail=error or 'Не удалось завершить заявку',
         )
 
-    return {"success": True}
+    return {'success': True}

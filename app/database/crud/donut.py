@@ -17,7 +17,7 @@ async def create_donut_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = "RUB",
+    currency: str = 'RUB',
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -37,49 +37,35 @@ async def create_donut_payment(
         donut_transaction_id=donut_transaction_id,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status="pending",
+        status='pending',
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info("Создан платеж Donut", order_id=order_id, user_id=user_id)
+    logger.info('Создан платеж Donut', order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_donut_payment_by_order_id(
-    db: AsyncSession, order_id: str
-) -> DonutPayment | None:
+async def get_donut_payment_by_order_id(db: AsyncSession, order_id: str) -> DonutPayment | None:
     """Получает платеж по order_id (internal)."""
-    result = await db.execute(
-        select(DonutPayment).where(DonutPayment.order_id == order_id)
-    )
+    result = await db.execute(select(DonutPayment).where(DonutPayment.order_id == order_id))
     return result.scalar_one_or_none()
 
 
-async def get_donut_payment_by_invoice_id(
-    db: AsyncSession, donut_transaction_id: str
-) -> DonutPayment | None:
+async def get_donut_payment_by_invoice_id(db: AsyncSession, donut_transaction_id: str) -> DonutPayment | None:
     """Получает платёж по transaction_id, выданному Donut."""
-    result = await db.execute(
-        select(DonutPayment).where(
-            DonutPayment.donut_transaction_id == donut_transaction_id
-        )
-    )
+    result = await db.execute(select(DonutPayment).where(DonutPayment.donut_transaction_id == donut_transaction_id))
     return result.scalar_one_or_none()
 
 
-async def get_donut_payment_by_id(
-    db: AsyncSession, payment_id: int
-) -> DonutPayment | None:
+async def get_donut_payment_by_id(db: AsyncSession, payment_id: int) -> DonutPayment | None:
     """Получает платеж по локальному ID."""
     result = await db.execute(select(DonutPayment).where(DonutPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_donut_payment_by_id_for_update(
-    db: AsyncSession, payment_id: int
-) -> DonutPayment | None:
+async def get_donut_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> DonutPayment | None:
     """Получает платёж с блокировкой FOR UPDATE."""
     result = await db.execute(
         select(DonutPayment)
@@ -121,7 +107,7 @@ async def update_donut_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        "Обновлён статус платежа Donut",
+        'Обновлён статус платежа Donut',
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -129,14 +115,12 @@ async def update_donut_payment_status(
     return payment
 
 
-async def get_pending_donut_payments(
-    db: AsyncSession, user_id: int
-) -> list[DonutPayment]:
+async def get_pending_donut_payments(db: AsyncSession, user_id: int) -> list[DonutPayment]:
     """Возвращает незавершённые платежи пользователя."""
     result = await db.execute(
         select(DonutPayment).where(
             DonutPayment.user_id == user_id,
-            DonutPayment.status == "pending",
+            DonutPayment.status == 'pending',
             DonutPayment.is_paid == False,
         )
     )
@@ -148,7 +132,7 @@ async def get_expired_pending_donut_payments(db: AsyncSession) -> list[DonutPaym
     now = datetime.now(UTC)
     result = await db.execute(
         select(DonutPayment).where(
-            DonutPayment.status == "pending",
+            DonutPayment.status == 'pending',
             DonutPayment.is_paid == False,
             DonutPayment.expires_at < now,
         )

@@ -36,9 +36,7 @@ async def record_notification(
     *,
     commit: bool = True,
 ) -> None:
-    already_exists = await notification_sent(
-        db, user_id, subscription_id, notification_type, days_before
-    )
+    already_exists = await notification_sent(db, user_id, subscription_id, notification_type, days_before)
     if already_exists:
         return
     notification = SentNotification(
@@ -52,14 +50,8 @@ async def record_notification(
         await db.commit()
 
 
-async def clear_notifications(
-    db: AsyncSession, subscription_id: int, *, commit: bool = True
-) -> None:
-    await db.execute(
-        delete(SentNotification).where(
-            SentNotification.subscription_id == subscription_id
-        )
-    )
+async def clear_notifications(db: AsyncSession, subscription_id: int, *, commit: bool = True) -> None:
+    await db.execute(delete(SentNotification).where(SentNotification.subscription_id == subscription_id))
     if commit:
         await db.commit()
 

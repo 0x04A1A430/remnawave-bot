@@ -93,18 +93,18 @@ logger = structlog.get_logger(__name__)
 
 
 async def debug_callback_handler(callback: types.CallbackQuery):
-    logger.info("DEBUG CALLBACK:")
-    logger.info("Data", callback_data=callback.data)
-    logger.info("User", from_user_id=callback.from_user.id)
-    logger.info("Username", username=callback.from_user.username)
+    logger.info('DEBUG CALLBACK:')
+    logger.info('Data', callback_data=callback.data)
+    logger.info('User', from_user_id=callback.from_user.id)
+    logger.info('Username', username=callback.from_user.username)
 
 
 async def setup_bot() -> tuple[Bot, Dispatcher]:
     try:
         await cache.connect()
-        logger.info("Кеш инициализирован")
+        logger.info('Кеш инициализирован')
     except Exception as e:
-        logger.warning("Кеш не инициализирован", error=e)
+        logger.warning('Кеш не инициализирован', error=e)
 
     from app.bot_factory import create_bot
 
@@ -122,30 +122,26 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         from app.utils.proxy import mask_proxy_url
 
         if proxy_url:
-            logger.info("Proxy configured", proxy_url=mask_proxy_url(proxy_url))
+            logger.info('Proxy configured', proxy_url=mask_proxy_url(proxy_url))
         if nalogo_proxy_url:
-            source = (
-                "NALOGO_PROXY_URL"
-                if settings.NALOGO_PROXY_URL
-                else "PROXY_URL (fallback)"
-            )
+            source = 'NALOGO_PROXY_URL' if settings.NALOGO_PROXY_URL else 'PROXY_URL (fallback)'
             logger.info(
-                "Nalogo proxy configured",
+                'Nalogo proxy configured',
                 proxy_url=mask_proxy_url(nalogo_proxy_url),
                 source=source,
             )
 
     maintenance_service.set_bot(bot)
-    logger.info("Бот установлен в maintenance_service")
+    logger.info('Бот установлен в maintenance_service')
 
     try:
         redis_client = redis.from_url(settings.REDIS_URL)
         await redis_client.ping()
         storage = RedisStorage(redis_client)
-        logger.info("Подключено к Redis для FSM storage")
+        logger.info('Подключено к Redis для FSM storage')
     except Exception as e:
-        logger.warning("Не удалось подключиться к Redis", error=e)
-        logger.info("Используется MemoryStorage для FSM")
+        logger.warning('Не удалось подключиться к Redis', error=e)
+        logger.info('Используется MemoryStorage для FSM')
         storage = MemoryStorage()
 
     dp = Dispatcher(storage=storage)
@@ -177,7 +173,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     if settings.MENU_LAYOUT_ENABLED:
         button_stats_middleware = ButtonStatsMiddleware()
         dp.callback_query.middleware(button_stats_middleware)
-        logger.info("ButtonStatsMiddleware активирован")
+        logger.info('ButtonStatsMiddleware активирован')
 
     from app.middlewares.channel_checker import ChannelCheckerMiddleware
 
@@ -250,53 +246,48 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     user_contests.register_handlers(dp)
     user_polls.register_handlers(dp)
     simple_subscription.register_simple_subscription_handlers(dp)
-    logger.info("Зарегистрированы обработчики Telegram Stars платежей")
-    logger.info("Зарегистрированы обработчики простой покупки")
-    logger.info("Зарегистрированы обработчики простой подписки")
+    logger.info('Зарегистрированы обработчики Telegram Stars платежей')
+    logger.info('Зарегистрированы обработчики простой покупки')
+    logger.info('Зарегистрированы обработчики простой подписки')
 
     if settings.is_maintenance_monitoring_enabled():
         try:
             await maintenance_service.start_monitoring()
-            logger.info("Мониторинг техработ запущен")
+            logger.info('Мониторинг техработ запущен')
         except Exception as e:
-            logger.error("Ошибка запуска мониторинга техработ", error=e)
+            logger.error('Ошибка запуска мониторинга техработ', error=e)
     else:
-        logger.info("Мониторинг техработ отключен настройками")
+        logger.info('Мониторинг техработ отключен настройками')
 
-    logger.info(
-        "GlobalErrorMiddleware активирован - бот защищен от устаревших callback queries"
-    )
+    logger.info('GlobalErrorMiddleware активирован - бот защищен от устаревших callback queries')
 
     # Validate CONNECT_BUTTON_MODE dependencies
     if not settings.get_happ_cryptolink_redirect_template():
-        if settings.CONNECT_BUTTON_MODE == "happ_cryptolink":
+        if settings.CONNECT_BUTTON_MODE == 'happ_cryptolink':
             logger.warning(
-                "CONNECT_BUTTON_MODE=happ_cryptolink, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! "
+                'CONNECT_BUTTON_MODE=happ_cryptolink, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
                 'Кнопка "Подключиться" не будет отображаться.'
             )
-        elif settings.CONNECT_BUTTON_MODE == "guide":
+        elif settings.CONNECT_BUTTON_MODE == 'guide':
             logger.warning(
-                "CONNECT_BUTTON_MODE=guide, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! "
+                'CONNECT_BUTTON_MODE=guide, но HAPP_CRYPTOLINK_REDIRECT_TEMPLATE не задан! '
                 'Кнопка "Подключиться" в гайдах не будет работать — Telegram не поддерживает '
-                "кастомные схемы (happ://, v2ray://) в inline-кнопках без HTTPS-редиректа."
+                'кастомные схемы (happ://, v2ray://) в inline-кнопках без HTTPS-редиректа.'
             )
-    if (
-        settings.CONNECT_BUTTON_MODE == "miniapp_custom"
-        and not settings.MINIAPP_CUSTOM_URL
-    ):
+    if settings.CONNECT_BUTTON_MODE == 'miniapp_custom' and not settings.MINIAPP_CUSTOM_URL:
         logger.warning(
-            "CONNECT_BUTTON_MODE=miniapp_custom, но MINIAPP_CUSTOM_URL не задан! "
+            'CONNECT_BUTTON_MODE=miniapp_custom, но MINIAPP_CUSTOM_URL не задан! '
             'Кнопка "Подключиться" не будет работать.'
         )
     if settings.is_cabinet_mode() and not settings.MINIAPP_CUSTOM_URL:
         logger.warning(
-            "MAIN_MENU_MODE=cabinet, но MINIAPP_CUSTOM_URL не задан! "
-            "Кнопки кабинета не смогут открывать разделы MiniApp. "
-            "Установите MINIAPP_CUSTOM_URL."
+            'MAIN_MENU_MODE=cabinet, но MINIAPP_CUSTOM_URL не задан! '
+            'Кнопки кабинета не смогут открывать разделы MiniApp. '
+            'Установите MINIAPP_CUSTOM_URL.'
         )
     elif settings.is_cabinet_mode():
         logger.info(
-            "Режим Cabinet активен, базовый URL",
+            'Режим Cabinet активен, базовый URL',
             MINIAPP_CUSTOM_URL=settings.MINIAPP_CUSTOM_URL,
         )
 
@@ -307,32 +298,32 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
             await load_button_styles_cache()
         except Exception as e:
-            logger.warning("Failed to load button styles cache", error=e)
+            logger.warning('Failed to load button styles cache', error=e)
 
         try:
             from app.utils.menu_layout_cache import load_menu_layout_cache
 
             await load_menu_layout_cache()
         except Exception as e:
-            logger.warning("Failed to load menu layout cache", error=e)
+            logger.warning('Failed to load menu layout cache', error=e)
 
     try:
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         await remnawave_retry_queue.start()
-        logger.info("RemnaWave retry queue запущен")
+        logger.info('RemnaWave retry queue запущен')
     except Exception as e:
-        logger.error("Ошибка запуска RemnaWave retry queue", error=e)
+        logger.error('Ошибка запуска RemnaWave retry queue', error=e)
 
-    logger.info("Бот успешно настроен")
+    logger.info('Бот успешно настроен')
 
     try:
         from app.services.backup_service import backup_service
 
         await backup_service.start_auto_backup()
-        logger.info("Автобэкапы запущены")
+        logger.info('Автобэкапы запущены')
     except Exception as e:
-        logger.warning("Не удалось запустить автобэкапы", error=e)
+        logger.warning('Не удалось запустить автобэкапы', error=e)
 
     return bot, dp
 
@@ -342,18 +333,18 @@ async def shutdown_bot():
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
         await remnawave_retry_queue.stop()
-        logger.info("RemnaWave retry queue остановлен")
+        logger.info('RemnaWave retry queue остановлен')
     except Exception as e:
-        logger.error("Ошибка остановки RemnaWave retry queue", error=e)
+        logger.error('Ошибка остановки RemnaWave retry queue', error=e)
 
     try:
         await maintenance_service.stop_monitoring()
-        logger.info("Мониторинг техработ остановлен")
+        logger.info('Мониторинг техработ остановлен')
     except Exception as e:
-        logger.error("Ошибка остановки мониторинга", error=e)
+        logger.error('Ошибка остановки мониторинга', error=e)
 
     try:
         await cache.close()
-        logger.info("Соединения с кешем закрыты")
+        logger.info('Соединения с кешем закрыты')
     except Exception as e:
-        logger.error("Ошибка закрытия кеша", error=e)
+        logger.error('Ошибка закрытия кеша', error=e)

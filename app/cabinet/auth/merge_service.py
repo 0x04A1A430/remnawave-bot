@@ -16,29 +16,27 @@ from app.utils.cache import cache, cache_key
 logger = structlog.get_logger(__name__)
 
 MERGE_TOKEN_TTL_SECONDS = 1800  # 30 minutes
-MERGE_TOKEN_PREFIX = "account_merge"
+MERGE_TOKEN_PREFIX = 'account_merge'
 
 # Pending email-merge OTP: before a merge token is minted for the email path, the
 # initiator must prove control of the EXISTING account's inbox with a one-time
 # code mailed to it. Keyed by the initiator's user id (one pending merge at a
 # time per user). Not the merge token itself — that is created only after the
 # code is verified.
-EMAIL_MERGE_OTP_PREFIX = "email_merge_otp"
+EMAIL_MERGE_OTP_PREFIX = 'email_merge_otp'
 EMAIL_MERGE_OTP_TTL_SECONDS = 900  # 15 minutes
 
 
-async def store_email_merge_otp(
-    initiator_user_id: int, secondary_user_id: int, email: str, code: str
-) -> None:
+async def store_email_merge_otp(initiator_user_id: int, secondary_user_id: int, email: str, code: str) -> None:
     """Store a pending email-merge code for the initiator (overwrites any prior)."""
     key = cache_key(EMAIL_MERGE_OTP_PREFIX, str(initiator_user_id))
     await cache.set(
         key,
         {
-            "secondary_user_id": secondary_user_id,
-            "email": email,
-            "code": code,
-            "created_at": datetime.now(UTC).isoformat(),
+            'secondary_user_id': secondary_user_id,
+            'email': email,
+            'code': code,
+            'created_at': datetime.now(UTC).isoformat(),
         },
         expire=EMAIL_MERGE_OTP_TTL_SECONDS,
     )
@@ -46,9 +44,7 @@ async def store_email_merge_otp(
 
 async def get_email_merge_otp(initiator_user_id: int) -> dict[str, Any] | None:
     """Read the pending email-merge code without consuming it."""
-    data: Any = await cache.get(
-        cache_key(EMAIL_MERGE_OTP_PREFIX, str(initiator_user_id))
-    )
+    data: Any = await cache.get(cache_key(EMAIL_MERGE_OTP_PREFIX, str(initiator_user_id)))
     return data if isinstance(data, dict) else None
 
 
@@ -73,25 +69,25 @@ async def create_merge_token(
     """
     token = secrets.token_urlsafe(32)
     value: dict[str, Any] = {
-        "primary_user_id": primary_user_id,
-        "secondary_user_id": secondary_user_id,
-        "provider": provider,
-        "provider_id": provider_id,
-        "created_at": datetime.now(UTC).isoformat(),
+        'primary_user_id': primary_user_id,
+        'secondary_user_id': secondary_user_id,
+        'provider': provider,
+        'provider_id': provider_id,
+        'created_at': datetime.now(UTC).isoformat(),
     }
     key = cache_key(MERGE_TOKEN_PREFIX, token)
     stored = await cache.set(key, value, expire=MERGE_TOKEN_TTL_SECONDS)
     if not stored:
         logger.error(
-            "Failed to store merge token in Redis",
+            'Failed to store merge token in Redis',
             primary_user_id=primary_user_id,
             secondary_user_id=secondary_user_id,
             provider=provider,
         )
-        raise RuntimeError("Failed to store merge token")
+        raise RuntimeError('Failed to store merge token')
 
     logger.info(
-        "Merge token created",
+        'Merge token created',
         primary_user_id=primary_user_id,
         secondary_user_id=secondary_user_id,
         provider=provider,
@@ -130,10 +126,10 @@ async def consume_merge_token(token: str) -> dict[str, Any] | None:
         return None
 
     logger.info(
-        "Merge token consumed",
-        primary_user_id=data.get("primary_user_id"),
-        secondary_user_id=data.get("secondary_user_id"),
-        provider=data.get("provider"),
+        'Merge token consumed',
+        primary_user_id=data.get('primary_user_id'),
+        secondary_user_id=data.get('secondary_user_id'),
+        provider=data.get('provider'),
     )
     return data
 
@@ -149,28 +145,26 @@ async def restore_merge_token(token: str, data: dict[str, Any]) -> bool:
     Caps restore attempts to prevent infinite retry cycles.
     Returns ``True`` if restored, ``False`` if exhausted or Redis write failed.
     """
-    restore_count = data.get("_restore_count", 0) + 1
+    restore_count = data.get('_restore_count', 0) + 1
     if restore_count > _MAX_MERGE_RESTORE_ATTEMPTS:
         logger.warning(
-            "Merge token exhausted restore attempts",
-            primary_user_id=data.get("primary_user_id"),
-            secondary_user_id=data.get("secondary_user_id"),
+            'Merge token exhausted restore attempts',
+            primary_user_id=data.get('primary_user_id'),
+            secondary_user_id=data.get('secondary_user_id'),
             restore_count=restore_count,
         )
         return False
 
     # Shallow copy to avoid mutating the caller's dict
-    data = {**data, "_restore_count": restore_count}
+    data = {**data, '_restore_count': restore_count}
 
-    created_at_str: str = data.get("created_at", "")
+    created_at_str: str = data.get('created_at', '')
     try:
         created_at = datetime.fromisoformat(created_at_str)
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
         elapsed = (datetime.now(UTC) - created_at).total_seconds()
-        remaining_ttl = max(
-            1, min(int(MERGE_TOKEN_TTL_SECONDS - elapsed), MERGE_TOKEN_TTL_SECONDS)
-        )
+        remaining_ttl = max(1, min(int(MERGE_TOKEN_TTL_SECONDS - elapsed), MERGE_TOKEN_TTL_SECONDS))
     except (ValueError, TypeError):
         remaining_ttl = 60  # brief retry window — fail closed
 
@@ -178,16 +172,16 @@ async def restore_merge_token(token: str, data: dict[str, Any]) -> bool:
     stored = await cache.setnx(key, data, expire=remaining_ttl)
     if stored:
         logger.info(
-            "Merge token restored after failed merge",
-            primary_user_id=data.get("primary_user_id"),
-            secondary_user_id=data.get("secondary_user_id"),
+            'Merge token restored after failed merge',
+            primary_user_id=data.get('primary_user_id'),
+            secondary_user_id=data.get('secondary_user_id'),
             remaining_ttl=remaining_ttl,
             restore_count=restore_count,
         )
     else:
         logger.error(
-            "Failed to restore merge token to Redis (key may already exist)",
-            primary_user_id=data.get("primary_user_id"),
-            secondary_user_id=data.get("secondary_user_id"),
+            'Failed to restore merge token to Redis (key may already exist)',
+            primary_user_id=data.get('primary_user_id'),
+            secondary_user_id=data.get('secondary_user_id'),
         )
     return bool(stored)

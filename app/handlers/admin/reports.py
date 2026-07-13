@@ -27,9 +27,9 @@ async def show_reports_menu(
     db: AsyncSession,
 ) -> None:
     await callback.message.edit_text(
-        "<b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.",
+        '<b>Отчеты</b>\n\nВыберите период, чтобы отправить отчет в админский топик.',
         reply_markup=get_admin_reports_keyboard(db_user.language),
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
     await callback.answer()
 
@@ -72,21 +72,19 @@ async def _send_report(
     try:
         report_text = await reporting_service.send_report(period, send_to_topic=True)
     except ReportingServiceError as exc:
-        logger.warning("Не удалось отправить отчет", exc=exc)
+        logger.warning('Не удалось отправить отчет', exc=exc)
         await callback.answer(str(exc), show_alert=True)
         return
     except Exception as exc:
-        logger.error("Непредвиденная ошибка при отправке отчета", exc=exc)
-        await callback.answer(
-            "Не удалось отправить отчет. Попробуйте позже.", show_alert=True
-        )
+        logger.error('Непредвиденная ошибка при отправке отчета', exc=exc)
+        await callback.answer('Не удалось отправить отчет. Попробуйте позже.', show_alert=True)
         return
 
     await callback.message.answer(
         report_text,
         reply_markup=get_admin_report_result_keyboard(language),
     )
-    await callback.answer("Отчет отправлен в топик")
+    await callback.answer('Отчет отправлен в топик')
 
 
 @admin_required
@@ -101,18 +99,16 @@ async def close_report_message(
     try:
         await callback.message.delete()
     except (TelegramBadRequest, TelegramForbiddenError) as exc:
-        logger.warning("Не удалось закрыть сообщение отчета", exc=exc)
-        await callback.answer(
-            texts.t("REPORT_CLOSE_ERROR", "Не удалось закрыть отчет."), show_alert=True
-        )
+        logger.warning('Не удалось закрыть сообщение отчета', exc=exc)
+        await callback.answer(texts.t('REPORT_CLOSE_ERROR', 'Не удалось закрыть отчет.'), show_alert=True)
         return
 
-    await callback.answer(texts.t("REPORT_CLOSED", "Отчет закрыт."))
+    await callback.answer(texts.t('REPORT_CLOSED', 'Отчет закрыт.'))
 
 
 def register_handlers(dp: Dispatcher) -> None:
-    dp.callback_query.register(show_reports_menu, F.data == "admin_reports")
-    dp.callback_query.register(send_daily_report, F.data == "admin_reports_daily")
-    dp.callback_query.register(send_weekly_report, F.data == "admin_reports_weekly")
-    dp.callback_query.register(send_monthly_report, F.data == "admin_reports_monthly")
-    dp.callback_query.register(close_report_message, F.data == "admin_close_report")
+    dp.callback_query.register(show_reports_menu, F.data == 'admin_reports')
+    dp.callback_query.register(send_daily_report, F.data == 'admin_reports_daily')
+    dp.callback_query.register(send_weekly_report, F.data == 'admin_reports_weekly')
+    dp.callback_query.register(send_monthly_report, F.data == 'admin_reports_monthly')
+    dp.callback_query.register(close_report_message, F.data == 'admin_close_report')

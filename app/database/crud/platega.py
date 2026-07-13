@@ -54,7 +54,7 @@ async def create_platega_payment(
     await db.refresh(payment)
 
     logger.info(
-        "Создан Platega платеж",
+        'Создан Platega платеж',
         payment_id=payment.id,
         platega_transaction_id=platega_transaction_id,
         amount_kopeks=amount_kopeks,
@@ -64,18 +64,12 @@ async def create_platega_payment(
     return payment
 
 
-async def get_platega_payment_by_id(
-    db: AsyncSession, payment_id: int
-) -> PlategaPayment | None:
-    result = await db.execute(
-        select(PlategaPayment).where(PlategaPayment.id == payment_id)
-    )
+async def get_platega_payment_by_id(db: AsyncSession, payment_id: int) -> PlategaPayment | None:
+    result = await db.execute(select(PlategaPayment).where(PlategaPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_platega_payment_by_id_for_update(
-    db: AsyncSession, payment_id: int
-) -> PlategaPayment | None:
+async def get_platega_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> PlategaPayment | None:
     result = await db.execute(
         select(PlategaPayment)
         .where(PlategaPayment.id == payment_id)
@@ -85,23 +79,13 @@ async def get_platega_payment_by_id_for_update(
     return result.scalar_one_or_none()
 
 
-async def get_platega_payment_by_transaction_id(
-    db: AsyncSession, transaction_id: str
-) -> PlategaPayment | None:
-    result = await db.execute(
-        select(PlategaPayment).where(
-            PlategaPayment.platega_transaction_id == transaction_id
-        )
-    )
+async def get_platega_payment_by_transaction_id(db: AsyncSession, transaction_id: str) -> PlategaPayment | None:
+    result = await db.execute(select(PlategaPayment).where(PlategaPayment.platega_transaction_id == transaction_id))
     return result.scalar_one_or_none()
 
 
-async def get_platega_payment_by_correlation_id(
-    db: AsyncSession, correlation_id: str
-) -> PlategaPayment | None:
-    result = await db.execute(
-        select(PlategaPayment).where(PlategaPayment.correlation_id == correlation_id)
-    )
+async def get_platega_payment_by_correlation_id(db: AsyncSession, correlation_id: str) -> PlategaPayment | None:
+    result = await db.execute(select(PlategaPayment).where(PlategaPayment.correlation_id == correlation_id))
     return result.scalar_one_or_none()
 
 

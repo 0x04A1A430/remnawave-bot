@@ -59,7 +59,7 @@ def preview_trial_activation_charge(user: User) -> int:
     if price_kopeks <= 0:
         return 0
 
-    balance = int(getattr(user, "balance_kopeks", 0) or 0)
+    balance = int(getattr(user, 'balance_kopeks', 0) or 0)
     if balance < price_kopeks:
         raise TrialPaymentInsufficientFunds(price_kopeks, balance)
 
@@ -82,7 +82,7 @@ async def charge_trial_activation_if_required(
     if price_kopeks <= 0:
         return 0
 
-    charge_description = description or "Активация триальной подписки"
+    charge_description = description or 'Активация триальной подписки'
 
     success = await subtract_user_balance(
         db,
@@ -119,7 +119,7 @@ async def refund_trial_activation_charge(
     if amount_kopeks <= 0:
         return True
 
-    refund_description = description or "Возврат оплаты за активацию триальной подписки"
+    refund_description = description or 'Возврат оплаты за активацию триальной подписки'
 
     success = await add_user_balance(
         db,
@@ -131,9 +131,9 @@ async def refund_trial_activation_charge(
 
     if not success:
         logger.error(
-            "Failed to refund kopeks for user during trial activation rollback",
+            'Failed to refund kopeks for user during trial activation rollback',
             amount_kopeks=amount_kopeks,
-            getattr=getattr(user, "id", "<unknown>"),
+            getattr=getattr(user, 'id', '<unknown>'),
         )
 
     return success
@@ -157,7 +157,7 @@ async def rollback_trial_subscription_activation(
         await decrement_subscription_server_counts(db, subscription)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "Failed to decrement server counters during trial rollback",
+            'Failed to decrement server counters during trial rollback',
             user_id=subscription.user_id,
             error=error,
         )
@@ -167,8 +167,8 @@ async def rollback_trial_subscription_activation(
         await db.commit()
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
-            "Failed to remove trial subscription after charge failure",
-            getattr=getattr(subscription, "id", "<unknown>"),
+            'Failed to remove trial subscription after charge failure',
+            getattr=getattr(subscription, 'id', '<unknown>'),
             error=error,
         )
         await db.rollback()
@@ -199,8 +199,8 @@ async def revert_trial_activation(
         await db.refresh(user)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.warning(
-            "Failed to refresh user after reverting trial activation",
-            getattr=getattr(user, "id", "<unknown>"),
+            'Failed to refresh user after reverting trial activation',
+            getattr=getattr(user, 'id', '<unknown>'),
             error=error,
         )
 

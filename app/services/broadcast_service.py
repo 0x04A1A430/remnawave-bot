@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-VALID_MEDIA_TYPES = {"photo", "video", "document"}
+VALID_MEDIA_TYPES = {'photo', 'video', 'document'}
 
 # =========================================================================
 # Telegram rate limits: ~30 msg/sec для бота.
@@ -73,7 +73,7 @@ class BroadcastConfig:
     media: BroadcastMediaConfig | None = None
     initiator_name: str | None = None
     custom_buttons: list[dict] | None = None
-    category: str = "system"  # system|news|promo
+    category: str = 'system'  # system|news|promo
 
 
 @dataclass
@@ -118,7 +118,7 @@ class BroadcastService:
     async def start_broadcast(self, broadcast_id: int, config: BroadcastConfig) -> None:
         if self._bot is None:
             logger.error(
-                "Невозможно запустить рассылку : бот не инициализирован",
+                'Невозможно запустить рассылку : бот не инициализирован',
                 broadcast_id=broadcast_id,
             )
             await self._mark_failed(broadcast_id)
@@ -127,20 +127,15 @@ class BroadcastService:
         cancel_event = asyncio.Event()
 
         async with self._lock:
-            if (
-                broadcast_id in self._tasks
-                and not self._tasks[broadcast_id].task.done()
-            ):
-                logger.warning("Рассылка уже запущена", broadcast_id=broadcast_id)
+            if broadcast_id in self._tasks and not self._tasks[broadcast_id].task.done():
+                logger.warning('Рассылка уже запущена', broadcast_id=broadcast_id)
                 return
 
             task = asyncio.create_task(
                 self._run_broadcast(broadcast_id, config, cancel_event),
-                name=f"broadcast-{broadcast_id}",
+                name=f'broadcast-{broadcast_id}',
             )
-            self._tasks[broadcast_id] = _BroadcastTask(
-                task=task, cancel_event=cancel_event
-            )
+            self._tasks[broadcast_id] = _BroadcastTask(task=task, cancel_event=cancel_event)
             task.add_done_callback(lambda _: self._tasks.pop(broadcast_id, None))
 
     async def request_stop(self, broadcast_id: int) -> bool:
@@ -164,51 +159,39 @@ class BroadcastService:
 
         try:
             if cancel_event.is_set():
-                await self._mark_cancelled(
-                    broadcast_id, sent_count, failed_count, blocked_count
-                )
+                await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
                 return
 
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error(
-                        "Запись рассылки не найдена в БД", broadcast_id=broadcast_id
-                    )
+                    logger.error('Запись рассылки не найдена в БД', broadcast_id=broadcast_id)
                     return
 
-                broadcast.status = "in_progress"
+                broadcast.status = 'in_progress'
                 broadcast.sent_count = 0
                 broadcast.failed_count = 0
                 broadcast.blocked_count = 0
                 await session.commit()
 
             # _fetch_recipients теперь возвращает list[int] (telegram_id), а не ORM-объекты
-            recipient_ids: list[int] = await self._fetch_recipients(
-                config.target, config.category
-            )
+            recipient_ids: list[int] = await self._fetch_recipients(config.target, config.category)
 
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error(
-                        "Запись рассылки удалена до запуска", broadcast_id=broadcast_id
-                    )
+                    logger.error('Запись рассылки удалена до запуска', broadcast_id=broadcast_id)
                     return
 
                 broadcast.total_count = len(recipient_ids)
                 await session.commit()
 
             if cancel_event.is_set():
-                await self._mark_cancelled(
-                    broadcast_id, sent_count, failed_count, blocked_count
-                )
+                await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
                 return
 
             if not recipient_ids:
-                logger.info(
-                    "Рассылка : получатели не найдены", broadcast_id=broadcast_id
-                )
+                logger.info('Рассылка : получатели не найдены', broadcast_id=broadcast_id)
                 await self._mark_finished(
                     broadcast_id,
                     sent_count,
@@ -218,38 +201,34 @@ class BroadcastService:
                 )
                 return
 
-            keyboard = self._build_keyboard(
-                config.selected_buttons, config.custom_buttons
-            )
+            keyboard = self._build_keyboard(config.selected_buttons, config.custom_buttons)
 
             logger.info(
-                "Рассылка: начинаем отправку получателям",
+                'Рассылка: начинаем отправку получателям',
                 broadcast_id=broadcast_id,
                 recipient_ids_count=len(recipient_ids),
                 TG_BATCH_SIZE=_TG_BATCH_SIZE,
                 TG_BATCH_DELAY=_TG_BATCH_DELAY,
             )
 
-            sent_count, failed_count, blocked_count, cancelled_during_run = (
-                await self._send_batched(
-                    broadcast_id,
-                    recipient_ids,
-                    config,
-                    keyboard,
-                    cancel_event,
-                )
+            sent_count, failed_count, blocked_count, cancelled_during_run = await self._send_batched(
+                broadcast_id,
+                recipient_ids,
+                config,
+                keyboard,
+                cancel_event,
             )
 
             if cancelled_during_run:
                 logger.info(
-                    "Рассылка была отменена во время выполнения, финальный статус уже установлен",
+                    'Рассылка была отменена во время выполнения, финальный статус уже установлен',
                     broadcast_id=broadcast_id,
                 )
                 return
 
             if cancel_event.is_set():
                 logger.info(
-                    "Запрос на отмену рассылки пришел после завершения отправки, фиксируем итоговый статус",
+                    'Запрос на отмену рассылки пришел после завершения отправки, фиксируем итоговый статус',
                     broadcast_id=broadcast_id,
                 )
 
@@ -262,23 +241,17 @@ class BroadcastService:
             )
 
         except asyncio.CancelledError:
-            await self._mark_cancelled(
-                broadcast_id, sent_count, failed_count, blocked_count
-            )
+            await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
             raise
         except Exception as exc:
             logger.exception(
-                "Критическая ошибка при выполнении рассылки",
+                'Критическая ошибка при выполнении рассылки',
                 broadcast_id=broadcast_id,
                 exc=exc,
             )
-            await self._mark_failed(
-                broadcast_id, sent_count, failed_count, blocked_count
-            )
+            await self._mark_failed(broadcast_id, sent_count, failed_count, blocked_count)
 
-    async def _fetch_recipients(
-        self, target: str, category: str = "system"
-    ) -> list[int]:
+    async def _fetch_recipients(self, target: str, category: str = 'system') -> list[int]:
         """Загружает получателей и возвращает список telegram_id (скаляры, не ORM-объекты).
 
         Filters out users who disabled the given broadcast category in their
@@ -286,18 +259,18 @@ class BroadcastService:
         Category 'system' is never filtered — system notifications reach everyone.
         """
         async with AsyncSessionLocal() as session:
-            if target.startswith("custom_"):
-                criteria = target[len("custom_") :]
+            if target.startswith('custom_'):
+                criteria = target[len('custom_') :]
                 users_orm = await get_custom_users(session, criteria)
             else:
                 users_orm = await get_target_users(session, target)
 
             # Filter by user notification preferences based on broadcast category
-            if category == "news":
+            if category == 'news':
                 from app.utils.notification_prefs import is_news_enabled
 
                 users_orm = [u for u in users_orm if is_news_enabled(u)]
-            elif category == "promo":
+            elif category == 'promo':
                 from app.utils.notification_prefs import is_promo_offers_enabled
 
                 users_orm = [u for u in users_orm if is_promo_offers_enabled(u)]
@@ -345,17 +318,17 @@ class BroadcastService:
                     await asyncio.sleep(flood_wait_until - now)
 
                 if cancel_event.is_set():
-                    return "failed"
+                    return 'failed'
 
                 try:
                     await self._deliver_message(telegram_id, config, keyboard)
-                    return "sent"
+                    return 'sent'
 
                 except TelegramRetryAfter as e:
                     wait_seconds = e.retry_after + 1
                     flood_wait_until = asyncio.get_event_loop().time() + wait_seconds
                     logger.warning(
-                        "FloodWait рассылки : Telegram просит сек (user попытка /)",
+                        'FloodWait рассылки : Telegram просит сек (user попытка /)',
                         broadcast_id=broadcast_id,
                         retry_after=e.retry_after,
                         telegram_id=telegram_id,
@@ -365,23 +338,19 @@ class BroadcastService:
                     await asyncio.sleep(wait_seconds)
 
                 except TelegramForbiddenError:
-                    return "blocked"
+                    return 'blocked'
 
                 except TelegramBadRequest as e:
                     err = str(e).lower()
-                    if (
-                        "bot was blocked" in err
-                        or "user is deactivated" in err
-                        or "chat not found" in err
-                    ):
-                        return "blocked"
-                    return "failed"
+                    if 'bot was blocked' in err or 'user is deactivated' in err or 'chat not found' in err:
+                        return 'blocked'
+                    return 'failed'
 
                 except (TelegramNetworkError, TelegramServerError) as exc:
                     # Транзиентные сетевые/5xx — warning, не error (иначе спам в админ-чат
                     # через TelegramNotifierProcessor при каждом ConnectionReset).
                     logger.warning(
-                        "Транзиентная сетевая ошибка рассылки (retry)",
+                        'Транзиентная сетевая ошибка рассылки (retry)',
                         broadcast_id=broadcast_id,
                         telegram_id=telegram_id,
                         attempt=attempt + 1,
@@ -394,7 +363,7 @@ class BroadcastService:
 
                 except Exception as exc:
                     logger.error(
-                        "Ошибка отправки рассылки пользователю (попытка /)",
+                        'Ошибка отправки рассылки пользователю (попытка /)',
                         broadcast_id=broadcast_id,
                         telegram_id=telegram_id,
                         attempt=attempt + 1,
@@ -404,13 +373,11 @@ class BroadcastService:
                     if attempt < _TG_MAX_RETRIES - 1:
                         await asyncio.sleep(0.5 * (attempt + 1))
 
-            return "failed"
+            return 'failed'
 
         for i in range(0, len(recipient_ids), _TG_BATCH_SIZE):
             if cancel_event.is_set():
-                await self._mark_cancelled(
-                    broadcast_id, sent_count, failed_count, blocked_count
-                )
+                await self._mark_cancelled(broadcast_id, sent_count, failed_count, blocked_count)
                 return sent_count, failed_count, blocked_count, True
 
             batch = recipient_ids[i : i + _TG_BATCH_SIZE]
@@ -421,9 +388,9 @@ class BroadcastService:
 
             for idx, result in enumerate(results):
                 if isinstance(result, str):
-                    if result == "sent":
+                    if result == 'sent':
                         sent_count += 1
-                    elif result == "blocked":
+                    elif result == 'blocked':
                         blocked_count += 1
                         blocked_telegram_ids.append(batch[idx])
                     else:
@@ -431,7 +398,7 @@ class BroadcastService:
                 elif isinstance(result, Exception):
                     failed_count += 1
                     logger.error(
-                        "Необработанное исключение в рассылке",
+                        'Необработанное исключение в рассылке',
                         broadcast_id=broadcast_id,
                         result=result,
                     )
@@ -443,9 +410,7 @@ class BroadcastService:
                 processed - last_progress_count >= _PROGRESS_UPDATE_MESSAGES
                 or now - last_progress_update >= _PROGRESS_MIN_INTERVAL_SEC
             ):
-                await self._update_progress(
-                    broadcast_id, sent_count, failed_count, blocked_count
-                )
+                await self._update_progress(broadcast_id, sent_count, failed_count, blocked_count)
                 last_progress_count = processed
                 last_progress_update = now
 
@@ -461,9 +426,7 @@ class BroadcastService:
     ) -> InlineKeyboardMarkup | None:
         if selected_buttons is None:
             selected_buttons = []
-        return create_broadcast_keyboard(
-            selected_buttons, custom_buttons=custom_buttons
-        )
+        return create_broadcast_keyboard(selected_buttons, custom_buttons=custom_buttons)
 
     async def _deliver_message(
         self,
@@ -478,21 +441,21 @@ class BroadcastService:
         обрабатываются в вызывающем коде (_send_batched).
         """
         if not self._bot:
-            raise RuntimeError("Телеграм-бот не инициализирован")
+            raise RuntimeError('Телеграм-бот не инициализирован')
 
         if config.media and config.media.type in VALID_MEDIA_TYPES:
             caption = config.media.caption or config.message_text
             media_methods = {
-                "photo": ("photo", self._bot.send_photo),
-                "video": ("video", self._bot.send_video),
-                "document": ("document", self._bot.send_document),
+                'photo': ('photo', self._bot.send_photo),
+                'video': ('video', self._bot.send_video),
+                'document': ('document', self._bot.send_document),
             }
             kwarg_name, send_method = media_methods[config.media.type]
             await send_method(
                 chat_id=telegram_id,
                 **{kwarg_name: config.media.file_id},
                 caption=caption,
-                parse_mode="HTML",
+                parse_mode='HTML',
                 reply_markup=keyboard,
             )
             return
@@ -500,7 +463,7 @@ class BroadcastService:
         await self._bot.send_message(
             chat_id=telegram_id,
             text=config.message_text,
-            parse_mode="HTML",
+            parse_mode='HTML',
             reply_markup=keyboard,
         )
 
@@ -519,13 +482,7 @@ class BroadcastService:
             failed_count,
             blocked_count,
             status=(
-                "cancelled"
-                if cancelled
-                else (
-                    "completed"
-                    if failed_count == 0 and blocked_count == 0
-                    else "partial"
-                )
+                'cancelled' if cancelled else ('completed' if failed_count == 0 and blocked_count == 0 else 'partial')
             ),
         )
 
@@ -556,7 +513,7 @@ class BroadcastService:
             sent_count,
             failed_count,
             blocked_count,
-            status="failed",
+            status='failed',
         )
 
     async def _update_progress(
@@ -573,7 +530,7 @@ class BroadcastService:
             sent_count,
             failed_count,
             blocked_count,
-            status="in_progress",
+            status='in_progress',
             update_completed_at=False,
         )
 
@@ -609,16 +566,14 @@ class BroadcastService:
             except InterfaceError as exc:
                 attempts += 1
                 logger.warning(
-                    "Проблемы с соединением при обновлении статуса рассылки, повтор",
+                    'Проблемы с соединением при обновлении статуса рассылки, повтор',
                     broadcast_id=broadcast_id,
                     exc=exc,
                     attempts=attempts,
                 )
                 await asyncio.sleep(0.2)
             except SQLAlchemyError:
-                logger.exception(
-                    "Не удалось обновить статус рассылки", broadcast_id=broadcast_id
-                )
+                logger.exception('Не удалось обновить статус рассылки', broadcast_id=broadcast_id)
                 return
 
 
@@ -638,9 +593,7 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
     for telegram_id in blocked_telegram_ids:
         try:
             async with AsyncSessionLocal() as session:
-                result = await session.execute(
-                    select(User).where(User.telegram_id == telegram_id)
-                )
+                result = await session.execute(select(User).where(User.telegram_id == telegram_id))
                 user = result.scalar_one_or_none()
                 if not user or user.status == UserStatus.BLOCKED.value:
                     continue
@@ -650,14 +603,12 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
                 # Проверяем, есть ли активная оплаченная подписка
                 from app.database.crud.subscription import is_active_paid_subscription
 
-                sub_result = await session.execute(
-                    select(Subscription).where(Subscription.user_id == user.id)
-                )
+                sub_result = await session.execute(select(Subscription).where(Subscription.user_id == user.id))
                 all_subs = sub_result.scalars().all()
 
                 if any(is_active_paid_subscription(s) for s in all_subs):
                     logger.info(
-                        "Пропуск отключения подписки: у пользователя активная оплаченная подписка",
+                        'Пропуск отключения подписки: у пользователя активная оплаченная подписка',
                         telegram_id=telegram_id,
                         user_id=user.id,
                     )
@@ -686,19 +637,15 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
                 from app.config import settings
 
                 if settings.is_multi_tariff_enabled():
-                    await session.refresh(user, ["subscriptions"])
+                    await session.refresh(user, ['subscriptions'])
                     for sub in user.subscriptions or []:
                         if sub.remnawave_uuid:
-                            await subscription_service.disable_remnawave_user(
-                                sub.remnawave_uuid
-                            )
+                            await subscription_service.disable_remnawave_user(sub.remnawave_uuid)
                 elif user.remnawave_uuid:
-                    await subscription_service.disable_remnawave_user(
-                        user.remnawave_uuid
-                    )
+                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
 
                 logger.info(
-                    "Заблокированный пользователь очищен при рассылке",
+                    'Заблокированный пользователь очищен при рассылке',
                     telegram_id=telegram_id,
                     user_id=user.id,
                     disabled_subs=len(subscriptions),
@@ -706,7 +653,7 @@ async def cleanup_blocked_broadcast_users(blocked_telegram_ids: list[int]) -> No
 
         except Exception as exc:
             logger.error(
-                "Ошибка очистки заблокированного пользователя",
+                'Ошибка очистки заблокированного пользователя',
                 telegram_id=telegram_id,
                 exc=exc,
             )
@@ -732,13 +679,11 @@ class EmailBroadcastService:
         task_entry = self._tasks.get(broadcast_id)
         return bool(task_entry and not task_entry.task.done())
 
-    async def start_broadcast(
-        self, broadcast_id: int, config: EmailBroadcastConfig
-    ) -> None:
+    async def start_broadcast(self, broadcast_id: int, config: EmailBroadcastConfig) -> None:
         """Start email broadcast in background."""
         if self._email_service is None:
             logger.error(
-                "Cannot start email broadcast : email service not initialized",
+                'Cannot start email broadcast : email service not initialized',
                 broadcast_id=broadcast_id,
             )
             await self._mark_failed(broadcast_id)
@@ -746,7 +691,7 @@ class EmailBroadcastService:
 
         if not self._email_service.is_configured():
             logger.error(
-                "Cannot start email broadcast : SMTP not configured",
+                'Cannot start email broadcast : SMTP not configured',
                 broadcast_id=broadcast_id,
             )
             await self._mark_failed(broadcast_id)
@@ -755,22 +700,15 @@ class EmailBroadcastService:
         cancel_event = asyncio.Event()
 
         async with self._lock:
-            if (
-                broadcast_id in self._tasks
-                and not self._tasks[broadcast_id].task.done()
-            ):
-                logger.warning(
-                    "Email broadcast is already running", broadcast_id=broadcast_id
-                )
+            if broadcast_id in self._tasks and not self._tasks[broadcast_id].task.done():
+                logger.warning('Email broadcast is already running', broadcast_id=broadcast_id)
                 return
 
             task = asyncio.create_task(
                 self._run_broadcast(broadcast_id, config, cancel_event),
-                name=f"email-broadcast-{broadcast_id}",
+                name=f'email-broadcast-{broadcast_id}',
             )
-            self._tasks[broadcast_id] = _BroadcastTask(
-                task=task, cancel_event=cancel_event
-            )
+            self._tasks[broadcast_id] = _BroadcastTask(task=task, cancel_event=cancel_event)
             task.add_done_callback(lambda _: self._tasks.pop(broadcast_id, None))
 
     async def request_stop(self, broadcast_id: int) -> bool:
@@ -802,12 +740,10 @@ class EmailBroadcastService:
             async with AsyncSessionLocal() as session:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
-                    logger.error(
-                        "Broadcast record not found", broadcast_id=broadcast_id
-                    )
+                    logger.error('Broadcast record not found', broadcast_id=broadcast_id)
                     return
 
-                broadcast.status = "in_progress"
+                broadcast.status = 'in_progress'
                 broadcast.sent_count = 0
                 broadcast.failed_count = 0
                 await session.commit()
@@ -820,7 +756,7 @@ class EmailBroadcastService:
                 broadcast = await session.get(BroadcastHistory, broadcast_id)
                 if not broadcast:
                     logger.error(
-                        "Broadcast record deleted before start",
+                        'Broadcast record deleted before start',
                         broadcast_id=broadcast_id,
                     )
                     return
@@ -833,12 +769,8 @@ class EmailBroadcastService:
                 return
 
             if not recipients:
-                logger.info(
-                    "Email broadcast : no recipients found", broadcast_id=broadcast_id
-                )
-                await self._mark_finished(
-                    broadcast_id, sent_count, failed_count, cancelled=False
-                )
+                logger.info('Email broadcast : no recipients found', broadcast_id=broadcast_id)
+                await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
                 return
 
             # Send emails with rate limiting
@@ -851,22 +783,18 @@ class EmailBroadcastService:
 
             if was_cancelled:
                 logger.info(
-                    "Email broadcast was cancelled during execution",
+                    'Email broadcast was cancelled during execution',
                     broadcast_id=broadcast_id,
                 )
                 return
 
-            await self._mark_finished(
-                broadcast_id, sent_count, failed_count, cancelled=False
-            )
+            await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
 
         except asyncio.CancelledError:
             await self._mark_cancelled(broadcast_id, sent_count, failed_count)
             raise
         except Exception as exc:
-            logger.exception(
-                "Critical error in email broadcast", broadcast_id=broadcast_id, exc=exc
-            )
+            logger.exception('Critical error in email broadcast', broadcast_id=broadcast_id, exc=exc)
             await self._mark_failed(broadcast_id, sent_count, failed_count)
 
     async def _fetch_email_recipients(self, target: str) -> list[_EmailRecipient]:
@@ -885,26 +813,26 @@ class EmailBroadcastService:
             base_conditions = [
                 User.email.isnot(None),
                 User.email_verified == True,
-                User.status == "active",
+                User.status == 'active',
             ]
 
-            if target == "all_email":
+            if target == 'all_email':
                 query = select(User).where(*base_conditions)
 
-            elif target == "email_only":
+            elif target == 'email_only':
                 query = select(User).where(
                     *base_conditions,
-                    User.auth_type == "email",
+                    User.auth_type == 'email',
                 )
 
-            elif target == "telegram_with_email":
+            elif target == 'telegram_with_email':
                 query = select(User).where(
                     *base_conditions,
-                    User.auth_type == "telegram",
+                    User.auth_type == 'telegram',
                     User.telegram_id.isnot(None),
                 )
 
-            elif target == "active_email":
+            elif target == 'active_email':
                 query = (
                     select(User)
                     .join(Subscription, User.id == Subscription.user_id)
@@ -914,7 +842,7 @@ class EmailBroadcastService:
                     )
                 )
 
-            elif target == "expired_email":
+            elif target == 'expired_email':
                 query = (
                     select(User)
                     .join(Subscription, User.id == Subscription.user_id)
@@ -930,7 +858,7 @@ class EmailBroadcastService:
                 )
 
             else:
-                logger.warning("Unknown email target filter", target=target)
+                logger.warning('Unknown email target filter', target=target)
                 return []
 
             # Загружаем батчами и извлекаем скаляры сразу
@@ -953,11 +881,11 @@ class EmailBroadcastService:
                     # Формируем имя пользователя
                     user_name = user.username
                     if not user_name:
-                        user_name = user.first_name or ""
+                        user_name = user.first_name or ''
                         if last_name := user.last_name:
-                            user_name = f"{user_name} {last_name}".strip()
+                            user_name = f'{user_name} {last_name}'.strip()
                     if not user_name:
-                        user_name = email.split("@")[0]
+                        user_name = email.split('@')[0]
 
                     recipients.append(_EmailRecipient(email=email, user_name=user_name))
 
@@ -991,9 +919,7 @@ class EmailBroadcastService:
                 if cancel_event.is_set():
                     return None
 
-                html_content = self._render_template(
-                    config.email_html_content, recipient
-                )
+                html_content = self._render_template(config.email_html_content, recipient)
                 subject = self._render_template(config.email_subject, recipient)
 
                 try:
@@ -1008,7 +934,7 @@ class EmailBroadcastService:
                     return success
                 except Exception as exc:
                     logger.error(
-                        "Ошибка отправки email рассылки",
+                        'Ошибка отправки email рассылки',
                         broadcast_id=broadcast_id,
                         email=recipient.email,
                         exc=exc,
@@ -1055,8 +981,8 @@ class EmailBroadcastService:
         if not template:
             return template
 
-        result = template.replace("{{user_name}}", recipient.user_name)
-        result = result.replace("{{email}}", recipient.email)
+        result = template.replace('{{user_name}}', recipient.user_name)
+        result = result.replace('{{email}}', recipient.email)
         return result
 
     async def _mark_finished(
@@ -1068,14 +994,8 @@ class EmailBroadcastService:
         cancelled: bool,
     ) -> None:
         """Mark broadcast as finished."""
-        status = (
-            "cancelled"
-            if cancelled
-            else ("completed" if failed_count == 0 else "partial")
-        )
-        await self._safe_status_update(
-            broadcast_id, sent_count, failed_count, status=status
-        )
+        status = 'cancelled' if cancelled else ('completed' if failed_count == 0 else 'partial')
+        await self._safe_status_update(broadcast_id, sent_count, failed_count, status=status)
 
     async def _mark_cancelled(
         self,
@@ -1084,9 +1004,7 @@ class EmailBroadcastService:
         failed_count: int,
     ) -> None:
         """Mark broadcast as cancelled."""
-        await self._mark_finished(
-            broadcast_id, sent_count, failed_count, cancelled=True
-        )
+        await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=True)
 
     async def _mark_failed(
         self,
@@ -1095,9 +1013,7 @@ class EmailBroadcastService:
         failed_count: int = 0,
     ) -> None:
         """Mark broadcast as failed."""
-        await self._safe_status_update(
-            broadcast_id, sent_count, failed_count, status="failed"
-        )
+        await self._safe_status_update(broadcast_id, sent_count, failed_count, status='failed')
 
     async def _update_progress(
         self,
@@ -1110,7 +1026,7 @@ class EmailBroadcastService:
             broadcast_id,
             sent_count,
             failed_count,
-            status="in_progress",
+            status='in_progress',
             update_completed_at=False,
         )
 
@@ -1145,16 +1061,14 @@ class EmailBroadcastService:
             except InterfaceError as exc:
                 attempts += 1
                 logger.warning(
-                    "Connection issue updating email broadcast, retrying",
+                    'Connection issue updating email broadcast, retrying',
                     broadcast_id=broadcast_id,
                     exc=exc,
                     attempts=attempts,
                 )
                 await asyncio.sleep(0.2)
             except SQLAlchemyError:
-                logger.exception(
-                    "Failed to update email broadcast status", broadcast_id=broadcast_id
-                )
+                logger.exception('Failed to update email broadcast status', broadcast_id=broadcast_id)
                 return
 
 

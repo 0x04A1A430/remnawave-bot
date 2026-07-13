@@ -12,7 +12,7 @@ class SettingCategorySummary(BaseModel):
     label: str
     items: int
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingCategoryRef(BaseModel):
@@ -21,7 +21,7 @@ class SettingCategoryRef(BaseModel):
     key: str
     label: str
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingChoice(BaseModel):
@@ -31,7 +31,7 @@ class SettingChoice(BaseModel):
     label: str
     description: str | None = None
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingDefinition(BaseModel):
@@ -51,7 +51,7 @@ class SettingDefinition(BaseModel):
     is_secret: bool = Field(default=False)
     choices: list[SettingChoice] = Field(default_factory=list)
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')
 
 
 class SettingUpdateRequest(BaseModel):
@@ -59,4 +59,4 @@ class SettingUpdateRequest(BaseModel):
 
     value: Any
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra='forbid')

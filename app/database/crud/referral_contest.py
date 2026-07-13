@@ -41,7 +41,7 @@ async def create_referral_contest(
         end_at=end_at,
         daily_summary_time=daily_summary_time,
         daily_summary_times=daily_summary_times,
-        timezone=timezone_name or "UTC",
+        timezone=timezone_name or 'UTC',
         created_by=created_by,
     )
     db.add(contest)
@@ -71,9 +71,7 @@ async def list_referral_contests(
     return list(result.scalars().all())
 
 
-async def get_referral_contests_count(
-    db: AsyncSession, contest_type: str | None = None
-) -> int:
+async def get_referral_contests_count(db: AsyncSession, contest_type: str | None = None) -> int:
     query = select(func.count(ReferralContest.id))
     if contest_type:
         query = query.where(ReferralContest.contest_type == contest_type)
@@ -81,9 +79,7 @@ async def get_referral_contests_count(
     return int(result.scalar_one())
 
 
-async def get_referral_contest(
-    db: AsyncSession, contest_id: int
-) -> ReferralContest | None:
+async def get_referral_contest(db: AsyncSession, contest_id: int) -> ReferralContest | None:
     result = await db.execute(
         select(ReferralContest)
         .options(
@@ -141,23 +137,15 @@ async def get_contests_for_events(
     filtered = []
     for contest in contests:
         contest_end = contest.end_at
-        if (
-            contest_end.hour == 0
-            and contest_end.minute == 0
-            and contest_end.second == 0
-        ):
-            contest_end = contest_end.replace(
-                hour=23, minute=59, second=59, microsecond=999999
-            )
+        if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
+            contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
         if contest_end >= now_utc:
             filtered.append(contest)
     return filtered
 
 
 async def get_contests_for_summaries(db: AsyncSession) -> list[ReferralContest]:
-    result = await db.execute(
-        select(ReferralContest).where(ReferralContest.is_active.is_(True))
-    )
+    result = await db.execute(select(ReferralContest).where(ReferralContest.is_active.is_(True)))
     return list(result.scalars().all())
 
 
@@ -168,7 +156,7 @@ async def add_contest_event(
     referrer_id: int,
     referral_id: int,
     amount_kopeks: int = 0,
-    event_type: str = "subscription_purchase",
+    event_type: str = 'subscription_purchase',
 ) -> ReferralContestEvent | None:
     existing_result = await db.execute(
         select(ReferralContestEvent).where(
@@ -219,17 +207,13 @@ async def get_contest_leaderboard(
     contest_start = contest.start_at
     contest_end = contest.end_at
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     query = (
         select(
             User,
-            func.count(ReferralContestEvent.id).label("referral_count"),
-            func.coalesce(
-                func.sum(func.abs(ReferralContestEvent.amount_kopeks)), 0
-            ).label("total_amount"),
+            func.count(ReferralContestEvent.id).label('referral_count'),
+            func.coalesce(func.sum(func.abs(ReferralContestEvent.amount_kopeks)), 0).label('total_amount'),
         )
         .join(User, User.id == ReferralContestEvent.referrer_id)
         .where(
@@ -240,7 +224,7 @@ async def get_contest_leaderboard(
             )
         )
         .group_by(User.id)
-        .order_by(desc("referral_count"), desc("total_amount"), User.id)
+        .order_by(desc('referral_count'), desc('total_amount'), User.id)
     )
     if limit:
         query = query.limit(limit)
@@ -265,12 +249,10 @@ async def get_contest_participants(
     contest_start = contest.start_at
     contest_end = contest.end_at
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     result = await db.execute(
-        select(User, func.count(ReferralContestEvent.id).label("referral_count"))
+        select(User, func.count(ReferralContestEvent.id).label('referral_count'))
         .join(User, User.id == ReferralContestEvent.referrer_id)
         .where(
             and_(
@@ -314,9 +296,7 @@ async def get_contest_events_count(
     start: datetime | None = None,
     end: datetime | None = None,
 ) -> int:
-    query = select(func.count(ReferralContestEvent.id)).where(
-        ReferralContestEvent.contest_id == contest_id
-    )
+    query = select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
     if start:
         query = query.where(ReferralContestEvent.occurred_at >= start)
     if end:
@@ -329,11 +309,7 @@ async def get_contest_events(
     db: AsyncSession,
     contest_id: int,
 ) -> list[ReferralContestEvent]:
-    result = await db.execute(
-        select(ReferralContestEvent).where(
-            ReferralContestEvent.contest_id == contest_id
-        )
-    )
+    result = await db.execute(select(ReferralContestEvent).where(ReferralContestEvent.contest_id == contest_id))
     return list(result.scalars().all())
 
 
@@ -388,14 +364,12 @@ async def get_contest_payment_stats(
     # Получаем даты конкурса для фильтрации
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        return {"paid_count": 0, "unpaid_count": 0, "total_amount": 0}
+        return {'paid_count': 0, 'unpaid_count': 0, 'total_amount': 0}
 
     contest_start = contest.start_at
     contest_end = contest.end_at
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     # Считаем рефералов с платежами (только зарегистрированных в период конкурса)
     paid_result = await db.execute(
@@ -425,9 +399,7 @@ async def get_contest_payment_stats(
 
     # Общая сумма (только за рефералов зарегистрированных в период конкурса)
     total_result = await db.execute(
-        select(
-            func.coalesce(func.sum(func.abs(ReferralContestEvent.amount_kopeks)), 0)
-        ).where(
+        select(func.coalesce(func.sum(func.abs(ReferralContestEvent.amount_kopeks)), 0)).where(
             and_(
                 ReferralContestEvent.contest_id == contest_id,
                 ReferralContestEvent.occurred_at >= contest_start,
@@ -438,9 +410,9 @@ async def get_contest_payment_stats(
     total_amount = int(total_result.scalar_one() or 0)
 
     return {
-        "paid_count": paid_count,
-        "unpaid_count": unpaid_count,
-        "total_amount": total_amount,
+        'paid_count': paid_count,
+        'unpaid_count': unpaid_count,
+        'total_amount': total_amount,
     }
 
 
@@ -460,14 +432,12 @@ async def get_contest_transaction_breakdown(
     """
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        return {"subscription_total": 0, "deposit_total": 0}
+        return {'subscription_total': 0, 'deposit_total': 0}
 
     contest_start = contest.start_at
     contest_end = contest.end_at
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     # Получаем referral_id только из событий в период конкурса
     events_result = await db.execute(
@@ -482,7 +452,7 @@ async def get_contest_transaction_breakdown(
     referral_ids = [r[0] for r in events_result.fetchall()]
 
     if not referral_ids:
-        return {"subscription_total": 0, "deposit_total": 0}
+        return {'subscription_total': 0, 'deposit_total': 0}
 
     # Сумма покупок подписок
     subscription_result = await db.execute(
@@ -515,8 +485,8 @@ async def get_contest_transaction_breakdown(
     deposit_total = int(deposit_result.scalar_one() or 0)
 
     return {
-        "subscription_total": subscription_total,
-        "deposit_total": deposit_total,
+        'subscription_total': subscription_total,
+        'deposit_total': deposit_total,
     }
 
 
@@ -527,7 +497,7 @@ async def upsert_contest_event(
     referrer_id: int,
     referral_id: int,
     amount_kopeks: int = 0,
-    event_type: str = "subscription_purchase",
+    event_type: str = 'subscription_purchase',
 ) -> tuple[ReferralContestEvent, bool]:
     """Создать или обновить событие конкурса.
 
@@ -578,16 +548,14 @@ async def debug_contest_transactions(
     """
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        return {"error": "Contest not found"}
+        return {'error': 'Contest not found'}
 
     # Нормализуем границы дат
     contest_start = contest.start_at
     contest_end = contest.end_at
 
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     # Получаем referral_id ТОЛЬКО из событий которые произошли в период конкурса
     events_result = await db.execute(
@@ -603,19 +571,17 @@ async def debug_contest_transactions(
 
     # Также считаем сколько всего событий для сравнения
     all_events_result = await db.execute(
-        select(func.count(ReferralContestEvent.id)).where(
-            ReferralContestEvent.contest_id == contest_id
-        )
+        select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
     )
     total_all_events = int(all_events_result.scalar_one() or 0)
 
     if not referral_ids:
         return {
-            "contest_start": contest_start.isoformat(),
-            "contest_end": contest_end.isoformat(),
-            "referral_count": 0,
-            "total_all_events": total_all_events,
-            "transactions": [],
+            'contest_start': contest_start.isoformat(),
+            'contest_end': contest_end.isoformat(),
+            'referral_count': 0,
+            'total_all_events': total_all_events,
+            'transactions': [],
         }
 
     # Получаем транзакции этих рефералов ЗА период конкурса
@@ -668,14 +634,10 @@ async def debug_contest_transactions(
 
     # Подсчёт общих сумм ПО ТИПАМ (исключаем бонусы без payment_method)
     deposit_in_period = sum(
-        tx.amount_kopeks
-        for tx in txs_in
-        if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
+        tx.amount_kopeks for tx in txs_in if tx.type == TransactionType.DEPOSIT.value and tx.payment_method is not None
     )
     subscription_in_period = sum(
-        abs(tx.amount_kopeks)
-        for tx in txs_in
-        if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
+        abs(tx.amount_kopeks) for tx in txs_in if tx.type == TransactionType.SUBSCRIPTION_PAYMENT.value
     )
     total_in_period = deposit_in_period + subscription_in_period
     total_outside = sum(abs(tx.amount_kopeks) for tx in txs_out)
@@ -709,38 +671,38 @@ async def debug_contest_transactions(
     full_subscription_total = int(full_subscription_result.scalar_one() or 0)
 
     return {
-        "contest_start": contest_start.isoformat(),
-        "contest_end": contest_end.isoformat(),
-        "referral_count": len(referral_ids),
-        "total_all_events": total_all_events,
-        "filtered_out": total_all_events - len(referral_ids),
-        "transactions_in_period": [
+        'contest_start': contest_start.isoformat(),
+        'contest_end': contest_end.isoformat(),
+        'referral_count': len(referral_ids),
+        'total_all_events': total_all_events,
+        'filtered_out': total_all_events - len(referral_ids),
+        'transactions_in_period': [
             {
-                "id": tx.id,
-                "user_id": tx.user_id,
-                "type": tx.type,
-                "amount_kopeks": tx.amount_kopeks,
-                "created_at": tx.created_at.isoformat() if tx.created_at else None,
-                "payment_method": tx.payment_method,
+                'id': tx.id,
+                'user_id': tx.user_id,
+                'type': tx.type,
+                'amount_kopeks': tx.amount_kopeks,
+                'created_at': tx.created_at.isoformat() if tx.created_at else None,
+                'payment_method': tx.payment_method,
             }
             for tx in txs_in
         ],
-        "transactions_outside_period": [
+        'transactions_outside_period': [
             {
-                "id": tx.id,
-                "user_id": tx.user_id,
-                "type": tx.type,
-                "amount_kopeks": tx.amount_kopeks,
-                "created_at": tx.created_at.isoformat() if tx.created_at else None,
-                "payment_method": tx.payment_method,
+                'id': tx.id,
+                'user_id': tx.user_id,
+                'type': tx.type,
+                'amount_kopeks': tx.amount_kopeks,
+                'created_at': tx.created_at.isoformat() if tx.created_at else None,
+                'payment_method': tx.payment_method,
             }
             for tx in txs_out
         ],
-        "total_in_period_kopeks": total_in_period,
-        "total_outside_period_kopeks": total_outside,
-        "deposit_total_kopeks": full_deposit_total,
-        "subscription_total_kopeks": full_subscription_total,
-        "sample_size": limit,
+        'total_in_period_kopeks': total_in_period,
+        'total_outside_period_kopeks': total_outside,
+        'deposit_total_kopeks': full_deposit_total,
+        'subscription_total_kopeks': full_subscription_total,
+        'sample_size': limit,
     }
 
 
@@ -765,7 +727,7 @@ async def sync_contest_events(
     """
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        return {"error": "Contest not found"}
+        return {'error': 'Contest not found'}
 
     # Нормализуем границы дат для СТРОГОЙ фильтрации
     # start_at должен быть началом дня (00:00:00)
@@ -777,26 +739,24 @@ async def sync_contest_events(
     # Если end_at содержит только дату, добавляем время до конца дня
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
         # Конец дня: 23:59:59.999999
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     logger.info(
-        "Синхронизация конкурса",
+        'Синхронизация конкурса',
         contest_id=contest_id,
         contest_start=contest_start,
         contest_end=contest_end,
     )
 
     stats = {
-        "updated": 0,
-        "skipped": 0,
-        "total_events": 0,
-        "total_amount": 0,
-        "paid_count": 0,
-        "unpaid_count": 0,
-        "contest_start": contest_start.isoformat(),
-        "contest_end": contest_end.isoformat(),
+        'updated': 0,
+        'skipped': 0,
+        'total_events': 0,
+        'total_amount': 0,
+        'paid_count': 0,
+        'unpaid_count': 0,
+        'contest_start': contest_start.isoformat(),
+        'contest_end': contest_end.isoformat(),
     }
 
     # Получаем события конкурса ТОЛЬКО для рефералов, зарегистрированных в период конкурса
@@ -816,24 +776,20 @@ async def sync_contest_events(
 
     # Также считаем сколько всего событий (для отладки)
     all_events_result = await db.execute(
-        select(func.count(ReferralContestEvent.id)).where(
-            ReferralContestEvent.contest_id == contest_id
-        )
+        select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
     )
     total_all_events = int(all_events_result.scalar_one() or 0)
 
-    stats["total_events"] = len(events)
-    stats["total_all_events"] = total_all_events
-    stats["filtered_out_events"] = total_all_events - len(events)
+    stats['total_events'] = len(events)
+    stats['total_all_events'] = total_all_events
+    stats['filtered_out_events'] = total_all_events - len(events)
 
-    stats["deposit_total"] = 0
-    stats["subscription_total"] = 0
+    stats['deposit_total'] = 0
+    stats['subscription_total'] = 0
 
     for event in events:
         # Считаем ТОЛЬКО покупки подписок (реальные траты на подписки)
-        subscription_query = select(
-            func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)
-        ).where(
+        subscription_query = select(func.coalesce(func.sum(func.abs(Transaction.amount_kopeks)), 0)).where(
             and_(
                 Transaction.user_id == event.referral_id,
                 Transaction.is_completed.is_(True),
@@ -846,9 +802,7 @@ async def sync_contest_events(
         subscription_paid = int(sub_result.scalar_one() or 0)
 
         # Также считаем пополнения баланса (ТОЛЬКО реальные платежи, БЕЗ бонусов)
-        deposit_query = select(
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0)
-        ).where(
+        deposit_query = select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
             and_(
                 Transaction.user_id == event.referral_id,
                 Transaction.is_completed.is_(True),
@@ -861,45 +815,45 @@ async def sync_contest_events(
         dep_result = await db.execute(deposit_query)
         deposit_paid = int(dep_result.scalar_one() or 0)
 
-        stats["subscription_total"] += subscription_paid
-        stats["deposit_total"] += deposit_paid
+        stats['subscription_total'] += subscription_paid
+        stats['deposit_total'] += deposit_paid
 
         # Основная метрика — покупки подписок
         total_paid = subscription_paid
 
         # Считаем статистику
         if total_paid > 0:
-            stats["total_amount"] += total_paid
-            stats["paid_count"] += 1
+            stats['total_amount'] += total_paid
+            stats['paid_count'] += 1
         else:
-            stats["unpaid_count"] += 1
+            stats['unpaid_count'] += 1
 
         # Обновляем сумму если изменилась
         if event.amount_kopeks != total_paid:
             old_amount = event.amount_kopeks
             event.amount_kopeks = total_paid
-            stats["updated"] += 1
+            stats['updated'] += 1
             # Логируем значительные изменения
             if abs(old_amount - total_paid) > 10000:  # больше 100 руб разницы
                 logger.debug(
-                    "Событие (реферал): -> коп.",
+                    'Событие (реферал): -> коп.',
                     event_id=event.id,
                     referral_id=event.referral_id,
                     old_amount=old_amount,
                     total_paid=total_paid,
                 )
         else:
-            stats["skipped"] += 1
+            stats['skipped'] += 1
 
     # Сохраняем изменения
     await db.commit()
 
     logger.info(
-        "Синхронизация конкурса завершена: обновлено , пропущено , сумма коп.",
+        'Синхронизация конкурса завершена: обновлено , пропущено , сумма коп.',
         contest_id=contest_id,
-        stats=stats["updated"],
-        stats_2=stats["skipped"],
-        stats_3=stats["total_amount"],
+        stats=stats['updated'],
+        stats_2=stats['skipped'],
+        stats_3=stats['total_amount'],
     )
 
     return stats
@@ -924,18 +878,16 @@ async def cleanup_invalid_contest_events(
     """
     contest = await get_referral_contest(db, contest_id)
     if not contest:
-        return {"error": "Contest not found"}
+        return {'error': 'Contest not found'}
 
     # Нормализуем границы дат
     contest_start = contest.start_at
     contest_end = contest.end_at
     if contest_end.hour == 0 and contest_end.minute == 0 and contest_end.second == 0:
-        contest_end = contest_end.replace(
-            hour=23, minute=59, second=59, microsecond=999999
-        )
+        contest_end = contest_end.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     logger.info(
-        "Очистка конкурса",
+        'Очистка конкурса',
         contest_id=contest_id,
         contest_start=contest_start,
         contest_end=contest_end,
@@ -943,9 +895,7 @@ async def cleanup_invalid_contest_events(
 
     # Считаем сколько было событий до очистки
     total_before_result = await db.execute(
-        select(func.count(ReferralContestEvent.id)).where(
-            ReferralContestEvent.contest_id == contest_id
-        )
+        select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
     )
     total_before = int(total_before_result.scalar_one() or 0)
 
@@ -973,23 +923,19 @@ async def cleanup_invalid_contest_events(
         from sqlalchemy import delete as sql_delete
 
         delete_result = await db.execute(
-            sql_delete(ReferralContestEvent).where(
-                ReferralContestEvent.id.in_(invalid_event_ids)
-            )
+            sql_delete(ReferralContestEvent).where(ReferralContestEvent.id.in_(invalid_event_ids))
         )
         deleted = delete_result.rowcount
         await db.commit()
 
     # Считаем сколько осталось валидных событий
     remaining_result = await db.execute(
-        select(func.count(ReferralContestEvent.id)).where(
-            ReferralContestEvent.contest_id == contest_id
-        )
+        select(func.count(ReferralContestEvent.id)).where(ReferralContestEvent.contest_id == contest_id)
     )
     remaining = int(remaining_result.scalar_one() or 0)
 
     logger.info(
-        "Очистка конкурса завершена: удалено невалидных событий, осталось валидных (было)",
+        'Очистка конкурса завершена: удалено невалидных событий, осталось валидных (было)',
         contest_id=contest_id,
         deleted=deleted,
         remaining=remaining,
@@ -997,11 +943,11 @@ async def cleanup_invalid_contest_events(
     )
 
     return {
-        "deleted": deleted,
-        "remaining": remaining,
-        "total_before": total_before,
-        "contest_start": contest_start.isoformat(),
-        "contest_end": contest_end.isoformat(),
+        'deleted': deleted,
+        'remaining': remaining,
+        'total_before': total_before,
+        'contest_start': contest_start.isoformat(),
+        'contest_end': contest_end.isoformat(),
     }
 
 
@@ -1044,9 +990,7 @@ async def delete_virtual_participant(
     participant_id: int,
 ) -> bool:
     result = await db.execute(
-        select(ReferralContestVirtualParticipant).where(
-            ReferralContestVirtualParticipant.id == participant_id
-        )
+        select(ReferralContestVirtualParticipant).where(ReferralContestVirtualParticipant.id == participant_id)
     )
     vp = result.scalar_one_or_none()
     if not vp:
@@ -1062,9 +1006,7 @@ async def update_virtual_participant_count(
     referral_count: int,
 ) -> ReferralContestVirtualParticipant | None:
     result = await db.execute(
-        select(ReferralContestVirtualParticipant).where(
-            ReferralContestVirtualParticipant.id == participant_id
-        )
+        select(ReferralContestVirtualParticipant).where(ReferralContestVirtualParticipant.id == participant_id)
     )
     vp = result.scalar_one_or_none()
     if not vp:
@@ -1092,9 +1034,7 @@ async def get_contest_leaderboard_with_virtual(
     for user, score, amount in real:
         merged.append((user.full_name, score, amount, False))
     for vp in virtual:
-        merged.append(
-            (vp.display_name, vp.referral_count, vp.total_amount_kopeks, True)
-        )
+        merged.append((vp.display_name, vp.referral_count, vp.total_amount_kopeks, True))
 
     merged.sort(key=lambda x: (-x[1], -x[2]))
 

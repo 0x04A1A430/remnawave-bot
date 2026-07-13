@@ -24,73 +24,73 @@ class NotificationType(Enum):
     """Types of notifications that can be sent to users."""
 
     # Balance notifications
-    BALANCE_TOPUP = "balance_topup"
-    BALANCE_CHANGE = "balance_change"
-    BALANCE_LOW = "balance_low"
+    BALANCE_TOPUP = 'balance_topup'
+    BALANCE_CHANGE = 'balance_change'
+    BALANCE_LOW = 'balance_low'
 
     # Subscription notifications
-    SUBSCRIPTION_ACTIVATED = "subscription_activated"
-    SUBSCRIPTION_EXPIRING = "subscription_expiring"
-    SUBSCRIPTION_EXPIRED = "subscription_expired"
-    SUBSCRIPTION_RENEWED = "subscription_renewed"
+    SUBSCRIPTION_ACTIVATED = 'subscription_activated'
+    SUBSCRIPTION_EXPIRING = 'subscription_expiring'
+    SUBSCRIPTION_EXPIRED = 'subscription_expired'
+    SUBSCRIPTION_RENEWED = 'subscription_renewed'
 
     # Autopay notifications
-    AUTOPAY_SUCCESS = "autopay_success"
-    AUTOPAY_FAILED = "autopay_failed"
-    AUTOPAY_INSUFFICIENT_FUNDS = "autopay_insufficient_funds"
+    AUTOPAY_SUCCESS = 'autopay_success'
+    AUTOPAY_FAILED = 'autopay_failed'
+    AUTOPAY_INSUFFICIENT_FUNDS = 'autopay_insufficient_funds'
 
     # Daily subscription notifications
-    DAILY_DEBIT = "daily_debit"
-    DAILY_INSUFFICIENT_FUNDS = "daily_insufficient_funds"
-    TRAFFIC_RESET = "traffic_reset"
+    DAILY_DEBIT = 'daily_debit'
+    DAILY_INSUFFICIENT_FUNDS = 'daily_insufficient_funds'
+    TRAFFIC_RESET = 'traffic_reset'
 
     # Account notifications
-    BAN_NOTIFICATION = "ban_notification"
-    UNBAN_NOTIFICATION = "unban_notification"
-    WARNING_NOTIFICATION = "warning_notification"
+    BAN_NOTIFICATION = 'ban_notification'
+    UNBAN_NOTIFICATION = 'unban_notification'
+    WARNING_NOTIFICATION = 'warning_notification'
 
     # Referral notifications
-    REFERRAL_BONUS = "referral_bonus"
-    REFERRAL_REGISTERED = "referral_registered"
+    REFERRAL_BONUS = 'referral_bonus'
+    REFERRAL_REGISTERED = 'referral_registered'
 
     # Partner notifications
-    PARTNER_APPLICATION_APPROVED = "partner_application_approved"
-    PARTNER_APPLICATION_REJECTED = "partner_application_rejected"
+    PARTNER_APPLICATION_APPROVED = 'partner_application_approved'
+    PARTNER_APPLICATION_REJECTED = 'partner_application_rejected'
 
     # Withdrawal notifications
-    WITHDRAWAL_APPROVED = "withdrawal_approved"
-    WITHDRAWAL_REJECTED = "withdrawal_rejected"
+    WITHDRAWAL_APPROVED = 'withdrawal_approved'
+    WITHDRAWAL_REJECTED = 'withdrawal_rejected'
 
     # Auth emails
-    EMAIL_VERIFICATION = "email_verification"
-    PASSWORD_RESET = "password_reset"
-    EMAIL_CHANGE_CODE = "email_change_code"
+    EMAIL_VERIFICATION = 'email_verification'
+    PASSWORD_RESET = 'password_reset'
+    EMAIL_CHANGE_CODE = 'email_change_code'
 
     # Webhook subscription events
-    WEBHOOK_SUB_EXPIRED = "webhook_sub_expired"
-    WEBHOOK_SUB_DISABLED = "webhook_sub_disabled"
-    WEBHOOK_SUB_ENABLED = "webhook_sub_enabled"
-    WEBHOOK_SUB_LIMITED = "webhook_sub_limited"
-    WEBHOOK_SUB_TRAFFIC_RESET = "webhook_sub_traffic_reset"
-    WEBHOOK_SUB_DELETED = "webhook_sub_deleted"
-    WEBHOOK_SUB_REVOKED = "webhook_sub_revoked"
-    WEBHOOK_SUB_EXPIRING = "webhook_sub_expiring"
-    WEBHOOK_SUB_FIRST_CONNECTED = "webhook_sub_first_connected"
-    WEBHOOK_SUB_BANDWIDTH_THRESHOLD = "webhook_sub_bandwidth_threshold"
-    WEBHOOK_USER_NOT_CONNECTED = "webhook_user_not_connected"
-    WEBHOOK_DEVICE_ADDED = "webhook_device_added"
-    WEBHOOK_DEVICE_DELETED = "webhook_device_deleted"
-    WEBHOOK_TORRENT_DETECTED = "webhook_torrent_detected"
+    WEBHOOK_SUB_EXPIRED = 'webhook_sub_expired'
+    WEBHOOK_SUB_DISABLED = 'webhook_sub_disabled'
+    WEBHOOK_SUB_ENABLED = 'webhook_sub_enabled'
+    WEBHOOK_SUB_LIMITED = 'webhook_sub_limited'
+    WEBHOOK_SUB_TRAFFIC_RESET = 'webhook_sub_traffic_reset'
+    WEBHOOK_SUB_DELETED = 'webhook_sub_deleted'
+    WEBHOOK_SUB_REVOKED = 'webhook_sub_revoked'
+    WEBHOOK_SUB_EXPIRING = 'webhook_sub_expiring'
+    WEBHOOK_SUB_FIRST_CONNECTED = 'webhook_sub_first_connected'
+    WEBHOOK_SUB_BANDWIDTH_THRESHOLD = 'webhook_sub_bandwidth_threshold'
+    WEBHOOK_USER_NOT_CONNECTED = 'webhook_user_not_connected'
+    WEBHOOK_DEVICE_ADDED = 'webhook_device_added'
+    WEBHOOK_DEVICE_DELETED = 'webhook_device_deleted'
+    WEBHOOK_TORRENT_DETECTED = 'webhook_torrent_detected'
 
     # Other
-    BROADCAST = "broadcast"
-    PAYMENT_RECEIVED = "payment_received"
+    BROADCAST = 'broadcast'
+    PAYMENT_RECEIVED = 'payment_received'
 
     # Guest purchase notifications
-    GUEST_SUBSCRIPTION_DELIVERED = "guest_subscription_delivered"
-    GUEST_ACTIVATION_REQUIRED = "guest_activation_required"
-    GUEST_GIFT_RECEIVED = "guest_gift_received"
-    GUEST_CABINET_CREDENTIALS = "guest_cabinet_credentials"
+    GUEST_SUBSCRIPTION_DELIVERED = 'guest_subscription_delivered'
+    GUEST_ACTIVATION_REQUIRED = 'guest_activation_required'
+    GUEST_GIFT_RECEIVED = 'guest_gift_received'
+    GUEST_CABINET_CREDENTIALS = 'guest_cabinet_credentials'
 
 
 class NotificationDeliveryService:
@@ -158,7 +158,7 @@ class NotificationDeliveryService:
         """
         if user.status in (UserStatus.BLOCKED.value, UserStatus.DELETED.value):
             logger.debug(
-                "Пропускаем уведомление для неактивного пользователя",
+                'Пропускаем уведомление для неактивного пользователя',
                 user_id=user.id,
                 status=user.status,
             )
@@ -187,7 +187,7 @@ class NotificationDeliveryService:
 
             if email_sent or ws_sent:
                 logger.info(
-                    "Уведомление отправлено email-пользователю",
+                    'Уведомление отправлено email-пользователю',
                     notification_type_value=notification_type.value,
                     user_id=user.id,
                     email_sent=email_sent,
@@ -195,13 +195,13 @@ class NotificationDeliveryService:
                 )
                 return True
             logger.warning(
-                "Не удалось отправить уведомление email-пользователю",
+                'Не удалось отправить уведомление email-пользователю',
                 notification_type_value=notification_type.value,
                 user_id=user.id,
             )
             return False
         logger.debug(
-            "Пользователь не имеет telegram_id или verified email, пропускаем уведомление",
+            'Пользователь не имеет telegram_id или verified email, пропускаем уведомление',
             user_id=user.id,
         )
         return False
@@ -218,14 +218,14 @@ class NotificationDeliveryService:
         """Send notification via Telegram bot."""
         if not bot:
             logger.warning(
-                "Bot instance not provided for Telegram notification to user",
+                'Bot instance not provided for Telegram notification to user',
                 telegram_id=user.telegram_id,
             )
             return False
 
         if not message:
             logger.warning(
-                "No Telegram message provided for notification to user",
+                'No Telegram message provided for notification to user',
                 notification_type_value=notification_type.value,
                 telegram_id=user.telegram_id,
             )
@@ -253,7 +253,7 @@ class NotificationDeliveryService:
                         chat_id=user.telegram_id,
                         text=message,
                         reply_markup=markup,
-                        parse_mode="HTML",
+                        parse_mode='HTML',
                     ),
                     timeout=15.0,
                 )
@@ -261,25 +261,23 @@ class NotificationDeliveryService:
 
             except TimeoutError:
                 logger.warning(
-                    "Timeout при отправке Telegram уведомления пользователю",
+                    'Timeout при отправке Telegram уведомления пользователю',
                     telegram_id=user.telegram_id,
                     attempt=attempt,
                 )
-                last_transient_error = TimeoutError("asyncio.wait_for timeout")
+                last_transient_error = TimeoutError('asyncio.wait_for timeout')
                 if attempt < max_attempts:
                     await asyncio.sleep(min(2 ** (attempt - 1), 4))
                     continue
                 break  # exhausted retries → summary log ниже
 
             except TelegramForbiddenError:
-                logger.warning(
-                    "Telegram user заблокировал бота", telegram_id=user.telegram_id
-                )
+                logger.warning('Telegram user заблокировал бота', telegram_id=user.telegram_id)
                 return False
 
             except TelegramBadRequest as e:
                 logger.warning(
-                    "Ошибка отправки Telegram уведомления пользователю",
+                    'Ошибка отправки Telegram уведомления пользователю',
                     telegram_id=user.telegram_id,
                     error=str(e),
                 )
@@ -288,9 +286,9 @@ class NotificationDeliveryService:
             except TelegramRetryAfter as e:
                 # Flood control — ждём, потом ретраим. Cap retry_after, чтобы
                 # не блочить очередь на минуты.
-                retry_after = min(max(1, int(getattr(e, "retry_after", 1))), 30)
+                retry_after = min(max(1, int(getattr(e, 'retry_after', 1))), 30)
                 logger.warning(
-                    "Telegram flood control при отправке уведомления",
+                    'Telegram flood control при отправке уведомления',
                     telegram_id=user.telegram_id,
                     retry_after=retry_after,
                     attempt=attempt,
@@ -305,7 +303,7 @@ class NotificationDeliveryService:
                 # Транзиентные сетевые/5xx — логируем как warning, не спамим админ-чат
                 last_transient_error = e
                 logger.warning(
-                    "Сетевая ошибка отправки Telegram уведомления (retry)",
+                    'Сетевая ошибка отправки Telegram уведомления (retry)',
                     telegram_id=user.telegram_id,
                     error=str(e)[:200],
                     error_type=type(e).__name__,
@@ -318,7 +316,7 @@ class NotificationDeliveryService:
 
             except Exception as e:
                 logger.error(
-                    "Неожиданная ошибка при отправке Telegram уведомления",
+                    'Неожиданная ошибка при отправке Telegram уведомления',
                     telegram_id=user.telegram_id,
                     error=str(e),
                     error_type=type(e).__name__,
@@ -328,7 +326,7 @@ class NotificationDeliveryService:
         # Все попытки исчерпаны — итоговый warning без error-уровня
         if last_transient_error is not None:
             logger.warning(
-                "Не удалось доставить Telegram уведомление после ретраев",
+                'Не удалось доставить Telegram уведомление после ретраев',
                 telegram_id=user.telegram_id,
                 attempts=max_attempts,
                 final_error=type(last_transient_error).__name__,
@@ -343,44 +341,42 @@ class NotificationDeliveryService:
     ) -> bool:
         """Send notification via email."""
         if not self.email_service.is_configured():
-            logger.debug("SMTP не настроен, пропускаем email уведомление")
+            logger.debug('SMTP не настроен, пропускаем email уведомление')
             return False
 
         if not user.email or not user.email_verified:
-            logger.debug("У пользователя нет подтверждённого email", user_id=user.id)
+            logger.debug('У пользователя нет подтверждённого email', user_id=user.id)
             return False
 
         try:
             # Get email template (check DB override first, then fall back to hardcoded)
-            language = user.language or "ru"
+            language = user.language or 'ru'
 
             # Inject common context values used across all email templates
             context = {
-                "cabinet_url": getattr(settings, "CABINET_URL", "") or "",
-                "username": user.first_name or user.username or "",
-                "email": user.email or "",
+                'cabinet_url': getattr(settings, 'CABINET_URL', '') or '',
+                'username': user.first_name or user.username or '',
+                'email': user.email or '',
                 **context,
             }
 
             # Backwards-compat aliases for DB templates that use shorter
             # placeholder names than the corresponding notify_* method ships.
             # E.g. {amount} vs amount_kopeks, {reason} vs comment, {balance}.
-            if "amount" not in context:
-                if context.get("formatted_amount"):
-                    context["amount"] = context["formatted_amount"]
-                elif "amount_kopeks" in context:
-                    context["amount"] = settings.format_price(context["amount_kopeks"])
-                elif "bonus_kopeks" in context:
-                    context["amount"] = settings.format_price(context["bonus_kopeks"])
-            if "balance" not in context:
-                if context.get("formatted_balance"):
-                    context["balance"] = context["formatted_balance"]
-                elif "new_balance_kopeks" in context:
-                    context["balance"] = settings.format_price(
-                        context["new_balance_kopeks"]
-                    )
-            if "reason" not in context and context.get("comment"):
-                context["reason"] = context["comment"]
+            if 'amount' not in context:
+                if context.get('formatted_amount'):
+                    context['amount'] = context['formatted_amount']
+                elif 'amount_kopeks' in context:
+                    context['amount'] = settings.format_price(context['amount_kopeks'])
+                elif 'bonus_kopeks' in context:
+                    context['amount'] = settings.format_price(context['bonus_kopeks'])
+            if 'balance' not in context:
+                if context.get('formatted_balance'):
+                    context['balance'] = context['formatted_balance']
+                elif 'new_balance_kopeks' in context:
+                    context['balance'] = settings.format_price(context['new_balance_kopeks'])
+            if 'reason' not in context and context.get('comment'):
+                context['reason'] = context['comment']
 
             # Try DB override (get_rendered_override substitutes context vars and wraps in base template)
             template = None
@@ -389,26 +385,22 @@ class NotificationDeliveryService:
                     get_rendered_override,
                 )
 
-                rendered = await get_rendered_override(
-                    notification_type.value, language, context
-                )
+                rendered = await get_rendered_override(notification_type.value, language, context)
                 if rendered:
                     subject, body_html = rendered
                     template = {
-                        "subject": subject,
-                        "body_html": body_html,
+                        'subject': subject,
+                        'body_html': body_html,
                     }
             except Exception as e:
-                logger.debug("Не удалось проверить override шаблона", e=e)
+                logger.debug('Не удалось проверить override шаблона', e=e)
 
             if not template:
-                template = self.email_templates.get_template(
-                    notification_type, language, context
-                )
+                template = self.email_templates.get_template(notification_type, language, context)
 
             if not template:
                 logger.warning(
-                    "Не найден email шаблон для типа уведомления",
+                    'Не найден email шаблон для типа уведомления',
                     notification_type_value=notification_type.value,
                 )
                 return False
@@ -417,14 +409,14 @@ class NotificationDeliveryService:
             success = await asyncio.to_thread(
                 self.email_service.send_email,
                 to_email=user.email,
-                subject=template["subject"],
-                body_html=template["body_html"],
-                body_text=template.get("body_text"),
+                subject=template['subject'],
+                body_html=template['body_html'],
+                body_text=template.get('body_text'),
             )
 
             if success:
                 logger.info(
-                    "Email уведомление отправлено пользователю",
+                    'Email уведомление отправлено пользователю',
                     notification_type_value=notification_type.value,
                     user_id=user.id,
                     email=user.email,
@@ -433,9 +425,7 @@ class NotificationDeliveryService:
             return success
 
         except Exception as e:
-            logger.error(
-                "Ошибка отправки email уведомления пользователю", user_id=user.id, e=e
-            )
+            logger.error('Ошибка отправки email уведомления пользователю', user_id=user.id, e=e)
             return False
 
     async def _send_websocket_notification(
@@ -447,7 +437,7 @@ class NotificationDeliveryService:
         """Send notification via WebSocket to cabinet."""
         try:
             message = {
-                "type": f"notification.{notification_type.value}",
+                'type': f'notification.{notification_type.value}',
                 **context,
             }
 
@@ -455,9 +445,7 @@ class NotificationDeliveryService:
             return True
 
         except Exception as e:
-            logger.debug(
-                "WebSocket уведомление не отправлено пользователю", user_id=user.id, e=e
-            )
+            logger.debug('WebSocket уведомление не отправлено пользователю', user_id=user.id, e=e)
             return False
 
     # ============================================================================
@@ -475,12 +463,12 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about balance top-up."""
         context = {
-            "amount_kopeks": amount_kopeks,
-            "amount_rubles": amount_kopeks / 100,
-            "new_balance_kopeks": new_balance_kopeks,
-            "new_balance_rubles": new_balance_kopeks / 100,
-            "formatted_amount": settings.format_price(amount_kopeks),
-            "formatted_balance": settings.format_price(new_balance_kopeks),
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'new_balance_kopeks': new_balance_kopeks,
+            'new_balance_rubles': new_balance_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'formatted_balance': settings.format_price(new_balance_kopeks),
         }
 
         return await self.send_notification(
@@ -503,11 +491,11 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about expiring subscription."""
         context = {
-            "days_left": days_left,
+            'days_left': days_left,
             # Localize + humanize: ``str(datetime)`` used to leak raw
             # ISO with microseconds and tz offset into the rendered
             # template body. See app/utils/timezone.py::format_email_datetime.
-            "expires_at": format_email_datetime(expires_at),
+            'expires_at': format_email_datetime(expires_at),
         }
 
         return await self.send_notification(
@@ -547,11 +535,11 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about successful autopay."""
         context = {
-            "amount_kopeks": amount_kopeks,
-            "amount_rubles": amount_kopeks / 100,
-            "formatted_amount": settings.format_price(amount_kopeks),
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
             # Localize + humanize (see expiring branch above).
-            "new_expires_at": format_email_datetime(new_expires_at),
+            'new_expires_at': format_email_datetime(new_expires_at),
         }
 
         return await self.send_notification(
@@ -573,7 +561,7 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about failed autopay."""
         context = {
-            "reason": reason,
+            'reason': reason,
         }
 
         return await self.send_notification(
@@ -595,7 +583,7 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about account ban."""
         context = {
-            "reason": reason or "Нарушение правил использования",
+            'reason': reason or 'Нарушение правил использования',
         }
 
         return await self.send_notification(
@@ -635,10 +623,10 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about referral bonus."""
         context = {
-            "bonus_kopeks": bonus_kopeks,
-            "bonus_rubles": bonus_kopeks / 100,
-            "formatted_bonus": settings.format_price(bonus_kopeks),
-            "referral_name": referral_name,
+            'bonus_kopeks': bonus_kopeks,
+            'bonus_rubles': bonus_kopeks / 100,
+            'formatted_bonus': settings.format_price(bonus_kopeks),
+            'referral_name': referral_name,
         }
 
         return await self.send_notification(
@@ -660,8 +648,8 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about partner application approval."""
         context = {
-            "commission_percent": commission_percent,
-            "comment": comment or "",
+            'commission_percent': commission_percent,
+            'comment': comment or '',
         }
 
         return await self.send_notification(
@@ -681,7 +669,7 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about partner application rejection."""
         context = {
-            "comment": comment or "",
+            'comment': comment or '',
         }
 
         return await self.send_notification(
@@ -702,10 +690,10 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about withdrawal request approval."""
         context = {
-            "amount_kopeks": amount_kopeks,
-            "amount_rubles": amount_kopeks / 100,
-            "formatted_amount": settings.format_price(amount_kopeks),
-            "comment": comment or "",
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'comment': comment or '',
         }
 
         return await self.send_notification(
@@ -726,10 +714,10 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about withdrawal request rejection."""
         context = {
-            "amount_kopeks": amount_kopeks,
-            "amount_rubles": amount_kopeks / 100,
-            "formatted_amount": settings.format_price(amount_kopeks),
-            "comment": comment or "",
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'comment': comment or '',
         }
 
         return await self.send_notification(
@@ -751,12 +739,12 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about daily subscription debit."""
         context = {
-            "amount_kopeks": amount_kopeks,
-            "amount_rubles": amount_kopeks / 100,
-            "formatted_amount": settings.format_price(amount_kopeks),
-            "new_balance_kopeks": new_balance_kopeks,
-            "new_balance_rubles": new_balance_kopeks / 100,
-            "formatted_balance": settings.format_price(new_balance_kopeks),
+            'amount_kopeks': amount_kopeks,
+            'amount_rubles': amount_kopeks / 100,
+            'formatted_amount': settings.format_price(amount_kopeks),
+            'new_balance_kopeks': new_balance_kopeks,
+            'new_balance_rubles': new_balance_kopeks / 100,
+            'formatted_balance': settings.format_price(new_balance_kopeks),
         }
 
         return await self.send_notification(

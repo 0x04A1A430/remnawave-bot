@@ -9,7 +9,7 @@ from app.database.models import User, WelcomeText
 
 logger = structlog.get_logger(__name__)
 
-WELCOME_TEXT_KEY = "welcome_text"
+WELCOME_TEXT_KEY = 'welcome_text'
 
 
 async def get_active_welcome_text(db: AsyncSession) -> str | None:
@@ -29,32 +29,26 @@ async def get_active_welcome_text(db: AsyncSession) -> str | None:
 
 async def get_current_welcome_text_settings(db: AsyncSession) -> dict:
     result = await db.execute(
-        select(WelcomeText)
-        .where(WelcomeText.is_active == True)
-        .order_by(WelcomeText.updated_at.desc())
+        select(WelcomeText).where(WelcomeText.is_active == True).order_by(WelcomeText.updated_at.desc())
     )
     welcome_text = result.scalar_one_or_none()
 
     if welcome_text:
         return {
-            "text": welcome_text.text_content,
-            "is_enabled": welcome_text.is_enabled,
-            "id": welcome_text.id,
+            'text': welcome_text.text_content,
+            'is_enabled': welcome_text.is_enabled,
+            'id': welcome_text.id,
         }
 
     return {
-        "text": await get_current_welcome_text_or_default(),
-        "is_enabled": True,
-        "id": None,
+        'text': await get_current_welcome_text_or_default(),
+        'is_enabled': True,
+        'id': None,
     }
 
 
-async def get_welcome_text_by_id(
-    db: AsyncSession, welcome_text_id: int
-) -> WelcomeText | None:
-    result = await db.execute(
-        select(WelcomeText).where(WelcomeText.id == welcome_text_id)
-    )
+async def get_welcome_text_by_id(db: AsyncSession, welcome_text_id: int) -> WelcomeText | None:
+    result = await db.execute(select(WelcomeText).where(WelcomeText.id == welcome_text_id))
     return result.scalar_one_or_none()
 
 
@@ -73,9 +67,7 @@ async def list_welcome_texts(
     return result.scalars().all()
 
 
-async def count_welcome_texts(
-    db: AsyncSession, *, include_inactive: bool = True
-) -> int:
+async def count_welcome_texts(db: AsyncSession, *, include_inactive: bool = True) -> int:
     query = select(func.count(WelcomeText.id))
     if not include_inactive:
         query = query.where(WelcomeText.is_active == True)
@@ -87,9 +79,7 @@ async def count_welcome_texts(
 async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
     try:
         result = await db.execute(
-            select(WelcomeText)
-            .where(WelcomeText.is_active == True)
-            .order_by(WelcomeText.updated_at.desc())
+            select(WelcomeText).where(WelcomeText.is_active == True).order_by(WelcomeText.updated_at.desc())
         )
         welcome_text = result.scalar_one_or_none()
 
@@ -100,10 +90,8 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
             await db.commit()
             await db.refresh(welcome_text)
 
-            status = "включен" if welcome_text.is_enabled else "отключен"
-            logger.info(
-                "Приветственный текст администратором", status=status, admin_id=admin_id
-            )
+            status = 'включен' if welcome_text.is_enabled else 'отключен'
+            logger.info('Приветственный текст администратором', status=status, admin_id=admin_id)
             return welcome_text.is_enabled
         default_text = await get_current_welcome_text_or_default()
         new_welcome_text = WelcomeText(
@@ -118,13 +106,13 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
         await db.refresh(new_welcome_text)
 
         logger.info(
-            "Создан и включен дефолтный приветственный текст администратором",
+            'Создан и включен дефолтный приветственный текст администратором',
             admin_id=admin_id,
         )
         return True
 
     except Exception as e:
-        logger.error("Ошибка при переключении статуса приветственного текста", error=e)
+        logger.error('Ошибка при переключении статуса приветственного текста', error=e)
         await db.rollback()
         return False
 
@@ -132,7 +120,7 @@ async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
 async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -> bool:
     try:
         current_settings = await get_current_welcome_text_settings(db)
-        current_enabled_status = current_settings.get("is_enabled", True)
+        current_enabled_status = current_settings.get('is_enabled', True)
 
         await db.execute(update(WelcomeText).values(is_active=False))
 
@@ -147,13 +135,11 @@ async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -
         await db.commit()
         await db.refresh(new_welcome_text)
 
-        logger.info(
-            "Установлен новый приветственный текст администратором", admin_id=admin_id
-        )
+        logger.info('Установлен новый приветственный текст администратором', admin_id=admin_id)
         return True
 
     except Exception as e:
-        logger.error("Ошибка при установке приветственного текста", error=e)
+        logger.error('Ошибка при установке приветственного текста', error=e)
         await db.rollback()
         return False
 
@@ -187,7 +173,7 @@ async def create_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        "Создан приветственный текст",
+        'Создан приветственный текст',
         welcome_text_id=welcome_text.id,
         is_active=welcome_text.is_active,
         is_enabled=welcome_text.is_enabled,
@@ -204,11 +190,7 @@ async def update_welcome_text(
     is_active: bool | None = None,
 ) -> WelcomeText:
     if is_active:
-        await db.execute(
-            update(WelcomeText)
-            .where(WelcomeText.id != welcome_text.id)
-            .values(is_active=False)
-        )
+        await db.execute(update(WelcomeText).where(WelcomeText.id != welcome_text.id).values(is_active=False))
 
     if text_content is not None:
         welcome_text.text_content = text_content
@@ -225,7 +207,7 @@ async def update_welcome_text(
     await db.refresh(welcome_text)
 
     logger.info(
-        "Обновлен приветственный текст",
+        'Обновлен приветственный текст',
         welcome_text_id=welcome_text.id,
         is_active=welcome_text.is_active,
         is_enabled=welcome_text.is_enabled,
@@ -236,41 +218,39 @@ async def update_welcome_text(
 async def delete_welcome_text(db: AsyncSession, welcome_text: WelcomeText) -> None:
     await db.delete(welcome_text)
     await db.commit()
-    logger.info("Удален приветственный текст ID", welcome_text_id=welcome_text.id)
+    logger.info('Удален приветственный текст ID', welcome_text_id=welcome_text.id)
 
 
 async def get_current_welcome_text_or_default() -> str:
     return (
-        "Привет, {user_name}!  3 дней VPN бесплатно! "
-        "Подключайтесь за минуту и забудьте о блокировках. "
-        "До 1 Гбит/с скорость "
-        "Умный VPN — можно не отключать для большинства российских сервисов "
-        "Современные протоколы — максимум защиты и анонимности "
-        "Всего 99₽/мес за 1 устройство "
-        "Жмите кнопку и подключайтесь!"
+        'Привет, {user_name}!  3 дней VPN бесплатно! '
+        'Подключайтесь за минуту и забудьте о блокировках. '
+        'До 1 Гбит/с скорость '
+        'Умный VPN — можно не отключать для большинства российских сервисов '
+        'Современные протоколы — максимум защиты и анонимности '
+        'Всего 99₽/мес за 1 устройство '
+        'Жмите кнопку и подключайтесь!'
     )
 
 
 def replace_placeholders(text: str, user) -> str:
-    first_name = getattr(user, "first_name", None)
-    username = getattr(user, "username", None)
+    first_name = getattr(user, 'first_name', None)
+    username = getattr(user, 'username', None)
 
     first_name = first_name.strip() if first_name else None
     username = username.strip() if username else None
 
-    user_name = html.escape(first_name or username or "друг")
-    display_first_name = html.escape(first_name or "друг")
-    display_username = (
-        f"@{html.escape(username)}" if username else html.escape(first_name or "друг")
-    )
-    clean_username = html.escape(username or first_name or "друг")
+    user_name = html.escape(first_name or username or 'друг')
+    display_first_name = html.escape(first_name or 'друг')
+    display_username = f'@{html.escape(username)}' if username else html.escape(first_name or 'друг')
+    clean_username = html.escape(username or first_name or 'друг')
 
     replacements = {
-        "{user_name}": user_name,
-        "{first_name}": display_first_name,
-        "{username}": display_username,
-        "{username_clean}": clean_username,
-        "Egor": user_name,
+        '{user_name}': user_name,
+        '{first_name}': display_first_name,
+        '{username}': display_username,
+        '{username_clean}': clean_username,
+        'Egor': user_name,
     }
 
     result = text
@@ -300,8 +280,8 @@ async def get_welcome_text_for_user(db: AsyncSession, user) -> str:
 
 def get_available_placeholders() -> dict:
     return {
-        "{user_name}": 'Имя или username пользователя (приоритет: имя → username → "друг")',
-        "{first_name}": 'Только имя пользователя (или "друг" если не указано)',
-        "{username}": "Username с символом @ (или имя если username не указан)",
-        "{username_clean}": "Username без символа @ (или имя если username не указан)",
+        '{user_name}': 'Имя или username пользователя (приоритет: имя → username → "друг")',
+        '{first_name}': 'Только имя пользователя (или "друг" если не указано)',
+        '{username}': 'Username с символом @ (или имя если username не указан)',
+        '{username_clean}': 'Username без символа @ (или имя если username не указан)',
     }

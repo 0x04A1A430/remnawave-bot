@@ -37,7 +37,7 @@ class ChatTypeFilterMiddleware(BaseMiddleware):
 
         if chat is not None and chat.type != ChatType.PRIVATE:
             logger.debug(
-                "Dropping non-private chat event",
+                'Dropping non-private chat event',
                 chat_id=chat.id,
                 chat_type=chat.type,
             )

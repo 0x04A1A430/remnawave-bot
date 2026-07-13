@@ -21,8 +21,8 @@ class PublicOfferService:
 
     @staticmethod
     def _normalize_language(language: str) -> str:
-        base_language = language or settings.DEFAULT_LANGUAGE or "ru"
-        return base_language.split("-")[0].lower()
+        base_language = language or settings.DEFAULT_LANGUAGE or 'ru'
+        return base_language.split('-')[0].lower()
 
     @staticmethod
     def normalize_language(language: str) -> str:
@@ -67,11 +67,7 @@ class PublicOfferService:
         default_lang = cls._normalize_language(settings.DEFAULT_LANGUAGE)
         if lang != default_lang:
             fallback_offer = await get_public_offer(db, default_lang)
-            if (
-                fallback_offer
-                and fallback_offer.is_enabled
-                and fallback_offer.content.strip()
-            ):
+            if fallback_offer and fallback_offer.is_enabled and fallback_offer.content.strip():
                 return fallback_offer
 
         return None
@@ -96,7 +92,7 @@ class PublicOfferService:
             content,
             enable_if_new=enable_if_new,
         )
-        logger.info("Публичная оферта обновлена для языка", lang=lang)
+        logger.info('Публичная оферта обновлена для языка', lang=lang)
         return offer
 
     @classmethod
@@ -128,7 +124,7 @@ class PublicOfferService:
     class _RichTextPaginator(HTMLParser):
         """Split HTML-like text into Telegram-safe chunks."""
 
-        SELF_CLOSING_TAGS = {"br", "hr", "img", "input", "meta", "link"}
+        SELF_CLOSING_TAGS = {'br', 'hr', 'img', 'input', 'meta', 'link'}
 
         def __init__(self, max_len: int) -> None:
             super().__init__(convert_charrefs=False)
@@ -142,13 +138,13 @@ class PublicOfferService:
             self.prefix_length = 0
 
         def _closing_sequence(self) -> str:
-            return "".join(f"</{name}>" for name, _, _ in reversed(self.open_stack))
+            return ''.join(f'</{name}>' for name, _, _ in reversed(self.open_stack))
 
         def _ensure_prefix(self) -> None:
             if not self.needs_prefix:
                 return
 
-            prefix = "".join(token for _, token, _ in self.open_stack)
+            prefix = ''.join(token for _, token, _ in self.open_stack)
             if prefix:
                 self.current_parts.append(prefix)
                 self.current_length += len(prefix)
@@ -158,7 +154,7 @@ class PublicOfferService:
             if not self.current_parts and not self.closing_length:
                 return
 
-            content = "".join(self.current_parts)
+            content = ''.join(self.current_parts)
             closing_tags = self._closing_sequence()
             page = (content + closing_tags).strip()
             if page:
@@ -179,18 +175,15 @@ class PublicOfferService:
             parts = []
             for name, value in attrs:
                 if value is None:
-                    parts.append(f" {name}")
+                    parts.append(f' {name}')
                 else:
                     parts.append(f' {name}="{value}"')
-            return "".join(parts)
+            return ''.join(parts)
 
         def _append_token(self, token: str) -> None:
             while True:
                 self._ensure_prefix()
-                if (
-                    self.current_length + len(token) + self.closing_length
-                    <= self.max_len
-                ):
+                if self.current_length + len(token) + self.closing_length <= self.max_len:
                     self.current_parts.append(token)
                     self.current_length += len(token)
                     break
@@ -223,33 +216,27 @@ class PublicOfferService:
                     self._flush()
 
         def handle_entityref(self, name: str) -> None:
-            self.handle_data(f"&{name};")
+            self.handle_data(f'&{name};')
 
         def handle_charref(self, name: str) -> None:
-            self.handle_data(f"&#{name};")
+            self.handle_data(f'&#{name};')
 
-        def _handle_self_closing(
-            self, tag: str, attrs: list[tuple[str, str | None]]
-        ) -> None:
-            token = f"<{tag}{self._format_attrs(attrs)}/>"
+        def _handle_self_closing(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            token = f'<{tag}{self._format_attrs(attrs)}/>'
             self._append_token(token)
 
-        def handle_starttag(
-            self, tag: str, attrs: list[tuple[str, str | None]]
-        ) -> None:
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
             if tag in self.SELF_CLOSING_TAGS:
                 self._handle_self_closing(tag, attrs)
                 return
 
-            token = f"<{tag}{self._format_attrs(attrs)}>"
-            closing_token = f"</{tag}>"
+            token = f'<{tag}{self._format_attrs(attrs)}>'
+            closing_token = f'</{tag}>'
             closing_len = len(closing_token)
 
             while True:
                 self._ensure_prefix()
-                projected_length = (
-                    self.current_length + len(token) + self.closing_length + closing_len
-                )
+                projected_length = self.current_length + len(token) + self.closing_length + closing_len
                 if projected_length <= self.max_len:
                     self.current_parts.append(token)
                     self.current_length += len(token)
@@ -269,7 +256,7 @@ class PublicOfferService:
                     break
 
         def handle_endtag(self, tag: str) -> None:
-            token = f"</{tag}>"
+            token = f'</{tag}>'
             closing_len_reduction = 0
             index_to_remove = None
             for index in range(len(self.open_stack) - 1, -1, -1):
@@ -283,9 +270,7 @@ class PublicOfferService:
                 projected_closing_length = self.closing_length - closing_len_reduction
                 projected_closing_length = max(projected_closing_length, 0)
 
-                projected_total = (
-                    self.current_length + len(token) + projected_closing_length
-                )
+                projected_total = self.current_length + len(token) + projected_closing_length
                 if projected_total <= self.max_len or not self.current_parts:
                     self.current_parts.append(token)
                     self.current_length += len(token)
@@ -297,9 +282,7 @@ class PublicOfferService:
 
                 self._flush()
 
-        def handle_startendtag(
-            self, tag: str, attrs: list[tuple[str, str | None]]
-        ) -> None:
+        def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
             self._handle_self_closing(tag, attrs)
 
         def finalize(self) -> list[str]:
@@ -327,7 +310,7 @@ class PublicOfferService:
         if not content:
             return []
 
-        normalized = content.replace("\r\n", "\n").strip()
+        normalized = content.replace('\r\n', '\n').strip()
         if not normalized:
             return []
 
@@ -336,20 +319,16 @@ class PublicOfferService:
         if len(normalized) <= max_len:
             return [normalized]
 
-        paragraphs = [
-            paragraph.strip()
-            for paragraph in normalized.split("\n\n")
-            if paragraph.strip()
-        ]
+        paragraphs = [paragraph.strip() for paragraph in normalized.split('\n\n') if paragraph.strip()]
 
         pages: list[str] = []
-        current = ""
+        current = ''
 
         def flush_current() -> None:
             nonlocal current
             if current:
                 pages.append(current.strip())
-                current = ""
+                current = ''
 
         for paragraph in paragraphs:
             segments = cls._split_rich_paragraph(paragraph, max_len)
@@ -358,7 +337,7 @@ class PublicOfferService:
                 if not segment:
                     continue
 
-                candidate = f"{current}\n\n{segment}".strip() if current else segment
+                candidate = f'{current}\n\n{segment}'.strip() if current else segment
                 if len(candidate) <= max_len:
                     current = candidate
                     continue

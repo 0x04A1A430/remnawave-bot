@@ -31,7 +31,7 @@ class LevelFilterHandler(logging.Handler):
         filename: str,
         min_level: int,
         max_level: int | None = None,
-        encoding: str = "utf-8",
+        encoding: str = 'utf-8',
     ):
         super().__init__(level=min_level)
         self.min_level = min_level
@@ -68,26 +68,26 @@ class PaymentLogFilter(logging.Filter):
     """
 
     PAYMENT_MODULES = (
-        "app.payments",
-        "app.services.payment",
-        "app.services.yookassa_service",
-        "app.services.tribute_service",
-        "app.services.mulenpay_service",
-        "app.services.cloudpayments_service",
-        "app.services.platega_service",
-        "app.services.pal24_service",
-        "app.services.wata_service",
-        "app.services.kassa_ai_service",
-        "app.services.freekassa_service",
-        "app.external.cryptobot",
-        "app.external.heleket",
-        "app.external.tribute",
-        "app.external.yookassa_webhook",
-        "app.external.wata_webhook",
-        "app.external.heleket_webhook",
-        "app.external.pal24_client",
-        "app.external.telegram_stars",
-        "app.webserver.payments",
+        'app.payments',
+        'app.services.payment',
+        'app.services.yookassa_service',
+        'app.services.tribute_service',
+        'app.services.mulenpay_service',
+        'app.services.cloudpayments_service',
+        'app.services.platega_service',
+        'app.services.pal24_service',
+        'app.services.wata_service',
+        'app.services.kassa_ai_service',
+        'app.services.freekassa_service',
+        'app.external.cryptobot',
+        'app.external.heleket',
+        'app.external.tribute',
+        'app.external.yookassa_webhook',
+        'app.external.wata_webhook',
+        'app.external.heleket_webhook',
+        'app.external.pal24_client',
+        'app.external.telegram_stars',
+        'app.webserver.payments',
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -106,6 +106,4 @@ class ExcludePaymentFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         """Пропустить записи НЕ из платежных модулей."""
-        return not any(
-            record.name.startswith(module) for module in self.PAYMENT_MODULES
-        )
+        return not any(record.name.startswith(module) for module in self.PAYMENT_MODULES)

@@ -17,7 +17,7 @@ async def create_aurapay_payment(
     user_id: int | None,
     order_id: str,
     amount_kopeks: int,
-    currency: str = "RUB",
+    currency: str = 'RUB',
     description: str | None = None,
     payment_url: str | None = None,
     payment_method: str | None = None,
@@ -37,51 +37,35 @@ async def create_aurapay_payment(
         aurapay_invoice_id=aurapay_invoice_id,
         expires_at=expires_at,
         metadata_json=metadata_json,
-        status="pending",
+        status='pending',
         is_paid=False,
     )
     db.add(payment)
     await db.commit()
     await db.refresh(payment)
-    logger.info("Создан платеж AuraPay", order_id=order_id, user_id=user_id)
+    logger.info('Создан платеж AuraPay', order_id=order_id, user_id=user_id)
     return payment
 
 
-async def get_aurapay_payment_by_order_id(
-    db: AsyncSession, order_id: str
-) -> AuraPayPayment | None:
+async def get_aurapay_payment_by_order_id(db: AsyncSession, order_id: str) -> AuraPayPayment | None:
     """Получает платеж по order_id (internal)."""
-    result = await db.execute(
-        select(AuraPayPayment).where(AuraPayPayment.order_id == order_id)
-    )
+    result = await db.execute(select(AuraPayPayment).where(AuraPayPayment.order_id == order_id))
     return result.scalar_one_or_none()
 
 
-async def get_aurapay_payment_by_invoice_id(
-    db: AsyncSession, aurapay_invoice_id: str
-) -> AuraPayPayment | None:
+async def get_aurapay_payment_by_invoice_id(db: AsyncSession, aurapay_invoice_id: str) -> AuraPayPayment | None:
     """Получает платеж по UUID от AuraPay."""
-    result = await db.execute(
-        select(AuraPayPayment).where(
-            AuraPayPayment.aurapay_invoice_id == aurapay_invoice_id
-        )
-    )
+    result = await db.execute(select(AuraPayPayment).where(AuraPayPayment.aurapay_invoice_id == aurapay_invoice_id))
     return result.scalar_one_or_none()
 
 
-async def get_aurapay_payment_by_id(
-    db: AsyncSession, payment_id: int
-) -> AuraPayPayment | None:
+async def get_aurapay_payment_by_id(db: AsyncSession, payment_id: int) -> AuraPayPayment | None:
     """Получает платеж по ID."""
-    result = await db.execute(
-        select(AuraPayPayment).where(AuraPayPayment.id == payment_id)
-    )
+    result = await db.execute(select(AuraPayPayment).where(AuraPayPayment.id == payment_id))
     return result.scalar_one_or_none()
 
 
-async def get_aurapay_payment_by_id_for_update(
-    db: AsyncSession, payment_id: int
-) -> AuraPayPayment | None:
+async def get_aurapay_payment_by_id_for_update(db: AsyncSession, payment_id: int) -> AuraPayPayment | None:
     """Получает платеж по ID с блокировкой FOR UPDATE."""
     result = await db.execute(
         select(AuraPayPayment)
@@ -123,7 +107,7 @@ async def update_aurapay_payment_status(
     await db.commit()
     await db.refresh(payment)
     logger.info(
-        "Обновлен статус платежа AuraPay",
+        'Обновлен статус платежа AuraPay',
         order_id=payment.order_id,
         status=status,
         is_paid=payment.is_paid,
@@ -131,14 +115,12 @@ async def update_aurapay_payment_status(
     return payment
 
 
-async def get_pending_aurapay_payments(
-    db: AsyncSession, user_id: int
-) -> list[AuraPayPayment]:
+async def get_pending_aurapay_payments(db: AsyncSession, user_id: int) -> list[AuraPayPayment]:
     """Получает незавершенные платежи пользователя."""
     result = await db.execute(
         select(AuraPayPayment).where(
             AuraPayPayment.user_id == user_id,
-            AuraPayPayment.status == "pending",
+            AuraPayPayment.status == 'pending',
             AuraPayPayment.is_paid == False,
         )
     )
@@ -152,7 +134,7 @@ async def get_expired_pending_aurapay_payments(
     now = datetime.now(UTC)
     result = await db.execute(
         select(AuraPayPayment).where(
-            AuraPayPayment.status == "pending",
+            AuraPayPayment.status == 'pending',
             AuraPayPayment.is_paid == False,
             AuraPayPayment.expires_at < now,
         )

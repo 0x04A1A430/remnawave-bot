@@ -21,11 +21,11 @@ def _token_fingerprint(token: str | None) -> str:
     тайминговыми атаками. SHA-256 hex prefix даёт ту же useful-корреляцию без leak'а.
     """
     if not token:
-        return ""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+        return ''
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()[:16]
 
 
-JWT_ALGORITHM = "HS256"
+JWT_ALGORITHM = 'HS256'
 
 
 def create_access_token(
@@ -53,23 +53,23 @@ def create_access_token(
     expires = datetime.now(UTC) + timedelta(minutes=expire_minutes)
 
     payload = {
-        "sub": str(user_id),
-        "type": "access",
-        "exp": expires,
-        "iat": datetime.now(UTC),
+        'sub': str(user_id),
+        'type': 'access',
+        'exp': expires,
+        'iat': datetime.now(UTC),
     }
 
     # Добавляем telegram_id только если он есть
     if telegram_id is not None:
-        payload["telegram_id"] = telegram_id
+        payload['telegram_id'] = telegram_id
 
     # RBAC data — only include when provided to keep token compact
     if permissions is not None:
-        payload["permissions"] = permissions
+        payload['permissions'] = permissions
     if roles is not None:
-        payload["roles"] = roles
+        payload['roles'] = roles
     if role_level > 0:
-        payload["role_level"] = role_level
+        payload['role_level'] = role_level
 
     secret = settings.get_cabinet_jwt_secret()
     return jwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
@@ -89,10 +89,10 @@ def create_refresh_token(user_id: int) -> str:
     expires = datetime.now(UTC) + timedelta(days=expire_days)
 
     payload = {
-        "sub": str(user_id),
-        "type": "refresh",
-        "exp": expires,
-        "iat": datetime.now(UTC),
+        'sub': str(user_id),
+        'type': 'refresh',
+        'exp': expires,
+        'iat': datetime.now(UTC),
     }
 
     secret = settings.get_cabinet_jwt_secret()
@@ -116,20 +116,18 @@ def decode_token(token: str) -> dict[str, Any] | None:
         # Логирование причины помогает дебажить 401 на стороне юзера
         # (раньше тихо возвращали None — было невозможно понять, истёк токен
         # или подпись не сходится).
-        logger.debug("JWT decode: token expired", token_fp=_token_fingerprint(token))
+        logger.debug('JWT decode: token expired', token_fp=_token_fingerprint(token))
         return None
     except jwt.InvalidTokenError as err:
         logger.debug(
-            "JWT decode: invalid token",
+            'JWT decode: invalid token',
             token_fp=_token_fingerprint(token),
             error=str(err),
         )
         return None
 
 
-def get_token_payload(
-    token: str, expected_type: str = "access"
-) -> dict[str, Any] | None:
+def get_token_payload(token: str, expected_type: str = 'access') -> dict[str, Any] | None:
     """
     Decode token and verify its type.
 
@@ -145,13 +143,13 @@ def get_token_payload(
     if not payload:
         return None
 
-    actual_type = payload.get("type")
+    actual_type = payload.get('type')
     if actual_type != expected_type:
         logger.debug(
-            "JWT type mismatch",
+            'JWT type mismatch',
             expected=expected_type,
             actual=actual_type,
-            user_id=payload.get("sub"),
+            user_id=payload.get('sub'),
         )
         return None
 
@@ -162,14 +160,12 @@ def create_auto_login_token(user_id: int, ttl_hours: int = 72) -> str:
     """Short-lived JWT for auto-login from guest purchase success page."""
     expires = datetime.now(UTC) + timedelta(hours=ttl_hours)
     payload = {
-        "sub": str(user_id),
-        "type": "auto_login",
-        "exp": expires,
-        "iat": datetime.now(UTC),
+        'sub': str(user_id),
+        'type': 'auto_login',
+        'exp': expires,
+        'iat': datetime.now(UTC),
     }
-    return jwt.encode(
-        payload, settings.get_cabinet_jwt_secret(), algorithm=JWT_ALGORITHM
-    )
+    return jwt.encode(payload, settings.get_cabinet_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
 def get_refresh_token_expires_at() -> datetime:

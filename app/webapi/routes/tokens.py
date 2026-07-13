@@ -33,7 +33,7 @@ def _serialize(token: WebApiToken) -> TokenResponse:
     )
 
 
-@router.get("", response_model=list[TokenResponse])
+@router.get('', response_model=list[TokenResponse])
 async def get_tokens(
     _: WebApiToken = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -42,9 +42,7 @@ async def get_tokens(
     return [_serialize(token) for token in tokens]
 
 
-@router.post(
-    "", response_model=TokenCreateResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post('', response_model=TokenCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_token(
     payload: TokenCreateRequest,
     actor: WebApiToken = Security(require_api_token),
@@ -60,11 +58,11 @@ async def create_token(
     await db.commit()
 
     base = _serialize(token).model_dump()
-    base["token"] = token_value
+    base['token'] = token_value
     return TokenCreateResponse(**base)
 
 
-@router.post("/{token_id}/revoke", response_model=TokenResponse)
+@router.post('/{token_id}/revoke', response_model=TokenResponse)
 async def revoke_token(
     token_id: int,
     _: WebApiToken = Security(require_api_token),
@@ -72,14 +70,14 @@ async def revoke_token(
 ) -> TokenResponse:
     token = await get_token_by_id(db, token_id)
     if not token:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Token not found')
 
     await web_api_token_service.revoke_token(db, token)
     await db.commit()
     return _serialize(token)
 
 
-@router.post("/{token_id}/activate", response_model=TokenResponse)
+@router.post('/{token_id}/activate', response_model=TokenResponse)
 async def activate_token(
     token_id: int,
     _: WebApiToken = Security(require_api_token),
@@ -87,14 +85,14 @@ async def activate_token(
 ) -> TokenResponse:
     token = await get_token_by_id(db, token_id)
     if not token:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Token not found')
 
     await web_api_token_service.activate_token(db, token)
     await db.commit()
     return _serialize(token)
 
 
-@router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{token_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_token_endpoint(
     token_id: int,
     _: WebApiToken = Security(require_api_token),
@@ -102,7 +100,7 @@ async def delete_token_endpoint(
 ) -> Response:
     token = await get_token_by_id(db, token_id)
     if not token:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Token not found')
 
     await delete_token(db, token)
     await db.commit()

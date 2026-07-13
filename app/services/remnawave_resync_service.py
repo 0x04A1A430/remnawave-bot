@@ -34,20 +34,20 @@ async def resync_user_subscriptions_with_panel(
 
     if not service.is_configured:
         logger.warning(
-            "remnawave_resync: panel not configured, skipping resync",
+            'remnawave_resync: panel not configured, skipping resync',
             user_id=user.id,
             config_error=service.configuration_error,
         )
-        return {"synced": 0, "failed": 0, "total": 0, "skipped": True}
+        return {'synced': 0, 'failed': 0, 'total': 0, 'skipped': True}
 
     subscriptions = await get_active_subscriptions_by_user_id(db, int(user.id))
 
     if not subscriptions:
         logger.info(
-            "remnawave_resync: no active subscriptions found",
+            'remnawave_resync: no active subscriptions found',
             user_id=user.id,
         )
-        return {"synced": 0, "failed": 0, "total": 0, "skipped": False}
+        return {'synced': 0, 'failed': 0, 'total': 0, 'skipped': False}
 
     synced = 0
     failed = 0
@@ -55,10 +55,10 @@ async def resync_user_subscriptions_with_panel(
     for subscription in subscriptions:
         # Eagerly refresh tariff to avoid lazy-loading in async context.
         try:
-            await db.refresh(subscription, ["tariff"])
+            await db.refresh(subscription, ['tariff'])
         except Exception as exc:
             logger.debug(
-                "remnawave_resync: could not refresh tariff for subscription",
+                'remnawave_resync: could not refresh tariff for subscription',
                 subscription_id=subscription.id,
                 error=exc,
             )
@@ -82,23 +82,23 @@ async def resync_user_subscriptions_with_panel(
             if result is not None:
                 synced += 1
                 logger.info(
-                    "remnawave_resync: subscription synced",
+                    'remnawave_resync: subscription synced',
                     subscription_id=subscription.id,
                     user_id=user.id,
-                    action="update" if panel_user_exists else "create",
+                    action='update' if panel_user_exists else 'create',
                 )
             else:
                 failed += 1
                 logger.warning(
-                    "remnawave_resync: subscription sync returned None",
+                    'remnawave_resync: subscription sync returned None',
                     subscription_id=subscription.id,
                     user_id=user.id,
-                    action="update" if panel_user_exists else "create",
+                    action='update' if panel_user_exists else 'create',
                 )
         except Exception as exc:
             failed += 1
             logger.error(
-                "remnawave_resync: unexpected error syncing subscription",
+                'remnawave_resync: unexpected error syncing subscription',
                 subscription_id=subscription.id,
                 user_id=user.id,
                 error=exc,
@@ -106,11 +106,11 @@ async def resync_user_subscriptions_with_panel(
 
     total = len(subscriptions)
     logger.info(
-        "remnawave_resync: completed",
+        'remnawave_resync: completed',
         user_id=user.id,
         total=total,
         synced=synced,
         failed=failed,
     )
 
-    return {"synced": synced, "failed": failed, "total": total, "skipped": False}
+    return {'synced': synced, 'failed': failed, 'total': total, 'skipped': False}

@@ -20,7 +20,7 @@ class JupiterAPIError(Exception):
         self.status_code = status_code
         self.message = message
         self.api_code = code
-        super().__init__(f"Jupiter API error ({status_code}): {message}")
+        super().__init__(f'Jupiter API error ({status_code}): {message}')
 
 
 class JupiterService:
@@ -31,24 +31,24 @@ class JupiterService:
 
     @property
     def base_url(self) -> str:
-        return (settings.JUPITER_BASE_URL or "https://app.juppiter.tech").rstrip("/")
+        return (settings.JUPITER_BASE_URL or 'https://app.juppiter.tech').rstrip('/')
 
     @property
     def token(self) -> str:
-        return settings.JUPITER_TOKEN or ""
+        return settings.JUPITER_TOKEN or ''
 
     @property
     def secret(self) -> str:
-        return settings.JUPITER_SECRET or ""
+        return settings.JUPITER_SECRET or ''
 
     @property
     def method_id(self) -> str | None:
-        value = (settings.JUPITER_METHOD_ID or "").strip()
+        value = (settings.JUPITER_METHOD_ID or '').strip()
         return value or None
 
     @property
     def method_description(self) -> str:
-        return (settings.JUPITER_METHOD_DESCRIPTION or "SBP").strip() or "SBP"
+        return (settings.JUPITER_METHOD_DESCRIPTION or 'SBP').strip() or 'SBP'
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -77,64 +77,64 @@ class JupiterService:
                 chunks.append(f'{key}={"true" if value else "false"}')
                 continue
             value_str = str(value)
-            if value_str == "":
+            if value_str == '':
                 continue
-            chunks.append(f"{key}={value_str}")
-        return "".join(chunks)
+            chunks.append(f'{key}={value_str}')
+        return ''.join(chunks)
 
     def _hmac_hex(self, message: str) -> str:
         """HMAC-SHA256 в hex (регистр не важен по спецификации)."""
         return hmac.new(
-            self.secret.encode("utf-8"),
-            msg=message.encode("utf-8"),
+            self.secret.encode('utf-8'),
+            msg=message.encode('utf-8'),
             digestmod=hashlib.sha256,
         ).hexdigest()
 
     def _sign_payin(self, payload: dict[str, Any]) -> str:
-        amount = payload["amount"]
-        customer = payload["customer"]
+        amount = payload['amount']
+        customer = payload['customer']
         parts: list[tuple[str, Any]] = [
-            ("token", payload["token"]),
-            ("order_id", payload["order_id"]),
-            ("amount.value", amount["value"]),
-            ("amount.currency", amount["currency"]),
-            ("customer.id", customer["id"]),
-            ("redirect", payload["redirect"]),
+            ('token', payload['token']),
+            ('order_id', payload['order_id']),
+            ('amount.value', amount['value']),
+            ('amount.currency', amount['currency']),
+            ('customer.id', customer['id']),
+            ('redirect', payload['redirect']),
         ]
         return self._hmac_hex(self._build_signature_string(parts))
 
     def _sign_status(self, payload: dict[str, Any]) -> str:
         parts: list[tuple[str, Any]] = [
-            ("token", payload["token"]),
-            ("transaction_id", payload["transaction_id"]),
+            ('token', payload['token']),
+            ('transaction_id', payload['transaction_id']),
         ]
         return self._hmac_hex(self._build_signature_string(parts))
 
     def _sign_balance(self, payload: dict[str, Any]) -> str:
         parts: list[tuple[str, Any]] = [
-            ("token", payload["token"]),
+            ('token', payload['token']),
         ]
         return self._hmac_hex(self._build_signature_string(parts))
 
     @staticmethod
     def _format_amount(amount_rubles: float) -> str:
         """Сумма строго '0.00' с точкой-разделителем (требование P2P v2.1)."""
-        return f"{float(amount_rubles):.2f}"
+        return f'{float(amount_rubles):.2f}'
 
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = f'{self.base_url}/{path.lstrip("/")}'
-        body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+        body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
         try:
             session = await self._get_session()
             async with session.post(
                 url,
                 data=body,
-                headers={"Content-Type": "application/json"},
+                headers={'Content-Type': 'application/json'},
             ) as response:
                 data = await response.json(content_type=None)
-                return data if isinstance(data, dict) else {"_raw": data}
+                return data if isinstance(data, dict) else {'_raw': data}
         except aiohttp.ClientError as error:
-            logger.exception("Jupiter API connection error", url=url, error=error)
+            logger.exception('Jupiter API connection error', url=url, error=error)
             raise
 
     async def create_payment(
@@ -155,56 +155,50 @@ class JupiterService:
         POST /p2p_payin_v2.1
         """
         payload: dict[str, Any] = {
-            "token": self.token,
-            "order_id": order_id,
-            "amount": {
-                "value": self._format_amount(amount_rubles),
-                "currency": (settings.JUPITER_CURRENCY or "RUB").upper(),
+            'token': self.token,
+            'order_id': order_id,
+            'amount': {
+                'value': self._format_amount(amount_rubles),
+                'currency': (settings.JUPITER_CURRENCY or 'RUB').upper(),
             },
-            "customer": {
-                "id": str(customer_id),
-                "email": customer_email
-                or settings.JUPITER_FALLBACK_EMAIL
-                or "user@vpn.bot",
-                "phone": customer_phone
-                or settings.JUPITER_FALLBACK_PHONE
-                or "0000000000",
-                "name": customer_name or settings.JUPITER_FALLBACK_NAME or "User",
+            'customer': {
+                'id': str(customer_id),
+                'email': customer_email or settings.JUPITER_FALLBACK_EMAIL or 'user@vpn.bot',
+                'phone': customer_phone or settings.JUPITER_FALLBACK_PHONE or '0000000000',
+                'name': customer_name or settings.JUPITER_FALLBACK_NAME or 'User',
             },
-            "redirect": "false",
-            "description": (description or self.method_description)[:255],
+            'redirect': 'false',
+            'description': (description or self.method_description)[:255],
         }
 
         if self.method_id:
-            payload["method_id"] = self.method_id
+            payload['method_id'] = self.method_id
         if callback_url:
-            payload["callback_url"] = callback_url
+            payload['callback_url'] = callback_url
         if receipt:
-            payload["receipt"] = receipt[:255]
+            payload['receipt'] = receipt[:255]
 
-        payload["signature"] = self._sign_payin(payload)
+        payload['signature'] = self._sign_payin(payload)
 
-        logger.info(
-            "Jupiter API create_payment", order_id=order_id, amount_rubles=amount_rubles
-        )
+        logger.info('Jupiter API create_payment', order_id=order_id, amount_rubles=amount_rubles)
 
-        data = await self._post("/p2p_payin_v2.1", payload)
-        status = (data.get("status") or {}) if isinstance(data, dict) else {}
-        status_type = status.get("type")
+        data = await self._post('/p2p_payin_v2.1', payload)
+        status = (data.get('status') or {}) if isinstance(data, dict) else {}
+        status_type = status.get('type')
 
-        if status_type in ("processing", "success"):
+        if status_type in ('processing', 'success'):
             logger.info(
-                "Jupiter API payment created",
+                'Jupiter API payment created',
                 order_id=order_id,
-                transaction_id=data.get("transaction_id"),
+                transaction_id=data.get('transaction_id'),
                 status_type=status_type,
             )
             return data
 
-        error_code = status.get("error_code") or "0"
-        error_msg = status.get("error_description") or "Unknown error"
+        error_code = status.get('error_code') or '0'
+        error_msg = status.get('error_description') or 'Unknown error'
         logger.error(
-            "Jupiter create_payment error",
+            'Jupiter create_payment error',
             error_code=error_code,
             error_msg=error_msg,
             response_data=data,
@@ -217,13 +211,13 @@ class JupiterService:
         POST /p2p_status_v2.1
         """
         payload: dict[str, Any] = {
-            "token": self.token,
-            "transaction_id": str(transaction_id),
+            'token': self.token,
+            'transaction_id': str(transaction_id),
         }
-        payload["signature"] = self._sign_status(payload)
+        payload['signature'] = self._sign_status(payload)
 
-        logger.info("Jupiter check_payment", transaction_id=transaction_id)
-        data = await self._post("/p2p_status_v2.1", payload)
+        logger.info('Jupiter check_payment', transaction_id=transaction_id)
+        data = await self._post('/p2p_status_v2.1', payload)
         return data
 
     async def get_balance(self) -> dict[str, Any]:
@@ -231,41 +225,41 @@ class JupiterService:
 
         POST /p2p_balance_v2.1
         """
-        payload: dict[str, Any] = {"token": self.token}
-        payload["signature"] = self._sign_balance(payload)
-        data = await self._post("/p2p_balance_v2.1", payload)
+        payload: dict[str, Any] = {'token': self.token}
+        payload['signature'] = self._sign_balance(payload)
+        data = await self._post('/p2p_balance_v2.1', payload)
         return data
 
     def verify_callback_signature(self, payload: dict[str, Any]) -> bool:
         """Верификация подписи callback (HMAC-SHA256, hex)."""
         try:
-            received = (payload.get("signature") or "").strip()
+            received = (payload.get('signature') or '').strip()
             if not received:
-                logger.warning("Jupiter callback: отсутствует signature")
+                logger.warning('Jupiter callback: отсутствует signature')
                 return False
 
-            amount = payload.get("amount") or {}
-            status = payload.get("status") or {}
+            amount = payload.get('amount') or {}
+            status = payload.get('status') or {}
             parts: list[tuple[str, Any]] = [
-                ("token", payload.get("token")),
-                ("transaction_id", payload.get("transaction_id")),
-                ("order_id", payload.get("order_id")),
-                ("amount.value", amount.get("value")),
-                ("amount.currency", amount.get("currency")),
-                ("recalculated", payload.get("recalculated")),
-                ("status.type", status.get("type")),
+                ('token', payload.get('token')),
+                ('transaction_id', payload.get('transaction_id')),
+                ('order_id', payload.get('order_id')),
+                ('amount.value', amount.get('value')),
+                ('amount.currency', amount.get('currency')),
+                ('recalculated', payload.get('recalculated')),
+                ('status.type', status.get('type')),
             ]
             expected = self._hmac_hex(self._build_signature_string(parts))
             if not hmac.compare_digest(expected.lower(), received.lower()):
                 logger.warning(
-                    "Jupiter callback: invalid signature",
+                    'Jupiter callback: invalid signature',
                     expected_prefix=expected[:8],
                     received_prefix=received[:8],
                 )
                 return False
             return True
         except Exception as error:
-            logger.error("Jupiter callback verify error", error=error)
+            logger.error('Jupiter callback verify error', error=error)
             return False
 
 

@@ -40,7 +40,7 @@ async def log_promo_offer_action(
             await db.commit()
             await db.refresh(entry)
         except Exception:
-            logger.exception("Failed to commit promo offer log entry")
+            logger.exception('Failed to commit promo offer log entry')
             raise
     else:
         await db.flush()

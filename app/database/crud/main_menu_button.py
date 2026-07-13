@@ -37,12 +37,8 @@ async def get_main_menu_buttons(
     return list(result.scalars().all())
 
 
-async def get_main_menu_button_by_id(
-    db: AsyncSession, button_id: int
-) -> MainMenuButton | None:
-    result = await db.execute(
-        select(MainMenuButton).where(MainMenuButton.id == button_id)
-    )
+async def get_main_menu_button_by_id(db: AsyncSession, button_id: int) -> MainMenuButton | None:
+    result = await db.execute(select(MainMenuButton).where(MainMenuButton.id == button_id))
     return result.scalar_one_or_none()
 
 
@@ -77,8 +73,7 @@ async def create_main_menu_button(
         text=text,
         action_type=_enum_value(action_type, MainMenuButtonActionType),
         action_value=action_value,
-        visibility=_enum_value(visibility, MainMenuButtonVisibility)
-        or MainMenuButtonVisibility.ALL.value,
+        visibility=_enum_value(visibility, MainMenuButtonVisibility) or MainMenuButtonVisibility.ALL.value,
         is_active=bool(is_active),
         display_order=int(display_order),
     )
@@ -132,9 +127,7 @@ async def reorder_main_menu_buttons(
 
     order_map = {int(button_id): index for index, button_id in enumerate(ordered_ids)}
 
-    result = await db.execute(
-        select(MainMenuButton).where(MainMenuButton.id.in_(order_map.keys()))
-    )
+    result = await db.execute(select(MainMenuButton).where(MainMenuButton.id.in_(order_map.keys())))
     buttons = result.scalars().all()
 
     for button in buttons:

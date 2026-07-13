@@ -46,7 +46,7 @@ def _make_user(telegram_id: int = TELEGRAM_ID) -> MagicMock:
     u = MagicMock()
     u.id = 1
     u.telegram_id = telegram_id
-    u.referral_code = "refABC123"
+    u.referral_code = 'refABC123'
     u.promo_group = None
     return u
 
@@ -69,19 +69,19 @@ def _make_db(
 
 def _integrity_error_with_constraint(constraint_name: str) -> IntegrityError:
     """IntegrityError с asyncpg-стилевым ``constraint_name`` на исходном исключении."""
-    asyncpg_exc = Exception("UniqueViolationError")
+    asyncpg_exc = Exception('UniqueViolationError')
     asyncpg_exc.constraint_name = constraint_name  # type: ignore[attr-defined]
 
-    orig = Exception("asyncpg wrapper")
+    orig = Exception('asyncpg wrapper')
     orig.__cause__ = asyncpg_exc  # type: ignore[attr-defined]
 
-    return IntegrityError("INSERT", {}, orig)
+    return IntegrityError('INSERT', {}, orig)
 
 
 def _integrity_error_text_only(message: str) -> IntegrityError:
     """IntegrityError без ``constraint_name`` — только текст (строковый fallback)."""
     orig = Exception(message)
-    return IntegrityError("INSERT", {}, orig)
+    return IntegrityError('INSERT', {}, orig)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -92,27 +92,25 @@ def _integrity_error_text_only(message: str) -> IntegrityError:
 class TestViolatedConstraint:
     def test_prefers_asyncpg_cause_constraint_name(self):
         """`constraint_name` из `cause` читается в первую очередь."""
-        exc = _integrity_error_with_constraint("ix_users_telegram_id")
-        assert _violated_constraint(exc) == "ix_users_telegram_id"
+        exc = _integrity_error_with_constraint('ix_users_telegram_id')
+        assert _violated_constraint(exc) == 'ix_users_telegram_id'
 
     def test_falls_back_to_orig_constraint_name(self):
         """`constraint_name` на самом `orig` используется как вторичный fallback."""
-        orig = Exception("some error")
-        orig.constraint_name = "users_pkey"  # type: ignore[attr-defined]
-        exc = IntegrityError("INSERT", {}, orig)
-        assert _violated_constraint(exc) == "users_pkey"
+        orig = Exception('some error')
+        orig.constraint_name = 'users_pkey'  # type: ignore[attr-defined]
+        exc = IntegrityError('INSERT', {}, orig)
+        assert _violated_constraint(exc) == 'users_pkey'
 
     def test_falls_back_to_str_orig_when_no_attribute(self):
         """Без `constraint_name` возвращается строковое представление `orig`."""
-        exc = _integrity_error_text_only(
-            'duplicate key value violates unique constraint "ix_users_telegram_id"'
-        )
+        exc = _integrity_error_text_only('duplicate key value violates unique constraint "ix_users_telegram_id"')
         result = _violated_constraint(exc)
-        assert "ix_users_telegram_id" in result
+        assert 'ix_users_telegram_id' in result
 
     def test_handles_missing_orig(self):
         """Если у `exc` нет `orig` совсем — не падает, возвращает строку exc."""
-        exc = IntegrityError("INSERT", {}, Exception("bare error"))
+        exc = IntegrityError('INSERT', {}, Exception('bare error'))
         # orig есть — третий аргумент. Это нормальный путь; проверяем, что нет AttributeError.
         result = _violated_constraint(exc)
         assert isinstance(result, str)
@@ -120,8 +118,8 @@ class TestViolatedConstraint:
     def test_returns_str_not_none(self):
         """Функция всегда возвращает str, никогда None."""
         for exc in [
-            _integrity_error_with_constraint("some_constraint"),
-            _integrity_error_text_only("plain text error"),
+            _integrity_error_with_constraint('some_constraint'),
+            _integrity_error_text_only('plain text error'),
         ]:
             result = _violated_constraint(exc)
             assert isinstance(result, str)
@@ -137,7 +135,7 @@ def _patch_dependencies(
     db: AsyncMock,
     existing_user=None,
     promo_group_id: int = 1,
-    referral_code: str = "refABC123",
+    referral_code: str = 'refABC123',
 ):
     """Контекстный менеджер с подменой всех внешних зависимостей create_user."""
     default_group = MagicMock()
@@ -145,28 +143,28 @@ def _patch_dependencies(
 
     return [
         patch(
-            "app.database.crud.user.create_unique_referral_code",
+            'app.database.crud.user.create_unique_referral_code',
             new=AsyncMock(return_value=referral_code),
         ),
-        patch("app.database.crud.user._normalize_language_code", return_value="ru"),
+        patch('app.database.crud.user._normalize_language_code', return_value='ru'),
         patch(
-            "app.database.crud.user._get_or_create_default_promo_group",
+            'app.database.crud.user._get_or_create_default_promo_group',
             new=AsyncMock(return_value=default_group),
         ),
-        patch("app.database.crud.user.sanitize_telegram_name", side_effect=lambda x: x),
+        patch('app.database.crud.user.sanitize_telegram_name', side_effect=lambda x: x),
         patch(
-            "app.database.crud.user.get_user_by_telegram_id",
+            'app.database.crud.user.get_user_by_telegram_id',
             new=AsyncMock(return_value=existing_user),
         ),
         # Redis — отключаем
         patch(
-            "app.services.referral_service.get_pending_referral",
+            'app.services.referral_service.get_pending_referral',
             new=AsyncMock(return_value=None),
             create=True,
         ),
         # event_emitter — отключаем
         patch(
-            "app.services.event_emitter.event_emitter",
+            'app.services.event_emitter.event_emitter',
             new=MagicMock(emit=AsyncMock()),
             create=True,
         ),
@@ -190,11 +188,9 @@ class TestCreateUserHappyPath:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=user),
+            patch('app.database.crud.user.User', return_value=user),
         ):
-            result = await create_user(
-                db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-            )
+            result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         db.add.assert_called_once_with(user)
         db.commit.assert_awaited_once()
@@ -202,14 +198,10 @@ class TestCreateUserHappyPath:
 
 
 class TestCreateUserRaceCondition:
-    async def test_returns_existing_user_on_telegram_id_constraint_via_constraint_name(
-        self, monkeypatch
-    ):
+    async def test_returns_existing_user_on_telegram_id_constraint_via_constraint_name(self, monkeypatch):
         """Гонка через constraint_name (asyncpg) → возвращаем уже существующего, без исключения."""
         existing = _make_user()
-        db = _make_db(
-            commit_side_effect=_integrity_error_with_constraint("ix_users_telegram_id")
-        )
+        db = _make_db(commit_side_effect=_integrity_error_with_constraint('ix_users_telegram_id'))
         new_user = _make_user()
 
         patches = _patch_dependencies(db, existing_user=existing)
@@ -221,20 +213,16 @@ class TestCreateUserRaceCondition:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=new_user),
+            patch('app.database.crud.user.User', return_value=new_user),
         ):
-            result = await create_user(
-                db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-            )
+            result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         assert result is existing
         db.rollback.assert_awaited_once()
         # Не должны повторно коммитить или вставлять вторую запись
         assert db.commit.await_count == 1  # единственный вызов — который упал
 
-    async def test_returns_existing_user_on_telegram_id_constraint_via_text_fallback(
-        self, monkeypatch
-    ):
+    async def test_returns_existing_user_on_telegram_id_constraint_via_text_fallback(self, monkeypatch):
         """Гонка через строку ошибки (fallback) → тот же результат."""
         existing = _make_user()
         db = _make_db(
@@ -253,11 +241,9 @@ class TestCreateUserRaceCondition:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=new_user),
+            patch('app.database.crud.user.User', return_value=new_user),
         ):
-            result = await create_user(
-                db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-            )
+            result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         assert result is existing
         db.rollback.assert_awaited_once()
@@ -265,9 +251,7 @@ class TestCreateUserRaceCondition:
     async def test_does_not_emit_user_created_event_for_race_winner(self, monkeypatch):
         """При гонке событие user.created не дублируется (победитель уже отправил его)."""
         existing = _make_user()
-        db = _make_db(
-            commit_side_effect=_integrity_error_with_constraint("ix_users_telegram_id")
-        )
+        db = _make_db(commit_side_effect=_integrity_error_with_constraint('ix_users_telegram_id'))
         new_user = _make_user()
         emit_mock = AsyncMock()
 
@@ -280,22 +264,20 @@ class TestCreateUserRaceCondition:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=new_user),
+            patch('app.database.crud.user.User', return_value=new_user),
             patch(
-                "app.services.event_emitter.event_emitter",
+                'app.services.event_emitter.event_emitter',
                 new=MagicMock(emit=emit_mock),
                 create=True,
             ),
         ):
-            await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123")
+            await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         emit_mock.assert_not_awaited()
 
     async def test_raises_when_existing_user_not_found_after_conflict(self):
         """Конфликт есть, но SELECT после rollback ничего не нашёл → IntegrityError наверх."""
-        db = _make_db(
-            commit_side_effect=_integrity_error_with_constraint("ix_users_telegram_id")
-        )
+        db = _make_db(commit_side_effect=_integrity_error_with_constraint('ix_users_telegram_id'))
         new_user = _make_user()
 
         # get_user_by_telegram_id всегда возвращает None
@@ -308,12 +290,10 @@ class TestCreateUserRaceCondition:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=new_user),
+            patch('app.database.crud.user.User', return_value=new_user),
         ):
             with pytest.raises(IntegrityError):
-                await create_user(
-                    db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-                )
+                await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         # rollback дёргался на каждой попытке (3 попытки)
         assert db.rollback.await_count == 3
@@ -324,12 +304,12 @@ class TestCreateUserSequenceDesync:
         """PK-конфликт (users_pkey) → синхронизирует последовательность и повторяет вставку."""
         user = _make_user()
 
-        call_count = {"n": 0}
+        call_count = {'n': 0}
 
         async def commit_once_then_ok():
-            call_count["n"] += 1
-            if call_count["n"] == 1:
-                raise _integrity_error_with_constraint("users_pkey")
+            call_count['n'] += 1
+            if call_count['n'] == 1:
+                raise _integrity_error_with_constraint('users_pkey')
             # Второй вызов — успех (ничего не делаем)
 
         db = _make_db()
@@ -346,12 +326,10 @@ class TestCreateUserSequenceDesync:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=user),
-            patch("app.database.crud.user._sync_users_sequence", new=sync_mock),
+            patch('app.database.crud.user.User', return_value=user),
+            patch('app.database.crud.user._sync_users_sequence', new=sync_mock),
         ):
-            result = await create_user(
-                db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-            )
+            result = await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         sync_mock.assert_awaited_once()
         assert db.commit.await_count == 2
@@ -359,7 +337,7 @@ class TestCreateUserSequenceDesync:
 
     async def test_raises_on_third_pkey_conflict(self, monkeypatch):
         """Три PK-конфликта подряд → RuntimeError (не может синхронизировать)."""
-        db = _make_db(commit_side_effect=_integrity_error_with_constraint("users_pkey"))
+        db = _make_db(commit_side_effect=_integrity_error_with_constraint('users_pkey'))
         new_user = _make_user()
         sync_mock = AsyncMock()
 
@@ -372,13 +350,11 @@ class TestCreateUserSequenceDesync:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=new_user),
-            patch("app.database.crud.user._sync_users_sequence", new=sync_mock),
+            patch('app.database.crud.user.User', return_value=new_user),
+            patch('app.database.crud.user._sync_users_sequence', new=sync_mock),
         ):
             with pytest.raises(IntegrityError):
-                await create_user(
-                    db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-                )
+                await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         # Синхронизация дёргалась на первых двух попытках, третья — reraise
         assert sync_mock.await_count == 2
@@ -403,11 +379,9 @@ class TestCreateUserUnknownIntegrityError:
             patches[4],
             patches[5],
             patches[6],
-            patch("app.database.crud.user.User", return_value=new_user),
+            patch('app.database.crud.user.User', return_value=new_user),
         ):
             with pytest.raises(IntegrityError):
-                await create_user(
-                    db=db, telegram_id=TELEGRAM_ID, referral_code="refABC123"
-                )
+                await create_user(db=db, telegram_id=TELEGRAM_ID, referral_code='refABC123')
 
         db.rollback.assert_awaited()

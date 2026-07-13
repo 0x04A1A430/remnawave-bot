@@ -13,10 +13,10 @@ from fastapi import HTTPException
 from app.services import overpay_certificate_service as cert_service
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def p12_bytes():
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "overpay-test")])
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'overpay-test')])
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -27,20 +27,16 @@ def p12_bytes():
         .not_valid_after(datetime.now(UTC) + timedelta(days=365))
         .sign(key, hashes.SHA256())
     )
-    return pkcs12.serialize_key_and_certificates(
-        b"test", key, cert, None, BestAvailableEncryption(b"secret")
-    )
+    return pkcs12.serialize_key_and_certificates(b'test', key, cert, None, BestAvailableEncryption(b'secret'))
 
 
 @pytest.fixture
 def stubbed_service(monkeypatch, tmp_path):
-    config_service = SimpleNamespace(
-        set_value=AsyncMock(), is_env_overridden=lambda key: False
-    )
+    config_service = SimpleNamespace(set_value=AsyncMock(), is_env_overridden=lambda key: False)
     overpay = SimpleNamespace(close=AsyncMock())
-    monkeypatch.setattr(cert_service, "CERTS_DIR", tmp_path / "certs")
-    monkeypatch.setattr(cert_service, "bot_configuration_service", config_service)
-    monkeypatch.setattr(cert_service, "overpay_service", overpay)
+    monkeypatch.setattr(cert_service, 'CERTS_DIR', tmp_path / 'certs')
+    monkeypatch.setattr(cert_service, 'bot_configuration_service', config_service)
+    monkeypatch.setattr(cert_service, 'overpay_service', overpay)
     return config_service
 
 
@@ -53,9 +49,9 @@ def test_admin_overpay_certificate_routes_registered():
 
     methods = set()
     for route in router.routes:
-        if route.path == "/cabinet/admin/overpay/certificate":
+        if route.path == '/cabinet/admin/overpay/certificate':
             methods |= route.methods
-    assert methods == {"GET", "POST", "DELETE"}
+    assert methods == {'GET', 'POST', 'DELETE'}
 
 
 @pytest.mark.asyncio
@@ -65,12 +61,12 @@ async def test_upload_certificate_commits(stubbed_service, p12_bytes):
     db = AsyncMock()
     response = await admin_overpay_certificate.upload_certificate(
         file=_fake_upload(p12_bytes),
-        passphrase="secret",
+        passphrase='secret',
         admin=SimpleNamespace(id=1),
         db=db,
     )
 
-    assert response.subject == "CN=overpay-test"
+    assert response.subject == 'CN=overpay-test'
     assert response.path == str(cert_service.get_canonical_path())
     assert response.warning is None
     assert cert_service.get_canonical_path().read_bytes() == p12_bytes
@@ -85,7 +81,7 @@ async def test_upload_certificate_env_locked_warning(stubbed_service, p12_bytes)
     db = AsyncMock()
     response = await admin_overpay_certificate.upload_certificate(
         file=_fake_upload(p12_bytes),
-        passphrase="secret",
+        passphrase='secret',
         admin=SimpleNamespace(id=1),
         db=db,
     )
@@ -103,8 +99,8 @@ async def test_upload_certificate_invalid_returns_422(stubbed_service):
     db = AsyncMock()
     with pytest.raises(HTTPException) as exc_info:
         await admin_overpay_certificate.upload_certificate(
-            file=_fake_upload(b"garbage"),
-            passphrase="",
+            file=_fake_upload(b'garbage'),
+            passphrase='',
             admin=SimpleNamespace(id=1),
             db=db,
         )
@@ -120,8 +116,8 @@ async def test_upload_certificate_oversize_returns_413(stubbed_service):
     db = AsyncMock()
     with pytest.raises(HTTPException) as exc_info:
         await admin_overpay_certificate.upload_certificate(
-            file=_fake_upload(b"0" * (cert_service.MAX_P12_SIZE + 1)),
-            passphrase="",
+            file=_fake_upload(b'0' * (cert_service.MAX_P12_SIZE + 1)),
+            passphrase='',
             admin=SimpleNamespace(id=1),
             db=db,
         )
@@ -137,15 +133,13 @@ async def test_delete_certificate_commits(stubbed_service, p12_bytes):
     db = AsyncMock()
     await admin_overpay_certificate.upload_certificate(
         file=_fake_upload(p12_bytes),
-        passphrase="secret",
+        passphrase='secret',
         admin=SimpleNamespace(id=1),
         db=db,
     )
     db.reset_mock()
 
-    await admin_overpay_certificate.delete_certificate(
-        admin=SimpleNamespace(id=1), db=db
-    )
+    await admin_overpay_certificate.delete_certificate(admin=SimpleNamespace(id=1), db=db)
 
     assert not cert_service.get_canonical_path().exists()
     db.commit.assert_awaited_once()

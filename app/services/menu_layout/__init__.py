@@ -22,15 +22,15 @@ from .service import MenuLayoutService
 from .stats_service import MenuLayoutStatsService
 
 __all__ = [
-    "AVAILABLE_CALLBACKS",
-    "BUILTIN_BUTTONS_INFO",
-    "DEFAULT_MENU_CONFIG",
-    "DYNAMIC_PLACEHOLDERS",
+    'AVAILABLE_CALLBACKS',
+    'BUILTIN_BUTTONS_INFO',
+    'DEFAULT_MENU_CONFIG',
+    'DYNAMIC_PLACEHOLDERS',
     # Константы
-    "MENU_LAYOUT_CONFIG_KEY",
+    'MENU_LAYOUT_CONFIG_KEY',
     # Классы
-    "MenuContext",
-    "MenuLayoutHistoryService",
-    "MenuLayoutService",
-    "MenuLayoutStatsService",
+    'MenuContext',
+    'MenuLayoutHistoryService',
+    'MenuLayoutService',
+    'MenuLayoutStatsService',
 ]

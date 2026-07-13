@@ -55,7 +55,7 @@ class TicketReplyRequest(BaseModel):
     message_text: str | None = Field(default=None, max_length=4000)
     media_type: str | None = Field(
         default=None,
-        description="Тип медиа (photo, video, document, voice и т.д.)",
+        description='Тип медиа (photo, video, document, voice и т.д.)',
         max_length=32,
     )
     media_file_id: str | None = Field(default=None, max_length=255)

@@ -49,12 +49,12 @@ _GATEWAY_REGISTRY: list[tuple[str, type, object]] = [
     (
         PaymentMethod.CRYPTOBOT.value,
         CryptoBotPayment,
-        CryptoBotPayment.status == "paid",
+        CryptoBotPayment.status == 'paid',
     ),
     (
         PaymentMethod.HELEKET.value,
         HeleketPayment,
-        HeleketPayment.status.in_(("paid", "paid_over")),
+        HeleketPayment.status.in_(('paid', 'paid_over')),
     ),
     (PaymentMethod.MULENPAY.value, MulenPayPayment, MulenPayPayment.is_paid.is_(True)),
     (PaymentMethod.PAL24.value, Pal24Payment, Pal24Payment.is_paid.is_(True)),
@@ -107,8 +107,8 @@ async def get_gateway_success_rates(
     for method, model, paid_predicate in _GATEWAY_REGISTRY:
         result = await db.execute(
             select(
-                func.count(model.id).label("total"),
-                func.count(case((paid_predicate, model.id))).label("paid"),
+                func.count(model.id).label('total'),
+                func.count(case((paid_predicate, model.id))).label('paid'),
             ).where(
                 and_(
                     model.created_at >= period_start,
@@ -123,11 +123,11 @@ async def get_gateway_success_rates(
         paid = row.paid or 0
         rows.append(
             {
-                "method": method,
-                "total": total,
-                "paid": paid,
-                "success_rate": round(paid / total * 100, 1),
+                'method': method,
+                'total': total,
+                'paid': paid,
+                'success_rate': round(paid / total * 100, 1),
             }
         )
-    rows.sort(key=lambda item: item["total"], reverse=True)
+    rows.sort(key=lambda item: item['total'], reverse=True)
     return rows

@@ -32,12 +32,7 @@ import ast
 from pathlib import Path
 
 PURCHASE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "app"
-    / "cabinet"
-    / "routes"
-    / "subscription_modules"
-    / "purchase.py"
+    Path(__file__).resolve().parents[2] / 'app' / 'cabinet' / 'routes' / 'subscription_modules' / 'purchase.py'
 )
 
 
@@ -45,13 +40,13 @@ def _find_async_function(tree: ast.Module, name: str) -> ast.AsyncFunctionDef:
     for node in ast.walk(tree):
         if isinstance(node, ast.AsyncFunctionDef) and node.name == name:
             return node
-    raise AssertionError(f"async function {name!r} not found in cabinet purchase.py")
+    raise AssertionError(f'async function {name!r} not found in cabinet purchase.py')
 
 
 def _function_source(source: str, func: ast.AsyncFunctionDef) -> str:
     lines = source.splitlines(keepends=True)
     end_line = func.end_lineno or len(lines)
-    return "".join(lines[func.lineno - 1 : end_line])
+    return ''.join(lines[func.lineno - 1 : end_line])
 
 
 def test_purchase_tariff_tariff_lookup_includes_inactive() -> None:
@@ -60,22 +55,22 @@ def test_purchase_tariff_tariff_lookup_includes_inactive() -> None:
     same-tariff trial is found and converted in place rather than missed →
     killed → re-created with a new Remnawave link.
     """
-    source = PURCHASE_PATH.read_text(encoding="utf-8")
+    source = PURCHASE_PATH.read_text(encoding='utf-8')
     tree = ast.parse(source)
-    func = _find_async_function(tree, "purchase_tariff")
+    func = _find_async_function(tree, 'purchase_tariff')
     body = _function_source(source, func)
 
     # The CALL (paren) — not the import line, which mentions the name without a
     # paren. The call may wrap across lines, so inspect a window over its args.
-    call_idx = body.find("get_subscription_by_user_and_tariff(")
+    call_idx = body.find('get_subscription_by_user_and_tariff(')
     assert call_idx >= 0, (
-        "purchase_tariff must resolve the existing subscription by (user, tariff) "
-        "via get_subscription_by_user_and_tariff"
+        'purchase_tariff must resolve the existing subscription by (user, tariff) '
+        'via get_subscription_by_user_and_tariff'
     )
     call_window = body[call_idx : call_idx + 200]
-    assert "include_inactive=True" in call_window, (
-        "purchase_tariff must call get_subscription_by_user_and_tariff(..., "
-        "include_inactive=True) so an EXPIRED trial of the same tariff is found and "
-        "converted in place. Without it the expired trial is missed, killed, and a "
-        "new subscription with a new Remnawave link is created (prod bug 2026-06)."
+    assert 'include_inactive=True' in call_window, (
+        'purchase_tariff must call get_subscription_by_user_and_tariff(..., '
+        'include_inactive=True) so an EXPIRED trial of the same tariff is found and '
+        'converted in place. Without it the expired trial is missed, killed, and a '
+        'new subscription with a new Remnawave link is created (prod bug 2026-06).'
     )

@@ -20,20 +20,20 @@ from app.external.cryptobot import CryptoBotService
 
 @pytest.fixture
 def anyio_backend() -> str:
-    return "asyncio"
+    return 'asyncio'
 
 
 def _enable_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "CRYPTOBOT_API_TOKEN", "token", raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'token', raising=False)
     monkeypatch.setattr(
         type(settings),
-        "get_cryptobot_base_url",
-        lambda self: "https://cryptobot.test",
+        'get_cryptobot_base_url',
+        lambda self: 'https://cryptobot.test',
         raising=False,
     )
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_invoice_uses_make_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -42,56 +42,54 @@ async def test_create_invoice_uses_make_request(
 
     captured: dict[str, Any] = {}
 
-    async def fake_make_request(
-        method: str, endpoint: str, data: dict[str, Any] | None = None
-    ):
-        captured["method"] = method
-        captured["endpoint"] = endpoint
-        captured["data"] = data
-        return {"invoice_id": 1}
+    async def fake_make_request(method: str, endpoint: str, data: dict[str, Any] | None = None):
+        captured['method'] = method
+        captured['endpoint'] = endpoint
+        captured['data'] = data
+        return {'invoice_id': 1}
 
-    monkeypatch.setattr(service, "_make_request", fake_make_request, raising=False)
+    monkeypatch.setattr(service, '_make_request', fake_make_request, raising=False)
 
     result = await service.create_invoice(
-        amount="10.00",
-        asset="USDT",
-        description="Пополнение",
-        payload="payload",
+        amount='10.00',
+        asset='USDT',
+        description='Пополнение',
+        payload='payload',
         expires_in=600,
     )
 
-    assert result == {"invoice_id": 1}
-    assert captured["method"] == "POST"
-    assert captured["endpoint"] == "createInvoice"
-    assert captured["data"]["amount"] == "10.00"
-    assert captured["data"]["payload"] == "payload"
+    assert result == {'invoice_id': 1}
+    assert captured['method'] == 'POST'
+    assert captured['endpoint'] == 'createInvoice'
+    assert captured['data']['amount'] == '10.00'
+    assert captured['data']['payload'] == 'payload'
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_make_request_returns_none_without_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "CRYPTOBOT_API_TOKEN", "", raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', '', raising=False)
     service = CryptoBotService()
-    result = await service._make_request("GET", "getMe")
+    result = await service._make_request('GET', 'getMe')
     assert result is None
 
 
 def test_verify_webhook_signature(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "CRYPTOBOT_API_TOKEN", "supersecret", raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', 'supersecret', raising=False)
     service = CryptoBotService()
 
     body = '{"invoice_id":1}'
-    secret_hash = hashlib.sha256(b"supersecret").digest()
+    secret_hash = hashlib.sha256(b'supersecret').digest()
     signature = hmac.new(secret_hash, body.encode(), hashlib.sha256).hexdigest()
 
     assert service.verify_webhook_signature(body, signature) is True
-    assert service.verify_webhook_signature(body, "invalid") is False
+    assert service.verify_webhook_signature(body, 'invalid') is False
 
 
 def test_verify_webhook_signature_without_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "CRYPTOBOT_API_TOKEN", "", raising=False)
+    monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', '', raising=False)
     service = CryptoBotService()
-    assert service.verify_webhook_signature("{}", "anything") is True
+    assert service.verify_webhook_signature('{}', 'anything') is True

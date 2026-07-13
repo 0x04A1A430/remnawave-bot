@@ -14,19 +14,17 @@ import pytest
 from app.services.system_settings_service import BotConfigurationService
 
 EXCLUDED_AUTH_KEYS = [
-    "ADMIN_EMAILS",
-    "CABINET_JWT_SECRET",
-    "WEB_API_DEFAULT_TOKEN",
-    "WEB_API_TOKEN_HMAC_SECRET",
-    "WEBHOOK_SECRET_TOKEN",
+    'ADMIN_EMAILS',
+    'CABINET_JWT_SECRET',
+    'WEB_API_DEFAULT_TOKEN',
+    'WEB_API_TOKEN_HMAC_SECRET',
+    'WEBHOOK_SECRET_TOKEN',
 ]
 
 
 def test_identity_and_auth_secrets_are_excluded() -> None:
     for key in EXCLUDED_AUTH_KEYS:
-        assert (
-            key in BotConfigurationService.EXCLUDED_KEYS
-        ), f"{key} must be in EXCLUDED_KEYS"
+        assert key in BotConfigurationService.EXCLUDED_KEYS, f'{key} must be in EXCLUDED_KEYS'
 
 
 def test_excluded_keys_have_no_editable_definition() -> None:

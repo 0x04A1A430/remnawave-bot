@@ -30,19 +30,19 @@ MODULES = [traffic, devices, purchase, subscription_renewal_service]
 CABINET_AXIOS_TIMEOUT_S = 30
 
 
-@pytest.mark.parametrize("mod", MODULES, ids=lambda m: m.__name__.split(".")[-1])
+@pytest.mark.parametrize('mod', MODULES, ids=lambda m: m.__name__.split('.')[-1])
 def test_sync_timeout_constant_is_sane(mod):
     budget = mod.REMNAWAVE_SYNC_TIMEOUT
     assert isinstance(budget, (int, float))
     assert 0 < budget < CABINET_AXIOS_TIMEOUT_S
 
 
-@pytest.mark.parametrize("mod", MODULES, ids=lambda m: m.__name__.split(".")[-1])
+@pytest.mark.parametrize('mod', MODULES, ids=lambda m: m.__name__.split('.')[-1])
 def test_inline_sync_is_time_bounded(mod):
     # The inline panel sync must remain wrapped so it can never hold the response
     # open. If someone unwraps it, this fails — that is exactly the regression.
     src = inspect.getsource(mod)
-    assert "asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT)" in src
+    assert 'asyncio.timeout(REMNAWAVE_SYNC_TIMEOUT)' in src
 
 
 @pytest.mark.asyncio
@@ -61,8 +61,8 @@ async def test_timeout_defers_to_fallback_and_returns_promptly():
         async with asyncio.timeout(0.05):
             await stalled_panel_sync()
     except Exception:  # mirrors the production `except Exception` fallback branch
-        enqueued.append("deferred-to-retry-queue")
+        enqueued.append('deferred-to-retry-queue')
     elapsed = time.monotonic() - start
 
-    assert enqueued == ["deferred-to-retry-queue"]
+    assert enqueued == ['deferred-to-retry-queue']
     assert elapsed < 5

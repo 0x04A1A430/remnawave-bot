@@ -32,10 +32,10 @@ from app.services.wheel_service import wheel_service
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/wheel", tags=["Fortune Wheel"])
+router = APIRouter(prefix='/wheel', tags=['Fortune Wheel'])
 
 
-@router.get("/config", response_model=WheelConfigResponse)
+@router.get('/config', response_model=WheelConfigResponse)
 async def get_wheel_config(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -55,9 +55,7 @@ async def get_wheel_config(
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
         # Check if user has any active subscription for wheel access
         if active_subs:
-            _non_daily = [
-                s for s in active_subs if not getattr(s, "is_daily_tariff", False)
-            ]
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
             _pool = _non_daily or active_subs
             subscription = max(_pool, key=lambda s: s.days_left)
         else:
@@ -83,16 +81,14 @@ async def get_wheel_config(
     eligible_subs_display = None
     if availability.eligible_subscriptions:
         eligible_subs_display = [
-            {"id": s.id, "tariff_name": s.tariff_name, "days_left": s.days_left}
+            {'id': s.id, 'tariff_name': s.tariff_name, 'days_left': s.days_left}
             for s in availability.eligible_subscriptions
         ]
 
     return WheelConfigResponse(
         is_enabled=config.is_enabled,
         name=config.name,
-        spin_cost_stars=(
-            config.spin_cost_stars if config.spin_cost_stars_enabled else None
-        ),
+        spin_cost_stars=(config.spin_cost_stars if config.spin_cost_stars_enabled else None),
         spin_cost_days=config.spin_cost_days if config.spin_cost_days_enabled else None,
         spin_cost_stars_enabled=config.spin_cost_stars_enabled,
         spin_cost_days_enabled=config.spin_cost_days_enabled,
@@ -110,7 +106,7 @@ async def get_wheel_config(
     )
 
 
-@router.get("/availability", response_model=SpinAvailabilityResponse)
+@router.get('/availability', response_model=SpinAvailabilityResponse)
 async def check_spin_availability(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -131,16 +127,14 @@ async def check_spin_availability(
     )
 
 
-@router.post("/spin", response_model=SpinResultResponse)
+@router.post('/spin', response_model=SpinResultResponse)
 async def spin_wheel(
     request: SpinRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Крутить колесо удачи."""
-    result = await wheel_service.spin(
-        db, user, request.payment_type.value, subscription_id=request.subscription_id
-    )
+    result = await wheel_service.spin(db, user, request.payment_type.value, subscription_id=request.subscription_id)
 
     if not result.success:
         # Возвращаем ошибку в теле ответа, а не HTTP exception
@@ -164,7 +158,7 @@ async def spin_wheel(
     )
 
 
-@router.get("/history", response_model=SpinHistoryResponse)
+@router.get('/history', response_model=SpinHistoryResponse)
 async def get_spin_history(
     page: int = 1,
     per_page: int = 20,
@@ -178,15 +172,13 @@ async def get_spin_history(
 
     offset = (page - 1) * per_page
 
-    spins, total = await get_user_spin_history(
-        db, user.id, limit=per_page, offset=offset
-    )
+    spins, total = await get_user_spin_history(db, user.id, limit=per_page, offset=offset)
 
     items = []
     for spin in spins:
         # Получаем emoji и color из приза, если он есть
-        emoji = ""
-        color = "#3B82F6"
+        emoji = ''
+        color = '#3B82F6'
         if spin.prize:
             emoji = spin.prize.emoji
             color = spin.prize.color
@@ -225,7 +217,7 @@ class StarsInvoiceResponse(BaseModel):
     stars_amount: int
 
 
-@router.post("/stars-invoice", response_model=StarsInvoiceResponse)
+@router.post('/stars-invoice', response_model=StarsInvoiceResponse)
 async def create_stars_invoice(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -239,13 +231,13 @@ async def create_stars_invoice(
     if not config.is_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Колесо удачи недоступно",
+            detail='Колесо удачи недоступно',
         )
 
     if not config.spin_cost_stars_enabled or not config.spin_cost_stars:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Оплата Stars не включена",
+            detail='Оплата Stars не включена',
         )
 
     # Проверяем наличие активной подписки (multi-tariff aware)
@@ -255,9 +247,7 @@ async def create_stars_invoice(
         active_subs = await get_active_subscriptions_by_user_id(db, user.id)
         # Check if user has any active subscription for Stars invoice
         if active_subs:
-            _non_daily = [
-                s for s in active_subs if not getattr(s, "is_daily_tariff", False)
-            ]
+            _non_daily = [s for s in active_subs if not getattr(s, 'is_daily_tariff', False)]
             _pool = _non_daily or active_subs
             subscription = max(_pool, key=lambda s: s.days_left)
         else:
@@ -269,7 +259,7 @@ async def create_stars_invoice(
     if not subscription or not subscription.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Для использования колеса необходима активная подписка",
+            detail='Для использования колеса необходима активная подписка',
         )
 
     # Проверяем лимит спинов
@@ -277,7 +267,7 @@ async def create_stars_invoice(
     if config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Достигнут дневной лимит спинов",
+            detail='Достигнут дневной лимит спинов',
         )
 
     # Проверяем наличие призов
@@ -285,11 +275,11 @@ async def create_stars_invoice(
     if not prizes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Призы не настроены",
+            detail='Призы не настроены',
         )
 
     stars_amount = config.spin_cost_stars
-    payload = f"wheel_spin_{user.id}_{int(time.time())}"
+    payload = f'wheel_spin_{user.id}_{int(time.time())}'
 
     # Создаем invoice через Telegram Bot API
     try:
@@ -300,16 +290,16 @@ async def create_stars_invoice(
 
         async with create_bot() as bot:
             invoice_url = await bot.create_invoice_link(
-                title="Колесо удачи",
-                description=f"Спин колеса удачи ({stars_amount} )",
+                title='Колесо удачи',
+                description=f'Спин колеса удачи ({stars_amount} )',
                 payload=payload,
-                provider_token="",
-                currency="XTR",
-                prices=[LabeledPrice(label="Спин колеса", amount=stars_amount)],
+                provider_token='',
+                currency='XTR',
+                prices=[LabeledPrice(label='Спин колеса', amount=stars_amount)],
             )
 
         logger.info(
-            "Created Stars invoice for wheel spin: user=, stars",
+            'Created Stars invoice for wheel spin: user=, stars',
             user_id=user.id,
             stars_amount=stars_amount,
         )
@@ -320,8 +310,8 @@ async def create_stars_invoice(
         )
 
     except TelegramAPIError as e:
-        logger.error("Error creating invoice", error=e)
+        logger.error('Error creating invoice', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Ошибка создания инвойса",
+            detail='Ошибка создания инвойса',
         )

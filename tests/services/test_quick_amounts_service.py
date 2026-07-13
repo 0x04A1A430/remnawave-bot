@@ -34,12 +34,12 @@ def test_normalize_empty_list_returns_none():
 
 def test_normalize_rejects_non_list():
     with pytest.raises(ValueError):
-        normalize_quick_amounts("10000")
+        normalize_quick_amounts('10000')
 
 
 def test_normalize_rejects_non_int_items():
     with pytest.raises(ValueError):
-        normalize_quick_amounts([10000, "30000"])
+        normalize_quick_amounts([10000, '30000'])
     with pytest.raises(ValueError):
         normalize_quick_amounts([True])
 

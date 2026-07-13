@@ -27,10 +27,10 @@ from ..schemas.partners import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/referral/partner", tags=["Cabinet Partner"])
+router = APIRouter(prefix='/referral/partner', tags=['Cabinet Partner'])
 
 
-@router.get("/status", response_model=PartnerStatusResponse)
+@router.get('/status', response_model=PartnerStatusResponse)
 async def get_partner_status(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -72,9 +72,7 @@ async def get_partner_status(
 
         # Fetch per-campaign stats in one batch
         campaign_ids = [c.id for c in campaign_models]
-        campaign_stats = await PartnerStatsService.get_per_campaign_stats(
-            db, user.id, campaign_ids
-        )
+        campaign_stats = await PartnerStatsService.get_per_campaign_stats(db, user.id, campaign_ids)
 
         for c in campaign_models:
             stats = campaign_stats.get(c.id, {})
@@ -89,9 +87,9 @@ async def get_partner_status(
                     subscription_traffic_gb=c.subscription_traffic_gb,
                     deep_link=get_campaign_deep_link(c.start_parameter),
                     web_link=get_campaign_web_link(c.start_parameter),
-                    registrations_count=stats.get("registrations_count", 0),
-                    referrals_count=stats.get("referrals_count", 0),
-                    earnings_kopeks=stats.get("earnings_kopeks", 0),
+                    registrations_count=stats.get('registrations_count', 0),
+                    referrals_count=stats.get('referrals_count', 0),
+                    earnings_kopeks=stats.get('earnings_kopeks', 0),
                 )
             )
 
@@ -103,9 +101,7 @@ async def get_partner_status(
     )
 
 
-@router.get(
-    "/campaigns/{campaign_id}/stats", response_model=PartnerCampaignDetailedStats
-)
+@router.get('/campaigns/{campaign_id}/stats', response_model=PartnerCampaignDetailedStats)
 async def get_campaign_stats(
     campaign_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -115,7 +111,7 @@ async def get_campaign_stats(
     if not user.is_partner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Partner status required",
+            detail='Partner status required',
         )
 
     # Verify campaign belongs to this partner
@@ -129,37 +125,33 @@ async def get_campaign_stats(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Campaign not found or not assigned to you",
+            detail='Campaign not found or not assigned to you',
         )
 
-    raw = await PartnerStatsService.get_campaign_detailed_stats(
-        db, user.id, campaign_id
-    )
+    raw = await PartnerStatsService.get_campaign_detailed_stats(db, user.id, campaign_id)
 
     return PartnerCampaignDetailedStats(
-        campaign_id=raw["campaign_id"],
+        campaign_id=raw['campaign_id'],
         campaign_name=campaign.name,
-        registrations_count=raw["registrations_count"],
-        referrals_count=raw["referrals_count"],
-        earnings_kopeks=raw["earnings_kopeks"],
-        conversion_rate=raw["conversion_rate"],
-        earnings_today=raw["earnings_today"],
-        earnings_week=raw["earnings_week"],
-        earnings_month=raw["earnings_month"],
-        daily_stats=[DailyStatItem(**d) for d in raw["daily_stats"]],
+        registrations_count=raw['registrations_count'],
+        referrals_count=raw['referrals_count'],
+        earnings_kopeks=raw['earnings_kopeks'],
+        conversion_rate=raw['conversion_rate'],
+        earnings_today=raw['earnings_today'],
+        earnings_week=raw['earnings_week'],
+        earnings_month=raw['earnings_month'],
+        daily_stats=[DailyStatItem(**d) for d in raw['daily_stats']],
         period_comparison=PeriodComparison(
-            current=PeriodStats(**raw["period_comparison"]["current"]),
-            previous=PeriodStats(**raw["period_comparison"]["previous"]),
-            referrals_change=PeriodChange(
-                **raw["period_comparison"]["referrals_change"]
-            ),
-            earnings_change=PeriodChange(**raw["period_comparison"]["earnings_change"]),
+            current=PeriodStats(**raw['period_comparison']['current']),
+            previous=PeriodStats(**raw['period_comparison']['previous']),
+            referrals_change=PeriodChange(**raw['period_comparison']['referrals_change']),
+            earnings_change=PeriodChange(**raw['period_comparison']['earnings_change']),
         ),
-        top_referrals=[CampaignReferralItem(**r) for r in raw["top_referrals"]],
+        top_referrals=[CampaignReferralItem(**r) for r in raw['top_referrals']],
     )
 
 
-@router.post("/apply", response_model=PartnerApplicationInfo)
+@router.post('/apply', response_model=PartnerApplicationInfo)
 async def apply_for_partner(
     request: PartnerApplicationRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -188,30 +180,25 @@ async def apply_for_partner(
         from app.bot_factory import create_bot
         from app.services.admin_notification_service import AdminNotificationService
 
-        if (
-            getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False)
-            and settings.BOT_TOKEN
-        ):
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
             bot = create_bot()
             try:
                 notification_service = AdminNotificationService(bot)
                 await notification_service.send_partner_application_notification(
                     user=user,
                     application_data={
-                        "company_name": request.company_name,
-                        "telegram_channel": request.telegram_channel,
-                        "website_url": request.website_url,
-                        "description": request.description,
-                        "expected_monthly_referrals": request.expected_monthly_referrals,
-                        "desired_commission_percent": request.desired_commission_percent,
+                        'company_name': request.company_name,
+                        'telegram_channel': request.telegram_channel,
+                        'website_url': request.website_url,
+                        'description': request.description,
+                        'expected_monthly_referrals': request.expected_monthly_referrals,
+                        'desired_commission_percent': request.desired_commission_percent,
                     },
                 )
             finally:
                 await bot.session.close()
     except Exception as e:
-        logger.error(
-            "Failed to send admin notification for partner application", error=e
-        )
+        logger.error('Failed to send admin notification for partner application', error=e)
 
     return PartnerApplicationInfo(
         id=application.id,

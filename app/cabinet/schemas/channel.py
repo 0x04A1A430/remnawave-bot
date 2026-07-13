@@ -12,13 +12,13 @@ def _validate_channel_link_value(v: str | None) -> str | None:
     if v is None:
         return v
     v = v.strip()
-    if v.startswith("http://t.me/"):
-        v = v.replace("http://", "https://", 1)
-    if v.startswith("https://t.me/"):
+    if v.startswith('http://t.me/'):
+        v = v.replace('http://', 'https://', 1)
+    if v.startswith('https://t.me/'):
         return v
-    if v.startswith("@"):
-        return f"https://t.me/{v[1:]}"
-    raise ValueError("channel_link must be a t.me URL or @username")
+    if v.startswith('@'):
+        return f'https://t.me/{v[1:]}'
+    raise ValueError('channel_link must be a t.me URL or @username')
 
 
 class ChannelResponse(BaseModel):
@@ -46,12 +46,12 @@ class ChannelCreateRequest(BaseModel):
     disable_trial_on_leave: bool = True
     disable_paid_on_leave: bool = False
 
-    @field_validator("channel_id")
+    @field_validator('channel_id')
     @classmethod
     def validate_channel_id(cls, v: str) -> str:
         return _validate_channel_id_format(v)
 
-    @field_validator("channel_link")
+    @field_validator('channel_link')
     @classmethod
     def validate_channel_link(cls, v: str | None) -> str | None:
         return _validate_channel_link_value(v)
@@ -66,14 +66,14 @@ class ChannelUpdateRequest(BaseModel):
     disable_trial_on_leave: bool | None = None
     disable_paid_on_leave: bool | None = None
 
-    @field_validator("channel_id")
+    @field_validator('channel_id')
     @classmethod
     def validate_channel_id(cls, v: str | None) -> str | None:
         if v is None:
             return v
         return _validate_channel_id_format(v)
 
-    @field_validator("channel_link")
+    @field_validator('channel_link')
     @classmethod
     def validate_channel_link(cls, v: str | None) -> str | None:
         return _validate_channel_link_value(v)

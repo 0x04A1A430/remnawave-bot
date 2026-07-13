@@ -17,18 +17,18 @@ logger = structlog.get_logger(__name__)
 
 
 class UserStatus(Enum):
-    ACTIVE = "ACTIVE"
-    DISABLED = "DISABLED"
-    LIMITED = "LIMITED"
-    EXPIRED = "EXPIRED"
+    ACTIVE = 'ACTIVE'
+    DISABLED = 'DISABLED'
+    LIMITED = 'LIMITED'
+    EXPIRED = 'EXPIRED'
 
 
 class TrafficLimitStrategy(Enum):
-    NO_RESET = "NO_RESET"
-    DAY = "DAY"
-    WEEK = "WEEK"
-    MONTH = "MONTH"
-    MONTH_ROLLING = "MONTH_ROLLING"
+    NO_RESET = 'NO_RESET'
+    DAY = 'DAY'
+    WEEK = 'WEEK'
+    MONTH = 'MONTH'
+    MONTH_ROLLING = 'MONTH_ROLLING'
 
 
 @dataclass
@@ -168,9 +168,7 @@ class RemnaWaveNode:
     provider_favicon: str | None = None  # provider.faviconLink — иконка хостера
     # v2.7.0: replaced cpuCount/cpuModel/totalRam/xrayVersion/nodeVersion
     versions: dict[str, str] | None = None  # {xray, node}
-    system: dict[str, Any] | None = (
-        None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
-    )
+    system: dict[str, Any] | None = None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
     active_plugin_uuid: str | None = None
 
     @property
@@ -226,9 +224,7 @@ class RemnaWaveExternalSquad:
 
 
 class RemnaWaveAPIError(Exception):
-    def __init__(
-        self, message: str, status_code: int = None, response_data: dict = None
-    ):
+    def __init__(self, message: str, status_code: int = None, response_data: dict = None):
         self.message = message
         self.status_code = status_code
         self.response_data = response_data
@@ -252,15 +248,15 @@ class RemnaWaveAPI:
         username: str | None = None,
         password: str | None = None,
         caddy_token: str | None = None,
-        auth_type: str = "api_key",
+        auth_type: str = 'api_key',
     ):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.secret_key = secret_key
         self.username = username
         self.password = password
         self.caddy_token = caddy_token
-        self.auth_type = auth_type.lower() if auth_type else "api_key"
+        self.auth_type = auth_type.lower() if auth_type else 'api_key'
         self.session: aiohttp.ClientSession | None = None
         self.authenticated = False
 
@@ -268,55 +264,55 @@ class RemnaWaveAPI:
         parsed = urlparse(self.base_url)
 
         local_hosts = [
-            "localhost",
-            "127.0.0.1",
-            "remnawave",
-            "remnawave-backend",
-            "app",
-            "api",
+            'localhost',
+            '127.0.0.1',
+            'remnawave',
+            'remnawave-backend',
+            'app',
+            'api',
         ]
 
         if parsed.hostname in local_hosts:
-            return "local"
+            return 'local'
 
         if parsed.hostname:
             if (
-                parsed.hostname.startswith("192.168.")
-                or parsed.hostname.startswith("10.")
-                or parsed.hostname.startswith("172.")
-                or parsed.hostname.endswith(".local")
+                parsed.hostname.startswith('192.168.')
+                or parsed.hostname.startswith('10.')
+                or parsed.hostname.startswith('172.')
+                or parsed.hostname.endswith('.local')
             ):
-                return "local"
+                return 'local'
 
-        return "external"
+        return 'external'
 
     def _prepare_auth_headers(self) -> dict[str, str]:
         headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "X-Forwarded-Proto": "https",
-            "X-Forwarded-For": "127.0.0.1",
-            "X-Real-IP": "127.0.0.1",
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1',
         }
 
         # Основная авторизация RemnaWave API
-        if self.auth_type == "basic" and self.username and self.password:
-            credentials = f"{self.username}:{self.password}"
+        if self.auth_type == 'basic' and self.username and self.password:
+            credentials = f'{self.username}:{self.password}'
             encoded_credentials = base64.b64encode(credentials.encode()).decode()
-            headers["X-Api-Key"] = f"Basic {encoded_credentials}"
-            logger.debug("Используем Basic Auth в X-Api-Key заголовке")
-        elif self.auth_type == "caddy":
+            headers['X-Api-Key'] = f'Basic {encoded_credentials}'
+            logger.debug('Используем Basic Auth в X-Api-Key заголовке')
+        elif self.auth_type == 'caddy':
             # Caddy Security: caddy_token → X-Api-Key, api_key → Authorization: Bearer
             if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
+                headers['Authorization'] = f'Bearer {self.api_key}'
             if self.caddy_token:
-                headers["X-Api-Key"] = self.caddy_token
-            logger.debug("Используем Caddy авторизацию")
+                headers['X-Api-Key'] = self.caddy_token
+            logger.debug('Используем Caddy авторизацию')
         else:
             # api_key или bearer — стандартный режим
-            headers["X-Api-Key"] = self.api_key
-            headers["Authorization"] = f"Bearer {self.api_key}"
-            logger.debug("Используем API ключ в X-Api-Key заголовке")
+            headers['X-Api-Key'] = self.api_key
+            headers['Authorization'] = f'Bearer {self.api_key}'
+            logger.debug('Используем API ключ в X-Api-Key заголовке')
 
         return headers
 
@@ -324,7 +320,7 @@ class RemnaWaveAPI:
         conn_type = self._detect_connection_type()
 
         logger.debug(
-            "Подключение к Remnawave: (тип: )",
+            'Подключение к Remnawave: (тип: )',
             base_url=self.base_url,
             conn_type=conn_type,
         )
@@ -333,43 +329,43 @@ class RemnaWaveAPI:
 
         cookies = None
         if self.secret_key:
-            if ":" in self.secret_key:
-                key_name, key_value = self.secret_key.split(":", 1)
+            if ':' in self.secret_key:
+                key_name, key_value = self.secret_key.split(':', 1)
                 cookies = {key_name: key_value}
-                logger.debug("Используем куки: =***", key_name=key_name)
+                logger.debug('Используем куки: =***', key_name=key_name)
             else:
                 cookies = {self.secret_key: self.secret_key}
-                logger.debug("Используем куки: =***", secret_key=self.secret_key)
+                logger.debug('Используем куки: =***', secret_key=self.secret_key)
 
         connector_kwargs = {}
 
-        if conn_type == "local":
-            logger.debug("Используют локальные заголовки proxy")
-            headers.update({"X-Forwarded-Host": "localhost", "Host": "localhost"})
+        if conn_type == 'local':
+            logger.debug('Используют локальные заголовки proxy')
+            headers.update({'X-Forwarded-Host': 'localhost', 'Host': 'localhost'})
 
-            if self.base_url.startswith("https://"):
+            if self.base_url.startswith('https://'):
                 ssl_context = ssl.create_default_context()
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
-                connector_kwargs["ssl"] = ssl_context
-                logger.debug("SSL проверка отключена для локального HTTPS")
+                connector_kwargs['ssl'] = ssl_context
+                logger.debug('SSL проверка отключена для локального HTTPS')
 
-        elif conn_type == "external":
-            logger.debug("Используют внешнее подключение с полной SSL проверкой")
+        elif conn_type == 'external':
+            logger.debug('Используют внешнее подключение с полной SSL проверкой')
 
         connector = aiohttp.TCPConnector(**connector_kwargs)
 
         session_kwargs = {
-            "timeout": aiohttp.ClientTimeout(
+            'timeout': aiohttp.ClientTimeout(
                 total=settings.REMNAWAVE_API_TOTAL_TIMEOUT,
                 connect=settings.REMNAWAVE_API_CONNECT_TIMEOUT,
             ),
-            "headers": headers,
-            "connector": connector,
+            'headers': headers,
+            'connector': connector,
         }
 
         if cookies:
-            session_kwargs["cookies"] = cookies
+            session_kwargs['cookies'] = cookies
 
         self.session = aiohttp.ClientSession(**session_kwargs)
         self.authenticated = True
@@ -388,42 +384,31 @@ class RemnaWaveAPI:
         params: dict | None = None,
     ) -> dict:
         if not self.session:
-            raise RemnaWaveAPIError(
-                "Session not initialized. Use async context manager."
-            )
+            raise RemnaWaveAPIError('Session not initialized. Use async context manager.')
 
-        url = f"{self.base_url}{endpoint}"
+        url = f'{self.base_url}{endpoint}'
         max_retries = 3
         base_delay = 1.0
 
         for attempt in range(max_retries + 1):
             try:
-                kwargs = {"url": url, "params": params}
+                kwargs = {'url': url, 'params': params}
 
                 if data:
-                    kwargs["json"] = data
+                    kwargs['json'] = data
 
                 async with self.session.request(method, **kwargs) as response:
                     response_text = await response.text()
 
                     try:
-                        response_data = (
-                            json.loads(response_text) if response_text else {}
-                        )
+                        response_data = json.loads(response_text) if response_text else {}
                     except json.JSONDecodeError:
-                        response_data = {"raw_response": response_text}
+                        response_data = {'raw_response': response_text}
 
-                    if (
-                        response.status in (429, 502, 503, 504)
-                        and attempt < max_retries
-                    ):
-                        retry_after = float(
-                            response.headers.get(
-                                "Retry-After", base_delay * (2**attempt)
-                            )
-                        )
+                    if response.status in (429, 502, 503, 504) and attempt < max_retries:
+                        retry_after = float(response.headers.get('Retry-After', base_delay * (2**attempt)))
                         logger.warning(
-                            "Retryable %s on %s %s, retry %s/%s after %ss",
+                            'Retryable %s on %s %s, retry %s/%s after %ss',
                             response.status,
                             method,
                             endpoint,
@@ -435,14 +420,11 @@ class RemnaWaveAPI:
                         continue
 
                     if response.status >= 400:
-                        error_message = response_data.get(
-                            "message", f"HTTP {response.status}"
-                        )
+                        error_message = response_data.get('message', f'HTTP {response.status}')
                         # Downgrade known-harmless 400s to warning (caller handles them as success)
                         error_lower = str(error_message).lower()
                         is_harmless = response.status == 400 and (
-                            "already enabled" in error_lower
-                            or "already disabled" in error_lower
+                            'already enabled' in error_lower or 'already disabled' in error_lower
                         )
                         # 404 = "not found" — это всегда обрабатывает вызывающий код (get_user_by_uuid
                         # → None, delete → success, sync → пересоздание). Логировать его как error
@@ -451,16 +433,12 @@ class RemnaWaveAPI:
                         is_not_found = response.status == 404
                         log = (
                             logger.warning
-                            if response.status in (502, 503, 504)
-                            or is_harmless
-                            or is_not_found
+                            if response.status in (502, 503, 504) or is_harmless or is_not_found
                             else logger.error
                         )
-                        log("API Error %s: %s", response.status, error_message)
-                        log("Response: %s", response_text[:500])
-                        raise RemnaWaveAPIError(
-                            error_message, response.status, response_data
-                        )
+                        log('API Error %s: %s', response.status, error_message)
+                        log('Response: %s', response_text[:500])
+                        raise RemnaWaveAPIError(error_message, response.status, response_data)
 
                     return response_data
 
@@ -468,7 +446,7 @@ class RemnaWaveAPI:
                 if attempt < max_retries:
                     delay = base_delay * (2**attempt)
                     logger.warning(
-                        "Request failed on retry / after s",
+                        'Request failed on retry / after s',
                         method=method,
                         endpoint=endpoint,
                         e=e,
@@ -482,27 +460,25 @@ class RemnaWaveAPI:
                 # а не ERROR: иначе медленная панель спамит админ-чат ошибками
                 # (forwarder в logging_handler шлёт только error+).
                 logger.warning(
-                    "RemnaWave request failed after retries (panel slow/unreachable)",
+                    'RemnaWave request failed after retries (panel slow/unreachable)',
                     method=method,
                     endpoint=endpoint,
                     error=str(e)[:200],
                 )
-                raise RemnaWaveTransientError(f"Request failed: {e!s}")
+                raise RemnaWaveTransientError(f'Request failed: {e!s}')
             except TimeoutError as e:
                 # Total-request timeout — the panel was slow to respond. Transient:
                 # log WARNING and wrap in a typed transient error so the admin-error
                 # forwarder skips it. No retry (avoids multi-minute user-facing hangs).
                 logger.warning(
-                    "RemnaWave request timed out (panel slow)",
+                    'RemnaWave request timed out (panel slow)',
                     method=method,
                     endpoint=endpoint,
                     error=str(e)[:200],
                 )
-                raise RemnaWaveTransientError(
-                    f"Request timed out: {method} {endpoint}"
-                ) from e
+                raise RemnaWaveTransientError(f'Request timed out: {method} {endpoint}') from e
 
-        raise RemnaWaveTransientError(f"Max retries exceeded for {method} {endpoint}")
+        raise RemnaWaveTransientError(f'Max retries exceeded for {method} {endpoint}')
 
     async def create_user(
         self,
@@ -520,53 +496,53 @@ class RemnaWaveAPI:
         external_squad_uuid: str | None = None,
     ) -> RemnaWaveUser:
         data = {
-            "username": username,
-            "status": status.value,
-            "expireAt": expire_at.isoformat(),
-            "trafficLimitBytes": traffic_limit_bytes,
-            "trafficLimitStrategy": traffic_limit_strategy.value,
+            'username': username,
+            'status': status.value,
+            'expireAt': expire_at.isoformat(),
+            'trafficLimitBytes': traffic_limit_bytes,
+            'trafficLimitStrategy': traffic_limit_strategy.value,
         }
 
         if telegram_id is not None:
-            data["telegramId"] = telegram_id
+            data['telegramId'] = telegram_id
         if email:
-            data["email"] = email
+            data['email'] = email
         if hwid_device_limit is not None:
-            data["hwidDeviceLimit"] = hwid_device_limit
+            data['hwidDeviceLimit'] = hwid_device_limit
         if description:
-            data["description"] = description
+            data['description'] = description
         if tag:
-            data["tag"] = tag
+            data['tag'] = tag
         if active_internal_squads:
-            data["activeInternalSquads"] = active_internal_squads
+            data['activeInternalSquads'] = active_internal_squads
         if external_squad_uuid is not None:
-            data["externalSquadUuid"] = external_squad_uuid
+            data['externalSquadUuid'] = external_squad_uuid
 
         logger.info(
-            "POST /api/users payload",
-            username=data.get("username"),
-            hwidDeviceLimit=data.get("hwidDeviceLimit"),
-            status=data.get("status"),
+            'POST /api/users payload',
+            username=data.get('username'),
+            hwidDeviceLimit=data.get('hwidDeviceLimit'),
+            status=data.get('status'),
         )
         try:
-            response = await self._make_request("POST", "/api/users", data)
+            response = await self._make_request('POST', '/api/users', data)
         except RemnaWaveAPIError as e:
             # A039 = FK violation on externalSquadUuid — retry without it
-            error_code = (e.response_data or {}).get("errorCode", "")
-            if error_code == "A039" and "externalSquadUuid" in data:
-                stale_uuid = data.pop("externalSquadUuid")
+            error_code = (e.response_data or {}).get('errorCode', '')
+            if error_code == 'A039' and 'externalSquadUuid' in data:
+                stale_uuid = data.pop('externalSquadUuid')
                 logger.warning(
-                    "A039 FK violation on externalSquadUuid, retrying without it",
+                    'A039 FK violation on externalSquadUuid, retrying without it',
                     stale_uuid=stale_uuid,
-                    username=data.get("username"),
+                    username=data.get('username'),
                 )
-                response = await self._make_request("POST", "/api/users", data)
+                response = await self._make_request('POST', '/api/users', data)
             else:
-                logger.error("POST /api/users FAILED — full payload", payload=data)
+                logger.error('POST /api/users FAILED — full payload', payload=data)
                 raise
-        user = self._parse_user(response["response"])
+        user = self._parse_user(response['response'])
         logger.info(
-            "POST /api/users response",
+            'POST /api/users response',
             uuid=user.uuid,
             response_hwidDeviceLimit=user.hwid_device_limit,
         )
@@ -574,8 +550,8 @@ class RemnaWaveAPI:
 
     async def get_user_by_uuid(self, uuid: str) -> RemnaWaveUser | None:
         try:
-            response = await self._make_request("GET", f"/api/users/{uuid}")
-            user = self._parse_user(response["response"])
+            response = await self._make_request('GET', f'/api/users/{uuid}')
+            user = self._parse_user(response['response'])
             return user
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
@@ -584,10 +560,8 @@ class RemnaWaveAPI:
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> list[RemnaWaveUser]:
         try:
-            response = await self._make_request(
-                "GET", f"/api/users/by-telegram-id/{telegram_id}"
-            )
-            users_data = response.get("response", [])
+            response = await self._make_request('GET', f'/api/users/by-telegram-id/{telegram_id}')
+            users_data = response.get('response', [])
             if not users_data:
                 return []
             users = [self._parse_user(user) for user in users_data]
@@ -599,10 +573,8 @@ class RemnaWaveAPI:
 
     async def get_user_by_username(self, username: str) -> RemnaWaveUser | None:
         try:
-            response = await self._make_request(
-                "GET", f"/api/users/by-username/{username}"
-            )
-            user = self._parse_user(response["response"])
+            response = await self._make_request('GET', f'/api/users/by-username/{username}')
+            user = self._parse_user(response['response'])
             return user
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
@@ -612,8 +584,8 @@ class RemnaWaveAPI:
     async def get_user_by_email(self, email: str) -> list[RemnaWaveUser]:
         """Get users by email address."""
         try:
-            response = await self._make_request("GET", f"/api/users/by-email/{email}")
-            users_data = response.get("response", [])
+            response = await self._make_request('GET', f'/api/users/by-email/{email}')
+            users_data = response.get('response', [])
             if not users_data:
                 return []
             # Handle both single object and array responses
@@ -642,13 +614,13 @@ class RemnaWaveAPI:
         """
         try:
             response = await self._make_request(
-                "GET",
-                f"/api/users/{uuid}/subscription-request-history",
-                params={"offset": offset, "limit": limit},
+                'GET',
+                f'/api/users/{uuid}/subscription-request-history',
+                params={'offset': offset, 'limit': limit},
             )
-            return response.get("response", {"total": 0, "records": []})
+            return response.get('response', {'total': 0, 'records': []})
         except RemnaWaveAPIError:
-            return {"total": 0, "records": []}
+            return {'total': 0, 'records': []}
 
     async def update_user(
         self,
@@ -665,76 +637,72 @@ class RemnaWaveAPI:
         active_internal_squads: list[str] | None = None,
         external_squad_uuid: str | None | type(...) = ...,
     ) -> RemnaWaveUser:
-        data = {"uuid": uuid}
+        data = {'uuid': uuid}
 
         if status:
-            data["status"] = status.value
+            data['status'] = status.value
         if traffic_limit_bytes is not None:
-            data["trafficLimitBytes"] = traffic_limit_bytes
+            data['trafficLimitBytes'] = traffic_limit_bytes
         if traffic_limit_strategy:
-            data["trafficLimitStrategy"] = traffic_limit_strategy.value
+            data['trafficLimitStrategy'] = traffic_limit_strategy.value
         if expire_at:
-            data["expireAt"] = expire_at.isoformat()
+            data['expireAt'] = expire_at.isoformat()
         if telegram_id is not None:
-            data["telegramId"] = telegram_id
+            data['telegramId'] = telegram_id
         if email is not None:
-            data["email"] = email
+            data['email'] = email
         if hwid_device_limit is not None:
-            data["hwidDeviceLimit"] = hwid_device_limit
+            data['hwidDeviceLimit'] = hwid_device_limit
         if description is not None:
-            data["description"] = description
+            data['description'] = description
         if tag is not None:
-            data["tag"] = tag
+            data['tag'] = tag
         if active_internal_squads is not None:
-            data["activeInternalSquads"] = active_internal_squads
+            data['activeInternalSquads'] = active_internal_squads
         if external_squad_uuid is not ...:
-            data["externalSquadUuid"] = external_squad_uuid
+            data['externalSquadUuid'] = external_squad_uuid
 
         try:
-            response = await self._make_request("PATCH", "/api/users", data)
+            response = await self._make_request('PATCH', '/api/users', data)
         except RemnaWaveAPIError as e:
             # A039 = FK violation on externalSquadUuid — retry without it
-            error_code = (e.response_data or {}).get("errorCode", "")
-            if error_code == "A039" and "externalSquadUuid" in data:
-                stale_uuid = data.pop("externalSquadUuid")
+            error_code = (e.response_data or {}).get('errorCode', '')
+            if error_code == 'A039' and 'externalSquadUuid' in data:
+                stale_uuid = data.pop('externalSquadUuid')
                 logger.warning(
-                    "A039 FK violation on externalSquadUuid, retrying without it",
+                    'A039 FK violation on externalSquadUuid, retrying without it',
                     stale_uuid=stale_uuid,
                     uuid=uuid,
                 )
-                response = await self._make_request("PATCH", "/api/users", data)
+                response = await self._make_request('PATCH', '/api/users', data)
             else:
-                logger.error("PATCH /api/users FAILED — full payload", payload=data)
+                logger.error('PATCH /api/users FAILED — full payload', payload=data)
                 raise
-        user = self._parse_user(response["response"])
+        user = self._parse_user(response['response'])
         logger.info(
-            "PATCH /api/users response",
+            'PATCH /api/users response',
             uuid=uuid,
             response_hwidDeviceLimit=user.hwid_device_limit,
         )
         return user
 
     async def delete_user(self, uuid: str) -> bool:
-        response = await self._make_request("DELETE", f"/api/users/{uuid}")
-        return response["response"]["isDeleted"]
+        response = await self._make_request('DELETE', f'/api/users/{uuid}')
+        return response['response']['isDeleted']
 
     async def enable_user(self, uuid: str) -> RemnaWaveUser:
-        response = await self._make_request("POST", f"/api/users/{uuid}/actions/enable")
-        user = self._parse_user(response["response"])
+        response = await self._make_request('POST', f'/api/users/{uuid}/actions/enable')
+        user = self._parse_user(response['response'])
         return user
 
     async def disable_user(self, uuid: str) -> RemnaWaveUser:
-        response = await self._make_request(
-            "POST", f"/api/users/{uuid}/actions/disable"
-        )
-        user = self._parse_user(response["response"])
+        response = await self._make_request('POST', f'/api/users/{uuid}/actions/disable')
+        user = self._parse_user(response['response'])
         return user
 
     async def reset_user_traffic(self, uuid: str) -> RemnaWaveUser:
-        response = await self._make_request(
-            "POST", f"/api/users/{uuid}/actions/reset-traffic"
-        )
-        user = self._parse_user(response["response"])
+        response = await self._make_request('POST', f'/api/users/{uuid}/actions/reset-traffic')
+        user = self._parse_user(response['response'])
         return user
 
     async def revoke_user_subscription(
@@ -753,38 +721,32 @@ class RemnaWaveAPI:
         """
         data = {}
         if new_short_uuid:
-            data["shortUuid"] = new_short_uuid
+            data['shortUuid'] = new_short_uuid
         if revoke_only_passwords:
-            data["revokeOnlyPasswords"] = True
+            data['revokeOnlyPasswords'] = True
 
-        response = await self._make_request(
-            "POST", f"/api/users/{uuid}/actions/revoke", data
-        )
-        user = self._parse_user(response["response"])
+        response = await self._make_request('POST', f'/api/users/{uuid}/actions/revoke', data)
+        user = self._parse_user(response['response'])
         return user
 
-    async def get_user_accessible_nodes(
-        self, uuid: str
-    ) -> list[RemnaWaveAccessibleNode]:
+    async def get_user_accessible_nodes(self, uuid: str) -> list[RemnaWaveAccessibleNode]:
         """Получает список доступных нод для пользователя"""
         try:
-            response = await self._make_request(
-                "GET", f"/api/users/{uuid}/accessible-nodes"
-            )
-            nodes_data = response.get("response", {}).get("activeNodes", [])
+            response = await self._make_request('GET', f'/api/users/{uuid}/accessible-nodes')
+            nodes_data = response.get('response', {}).get('activeNodes', [])
             result = []
             for node in nodes_data:
                 # Collect inbounds from activeSquads
                 inbounds: list[str] = []
-                for squad in node.get("activeSquads", []):
-                    inbounds.extend(squad.get("activeInbounds", []))
+                for squad in node.get('activeSquads', []):
+                    inbounds.extend(squad.get('activeInbounds', []))
                 result.append(
                     RemnaWaveAccessibleNode(
-                        uuid=node["uuid"],
-                        node_name=node["nodeName"],
-                        country_code=node["countryCode"],
-                        config_profile_uuid=node.get("configProfileUuid", ""),
-                        config_profile_name=node.get("configProfileName", ""),
+                        uuid=node['uuid'],
+                        node_name=node['nodeName'],
+                        country_code=node['countryCode'],
+                        config_profile_uuid=node.get('configProfileUuid', ''),
+                        config_profile_name=node.get('configProfileName', ''),
                         active_inbounds=inbounds,
                     )
                 )
@@ -795,16 +757,14 @@ class RemnaWaveAPI:
             raise
 
     async def get_all_users(self, start: int = 0, size: int = 100) -> dict[str, Any]:
-        params = {"start": start, "size": size}
-        response = await self._make_request("GET", "/api/users", params=params)
+        params = {'start': start, 'size': size}
+        response = await self._make_request('GET', '/api/users', params=params)
 
-        users = [self._parse_user(user) for user in response["response"]["users"]]
+        users = [self._parse_user(user) for user in response['response']['users']]
 
-        return {"users": users, "total": response["response"]["total"]}
+        return {'users': users, 'total': response['response']['total']}
 
-    async def get_all_users_page_stream(
-        self, cursor: str | None = None, size: int = 500
-    ) -> dict[str, Any]:
+    async def get_all_users_page_stream(self, cursor: str | None = None, size: int = 500) -> dict[str, Any]:
         """Одна страница keyset-пагинации пользователей (Remnawave 2.8.0+).
 
         ``GET /api/users/stream`` — курсорная пагинация, устойчивая к мутациям
@@ -814,19 +774,19 @@ class RemnaWaveAPI:
 
         Возвращает ``{'users': [...], 'nextCursor': str | None, 'hasMore': bool}``.
         """
-        params: dict[str, Any] = {"size": size}
+        params: dict[str, Any] = {'size': size}
         if cursor is not None:
-            params["cursor"] = cursor
+            params['cursor'] = cursor
 
-        response = await self._make_request("GET", "/api/users/stream", params=params)
-        data = response["response"]
+        response = await self._make_request('GET', '/api/users/stream', params=params)
+        data = response['response']
 
-        users = [self._parse_user(user) for user in data["users"]]
+        users = [self._parse_user(user) for user in data['users']]
 
         return {
-            "users": users,
-            "nextCursor": data.get("nextCursor"),
-            "hasMore": bool(data.get("hasMore")),
+            'users': users,
+            'nextCursor': data.get('nextCursor'),
+            'hasMore': bool(data.get('hasMore')),
         }
 
     async def get_all_users_stream(self, size: int = 500) -> list[RemnaWaveUser]:
@@ -836,66 +796,52 @@ class RemnaWaveAPI:
 
         while True:
             page = await self.get_all_users_page_stream(cursor=cursor, size=size)
-            all_users.extend(page["users"])
-            if not page["hasMore"] or not page["nextCursor"]:
+            all_users.extend(page['users'])
+            if not page['hasMore'] or not page['nextCursor']:
                 break
-            cursor = page["nextCursor"]
+            cursor = page['nextCursor']
 
         return all_users
 
     async def get_internal_squads(self) -> list[RemnaWaveInternalSquad]:
-        response = await self._make_request("GET", "/api/internal-squads")
-        return [
-            self._parse_internal_squad(squad)
-            for squad in response["response"]["internalSquads"]
-        ]
+        response = await self._make_request('GET', '/api/internal-squads')
+        return [self._parse_internal_squad(squad) for squad in response['response']['internalSquads']]
 
-    async def get_internal_squad_by_uuid(
-        self, uuid: str
-    ) -> RemnaWaveInternalSquad | None:
+    async def get_internal_squad_by_uuid(self, uuid: str) -> RemnaWaveInternalSquad | None:
         try:
-            response = await self._make_request("GET", f"/api/internal-squads/{uuid}")
-            return self._parse_internal_squad(response["response"])
+            response = await self._make_request('GET', f'/api/internal-squads/{uuid}')
+            return self._parse_internal_squad(response['response'])
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
             raise
 
-    async def create_internal_squad(
-        self, name: str, inbounds: list[str]
-    ) -> RemnaWaveInternalSquad:
-        data = {"name": name, "inbounds": inbounds}
-        response = await self._make_request("POST", "/api/internal-squads", data)
-        return self._parse_internal_squad(response["response"])
+    async def create_internal_squad(self, name: str, inbounds: list[str]) -> RemnaWaveInternalSquad:
+        data = {'name': name, 'inbounds': inbounds}
+        response = await self._make_request('POST', '/api/internal-squads', data)
+        return self._parse_internal_squad(response['response'])
 
     async def update_internal_squad(
         self, uuid: str, name: str | None = None, inbounds: list[str] | None = None
     ) -> RemnaWaveInternalSquad:
-        data = {"uuid": uuid}
+        data = {'uuid': uuid}
         if name:
-            data["name"] = name
+            data['name'] = name
         if inbounds is not None:
-            data["inbounds"] = inbounds
+            data['inbounds'] = inbounds
 
-        response = await self._make_request("PATCH", "/api/internal-squads", data)
-        return self._parse_internal_squad(response["response"])
+        response = await self._make_request('PATCH', '/api/internal-squads', data)
+        return self._parse_internal_squad(response['response'])
 
     async def delete_internal_squad(self, uuid: str) -> bool:
-        response = await self._make_request("DELETE", f"/api/internal-squads/{uuid}")
-        return response["response"]["isDeleted"]
+        response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
+        return response['response']['isDeleted']
 
-    async def get_internal_squad_accessible_nodes(
-        self, uuid: str
-    ) -> list[RemnaWaveAccessibleNode]:
+    async def get_internal_squad_accessible_nodes(self, uuid: str) -> list[RemnaWaveAccessibleNode]:
         """Получает список доступных нод для Internal Squad"""
         try:
-            response = await self._make_request(
-                "GET", f"/api/internal-squads/{uuid}/accessible-nodes"
-            )
-            return [
-                self._parse_accessible_node(node)
-                for node in response["response"]["accessibleNodes"]
-            ]
+            response = await self._make_request('GET', f'/api/internal-squads/{uuid}/accessible-nodes')
+            return [self._parse_accessible_node(node) for node in response['response']['accessibleNodes']]
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return []
@@ -903,61 +849,45 @@ class RemnaWaveAPI:
 
     async def add_users_to_internal_squad(self, uuid: str) -> bool:
         """Добавляет всех пользователей в Internal Squad (bulk action)"""
-        response = await self._make_request(
-            "POST", f"/api/internal-squads/{uuid}/bulk-actions/add-users"
-        )
-        return response["response"]["eventSent"]
+        response = await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/add-users')
+        return response['response']['eventSent']
 
     async def remove_users_from_internal_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из Internal Squad (bulk action)"""
-        response = await self._make_request(
-            "DELETE", f"/api/internal-squads/{uuid}/bulk-actions/remove-users"
-        )
-        return response["response"]["eventSent"]
+        response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
+        return response['response']['eventSent']
 
-    async def reorder_internal_squads(
-        self, items: list[dict[str, Any]]
-    ) -> list[RemnaWaveInternalSquad]:
+    async def reorder_internal_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveInternalSquad]:
         """
         Изменяет порядок Internal Squads
         items: список словарей с uuid и viewPosition
         Пример: [{'uuid': '...', 'viewPosition': 0}, {'uuid': '...', 'viewPosition': 1}]
         """
-        data = {"items": items}
-        response = await self._make_request(
-            "POST", "/api/internal-squads/actions/reorder", data
-        )
-        return [
-            self._parse_internal_squad(squad)
-            for squad in response["response"]["internalSquads"]
-        ]
+        data = {'items': items}
+        response = await self._make_request('POST', '/api/internal-squads/actions/reorder', data)
+        return [self._parse_internal_squad(squad) for squad in response['response']['internalSquads']]
 
     # ============== External Squads API ==============
 
     async def get_external_squads(self) -> list[RemnaWaveExternalSquad]:
         """Получает список всех External Squads"""
-        response = await self._make_request("GET", "/api/external-squads")
-        return [
-            self._parse_external_squad(squad)
-            for squad in response["response"]["externalSquads"]
-        ]
+        response = await self._make_request('GET', '/api/external-squads')
+        return [self._parse_external_squad(squad) for squad in response['response']['externalSquads']]
 
-    async def get_external_squad_by_uuid(
-        self, uuid: str
-    ) -> RemnaWaveExternalSquad | None:
+    async def get_external_squad_by_uuid(self, uuid: str) -> RemnaWaveExternalSquad | None:
         """Получает External Squad по UUID"""
         try:
-            response = await self._make_request("GET", f"/api/external-squads/{uuid}")
-            return self._parse_external_squad(response["response"])
+            response = await self._make_request('GET', f'/api/external-squads/{uuid}')
+            return self._parse_external_squad(response['response'])
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
             raise
 
     async def create_external_squad(self, name: str) -> RemnaWaveExternalSquad:
-        data = {"name": name}
-        response = await self._make_request("POST", "/api/external-squads", data)
-        return self._parse_external_squad(response["response"])
+        data = {'name': name}
+        response = await self._make_request('POST', '/api/external-squads', data)
+        return self._parse_external_squad(response['response'])
 
     async def update_external_squad(
         self,
@@ -971,208 +901,171 @@ class RemnaWaveAPI:
         custom_remarks: dict[str, Any] | None = None,
         subpage_config_uuid: str | None = None,
     ) -> RemnaWaveExternalSquad:
-        data = {"uuid": uuid}
+        data = {'uuid': uuid}
         if name is not None:
-            data["name"] = name
+            data['name'] = name
         if templates is not None:
-            data["templates"] = templates
+            data['templates'] = templates
         if subscription_settings is not None:
-            data["subscriptionSettings"] = subscription_settings
+            data['subscriptionSettings'] = subscription_settings
         if host_overrides is not None:
-            data["hostOverrides"] = host_overrides
+            data['hostOverrides'] = host_overrides
         if response_headers is not None:
-            data["responseHeaders"] = response_headers
+            data['responseHeaders'] = response_headers
         if hwid_settings is not None:
-            data["hwidSettings"] = hwid_settings
+            data['hwidSettings'] = hwid_settings
         if custom_remarks is not None:
-            data["customRemarks"] = custom_remarks
+            data['customRemarks'] = custom_remarks
         if subpage_config_uuid is not None:
-            data["subpageConfigUuid"] = subpage_config_uuid
+            data['subpageConfigUuid'] = subpage_config_uuid
 
-        response = await self._make_request("PATCH", "/api/external-squads", data)
-        return self._parse_external_squad(response["response"])
+        response = await self._make_request('PATCH', '/api/external-squads', data)
+        return self._parse_external_squad(response['response'])
 
     async def delete_external_squad(self, uuid: str) -> bool:
         """Удаляет External Squad"""
-        response = await self._make_request("DELETE", f"/api/external-squads/{uuid}")
-        return response["response"]["isDeleted"]
+        response = await self._make_request('DELETE', f'/api/external-squads/{uuid}')
+        return response['response']['isDeleted']
 
     async def add_users_to_external_squad(self, uuid: str) -> bool:
         """Добавляет всех пользователей в External Squad (bulk action)"""
-        response = await self._make_request(
-            "POST", f"/api/external-squads/{uuid}/bulk-actions/add-users"
-        )
-        return response["response"]["eventSent"]
+        response = await self._make_request('POST', f'/api/external-squads/{uuid}/bulk-actions/add-users')
+        return response['response']['eventSent']
 
     async def remove_users_from_external_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из External Squad (bulk action)"""
-        response = await self._make_request(
-            "DELETE", f"/api/external-squads/{uuid}/bulk-actions/remove-users"
-        )
-        return response["response"]["eventSent"]
+        response = await self._make_request('DELETE', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
+        return response['response']['eventSent']
 
-    async def reorder_external_squads(
-        self, items: list[dict[str, Any]]
-    ) -> list[RemnaWaveExternalSquad]:
-        data = {"items": items}
-        response = await self._make_request(
-            "POST", "/api/external-squads/actions/reorder", data
-        )
-        return [
-            self._parse_external_squad(squad)
-            for squad in response["response"]["externalSquads"]
-        ]
+    async def reorder_external_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveExternalSquad]:
+        data = {'items': items}
+        response = await self._make_request('POST', '/api/external-squads/actions/reorder', data)
+        return [self._parse_external_squad(squad) for squad in response['response']['externalSquads']]
 
     def _parse_external_squad(self, squad_data: dict) -> RemnaWaveExternalSquad:
         """Парсит данные External Squad"""
-        info = squad_data.get("info", {})
+        info = squad_data.get('info', {})
         return RemnaWaveExternalSquad(
-            uuid=squad_data["uuid"],
-            name=squad_data["name"],
-            view_position=squad_data.get("viewPosition", 0),
-            members_count=info.get("membersCount", 0),
-            templates=squad_data.get("templates", []),
-            subscription_settings=squad_data.get("subscriptionSettings"),
-            host_overrides=squad_data.get("hostOverrides"),
-            response_headers=squad_data.get("responseHeaders"),
-            hwid_settings=squad_data.get("hwidSettings"),
-            custom_remarks=squad_data.get("customRemarks"),
-            subpage_config_uuid=squad_data.get("subpageConfigUuid"),
-            created_at=self._parse_optional_datetime(squad_data.get("createdAt")),
-            updated_at=self._parse_optional_datetime(squad_data.get("updatedAt")),
+            uuid=squad_data['uuid'],
+            name=squad_data['name'],
+            view_position=squad_data.get('viewPosition', 0),
+            members_count=info.get('membersCount', 0),
+            templates=squad_data.get('templates', []),
+            subscription_settings=squad_data.get('subscriptionSettings'),
+            host_overrides=squad_data.get('hostOverrides'),
+            response_headers=squad_data.get('responseHeaders'),
+            hwid_settings=squad_data.get('hwidSettings'),
+            custom_remarks=squad_data.get('customRemarks'),
+            subpage_config_uuid=squad_data.get('subpageConfigUuid'),
+            created_at=self._parse_optional_datetime(squad_data.get('createdAt')),
+            updated_at=self._parse_optional_datetime(squad_data.get('updatedAt')),
         )
 
     async def get_all_nodes(self) -> list[RemnaWaveNode]:
-        response = await self._make_request("GET", "/api/nodes")
-        return [self._parse_node(node) for node in response["response"]]
+        response = await self._make_request('GET', '/api/nodes')
+        return [self._parse_node(node) for node in response['response']]
 
     async def get_node_by_uuid(self, uuid: str) -> RemnaWaveNode | None:
         try:
-            response = await self._make_request("GET", f"/api/nodes/{uuid}")
-            return self._parse_node(response["response"])
+            response = await self._make_request('GET', f'/api/nodes/{uuid}')
+            return self._parse_node(response['response'])
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
             raise
 
     async def enable_node(self, uuid: str) -> RemnaWaveNode:
-        response = await self._make_request("POST", f"/api/nodes/{uuid}/actions/enable")
-        return self._parse_node(response["response"])
+        response = await self._make_request('POST', f'/api/nodes/{uuid}/actions/enable')
+        return self._parse_node(response['response'])
 
     async def disable_node(self, uuid: str) -> RemnaWaveNode:
-        response = await self._make_request(
-            "POST", f"/api/nodes/{uuid}/actions/disable"
-        )
-        return self._parse_node(response["response"])
+        response = await self._make_request('POST', f'/api/nodes/{uuid}/actions/disable')
+        return self._parse_node(response['response'])
 
     async def restart_node(self, uuid: str, force_restart: bool = False) -> bool:
         # Remnawave 2.8.0+: команда рестарта ноды принимает forceRestart в теле
         # запроса (раньше body не было). Старые панели игнорируют лишнее поле.
-        data = {"forceRestart": force_restart}
-        response = await self._make_request(
-            "POST", f"/api/nodes/{uuid}/actions/restart", data
-        )
-        return response["response"]["eventSent"]
+        data = {'forceRestart': force_restart}
+        response = await self._make_request('POST', f'/api/nodes/{uuid}/actions/restart', data)
+        return response['response']['eventSent']
 
     async def restart_all_nodes(self, force_restart: bool = False) -> bool:
-        data = {"forceRestart": force_restart}
-        response = await self._make_request(
-            "POST", "/api/nodes/actions/restart-all", data
-        )
-        return response["response"]["eventSent"]
+        data = {'forceRestart': force_restart}
+        response = await self._make_request('POST', '/api/nodes/actions/restart-all', data)
+        return response['response']['eventSent']
 
     async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
-        response = await self._make_request("GET", f"/api/sub/{short_uuid}/info")
-        info = self._parse_subscription_info(response["response"])
+        response = await self._make_request('GET', f'/api/sub/{short_uuid}/info')
+        info = self._parse_subscription_info(response['response'])
         return info
 
     async def get_subscription_by_short_uuid(self, short_uuid: str) -> str:
-        async with self.session.get(
-            f"{self.base_url}/api/sub/{short_uuid}"
-        ) as response:
+        async with self.session.get(f'{self.base_url}/api/sub/{short_uuid}') as response:
             if response.status >= 400:
-                raise RemnaWaveAPIError(
-                    f"Failed to get subscription: {response.status}"
-                )
+                raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
             return await response.text()
 
-    async def get_subscription_by_client_type(
-        self, short_uuid: str, client_type: str
-    ) -> str:
+    async def get_subscription_by_client_type(self, short_uuid: str, client_type: str) -> str:
         valid_types = [
-            "stash",
-            "singbox",
-            "singbox-legacy",
-            "mihomo",
-            "json",
-            "v2ray-json",
-            "clash",
+            'stash',
+            'singbox',
+            'singbox-legacy',
+            'mihomo',
+            'json',
+            'v2ray-json',
+            'clash',
         ]
         if client_type not in valid_types:
-            raise ValueError(f"Invalid client type. Must be one of: {valid_types}")
+            raise ValueError(f'Invalid client type. Must be one of: {valid_types}')
 
-        async with self.session.get(
-            f"{self.base_url}/api/sub/{short_uuid}/{client_type}"
-        ) as response:
+        async with self.session.get(f'{self.base_url}/api/sub/{short_uuid}/{client_type}') as response:
             if response.status >= 400:
-                raise RemnaWaveAPIError(
-                    f"Failed to get subscription: {response.status}"
-                )
+                raise RemnaWaveAPIError(f'Failed to get subscription: {response.status}')
             return await response.text()
 
     async def get_subscription_links(self, short_uuid: str) -> dict[str, str]:
-        base_url = f"{self.base_url}/api/sub/{short_uuid}"
+        base_url = f'{self.base_url}/api/sub/{short_uuid}'
 
         links = {
-            "base": base_url,
-            "stash": f"{base_url}/stash",
-            "singbox": f"{base_url}/singbox",
-            "singbox_legacy": f"{base_url}/singbox-legacy",
-            "mihomo": f"{base_url}/mihomo",
-            "json": f"{base_url}/json",
-            "v2ray_json": f"{base_url}/v2ray-json",
-            "clash": f"{base_url}/clash",
+            'base': base_url,
+            'stash': f'{base_url}/stash',
+            'singbox': f'{base_url}/singbox',
+            'singbox_legacy': f'{base_url}/singbox-legacy',
+            'mihomo': f'{base_url}/mihomo',
+            'json': f'{base_url}/json',
+            'v2ray_json': f'{base_url}/v2ray-json',
+            'clash': f'{base_url}/clash',
         }
 
         return links
 
     async def get_outline_subscription(self, short_uuid: str, encoded_tag: str) -> str:
-        async with self.session.get(
-            f"{self.base_url}/api/sub/outline/{short_uuid}/ss/{encoded_tag}"
-        ) as response:
+        async with self.session.get(f'{self.base_url}/api/sub/outline/{short_uuid}/ss/{encoded_tag}') as response:
             if response.status >= 400:
-                raise RemnaWaveAPIError(
-                    f"Failed to get outline subscription: {response.status}"
-                )
+                raise RemnaWaveAPIError(f'Failed to get outline subscription: {response.status}')
             return await response.text()
 
     async def get_system_stats(self, tz: str | None = None) -> dict[str, Any]:
-        params = {"tz": tz} if tz else None
-        response = await self._make_request("GET", "/api/system/stats", params=params)
-        return response["response"]
+        params = {'tz': tz} if tz else None
+        response = await self._make_request('GET', '/api/system/stats', params=params)
+        return response['response']
 
     async def get_health(self) -> dict[str, Any]:
         """Panel runtime health: {runtimeMetrics: [{rss, heapUsed, heapTotal,
         eventLoopDelayMs, eventLoopP99Ms, uptime, instanceId, ...}]}."""
-        response = await self._make_request("GET", "/api/system/health")
-        return response["response"]
+        response = await self._make_request('GET', '/api/system/health')
+        return response['response']
 
-    async def get_hwid_top_users(
-        self, size: int = 10, start: int = 0
-    ) -> dict[str, Any]:
+    async def get_hwid_top_users(self, size: int = 10, start: int = 0) -> dict[str, Any]:
         """Top users by HWID device count: {users:[{username,devicesCount,...}], total}."""
-        params = {"size": size, "start": start}
-        response = await self._make_request(
-            "GET", "/api/hwid/devices/top-users", params=params
-        )
-        return response["response"]
+        params = {'size': size, 'start': start}
+        response = await self._make_request('GET', '/api/hwid/devices/top-users', params=params)
+        return response['response']
 
     async def get_subscription_request_stats(self) -> dict[str, Any]:
         """Subscription request history: {byParsedApp:[{app,count}], hourlyRequestStats:[...]}."""
-        response = await self._make_request(
-            "GET", "/api/subscription-request-history/stats"
-        )
-        return response["response"]
+        response = await self._make_request('GET', '/api/subscription-request-history/stats')
+        return response['response']
 
     async def get_system_metadata(self) -> dict[str, Any]:
         """
@@ -1184,25 +1077,23 @@ class RemnaWaveAPI:
             - build: {time, number} - информация о сборке
             - git: {backend: {commitSha}, node: {commitSha}} - информация о коммитах
         """
-        response = await self._make_request("GET", "/api/system/metadata")
-        return response["response"]
+        response = await self._make_request('GET', '/api/system/metadata')
+        return response['response']
 
     async def get_bandwidth_stats(self, tz: str | None = None) -> dict[str, Any]:
-        params = {"tz": tz} if tz else None
-        response = await self._make_request(
-            "GET", "/api/system/stats/bandwidth", params=params
-        )
-        return response["response"]
+        params = {'tz': tz} if tz else None
+        response = await self._make_request('GET', '/api/system/stats/bandwidth', params=params)
+        return response['response']
 
     async def get_nodes_statistics(self) -> dict[str, Any]:
-        response = await self._make_request("GET", "/api/system/stats/nodes")
-        return response["response"]
+        response = await self._make_request('GET', '/api/system/stats/nodes')
+        return response['response']
 
     async def get_stats_recap(self) -> dict[str, Any]:
         """Panel recap: {thisMonth:{users,traffic}, total:{users,nodes,traffic,nodesRam,
         nodesCpuCores,distinctCountries}, version, initDate}."""
-        response = await self._make_request("GET", "/api/system/stats/recap")
-        return response["response"]
+        response = await self._make_request('GET', '/api/system/stats/recap')
+        return response['response']
 
     async def get_hwid_devices_stats(self) -> dict[str, Any]:
         """HWID device stats.
@@ -1212,12 +1103,12 @@ class RemnaWaveAPI:
         До 2.8.0 ``byApp`` был top-level массивом (см. backward-compat в
         ``RemnaWaveService.get_devices_statistics``).
         """
-        response = await self._make_request("GET", "/api/hwid/devices/stats")
-        return response["response"]
+        response = await self._make_request('GET', '/api/hwid/devices/stats')
+        return response['response']
 
     async def get_nodes_metrics(self) -> dict[str, Any]:
-        response = await self._make_request("GET", "/api/system/nodes/metrics")
-        return response.get("response", {})
+        response = await self._make_request('GET', '/api/system/nodes/metrics')
+        return response.get('response', {})
 
     async def get_nodes_realtime_usage(self) -> list[dict[str, Any]]:
         """Get per-node metrics with per-inbound traffic breakdown.
@@ -1227,7 +1118,7 @@ class RemnaWaveAPI:
         """
         try:
             metrics = await self.get_nodes_metrics()
-            nodes = metrics.get("nodes", [])
+            nodes = metrics.get('nodes', [])
             if isinstance(metrics, list):
                 nodes = metrics
             result = []
@@ -1235,185 +1126,143 @@ class RemnaWaveAPI:
                 download_bytes = 0
                 upload_bytes = 0
                 inbounds = []
-                for ib in node.get("inboundsStats", []):
-                    ib_dl = parse_bytes(ib.get("download", "0"))
-                    ib_ul = parse_bytes(ib.get("upload", "0"))
+                for ib in node.get('inboundsStats', []):
+                    ib_dl = parse_bytes(ib.get('download', '0'))
+                    ib_ul = parse_bytes(ib.get('upload', '0'))
                     download_bytes += ib_dl
                     upload_bytes += ib_ul
                     inbounds.append(
                         {
-                            "tag": ib.get("tag", "unknown"),
-                            "downloadBytes": ib_dl,
-                            "uploadBytes": ib_ul,
-                            "totalBytes": ib_dl + ib_ul,
+                            'tag': ib.get('tag', 'unknown'),
+                            'downloadBytes': ib_dl,
+                            'uploadBytes': ib_ul,
+                            'totalBytes': ib_dl + ib_ul,
                         }
                     )
 
                 outbounds = []
-                for ob in node.get("outboundsStats", []):
-                    ob_dl = parse_bytes(ob.get("download", "0"))
-                    ob_ul = parse_bytes(ob.get("upload", "0"))
+                for ob in node.get('outboundsStats', []):
+                    ob_dl = parse_bytes(ob.get('download', '0'))
+                    ob_ul = parse_bytes(ob.get('upload', '0'))
                     outbounds.append(
                         {
-                            "tag": ob.get("tag", "unknown"),
-                            "downloadBytes": ob_dl,
-                            "uploadBytes": ob_ul,
-                            "totalBytes": ob_dl + ob_ul,
+                            'tag': ob.get('tag', 'unknown'),
+                            'downloadBytes': ob_dl,
+                            'uploadBytes': ob_ul,
+                            'totalBytes': ob_dl + ob_ul,
                         }
                     )
 
                 result.append(
                     {
-                        "nodeUuid": node.get("nodeUuid", ""),
-                        "nodeName": node.get("nodeName", ""),
-                        "countryEmoji": node.get("countryEmoji", ""),
-                        "providerName": node.get("providerName", ""),
-                        "downloadBytes": download_bytes,
-                        "uploadBytes": upload_bytes,
-                        "totalBytes": download_bytes + upload_bytes,
-                        "usersOnline": node.get("usersOnline", 0),
-                        "inbounds": inbounds,
-                        "outbounds": outbounds,
+                        'nodeUuid': node.get('nodeUuid', ''),
+                        'nodeName': node.get('nodeName', ''),
+                        'countryEmoji': node.get('countryEmoji', ''),
+                        'providerName': node.get('providerName', ''),
+                        'downloadBytes': download_bytes,
+                        'uploadBytes': upload_bytes,
+                        'totalBytes': download_bytes + upload_bytes,
+                        'usersOnline': node.get('usersOnline', 0),
+                        'inbounds': inbounds,
+                        'outbounds': outbounds,
                     }
                 )
             return result
         except Exception as e:
-            logger.warning("Failed to get nodes metrics for realtime usage", error=e)
+            logger.warning('Failed to get nodes metrics for realtime usage', error=e)
             return []
 
-    async def get_user_stats_usage(
-        self, user_uuid: str, start_date: str, end_date: str
-    ) -> dict[str, Any]:
-        return await self.get_bandwidth_stats_user_legacy(
-            user_uuid, start_date, end_date
-        )
+    async def get_user_stats_usage(self, user_uuid: str, start_date: str, end_date: str) -> dict[str, Any]:
+        return await self.get_bandwidth_stats_user_legacy(user_uuid, start_date, end_date)
 
     # ============== Bandwidth Stats API ==============
 
-    async def get_bandwidth_stats_nodes(
-        self, start_date: str, end_date: str
-    ) -> dict[str, Any]:
-        params = {"start": start_date, "end": end_date}
-        response = await self._make_request(
-            "GET", "/api/bandwidth-stats/nodes", params=params
-        )
-        return response["response"]
+    async def get_bandwidth_stats_nodes(self, start_date: str, end_date: str) -> dict[str, Any]:
+        params = {'start': start_date, 'end': end_date}
+        response = await self._make_request('GET', '/api/bandwidth-stats/nodes', params=params)
+        return response['response']
 
     async def get_bandwidth_stats_node_users(
         self, node_uuid: str, start_date: str, end_date: str, top_users_limit: int = 10
     ) -> dict[str, Any]:
         params = {
-            "start": start_date,
-            "end": end_date,
-            "topUsersLimit": top_users_limit,
+            'start': start_date,
+            'end': end_date,
+            'topUsersLimit': top_users_limit,
         }
-        response = await self._make_request(
-            "GET", f"/api/bandwidth-stats/nodes/{node_uuid}/users", params=params
-        )
-        return response["response"]
+        response = await self._make_request('GET', f'/api/bandwidth-stats/nodes/{node_uuid}/users', params=params)
+        return response['response']
 
     async def get_bandwidth_stats_node_users_legacy(
         self, node_uuid: str, start_date: str, end_date: str
     ) -> dict[str, Any]:
-        params = {"start": start_date, "end": end_date}
+        params = {'start': start_date, 'end': end_date}
         response = await self._make_request(
-            "GET", f"/api/bandwidth-stats/nodes/{node_uuid}/users/legacy", params=params
+            'GET', f'/api/bandwidth-stats/nodes/{node_uuid}/users/legacy', params=params
         )
-        return response["response"]
+        return response['response']
 
-    async def get_bandwidth_stats_user(
-        self, user_uuid: str, start_date: str, end_date: str
-    ) -> dict[str, Any]:
-        params = {"start": start_date, "end": end_date}
-        response = await self._make_request(
-            "GET", f"/api/bandwidth-stats/users/{user_uuid}", params=params
-        )
-        return response["response"]
+    async def get_bandwidth_stats_user(self, user_uuid: str, start_date: str, end_date: str) -> dict[str, Any]:
+        params = {'start': start_date, 'end': end_date}
+        response = await self._make_request('GET', f'/api/bandwidth-stats/users/{user_uuid}', params=params)
+        return response['response']
 
-    async def get_bandwidth_stats_user_legacy(
-        self, user_uuid: str, start_date: str, end_date: str
-    ) -> dict[str, Any]:
-        params = {"start": start_date, "end": end_date}
-        response = await self._make_request(
-            "GET", f"/api/bandwidth-stats/users/{user_uuid}/legacy", params=params
-        )
+    async def get_bandwidth_stats_user_legacy(self, user_uuid: str, start_date: str, end_date: str) -> dict[str, Any]:
+        params = {'start': start_date, 'end': end_date}
+        response = await self._make_request('GET', f'/api/bandwidth-stats/users/{user_uuid}/legacy', params=params)
         return response
 
     # ============== Subscription Page Configs API ==============
 
     async def get_subscription_page_configs(self) -> list[SubscriptionPageConfig]:
-        response = await self._make_request("GET", "/api/subscription-page-configs")
-        configs_data = response["response"].get("configs", [])
+        response = await self._make_request('GET', '/api/subscription-page-configs')
+        configs_data = response['response'].get('configs', [])
         return [self._parse_subscription_page_config(c) for c in configs_data]
 
-    async def get_subscription_page_config(
-        self, uuid: str
-    ) -> SubscriptionPageConfig | None:
+    async def get_subscription_page_config(self, uuid: str) -> SubscriptionPageConfig | None:
         try:
-            response = await self._make_request(
-                "GET", f"/api/subscription-page-configs/{uuid}"
-            )
-            return self._parse_subscription_page_config(response["response"])
+            response = await self._make_request('GET', f'/api/subscription-page-configs/{uuid}')
+            return self._parse_subscription_page_config(response['response'])
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
             raise
 
-    async def create_subscription_page_config(
-        self, name: str
-    ) -> SubscriptionPageConfig:
-        data = {"name": name}
-        response = await self._make_request(
-            "POST", "/api/subscription-page-configs", data
-        )
-        return self._parse_subscription_page_config(response["response"])
+    async def create_subscription_page_config(self, name: str) -> SubscriptionPageConfig:
+        data = {'name': name}
+        response = await self._make_request('POST', '/api/subscription-page-configs', data)
+        return self._parse_subscription_page_config(response['response'])
 
     async def update_subscription_page_config(
         self, uuid: str, name: str | None = None, config: dict[str, Any] | None = None
     ) -> SubscriptionPageConfig:
-        data = {"uuid": uuid}
+        data = {'uuid': uuid}
         if name is not None:
-            data["name"] = name
+            data['name'] = name
         if config is not None:
-            data["config"] = config
-        response = await self._make_request(
-            "PATCH", "/api/subscription-page-configs", data
-        )
-        return self._parse_subscription_page_config(response["response"])
+            data['config'] = config
+        response = await self._make_request('PATCH', '/api/subscription-page-configs', data)
+        return self._parse_subscription_page_config(response['response'])
 
     async def delete_subscription_page_config(self, uuid: str) -> bool:
-        response = await self._make_request(
-            "DELETE", f"/api/subscription-page-configs/{uuid}"
-        )
-        return response["response"]["isDeleted"]
+        response = await self._make_request('DELETE', f'/api/subscription-page-configs/{uuid}')
+        return response['response']['isDeleted']
 
-    async def reorder_subscription_page_configs(
-        self, items: list[dict[str, Any]]
-    ) -> list[SubscriptionPageConfig]:
-        data = {"items": items}
-        response = await self._make_request(
-            "POST", "/api/subscription-page-configs/actions/reorder", data
-        )
-        configs_data = response["response"].get("configs", [])
+    async def reorder_subscription_page_configs(self, items: list[dict[str, Any]]) -> list[SubscriptionPageConfig]:
+        data = {'items': items}
+        response = await self._make_request('POST', '/api/subscription-page-configs/actions/reorder', data)
+        configs_data = response['response'].get('configs', [])
         return [self._parse_subscription_page_config(c) for c in configs_data]
 
-    async def clone_subscription_page_config(
-        self, clone_from_uuid: str
-    ) -> SubscriptionPageConfig:
-        data = {"cloneFromUuid": clone_from_uuid}
-        response = await self._make_request(
-            "POST", "/api/subscription-page-configs/actions/clone", data
-        )
-        return self._parse_subscription_page_config(response["response"])
+    async def clone_subscription_page_config(self, clone_from_uuid: str) -> SubscriptionPageConfig:
+        data = {'cloneFromUuid': clone_from_uuid}
+        response = await self._make_request('POST', '/api/subscription-page-configs/actions/clone', data)
+        return self._parse_subscription_page_config(response['response'])
 
-    async def get_subpage_config_by_short_uuid(
-        self, short_uuid: str
-    ) -> dict[str, Any] | None:
+    async def get_subpage_config_by_short_uuid(self, short_uuid: str) -> dict[str, Any] | None:
         try:
-            response = await self._make_request(
-                "GET", f"/api/subscriptions/subpage-config/{short_uuid}"
-            )
-            return response.get("response")
+            response = await self._make_request('GET', f'/api/subscriptions/subpage-config/{short_uuid}')
+            return response.get('response')
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return None
@@ -1422,10 +1271,10 @@ class RemnaWaveAPI:
     def _parse_subscription_page_config(self, data: dict) -> SubscriptionPageConfig:
         """Парсит данные конфигурации страницы подписки"""
         return SubscriptionPageConfig(
-            uuid=data["uuid"],
-            name=data["name"],
-            view_position=data["viewPosition"],
-            config=data.get("config"),
+            uuid=data['uuid'],
+            name=data['name'],
+            view_position=data['viewPosition'],
+            config=data.get('config'),
         )
 
     async def get_all_hwid_devices(self) -> dict[str, Any]:
@@ -1435,32 +1284,30 @@ class RemnaWaveAPI:
         page_size = 1000
 
         while True:
-            response = await self._make_request(
-                "GET", "/api/hwid/devices", params={"start": start, "size": page_size}
-            )
-            data = response.get("response", {"devices": [], "total": 0})
-            devices = data.get("devices", [])
-            total = data.get("total", 0)
+            response = await self._make_request('GET', '/api/hwid/devices', params={'start': start, 'size': page_size})
+            data = response.get('response', {'devices': [], 'total': 0})
+            devices = data.get('devices', [])
+            total = data.get('total', 0)
             all_devices.extend(devices)
 
             if len(all_devices) >= total or not devices:
                 break
             start += len(devices)
 
-        return {"devices": all_devices, "total": len(all_devices)}
+        return {'devices': all_devices, 'total': len(all_devices)}
 
     async def get_all_panel_subscriptions(self) -> list[dict[str, Any]]:
         """GET /api/subscriptions — all panel subscriptions."""
-        response = await self._make_request("GET", "/api/subscriptions")
-        return response.get("response") or []
+        response = await self._make_request('GET', '/api/subscriptions')
+        return response.get('response') or []
 
     async def get_user_devices(self, user_uuid: str) -> dict[str, Any]:
         try:
-            response = await self._make_request("GET", f"/api/hwid/devices/{user_uuid}")
-            return response["response"]
+            response = await self._make_request('GET', f'/api/hwid/devices/{user_uuid}')
+            return response['response']
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
-                return {"total": 0, "devices": []}
+                return {'total': 0, 'devices': []}
             raise
 
     async def get_user_devices_all(self, user_uuid: str) -> dict[str, Any]:
@@ -1472,13 +1319,13 @@ class RemnaWaveAPI:
         try:
             while True:
                 response = await self._make_request(
-                    "GET",
-                    f"/api/hwid/devices/{user_uuid}",
-                    params={"start": start, "size": page_size},
+                    'GET',
+                    f'/api/hwid/devices/{user_uuid}',
+                    params={'start': start, 'size': page_size},
                 )
-                data = response.get("response", {"devices": [], "total": 0})
-                devices = data.get("devices", [])
-                total = data.get("total", 0)
+                data = response.get('response', {'devices': [], 'total': 0})
+                devices = data.get('devices', [])
+                total = data.get('total', 0)
                 all_devices.extend(devices)
 
                 if len(all_devices) >= total or not devices:
@@ -1486,31 +1333,29 @@ class RemnaWaveAPI:
                 start += len(devices)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
-                return {"total": 0, "devices": []}
+                return {'total': 0, 'devices': []}
             raise
 
-        return {"devices": all_devices, "total": len(all_devices)}
+        return {'devices': all_devices, 'total': len(all_devices)}
 
     async def reset_user_devices(self, user_uuid: str) -> bool:
         try:
             devices_info = await self.get_user_devices_all(user_uuid)
-            devices = devices_info.get("devices", [])
+            devices = devices_info.get('devices', [])
 
             if not devices:
                 return True
 
             failed_count = 0
             for device in devices:
-                device_hwid = device.get("hwid")
+                device_hwid = device.get('hwid')
                 if device_hwid:
                     try:
-                        delete_data = {"userUuid": user_uuid, "hwid": device_hwid}
-                        await self._make_request(
-                            "POST", "/api/hwid/devices/delete", data=delete_data
-                        )
+                        delete_data = {'userUuid': user_uuid, 'hwid': device_hwid}
+                        await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
                     except Exception as device_error:
                         logger.error(
-                            "Ошибка удаления устройства",
+                            'Ошибка удаления устройства',
                             device_hwid=device_hwid,
                             device_error=device_error,
                         )
@@ -1519,7 +1364,7 @@ class RemnaWaveAPI:
             return failed_count < len(devices) / 2
 
         except Exception as e:
-            logger.error("Ошибка при сбросе устройств", error=e)
+            logger.error('Ошибка при сбросе устройств', error=e)
             return False
 
     async def remove_device(self, user_uuid: str, device_hwid: str) -> bool:
@@ -1534,36 +1379,32 @@ class RemnaWaveAPI:
         Панели, отвечающие «голым» ack без списка devices, обрабатываются как раньше
         (успешный запрос == удалено).
         """
-        delete_data = {"userUuid": user_uuid, "hwid": device_hwid}
+        delete_data = {'userUuid': user_uuid, 'hwid': device_hwid}
         try:
-            response = await self._make_request(
-                "POST", "/api/hwid/devices/delete", data=delete_data
-            )
+            response = await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return True  # устройства уже нет — цель достигнута
             logger.error(
-                "Ошибка удаления устройства",
+                'Ошибка удаления устройства',
                 device_hwid=device_hwid,
                 status_code=e.status_code,
                 error=e.message,
             )
             return False
         except Exception as e:
-            logger.error("Ошибка удаления устройства", device_hwid=device_hwid, error=e)
+            logger.error('Ошибка удаления устройства', device_hwid=device_hwid, error=e)
             return False
 
-        payload = response.get("response") if isinstance(response, dict) else None
-        devices = payload.get("devices") if isinstance(payload, dict) else None
+        payload = response.get('response') if isinstance(response, dict) else None
+        devices = payload.get('devices') if isinstance(payload, dict) else None
         if isinstance(devices, list):
-            still_present = any(
-                isinstance(d, dict) and d.get("hwid") == device_hwid for d in devices
-            )
+            still_present = any(isinstance(d, dict) and d.get('hwid') == device_hwid for d in devices)
             if still_present:
                 logger.warning(
-                    "Панель приняла запрос, но устройство осталось в списке",
+                    'Панель приняла запрос, но устройство осталось в списке',
                     device_hwid=device_hwid,
-                    remaining=payload.get("total"),
+                    remaining=payload.get('total'),
                 )
                 return False
 
@@ -1575,90 +1416,78 @@ class RemnaWaveAPI:
             return None
 
         return UserTraffic(
-            used_traffic_bytes=int(traffic_data.get("usedTrafficBytes", 0)),
-            lifetime_used_traffic_bytes=int(
-                traffic_data.get("lifetimeUsedTrafficBytes", 0)
-            ),
-            online_at=self._parse_optional_datetime(traffic_data.get("onlineAt")),
-            first_connected_at=self._parse_optional_datetime(
-                traffic_data.get("firstConnectedAt")
-            ),
-            last_connected_node_uuid=traffic_data.get("lastConnectedNodeUuid"),
+            used_traffic_bytes=int(traffic_data.get('usedTrafficBytes', 0)),
+            lifetime_used_traffic_bytes=int(traffic_data.get('lifetimeUsedTrafficBytes', 0)),
+            online_at=self._parse_optional_datetime(traffic_data.get('onlineAt')),
+            first_connected_at=self._parse_optional_datetime(traffic_data.get('firstConnectedAt')),
+            last_connected_node_uuid=traffic_data.get('lastConnectedNodeUuid'),
         )
 
     def _parse_user(self, user_data: dict) -> RemnaWaveUser:
-        happ_data = user_data.get("happ") or {}
-        happ_link = happ_data.get("link") or happ_data.get("url")
-        happ_crypto_link = happ_data.get("cryptoLink") or happ_data.get("crypto_link")
+        happ_data = user_data.get('happ') or {}
+        happ_link = happ_data.get('link') or happ_data.get('url')
+        happ_crypto_link = happ_data.get('cryptoLink') or happ_data.get('crypto_link')
 
         # Парсим userTraffic из нового формата API
-        user_traffic = self._parse_user_traffic(user_data.get("userTraffic"))
+        user_traffic = self._parse_user_traffic(user_data.get('userTraffic'))
 
         # Получаем status с fallback на ACTIVE
-        status_str = user_data.get("status") or "ACTIVE"
+        status_str = user_data.get('status') or 'ACTIVE'
         try:
             status = UserStatus(status_str)
         except ValueError:
             logger.warning(
-                "Неизвестный статус пользователя: используем ACTIVE",
+                'Неизвестный статус пользователя: используем ACTIVE',
                 status_str=status_str,
             )
             status = UserStatus.ACTIVE
 
         # Получаем trafficLimitStrategy с fallback
-        strategy_str = user_data.get("trafficLimitStrategy") or "NO_RESET"
+        strategy_str = user_data.get('trafficLimitStrategy') or 'NO_RESET'
         try:
             traffic_strategy = TrafficLimitStrategy(strategy_str)
         except ValueError:
             logger.warning(
-                "Неизвестная стратегия трафика: используем NO_RESET",
+                'Неизвестная стратегия трафика: используем NO_RESET',
                 strategy_str=strategy_str,
             )
             traffic_strategy = TrafficLimitStrategy.NO_RESET
 
         return RemnaWaveUser(
-            uuid=user_data["uuid"],
-            short_uuid=user_data["shortUuid"],
-            username=user_data["username"],
+            uuid=user_data['uuid'],
+            short_uuid=user_data['shortUuid'],
+            username=user_data['username'],
             status=status,
             # Remnawave 2.8.0 ослабил валидацию trafficLimitBytes (integer → number),
             # поэтому панель может вернуть float — приводим к int явно.
-            traffic_limit_bytes=int(user_data.get("trafficLimitBytes") or 0),
+            traffic_limit_bytes=int(user_data.get('trafficLimitBytes') or 0),
             traffic_limit_strategy=traffic_strategy,
-            expire_at=datetime.fromisoformat(
-                user_data["expireAt"].replace("Z", "+00:00")
-            ),
-            telegram_id=user_data.get("telegramId"),
-            email=user_data.get("email"),
-            hwid_device_limit=user_data.get("hwidDeviceLimit"),
-            description=user_data.get("description"),
-            tag=user_data.get("tag"),
-            subscription_url=user_data.get("subscriptionUrl", ""),
-            active_internal_squads=user_data.get("activeInternalSquads", []),
-            created_at=datetime.fromisoformat(
-                user_data["createdAt"].replace("Z", "+00:00")
-            ),
-            updated_at=datetime.fromisoformat(
-                user_data["updatedAt"].replace("Z", "+00:00")
-            ),
+            expire_at=datetime.fromisoformat(user_data['expireAt'].replace('Z', '+00:00')),
+            telegram_id=user_data.get('telegramId'),
+            email=user_data.get('email'),
+            hwid_device_limit=user_data.get('hwidDeviceLimit'),
+            description=user_data.get('description'),
+            tag=user_data.get('tag'),
+            subscription_url=user_data.get('subscriptionUrl', ''),
+            active_internal_squads=user_data.get('activeInternalSquads', []),
+            created_at=datetime.fromisoformat(user_data['createdAt'].replace('Z', '+00:00')),
+            updated_at=datetime.fromisoformat(user_data['updatedAt'].replace('Z', '+00:00')),
             user_traffic=user_traffic,
-            sub_revoked_at=self._parse_optional_datetime(user_data.get("subRevokedAt")),
-            last_traffic_reset_at=self._parse_optional_datetime(
-                user_data.get("lastTrafficResetAt")
-            ),
-            trojan_password=user_data.get("trojanPassword"),
-            vless_uuid=user_data.get("vlessUuid"),
-            ss_password=user_data.get("ssPassword"),
-            last_triggered_threshold=user_data.get("lastTriggeredThreshold", 0),
+            sub_revoked_at=self._parse_optional_datetime(user_data.get('subRevokedAt')),
+            last_traffic_reset_at=self._parse_optional_datetime(user_data.get('lastTrafficResetAt')),
+            trojan_password=user_data.get('trojanPassword'),
+            vless_uuid=user_data.get('vlessUuid'),
+            ss_password=user_data.get('ssPassword'),
+            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0),
             happ_link=happ_link,
             happ_crypto_link=happ_crypto_link,
-            external_squad_uuid=user_data.get("externalSquadUuid"),
-            id=user_data.get("id"),
+            external_squad_uuid=user_data.get('externalSquadUuid'),
+            id=user_data.get('id'),
         )
 
     def _parse_optional_datetime(self, date_str: str | None) -> datetime | None:
         if date_str:
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         return None
 
     @staticmethod
@@ -1674,100 +1503,94 @@ class RemnaWaveAPI:
     def _parse_inbound(self, inbound_data: dict) -> RemnaWaveInbound:
         """Парсит данные inbound"""
         return RemnaWaveInbound(
-            uuid=inbound_data["uuid"],
-            profile_uuid=inbound_data["profileUuid"],
-            tag=inbound_data["tag"],
-            type=inbound_data["type"],
-            network=inbound_data.get("network"),
-            security=inbound_data.get("security"),
-            port=inbound_data.get("port"),
-            raw_inbound=inbound_data.get("rawInbound"),
+            uuid=inbound_data['uuid'],
+            profile_uuid=inbound_data['profileUuid'],
+            tag=inbound_data['tag'],
+            type=inbound_data['type'],
+            network=inbound_data.get('network'),
+            security=inbound_data.get('security'),
+            port=inbound_data.get('port'),
+            raw_inbound=inbound_data.get('rawInbound'),
         )
 
     def _parse_internal_squad(self, squad_data: dict) -> RemnaWaveInternalSquad:
-        info = squad_data.get("info", {})
-        inbounds_raw = squad_data.get("inbounds", [])
-        inbounds = (
-            [self._parse_inbound(ib) for ib in inbounds_raw] if inbounds_raw else []
-        )
+        info = squad_data.get('info', {})
+        inbounds_raw = squad_data.get('inbounds', [])
+        inbounds = [self._parse_inbound(ib) for ib in inbounds_raw] if inbounds_raw else []
         return RemnaWaveInternalSquad(
-            uuid=squad_data["uuid"],
-            name=squad_data["name"],
-            members_count=info.get("membersCount", 0),
-            inbounds_count=info.get("inboundsCount", 0),
+            uuid=squad_data['uuid'],
+            name=squad_data['name'],
+            members_count=info.get('membersCount', 0),
+            inbounds_count=info.get('inboundsCount', 0),
             inbounds=inbounds,
-            view_position=squad_data.get("viewPosition", 0),
-            created_at=self._parse_optional_datetime(squad_data.get("createdAt")),
-            updated_at=self._parse_optional_datetime(squad_data.get("updatedAt")),
+            view_position=squad_data.get('viewPosition', 0),
+            created_at=self._parse_optional_datetime(squad_data.get('createdAt')),
+            updated_at=self._parse_optional_datetime(squad_data.get('updatedAt')),
         )
 
     def _parse_accessible_node(self, node_data: dict) -> RemnaWaveAccessibleNode:
         """Парсит данные доступной ноды для Internal Squad"""
         return RemnaWaveAccessibleNode(
-            uuid=node_data["uuid"],
-            node_name=node_data["nodeName"],
-            country_code=node_data["countryCode"],
-            config_profile_uuid=node_data["configProfileUuid"],
-            config_profile_name=node_data["configProfileName"],
-            active_inbounds=node_data.get("activeInbounds", []),
+            uuid=node_data['uuid'],
+            node_name=node_data['nodeName'],
+            country_code=node_data['countryCode'],
+            config_profile_uuid=node_data['configProfileUuid'],
+            config_profile_name=node_data['configProfileName'],
+            active_inbounds=node_data.get('activeInbounds', []),
         )
 
     def _parse_node(self, node_data: dict) -> RemnaWaveNode:
         return RemnaWaveNode(
-            uuid=node_data["uuid"],
-            name=node_data["name"],
-            address=node_data["address"],
-            country_code=node_data.get("countryCode", ""),
-            is_connected=node_data.get("isConnected", False),
-            is_disabled=node_data.get("isDisabled", False),
-            users_online=node_data.get("usersOnline", 0),
+            uuid=node_data['uuid'],
+            name=node_data['name'],
+            address=node_data['address'],
+            country_code=node_data.get('countryCode', ''),
+            is_connected=node_data.get('isConnected', False),
+            is_disabled=node_data.get('isDisabled', False),
+            users_online=node_data.get('usersOnline', 0),
             # 2.8.0: trafficLimitBytes может прийти float (валидация ослаблена) —
             # приводим к int, но сохраняем None когда панель поле не вернула.
             traffic_used_bytes=(
-                None
-                if node_data.get("trafficUsedBytes") is None
-                else self._safe_int(node_data.get("trafficUsedBytes"))
+                None if node_data.get('trafficUsedBytes') is None else self._safe_int(node_data.get('trafficUsedBytes'))
             ),
             traffic_limit_bytes=(
                 None
-                if node_data.get("trafficLimitBytes") is None
-                else self._safe_int(node_data.get("trafficLimitBytes"))
+                if node_data.get('trafficLimitBytes') is None
+                else self._safe_int(node_data.get('trafficLimitBytes'))
             ),
-            port=node_data.get("port"),
-            is_connecting=node_data.get("isConnecting", False),
-            view_position=node_data.get("viewPosition", 0),
-            tags=node_data.get("tags", []),
-            last_status_change=self._parse_optional_datetime(
-                node_data.get("lastStatusChange")
-            ),
-            last_status_message=node_data.get("lastStatusMessage"),
-            xray_uptime=self._safe_int(node_data.get("xrayUptime")),
-            is_traffic_tracking_active=node_data.get("isTrafficTrackingActive", False),
-            traffic_reset_day=node_data.get("trafficResetDay"),
-            notify_percent=node_data.get("notifyPercent"),
-            consumption_multiplier=node_data.get("consumptionMultiplier", 1.0),
-            created_at=self._parse_optional_datetime(node_data.get("createdAt")),
-            updated_at=self._parse_optional_datetime(node_data.get("updatedAt")),
-            provider_uuid=node_data.get("providerUuid"),
-            provider_name=(node_data.get("provider") or {}).get("name"),
-            provider_favicon=(node_data.get("provider") or {}).get("faviconLink"),
-            versions=node_data.get("versions"),
-            system=node_data.get("system"),
-            active_plugin_uuid=node_data.get("activePluginUuid"),
+            port=node_data.get('port'),
+            is_connecting=node_data.get('isConnecting', False),
+            view_position=node_data.get('viewPosition', 0),
+            tags=node_data.get('tags', []),
+            last_status_change=self._parse_optional_datetime(node_data.get('lastStatusChange')),
+            last_status_message=node_data.get('lastStatusMessage'),
+            xray_uptime=self._safe_int(node_data.get('xrayUptime')),
+            is_traffic_tracking_active=node_data.get('isTrafficTrackingActive', False),
+            traffic_reset_day=node_data.get('trafficResetDay'),
+            notify_percent=node_data.get('notifyPercent'),
+            consumption_multiplier=node_data.get('consumptionMultiplier', 1.0),
+            created_at=self._parse_optional_datetime(node_data.get('createdAt')),
+            updated_at=self._parse_optional_datetime(node_data.get('updatedAt')),
+            provider_uuid=node_data.get('providerUuid'),
+            provider_name=(node_data.get('provider') or {}).get('name'),
+            provider_favicon=(node_data.get('provider') or {}).get('faviconLink'),
+            versions=node_data.get('versions'),
+            system=node_data.get('system'),
+            active_plugin_uuid=node_data.get('activePluginUuid'),
         )
 
     def _parse_subscription_info(self, data: dict) -> SubscriptionInfo:
-        happ_data = data.get("happ") or {}
-        happ_link = happ_data.get("link") or happ_data.get("url")
-        happ_crypto_link = happ_data.get("cryptoLink") or happ_data.get("crypto_link")
+        happ_data = data.get('happ') or {}
+        happ_link = happ_data.get('link') or happ_data.get('url')
+        happ_crypto_link = happ_data.get('cryptoLink') or happ_data.get('crypto_link')
 
         return SubscriptionInfo(
-            is_found=data["isFound"],
-            user=data.get("user"),
-            links=data.get("links", []),
-            ss_conf_links=data.get("ssConfLinks", {}),
-            subscription_url=data.get("subscriptionUrl", ""),
-            happ=data.get("happ"),
+            is_found=data['isFound'],
+            user=data.get('user'),
+            links=data.get('links', []),
+            ss_conf_links=data.get('ssConfLinks', {}),
+            subscription_url=data.get('subscriptionUrl', ''),
+            happ=data.get('happ'),
             happ_link=happ_link,
             happ_crypto_link=happ_crypto_link,
         )
@@ -1775,9 +1598,9 @@ class RemnaWaveAPI:
 
 def format_bytes(bytes_value: int) -> str:
     if bytes_value == 0:
-        return "0 B"
+        return '0 B'
 
-    units = ["B", "KB", "MB", "GB", "TB"]
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
     size = bytes_value
     unit_index = 0
 
@@ -1785,7 +1608,7 @@ def format_bytes(bytes_value: int) -> str:
         size /= 1024
         unit_index += 1
 
-    return f"{size:.1f} {units[unit_index]}"
+    return f'{size:.1f} {units[unit_index]}'
 
 
 def parse_bytes(size_str: str) -> int:
@@ -1793,15 +1616,15 @@ def parse_bytes(size_str: str) -> int:
 
     # Check longest suffixes first; support both IEC (GiB) and SI (GB) units
     units = [
-        ("TiB", 1024**4),
-        ("GiB", 1024**3),
-        ("MiB", 1024**2),
-        ("KiB", 1024),
-        ("TB", 1024**4),
-        ("GB", 1024**3),
-        ("MB", 1024**2),
-        ("KB", 1024),
-        ("B", 1),
+        ('TiB', 1024**4),
+        ('GiB', 1024**3),
+        ('MiB', 1024**2),
+        ('KiB', 1024),
+        ('TB', 1024**4),
+        ('GB', 1024**3),
+        ('MB', 1024**2),
+        ('KB', 1024),
+        ('B', 1),
     ]
 
     for unit, multiplier in units:
@@ -1820,5 +1643,5 @@ async def test_api_connection(api: RemnaWaveAPI) -> bool:
         await api.get_system_stats()
         return True
     except Exception as e:
-        logger.warning("API connection test failed", e=e)
+        logger.warning('API connection test failed', e=e)
         return False

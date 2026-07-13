@@ -21,7 +21,7 @@ import structlog
 
 # The stdlib backend logger — keeps propagate=False so payment events
 # only go to the dedicated file handler, not the root logger.
-_stdlib_payment_logger = logging.getLogger("app.payments")
+_stdlib_payment_logger = logging.getLogger('app.payments')
 
 # Structlog frontend wrapping the stdlib backend.
 # All structlog processors (timestamper, notifier, etc.) apply normally.

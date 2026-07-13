@@ -92,16 +92,14 @@ class RemnaWaveAutoSyncService:
 
             times = settings.get_remnawave_auto_sync_times()
             if not times:
-                logger.warning(
-                    "Автосинхронизация включена, но расписание пустое. Укажите время запуска."
-                )
+                logger.warning('Автосинхронизация включена, но расписание пустое. Укажите время запуска.')
                 self._next_run = None
                 return
 
             self._scheduler_task = asyncio.create_task(self._run_scheduler(times))
 
         if run_immediately:
-            asyncio.create_task(self.run_sync_now(reason="immediate"))
+            asyncio.create_task(self.run_sync_now(reason='immediate'))
 
     def schedule_refresh(self, *, run_immediately: bool = False) -> None:
         if not self._initialized:
@@ -124,9 +122,9 @@ class RemnaWaveAutoSyncService:
             self._scheduler_task = None
             self._next_run = None
 
-    async def run_sync_now(self, *, reason: str = "manual") -> dict[str, Any]:
+    async def run_sync_now(self, *, reason: str = 'manual') -> dict[str, Any]:
         if self._sync_lock.locked():
-            return {"started": False, "reason": "already_running"}
+            return {'started': False, 'reason': 'already_running'}
 
         async with self._sync_lock:
             self._last_run_started_at = datetime.now(UTC)
@@ -144,13 +142,13 @@ class RemnaWaveAutoSyncService:
                 self._last_user_stats = None
                 self._last_server_stats = None
                 self._last_run_finished_at = datetime.now(UTC)
-                logger.error("Автосинхронизация RemnaWave", message=message)
+                logger.error('Автосинхронизация RemnaWave', message=message)
                 return {
-                    "started": True,
-                    "success": False,
-                    "error": message,
-                    "user_stats": None,
-                    "server_stats": None,
+                    'started': True,
+                    'success': False,
+                    'error': message,
+                    'user_stats': None,
+                    'server_stats': None,
                 }
             except Exception as error:
                 message = str(error)
@@ -159,13 +157,13 @@ class RemnaWaveAutoSyncService:
                 self._last_user_stats = None
                 self._last_server_stats = None
                 self._last_run_finished_at = datetime.now(UTC)
-                logger.exception("Ошибка автосинхронизации RemnaWave", error=error)
+                logger.exception('Ошибка автосинхронизации RemnaWave', error=error)
                 return {
-                    "started": True,
-                    "success": False,
-                    "error": message,
-                    "user_stats": None,
-                    "server_stats": None,
+                    'started': True,
+                    'success': False,
+                    'error': message,
+                    'user_stats': None,
+                    'server_stats': None,
                 }
 
             self._last_run_success = True
@@ -175,11 +173,11 @@ class RemnaWaveAutoSyncService:
             self._last_run_finished_at = datetime.now(UTC)
 
             return {
-                "started": True,
-                "success": True,
-                "error": None,
-                "user_stats": user_stats,
-                "server_stats": server_stats,
+                'started': True,
+                'success': True,
+                'error': None,
+                'user_stats': user_stats,
+                'server_stats': server_stats,
             }
 
     def get_status(self) -> RemnaWaveAutoSyncStatus:
@@ -210,7 +208,7 @@ class RemnaWaveAutoSyncService:
                 if delay > 0:
                     await asyncio.sleep(delay)
 
-                await self.run_sync_now(reason="auto")
+                await self.run_sync_now(reason='auto')
         except asyncio.CancelledError:
             raise
         finally:
@@ -224,12 +222,10 @@ class RemnaWaveAutoSyncService:
         service = self._refresh_service()
 
         if not service.is_configured:
-            raise RemnaWaveConfigurationError(
-                service.configuration_error or "RemnaWave API не настроен"
-            )
+            raise RemnaWaveConfigurationError(service.configuration_error or 'RemnaWave API не настроен')
 
         async with AsyncSessionLocal() as session:
-            user_stats = await service.sync_users_from_panel(session, "all")
+            user_stats = await service.sync_users_from_panel(session, 'all')
             server_stats = await self._sync_servers(session, service)
 
         return user_stats, server_stats
@@ -242,25 +238,21 @@ class RemnaWaveAutoSyncService:
         squads = await service.get_all_squads()
 
         if not squads:
-            logger.warning(
-                "Не удалось получить сквады из RemnaWave для автосинхронизации"
-            )
-            return {"created": 0, "updated": 0, "removed": 0, "total": 0}
+            logger.warning('Не удалось получить сквады из RemnaWave для автосинхронизации')
+            return {'created': 0, 'updated': 0, 'removed': 0, 'total': 0}
 
         created, updated, removed = await sync_with_remnawave(session, squads)
 
         try:
-            await cache.delete_pattern("available_countries*")
+            await cache.delete_pattern('available_countries*')
         except Exception as error:
-            logger.warning(
-                "Не удалось очистить кеш стран после автосинхронизации", error=error
-            )
+            logger.warning('Не удалось очистить кеш стран после автосинхронизации', error=error)
 
         return {
-            "created": created,
-            "updated": updated,
-            "removed": removed,
-            "total": len(squads),
+            'created': created,
+            'updated': updated,
+            'removed': removed,
+            'total': len(squads),
         }
 
     @staticmethod

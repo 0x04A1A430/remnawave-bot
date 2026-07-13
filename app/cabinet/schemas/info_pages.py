@@ -12,12 +12,12 @@ class InfoPageResponse(BaseModel):
     slug: str
     title: dict[str, str]
     content: dict[str, str]
-    page_type: str = "page"
+    page_type: str = 'page'
     is_active: bool
     sort_order: int
     icon: str | None = None
     replaces_tab: str | None = None
-    display_mode: str = "both"
+    display_mode: str = 'both'
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -30,12 +30,12 @@ class InfoPageListItem(BaseModel):
     id: int
     slug: str
     title: dict[str, str]
-    page_type: str = "page"
+    page_type: str = 'page'
     is_active: bool
     sort_order: int
     icon: str | None = None
     replaces_tab: str | None = None
-    display_mode: str = "both"
+    display_mode: str = 'both'
     updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -44,31 +44,29 @@ class InfoPageListItem(BaseModel):
 class InfoPageCreateRequest(BaseModel):
     """Request to create an info page."""
 
-    slug: str = Field(min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$")
+    slug: str = Field(min_length=1, max_length=200, pattern=r'^[a-z0-9\-]+$')
     title: dict[str, str] = Field(default_factory=dict)
     content: dict[str, str] = Field(default_factory=dict)
-    page_type: str = Field(default="page", pattern=r"^(page|faq)$")
+    page_type: str = Field(default='page', pattern=r'^(page|faq)$')
     is_active: bool = True
     sort_order: int = 0
     icon: str | None = Field(None, max_length=50)
-    replaces_tab: str | None = Field(None, pattern=r"^(faq|rules|privacy|offer)$")
-    display_mode: str = Field(default="both", pattern=r"^(bot|web|both)$")
+    replaces_tab: str | None = Field(None, pattern=r'^(faq|rules|privacy|offer)$')
+    display_mode: str = Field(default='both', pattern=r'^(bot|web|both)$')
 
 
 class InfoPageUpdateRequest(BaseModel):
     """Request to update an info page."""
 
-    slug: str | None = Field(
-        None, min_length=1, max_length=200, pattern=r"^[a-z0-9\-]+$"
-    )
+    slug: str | None = Field(None, min_length=1, max_length=200, pattern=r'^[a-z0-9\-]+$')
     title: dict[str, str] | None = None
     content: dict[str, str] | None = None
-    page_type: str | None = Field(None, pattern=r"^(page|faq)$")
+    page_type: str | None = Field(None, pattern=r'^(page|faq)$')
     is_active: bool | None = None
     sort_order: int | None = None
     icon: str | None = Field(None, max_length=50)
-    replaces_tab: str | None = Field(None, pattern=r"^(faq|rules|privacy|offer)$")
-    display_mode: str | None = Field(None, pattern=r"^(bot|web|both)$")
+    replaces_tab: str | None = Field(None, pattern=r'^(faq|rules|privacy|offer)$')
+    display_mode: str | None = Field(None, pattern=r'^(bot|web|both)$')
 
 
 class ReorderItem(BaseModel):

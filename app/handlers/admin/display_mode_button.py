@@ -13,7 +13,7 @@ async def cycle_display_mode_setting(
 ) -> str | None:
     if BotConfigurationService.is_env_overridden(key):
         await callback.answer(
-            "Значение задано через .env, измените переменную окружения",
+            'Значение задано через .env, измените переменную окружения',
             show_alert=True,
         )
         return None

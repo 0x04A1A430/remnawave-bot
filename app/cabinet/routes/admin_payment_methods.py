@@ -23,9 +23,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(
-    prefix="/admin/payment-methods", tags=["Cabinet Admin Payment Methods"]
-)
+router = APIRouter(prefix='/admin/payment-methods', tags=['Cabinet Admin Payment Methods'])
 
 
 # ============ Schemas ============
@@ -46,9 +44,7 @@ class PaymentMethodConfigResponse(BaseModel):
     sub_options: dict | None = None
     available_sub_options: list[SubOptionInfo] | None = None
     quick_amounts: list[int] | None = None
-    default_quick_amounts: list[int] = Field(
-        default_factory=lambda: list(DEFAULT_QUICK_AMOUNTS)
-    )
+    default_quick_amounts: list[int] = Field(default_factory=lambda: list(DEFAULT_QUICK_AMOUNTS))
     min_amount_kopeks: int | None = None
     max_amount_kopeks: int | None = None
     default_min_amount_kopeks: int
@@ -68,45 +64,37 @@ class PaymentMethodConfigResponse(BaseModel):
 
 class PaymentMethodConfigUpdateRequest(BaseModel):
     is_enabled: bool | None = None
-    display_name: str | None = Field(
-        default=None, description="Null to reset to default"
-    )
+    display_name: str | None = Field(default=None, description='Null to reset to default')
     sub_options: dict[str, bool] | None = None
     min_amount_kopeks: int | None = Field(default=None, ge=0)
     max_amount_kopeks: int | None = Field(default=None, ge=0)
-    user_type_filter: str | None = Field(default=None, pattern="^(all|telegram|email)$")
+    user_type_filter: str | None = Field(default=None, pattern='^(all|telegram|email)$')
 
-    @field_validator("sub_options", mode="before")
+    @field_validator('sub_options', mode='before')
     @classmethod
     def validate_sub_options(cls, v: dict[str, bool] | None) -> dict[str, bool] | None:
         if not v:
             return None
         if len(v) > 20:
-            raise ValueError("sub_options cannot have more than 20 keys")
+            raise ValueError('sub_options cannot have more than 20 keys')
         for key in v:
             if not isinstance(key, str) or len(key) > 50:
-                raise ValueError(
-                    "sub_options keys must be strings of at most 50 characters"
-                )
+                raise ValueError('sub_options keys must be strings of at most 50 characters')
         return v
 
     quick_amounts: list[int] | None = None
     reset_quick_amounts: bool = False
 
-    @field_validator("quick_amounts")
+    @field_validator('quick_amounts')
     @classmethod
     def validate_quick_amounts(cls, v: list[int] | None) -> list[int] | None:
         return normalize_quick_amounts(v)
 
-    first_topup_filter: str | None = Field(default=None, pattern="^(any|yes|no)$")
-    promo_group_filter_mode: str | None = Field(
-        default=None, pattern="^(all|selected)$"
-    )
+    first_topup_filter: str | None = Field(default=None, pattern='^(any|yes|no)$')
+    promo_group_filter_mode: str | None = Field(default=None, pattern='^(all|selected)$')
     allowed_promo_group_ids: list[int] | None = None
     open_url_direct: bool | None = None
-    description: str | None = Field(
-        default=None, description="Null to reset to default"
-    )
+    description: str | None = Field(default=None, description='Null to reset to default')
     # Allow explicitly resetting display_name to null
     reset_display_name: bool = False
     reset_description: bool = False
@@ -134,7 +122,7 @@ def _enrich_config(config, defaults: dict) -> PaymentMethodConfigResponse:
     method_def = defaults.get(config.method_id, {})
 
     available_sub_options = None
-    raw_options = method_def.get("available_sub_options")
+    raw_options = method_def.get('available_sub_options')
     if raw_options:
         available_sub_options = [SubOptionInfo(**opt) for opt in raw_options]
 
@@ -144,20 +132,20 @@ def _enrich_config(config, defaults: dict) -> PaymentMethodConfigResponse:
         is_enabled=config.is_enabled,
         display_name=config.display_name,
         description=config.description,
-        default_display_name=method_def.get("default_display_name", config.method_id),
+        default_display_name=method_def.get('default_display_name', config.method_id),
         sub_options=config.sub_options,
         available_sub_options=available_sub_options,
-        quick_amounts=getattr(config, "quick_amounts", None),
+        quick_amounts=getattr(config, 'quick_amounts', None),
         min_amount_kopeks=config.min_amount_kopeks,
         max_amount_kopeks=config.max_amount_kopeks,
-        default_min_amount_kopeks=method_def.get("default_min", 1000),
-        default_max_amount_kopeks=method_def.get("default_max", 10000000),
+        default_min_amount_kopeks=method_def.get('default_min', 1000),
+        default_max_amount_kopeks=method_def.get('default_max', 10000000),
         user_type_filter=config.user_type_filter,
         first_topup_filter=config.first_topup_filter,
         promo_group_filter_mode=config.promo_group_filter_mode,
         allowed_promo_group_ids=[pg.id for pg in config.allowed_promo_groups],
-        open_url_direct=bool(getattr(config, "open_url_direct", False)),
-        is_provider_configured=method_def.get("is_configured", False),
+        open_url_direct=bool(getattr(config, 'open_url_direct', False)),
+        is_provider_configured=method_def.get('is_configured', False),
         created_at=config.created_at,
         updated_at=config.updated_at,
     )
@@ -166,9 +154,9 @@ def _enrich_config(config, defaults: dict) -> PaymentMethodConfigResponse:
 # ============ Routes ============
 
 
-@router.get("", response_model=list[PaymentMethodConfigResponse])
+@router.get('', response_model=list[PaymentMethodConfigResponse])
 async def list_payment_methods(
-    admin: User = Depends(require_permission("payment_methods:read")),
+    admin: User = Depends(require_permission('payment_methods:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List all payment method configurations."""
@@ -177,9 +165,9 @@ async def list_payment_methods(
     return [_enrich_config(c, defaults) for c in configs]
 
 
-@router.get("/promo-groups", response_model=list[PromoGroupSimple])
+@router.get('/promo-groups', response_model=list[PromoGroupSimple])
 async def list_promo_groups(
-    admin: User = Depends(require_permission("payment_methods:read")),
+    admin: User = Depends(require_permission('payment_methods:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List all promo groups for filter selector."""
@@ -187,10 +175,10 @@ async def list_promo_groups(
     return [PromoGroupSimple(id=g.id, name=g.name) for g in groups]
 
 
-@router.get("/{method_id}", response_model=PaymentMethodConfigResponse)
+@router.get('/{method_id}', response_model=PaymentMethodConfigResponse)
 async def get_payment_method(
     method_id: str,
-    admin: User = Depends(require_permission("payment_methods:read")),
+    admin: User = Depends(require_permission('payment_methods:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get a single payment method configuration."""
@@ -198,33 +186,33 @@ async def get_payment_method(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Payment method not found: {method_id}",
+            detail=f'Payment method not found: {method_id}',
         )
     defaults = _get_method_defaults()
     return _enrich_config(config, defaults)
 
 
-@router.put("/order")
+@router.put('/order')
 async def update_payment_methods_order(
     request: SortOrderRequest,
-    admin: User = Depends(require_permission("payment_methods:edit")),
+    admin: User = Depends(require_permission('payment_methods:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Batch update sort order for payment methods."""
     await update_sort_order(db, request.method_ids)
     logger.info(
-        "Admin updated payment methods order",
+        'Admin updated payment methods order',
         admin_id=admin.id,
         method_ids=request.method_ids,
     )
-    return {"success": True}
+    return {'success': True}
 
 
-@router.put("/{method_id}", response_model=PaymentMethodConfigResponse)
+@router.put('/{method_id}', response_model=PaymentMethodConfigResponse)
 async def update_payment_method(
     method_id: str,
     request: PaymentMethodConfigUpdateRequest,
-    admin: User = Depends(require_permission("payment_methods:edit")),
+    admin: User = Depends(require_permission('payment_methods:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update a payment method configuration."""
@@ -232,65 +220,61 @@ async def update_payment_method(
     data = {}
 
     if request.is_enabled is not None:
-        data["is_enabled"] = request.is_enabled
+        data['is_enabled'] = request.is_enabled
 
     if request.reset_display_name:
-        data["display_name"] = None
+        data['display_name'] = None
     elif request.display_name is not None:
-        data["display_name"] = request.display_name.strip() or None
+        data['display_name'] = request.display_name.strip() or None
 
     if request.reset_description:
-        data["description"] = None
+        data['description'] = None
     elif request.description is not None:
-        data["description"] = request.description.strip() or None
+        data['description'] = request.description.strip() or None
 
     if request.sub_options is not None:
-        data["sub_options"] = request.sub_options
+        data['sub_options'] = request.sub_options
 
     if request.reset_quick_amounts:
-        data["quick_amounts"] = None
+        data['quick_amounts'] = None
     elif request.quick_amounts is not None:
-        data["quick_amounts"] = request.quick_amounts
+        data['quick_amounts'] = request.quick_amounts
 
     if request.reset_min_amount:
-        data["min_amount_kopeks"] = None
+        data['min_amount_kopeks'] = None
     elif request.min_amount_kopeks is not None:
-        data["min_amount_kopeks"] = request.min_amount_kopeks
+        data['min_amount_kopeks'] = request.min_amount_kopeks
 
     if request.reset_max_amount:
-        data["max_amount_kopeks"] = None
+        data['max_amount_kopeks'] = None
     elif request.max_amount_kopeks is not None:
-        data["max_amount_kopeks"] = request.max_amount_kopeks
+        data['max_amount_kopeks'] = request.max_amount_kopeks
 
     if request.user_type_filter is not None:
-        data["user_type_filter"] = request.user_type_filter
+        data['user_type_filter'] = request.user_type_filter
 
     if request.first_topup_filter is not None:
-        data["first_topup_filter"] = request.first_topup_filter
+        data['first_topup_filter'] = request.first_topup_filter
 
     if request.promo_group_filter_mode is not None:
-        data["promo_group_filter_mode"] = request.promo_group_filter_mode
+        data['promo_group_filter_mode'] = request.promo_group_filter_mode
 
     if request.open_url_direct is not None:
-        data["open_url_direct"] = request.open_url_direct
+        data['open_url_direct'] = request.open_url_direct
 
     promo_group_ids = request.allowed_promo_group_ids
 
     try:
         config = await update_config(db, method_id, data, promo_group_ids)
     except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error))
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Payment method not found: {method_id}",
+            detail=f'Payment method not found: {method_id}',
         )
 
-    logger.info(
-        "Admin updated payment method config", admin_id=admin.id, method_id=method_id
-    )
+    logger.info('Admin updated payment method config', admin_id=admin.id, method_id=method_id)
 
     defaults = _get_method_defaults()
     return _enrich_config(config, defaults)

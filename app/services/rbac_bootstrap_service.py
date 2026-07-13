@@ -30,7 +30,7 @@ def normalize_admin_email(value: str) -> str:
     Используется и в bootstrap, и в login-time, и в auto_login guard — единая точка
     нормализации, чтобы drift между путями был невозможен.
     """
-    return unicodedata.normalize("NFKC", value).strip().lower()
+    return unicodedata.normalize('NFKC', value).strip().lower()
 
 
 # Backward-compat alias на случай если что-то импортировало private имя.
@@ -39,13 +39,13 @@ _normalize_email = normalize_admin_email
 
 def _mask_email(value: str | None) -> str:
     """Маскинг email для логов: `admin@example.com` → `a***@e***.com`."""
-    if not value or "@" not in value:
-        return "***"
-    local, _, domain = value.partition("@")
-    domain_name, _, tld = domain.rpartition(".")
-    local_mask = (local[:1] + "***") if local else "***"
-    domain_mask = (domain_name[:1] + "***") if domain_name else "***"
-    return f"{local_mask}@{domain_mask}.{tld}" if tld else f"{local_mask}@{domain_mask}"
+    if not value or '@' not in value:
+        return '***'
+    local, _, domain = value.partition('@')
+    domain_name, _, tld = domain.rpartition('.')
+    local_mask = (local[:1] + '***') if local else '***'
+    domain_mask = (domain_name[:1] + '***') if domain_name else '***'
+    return f'{local_mask}@{domain_mask}.{tld}' if tld else f'{local_mask}@{domain_mask}'
 
 
 # Источники верификации email, которым доверяем для admin escalation.
@@ -57,8 +57,8 @@ def _mask_email(value: str | None) -> str:
 # email в OAuth-ответе, но провайдер не выдаёт cryptographic proof of ownership.
 # Email используется для UX (recovery, linking, panel sync), но не доверяется
 # для match с ADMIN_EMAILS.
-TRUSTED_EMAIL_VERIFICATION_SOURCES: "frozenset[str]" = frozenset(
-    {"cabinet", "oauth_google", "oauth_discord", "admin_override"}
+TRUSTED_EMAIL_VERIFICATION_SOURCES: 'frozenset[str]' = frozenset(
+    {'cabinet', 'oauth_google', 'oauth_discord', 'admin_override'}
 )
 
 
@@ -81,9 +81,9 @@ class AdminEnvCheck:
     @property
     def matched_via(self) -> str | None:
         if self.is_telegram_admin:
-            return "telegram_id"
+            return 'telegram_id'
         if self.is_email_admin:
-            return "email"
+            return 'email'
         return None
 
 
@@ -98,39 +98,26 @@ def is_user_admin_by_env(user: User) -> AdminEnvCheck:
 
     Не делает SQL-запросов — чистая функция от User-row + settings.
     """
-    admin_ids: set[int] = {
-        tg_id for tg_id in (settings.get_admin_ids() or []) if tg_id > 0
-    }
-    admin_emails: set[str] = {
-        normalize_admin_email(email)
-        for email in (settings.get_admin_emails() or [])
-        if email
-    }
+    admin_ids: set[int] = {tg_id for tg_id in (settings.get_admin_ids() or []) if tg_id > 0}
+    admin_emails: set[str] = {normalize_admin_email(email) for email in (settings.get_admin_emails() or []) if email}
 
     try:
-        telegram_id_int = (
-            int(user.telegram_id) if user.telegram_id is not None else None
-        )
+        telegram_id_int = int(user.telegram_id) if user.telegram_id is not None else None
     except (TypeError, ValueError):
         telegram_id_int = None
-    is_telegram_admin = (
-        telegram_id_int is not None
-        and telegram_id_int > 0
-        and telegram_id_int in admin_ids
-    )
+    is_telegram_admin = telegram_id_int is not None and telegram_id_int > 0 and telegram_id_int in admin_ids
 
-    user_email = getattr(user, "email", None)
-    email_verified = bool(getattr(user, "email_verified", False))
+    user_email = getattr(user, 'email', None)
+    email_verified = bool(getattr(user, 'email_verified', False))
     # Trust guard: для admin escalation нужен НЕ просто verified email, но и
     # верификация через trusted источник. VK/Yandex выставляют email_verified=True
     # для UX (recovery, linking), но их source='oauth_vk'/'oauth_yandex' НЕ в
     # TRUSTED_EMAIL_VERIFICATION_SOURCES — значит admin escalation для них закрыта.
     # NULL (legacy строки до миграции 0079, не успевшие пройти backfill) трактуется
     # как trusted-'cabinet' equivalent — backward-compat.
-    verification_source = getattr(user, "email_verification_source", None)
+    verification_source = getattr(user, 'email_verification_source', None)
     verification_ok = email_verified and (
-        verification_source is None
-        or verification_source in TRUSTED_EMAIL_VERIFICATION_SOURCES
+        verification_source is None or verification_source in TRUSTED_EMAIL_VERIFICATION_SOURCES
     )
 
     is_email_admin = (
@@ -140,112 +127,110 @@ def is_user_admin_by_env(user: User) -> AdminEnvCheck:
         and normalize_admin_email(user_email) in admin_emails
     )
 
-    return AdminEnvCheck(
-        is_telegram_admin=is_telegram_admin, is_email_admin=is_email_admin
-    )
+    return AdminEnvCheck(is_telegram_admin=is_telegram_admin, is_email_admin=is_email_admin)
 
 
 logger = structlog.get_logger(__name__)
 
-SUPERADMIN_ROLE_NAME: Final[str] = "Superadmin"
+SUPERADMIN_ROLE_NAME: Final[str] = 'Superadmin'
 
 # Preset roles seeded on first run
 _PRESET_ROLES: list[dict] = [
     {
-        "name": "Superadmin",
-        "description": "Full system access",
-        "level": 999,
-        "permissions": ["*:*"],
-        "color": "#EF4444",
-        "icon": "shield",
-        "is_system": True,
+        'name': 'Superadmin',
+        'description': 'Full system access',
+        'level': 999,
+        'permissions': ['*:*'],
+        'color': '#EF4444',
+        'icon': 'shield',
+        'is_system': True,
     },
     {
-        "name": "Admin",
-        "description": "Administrative access",
-        "level": 100,
-        "permissions": [
-            "users:*",
-            "tickets:*",
-            "stats:*",
-            "sales_stats:*",
-            "broadcasts:*",
-            "tariffs:*",
-            "promocodes:*",
-            "promo_groups:*",
-            "promo_offers:*",
-            "campaigns:*",
-            "partners:*",
-            "withdrawals:*",
-            "payments:*",
-            "payment_methods:*",
-            "servers:*",
-            "remnawave:*",
-            "traffic:*",
-            "settings:*",
-            "roles:read",
-            "roles:create",
-            "roles:edit",
-            "roles:assign",
-            "audit_log:*",
-            "channels:*",
-            "ban_system:*",
-            "wheel:*",
-            "apps:*",
-            "email_templates:*",
-            "pinned_messages:*",
-            "updates:*",
-            "landings:read",
-            "landings:create",
-            "landings:edit",
-            "landings:delete",
+        'name': 'Admin',
+        'description': 'Administrative access',
+        'level': 100,
+        'permissions': [
+            'users:*',
+            'tickets:*',
+            'stats:*',
+            'sales_stats:*',
+            'broadcasts:*',
+            'tariffs:*',
+            'promocodes:*',
+            'promo_groups:*',
+            'promo_offers:*',
+            'campaigns:*',
+            'partners:*',
+            'withdrawals:*',
+            'payments:*',
+            'payment_methods:*',
+            'servers:*',
+            'remnawave:*',
+            'traffic:*',
+            'settings:*',
+            'roles:read',
+            'roles:create',
+            'roles:edit',
+            'roles:assign',
+            'audit_log:*',
+            'channels:*',
+            'ban_system:*',
+            'wheel:*',
+            'apps:*',
+            'email_templates:*',
+            'pinned_messages:*',
+            'updates:*',
+            'landings:read',
+            'landings:create',
+            'landings:edit',
+            'landings:delete',
         ],
-        "color": "#F59E0B",
-        "icon": "crown",
-        "is_system": True,
+        'color': '#F59E0B',
+        'icon': 'crown',
+        'is_system': True,
     },
     {
-        "name": "Moderator",
-        "description": "User and ticket management",
-        "level": 50,
-        "permissions": [
-            "users:read",
-            "users:edit",
-            "users:block",
-            "tickets:*",
-            "ban_system:*",
+        'name': 'Moderator',
+        'description': 'User and ticket management',
+        'level': 50,
+        'permissions': [
+            'users:read',
+            'users:edit',
+            'users:block',
+            'tickets:*',
+            'ban_system:*',
         ],
-        "color": "#3B82F6",
-        "icon": "user-shield",
-        "is_system": True,
+        'color': '#3B82F6',
+        'icon': 'user-shield',
+        'is_system': True,
     },
     {
-        "name": "Marketer",
-        "description": "Marketing tools access",
-        "level": 30,
-        "permissions": [
-            "campaigns:*",
-            "broadcasts:*",
-            "promocodes:*",
-            "promo_offers:*",
-            "promo_groups:*",
-            "stats:read",
-            "sales_stats:read",
-            "pinned_messages:*",
-            "wheel:*",
+        'name': 'Marketer',
+        'description': 'Marketing tools access',
+        'level': 30,
+        'permissions': [
+            'campaigns:*',
+            'broadcasts:*',
+            'promocodes:*',
+            'promo_offers:*',
+            'promo_groups:*',
+            'stats:read',
+            'sales_stats:read',
+            'pinned_messages:*',
+            'wheel:*',
         ],
-        "color": "#8B5CF6",
-        "icon": "megaphone",
-        "is_system": True,
+        'color': '#8B5CF6',
+        'icon': 'megaphone',
+        'is_system': True,
     },
     {
-        "name": "Support",
-        "description": "Ticket support access",
-        "level": 20,
-        "permissions": ["tickets:read", "tickets:reply", "users:read"],
-        "color": "#10B981",
-        "icon": "headset",
-        "is_system": True,
+        'name': 'Support',
+        'description': 'Ticket support access',
+        'level': 20,
+        'permissions': ['tickets:read', 'tickets:reply', 'users:read'],
+        'color': '#10B981',
+        'icon': 'headset',
+        'is_system': True,
     },
 ]
 
@@ -262,17 +247,13 @@ async def _ensure_preset_roles(db: AsyncSession) -> AdminRole | None:
     for preset in _PRESET_ROLES:
         # Сначала ищем по стабильному ключу (is_system + level)
         result = await db.execute(
-            select(AdminRole).where(
-                AdminRole.is_system.is_(True), AdminRole.level == preset["level"]
-            )
+            select(AdminRole).where(AdminRole.is_system.is_(True), AdminRole.level == preset['level'])
         )
         existing = result.scalars().first()
 
         # Fallback: поиск по имени (для ролей, созданных до этого фикса)
         if existing is None:
-            result = await db.execute(
-                select(AdminRole).where(AdminRole.name == preset["name"])
-            )
+            result = await db.execute(select(AdminRole).where(AdminRole.name == preset['name']))
             existing = result.scalars().first()
 
         if existing is not None:
@@ -281,13 +262,13 @@ async def _ensure_preset_roles(db: AsyncSession) -> AdminRole | None:
             # Добавить НОВЫЕ permissions из кода, не трогая существующие (админ мог кастомизировать)
             if existing.is_system:
                 current = set(existing.permissions or [])
-                from_code = set(preset["permissions"])
+                from_code = set(preset['permissions'])
                 new_perms = from_code - current
                 if new_perms:
                     existing.permissions = list(current | new_perms)
                     await db.flush()
                     logger.info(
-                        "Added new permissions to system role",
+                        'Added new permissions to system role',
                         role_name=existing.name,
                         role_id=existing.id,
                         added=sorted(new_perms),
@@ -295,20 +276,20 @@ async def _ensure_preset_roles(db: AsyncSession) -> AdminRole | None:
             continue
 
         role = AdminRole(
-            name=preset["name"],
-            description=preset["description"],
-            level=preset["level"],
-            permissions=preset["permissions"],
-            color=preset["color"],
-            icon=preset["icon"],
-            is_system=preset["is_system"],
+            name=preset['name'],
+            description=preset['description'],
+            level=preset['level'],
+            permissions=preset['permissions'],
+            color=preset['color'],
+            icon=preset['icon'],
+            is_system=preset['is_system'],
             is_active=True,
         )
         db.add(role)
         await db.flush()
-        logger.info("Seeded preset role", role_name=preset["name"], role_id=role.id)
+        logger.info('Seeded preset role', role_name=preset['name'], role_id=role.id)
 
-        if preset["name"] == SUPERADMIN_ROLE_NAME:
+        if preset['name'] == SUPERADMIN_ROLE_NAME:
             superadmin_role = role
 
     return superadmin_role
@@ -329,13 +310,11 @@ async def bootstrap_superadmins(db: AsyncSession) -> None:
         superadmin_role = await _ensure_preset_roles(db)
 
         if superadmin_role is None:
-            logger.error("Failed to resolve Superadmin role after seeding")
+            logger.error('Failed to resolve Superadmin role after seeding')
             return
 
         if not admin_ids and not admin_emails:
-            logger.debug(
-                "No admin IDs or emails configured, skipping superadmin assignment"
-            )
+            logger.debug('No admin IDs or emails configured, skipping superadmin assignment')
             await db.commit()
             # Safety check even when no IDs configured — someone may have cleared them
             await _warn_if_no_superadmins(db, admin_ids, admin_emails)
@@ -346,9 +325,7 @@ async def bootstrap_superadmins(db: AsyncSession) -> None:
 
         # ── 2. Process admin telegram IDs ──────────────────────────────
         for telegram_id in admin_ids:
-            assigned = await _ensure_role_by_telegram_id(
-                db, telegram_id=telegram_id, role_id=role_id
-            )
+            assigned = await _ensure_role_by_telegram_id(db, telegram_id=telegram_id, role_id=role_id)
             if assigned:
                 assigned_count += 1
 
@@ -371,20 +348,20 @@ async def bootstrap_superadmins(db: AsyncSession) -> None:
 
         if assigned_count > 0 or revoked_count > 0:
             logger.info(
-                "Superadmin bootstrap completed",
+                'Superadmin bootstrap completed',
                 assigned_count=assigned_count,
                 revoked_count=revoked_count,
                 role_id=role_id,
             )
         else:
-            logger.debug("Superadmin bootstrap: no changes needed")
+            logger.debug('Superadmin bootstrap: no changes needed')
 
         # ── 6. Safety: warn if no active superadmins exist ────────────
         await _warn_if_no_superadmins(db, admin_ids, admin_emails)
 
     except Exception:
         await db.rollback()
-        logger.exception("Failed to bootstrap superadmins, continuing startup")
+        logger.exception('Failed to bootstrap superadmins, continuing startup')
 
 
 async def _revoke_stale_superadmins(
@@ -426,13 +403,9 @@ async def _revoke_stale_superadmins(
 
         # Check if user is still in env config.
         # email_verified is required — symmetric with _ensure_role_by_email.
-        in_env_by_id = (
-            user.telegram_id is not None and user.telegram_id in admin_ids_set
-        )
+        in_env_by_id = user.telegram_id is not None and user.telegram_id in admin_ids_set
         in_env_by_email = (
-            user.email is not None
-            and user.email_verified
-            and normalize_admin_email(user.email) in admin_emails_set
+            user.email is not None and user.email_verified and normalize_admin_email(user.email) in admin_emails_set
         )
 
         if not in_env_by_id and not in_env_by_email:
@@ -441,20 +414,20 @@ async def _revoke_stale_superadmins(
             # Иначе senior-админ revoke через UI был бы переименован в env-revoke
             # на ближайшем рестарте, теряя forensic trail и нарушая семантику
             # 'ui' branch в _assign_if_missing.
-            if not assignment.is_active and assignment.revocation_source == "ui":
+            if not assignment.is_active and assignment.revocation_source == 'ui':
                 continue
 
             assignment.is_active = False
-            assignment.revocation_source = "env"
+            assignment.revocation_source = 'env'
             await db.flush()
             revoked += 1
             logger.warning(
-                "Revoked Superadmin role: user removed from env config",
+                'Revoked Superadmin role: user removed from env config',
                 user_id=user.id,
                 telegram_id=user.telegram_id,
                 email=_mask_email(user.email),
                 user_role_id=assignment.id,
-                revocation_source="env",
+                revocation_source='env',
             )
 
     return revoked
@@ -471,12 +444,12 @@ async def _warn_if_no_superadmins(
         return
     if not admin_ids and not admin_emails:
         logger.critical(
-            "No active superadmins exist and no ADMIN_IDS/ADMIN_EMAILS configured. "
-            "Cabinet admin access is not possible until this is resolved.",
+            'No active superadmins exist and no ADMIN_IDS/ADMIN_EMAILS configured. '
+            'Cabinet admin access is not possible until this is resolved.',
         )
     else:
         logger.warning(
-            "No active superadmin RBAC roles in DB. Legacy config admins (ADMIN_IDS/ADMIN_EMAILS) still have access.",
+            'No active superadmin RBAC roles in DB. Legacy config admins (ADMIN_IDS/ADMIN_EMAILS) still have access.',
         )
 
 
@@ -492,14 +465,12 @@ async def _ensure_role_by_telegram_id(
 
     if user is None:
         logger.debug(
-            "Admin user not yet registered, skipping",
+            'Admin user not yet registered, skipping',
             telegram_id=telegram_id,
         )
         return False
 
-    return await _assign_if_missing(
-        db, user_id=user.id, role_id=role_id, identifier=str(telegram_id)
-    )
+    return await _assign_if_missing(db, user_id=user.id, role_id=role_id, identifier=str(telegram_id))
 
 
 async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
@@ -523,7 +494,7 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     if not env_check.is_admin:
         return False
     is_telegram_admin = env_check.is_telegram_admin
-    user_email = getattr(user, "email", None)
+    user_email = getattr(user, 'email', None)
 
     # Lookup Superadmin role: предпочитаем поиск по (is_system=True, level=SUPERADMIN_LEVEL)
     # как в _ensure_preset_roles — это работает даже если кто-то переименовал «Superadmin»
@@ -536,13 +507,11 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
     )
     role = role_result.scalar_one_or_none()
     if role is None:
-        role_result = await db.execute(
-            select(AdminRole).where(AdminRole.name == SUPERADMIN_ROLE_NAME)
-        )
+        role_result = await db.execute(select(AdminRole).where(AdminRole.name == SUPERADMIN_ROLE_NAME))
         role = role_result.scalar_one_or_none()
     if role is None:
         logger.warning(
-            "Superadmin role not found at login bootstrap — RBAC tables not seeded?",
+            'Superadmin role not found at login bootstrap — RBAC tables not seeded?',
             user_id=user.id,
         )
         return False
@@ -564,17 +533,11 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
 
     # Лог-идентификатор: telegram_id (публичный) или masked email (без PII).
     log_identifier = (
-        str(user.telegram_id)
-        if is_telegram_admin
-        else _mask_email(user_email) if user_email else str(user.id)
+        str(user.telegram_id) if is_telegram_admin else _mask_email(user_email) if user_email else str(user.id)
     )
     # В AdminAuditLog кладём реальный identifier для forensics (БД защищена admin-only
     # доступом, в отличие от структlog'ов, которые уезжают в external aggregators).
-    audit_identifier = (
-        str(user.telegram_id)
-        if is_telegram_admin
-        else (user_email or f"user_id={user.id}")
-    )
+    audit_identifier = str(user.telegram_id) if is_telegram_admin else (user_email or f'user_id={user.id}')
 
     # Savepoint: на IntegrityError откатывается ТОЛЬКО блок INSERT'а — outer
     # транзакция caller'а сохраняется. Раньше `await db.rollback()` сбрасывал
@@ -602,23 +565,23 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
         async with db.begin_nested():
             audit_entry = AdminAuditLog(
                 user_id=user.id,
-                action="rbac.superadmin.auto_grant_on_login",
-                resource_type="user_role",
+                action='rbac.superadmin.auto_grant_on_login',
+                resource_type='user_role',
                 resource_id=str(new_assignment.id),
                 details={
-                    "role_id": role.id,
-                    "role_name": role.name,
-                    "source": "env",
-                    "identifier": audit_identifier,
-                    "matched_via": "telegram_id" if is_telegram_admin else "email",
+                    'role_id': role.id,
+                    'role_name': role.name,
+                    'source': 'env',
+                    'identifier': audit_identifier,
+                    'matched_via': 'telegram_id' if is_telegram_admin else 'email',
                 },
-                status="success",
+                status='success',
             )
             db.add(audit_entry)
             await db.flush()
     except Exception as audit_error:
         logger.warning(
-            "Failed to write AdminAuditLog for Superadmin auto-grant",
+            'Failed to write AdminAuditLog for Superadmin auto-grant',
             user_id=user.id,
             role_id=role.id,
             error=str(audit_error),
@@ -626,11 +589,11 @@ async def ensure_superadmin_role_on_login(db: AsyncSession, user: User) -> bool:
         )
 
     logger.info(
-        "Superadmin role assigned at login",
+        'Superadmin role assigned at login',
         user_id=user.id,
         role_id=role.id,
         identifier=log_identifier,
-        matched_via="telegram_id" if is_telegram_admin else "email",
+        matched_via='telegram_id' if is_telegram_admin else 'email',
     )
     return True
 
@@ -656,24 +619,18 @@ async def _ensure_role_by_email(
     )
     candidates = result.scalars().all()
     user = next(
-        (
-            u
-            for u in candidates
-            if u.email is not None and normalize_admin_email(u.email) == target
-        ),
+        (u for u in candidates if u.email is not None and normalize_admin_email(u.email) == target),
         None,
     )
 
     if user is None:
         logger.debug(
-            "Admin user (email) not yet registered or not verified, skipping",
+            'Admin user (email) not yet registered or not verified, skipping',
             email=email,
         )
         return False
 
-    return await _assign_if_missing(
-        db, user_id=user.id, role_id=role_id, identifier=email
-    )
+    return await _assign_if_missing(db, user_id=user.id, role_id=role_id, identifier=email)
 
 
 async def _assign_if_missing(
@@ -713,15 +670,15 @@ async def _assign_if_missing(
     if existing is not None:
         if existing.is_active:
             logger.debug(
-                "User already has Superadmin role",
+                'User already has Superadmin role',
                 user_id=user_id,
                 identifier=identifier,
             )
             return False
 
-        if existing.revocation_source == "ui":
+        if existing.revocation_source == 'ui':
             logger.warning(
-                "Skipping bootstrap reactivation: role was revoked via UI; env config will not override manual revoke",
+                'Skipping bootstrap reactivation: role was revoked via UI; env config will not override manual revoke',
                 user_id=user_id,
                 identifier=identifier,
                 user_role_id=existing.id,
@@ -734,7 +691,7 @@ async def _assign_if_missing(
         existing.revocation_source = None
         await db.flush()
         logger.info(
-            "Reactivated Superadmin role (user is in env config)",
+            'Reactivated Superadmin role (user is in env config)',
             user_id=user_id,
             identifier=identifier,
             user_role_id=existing.id,
@@ -751,7 +708,7 @@ async def _assign_if_missing(
     await db.flush()
 
     logger.info(
-        "Assigned Superadmin role to user",
+        'Assigned Superadmin role to user',
         user_id=user_id,
         role_id=role_id,
         identifier=identifier,

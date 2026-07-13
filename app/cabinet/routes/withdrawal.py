@@ -20,27 +20,25 @@ from ..schemas.withdrawals import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/referral/withdrawal", tags=["Cabinet Withdrawal"])
+router = APIRouter(prefix='/referral/withdrawal', tags=['Cabinet Withdrawal'])
 
 
-@router.get("/balance", response_model=WithdrawalBalanceResponse)
+@router.get('/balance', response_model=WithdrawalBalanceResponse)
 async def get_withdrawal_balance(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get withdrawal balance stats for current user."""
-    can_request, reason, stats = (
-        await referral_withdrawal_service.can_request_withdrawal(db, user.id)
-    )
+    can_request, reason, stats = await referral_withdrawal_service.can_request_withdrawal(db, user.id)
 
     return WithdrawalBalanceResponse(
-        total_earned=stats["total_earned"],
-        referral_spent=stats["referral_spent"],
-        withdrawn=stats["withdrawn"],
-        pending=stats["pending"],
-        available_referral=stats["available_referral"],
-        available_total=stats["available_total"],
-        only_referral_mode=stats["only_referral_mode"],
+        total_earned=stats['total_earned'],
+        referral_spent=stats['referral_spent'],
+        withdrawn=stats['withdrawn'],
+        pending=stats['pending'],
+        available_referral=stats['available_referral'],
+        available_total=stats['available_total'],
+        only_referral_mode=stats['only_referral_mode'],
         min_amount_kopeks=settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS,
         is_withdrawal_enabled=settings.is_referral_withdrawal_enabled(),
         can_request=can_request,
@@ -49,7 +47,7 @@ async def get_withdrawal_balance(
     )
 
 
-@router.post("/create", response_model=WithdrawalCreateResponse)
+@router.post('/create', response_model=WithdrawalCreateResponse)
 async def create_withdrawal(
     request: WithdrawalCreateRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -74,10 +72,7 @@ async def create_withdrawal(
         from app.bot_factory import create_bot
         from app.services.admin_notification_service import AdminNotificationService
 
-        if (
-            getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False)
-            and settings.BOT_TOKEN
-        ):
+        if getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) and settings.BOT_TOKEN:
             bot = create_bot()
             try:
                 notification_service = AdminNotificationService(bot)
@@ -89,9 +84,7 @@ async def create_withdrawal(
             finally:
                 await bot.session.close()
     except Exception as e:
-        logger.error(
-            "Failed to send admin notification for withdrawal request", error=e
-        )
+        logger.error('Failed to send admin notification for withdrawal request', error=e)
 
     return WithdrawalCreateResponse(
         id=withdrawal.id,
@@ -100,16 +93,14 @@ async def create_withdrawal(
     )
 
 
-@router.get("/history", response_model=WithdrawalListResponse)
+@router.get('/history', response_model=WithdrawalListResponse)
 async def get_withdrawal_history(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's withdrawal request history."""
     count_result = await db.execute(
-        select(func.count())
-        .select_from(WithdrawalRequest)
-        .where(WithdrawalRequest.user_id == user.id)
+        select(func.count()).select_from(WithdrawalRequest).where(WithdrawalRequest.user_id == user.id)
     )
     total = count_result.scalar() or 0
 
@@ -138,7 +129,7 @@ async def get_withdrawal_history(
     return WithdrawalListResponse(items=items, total=total)
 
 
-@router.post("/{request_id}/cancel")
+@router.post('/{request_id}/cancel')
 async def cancel_withdrawal(
     request_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -158,16 +149,16 @@ async def cancel_withdrawal(
     if not withdrawal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Заявка не найдена",
+            detail='Заявка не найдена',
         )
 
     if withdrawal.status != WithdrawalRequestStatus.PENDING.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Можно отменить только заявку в ожидании",
+            detail='Можно отменить только заявку в ожидании',
         )
 
     withdrawal.status = WithdrawalRequestStatus.CANCELLED.value
     await db.commit()
 
-    return {"success": True}
+    return {'success': True}

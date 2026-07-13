@@ -82,7 +82,7 @@ from .wheel import router as wheel_router
 from .withdrawal import router as withdrawal_router
 
 # Main cabinet router
-router = APIRouter(prefix="/cabinet", tags=["Cabinet"], redirect_slashes=False)
+router = APIRouter(prefix='/cabinet', tags=['Cabinet'], redirect_slashes=False)
 
 # Public (unauthenticated) endpoints used by payment-provider crawlers.
 # Final path becomes `/cabinet/public/site-verification`. Has its own
@@ -173,4 +173,4 @@ router.include_router(admin_overpay_certificate_router)
 # WebSocket route
 router.include_router(websocket_router)
 
-__all__ = ["router"]
+__all__ = ['router']

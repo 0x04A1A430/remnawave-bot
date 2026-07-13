@@ -13,17 +13,17 @@ except ImportError:
 
 
 def _is_enabled() -> bool:
-    return getattr(settings, "S2S_POSTBACK_ENABLED", False) and httpx is not None
+    return getattr(settings, 'S2S_POSTBACK_ENABLED', False) and httpx is not None
 
 
 def _get_url(event: str) -> str | None:
     """Get postback URL template for event type."""
     mapping = {
-        "registration": getattr(settings, "S2S_POSTBACK_REGISTRATION_URL", ""),
-        "trial": getattr(settings, "S2S_POSTBACK_TRIAL_URL", ""),
-        "purchase": getattr(settings, "S2S_POSTBACK_PURCHASE_URL", ""),
+        'registration': getattr(settings, 'S2S_POSTBACK_REGISTRATION_URL', ''),
+        'trial': getattr(settings, 'S2S_POSTBACK_TRIAL_URL', ''),
+        'purchase': getattr(settings, 'S2S_POSTBACK_PURCHASE_URL', ''),
     }
-    url = mapping.get(event, "")
+    url = mapping.get(event, '')
     return url or None
 
 
@@ -52,26 +52,26 @@ async def send_postback(
 
     url_template = _get_url(event)
     if not url_template:
-        logger.debug("S2S postback URL not configured", event=event)
+        logger.debug('S2S postback URL not configured', event=event)
         return False
 
     # Replace placeholders (URL-encode subid to prevent injection)
     from urllib.parse import quote
 
-    url = url_template.replace("{subid}", quote(subid, safe=""))
-    url = url.replace("{event}", event)
+    url = url_template.replace('{subid}', quote(subid, safe=''))
+    url = url.replace('{event}', event)
     if amount is not None:
-        url = url.replace("{amount}", str(round(amount, 2)))
+        url = url.replace('{amount}', str(round(amount, 2)))
     else:
-        url = url.replace("{amount}", "0")
+        url = url.replace('{amount}', '0')
 
-    url = url.replace("{user_id}", str(user_id) if user_id is not None else "0")
+    url = url.replace('{user_id}', str(user_id) if user_id is not None else '0')
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(url)
             logger.info(
-                "S2S postback sent",
+                'S2S postback sent',
                 event=event,
                 subid=subid,
                 amount=amount,
@@ -82,7 +82,7 @@ async def send_postback(
             return response.status_code < 400
     except Exception as e:
         logger.error(
-            "S2S postback failed",
+            'S2S postback failed',
             event=event,
             subid=subid,
             error=str(e),

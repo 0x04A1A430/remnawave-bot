@@ -19,8 +19,8 @@ from app.cabinet.routes.media import (
     make_media_token,
 )
 
-FID = "BAADAgADabcdef_-1234567890"
-OTHER = "BQADdifferent_-9876543210zy"
+FID = 'BAADAgADabcdef_-1234567890'
+OTHER = 'BQADdifferent_-9876543210zy'
 
 
 def test_token_roundtrip() -> None:
@@ -33,23 +33,20 @@ def test_token_is_bound_to_file_id() -> None:
 
 def test_token_rejects_tampered_and_garbage() -> None:
     tok = make_media_token(FID)
-    exp, _, sig = tok.partition(".")
-    assert (
-        _verify_media_token(FID, f'{exp}.{sig[:-1]}{"0" if sig[-1] != "0" else "1"}')
-        is False
-    )
-    assert _verify_media_token(FID, "") is False
-    assert _verify_media_token(FID, "notatoken") is False
+    exp, _, sig = tok.partition('.')
+    assert _verify_media_token(FID, f'{exp}.{sig[:-1]}{"0" if sig[-1] != "0" else "1"}') is False
+    assert _verify_media_token(FID, '') is False
+    assert _verify_media_token(FID, 'notatoken') is False
 
 
 def test_token_rejects_expired() -> None:
     exp = int(time.time()) - 10
-    assert _verify_media_token(FID, f"{exp}.{_media_signature(FID, exp)}") is False
+    assert _verify_media_token(FID, f'{exp}.{_media_signature(FID, exp)}') is False
 
 
 @pytest.mark.asyncio
 async def test_download_rejects_missing_token() -> None:
     # No token -> 404 before the bot is ever touched (the open-proxy is closed).
     with pytest.raises(HTTPException) as exc:
-        await download_media(file_id=FID, token="")
+        await download_media(file_id=FID, token='')
     assert exc.value.status_code == status.HTTP_404_NOT_FOUND

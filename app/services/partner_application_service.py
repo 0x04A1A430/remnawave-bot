@@ -37,13 +37,13 @@ class PartnerApplicationService:
         """
         user = await db.get(User, user_id)
         if not user:
-            return None, "Пользователь не найден"
+            return None, 'Пользователь не найден'
 
         if user.partner_status == PartnerStatus.APPROVED.value:
-            return None, "Вы уже являетесь партнёром"
+            return None, 'Вы уже являетесь партнёром'
 
         if user.partner_status == PartnerStatus.PENDING.value:
-            return None, "У вас уже есть заявка на рассмотрении"
+            return None, 'У вас уже есть заявка на рассмотрении'
 
         application = PartnerApplication(
             user_id=user_id,
@@ -62,12 +62,12 @@ class PartnerApplicationService:
         await db.refresh(application)
 
         logger.info(
-            "Подана заявка на партнёрство",
+            'Подана заявка на партнёрство',
             user_id=user_id,
             application_id=application.id,
         )
 
-        return application, ""
+        return application, ''
 
     async def approve_application(
         self,
@@ -82,29 +82,23 @@ class PartnerApplicationService:
         Возвращает (success, error_message).
         """
         result = await db.execute(
-            select(PartnerApplication)
-            .where(PartnerApplication.id == application_id)
-            .with_for_update()
+            select(PartnerApplication).where(PartnerApplication.id == application_id).with_for_update()
         )
         application = result.scalar_one_or_none()
         if not application:
-            return False, "Заявка не найдена"
+            return False, 'Заявка не найдена'
 
         if application.status != PartnerStatus.PENDING.value:
-            return False, "Заявка уже обработана"
+            return False, 'Заявка уже обработана'
 
-        user_result = await db.execute(
-            select(User).where(User.id == application.user_id).with_for_update()
-        )
+        user_result = await db.execute(select(User).where(User.id == application.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
         if not user:
-            return False, "Пользователь не найден"
+            return False, 'Пользователь не найден'
 
         # Генерируем реферальный код, если его нет
         if not user.referral_code:
-            user.referral_code = await generate_unique_referral_code(
-                db, user.telegram_id or 0
-            )
+            user.referral_code = await generate_unique_referral_code(db, user.telegram_id or 0)
 
         user.partner_status = PartnerStatus.APPROVED.value
         user.referral_commission_percent = commission_percent
@@ -118,14 +112,14 @@ class PartnerApplicationService:
         await db.commit()
 
         logger.info(
-            "Партнёрская заявка одобрена",
+            'Партнёрская заявка одобрена',
             application_id=application_id,
             user_id=application.user_id,
             commission_percent=commission_percent,
             admin_id=admin_id,
         )
 
-        return True, ""
+        return True, ''
 
     async def reject_application(
         self,
@@ -136,20 +130,16 @@ class PartnerApplicationService:
     ) -> tuple[bool, str]:
         """Отклоняет заявку на партнёрство."""
         result = await db.execute(
-            select(PartnerApplication)
-            .where(PartnerApplication.id == application_id)
-            .with_for_update()
+            select(PartnerApplication).where(PartnerApplication.id == application_id).with_for_update()
         )
         application = result.scalar_one_or_none()
         if not application:
-            return False, "Заявка не найдена"
+            return False, 'Заявка не найдена'
 
         if application.status != PartnerStatus.PENDING.value:
-            return False, "Заявка уже обработана"
+            return False, 'Заявка уже обработана'
 
-        user_result = await db.execute(
-            select(User).where(User.id == application.user_id).with_for_update()
-        )
+        user_result = await db.execute(select(User).where(User.id == application.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
         if user:
             user.partner_status = PartnerStatus.REJECTED.value
@@ -162,13 +152,13 @@ class PartnerApplicationService:
         await db.commit()
 
         logger.info(
-            "Партнёрская заявка отклонена",
+            'Партнёрская заявка отклонена',
             application_id=application_id,
             user_id=application.user_id,
             admin_id=admin_id,
         )
 
-        return True, ""
+        return True, ''
 
     async def revoke_partner(
         self,
@@ -179,10 +169,10 @@ class PartnerApplicationService:
         """Отзывает партнёрский статус."""
         user = await db.get(User, user_id)
         if not user:
-            return False, "Пользователь не найден"
+            return False, 'Пользователь не найден'
 
         if user.partner_status != PartnerStatus.APPROVED.value:
-            return False, "Пользователь не является партнёром"
+            return False, 'Пользователь не является партнёром'
 
         user.partner_status = PartnerStatus.NONE.value
         user.referral_commission_percent = None
@@ -197,16 +187,14 @@ class PartnerApplicationService:
         await db.commit()
 
         logger.info(
-            "Партнёрский статус отозван",
+            'Партнёрский статус отозван',
             user_id=user_id,
             admin_id=admin_id,
         )
 
-        return True, ""
+        return True, ''
 
-    async def get_pending_applications(
-        self, db: AsyncSession
-    ) -> list[PartnerApplication]:
+    async def get_pending_applications(self, db: AsyncSession) -> list[PartnerApplication]:
         """Получает все заявки на рассмотрении."""
         result = await db.execute(
             select(PartnerApplication)
@@ -233,18 +221,12 @@ class PartnerApplicationService:
         total_result = await db.execute(count_query)
         total = total_result.scalar() or 0
 
-        query = (
-            query.order_by(desc(PartnerApplication.created_at))
-            .offset(offset)
-            .limit(limit)
-        )
+        query = query.order_by(desc(PartnerApplication.created_at)).offset(offset).limit(limit)
         result = await db.execute(query)
 
         return list(result.scalars().all()), total
 
-    async def get_latest_application(
-        self, db: AsyncSession, user_id: int
-    ) -> PartnerApplication | None:
+    async def get_latest_application(self, db: AsyncSession, user_id: int) -> PartnerApplication | None:
         """Получает последнюю заявку пользователя."""
         result = await db.execute(
             select(PartnerApplication)

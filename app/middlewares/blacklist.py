@@ -30,21 +30,21 @@ class BlacklistMiddleware(BaseMiddleware):
         if not user or user.is_bot:
             return await handler(event, data)
 
-        is_blacklisted, reason = await blacklist_service.is_user_blacklisted(
-            user.id, user.username
-        )
+        is_blacklisted, reason = await blacklist_service.is_user_blacklisted(user.id, user.username)
 
         if not is_blacklisted:
             return await handler(event, data)
 
         logger.warning(
-            "Пользователь из черного списка",
+            'Пользователь из черного списка',
             user_id=user.id,
             username=user.username,
             reason=reason,
         )
 
-        block_text = f"Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку."
+        block_text = (
+            f'Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку.'
+        )
 
         try:
             if isinstance(event, Message):
@@ -52,10 +52,10 @@ class BlacklistMiddleware(BaseMiddleware):
             elif isinstance(event, CallbackQuery):
                 await event.answer(block_text, show_alert=True)
             elif isinstance(event, PreCheckoutQuery):
-                await event.answer(ok=False, error_message="Доступ запрещен")
+                await event.answer(ok=False, error_message='Доступ запрещен')
         except Exception as e:
             logger.error(
-                "Ошибка отправки сообщения о блокировке пользователю",
+                'Ошибка отправки сообщения о блокировке пользователю',
                 user_id=user.id,
                 error=e,
             )

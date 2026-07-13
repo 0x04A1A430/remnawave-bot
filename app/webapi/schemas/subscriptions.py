@@ -36,7 +36,7 @@ class SubscriptionCreateRequest(BaseModel):
     replace_existing: bool = False
     subscription_id: int | None = Field(
         default=None,
-        description="ID of existing subscription to replace (required in multi-tariff mode when replace_existing=true)",
+        description='ID of existing subscription to replace (required in multi-tariff mode when replace_existing=true)',
     )
 
 

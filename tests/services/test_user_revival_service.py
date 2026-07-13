@@ -30,21 +30,19 @@ class _FakeUser:
     """
 
     def __init__(self, **kwargs: object) -> None:
-        self.id = kwargs.get("id", 42)
-        self.telegram_id = kwargs.get("telegram_id", 12345)
-        self.username = kwargs.get("username", "someone")
-        self.email = kwargs.get("email")
-        self.email_verified = bool(kwargs.get("email_verified", False))
-        self.status = kwargs.get("status", UserStatus.DELETED.value)
-        self.balance_kopeks = kwargs.get("balance_kopeks", 50000)
-        self.last_activity = kwargs.get(
-            "last_activity", datetime(2025, 1, 1, tzinfo=UTC)
-        )
-        self.updated_at = kwargs.get("updated_at", datetime(2025, 1, 1, tzinfo=UTC))
+        self.id = kwargs.get('id', 42)
+        self.telegram_id = kwargs.get('telegram_id', 12345)
+        self.username = kwargs.get('username', 'someone')
+        self.email = kwargs.get('email')
+        self.email_verified = bool(kwargs.get('email_verified', False))
+        self.status = kwargs.get('status', UserStatus.DELETED.value)
+        self.balance_kopeks = kwargs.get('balance_kopeks', 50000)
+        self.last_activity = kwargs.get('last_activity', datetime(2025, 1, 1, tzinfo=UTC))
+        self.updated_at = kwargs.get('updated_at', datetime(2025, 1, 1, tzinfo=UTC))
         # We track these to assert the revival is NON-destructive.
-        self.referral_code = kwargs.get("referral_code", "INV-XYZ")
-        self.referred_by_id = kwargs.get("referred_by_id", 7)
-        self.remnawave_uuid = kwargs.get("remnawave_uuid", "panel-uuid-abc")
+        self.referral_code = kwargs.get('referral_code', 'INV-XYZ')
+        self.referred_by_id = kwargs.get('referred_by_id', 7)
+        self.remnawave_uuid = kwargs.get('remnawave_uuid', 'panel-uuid-abc')
 
 
 @pytest.fixture
@@ -60,7 +58,7 @@ async def test_revive_flips_status_to_active(db: AsyncMock) -> None:
     user = _FakeUser(status=UserStatus.DELETED.value)
     before = user.updated_at
 
-    result = await revive_deleted_user(db, user, source="unit_test")
+    result = await revive_deleted_user(db, user, source='unit_test')
 
     assert result is user
     assert user.status == UserStatus.ACTIVE.value
@@ -71,18 +69,14 @@ async def test_revive_flips_status_to_active(db: AsyncMock) -> None:
 @pytest.mark.asyncio
 async def test_revive_preserves_balance_and_referral_state(db: AsyncMock) -> None:
     """The cabinet revival path is NOT a wipe — value-bearing fields stay."""
-    user = _FakeUser(balance_kopeks=99999, referral_code="KEEP-ME", referred_by_id=11)
+    user = _FakeUser(balance_kopeks=99999, referral_code='KEEP-ME', referred_by_id=11)
 
-    await revive_deleted_user(db, user, source="unit_test")
+    await revive_deleted_user(db, user, source='unit_test')
 
-    assert user.balance_kopeks == 99999, "balance must not be zeroed on cabinet revival"
-    assert (
-        user.referral_code == "KEEP-ME"
-    ), "referral_code must not be regenerated on cabinet revival"
-    assert (
-        user.referred_by_id == 11
-    ), "referrer attribution must survive cabinet revival"
-    assert user.remnawave_uuid == "panel-uuid-abc", "panel UUID must not be cleared"
+    assert user.balance_kopeks == 99999, 'balance must not be zeroed on cabinet revival'
+    assert user.referral_code == 'KEEP-ME', 'referral_code must not be regenerated on cabinet revival'
+    assert user.referred_by_id == 11, 'referrer attribution must survive cabinet revival'
+    assert user.remnawave_uuid == 'panel-uuid-abc', 'panel UUID must not be cleared'
 
 
 @pytest.mark.asyncio
@@ -94,7 +88,7 @@ async def test_revive_never_commits_caller_owns_transaction(db: AsyncMock) -> No
     callers' downstream commit raised after the audit line was emitted.
     """
     user = _FakeUser()
-    await revive_deleted_user(db, user, source="unit_test")
+    await revive_deleted_user(db, user, source='unit_test')
     db.commit.assert_not_called()
     db.refresh.assert_not_called()
     # State is flipped in-place — caller's commit persists it.
@@ -106,7 +100,7 @@ async def test_revive_raises_when_already_active(db: AsyncMock) -> None:
     """Misuse-guard: revive must NEVER silently no-op on ACTIVE rows."""
     user = _FakeUser(status=UserStatus.ACTIVE.value)
     with pytest.raises(NotDeletedError):
-        await revive_deleted_user(db, user, source="unit_test")
+        await revive_deleted_user(db, user, source='unit_test')
     db.commit.assert_not_called()
 
 
@@ -115,5 +109,5 @@ async def test_revive_raises_on_blocked_user(db: AsyncMock) -> None:
     """A BLOCKED admin-action row is a separate domain — revival is wrong here."""
     user = _FakeUser(status=UserStatus.BLOCKED.value)
     with pytest.raises(NotDeletedError):
-        await revive_deleted_user(db, user, source="unit_test")
+        await revive_deleted_user(db, user, source='unit_test')
     db.commit.assert_not_called()

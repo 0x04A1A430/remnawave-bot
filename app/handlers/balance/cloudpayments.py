@@ -59,23 +59,23 @@ async def _create_cloudpayments_payment_and_respond(
 
     if not result:
         error_text = texts.t(
-            "PAYMENT_CREATE_ERROR",
-            "Не удалось создать платёж. Попробуйте позже.",
+            'PAYMENT_CREATE_ERROR',
+            'Не удалось создать платёж. Попробуйте позже.',
         )
         if edit_message:
             await message_or_callback.edit_text(
                 error_text,
                 reply_markup=get_back_keyboard(db_user.language),
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
         else:
             await message_or_callback.answer(
                 error_text,
-                parse_mode="HTML",
+                parse_mode='HTML',
             )
         return
 
-    payment_url = result.get("payment_url")
+    payment_url = result.get('payment_url')
 
     # Create keyboard with payment button
     keyboard = InlineKeyboardMarkup(
@@ -83,44 +83,44 @@ async def _create_cloudpayments_payment_and_respond(
             [
                 InlineKeyboardButton(
                     text=texts.t(
-                        "PAY_BUTTON",
-                        "Оплатить {amount}₽",
-                    ).format(amount=f"{amount_rub:.0f}"),
+                        'PAY_BUTTON',
+                        'Оплатить {amount}₽',
+                    ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t("BACK_BUTTON", "Назад"),
-                    callback_data="menu_balance",
+                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    callback_data='menu_balance',
                 )
             ],
         ]
     )
 
     response_text = texts.t(
-        "CLOUDPAYMENTS_PAYMENT_CREATED",
-        "<b>Оплата банковской картой</b>\n\n"
-        "Сумма: <b>{amount}₽</b>\n\n"
-        "Нажмите кнопку ниже для оплаты.\n"
-        "После успешной оплаты баланс будет пополнен автоматически.",
-    ).format(amount=f"{amount_rub:.2f}")
+        'CLOUDPAYMENTS_PAYMENT_CREATED',
+        '<b>Оплата банковской картой</b>\n\n'
+        'Сумма: <b>{amount}₽</b>\n\n'
+        'Нажмите кнопку ниже для оплаты.\n'
+        'После успешной оплаты баланс будет пополнен автоматически.',
+    ).format(amount=f'{amount_rub:.2f}')
 
     if edit_message:
         await message_or_callback.edit_text(
             response_text,
             reply_markup=keyboard,
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
     else:
         await message_or_callback.answer(
             response_text,
             reply_markup=keyboard,
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
 
     logger.info(
-        "CloudPayments payment created",
+        'CloudPayments payment created',
         telegram_id=db_user.telegram_id,
         amount_rub=amount_rub,
     )
@@ -142,30 +142,25 @@ async def process_cloudpayments_payment_amount(
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на пополнение
-    if getattr(db_user, "restriction_topup", False):
-        reason = html.escape(
-            getattr(db_user, "restriction_reason", None)
-            or "Действие ограничено администратором"
-        )
+    if getattr(db_user, 'restriction_topup', False):
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text="Обжаловать", url=support_url)])
-        keyboard.append(
-            [InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")]
-        )
+            keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
-            f"<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.",
+            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         await state.clear()
         return
 
     if not settings.is_cloudpayments_enabled():
         await message.answer(
-            texts.t("CLOUDPAYMENTS_NOT_AVAILABLE", "CloudPayments временно недоступен"),
+            texts.t('CLOUDPAYMENTS_NOT_AVAILABLE', 'CloudPayments временно недоступен'),
         )
         return
 
@@ -174,8 +169,8 @@ async def process_cloudpayments_payment_amount(
         min_rub = settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS / 100
         await message.answer(
             texts.t(
-                "AMOUNT_TOO_LOW",
-                "Минимальная сумма пополнения: {min_amount:.0f}₽",
+                'AMOUNT_TOO_LOW',
+                'Минимальная сумма пополнения: {min_amount:.0f}₽',
             ).format(min_amount=min_rub),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -185,8 +180,8 @@ async def process_cloudpayments_payment_amount(
         max_rub = settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100
         await message.answer(
             texts.t(
-                "AMOUNT_TOO_HIGH",
-                "Максимальная сумма пополнения: {max_amount:,.0f}₽",
+                'AMOUNT_TOO_HIGH',
+                'Максимальная сумма пополнения: {max_amount:,.0f}₽',
             ).format(max_amount=max_rub),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -195,9 +190,7 @@ async def process_cloudpayments_payment_amount(
     # Clear state
     await state.clear()
 
-    await _create_cloudpayments_payment_and_respond(
-        message, db_user, db, amount_kopeks, edit_message=False
-    )
+    await _create_cloudpayments_payment_and_respond(message, db_user, db, amount_kopeks, edit_message=False)
 
 
 @error_handler
@@ -214,21 +207,16 @@ async def start_cloudpayments_payment(
     texts = get_texts(db_user.language)
 
     # Проверка ограничения на пополнение
-    if getattr(db_user, "restriction_topup", False):
-        reason = html.escape(
-            getattr(db_user, "restriction_reason", None)
-            or "Действие ограничено администратором"
-        )
+    if getattr(db_user, 'restriction_topup', False):
+        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text="Обжаловать", url=support_url)])
-        keyboard.append(
-            [InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")]
-        )
+            keyboard.append([InlineKeyboardButton(text='Обжаловать', url=support_url)])
+        keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
-            f"<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.",
+            f'<b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -236,7 +224,7 @@ async def start_cloudpayments_payment(
 
     if not settings.is_cloudpayments_enabled():
         await callback.answer(
-            texts.t("CLOUDPAYMENTS_NOT_AVAILABLE", "CloudPayments временно недоступен"),
+            texts.t('CLOUDPAYMENTS_NOT_AVAILABLE', 'CloudPayments временно недоступен'),
             show_alert=True,
         )
         return
@@ -245,23 +233,21 @@ async def start_cloudpayments_payment(
     max_amount_rub = settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100
 
     message_text = texts.t(
-        "CLOUDPAYMENTS_ENTER_AMOUNT",
-        "<b>Оплата банковской картой (CloudPayments)</b>\n\n"
-        "Введите сумму для пополнения от {min_amount:.0f} до {max_amount:,.0f} рублей:",
+        'CLOUDPAYMENTS_ENTER_AMOUNT',
+        '<b>Оплата банковской картой (CloudPayments)</b>\n\n'
+        'Введите сумму для пополнения от {min_amount:.0f} до {max_amount:,.0f} рублей:',
     ).format(min_amount=min_amount_rub, max_amount=max_amount_rub)
 
-    keyboard = await get_topup_amount_keyboard(
-        "cloudpayments", db_user.language, back_callback="back_to_menu"
-    )
+    keyboard = await get_topup_amount_keyboard('cloudpayments', db_user.language, back_callback='back_to_menu')
 
     await callback.message.edit_text(
         message_text,
         reply_markup=keyboard,
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
 
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="cloudpayments")
+    await state.update_data(payment_method='cloudpayments')
     await state.update_data(
         cloudpayments_prompt_message_id=callback.message.message_id,
         cloudpayments_prompt_chat_id=callback.message.chat.id,
@@ -285,20 +271,20 @@ async def process_cloudpayments_amount(
 
     # Get state data
     state_data = await state.get_data()
-    payment_method = state_data.get("payment_method")
+    payment_method = state_data.get('payment_method')
 
-    if payment_method != "cloudpayments":
+    if payment_method != 'cloudpayments':
         return  # Not our payment method
 
     # Parse amount
     try:
-        amount_text = message.text.strip().replace(",", ".").replace(" ", "")
+        amount_text = message.text.strip().replace(',', '.').replace(' ', '')
         amount_rub = float(amount_text)
         amount_kopeks = int(amount_rub * 100)
     except (ValueError, TypeError):
         await message.answer(
-            texts.t("INVALID_AMOUNT", "Введите корректную сумму числом"),
-            parse_mode="HTML",
+            texts.t('INVALID_AMOUNT', 'Введите корректную сумму числом'),
+            parse_mode='HTML',
         )
         return
 
@@ -307,11 +293,11 @@ async def process_cloudpayments_amount(
         min_rub = settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS / 100
         await message.answer(
             texts.t(
-                "AMOUNT_TOO_LOW",
-                "Минимальная сумма пополнения: {min_amount:.0f}₽",
+                'AMOUNT_TOO_LOW',
+                'Минимальная сумма пополнения: {min_amount:.0f}₽',
             ).format(min_amount=min_rub),
             reply_markup=get_back_keyboard(db_user.language),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         return
 
@@ -319,11 +305,11 @@ async def process_cloudpayments_amount(
         max_rub = settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100
         await message.answer(
             texts.t(
-                "AMOUNT_TOO_HIGH",
-                "Максимальная сумма пополнения: {max_amount:,.0f}₽",
+                'AMOUNT_TOO_HIGH',
+                'Максимальная сумма пополнения: {max_amount:,.0f}₽',
             ).format(max_amount=max_rub),
             reply_markup=get_back_keyboard(db_user.language),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         return
 
@@ -350,14 +336,14 @@ async def process_cloudpayments_amount(
     if not result:
         await message.answer(
             texts.t(
-                "PAYMENT_CREATE_ERROR",
-                "Не удалось создать платёж. Попробуйте позже.",
+                'PAYMENT_CREATE_ERROR',
+                'Не удалось создать платёж. Попробуйте позже.',
             ),
-            parse_mode="HTML",
+            parse_mode='HTML',
         )
         return
 
-    payment_url = result.get("payment_url")
+    payment_url = result.get('payment_url')
 
     # Create keyboard with payment button
     keyboard = InlineKeyboardMarkup(
@@ -365,16 +351,16 @@ async def process_cloudpayments_amount(
             [
                 InlineKeyboardButton(
                     text=texts.t(
-                        "PAY_BUTTON",
-                        "Оплатить {amount}₽",
-                    ).format(amount=f"{amount_rub:.0f}"),
+                        'PAY_BUTTON',
+                        'Оплатить {amount}₽',
+                    ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t("BACK_BUTTON", "Назад"),
-                    callback_data="menu_balance",
+                    text=texts.t('BACK_BUTTON', 'Назад'),
+                    callback_data='menu_balance',
                 )
             ],
         ]
@@ -382,18 +368,18 @@ async def process_cloudpayments_amount(
 
     await message.answer(
         texts.t(
-            "CLOUDPAYMENTS_PAYMENT_CREATED",
-            "<b>Оплата банковской картой</b>\n\n"
-            "Сумма: <b>{amount}₽</b>\n\n"
-            "Нажмите кнопку ниже для оплаты.\n"
-            "После успешной оплаты баланс будет пополнен автоматически.",
-        ).format(amount=f"{amount_rub:.2f}"),
+            'CLOUDPAYMENTS_PAYMENT_CREATED',
+            '<b>Оплата банковской картой</b>\n\n'
+            'Сумма: <b>{amount}₽</b>\n\n'
+            'Нажмите кнопку ниже для оплаты.\n'
+            'После успешной оплаты баланс будет пополнен автоматически.',
+        ).format(amount=f'{amount_rub:.2f}'),
         reply_markup=keyboard,
-        parse_mode="HTML",
+        parse_mode='HTML',
     )
 
     logger.info(
-        "CloudPayments payment created",
+        'CloudPayments payment created',
         telegram_id=db_user.telegram_id,
         amount_rub=amount_rub,
     )

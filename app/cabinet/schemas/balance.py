@@ -67,13 +67,9 @@ class PaymentMethodResponse(BaseModel):
 class TopUpRequest(BaseModel):
     """Request to create payment for balance top-up."""
 
-    amount_kopeks: int = Field(
-        ..., ge=1000, le=2_000_000_000, description="Amount in kopeks (min 10 rubles)"
-    )
-    payment_method: str = Field(..., description="Payment method ID")
-    payment_option: str | None = Field(
-        None, description="Payment option (e.g. Platega method code)"
-    )
+    amount_kopeks: int = Field(..., ge=1000, le=2_000_000_000, description='Amount in kopeks (min 10 rubles)')
+    payment_method: str = Field(..., description='Payment method ID')
+    payment_option: str | None = Field(None, description='Payment option (e.g. Platega method code)')
 
 
 class TopUpResponse(BaseModel):
@@ -90,9 +86,7 @@ class TopUpResponse(BaseModel):
 class StarsInvoiceRequest(BaseModel):
     """Request to create Telegram Stars invoice for balance top-up."""
 
-    amount_kopeks: int = Field(
-        ..., ge=100, le=2_000_000_000, description="Amount in kopeks (min 1 ruble)"
-    )
+    amount_kopeks: int = Field(..., ge=100, le=2_000_000_000, description='Amount in kopeks (min 1 ruble)')
 
 
 class StarsInvoiceResponse(BaseModel):

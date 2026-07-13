@@ -18,7 +18,7 @@ from ..dependencies import get_cabinet_db, require_permission
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/admin/rbac", tags=["Admin RBAC"])
+router = APIRouter(prefix='/admin/rbac', tags=['Admin RBAC'])
 
 
 # ============ Schemas ============
@@ -157,9 +157,9 @@ def _validate_permissions(permissions: list[str]) -> None:
     """Validate that all provided permissions exist in the registry."""
     all_valid = set(get_all_permissions())
     # Also allow wildcard patterns
-    all_valid.add("*:*")
+    all_valid.add('*:*')
     for section in PERMISSION_REGISTRY:
-        all_valid.add(f"{section}:*")
+        all_valid.add(f'{section}:*')
 
     invalid = [p for p in permissions if p not in all_valid]
     if invalid:
@@ -171,15 +171,13 @@ def _validate_permissions(permissions: list[str]) -> None:
 
 def _permission_covered(perm: str, held: set[str]) -> bool:
     """True when a held permission set grants `perm` (supports *:* and section:* wildcards)."""
-    if "*:*" in held or perm in held:
+    if '*:*' in held or perm in held:
         return True
-    section = perm.split(":", 1)[0] if ":" in perm else perm
-    return f"{section}:*" in held
+    section = perm.split(':', 1)[0] if ':' in perm else perm
+    return f'{section}:*' in held
 
 
-async def _ensure_can_grant(
-    db: AsyncSession, admin: User, admin_level: int, permissions: list[str]
-) -> None:
+async def _ensure_can_grant(db: AsyncSession, admin: User, admin_level: int, permissions: list[str]) -> None:
     """Block privilege escalation: an admin may only grant permissions they hold.
 
     Hierarchy guards only check the numeric role LEVEL, so without this a
@@ -203,20 +201,19 @@ async def _ensure_can_grant(
 # ============ Routes ============
 
 
-@router.get("/permissions", response_model=list[PermissionSection])
+@router.get('/permissions', response_model=list[PermissionSection])
 async def get_permission_registry(
-    admin: User = Depends(require_permission("roles:read")),
+    admin: User = Depends(require_permission('roles:read')),
 ):
     """Get all available permissions grouped by section."""
     return [
-        PermissionSection(section=section, actions=list(actions))
-        for section, actions in PERMISSION_REGISTRY.items()
+        PermissionSection(section=section, actions=list(actions)) for section, actions in PERMISSION_REGISTRY.items()
     ]
 
 
-@router.get("/users", response_model=list[AdminWithRolesResponse])
+@router.get('/users', response_model=list[AdminWithRolesResponse])
 async def list_rbac_users(
-    admin: User = Depends(require_permission("roles:read")),
+    admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List all users that have at least one active RBAC role."""
@@ -253,10 +250,10 @@ async def list_rbac_users(
     return list(users_map.values())
 
 
-@router.get("/roles/{role_id}/users", response_model=list[UserRoleResponse])
+@router.get('/roles/{role_id}/users', response_model=list[UserRoleResponse])
 async def list_role_users(
     role_id: int,
-    admin: User = Depends(require_permission("roles:read")),
+    admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """List user-role assignments for a specific role."""
@@ -264,9 +261,7 @@ async def list_role_users(
 
     role = await AdminRoleCRUD.get_by_id(db, role_id)
     if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Role not found')
 
     from sqlalchemy import select as _sa_select
 
@@ -299,9 +294,9 @@ async def list_role_users(
     ]
 
 
-@router.get("/roles", response_model=list[RoleResponse])
+@router.get('/roles', response_model=list[RoleResponse])
 async def list_roles(
-    admin: User = Depends(require_permission("roles:read")),
+    admin: User = Depends(require_permission('roles:read')),
     db: AsyncSession = Depends(get_cabinet_db),
     include_inactive: bool = False,
 ):
@@ -310,10 +305,10 @@ async def list_roles(
     return [await _role_to_response(db, role) for role in roles]
 
 
-@router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post('/roles', response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     payload: RoleCreateRequest,
-    admin: User = Depends(require_permission("roles:create")),
+    admin: User = Depends(require_permission('roles:create')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new custom admin role."""
@@ -325,7 +320,7 @@ async def create_role(
     if payload.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot create a role with level >= your own role level",
+            detail='Cannot create a role with level >= your own role level',
         )
 
     # Cannot grant permissions the creating admin does not themselves hold.
@@ -336,7 +331,7 @@ async def create_role(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Role with this name already exists",
+            detail='Role with this name already exists',
         )
 
     role = await AdminRoleCRUD.create(
@@ -351,17 +346,15 @@ async def create_role(
     )
     await db.commit()
 
-    logger.info(
-        "Admin created role", admin_id=admin.id, role_id=role.id, role_name=role.name
-    )
+    logger.info('Admin created role', admin_id=admin.id, role_id=role.id, role_name=role.name)
     return await _role_to_response(db, role)
 
 
-@router.put("/roles/{role_id}", response_model=RoleResponse)
+@router.put('/roles/{role_id}', response_model=RoleResponse)
 async def update_role(
     role_id: int,
     payload: RoleUpdateRequest,
-    admin: User = Depends(require_permission("roles:edit")),
+    admin: User = Depends(require_permission('roles:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing admin role."""
@@ -369,7 +362,7 @@ async def update_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found",
+            detail='Role not found',
         )
 
     admin_level = await _get_admin_level(db, admin)
@@ -378,14 +371,14 @@ async def update_role(
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot edit a role at or above your own level",
+            detail='Cannot edit a role at or above your own level',
         )
 
     update_data = payload.model_dump(exclude_unset=True)
 
     # System roles: only permissions can be extended, block is_active/level changes
     if role.is_system:
-        blocked = {"is_active", "level"} & update_data.keys()
+        blocked = {'is_active', 'level'} & update_data.keys()
         if blocked:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -393,38 +386,38 @@ async def update_role(
             )
 
     # Validate level change
-    if "level" in update_data and update_data["level"] >= admin_level:
+    if 'level' in update_data and update_data['level'] >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot set role level >= your own role level",
+            detail='Cannot set role level >= your own role level',
         )
 
     # Validate permissions
-    if "permissions" in update_data and update_data["permissions"] is not None:
-        _validate_permissions(update_data["permissions"])
+    if 'permissions' in update_data and update_data['permissions'] is not None:
+        _validate_permissions(update_data['permissions'])
         # Cannot raise a role's permissions beyond what the editing admin holds.
-        await _ensure_can_grant(db, admin, admin_level, update_data["permissions"])
+        await _ensure_can_grant(db, admin, admin_level, update_data['permissions'])
 
     # Check name uniqueness if name is changing
-    if "name" in update_data and update_data["name"] != role.name:
-        existing = await AdminRoleCRUD.get_by_name(db, update_data["name"])
+    if 'name' in update_data and update_data['name'] != role.name:
+        existing = await AdminRoleCRUD.get_by_name(db, update_data['name'])
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Role with this name already exists",
+                detail='Role with this name already exists',
             )
 
     updated = await AdminRoleCRUD.update(db, role_id, **update_data)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found",
+            detail='Role not found',
         )
 
     await db.commit()
 
     logger.info(
-        "Admin updated role",
+        'Admin updated role',
         admin_id=admin.id,
         role_id=role_id,
         fields=list(update_data.keys()),
@@ -432,10 +425,10 @@ async def update_role(
     return await _role_to_response(db, updated)
 
 
-@router.delete("/roles/{role_id}")
+@router.delete('/roles/{role_id}')
 async def delete_role(
     role_id: int,
-    admin: User = Depends(require_permission("roles:delete")),
+    admin: User = Depends(require_permission('roles:delete')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete a custom admin role. System roles cannot be deleted."""
@@ -443,43 +436,39 @@ async def delete_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found",
+            detail='Role not found',
         )
 
     if role.is_system:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot delete a system role",
+            detail='Cannot delete a system role',
         )
 
     admin_level = await _get_admin_level(db, admin)
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot delete a role at or above your own level",
+            detail='Cannot delete a role at or above your own level',
         )
 
     deleted = await AdminRoleCRUD.delete(db, role_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to delete role",
+            detail='Failed to delete role',
         )
 
     await db.commit()
 
-    logger.info(
-        "Admin deleted role", admin_id=admin.id, role_id=role_id, role_name=role.name
-    )
-    return {"message": "Role deleted", "role_id": role_id}
+    logger.info('Admin deleted role', admin_id=admin.id, role_id=role_id, role_name=role.name)
+    return {'message': 'Role deleted', 'role_id': role_id}
 
 
-@router.post(
-    "/assignments", response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post('/assignments', response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
 async def assign_role(
     payload: RoleAssignRequest,
-    admin: User = Depends(require_permission("roles:assign")),
+    admin: User = Depends(require_permission('roles:assign')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Assign a role to a user. Hierarchy enforcement applies."""
@@ -487,15 +476,15 @@ async def assign_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found",
+            detail='Role not found',
         )
 
     # Superadmin role is managed exclusively via ADMIN_IDS/ADMIN_EMAILS env config
     if role.level >= SUPERADMIN_LEVEL:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. "
-            "Add the user there and restart the bot.",
+            detail='Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
+            'Add the user there and restart the bot.',
         )
 
     admin_level = await _get_admin_level(db, admin)
@@ -504,7 +493,7 @@ async def assign_role(
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot assign a role with level >= your own role level",
+            detail='Cannot assign a role with level >= your own role level',
         )
 
     # Cannot hand out a role whose permissions exceed the assigning admin's own
@@ -518,7 +507,7 @@ async def assign_role(
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Target user not found",
+            detail='Target user not found',
         )
 
     user_role = await UserRoleCRUD.assign_role(
@@ -531,7 +520,7 @@ async def assign_role(
     await db.commit()
 
     logger.info(
-        "Admin assigned role",
+        'Admin assigned role',
         admin_id=admin.id,
         target_user_id=payload.user_id,
         role_id=payload.role_id,
@@ -553,39 +542,37 @@ async def assign_role(
     )
 
 
-@router.delete("/assignments/{assignment_id}")
+@router.delete('/assignments/{assignment_id}')
 async def revoke_role(
     assignment_id: int,
-    admin: User = Depends(require_permission("roles:assign")),
+    admin: User = Depends(require_permission('roles:assign')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Revoke a role assignment. Superadmin roles are managed via env config."""
     from app.database.models import UserRole
 
     # Lock the assignment row (FOR UPDATE held until commit)
-    result = await db.execute(
-        sa.select(UserRole).where(UserRole.id == assignment_id).with_for_update()
-    )
+    result = await db.execute(sa.select(UserRole).where(UserRole.id == assignment_id).with_for_update())
     user_role = result.scalar_one_or_none()
     if not user_role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role assignment not found",
+            detail='Role assignment not found',
         )
 
     role = await AdminRoleCRUD.get_by_id(db, user_role.role_id)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Associated role not found",
+            detail='Associated role not found',
         )
 
     # Superadmin role is managed exclusively via env config
     if role.level >= SUPERADMIN_LEVEL:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. "
-            "Remove the user from env and restart the bot.",
+            detail='Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
+            'Remove the user from env and restart the bot.',
         )
 
     admin_level = await _get_admin_level(db, admin)
@@ -594,24 +581,24 @@ async def revoke_role(
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot revoke a role at or above your own level",
+            detail='Cannot revoke a role at or above your own level',
         )
 
     # Revoke directly on the locked object (avoid CRUD re-fetch without FOR UPDATE).
     # revocation_source='ui' защищает manual decision от автоматической реактивации
     # bootstrap'ом при следующем рестарте бота (см. _assign_if_missing).
     user_role.is_active = False
-    user_role.revocation_source = "ui"
+    user_role.revocation_source = 'ui'
     await db.flush()
     await db.commit()
 
     logger.info(
-        "Admin revoked role assignment",
+        'Admin revoked role assignment',
         admin_id=admin.id,
         assignment_id=assignment_id,
         target_user_id=user_role.user_id,
         role_name=role.name,
-        revocation_source="ui",
+        revocation_source='ui',
     )
 
-    return {"message": "Role revoked", "assignment_id": assignment_id}
+    return {'message': 'Role revoked', 'assignment_id': assignment_id}

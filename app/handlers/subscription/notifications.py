@@ -17,11 +17,9 @@ async def send_trial_notification(
 ):
     try:
         notification_service = AdminNotificationService(callback.bot)
-        await notification_service.send_trial_activation_notification(
-            db, db_user, subscription
-        )
+        await notification_service.send_trial_activation_notification(db, db_user, subscription)
     except Exception as e:
-        logger.error("Ошибка отправки уведомления о триале", error=e)
+        logger.error('Ошибка отправки уведомления о триале', error=e)
 
 
 async def send_purchase_notification(
@@ -50,7 +48,7 @@ async def send_purchase_notification(
                 purchase_type=purchase_type,
             )
     except Exception as e:
-        logger.error("Ошибка отправки уведомления о покупке", error=e)
+        logger.error('Ошибка отправки уведомления о покупке', error=e)
 
 
 async def send_extension_notification(
@@ -72,4 +70,4 @@ async def send_extension_notification(
                 db, db_user, subscription, transaction, extended_days, old_end_date
             )
     except Exception as e:
-        logger.error("Ошибка отправки уведомления о продлении", error=e)
+        logger.error('Ошибка отправки уведомления о продлении', error=e)

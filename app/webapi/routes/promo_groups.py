@@ -52,12 +52,12 @@ def _serialize(group: PromoGroup, members_count: int = 0) -> PromoGroupResponse:
         apply_discounts_to_addons=group.apply_discounts_to_addons,
         is_default=group.is_default,
         members_count=members_count,
-        created_at=getattr(group, "created_at", None),
-        updated_at=getattr(group, "updated_at", None),
+        created_at=getattr(group, 'created_at', None),
+        updated_at=getattr(group, 'updated_at', None),
     )
 
 
-@router.get("", response_model=PromoGroupListResponse, response_model_exclude_none=True)
+@router.get('', response_model=PromoGroupListResponse, response_model_exclude_none=True)
 async def list_promo_groups(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -72,19 +72,14 @@ async def list_promo_groups(
     )
 
     return PromoGroupListResponse(
-        items=[
-            _serialize(group, members_count=count)
-            for group, count in groups_with_counts
-        ],
+        items=[_serialize(group, members_count=count) for group, count in groups_with_counts],
         total=total,
         limit=limit,
         offset=offset,
     )
 
 
-@router.get(
-    "/{group_id}", response_model=PromoGroupResponse, response_model_exclude_none=True
-)
+@router.get('/{group_id}', response_model=PromoGroupResponse, response_model_exclude_none=True)
 async def get_promo_group(
     group_id: int,
     _: Any = Security(require_api_token),
@@ -92,14 +87,14 @@ async def get_promo_group(
 ) -> PromoGroupResponse:
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
 
     members_count = await count_promo_group_members(db, group_id)
     return _serialize(group, members_count=members_count)
 
 
 @router.post(
-    "",
+    '',
     response_model=PromoGroupResponse,
     response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
@@ -125,13 +120,13 @@ async def create_promo_group_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Promo group with this name already exists",
+            'Promo group with this name already exists',
         ) from exc
     return _serialize(group, members_count=0)
 
 
 @router.patch(
-    "/{group_id}",
+    '/{group_id}',
     response_model=PromoGroupResponse,
     response_model_exclude_none=True,
 )
@@ -143,7 +138,7 @@ async def update_promo_group_endpoint(
 ) -> PromoGroupResponse:
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
 
     try:
         group = await update_promo_group(
@@ -162,13 +157,13 @@ async def update_promo_group_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Promo group with this name already exists",
+            'Promo group with this name already exists',
         ) from exc
     members_count = await count_promo_group_members(db, group_id)
     return _serialize(group, members_count=members_count)
 
 
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{group_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_promo_group_endpoint(
     group_id: int,
     _: Any = Security(require_api_token),
@@ -176,12 +171,10 @@ async def delete_promo_group_endpoint(
 ) -> Response:
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
 
     success = await delete_promo_group(db, group)
     if not success:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Cannot delete default promo group"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Cannot delete default promo group')
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

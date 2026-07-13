@@ -34,7 +34,7 @@ class _SelectSubscriptionRequired(Exception):
     def __init__(self, eligible_subscriptions: list[dict], code: str):
         self.eligible_subscriptions = eligible_subscriptions
         self.code = code
-        super().__init__("select_subscription")
+        super().__init__('select_subscription')
 
 
 class PromoCodeService:
@@ -48,8 +48,8 @@ class PromoCodeService:
         if user.telegram_id:
             return str(user.telegram_id)
         if user.email:
-            return f"{user.id} ({user.email})"
-        return f"#{user.id}"
+            return f'{user.id} ({user.email})'
+        return f'#{user.id}'
 
     async def activate_promocode(
         self,
@@ -62,28 +62,28 @@ class PromoCodeService:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
-                return {"success": False, "error": "user_not_found"}
+                return {'success': False, 'error': 'user_not_found'}
 
             promocode = await get_promocode_by_code(db, code)
             if not promocode:
-                return {"success": False, "error": "not_found"}
+                return {'success': False, 'error': 'not_found'}
 
             if not promocode.is_valid:
                 if promocode.current_uses >= promocode.max_uses:
-                    return {"success": False, "error": "used"}
+                    return {'success': False, 'error': 'used'}
                 if not promocode.is_active:
-                    return {"success": False, "error": "inactive"}
+                    return {'success': False, 'error': 'inactive'}
                 from app.database.models import _aware
 
                 now = datetime.now(UTC)
                 aware_from = _aware(promocode.valid_from)
                 if aware_from is not None and aware_from > now:
-                    return {"success": False, "error": "not_yet_valid"}
-                return {"success": False, "error": "expired"}
+                    return {'success': False, 'error': 'not_yet_valid'}
+                return {'success': False, 'error': 'expired'}
 
             existing_use = await check_user_promocode_usage(db, user_id, promocode.id)
             if existing_use:
-                return {"success": False, "error": "already_used_by_user"}
+                return {'success': False, 'error': 'already_used_by_user'}
 
             # Лимит на количество активаций за день (анти-стакинг)
             from app.database.crud.promocode import count_user_recent_activations
@@ -91,23 +91,23 @@ class PromoCodeService:
             recent_count = await count_user_recent_activations(db, user_id, hours=24)
             if recent_count >= 5:
                 logger.warning(
-                    "Promo stacking limit: user has activations in 24h",
+                    'Promo stacking limit: user has activations in 24h',
                     _format_user_log=self._format_user_log(user),
                     recent_count=recent_count,
                 )
-                return {"success": False, "error": "daily_limit"}
+                return {'success': False, 'error': 'daily_limit'}
 
             # Проверка "только для первой покупки"
-            if getattr(promocode, "first_purchase_only", False):
-                if getattr(user, "has_had_paid_subscription", False):
-                    return {"success": False, "error": "not_first_purchase"}
+            if getattr(promocode, 'first_purchase_only', False):
+                if getattr(user, 'has_had_paid_subscription', False):
+                    return {'success': False, 'error': 'not_first_purchase'}
 
             balance_before_kopeks = user.balance_kopeks
 
             # Резервируем запись использования ДО применения эффектов (защита от race condition)
             promo_use = await create_promocode_use(db, promocode.id, user_id)
             if promo_use is None:
-                return {"success": False, "error": "already_used_by_user"}
+                return {'success': False, 'error': 'already_used_by_user'}
 
             # Atomically CLAIM a usage slot before applying any effect. The conditional
             # UPDATE (current_uses < max_uses) takes a row lock, so concurrent activations
@@ -129,7 +129,7 @@ class PromoCodeService:
             if claim.rowcount == 0:
                 # Lost the race / fully used between the is_valid read and now.
                 await db.rollback()
-                return {"success": False, "error": "used"}
+                return {'success': False, 'error': 'used'}
 
             try:
                 result_description = await self._apply_promocode_effects(
@@ -139,10 +139,10 @@ class PromoCodeService:
                 # Мульти-тариф: нужен выбор подписки — откатываем резерв И claim инкремента.
                 await db.rollback()
                 return {
-                    "success": False,
-                    "error": "select_subscription",
-                    "eligible_subscriptions": e.eligible_subscriptions,
-                    "code": e.code,
+                    'success': False,
+                    'error': 'select_subscription',
+                    'eligible_subscriptions': e.eligible_subscriptions,
+                    'code': e.code,
                 }
             except ValueError as e:
                 # Эффект не применён — откатываем резерв использования И claim инкремента.
@@ -151,26 +151,23 @@ class PromoCodeService:
                 await db.rollback()
                 error_key = str(e)
                 if error_key in (
-                    "active_discount_exists",
-                    "no_subscription_for_days",
-                    "subscription_not_found",
-                    "trial_subscription_exists",
-                    "trial_provisioning_failed",
+                    'active_discount_exists',
+                    'no_subscription_for_days',
+                    'subscription_not_found',
+                    'trial_subscription_exists',
+                    'trial_provisioning_failed',
                 ):
-                    return {"success": False, "error": error_key}
+                    return {'success': False, 'error': error_key}
                 raise
             balance_after_kopeks = user.balance_kopeks
 
-            if (
-                promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value
-                and promocode.subscription_days > 0
-            ):
+            if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
                 from app.utils.user_utils import mark_user_as_had_paid_subscription
 
                 await mark_user_as_had_paid_subscription(db, user)
 
                 logger.info(
-                    "Пользователь получил платную подписку через промокод",
+                    'Пользователь получил платную подписку через промокод',
                     _format_user_log=self._format_user_log(user),
                     code=code,
                 )
@@ -179,15 +176,11 @@ class PromoCodeService:
             if promocode.promo_group_id:
                 try:
                     # Check if user already has this promo group
-                    has_group = await has_user_promo_group(
-                        db, user_id, promocode.promo_group_id
-                    )
+                    has_group = await has_user_promo_group(db, user_id, promocode.promo_group_id)
 
                     if not has_group:
                         # Get promo group details
-                        promo_group = await get_promo_group_by_id(
-                            db, promocode.promo_group_id
-                        )
+                        promo_group = await get_promo_group_by_id(db, promocode.promo_group_id)
 
                         if promo_group:
                             # Add promo group to user
@@ -195,12 +188,12 @@ class PromoCodeService:
                                 db,
                                 user_id,
                                 promocode.promo_group_id,
-                                assigned_by="promocode",
+                                assigned_by='promocode',
                                 commit=False,
                             )
 
                             logger.info(
-                                "Пользователю назначена промогруппа через промокод",
+                                'Пользователю назначена промогруппа через промокод',
                                 _format_user_log=self._format_user_log(user),
                                 promo_group_name=promo_group.name,
                                 priority=promo_group.priority,
@@ -208,24 +201,22 @@ class PromoCodeService:
                             )
 
                             # Add to result description
-                            result_description += (
-                                f"\n Назначена промогруппа: {promo_group.name}"
-                            )
+                            result_description += f'\n Назначена промогруппа: {promo_group.name}'
                         else:
                             logger.warning(
-                                "Промогруппа ID не найдена для промокода",
+                                'Промогруппа ID не найдена для промокода',
                                 promo_group_id=promocode.promo_group_id,
                                 code=code,
                             )
                     else:
                         logger.info(
-                            "Пользователь уже состоит в промогруппе",
+                            'Пользователь уже состоит в промогруппе',
                             _format_user_log=self._format_user_log(user),
                             promo_group_id=promocode.promo_group_id,
                         )
                 except Exception as pg_error:
                     logger.error(
-                        "Ошибка назначения промогруппы для пользователя при активации промокода",
+                        'Ошибка назначения промогруппы для пользователя при активации промокода',
                         _format_user_log=self._format_user_log(user),
                         code=code,
                         pg_error=pg_error,
@@ -239,40 +230,39 @@ class PromoCodeService:
             await db.commit()
 
             logger.info(
-                "Пользователь активировал промокод",
+                'Пользователь активировал промокод',
                 _format_user_log=self._format_user_log(user),
                 code=code,
             )
 
             promocode_data = {
-                "code": promocode.code,
-                "type": promocode.type,
-                "balance_bonus_kopeks": promocode.balance_bonus_kopeks,
-                "subscription_days": promocode.subscription_days,
-                "max_uses": promocode.max_uses,
-                "current_uses": promocode.current_uses
-                + 1,  # +1 because we just incremented atomically
-                "valid_until": promocode.valid_until,
-                "promo_group_id": promocode.promo_group_id,
+                'code': promocode.code,
+                'type': promocode.type,
+                'balance_bonus_kopeks': promocode.balance_bonus_kopeks,
+                'subscription_days': promocode.subscription_days,
+                'max_uses': promocode.max_uses,
+                'current_uses': promocode.current_uses + 1,  # +1 because we just incremented atomically
+                'valid_until': promocode.valid_until,
+                'promo_group_id': promocode.promo_group_id,
             }
 
             return {
-                "success": True,
-                "description": result_description,
-                "promocode": promocode_data,
-                "balance_before_kopeks": balance_before_kopeks,
-                "balance_after_kopeks": balance_after_kopeks,
+                'success': True,
+                'description': result_description,
+                'promocode': promocode_data,
+                'balance_before_kopeks': balance_before_kopeks,
+                'balance_after_kopeks': balance_after_kopeks,
             }
 
         except Exception as e:
             logger.error(
-                "Ошибка активации промокода для пользователя",
+                'Ошибка активации промокода для пользователя',
                 code=code,
                 user_id=user_id,
                 error=e,
             )
             await db.rollback()
-            return {"success": False, "error": "server_error"}
+            return {'success': False, 'error': 'server_error'}
 
     async def _apply_promocode_effects(
         self,
@@ -301,20 +291,20 @@ class PromoCodeService:
         # Обработка DISCOUNT типа (одноразовая скидка)
         if promocode.type == PromoCodeType.DISCOUNT.value:
             # Проверка на наличие активной скидки
-            current_discount = getattr(user, "promo_offer_discount_percent", 0) or 0
-            expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+            current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
+            expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
 
             # Если есть активная скидка (процент > 0 и срок не истек)
             if current_discount > 0:
                 if expires_at is None or expires_at > datetime.now(UTC):
                     logger.warning(
-                        "Пользователь попытался активировать промокод, но у него уже есть активная скидка",
+                        'Пользователь попытался активировать промокод, но у него уже есть активная скидка',
                         _format_user_log=self._format_user_log(user),
                         code=promocode.code,
                         current_discount=current_discount,
                         expires_at=expires_at,
                     )
-                    raise ValueError("active_discount_exists")
+                    raise ValueError('active_discount_exists')
 
             # balance_bonus_kopeks хранит процент скидки (1-100)
             discount_percent = promocode.balance_bonus_kopeks
@@ -323,49 +313,39 @@ class PromoCodeService:
 
             # Устанавливаем процент скидки
             user.promo_offer_discount_percent = discount_percent
-            user.promo_offer_discount_source = f"promocode:{promocode.code}"
+            user.promo_offer_discount_source = f'promocode:{promocode.code}'
 
             # Устанавливаем срок действия скидки
             if discount_hours > 0:
-                user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(
-                    hours=discount_hours
-                )
-                effects.append(
-                    f"Получена скидка {discount_percent}% (действует {discount_hours} ч.)"
-                )
+                user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(hours=discount_hours)
+                effects.append(f'Получена скидка {discount_percent}% (действует {discount_hours} ч.)')
             else:
                 # 0 часов = бессрочно до первой покупки
                 user.promo_offer_discount_expires_at = None
-                effects.append(f"Получена скидка {discount_percent}% до первой покупки")
+                effects.append(f'Получена скидка {discount_percent}% до первой покупки')
 
             await db.flush()
 
             logger.info(
-                "Пользователю назначена скидка по промокоду",
+                'Пользователю назначена скидка по промокоду',
                 _format_user_log=self._format_user_log(user),
                 discount_percent=discount_percent,
                 discount_hours=discount_hours,
                 code=promocode.code,
             )
 
-        if (
-            promocode.type == PromoCodeType.BALANCE.value
-            and promocode.balance_bonus_kopeks > 0
-        ):
+        if promocode.type == PromoCodeType.BALANCE.value and promocode.balance_bonus_kopeks > 0:
             await add_user_balance(
                 db,
                 user,
                 promocode.balance_bonus_kopeks,
-                f"Бонус по промокоду {promocode.code}",
+                f'Бонус по промокоду {promocode.code}',
             )
 
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
-            effects.append(f"Баланс пополнен на {balance_bonus_rubles}₽")
+            effects.append(f'Баланс пополнен на {balance_bonus_rubles}₽')
 
-        if (
-            promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value
-            and promocode.subscription_days > 0
-        ):
+        if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
             if settings.is_multi_tariff_enabled():
                 from app.database.crud.subscription import (
                     get_active_subscriptions_by_user_id,
@@ -398,22 +378,16 @@ class PromoCodeService:
                 active_subs = [single_sub] if single_sub else []
 
             if not active_subs:
-                raise ValueError("no_subscription_for_days")
+                raise ValueError('no_subscription_for_days')
 
             # Multi-tariff: require subscription selection if >1 non-daily subscriptions
-            non_daily = [
-                s
-                for s in active_subs
-                if not (s.tariff and getattr(s.tariff, "is_daily", False))
-            ]
+            non_daily = [s for s in active_subs if not (s.tariff and getattr(s.tariff, 'is_daily', False))]
             eligible = non_daily or active_subs
 
             if subscription_id:
-                target_sub = next(
-                    (s for s in eligible if s.id == subscription_id), None
-                )
+                target_sub = next((s for s in eligible if s.id == subscription_id), None)
                 if not target_sub:
-                    raise ValueError("subscription_not_found")
+                    raise ValueError('subscription_not_found')
             elif len(eligible) == 1:
                 target_sub = eligible[0]
             elif len(eligible) > 1 and settings.is_multi_tariff_enabled():
@@ -421,9 +395,9 @@ class PromoCodeService:
                 raise _SelectSubscriptionRequired(
                     eligible_subscriptions=[
                         {
-                            "id": s.id,
-                            "tariff_name": s.tariff.name if s.tariff else f"#{s.id}",
-                            "days_left": s.days_left,
+                            'id': s.id,
+                            'tariff_name': s.tariff.name if s.tariff else f'#{s.id}',
+                            'days_left': s.days_left,
                         }
                         for s in eligible
                     ],
@@ -435,7 +409,7 @@ class PromoCodeService:
             else:
                 # eligible = non_daily or active_subs, active_subs is guaranteed non-empty (guard above)
                 # This branch is unreachable, but defend against future changes
-                raise ValueError("no_subscription_for_days")
+                raise ValueError('no_subscription_for_days')
             # NB: a days-promocode is a FREE grant, not a purchase — do NOT flip
             # is_trial here (bug #629889 class). Converting a trial to is_trial=False
             # without a charge un-gated it from try_auto_extend_expired_after_topup,
@@ -447,16 +421,12 @@ class PromoCodeService:
             await extend_subscription(db, target_sub, promocode.subscription_days)
             await self.subscription_service.update_remnawave_user(db, target_sub)
 
-            tariff_label = ""
-            if settings.is_multi_tariff_enabled() and getattr(
-                target_sub, "tariff", None
-            ):
-                tariff_label = f" «{target_sub.tariff.name}»"
-            effects.append(
-                f"Подписка{tariff_label} продлена на {promocode.subscription_days} дней"
-            )
+            tariff_label = ''
+            if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
+                tariff_label = f' «{target_sub.tariff.name}»'
+            effects.append(f'Подписка{tariff_label} продлена на {promocode.subscription_days} дней')
             logger.info(
-                "Подписка пользователя продлена на дней в RemnaWave",
+                'Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
                 subscription_days=promocode.subscription_days,
                 subscription_id=target_sub.id,
@@ -495,13 +465,9 @@ class PromoCodeService:
                     trial_traffic_limit = trial_tariff.traffic_limit_gb
                     trial_device_limit = trial_tariff.device_limit
                     tariff_id_for_trial = trial_tariff.id
-                    trial_squads = await get_effective_tariff_squad_uuids(
-                        db, trial_tariff.allowed_squads
-                    )
+                    trial_squads = await get_effective_tariff_squad_uuids(db, trial_tariff.allowed_squads)
             except Exception as e:
-                logger.error(
-                    "Ошибка получения тарифа для триального промокода", error=e
-                )
+                logger.error('Ошибка получения тарифа для триального промокода', error=e)
 
             # Check if user already has a subscription with the same tariff
             existing_same_tariff_sub = None
@@ -546,49 +512,33 @@ class PromoCodeService:
             else:
                 existing_sub = await get_subscription_by_user_id(db, user.id)
                 if existing_sub:
-                    if (
-                        tariff_id_for_trial
-                        and existing_sub.tariff_id == tariff_id_for_trial
-                    ):
+                    if tariff_id_for_trial and existing_sub.tariff_id == tariff_id_for_trial:
                         existing_same_tariff_sub = existing_sub
                     else:
                         can_create_new = False
 
             trial_days = (
-                promocode.subscription_days
-                if promocode.subscription_days > 0
-                else settings.TRIAL_DURATION_DAYS
+                promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS
             )
             # Override with tariff trial_duration_days if available
-            tariff_trial_days = (
-                getattr(trial_tariff, "trial_duration_days", None)
-                if trial_tariff
-                else None
-            )
+            tariff_trial_days = getattr(trial_tariff, 'trial_duration_days', None) if trial_tariff else None
             if tariff_trial_days and promocode.subscription_days <= 0:
                 trial_days = tariff_trial_days
 
             if existing_same_tariff_sub:
                 # User already has this tariff — extend it
                 await extend_subscription(db, existing_same_tariff_sub, trial_days)
-                await self.subscription_service.update_remnawave_user(
-                    db, existing_same_tariff_sub
-                )
+                await self.subscription_service.update_remnawave_user(db, existing_same_tariff_sub)
 
-                effects.append(
-                    f'Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней'
-                )
+                effects.append(f'Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней')
                 logger.info(
-                    "Триал промокод: продлена существующая подписка",
+                    'Триал промокод: продлена существующая подписка',
                     _format_user_log=self._format_user_log(user),
                     trial_days=trial_days,
                     subscription_id=existing_same_tariff_sub.id,
                 )
             elif can_create_new:
-                if (
-                    trial_device_limit is None
-                    and not settings.is_devices_selection_enabled()
-                ):
+                if trial_device_limit is None and not settings.is_devices_selection_enabled():
                     trial_device_limit = settings.get_disabled_mode_device_limit()
 
                 trial_subscription = await create_trial_subscription(
@@ -601,27 +551,25 @@ class PromoCodeService:
                     tariff_id=tariff_id_for_trial,
                 )
 
-                remnawave_user = await self.subscription_service.create_remnawave_user(
-                    db, trial_subscription
-                )
+                remnawave_user = await self.subscription_service.create_remnawave_user(db, trial_subscription)
                 if remnawave_user is None:
                     # Provisioning failed (create_remnawave_user swallows errors and
                     # returns None). Don't report a fake success that grants a subscription
                     # with no working config — delete the just-created orphan row and raise
                     # so the user gets an honest, mapped error instead.
                     logger.error(
-                        "Триал промокод: не удалось создать пользователя в RemnaWave — откатываем подписку",
+                        'Триал промокод: не удалось создать пользователя в RemnaWave — откатываем подписку',
                         _format_user_log=self._format_user_log(user),
                         subscription_id=trial_subscription.id,
                         code=promocode.code,
                     )
                     await db.delete(trial_subscription)
                     await db.commit()
-                    raise ValueError("trial_provisioning_failed")
+                    raise ValueError('trial_provisioning_failed')
 
-                effects.append(f"Активирована тестовая подписка на {trial_days} дней")
+                effects.append(f'Активирована тестовая подписка на {trial_days} дней')
                 logger.info(
-                    "Создана триал подписка для пользователя на дней",
+                    'Создана триал подписка для пользователя на дней',
                     _format_user_log=self._format_user_log(user),
                     trial_days=trial_days,
                     tariff_id=tariff_id_for_trial,
@@ -631,9 +579,9 @@ class PromoCodeService:
                 # blocks creating a new trial. Raising (instead of appending an info line
                 # and returning success) refunds the reserved use + claimed increment, so
                 # the code is not silently burned and stays retryable.
-                raise ValueError("trial_subscription_exists")
+                raise ValueError('trial_subscription_exists')
 
-        return "\n".join(effects) if effects else "Промокод активирован"
+        return '\n'.join(effects) if effects else 'Промокод активирован'
 
     async def deactivate_discount_promocode(
         self,
@@ -662,19 +610,15 @@ class PromoCodeService:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
-                return {"success": False, "error": "user_not_found"}
+                return {'success': False, 'error': 'user_not_found'}
 
-            current_discount = getattr(user, "promo_offer_discount_percent", 0) or 0
-            source = getattr(user, "promo_offer_discount_source", None)
+            current_discount = getattr(user, 'promo_offer_discount_percent', 0) or 0
+            source = getattr(user, 'promo_offer_discount_source', None)
 
-            if (
-                current_discount <= 0
-                or not source
-                or not source.startswith("promocode:")
-            ):
-                return {"success": False, "error": "no_active_discount_promocode"}
+            if current_discount <= 0 or not source or not source.startswith('promocode:'):
+                return {'success': False, 'error': 'no_active_discount_promocode'}
 
-            expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+            expires_at = getattr(user, 'promo_offer_discount_expires_at', None)
             # Если скидка уже истекла по времени -- тоже нечего деактивировать
             if expires_at is not None and expires_at <= datetime.now(UTC):
                 # Просто зачистим протухшие данные
@@ -683,13 +627,11 @@ class PromoCodeService:
                 user.promo_offer_discount_expires_at = None
                 user.updated_at = datetime.now(UTC)
                 await db.commit()
-                return {"success": False, "error": "discount_already_expired"}
+                return {'success': False, 'error': 'discount_already_expired'}
 
-            promocode, promo_use = await get_active_discount_promocode_for_user(
-                db, user_id
-            )
+            promocode, promo_use = await get_active_discount_promocode_for_user(db, user_id)
 
-            deactivated_code = source.split(":", 1)[1]
+            deactivated_code = source.split(':', 1)[1]
 
             # 1. Сбрасываем скидку на пользователе
             user.promo_offer_discount_percent = 0
@@ -711,15 +653,11 @@ class PromoCodeService:
                         remove_user_from_promo_group,
                     )
 
-                    has_group = await has_user_promo_group(
-                        db, user_id, promocode.promo_group_id
-                    )
+                    has_group = await has_user_promo_group(db, user_id, promocode.promo_group_id)
                     if has_group:
-                        await remove_user_from_promo_group(
-                            db, user_id, promocode.promo_group_id, commit=False
-                        )
+                        await remove_user_from_promo_group(db, user_id, promocode.promo_group_id, commit=False)
                         logger.info(
-                            "Снята промогруппа ID у пользователя при деактивации промокода",
+                            'Снята промогруппа ID у пользователя при деактивации промокода',
                             promo_group_id=promocode.promo_group_id,
                             _format_user_log=self._format_user_log(user),
                             deactivated_code=deactivated_code,
@@ -727,9 +665,9 @@ class PromoCodeService:
 
             await db.commit()
 
-            initiator = "администратором" if admin_initiated else "пользователем"
+            initiator = 'администратором' if admin_initiated else 'пользователем'
             logger.info(
-                "Промокод (скидка %) деактивирован для пользователя",
+                'Промокод (скидка %) деактивирован для пользователя',
                 deactivated_code=deactivated_code,
                 current_discount=current_discount,
                 initiator=initiator,
@@ -737,16 +675,16 @@ class PromoCodeService:
             )
 
             return {
-                "success": True,
-                "deactivated_code": deactivated_code,
-                "discount_percent": current_discount,
+                'success': True,
+                'deactivated_code': deactivated_code,
+                'discount_percent': current_discount,
             }
 
         except Exception as e:
             logger.error(
-                "Ошибка деактивации промокода для пользователя",
+                'Ошибка деактивации промокода для пользователя',
                 user_id=user_id,
                 error=e,
             )
             await db.rollback()
-            return {"success": False, "error": "server_error"}
+            return {'success': False, 'error': 'server_error'}

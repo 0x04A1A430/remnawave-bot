@@ -24,24 +24,24 @@ def _resolve_log_path() -> Path:
 
 
 def _format_preview_block(text: str) -> str:
-    escaped_text = escape(text) if text else ""
-    return f"<blockquote expandable><pre><code>{escaped_text}</code></pre></blockquote>"
+    escaped_text = escape(text) if text else ''
+    return f'<blockquote expandable><pre><code>{escaped_text}</code></pre></blockquote>'
 
 
 def _build_logs_message(log_path: Path) -> str:
     if not log_path.exists():
         message = (
-            "<b>Системные логи</b>\n\n"
-            f"Файл <code>{log_path}</code> пока не создан.\n"
-            "Логи появятся автоматически после первой записи."
+            '<b>Системные логи</b>\n\n'
+            f'Файл <code>{log_path}</code> пока не создан.\n'
+            'Логи появятся автоматически после первой записи.'
         )
         return message
 
     try:
-        content = log_path.read_text(encoding="utf-8", errors="ignore")
+        content = log_path.read_text(encoding='utf-8', errors='ignore')
     except Exception as error:  # pragma: no cover - защита от проблем чтения
-        logger.error("Ошибка чтения лог-файла", log_path=log_path, error=error)
-        message = f"<b>Ошибка чтения логов</b>\n\nНе удалось прочитать файл <code>{log_path}</code>."
+        logger.error('Ошибка чтения лог-файла', log_path=log_path, error=error)
+        message = f'<b>Ошибка чтения логов</b>\n\nНе удалось прочитать файл <code>{log_path}</code>.'
         return message
 
     total_length = len(content)
@@ -49,48 +49,32 @@ def _build_logs_message(log_path: Path) -> str:
     updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC)
 
     if not content:
-        preview_text = "Лог-файл пуст."
+        preview_text = 'Лог-файл пуст.'
         truncated = False
     else:
         preview_text = content[-LOG_PREVIEW_LIMIT:]
         truncated = total_length > LOG_PREVIEW_LIMIT
 
     details_lines = [
-        "<b>Системные логи</b>",
-        "",
-        f"<b>Файл:</b> <code>{log_path}</code>",
+        '<b>Системные логи</b>',
+        '',
+        f'<b>Файл:</b> <code>{log_path}</code>',
         f'<b>Обновлен:</b> {updated_at.strftime("%d.%m.%Y %H:%M:%S")}',
-        f"<b>Размер:</b> {total_length} символов",
-        (
-            f"Показаны последние {LOG_PREVIEW_LIMIT} символов."
-            if truncated
-            else "Показано все содержимое файла."
-        ),
-        "",
+        f'<b>Размер:</b> {total_length} символов',
+        (f'Показаны последние {LOG_PREVIEW_LIMIT} символов.' if truncated else 'Показано все содержимое файла.'),
+        '',
         _format_preview_block(preview_text),
     ]
 
-    return "\n".join(details_lines)
+    return '\n'.join(details_lines)
 
 
 def _get_logs_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Обновить", callback_data="admin_system_logs_refresh"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="↓ Скачать лог", callback_data="admin_system_logs_download"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="← Назад", callback_data="admin_submenu_system"
-                )
-            ],
+            [InlineKeyboardButton(text='Обновить', callback_data='admin_system_logs_refresh')],
+            [InlineKeyboardButton(text='↓ Скачать лог', callback_data='admin_system_logs_download')],
+            [InlineKeyboardButton(text='← Назад', callback_data='admin_submenu_system')],
         ]
     )
 
@@ -106,9 +90,7 @@ async def show_system_logs(
     message = _build_logs_message(log_path)
 
     reply_markup = _get_logs_keyboard()
-    await callback.message.edit_text(
-        message, reply_markup=reply_markup, parse_mode="HTML"
-    )
+    await callback.message.edit_text(message, reply_markup=reply_markup, parse_mode='HTML')
     await callback.answer()
 
 
@@ -123,10 +105,8 @@ async def refresh_system_logs(
     message = _build_logs_message(log_path)
 
     reply_markup = _get_logs_keyboard()
-    await callback.message.edit_text(
-        message, reply_markup=reply_markup, parse_mode="HTML"
-    )
-    await callback.answer("Обновлено")
+    await callback.message.edit_text(message, reply_markup=reply_markup, parse_mode='HTML')
+    await callback.answer('Обновлено')
 
 
 @admin_required
@@ -139,39 +119,35 @@ async def download_system_logs(
     log_path = _resolve_log_path()
 
     if not log_path.exists() or not log_path.is_file():
-        await callback.answer("Лог-файл не найден", show_alert=True)
+        await callback.answer('Лог-файл не найден', show_alert=True)
         return
 
     try:
-        await callback.answer("↓ Отправляю лог...")
+        await callback.answer('↓ Отправляю лог...')
 
         document = FSInputFile(log_path)
         stats = log_path.stat()
-        updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime(
-            "%d.%m.%Y %H:%M:%S"
-        )
-        caption = f"Лог-файл <code>{log_path.name}</code>\nПуть: <code>{log_path}</code>\nОбновлен: {updated_at}"
-        await callback.message.answer_document(
-            document=document, caption=caption, parse_mode="HTML"
-        )
+        updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime('%d.%m.%Y %H:%M:%S')
+        caption = f'Лог-файл <code>{log_path.name}</code>\nПуть: <code>{log_path}</code>\nОбновлен: {updated_at}'
+        await callback.message.answer_document(document=document, caption=caption, parse_mode='HTML')
     except Exception as error:  # pragma: no cover - защита от ошибок отправки
-        logger.error("Ошибка отправки лог-файла", log_path=log_path, error=error)
+        logger.error('Ошибка отправки лог-файла', log_path=log_path, error=error)
         await callback.message.answer(
-            "<b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.",
-            parse_mode="HTML",
+            '<b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.',
+            parse_mode='HTML',
         )
 
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_system_logs,
-        F.data == "admin_system_logs",
+        F.data == 'admin_system_logs',
     )
     dp.callback_query.register(
         refresh_system_logs,
-        F.data == "admin_system_logs_refresh",
+        F.data == 'admin_system_logs_refresh',
     )
     dp.callback_query.register(
         download_system_logs,
-        F.data == "admin_system_logs_download",
+        F.data == 'admin_system_logs_download',
     )

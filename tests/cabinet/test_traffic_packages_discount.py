@@ -23,7 +23,7 @@ from app.database.models import PromoGroup, Subscription, User
 
 def _make_user(*, traffic_discount_percent: int, apply_to_addons: bool = True) -> User:
     pg = PromoGroup(
-        name="Test promo group",
+        name='Test promo group',
         traffic_discount_percent=traffic_discount_percent,
         server_discount_percent=0,
         device_discount_percent=0,
@@ -42,7 +42,7 @@ def _make_subscription() -> Subscription:
     sub = Subscription(
         id=10,
         user_id=1,
-        status="active",
+        status='active',
         is_trial=False,
         traffic_limit_gb=200,
         tariff_id=None,
@@ -59,21 +59,21 @@ def classic_mode(monkeypatch):
     (instance ``__setattr__`` is blocked for non-field names).
     """
     settings_cls = type(traffic_route.settings)
-    monkeypatch.setattr(settings_cls, "is_tariffs_mode", lambda self: False)
-    monkeypatch.setattr(settings_cls, "is_traffic_topup_enabled", lambda self: True)
+    monkeypatch.setattr(settings_cls, 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(settings_cls, 'is_traffic_topup_enabled', lambda self: True)
     monkeypatch.setattr(
         settings_cls,
-        "get_traffic_topup_packages",
+        'get_traffic_topup_packages',
         lambda self: [
-            {"gb": 50, "price": 10000, "enabled": True},
-            {"gb": 100, "price": 18000, "enabled": True},
+            {'gb': 50, 'price': 10000, 'enabled': True},
+            {'gb': 100, 'price': 18000, 'enabled': True},
         ],
     )
 
     async def _fake_resolve(db, user, subscription_id):
         return _make_subscription()
 
-    monkeypatch.setattr(traffic_route, "resolve_subscription", _fake_resolve)
+    monkeypatch.setattr(traffic_route, 'resolve_subscription', _fake_resolve)
 
 
 @pytest.mark.asyncio
@@ -81,9 +81,7 @@ async def test_traffic_packages_expose_promo_group_discount(classic_mode):
     """A 20% traffic promo-group discount surfaces on every package."""
     user = _make_user(traffic_discount_percent=20)
 
-    result = await traffic_route.get_traffic_packages(
-        user=user, db=object(), subscription_id=None
-    )
+    result = await traffic_route.get_traffic_packages(user=user, db=object(), subscription_id=None)
 
     assert len(result) == 2
 
@@ -104,15 +102,11 @@ async def test_traffic_packages_no_discount_when_group_has_none(classic_mode):
     """No promo discount → no discount fields, raw price unchanged."""
     user = _make_user(traffic_discount_percent=0)
 
-    result = await traffic_route.get_traffic_packages(
-        user=user, db=object(), subscription_id=None
-    )
+    result = await traffic_route.get_traffic_packages(user=user, db=object(), subscription_id=None)
 
     pkg50 = next(p for p in result if p.gb == 50)
     assert pkg50.discount_percent == 0
-    assert (
-        pkg50.base_price_kopeks is None
-    )  # no strike-through when nothing is discounted
+    assert pkg50.base_price_kopeks is None  # no strike-through when nothing is discounted
     assert pkg50.price_kopeks == 10000
 
 
@@ -121,9 +115,7 @@ async def test_traffic_packages_respect_apply_discounts_to_addons_flag(classic_m
     """When the promo group opts out of addon discounts, traffic stays full price."""
     user = _make_user(traffic_discount_percent=30, apply_to_addons=False)
 
-    result = await traffic_route.get_traffic_packages(
-        user=user, db=object(), subscription_id=None
-    )
+    result = await traffic_route.get_traffic_packages(user=user, db=object(), subscription_id=None)
 
     pkg50 = next(p for p in result if p.gb == 50)
     assert pkg50.discount_percent == 0
@@ -135,7 +127,7 @@ async def test_traffic_packages_respect_apply_discounts_to_addons_flag(classic_m
 async def test_traffic_packages_apply_discount_in_tariff_mode(monkeypatch):
     """Tariff-mode packages go through the same discount path as classic mode."""
     settings_cls = type(traffic_route.settings)
-    monkeypatch.setattr(settings_cls, "is_tariffs_mode", lambda self: True)
+    monkeypatch.setattr(settings_cls, 'is_tariffs_mode', lambda self: True)
 
     class _FakeTariff:
         traffic_topup_enabled = True
@@ -149,7 +141,7 @@ async def test_traffic_packages_apply_discount_in_tariff_mode(monkeypatch):
 
     import app.database.crud.tariff as tariff_crud
 
-    monkeypatch.setattr(tariff_crud, "get_tariff_by_id", _fake_get_tariff)
+    monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', _fake_get_tariff)
 
     sub = _make_subscription()
     sub.tariff_id = 5
@@ -157,13 +149,11 @@ async def test_traffic_packages_apply_discount_in_tariff_mode(monkeypatch):
     async def _fake_resolve(db, user, subscription_id):
         return sub
 
-    monkeypatch.setattr(traffic_route, "resolve_subscription", _fake_resolve)
+    monkeypatch.setattr(traffic_route, 'resolve_subscription', _fake_resolve)
 
     user = _make_user(traffic_discount_percent=25)
 
-    result = await traffic_route.get_traffic_packages(
-        user=user, db=object(), subscription_id=None
-    )
+    result = await traffic_route.get_traffic_packages(user=user, db=object(), subscription_id=None)
 
     pkg50 = next(p for p in result if p.gb == 50)
     assert pkg50.discount_percent == 25
@@ -175,26 +165,22 @@ async def test_traffic_packages_apply_discount_in_tariff_mode(monkeypatch):
 async def test_traffic_packages_floor_displayed_price_at_one_ruble(monkeypatch):
     """An extreme discount never displays below 1₽ — matching POST's max(100,...) floor."""
     settings_cls = type(traffic_route.settings)
-    monkeypatch.setattr(settings_cls, "is_tariffs_mode", lambda self: False)
-    monkeypatch.setattr(settings_cls, "is_traffic_topup_enabled", lambda self: True)
+    monkeypatch.setattr(settings_cls, 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(settings_cls, 'is_traffic_topup_enabled', lambda self: True)
     monkeypatch.setattr(
         settings_cls,
-        "get_traffic_topup_packages",
-        lambda self: [{"gb": 5, "price": 5000, "enabled": True}],
+        'get_traffic_topup_packages',
+        lambda self: [{'gb': 5, 'price': 5000, 'enabled': True}],
     )
 
     async def _fake_resolve(db, user, subscription_id):
         return _make_subscription()
 
-    monkeypatch.setattr(traffic_route, "resolve_subscription", _fake_resolve)
+    monkeypatch.setattr(traffic_route, 'resolve_subscription', _fake_resolve)
 
-    user = _make_user(
-        traffic_discount_percent=99
-    )  # 99% of 5000 = 50 kopeks → floored to 100
+    user = _make_user(traffic_discount_percent=99)  # 99% of 5000 = 50 kopeks → floored to 100
 
-    result = await traffic_route.get_traffic_packages(
-        user=user, db=object(), subscription_id=None
-    )
+    result = await traffic_route.get_traffic_packages(user=user, db=object(), subscription_id=None)
 
     pkg = result[0]
     assert pkg.discount_percent == 99
@@ -208,12 +194,12 @@ async def test_traffic_packages_default_group_uses_prorated_period_hint(monkeypa
     """Default group period-based traffic discount uses the same ceil(remaining days)
     hint POST charges with — so the displayed percent matches the charged percent."""
     settings_cls = type(traffic_route.settings)
-    monkeypatch.setattr(settings_cls, "is_tariffs_mode", lambda self: False)
-    monkeypatch.setattr(settings_cls, "is_traffic_topup_enabled", lambda self: True)
+    monkeypatch.setattr(settings_cls, 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(settings_cls, 'is_traffic_topup_enabled', lambda self: True)
     monkeypatch.setattr(
         settings_cls,
-        "get_traffic_topup_packages",
-        lambda self: [{"gb": 50, "price": 10000, "enabled": True}],
+        'get_traffic_topup_packages',
+        lambda self: [{'gb': 50, 'price': 10000, 'enabled': True}],
     )
 
     # Subscription with ~45 days left (minus 1h margin so ceil resolves to 45
@@ -225,10 +211,10 @@ async def test_traffic_packages_default_group_uses_prorated_period_hint(monkeypa
     async def _fake_resolve(db, user, subscription_id):
         return sub
 
-    monkeypatch.setattr(traffic_route, "resolve_subscription", _fake_resolve)
+    monkeypatch.setattr(traffic_route, 'resolve_subscription', _fake_resolve)
 
     pg = PromoGroup(
-        name="Default",
+        name='Default',
         traffic_discount_percent=0,
         server_discount_percent=0,
         device_discount_percent=0,
@@ -240,9 +226,7 @@ async def test_traffic_packages_default_group_uses_prorated_period_hint(monkeypa
     user.promo_group = pg
     user.user_promo_groups = []
 
-    result = await traffic_route.get_traffic_packages(
-        user=user, db=object(), subscription_id=None
-    )
+    result = await traffic_route.get_traffic_packages(user=user, db=object(), subscription_id=None)
 
     pkg = result[0]
     assert pkg.discount_percent == 15

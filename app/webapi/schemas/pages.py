@@ -8,38 +8,38 @@ from pydantic import BaseModel, Field
 class RichTextPageResponse(BaseModel):
     """Generic representation for rich text informational pages."""
 
-    requested_language: str = Field(..., description="Язык, запрошенный клиентом")
-    language: str = Field(..., description="Фактический язык найденной записи")
+    requested_language: str = Field(..., description='Язык, запрошенный клиентом')
+    language: str = Field(..., description='Фактический язык найденной записи')
     is_enabled: bool | None = Field(
         default=None,
-        description="Текущий статус публикации страницы (если применимо)",
+        description='Текущий статус публикации страницы (если применимо)',
     )
-    content: str = Field(..., description="Полное содержимое страницы")
+    content: str = Field(..., description='Полное содержимое страницы')
     content_pages: list[str] = Field(
         default_factory=list,
-        description="Содержимое, разбитое на страницы фиксированной длины",
+        description='Содержимое, разбитое на страницы фиксированной длины',
     )
     created_at: datetime | None = Field(
         default=None,
-        description="Дата создания записи",
+        description='Дата создания записи',
     )
     updated_at: datetime | None = Field(
         default=None,
-        description="Дата последнего обновления записи",
+        description='Дата последнего обновления записи',
     )
 
 
 class RichTextPageUpdateRequest(BaseModel):
     language: str = Field(
-        default="ru",
+        default='ru',
         min_length=2,
         max_length=10,
-        description="Язык, для которого выполняется обновление",
+        description='Язык, для которого выполняется обновление',
     )
-    content: str = Field(..., description="Новое содержимое страницы")
+    content: str = Field(..., description='Новое содержимое страницы')
     is_enabled: bool | None = Field(
         default=None,
-        description="Если указано — обновить статус публикации",
+        description='Если указано — обновить статус публикации',
     )
 
 
@@ -65,21 +65,21 @@ class FaqPageListResponse(BaseModel):
 
 class FaqPageCreateRequest(BaseModel):
     language: str = Field(
-        default="ru",
+        default='ru',
         min_length=2,
         max_length=10,
-        description="Язык создаваемой страницы",
+        description='Язык создаваемой страницы',
     )
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(...)
     display_order: int | None = Field(
         default=None,
         ge=0,
-        description="Порядок отображения (если не указан — будет рассчитан автоматически)",
+        description='Порядок отображения (если не указан — будет рассчитан автоматически)',
     )
     is_active: bool | None = Field(
         default=True,
-        description="Начальный статус активности страницы",
+        description='Начальный статус активности страницы',
     )
 
 
@@ -97,10 +97,10 @@ class FaqReorderItem(BaseModel):
 
 class FaqReorderRequest(BaseModel):
     language: str = Field(
-        default="ru",
+        default='ru',
         min_length=2,
         max_length=10,
-        description="Язык, для которого применяется сортировка",
+        description='Язык, для которого применяется сортировка',
     )
     items: list[FaqReorderItem]
 
@@ -113,7 +113,7 @@ class FaqStatusResponse(BaseModel):
 
 class FaqStatusUpdateRequest(BaseModel):
     language: str = Field(
-        default="ru",
+        default='ru',
         min_length=2,
         max_length=10,
     )
@@ -132,13 +132,13 @@ class ServiceRulesResponse(BaseModel):
 
 class ServiceRulesUpdateRequest(BaseModel):
     language: str = Field(
-        default="ru",
+        default='ru',
         min_length=2,
         max_length=10,
-        description="Язык, для которого обновляются правила",
+        description='Язык, для которого обновляются правила',
     )
     title: str | None = Field(
-        default="Правила сервиса",
+        default='Правила сервиса',
         min_length=1,
         max_length=255,
     )

@@ -42,29 +42,29 @@ async def test_save_user_cart(user_cart_service, mock_redis):
     """Тест сохранения корзины пользователя"""
     user_id = 12345
     cart_data = {
-        "period_days": 30,
-        "countries": ["ru", "us"],
-        "devices": 3,
-        "traffic_gb": 10,
-        "total_price": 50000,
+        'period_days': 30,
+        'countries': ['ru', 'us'],
+        'devices': 3,
+        'traffic_gb': 10,
+        'total_price': 50000,
     }
 
     result = await user_cart_service.save_user_cart(user_id, cart_data)
 
     assert result is True
-    assert f"user_cart:{user_id}" in mock_redis.storage
-    assert cart_data == eval(mock_redis.storage[f"user_cart:{user_id}"])
+    assert f'user_cart:{user_id}' in mock_redis.storage
+    assert cart_data == eval(mock_redis.storage[f'user_cart:{user_id}'])
 
 
 async def test_get_user_cart(user_cart_service, mock_redis):
     """Тест получения корзины пользователя"""
     user_id = 12345
     cart_data = {
-        "period_days": 30,
-        "countries": ["ru", "us"],
-        "devices": 3,
-        "traffic_gb": 10,
-        "total_price": 50000,
+        'period_days': 30,
+        'countries': ['ru', 'us'],
+        'devices': 3,
+        'traffic_gb': 10,
+        'total_price': 50000,
     }
 
     # Сохраняем данные
@@ -89,22 +89,22 @@ async def test_delete_user_cart(user_cart_service, mock_redis):
     """Тест удаления корзины пользователя"""
     user_id = 12345
     cart_data = {
-        "period_days": 30,
-        "countries": ["ru", "us"],
-        "devices": 3,
-        "traffic_gb": 10,
-        "total_price": 50000,
+        'period_days': 30,
+        'countries': ['ru', 'us'],
+        'devices': 3,
+        'traffic_gb': 10,
+        'total_price': 50000,
     }
 
     # Сохраняем данные
     await user_cart_service.save_user_cart(user_id, cart_data)
-    assert f"user_cart:{user_id}" in mock_redis.storage
+    assert f'user_cart:{user_id}' in mock_redis.storage
 
     # Удаляем данные
     result = await user_cart_service.delete_user_cart(user_id)
 
     assert result is True
-    assert f"user_cart:{user_id}" not in mock_redis.storage
+    assert f'user_cart:{user_id}' not in mock_redis.storage
 
 
 async def test_delete_user_cart_not_found(user_cart_service):
@@ -120,11 +120,11 @@ async def test_has_user_cart(user_cart_service, mock_redis):
     """Тест проверки наличия корзины пользователя"""
     user_id = 12345
     cart_data = {
-        "period_days": 30,
-        "countries": ["ru", "us"],
-        "devices": 3,
-        "traffic_gb": 10,
-        "total_price": 50000,
+        'period_days': 30,
+        'countries': ['ru', 'us'],
+        'devices': 3,
+        'traffic_gb': 10,
+        'total_price': 50000,
     }
 
     # Проверяем, что корзины нет

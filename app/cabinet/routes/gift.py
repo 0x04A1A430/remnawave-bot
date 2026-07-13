@@ -54,23 +54,23 @@ from ..schemas.gift import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/gift", tags=["Cabinet Gift"])
+router = APIRouter(prefix='/gift', tags=['Cabinet Gift'])
 
-GIFT_ENABLED_KEY = "CABINET_GIFT_ENABLED"
+GIFT_ENABLED_KEY = 'CABINET_GIFT_ENABLED'
 
-_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
-_TELEGRAM_RE = re.compile(r"^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$")
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+_TELEGRAM_RE = re.compile(r'^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
 
 async def _is_gift_enabled(db: AsyncSession) -> bool:
     """Check if the gift feature is enabled via system settings."""
     value = await get_setting_value(db, GIFT_ENABLED_KEY)
     if value is not None:
-        return value.lower() == "true"
+        return value.lower() == 'true'
     return False
 
 
-@router.get("/config", response_model=GiftConfigResponse)
+@router.get('/config', response_model=GiftConfigResponse)
 async def get_gift_config(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -92,13 +92,9 @@ async def get_gift_config(
     tariffs_db = result.scalars().all()
 
     # Get user's promo group for discount calculation
-    promo_group = (
-        user.get_primary_promo_group()
-        if hasattr(user, "get_primary_promo_group")
-        else None
-    )
+    promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
     if promo_group is None:
-        promo_group = getattr(user, "promo_group", None)
+        promo_group = getattr(user, 'promo_group', None)
     promo_group_name = promo_group.name if promo_group else None
 
     # Get active promo offer discount
@@ -130,7 +126,7 @@ async def get_gift_config(
                 )
             except Exception as error:
                 logger.warning(
-                    "pricing_engine error in gift config, fallback to base price",
+                    'pricing_engine error in gift config, fallback to base price',
                     tariff_id=tariff.id,
                     days=days,
                     error=str(error),
@@ -159,12 +155,8 @@ async def get_gift_config(
                     days=days,
                     price_kopeks=price,
                     price_label=settings.format_price(price),
-                    original_price_kopeks=(
-                        original_price if combined_discount > 0 else None
-                    ),
-                    discount_percent=(
-                        combined_discount if combined_discount > 0 else None
-                    ),
+                    original_price_kopeks=(original_price if combined_discount > 0 else None),
+                    discount_percent=(combined_discount if combined_discount > 0 else None),
                 )
             )
         if not periods:
@@ -185,18 +177,15 @@ async def get_gift_config(
     payment_methods: list[GiftConfigPaymentMethod] = []
     for method_data in enabled_methods:
         sub_options = None
-        raw_options = method_data.get("options")
+        raw_options = method_data.get('options')
         if raw_options:
-            sub_options = [
-                GiftConfigSubOption(id=opt["id"], name=opt.get("name", opt["id"]))
-                for opt in raw_options
-            ]
+            sub_options = [GiftConfigSubOption(id=opt['id'], name=opt.get('name', opt['id'])) for opt in raw_options]
         payment_methods.append(
             GiftConfigPaymentMethod(
-                method_id=method_data["id"],
-                display_name=method_data["name"],
-                min_amount_kopeks=method_data.get("min_amount_kopeks"),
-                max_amount_kopeks=method_data.get("max_amount_kopeks"),
+                method_id=method_data['id'],
+                display_name=method_data['name'],
+                min_amount_kopeks=method_data.get('min_amount_kopeks'),
+                max_amount_kopeks=method_data.get('max_amount_kopeks'),
                 sub_options=sub_options,
             )
         )
@@ -206,20 +195,16 @@ async def get_gift_config(
         tariffs=tariffs,
         payment_methods=payment_methods,
         balance_kopeks=user.balance_kopeks,
-        currency_symbol=getattr(settings, "CURRENCY_SYMBOL", "\u20bd"),
+        currency_symbol=getattr(settings, 'CURRENCY_SYMBOL', '\u20bd'),
         promo_group_name=promo_group_name,
-        active_discount_percent=(
-            promo_offer_discount_percent if promo_offer_discount_percent > 0 else None
-        ),
+        active_discount_percent=(promo_offer_discount_percent if promo_offer_discount_percent > 0 else None),
         active_discount_expires_at=(
-            getattr(user, "promo_offer_discount_expires_at", None)
-            if promo_offer_discount_percent > 0
-            else None
+            getattr(user, 'promo_offer_discount_expires_at', None) if promo_offer_discount_percent > 0 else None
         ),
     )
 
 
-@router.post("/purchase", response_model=GiftPurchaseResponse)
+@router.post('/purchase', response_model=GiftPurchaseResponse)
 async def create_gift_purchase(
     body: GiftPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -230,23 +215,19 @@ async def create_gift_purchase(
     if not enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Gift feature is not enabled",
+            detail='Gift feature is not enabled',
         )
 
     # Rate limit: 5 gift purchases per 60 seconds per user
-    is_limited = await RateLimitCache.is_rate_limited(
-        user.id, "gift_purchase", limit=5, window=60
-    )
+    is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_purchase', limit=5, window=60)
     if is_limited:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
-        )
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     # Check if user has purchase restrictions
-    if getattr(user, "restriction_subscription", False):
+    if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Purchases are restricted for this account",
+            detail='Purchases are restricted for this account',
         )
 
     # Recipient is optional — when omitted, buyer gets a code to share manually
@@ -254,32 +235,30 @@ async def create_gift_purchase(
 
     if has_recipient:
         # Validate recipient format
-        if body.recipient_type == "email" and not _EMAIL_RE.match(body.recipient_value):
+        if body.recipient_type == 'email' and not _EMAIL_RE.match(body.recipient_value):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid email format",
+                detail='Invalid email format',
             )
-        if body.recipient_type == "telegram" and not _TELEGRAM_RE.match(
-            body.recipient_value
-        ):
+        if body.recipient_type == 'telegram' and not _TELEGRAM_RE.match(body.recipient_value):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Telegram username format",
+                detail='Invalid Telegram username format',
             )
 
         # Prevent self-gift
-        if body.recipient_type == "telegram":
-            normalized_recipient = body.recipient_value.lstrip("@").lower()
+        if body.recipient_type == 'telegram':
+            normalized_recipient = body.recipient_value.lstrip('@').lower()
             if user.username and user.username.lower() == normalized_recipient:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot gift to yourself",
+                    detail='Cannot gift to yourself',
                 )
-        elif body.recipient_type == "email":
+        elif body.recipient_type == 'email':
             if user.email and user.email.lower() == body.recipient_value.lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot gift to yourself",
+                    detail='Cannot gift to yourself',
                 )
 
     # Find tariff and validate period
@@ -287,14 +266,14 @@ async def create_gift_purchase(
     if tariff is None or not tariff.is_active or not tariff.show_in_gift:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tariff not found or inactive",
+            detail='Tariff not found or inactive',
         )
 
     # Validate that period has a configured price before locking
     if tariff.get_price_for_period(body.period_days) is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Price is not configured for this period",
+            detail='Price is not configured for this period',
         )
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo offer
@@ -315,21 +294,21 @@ async def create_gift_purchase(
 
     # Determine buyer contact info
     if user.email:
-        buyer_contact_type = "email"
+        buyer_contact_type = 'email'
         buyer_contact_value = user.email
     elif user.username:
-        buyer_contact_type = "telegram"
-        buyer_contact_value = f"@{user.username}"
+        buyer_contact_type = 'telegram'
+        buyer_contact_value = f'@{user.username}'
     else:
-        buyer_contact_type = "telegram"
-        buyer_contact_value = f"id:{user.telegram_id or user.id}"
+        buyer_contact_type = 'telegram'
+        buyer_contact_value = f'id:{user.telegram_id or user.id}'
 
     # Pre-check: verify the Telegram username is known — DB first, then Bot API —
     # purely to warn the buyer if it can't be found. Binding happens at claim
     # time (whoever activates the link), so we no longer pre-resolve for delivery.
     recipient_warning: str | None = None
-    if has_recipient and body.recipient_type == "telegram":
-        tg_username = body.recipient_value.lstrip("@")
+    if has_recipient and body.recipient_type == 'telegram':
+        tg_username = body.recipient_value.lstrip('@')
         normalized_username = tg_username.lower()
 
         # 1) Check local DB — user may already be registered in the bot
@@ -345,34 +324,32 @@ async def create_gift_purchase(
                 from app.bot_factory import create_bot
 
                 async with create_bot() as bot:
-                    await asyncio.wait_for(
-                        bot.get_chat(chat_id=f"@{tg_username}"), timeout=5.0
-                    )
+                    await asyncio.wait_for(bot.get_chat(chat_id=f'@{tg_username}'), timeout=5.0)
             except Exception:
-                recipient_warning = "telegram_unresolvable"
+                recipient_warning = 'telegram_unresolvable'
                 logger.warning(
-                    "Telegram username not resolvable for gift",
+                    'Telegram username not resolvable for gift',
                     username=tg_username,
                     buyer_id=user.id,
                 )
 
     # Gateway mode: create payment via external provider
-    if body.payment_mode == "gateway":
+    if body.payment_mode == 'gateway':
         if not body.payment_method:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="payment_method is required for gateway mode",
+                detail='payment_method is required for gateway mode',
             )
 
         purchase_kwargs: dict = (
             {
-                "gift_recipient_type": body.recipient_type,
-                "gift_recipient_value": body.recipient_value,
-                "gift_message": body.gift_message,
+                'gift_recipient_type': body.recipient_type,
+                'gift_recipient_value': body.recipient_value,
+                'gift_message': body.gift_message,
             }
             if has_recipient
             else {
-                "gift_message": body.gift_message,
+                'gift_message': body.gift_message,
             }
         )
 
@@ -387,29 +364,27 @@ async def create_gift_purchase(
                 contact_value=buyer_contact_value,
                 payment_method=body.payment_method,
                 is_gift=True,
-                source="cabinet",
+                source='cabinet',
                 buyer_user_id=user.id,
                 commit=False,
                 **purchase_kwargs,
             )
         except GuestPurchaseError as exc:
-            raise HTTPException(
-                status_code=exc.status_code, detail=exc.message
-            ) from exc
+            raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
         # Persist warning so it survives the gateway redirect
         if recipient_warning:
             purchase.recipient_warning = recipient_warning
 
         # Build return URL for after payment
-        cabinet_base = (settings.CABINET_URL or "").rstrip("/")
-        return_url = f"{cabinet_base}/gift/result?token={purchase.token[:12]}"
+        cabinet_base = (settings.CABINET_URL or '').rstrip('/')
+        return_url = f'{cabinet_base}/gift/result?token={purchase.token[:12]}'
 
         from app.services.payment_service import PaymentService
 
         # Stars payments need a Bot instance to create invoice links
         bot = None
-        if body.payment_method == "telegram_stars":
+        if body.payment_method == 'telegram_stars':
             from app.bot_factory import create_bot
 
             bot = create_bot()
@@ -420,7 +395,7 @@ async def create_gift_purchase(
                 db=db,
                 amount_kopeks=price_kopeks,
                 payment_method=body.payment_method,
-                description=f"Gift: {tariff.name} ({body.period_days}d)",
+                description=f'Gift: {tariff.name} ({body.period_days}d)',
                 purchase_token=purchase.token,
                 return_url=return_url,
             )
@@ -432,24 +407,24 @@ async def create_gift_purchase(
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Payment provider is unavailable, please try again later",
+                detail='Payment provider is unavailable, please try again later',
             )
 
-        payment_url = payment_result.get("payment_url")
+        payment_url = payment_result.get('payment_url')
         if not payment_url:
             await db.rollback()
             logger.error(
-                "Gift payment created but no payment_url returned",
+                'Gift payment created but no payment_url returned',
                 purchase_token=purchase.token[:5],
-                provider=payment_result.get("provider"),
+                provider=payment_result.get('provider'),
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Payment provider returned an invalid response",
+                detail='Payment provider returned an invalid response',
             )
 
         # Consume promo offer discount before committing gateway purchase
-        if consume_promo and getattr(user, "promo_offer_discount_percent", 0):
+        if consume_promo and getattr(user, 'promo_offer_discount_percent', 0):
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
             user.promo_offer_discount_expires_at = None
@@ -458,7 +433,7 @@ async def create_gift_purchase(
         await db.refresh(purchase)
 
         return GiftPurchaseResponse(
-            status="created",
+            status='created',
             purchase_token=purchase.token[:12],
             payment_url=payment_url,
             warning=recipient_warning,
@@ -468,19 +443,19 @@ async def create_gift_purchase(
     if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Insufficient balance",
+            detail='Insufficient balance',
         )
 
     # Create purchase record
     balance_purchase_kwargs: dict = (
         {
-            "gift_recipient_type": body.recipient_type,
-            "gift_recipient_value": body.recipient_value,
-            "gift_message": body.gift_message,
+            'gift_recipient_type': body.recipient_type,
+            'gift_recipient_value': body.recipient_value,
+            'gift_message': body.gift_message,
         }
         if has_recipient
         else {
-            "gift_message": body.gift_message,
+            'gift_message': body.gift_message,
         }
     )
 
@@ -493,9 +468,9 @@ async def create_gift_purchase(
             amount_kopeks=price_kopeks,
             contact_type=buyer_contact_type,
             contact_value=buyer_contact_value,
-            payment_method="balance",
+            payment_method='balance',
             is_gift=True,
-            source="cabinet",
+            source='cabinet',
             buyer_user_id=user.id,
             commit=False,
             **balance_purchase_kwargs,
@@ -512,7 +487,7 @@ async def create_gift_purchase(
         db,
         user,
         price_kopeks,
-        description=f"Gift: {tariff.name} ({body.period_days}d)",
+        description=f'Gift: {tariff.name} ({body.period_days}d)',
         create_transaction=False,
         consume_promo_offer=consume_promo,
     )
@@ -520,13 +495,13 @@ async def create_gift_purchase(
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Insufficient balance",
+            detail='Insufficient balance',
         )
 
     # Transaction description: include recipient when specified
-    tx_description = f"Gift: {tariff.name} ({body.period_days}d)"
+    tx_description = f'Gift: {tariff.name} ({body.period_days}d)'
     if has_recipient:
-        tx_description += f" -> {body.recipient_value}"
+        tx_description += f' -> {body.recipient_value}'
 
     # Create transaction record
     transaction = await create_transaction(
@@ -564,22 +539,18 @@ async def create_gift_purchase(
     # (and a backstop copy to the buyer); never block on notification.
     if has_recipient:
         try:
-            await notify_gift_claim_available(
-                purchase, tariff_name=tariff.name, period_days=body.period_days
-            )
+            await notify_gift_claim_available(purchase, tariff_name=tariff.name, period_days=body.period_days)
         except Exception:
-            logger.warning(
-                "Failed to send gift claim notification", purchase_id=purchase.id
-            )
+            logger.warning('Failed to send gift claim notification', purchase_id=purchase.id)
 
     return GiftPurchaseResponse(
-        status="ok",
+        status='ok',
         purchase_token=purchase_token[:12],
         warning=recipient_warning,
     )
 
 
-@router.get("/pending", response_model=list[PendingGiftResponse])
+@router.get('/pending', response_model=list[PendingGiftResponse])
 async def get_pending_gifts(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -619,7 +590,7 @@ async def get_pending_gifts(
     return pending
 
 
-@router.get("/purchase/{token}", response_model=GiftPurchaseStatusResponse)
+@router.get('/purchase/{token}', response_model=GiftPurchaseStatusResponse)
 async def get_gift_purchase_status(
     token: str,
     user: User = Depends(get_current_cabinet_user),
@@ -631,23 +602,19 @@ async def get_gift_purchase_status(
     else:
         token_filter = GuestPurchase.token.startswith(token)
 
-    result = await db.execute(
-        select(GuestPurchase)
-        .options(selectinload(GuestPurchase.tariff))
-        .where(token_filter)
-    )
+    result = await db.execute(select(GuestPurchase).options(selectinload(GuestPurchase.tariff)).where(token_filter))
     purchase = result.scalars().first()
     if purchase is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Purchase not found",
+            detail='Purchase not found',
         )
 
     # Uniform 404 prevents token existence oracle
     if purchase.buyer_user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Purchase not found",
+            detail='Purchase not found',
         )
 
     tariff_name = purchase.tariff.name if purchase.tariff else None
@@ -679,7 +646,7 @@ async def get_gift_purchase_status(
     )
 
 
-@router.get("/sent", response_model=list[SentGiftResponse])
+@router.get('/sent', response_model=list[SentGiftResponse])
 async def get_sent_gifts(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -700,12 +667,8 @@ async def get_sent_gifts(
     sent: list[SentGiftResponse] = []
     for p in purchases:
         activated_by_username = None
-        if (
-            p.status == GuestPurchaseStatus.DELIVERED.value
-            and p.user
-            and p.user.username
-        ):
-            activated_by_username = f"@{p.user.username}"
+        if p.status == GuestPurchaseStatus.DELIVERED.value and p.user and p.user.username:
+            activated_by_username = f'@{p.user.username}'
 
         sent.append(
             SentGiftResponse(
@@ -724,7 +687,7 @@ async def get_sent_gifts(
     return sent
 
 
-@router.get("/received", response_model=list[ReceivedGiftResponse])
+@router.get('/received', response_model=list[ReceivedGiftResponse])
 async def get_received_gifts(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -746,7 +709,7 @@ async def get_received_gifts(
     for p in purchases:
         sender_display = None
         if p.buyer and p.buyer.username:
-            sender_display = f"@{p.buyer.username}"
+            sender_display = f'@{p.buyer.username}'
         elif p.contact_value:
             sender_display = p.contact_value
 
@@ -766,7 +729,7 @@ async def get_received_gifts(
     return received
 
 
-@router.post("/activate", response_model=ActivateGiftResponse)
+@router.post('/activate', response_model=ActivateGiftResponse)
 async def activate_gift_by_code(
     body: ActivateGiftRequest,
     user: User = Depends(get_current_cabinet_user),
@@ -776,22 +739,16 @@ async def activate_gift_by_code(
     from app.services.guest_purchase_service import activate_purchase as svc_activate
 
     # Bug 2 fix: rate limit activation attempts to prevent brute-force token enumeration
-    is_limited = await RateLimitCache.is_rate_limited(
-        user.id, "gift_activate", limit=10, window=60
-    )
+    is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_activate', limit=10, window=60)
     if is_limited:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests"
-        )
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     code = body.code.strip()
-    if code.upper().startswith("GIFT-") or code.upper().startswith("GIFT_"):
+    if code.upper().startswith('GIFT-') or code.upper().startswith('GIFT_'):
         code = code[5:]
 
     if len(code) < 8:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Code too short"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Code too short')
 
     # Support both full token and prefix-based lookup (displayed codes are truncated)
     if len(code) >= 64:
@@ -812,26 +769,26 @@ async def activate_gift_by_code(
     if purchase is None or not purchase.is_gift:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Gift not found",
+            detail='Gift not found',
         )
 
     # Bug 1 fix: check ownership BEFORE leaking any status/tariff info
     if purchase.user_id is not None and purchase.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Gift not found",
+            detail='Gift not found',
         )
 
     # Prevent self-activation: buyer cannot activate their own gift
     if purchase.buyer_user_id is not None and purchase.buyer_user_id == user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot activate your own gift",
+            detail='Cannot activate your own gift',
         )
 
     if purchase.status == GuestPurchaseStatus.DELIVERED.value:
         return ActivateGiftResponse(
-            status="activated",
+            status='activated',
             tariff_name=purchase.tariff.name if purchase.tariff else None,
             period_days=purchase.period_days,
         )
@@ -844,7 +801,7 @@ async def activate_gift_by_code(
     if purchase.status not in activatable_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This gift cannot be activated",
+            detail='This gift cannot be activated',
         )
 
     # For code-only gifts (user_id is None), link the purchase to the activating user
@@ -863,7 +820,7 @@ async def activate_gift_by_code(
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
     return ActivateGiftResponse(
-        status="activated",
+        status='activated',
         tariff_name=purchase.tariff.name if purchase.tariff else None,
         period_days=purchase.period_days,
     )

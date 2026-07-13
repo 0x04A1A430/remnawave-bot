@@ -33,9 +33,7 @@ from ..schemas.pinned_messages import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(
-    prefix="/admin/pinned-messages", tags=["Cabinet Admin Pinned Messages"]
-)
+router = APIRouter(prefix='/admin/pinned-messages', tags=['Cabinet Admin Pinned Messages'])
 
 # Broadcast cooldown: min 60 seconds between mass operations
 _BROADCAST_COOLDOWN_SECONDS = 60
@@ -50,7 +48,7 @@ def _check_broadcast_cooldown() -> None:
         remaining = int(_BROADCAST_COOLDOWN_SECONDS - elapsed)
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            f"Broadcast cooldown active. Try again in {remaining} seconds.",
+            f'Broadcast cooldown active. Try again in {remaining} seconds.',
         )
     _last_broadcast_time = now
 
@@ -83,9 +81,9 @@ def _get_bot() -> Bot:
 # ============ List / Get Endpoints ============
 
 
-@router.get("", response_model=PinnedMessageListResponse)
+@router.get('', response_model=PinnedMessageListResponse)
 async def list_pinned_messages(
-    admin: User = Depends(require_permission("pinned_messages:read")),
+    admin: User = Depends(require_permission('pinned_messages:read')),
     db: AsyncSession = Depends(get_cabinet_db),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -111,9 +109,9 @@ async def list_pinned_messages(
     )
 
 
-@router.get("/active", response_model=PinnedMessageResponse | None)
+@router.get('/active', response_model=PinnedMessageResponse | None)
 async def get_active_message(
-    admin: User = Depends(require_permission("pinned_messages:read")),
+    admin: User = Depends(require_permission('pinned_messages:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageResponse | None:
     """Get current active pinned message."""
@@ -123,19 +121,17 @@ async def get_active_message(
     return _serialize_pinned_message(msg)
 
 
-@router.get("/{message_id}", response_model=PinnedMessageResponse)
+@router.get('/{message_id}', response_model=PinnedMessageResponse)
 async def get_pinned_message(
     message_id: int,
-    admin: User = Depends(require_permission("pinned_messages:read")),
+    admin: User = Depends(require_permission('pinned_messages:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageResponse:
     """Get pinned message by ID."""
-    result = await db.execute(
-        select(PinnedMessage).where(PinnedMessage.id == message_id)
-    )
+    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
     return _serialize_pinned_message(msg)
 
 
@@ -143,13 +139,13 @@ async def get_pinned_message(
 
 
 @router.post(
-    "",
+    '',
     response_model=PinnedMessageBroadcastResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def create_pinned_message(
     payload: PinnedMessageCreateRequest,
-    admin: User = Depends(require_permission("pinned_messages:create")),
+    admin: User = Depends(require_permission('pinned_messages:create')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageBroadcastResponse:
     """
@@ -164,9 +160,7 @@ async def create_pinned_message(
 
     content = payload.content.strip()
     if not content and not payload.media:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Either content or media must be provided"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Either content or media must be provided')
 
     media_type = payload.media.type if payload.media else None
     media_file_id = payload.media.file_id if payload.media else None
@@ -191,7 +185,7 @@ async def create_pinned_message(
         sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     logger.info(
-        "Admin created pinned message # (broadcast=)",
+        'Admin created pinned message # (broadcast=)',
         admin_id=admin.id,
         message_id=msg.id,
         broadcast=payload.broadcast,
@@ -204,20 +198,18 @@ async def create_pinned_message(
     )
 
 
-@router.patch("/{message_id}", response_model=PinnedMessageResponse)
+@router.patch('/{message_id}', response_model=PinnedMessageResponse)
 async def update_pinned_message(
     message_id: int,
     payload: PinnedMessageUpdateRequest,
-    admin: User = Depends(require_permission("pinned_messages:edit")),
+    admin: User = Depends(require_permission('pinned_messages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageResponse:
     """Update a pinned message content, media, or settings."""
-    result = await db.execute(
-        select(PinnedMessage).where(PinnedMessage.id == message_id)
-    )
+    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
 
     if payload.content is not None:
         sanitized = sanitize_html(payload.content)
@@ -240,27 +232,23 @@ async def update_pinned_message(
     await db.commit()
     await db.refresh(msg)
 
-    logger.info(
-        "Admin updated pinned message #", admin_id=admin.id, message_id=message_id
-    )
+    logger.info('Admin updated pinned message #', admin_id=admin.id, message_id=message_id)
 
     return _serialize_pinned_message(msg)
 
 
-@router.patch("/{message_id}/settings", response_model=PinnedMessageResponse)
+@router.patch('/{message_id}/settings', response_model=PinnedMessageResponse)
 async def update_pinned_message_settings(
     message_id: int,
     payload: PinnedMessageSettingsRequest,
-    admin: User = Depends(require_permission("pinned_messages:edit")),
+    admin: User = Depends(require_permission('pinned_messages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageResponse:
     """Update only pinned message display settings."""
-    result = await db.execute(
-        select(PinnedMessage).where(PinnedMessage.id == message_id)
-    )
+    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
 
     if payload.send_before_menu is not None:
         msg.send_before_menu = payload.send_before_menu
@@ -278,9 +266,9 @@ async def update_pinned_message_settings(
 # ============ Active Message Actions (before /{message_id} POST routes) ============
 
 
-@router.post("/active/deactivate", response_model=PinnedMessageResponse | None)
+@router.post('/active/deactivate', response_model=PinnedMessageResponse | None)
 async def deactivate_active_message(
-    admin: User = Depends(require_permission("pinned_messages:edit")),
+    admin: User = Depends(require_permission('pinned_messages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageResponse | None:
     """Deactivate the current active pinned message without unpinning from users."""
@@ -288,27 +276,23 @@ async def deactivate_active_message(
     if not msg:
         return None
 
-    logger.info(
-        "Admin deactivated pinned message #", admin_id=admin.id, message_id=msg.id
-    )
+    logger.info('Admin deactivated pinned message #', admin_id=admin.id, message_id=msg.id)
 
     return _serialize_pinned_message(msg)
 
 
-@router.post("/active/unpin", response_model=PinnedMessageUnpinResponse)
+@router.post('/active/unpin', response_model=PinnedMessageUnpinResponse)
 async def unpin_active_message(
-    admin: User = Depends(require_permission("pinned_messages:edit")),
+    admin: User = Depends(require_permission('pinned_messages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageUnpinResponse:
     """Unpin messages from all users and deactivate the active pinned message."""
     _check_broadcast_cooldown()
-    unpinned_count, failed_count, was_active = await unpin_active_pinned_message(
-        _get_bot(), db
-    )
+    unpinned_count, failed_count, was_active = await unpin_active_pinned_message(_get_bot(), db)
 
     if was_active:
         logger.info(
-            "Admin unpinned active message: unpinned=, failed",
+            'Admin unpinned active message: unpinned=, failed',
             admin_id=admin.id,
             unpinned_count=unpinned_count,
             failed_count=failed_count,
@@ -324,11 +308,11 @@ async def unpin_active_message(
 # ============ Per-Message Actions ============
 
 
-@router.post("/{message_id}/activate", response_model=PinnedMessageBroadcastResponse)
+@router.post('/{message_id}/activate', response_model=PinnedMessageBroadcastResponse)
 async def activate_pinned_message(
     message_id: int,
     broadcast: bool = Query(False),
-    admin: User = Depends(require_permission("pinned_messages:edit")),
+    admin: User = Depends(require_permission('pinned_messages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageBroadcastResponse:
     """
@@ -341,12 +325,10 @@ async def activate_pinned_message(
     if broadcast:
         _check_broadcast_cooldown()
 
-    result = await db.execute(
-        select(PinnedMessage).where(PinnedMessage.id == message_id)
-    )
+    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
 
     await db.execute(
         update(PinnedMessage)
@@ -366,7 +348,7 @@ async def activate_pinned_message(
         sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     logger.info(
-        "Admin activated pinned message # (broadcast=)",
+        'Admin activated pinned message # (broadcast=)',
         admin_id=admin.id,
         message_id=message_id,
         broadcast=broadcast,
@@ -379,26 +361,24 @@ async def activate_pinned_message(
     )
 
 
-@router.post("/{message_id}/broadcast", response_model=PinnedMessageBroadcastResponse)
+@router.post('/{message_id}/broadcast', response_model=PinnedMessageBroadcastResponse)
 async def broadcast_message(
     message_id: int,
-    admin: User = Depends(require_permission("pinned_messages:edit")),
+    admin: User = Depends(require_permission('pinned_messages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PinnedMessageBroadcastResponse:
     """Broadcast a pinned message to all active users."""
     _check_broadcast_cooldown()
 
-    result = await db.execute(
-        select(PinnedMessage).where(PinnedMessage.id == message_id)
-    )
+    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
 
     sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
     logger.info(
-        "Admin broadcast pinned message #: sent=, failed",
+        'Admin broadcast pinned message #: sent=, failed',
         admin_id=admin.id,
         message_id=message_id,
         sent_count=sent_count,
@@ -412,31 +392,25 @@ async def broadcast_message(
     )
 
 
-@router.delete(
-    "/{message_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
-)
+@router.delete('/{message_id}', status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_pinned_message(
     message_id: int,
-    admin: User = Depends(require_permission("pinned_messages:delete")),
+    admin: User = Depends(require_permission('pinned_messages:delete')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete a pinned message. Active messages must be deactivated first."""
-    result = await db.execute(
-        select(PinnedMessage).where(PinnedMessage.id == message_id)
-    )
+    result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pinned message not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
 
     if msg.is_active:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "Cannot delete active pinned message. Deactivate it first.",
+            'Cannot delete active pinned message. Deactivate it first.',
         )
 
     await db.delete(msg)
     await db.commit()
 
-    logger.info(
-        "Admin deleted pinned message #", admin_id=admin.id, message_id=message_id
-    )
+    logger.info('Admin deleted pinned message #', admin_id=admin.id, message_id=message_id)

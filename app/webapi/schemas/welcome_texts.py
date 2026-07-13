@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field, validator
 
 
 def _normalize_text(value: str) -> str:
-    cleaned = (value or "").strip()
+    cleaned = (value or '').strip()
     if not cleaned:
-        raise ValueError("Text cannot be empty")
+        raise ValueError('Text cannot be empty')
     return cleaned
 
 
@@ -27,7 +27,7 @@ class WelcomeTextCreateRequest(BaseModel):
     is_enabled: bool = True
     is_active: bool = True
 
-    _normalize_text = validator("text", allow_reuse=True)(_normalize_text)
+    _normalize_text = validator('text', allow_reuse=True)(_normalize_text)
 
 
 class WelcomeTextUpdateRequest(BaseModel):
@@ -35,7 +35,7 @@ class WelcomeTextUpdateRequest(BaseModel):
     is_enabled: bool | None = None
     is_active: bool | None = None
 
-    @validator("text")
+    @validator('text')
     def validate_text(cls, value):
         if value is None:
             return value

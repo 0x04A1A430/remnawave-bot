@@ -30,15 +30,15 @@ def _validate_logo_path(path: Path) -> bool:
     """
     if not path.exists():
         logger.warning(
-            "Logo file does not exist — photo messages will be sent without logo",
+            'Logo file does not exist — photo messages will be sent without logo',
             logo_path=str(path),
         )
         return False
     if not path.is_file():
         logger.warning(
-            "Logo path is not a regular file (likely a directory created by a "
-            "failed bind-mount) — photo messages will be sent without logo. "
-            "Fix: remove the directory and replace with a real PNG, then restart.",
+            'Logo path is not a regular file (likely a directory created by a '
+            'failed bind-mount) — photo messages will be sent without logo. '
+            'Fix: remove the directory and replace with a real PNG, then restart.',
             logo_path=str(path),
         )
         return False
@@ -57,10 +57,8 @@ _logo_path_valid = _validate_logo_path(LOGO_PATH)
 # under the limit (Telegram bug #339184 — Pillow's `convert+thumbnail` keeps
 # the aspect ratio so even a 1980×1267 logo lands on ≤1280×820).
 _LOGO_MAX_DIMENSION = 1280
-_LOGO_MAX_BYTES = (
-    5 * 1024 * 1024
-)  # 5 MB — give ourselves a margin under the 10 MB hard cap
-_LOGO_RESIZED_SUFFIX = ".bot_resized.png"
+_LOGO_MAX_BYTES = 5 * 1024 * 1024  # 5 MB — give ourselves a margin under the 10 MB hard cap
+_LOGO_RESIZED_SUFFIX = '.bot_resized.png'
 _logo_send_path: Path | None = None  # filled lazily by _prepare_logo_for_send
 
 
@@ -80,9 +78,7 @@ def _prepare_logo_for_send(path: Path) -> Path:
         with Image.open(path) as img:
             width, height = img.size
             needs_resize = (
-                size > _LOGO_MAX_BYTES
-                or max(width, height) > _LOGO_MAX_DIMENSION
-                or (width + height) > 10000
+                size > _LOGO_MAX_BYTES or max(width, height) > _LOGO_MAX_DIMENSION or (width + height) > 10000
             )
             if not needs_resize:
                 return path
@@ -93,10 +89,7 @@ def _prepare_logo_for_send(path: Path) -> Path:
             # oversized original. Hash the resolved source path so distinct logos don't
             # collide or reuse a stale temp file.
             cache_key = hashlib.sha1(str(path.resolve()).encode()).hexdigest()[:10]
-            resized_path = (
-                Path(tempfile.gettempdir())
-                / f"{path.stem}.{cache_key}{_LOGO_RESIZED_SUFFIX}"
-            )
+            resized_path = Path(tempfile.gettempdir()) / f'{path.stem}.{cache_key}{_LOGO_RESIZED_SUFFIX}'
             # If the cached resized copy exists and is newer than the source, reuse it.
             if (
                 resized_path.exists()
@@ -106,18 +99,16 @@ def _prepare_logo_for_send(path: Path) -> Path:
                 return resized_path
 
             resized = img.copy()
-            if resized.mode in ("RGBA", "LA", "P"):
+            if resized.mode in ('RGBA', 'LA', 'P'):
                 # Preserve transparency for PNG; fall back to RGB for other modes.
-                if resized.mode == "P":
-                    resized = resized.convert("RGBA")
+                if resized.mode == 'P':
+                    resized = resized.convert('RGBA')
             else:
-                resized = resized.convert("RGB")
-            resized.thumbnail(
-                (_LOGO_MAX_DIMENSION, _LOGO_MAX_DIMENSION), Image.Resampling.LANCZOS
-            )
-            resized.save(resized_path, format="PNG", optimize=True)
+                resized = resized.convert('RGB')
+            resized.thumbnail((_LOGO_MAX_DIMENSION, _LOGO_MAX_DIMENSION), Image.Resampling.LANCZOS)
+            resized.save(resized_path, format='PNG', optimize=True)
             logger.info(
-                "Resized logo for Telegram send",
+                'Resized logo for Telegram send',
                 src=str(path),
                 src_size_bytes=size,
                 src_dimensions=(width, height),
@@ -128,7 +119,7 @@ def _prepare_logo_for_send(path: Path) -> Path:
             return resized_path
     except Exception as exc:
         logger.warning(
-            "Logo resize preflight failed — sending original and letting Telegram complain",
+            'Logo resize preflight failed — sending original and letting Telegram complain',
             logo_path=str(path),
             error=str(exc),
         )
@@ -137,18 +128,18 @@ def _prepare_logo_for_send(path: Path) -> Path:
 
 # Telegram API: caption limit is 1024 characters AFTER HTML entity parsing (tags stripped)
 TELEGRAM_CAPTION_LIMIT = 1024
-_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
 
 
 def caption_exceeds_telegram_limit(text: str | None) -> bool:
     """Check if text exceeds Telegram's caption limit (1024 parsed chars)."""
     if not text:
         return False
-    stripped = html_module.unescape(_HTML_TAG_RE.sub("", text))
+    stripped = html_module.unescape(_HTML_TAG_RE.sub('', text))
     return len(stripped) > TELEGRAM_CAPTION_LIMIT
 
 
-_PRIVACY_RESTRICTED_CODE = "BUTTON_USER_PRIVACY_RESTRICTED"
+_PRIVACY_RESTRICTED_CODE = 'BUTTON_USER_PRIVACY_RESTRICTED'
 
 # Кеш file_id логотипа: после первой загрузки Telegram возвращает file_id,
 # который можно переиспользовать без повторной загрузки файла (экономит 3-4 сек)
@@ -179,25 +170,22 @@ def _cache_logo_file_id(result: Message | None) -> None:
     global _logo_file_id
     if _logo_file_id or result is None:
         return
-    if hasattr(result, "photo") and result.photo:
+    if hasattr(result, 'photo') and result.photo:
         _logo_file_id = result.photo[-1].file_id
 
 
 _TOPIC_REQUIRED_ERRORS = (
-    "topic must be specified",
-    "TOPIC_CLOSED",
-    "TOPIC_DELETED",
-    "FORUM_CLOSED",
+    'topic must be specified',
+    'TOPIC_CLOSED',
+    'TOPIC_DELETED',
+    'FORUM_CLOSED',
 )
 
 
 def is_qr_message(message: Message) -> bool:
     if isinstance(message, InaccessibleMessage):
         return False
-    return bool(
-        message.caption
-        and message.caption.startswith("\U0001f517 Ваша реферальная ссылка")
-    )
+    return bool(message.caption and message.caption.startswith('\U0001f517 Ваша реферальная ссылка'))
 
 
 _original_answer = Message.answer
@@ -207,24 +195,22 @@ _original_edit_text = Message.edit_text
 async def _text_answer(self: Message, text: str = None, **kwargs):
     import sys
 
-    print(
-        "DEBUG TEXT:", repr(text[:200] if text else None), file=sys.stderr, flush=True
-    )
+    print('DEBUG TEXT:', repr(text[:200] if text else None), file=sys.stderr, flush=True)
     """Обёртка над оригинальным Message.answer с подавлением web page preview."""
-    kwargs.setdefault("disable_web_page_preview", True)
+    kwargs.setdefault('disable_web_page_preview', True)
     return await _original_answer(self, text, **kwargs)
 
 
 async def _text_edit(self: Message, text: str, **kwargs):
     """Обёртка над оригинальным Message.edit_text с подавлением web page preview."""
-    kwargs.setdefault("disable_web_page_preview", True)
+    kwargs.setdefault('disable_web_page_preview', True)
     return await _original_edit_text(self, text, **kwargs)
 
 
 def _get_language(message: Message) -> str | None:
     try:
         user = message.from_user
-        if user and getattr(user, "language_code", None):
+        if user and getattr(user, 'language_code', None):
             return user.language_code
     except AttributeError:
         pass
@@ -232,22 +218,22 @@ def _get_language(message: Message) -> str | None:
 
 
 def _default_privacy_hint(language: str | None) -> str:
-    if language and language.lower().startswith("en"):
+    if language and language.lower().startswith('en'):
         return (
-            "Telegram blocked the contact request button because of your privacy settings. "
-            "Please allow sharing your contact information or send the required details manually."
+            'Telegram blocked the contact request button because of your privacy settings. '
+            'Please allow sharing your contact information or send the required details manually.'
         )
     return (
-        "Telegram запретил кнопку запроса контакта из-за настроек приватности. "
-        "Разрешите отправку контакта в настройках Telegram или отправьте данные вручную."
+        'Telegram запретил кнопку запроса контакта из-за настроек приватности. '
+        'Разрешите отправку контакта в настройках Telegram или отправьте данные вручную.'
     )
 
 
 def append_privacy_hint(text: str | None, language: str | None) -> str:
-    base_text = text or ""
+    base_text = text or ''
     try:
         hint = get_texts(language).t(
-            "PRIVACY_RESTRICTED_BUTTON_HINT",
+            'PRIVACY_RESTRICTED_BUTTON_HINT',
             default=_default_privacy_hint(language),
         )
     except Exception:
@@ -261,13 +247,13 @@ def append_privacy_hint(text: str | None, language: str | None) -> str:
         return base_text
 
     if base_text:
-        return f"{base_text}\n\n{hint}"
+        return f'{base_text}\n\n{hint}'
     return hint
 
 
 def prepare_privacy_safe_kwargs(kwargs: dict[str, Any] | None = None) -> dict[str, Any]:
     safe_kwargs: dict[str, Any] = dict(kwargs or {})
-    safe_kwargs.pop("reply_markup", None)
+    safe_kwargs.pop('reply_markup', None)
     return safe_kwargs
 
 
@@ -275,11 +261,9 @@ def is_privacy_restricted_error(error: Exception) -> bool:
     if not isinstance(error, TelegramBadRequest):
         return False
 
-    message = getattr(error, "message", "") or ""
+    message = getattr(error, 'message', '') or ''
     description = str(error)
-    return (
-        _PRIVACY_RESTRICTED_CODE in message or _PRIVACY_RESTRICTED_CODE in description
-    )
+    return _PRIVACY_RESTRICTED_CODE in message or _PRIVACY_RESTRICTED_CODE in description
 
 
 def is_topic_required_error(error: Exception) -> bool:
@@ -296,7 +280,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
     if not settings.ENABLE_LOGO_MODE:
         # Фото-сообщения не показывают web page preview, текстовые — показывают.
         # Подавляем превью чтобы поведение не менялось при переключении режима логотипа.
-        kwargs.setdefault("disable_web_page_preview", True)
+        kwargs.setdefault('disable_web_page_preview', True)
         return await _original_answer(self, text, **kwargs)
     # Если caption слишком длинный для фото — отправим как текст
     try:
@@ -311,7 +295,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
             import sys
 
             print(
-                "DEBUG CAPTION:",
+                'DEBUG CAPTION:',
                 repr(text[:300] if text else None),
                 file=sys.stderr,
                 flush=True,
@@ -357,7 +341,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 async def _edit_with_photo(self: Message, text: str, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем редактирование
     if not settings.ENABLE_LOGO_MODE:
-        kwargs.setdefault("disable_web_page_preview", True)
+        kwargs.setdefault('disable_web_page_preview', True)
         # Медиа-сообщения (фото/видео из рассылки и т.д.) не имеют text — edit_text упадёт.
         # Удаляем старое сообщение и отправляем новое.
         if self.text is None:
@@ -376,12 +360,9 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
         except TelegramBadRequest as error:
             if is_topic_required_error(error):
                 return None
-            if (
-                "MESSAGE_ID_INVALID" in str(error)
-                or "message to edit not found" in str(error).lower()
-            ):
+            if 'MESSAGE_ID_INVALID' in str(error) or 'message to edit not found' in str(error).lower():
                 return None
-            if "message is not modified" in str(error).lower():
+            if 'message is not modified' in str(error).lower():
                 return None
             raise
     if self.photo:
@@ -400,13 +381,13 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
             media = get_logo_media()
         else:
             media = self.photo[-1].file_id
-        media_kwargs = {"media": media, "caption": text}
+        media_kwargs = {'media': media, 'caption': text}
         edit_kwargs = dict(kwargs)
-        if "parse_mode" in edit_kwargs:
-            _pm = edit_kwargs.pop("parse_mode")
-            media_kwargs["parse_mode"] = _pm if _pm is not None else "HTML"
+        if 'parse_mode' in edit_kwargs:
+            _pm = edit_kwargs.pop('parse_mode')
+            media_kwargs['parse_mode'] = _pm if _pm is not None else 'HTML'
         else:
-            media_kwargs["parse_mode"] = "HTML"
+            media_kwargs['parse_mode'] = 'HTML'
         try:
             return await self.edit_media(InputMediaPhoto(**media_kwargs), **edit_kwargs)
         except TelegramBadRequest as error:
@@ -455,13 +436,10 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
     except TelegramBadRequest as error:
         if is_topic_required_error(error):
             return None
-        if (
-            "MESSAGE_ID_INVALID" in str(error)
-            or "message to edit not found" in str(error).lower()
-        ):
+        if 'MESSAGE_ID_INVALID' in str(error) or 'message to edit not found' in str(error).lower():
             # Сообщение удалено или недоступно — просто игнорируем
             return None
-        if "message is not modified" in str(error).lower():
+        if 'message is not modified' in str(error).lower():
             # Контент не изменился — безопасно игнорируем
             return None
         raise

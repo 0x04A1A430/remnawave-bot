@@ -187,7 +187,7 @@ class BanAgentItem(BaseModel):
     dedup_skipped: int = 0
     filter_checked: int = 0
     filter_filtered: int = 0
-    health: str = "unknown"  # healthy, warning, critical
+    health: str = 'unknown'  # healthy, warning, critical
     is_online: bool = False
     last_report: datetime | None = None
 

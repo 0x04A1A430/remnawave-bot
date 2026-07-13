@@ -23,18 +23,16 @@ def _restore_template(monkeypatch: pytest.MonkeyPatch):
     """Ensure each test starts from the default template."""
     original = settings.REMNAWAVE_USER_USERNAME_TEMPLATE
     yield
-    monkeypatch.setattr(
-        settings, "REMNAWAVE_USER_USERNAME_TEMPLATE", original, raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', original, raising=False)
 
 
 def test_format_remnawave_username_within_max_without_suffix() -> None:
     """Default behaviour stays bounded by REMNAWAVE_USERNAME_MAX_LENGTH."""
     name = settings.format_remnawave_username(
-        full_name="Some Long Name That Could Inflate The Username",
-        username="averylongnickname",
+        full_name='Some Long Name That Could Inflate The Username',
+        username='averylongnickname',
         telegram_id=12345678901,
-        email="averylongemailprefix@example.com",
+        email='averylongemailprefix@example.com',
         user_id=999999,
     )
 
@@ -48,36 +46,36 @@ def test_format_remnawave_username_reserves_room_for_caller_suffix(
     """reserve_suffix_chars=N → base fits in MAX-N so caller can append safely."""
     monkeypatch.setattr(
         settings,
-        "REMNAWAVE_USER_USERNAME_TEMPLATE",
-        "{email}_{telegram_id}",
+        'REMNAWAVE_USER_USERNAME_TEMPLATE',
+        '{email}_{telegram_id}',
         raising=False,
     )
 
-    suffix = "_49883b"  # 7 chars
+    suffix = '_49883b'  # 7 chars
     base = settings.format_remnawave_username(
-        full_name="Марина Дидык",
+        full_name='Марина Дидык',
         username=None,
         telegram_id=None,
-        email="didykmarin@yandex.ru",
+        email='didykmarin@yandex.ru',
         user_id=703,
         reserve_suffix_chars=len(suffix),
     )
-    final = f"{base}{suffix}"
+    final = f'{base}{suffix}'
 
     # The ORIGINAL bug — final length = 38. With the fix it must be ≤ 36.
     assert len(final) <= settings.REMNAWAVE_USERNAME_MAX_LENGTH
     assert final.endswith(suffix)
     # Sanity: still a valid RemnaWave identifier (alnum + underscores + dashes).
-    assert all(ch.isalnum() or ch in {"_", "-"} for ch in final)
+    assert all(ch.isalnum() or ch in {'_', '-'} for ch in final)
 
 
 def test_format_remnawave_username_email_user_default_template() -> None:
     """Email-only user with the bundled default template still fits."""
     name = settings.format_remnawave_username(
-        full_name="Марина Дидык",
+        full_name='Марина Дидык',
         username=None,
         telegram_id=None,
-        email="didykmarin@yandex.ru",
+        email='didykmarin@yandex.ru',
         user_id=703,
         reserve_suffix_chars=7,  # what subscription_service actually reserves
     )
@@ -88,8 +86,8 @@ def test_format_remnawave_username_email_user_default_template() -> None:
 def test_format_remnawave_username_does_not_go_below_min_with_huge_reserve() -> None:
     """If caller asks for more reserve than the cap allows, base falls back to MIN."""
     name = settings.format_remnawave_username(
-        full_name="X",
-        username="x",
+        full_name='X',
+        username='x',
         telegram_id=1,
         email=None,
         user_id=None,
@@ -106,24 +104,24 @@ def test_format_remnawave_username_repro_38_char_bug(
     # Production .env override exposes the duplication path:
     monkeypatch.setattr(
         settings,
-        "REMNAWAVE_USER_USERNAME_TEMPLATE",
-        "{email}_{telegram_id}",
+        'REMNAWAVE_USER_USERNAME_TEMPLATE',
+        '{email}_{telegram_id}',
         raising=False,
     )
 
-    suffix = "_49883b"
+    suffix = '_49883b'
     base = settings.format_remnawave_username(
-        full_name="Марина Дидык",
+        full_name='Марина Дидык',
         username=None,
         telegram_id=None,
-        email="didykmarin@yandex.ru",
+        email='didykmarin@yandex.ru',
         user_id=703,
         reserve_suffix_chars=len(suffix),
     )
     final = base + suffix
 
     # Before the fix: len(final) == 38 → RemnaWave 400.
-    assert len(final) <= 36, f"username still too long: {final!r} ({len(final)} chars)"
+    assert len(final) <= 36, f'username still too long: {final!r} ({len(final)} chars)'
 
 
 # ---------------------------------------------------------------------------
@@ -138,40 +136,40 @@ def test_build_subscription_username_production_repro(
     """Production repro through the high-level helper used by all 3 callers."""
     monkeypatch.setattr(
         settings,
-        "REMNAWAVE_USER_USERNAME_TEMPLATE",
-        "{email}_{telegram_id}",
+        'REMNAWAVE_USER_USERNAME_TEMPLATE',
+        '{email}_{telegram_id}',
         raising=False,
     )
 
     final = settings.build_remnawave_subscription_username(
-        full_name="Марина Дидык",
+        full_name='Марина Дидык',
         username=None,
         telegram_id=None,
-        email="didykmarin@yandex.ru",
+        email='didykmarin@yandex.ru',
         user_id=703,
-        suffix="_49883b",
+        suffix='_49883b',
     )
 
     assert len(final) <= settings.REMNAWAVE_USERNAME_MAX_LENGTH
-    assert final.endswith("_49883b")
+    assert final.endswith('_49883b')
 
 
 def test_build_subscription_username_empty_suffix_is_legacy_format() -> None:
     """suffix='' → equivalent to plain format_remnawave_username (single-tariff path)."""
     plain = settings.format_remnawave_username(
-        full_name="X",
-        username="x",
+        full_name='X',
+        username='x',
         telegram_id=12345,
         email=None,
         user_id=1,
     )
     helper = settings.build_remnawave_subscription_username(
-        full_name="X",
-        username="x",
+        full_name='X',
+        username='x',
         telegram_id=12345,
         email=None,
         user_id=1,
-        suffix="",
+        suffix='',
     )
 
     assert helper == plain
@@ -185,11 +183,11 @@ def test_build_subscription_username_handles_pathological_long_suffix() -> None:
     `keep_for_base = MAX - len(suffix)` could go negative; without `max(0, …)`
     the base-slice silently kept the tail.
     """
-    huge_suffix = "_" + "x" * 80  # 81 chars, way over MAX
+    huge_suffix = '_' + 'x' * 80  # 81 chars, way over MAX
 
     final = settings.build_remnawave_subscription_username(
-        full_name="X",
-        username="x",
+        full_name='X',
+        username='x',
         telegram_id=12345,
         email=None,
         user_id=1,
@@ -212,26 +210,24 @@ def test_skeleton_detector_falls_back_when_username_template_renders_constant(
 ) -> None:
     """Template `user_{username}` for email-only user (no TG username) renders to
     the constant `user` — must fall back to `user_email_<prefix>_<user_id>`."""
-    monkeypatch.setattr(
-        settings, "REMNAWAVE_USER_USERNAME_TEMPLATE", "user_{username}", raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', 'user_{username}', raising=False)
 
     name = settings.format_remnawave_username(
-        full_name="Email User",
+        full_name='Email User',
         username=None,
         telegram_id=None,
-        email="alice@example.com",
+        email='alice@example.com',
         user_id=42,
     )
 
     # Must NOT equal the degenerate `user` rendered by the skeleton.
-    assert name != "user"
+    assert name != 'user'
     # Must contain the unique user_id so two email-only users get different usernames.
-    assert "42" in name
+    assert '42' in name
     # Must still match RemnaWave's character class.
     import re as _re
 
-    assert _re.match(r"^[A-Za-z0-9_-]+$", name)
+    assert _re.match(r'^[A-Za-z0-9_-]+$', name)
 
 
 def test_skeleton_detector_falls_back_when_template_has_no_variables(
@@ -239,20 +235,18 @@ def test_skeleton_detector_falls_back_when_template_has_no_variables(
 ) -> None:
     """A template with no variables (admin misconfig) is itself degenerate —
     it would collide for every single user. Skeleton detector catches it."""
-    monkeypatch.setattr(
-        settings, "REMNAWAVE_USER_USERNAME_TEMPLATE", "static_user", raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', 'static_user', raising=False)
 
     name_a = settings.format_remnawave_username(
-        full_name="A", username=None, telegram_id=None, email="a@example.com", user_id=1
+        full_name='A', username=None, telegram_id=None, email='a@example.com', user_id=1
     )
     name_b = settings.format_remnawave_username(
-        full_name="B", username=None, telegram_id=None, email="b@example.com", user_id=2
+        full_name='B', username=None, telegram_id=None, email='b@example.com', user_id=2
     )
 
     # Two different users must get two different usernames despite the broken template.
     assert name_a != name_b
-    assert "1" in name_a and "2" in name_b
+    assert '1' in name_a and '2' in name_b
 
 
 def test_skeleton_detector_does_not_trigger_for_telegram_users(
@@ -261,20 +255,18 @@ def test_skeleton_detector_does_not_trigger_for_telegram_users(
     """TG users with a real @username are NOT degenerate — the template renders
     their unique username. Skeleton detector must NOT fire here, otherwise the
     fix would regress every TG user to user_<telegram_id> and rename them all."""
-    monkeypatch.setattr(
-        settings, "REMNAWAVE_USER_USERNAME_TEMPLATE", "user_{username}", raising=False
-    )
+    monkeypatch.setattr(settings, 'REMNAWAVE_USER_USERNAME_TEMPLATE', 'user_{username}', raising=False)
 
     name = settings.format_remnawave_username(
-        full_name="TG User",
-        username="alice_tg",
+        full_name='TG User',
+        username='alice_tg',
         telegram_id=123456,
         email=None,
         user_id=10,
     )
 
     # Should reflect the actual TG username, not the user_<identifier> fallback.
-    assert "alice_tg" in name
+    assert 'alice_tg' in name
 
 
 def test_skeleton_detector_uses_user_id_when_template_references_it(
@@ -284,21 +276,21 @@ def test_skeleton_detector_uses_user_id_when_template_references_it(
     trigger the fallback — the rendered username already carries unique data."""
     monkeypatch.setattr(
         settings,
-        "REMNAWAVE_USER_USERNAME_TEMPLATE",
-        "u_{user_id}_{username}",
+        'REMNAWAVE_USER_USERNAME_TEMPLATE',
+        'u_{user_id}_{username}',
         raising=False,
     )
 
     name = settings.format_remnawave_username(
-        full_name="Email User",
+        full_name='Email User',
         username=None,
         telegram_id=None,
-        email="alice@example.com",
+        email='alice@example.com',
         user_id=42,
     )
 
     # The {user_id} substitution gives uniqueness — fallback path must NOT fire.
-    assert "42" in name
+    assert '42' in name
     # And the rendered result must NOT be the user_<identifier> fallback shape,
     # which would have wiped the template's own structure.
-    assert name.startswith("u_42")
+    assert name.startswith('u_42')

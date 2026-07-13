@@ -33,7 +33,7 @@ from app.database.models import PromoCode, PromoCodeType, PromoCodeUse, PromoGro
 
 from ..dependencies import get_cabinet_db, require_permission
 
-router = APIRouter(prefix="/admin/promocodes", tags=["Admin Promocodes"])
+router = APIRouter(prefix='/admin/promocodes', tags=['Admin Promocodes'])
 
 
 # ============== Schemas ==============
@@ -172,9 +172,7 @@ def _normalize_datetime(value: datetime | None) -> datetime | None:
     return value
 
 
-async def _serialize_promocode(
-    db: AsyncSession, promocode: PromoCode
-) -> PromoCodeResponse:
+async def _serialize_promocode(db: AsyncSession, promocode: PromoCode) -> PromoCodeResponse:
     tariff_name = None
     if promocode.tariff_id:
         tariff = await get_tariff_by_id(db, promocode.tariff_id)
@@ -209,9 +207,9 @@ def _serialize_recent_use(use: PromoCodeUse) -> PromoCodeRecentUse:
     return PromoCodeRecentUse(
         id=use.id,
         user_id=use.user_id,
-        user_username=getattr(use, "user_username", None),
-        user_full_name=getattr(use, "user_full_name", None),
-        user_telegram_id=getattr(use, "user_telegram_id", None),
+        user_username=getattr(use, 'user_username', None),
+        user_full_name=getattr(use, 'user_full_name', None),
+        user_telegram_id=getattr(use, 'user_telegram_id', None),
         used_at=use.used_at,
     )
 
@@ -228,9 +226,7 @@ def _normalize_period_discounts(group: PromoGroup) -> dict[int, int]:
     return normalized
 
 
-def _serialize_promo_group(
-    group: PromoGroup, members_count: int = 0
-) -> PromoGroupResponse:
+def _serialize_promo_group(group: PromoGroup, members_count: int = 0) -> PromoGroupResponse:
     return PromoGroupResponse(
         id=group.id,
         name=group.name,
@@ -242,15 +238,15 @@ def _serialize_promo_group(
         apply_discounts_to_addons=group.apply_discounts_to_addons,
         is_default=group.is_default,
         members_count=members_count,
-        created_at=getattr(group, "created_at", None),
-        updated_at=getattr(group, "updated_at", None),
+        created_at=getattr(group, 'created_at', None),
+        updated_at=getattr(group, 'updated_at', None),
     )
 
 
 def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
     code = payload.code.strip()
     if not code:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Code must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Code must not be empty')
 
     normalized_valid_from = _normalize_datetime(payload.valid_from)
     normalized_valid_until = _normalize_datetime(payload.valid_until)
@@ -258,7 +254,7 @@ def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
     if payload.type == PromoCodeType.BALANCE and payload.balance_bonus_kopeks <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Balance bonus must be positive for balance promo codes",
+            'Balance bonus must be positive for balance promo codes',
         )
 
     if payload.type in {
@@ -268,37 +264,29 @@ def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
         if payload.subscription_days <= 0:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Subscription days must be positive for this promo code type",
+                'Subscription days must be positive for this promo code type',
             )
 
     if payload.type == PromoCodeType.DISCOUNT:
         if payload.balance_bonus_kopeks <= 0 or payload.balance_bonus_kopeks > 100:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Discount percent must be between 1 and 100",
+                'Discount percent must be between 1 and 100',
             )
         # 0 hours = perpetual ("until first purchase"), matching the bot + service.
         if payload.subscription_days < 0:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Discount validity hours cannot be negative",
+                'Discount validity hours cannot be negative',
             )
 
-    if (
-        normalized_valid_from
-        and normalized_valid_until
-        and normalized_valid_from > normalized_valid_until
-    ):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "valid_from cannot be greater than valid_until"
-        )
+    if normalized_valid_from and normalized_valid_until and normalized_valid_from > normalized_valid_until:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_from cannot be greater than valid_until')
 
 
-def _validate_update_payload(
-    payload: PromoCodeUpdateRequest, promocode: PromoCode
-) -> None:
+def _validate_update_payload(payload: PromoCodeUpdateRequest, promocode: PromoCode) -> None:
     if payload.code is not None and not payload.code.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Code must not be empty")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Code must not be empty')
 
     if payload.type is not None:
         new_type = payload.type
@@ -306,74 +294,54 @@ def _validate_update_payload(
         new_type = PromoCodeType(promocode.type)
 
     balance_bonus = (
-        payload.balance_bonus_kopeks
-        if payload.balance_bonus_kopeks is not None
-        else promocode.balance_bonus_kopeks
+        payload.balance_bonus_kopeks if payload.balance_bonus_kopeks is not None else promocode.balance_bonus_kopeks
     )
     subscription_days = (
-        payload.subscription_days
-        if payload.subscription_days is not None
-        else promocode.subscription_days
+        payload.subscription_days if payload.subscription_days is not None else promocode.subscription_days
     )
 
     if new_type == PromoCodeType.BALANCE and balance_bonus <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Balance bonus must be positive for balance promo codes",
+            'Balance bonus must be positive for balance promo codes',
         )
 
     if new_type in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION}:
         if subscription_days <= 0:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Subscription days must be positive for this promo code type",
+                'Subscription days must be positive for this promo code type',
             )
 
     if new_type == PromoCodeType.DISCOUNT:
         if balance_bonus <= 0 or balance_bonus > 100:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Discount percent must be between 1 and 100",
+                'Discount percent must be between 1 and 100',
             )
         # 0 hours = perpetual ("until first purchase"), matching the bot + service.
         if subscription_days < 0:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Discount validity hours cannot be negative",
+                'Discount validity hours cannot be negative',
             )
 
-    valid_from = (
-        _normalize_datetime(payload.valid_from)
-        if payload.valid_from is not None
-        else promocode.valid_from
-    )
-    valid_until = (
-        _normalize_datetime(payload.valid_until)
-        if payload.valid_until is not None
-        else promocode.valid_until
-    )
+    valid_from = _normalize_datetime(payload.valid_from) if payload.valid_from is not None else promocode.valid_from
+    valid_until = _normalize_datetime(payload.valid_until) if payload.valid_until is not None else promocode.valid_until
 
     if valid_from and valid_until and valid_from > valid_until:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "valid_from cannot be greater than valid_until"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'valid_from cannot be greater than valid_until')
 
-    if (
-        payload.max_uses is not None
-        and payload.max_uses != 0
-        and payload.max_uses < promocode.current_uses
-    ):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "max_uses cannot be less than current uses"
-        )
+    if payload.max_uses is not None and payload.max_uses != 0 and payload.max_uses < promocode.current_uses:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'max_uses cannot be less than current uses')
 
 
 # ============== Promocode Endpoints ==============
 
 
-@router.get("", response_model=PromoCodeListResponse)
+@router.get('', response_model=PromoCodeListResponse)
 async def list_promocodes(
-    admin: User = Depends(require_permission("promocodes:read")),
+    admin: User = Depends(require_permission('promocodes:read')),
     db: AsyncSession = Depends(get_cabinet_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -381,9 +349,7 @@ async def list_promocodes(
 ) -> PromoCodeListResponse:
     """Get list of all promocodes."""
     total = await get_promocodes_count(db, is_active=is_active) or 0
-    promocodes = await get_promocodes_list(
-        db, offset=offset, limit=limit, is_active=is_active
-    )
+    promocodes = await get_promocodes_list(db, offset=offset, limit=limit, is_active=is_active)
 
     serialized = [await _serialize_promocode(db, p) for p in promocodes]
     return PromoCodeListResponse(
@@ -394,33 +360,33 @@ async def list_promocodes(
     )
 
 
-@router.get("/{promocode_id}", response_model=PromoCodeDetailResponse)
+@router.get('/{promocode_id}', response_model=PromoCodeDetailResponse)
 async def get_promocode(
     promocode_id: int,
-    admin: User = Depends(require_permission("promocodes:read")),
+    admin: User = Depends(require_permission('promocodes:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoCodeDetailResponse:
     """Get promocode details with usage statistics."""
     promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo code not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo code not found')
 
     stats = await get_promocode_statistics(db, promocode_id)
     base = await _serialize_promocode(db, promocode)
-    recent_uses = [_serialize_recent_use(use) for use in stats.get("recent_uses", [])]
+    recent_uses = [_serialize_recent_use(use) for use in stats.get('recent_uses', [])]
 
     return PromoCodeDetailResponse(
         **base.model_dump(),
-        total_uses=stats.get("total_uses", 0),
-        today_uses=stats.get("today_uses", 0),
+        total_uses=stats.get('total_uses', 0),
+        today_uses=stats.get('today_uses', 0),
         recent_uses=recent_uses,
     )
 
 
-@router.post("", response_model=PromoCodeResponse, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=PromoCodeResponse, status_code=status.HTTP_201_CREATED)
 async def create_promocode_endpoint(
     payload: PromoCodeCreateRequest,
-    admin: User = Depends(require_permission("promocodes:create")),
+    admin: User = Depends(require_permission('promocodes:create')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoCodeResponse:
     """Create a new promocode."""
@@ -432,9 +398,7 @@ async def create_promocode_endpoint(
 
     existing = await get_promocode_by_code(db, normalized_code)
     if existing:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Promo code with this code already exists"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo code with this code already exists')
 
     # 0 means unlimited — convert to large number for is_valid check (current_uses < max_uses)
     effective_max_uses = 999999 if payload.max_uses == 0 else payload.max_uses
@@ -452,17 +416,17 @@ async def create_promocode_endpoint(
 
     update_fields = {}
     if normalized_valid_from is not None:
-        update_fields["valid_from"] = normalized_valid_from
+        update_fields['valid_from'] = normalized_valid_from
     if payload.is_active is not None and payload.is_active != promocode.is_active:
-        update_fields["is_active"] = payload.is_active
+        update_fields['is_active'] = payload.is_active
     if normalized_valid_until is not None:
-        update_fields["valid_until"] = normalized_valid_until
+        update_fields['valid_until'] = normalized_valid_until
     if payload.first_purchase_only:
-        update_fields["first_purchase_only"] = payload.first_purchase_only
+        update_fields['first_purchase_only'] = payload.first_purchase_only
     if payload.promo_group_id is not None:
-        update_fields["promo_group_id"] = payload.promo_group_id
+        update_fields['promo_group_id'] = payload.promo_group_id
     if payload.tariff_id is not None:
-        update_fields["tariff_id"] = payload.tariff_id
+        update_fields['tariff_id'] = payload.tariff_id
 
     if update_fields:
         promocode = await update_promocode(db, promocode, **update_fields)
@@ -470,17 +434,17 @@ async def create_promocode_endpoint(
     return await _serialize_promocode(db, promocode)
 
 
-@router.patch("/{promocode_id}", response_model=PromoCodeResponse)
+@router.patch('/{promocode_id}', response_model=PromoCodeResponse)
 async def update_promocode_endpoint(
     promocode_id: int,
     payload: PromoCodeUpdateRequest,
-    admin: User = Depends(require_permission("promocodes:edit")),
+    admin: User = Depends(require_permission('promocodes:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoCodeResponse:
     """Update an existing promocode."""
     promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo code not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo code not found')
 
     _validate_update_payload(payload, promocode)
 
@@ -493,39 +457,39 @@ async def update_promocode_endpoint(
             if existing and existing.id != promocode_id:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    "Promo code with this code already exists",
+                    'Promo code with this code already exists',
                 )
-        updates["code"] = normalized_code
+        updates['code'] = normalized_code
 
     if payload.type is not None:
-        updates["type"] = payload.type.value
+        updates['type'] = payload.type.value
 
     if payload.balance_bonus_kopeks is not None:
-        updates["balance_bonus_kopeks"] = payload.balance_bonus_kopeks
+        updates['balance_bonus_kopeks'] = payload.balance_bonus_kopeks
 
     if payload.subscription_days is not None:
-        updates["subscription_days"] = payload.subscription_days
+        updates['subscription_days'] = payload.subscription_days
 
     if payload.max_uses is not None:
-        updates["max_uses"] = 999999 if payload.max_uses == 0 else payload.max_uses
+        updates['max_uses'] = 999999 if payload.max_uses == 0 else payload.max_uses
 
     if payload.valid_from is not None:
-        updates["valid_from"] = _normalize_datetime(payload.valid_from)
+        updates['valid_from'] = _normalize_datetime(payload.valid_from)
 
     if payload.valid_until is not None:
-        updates["valid_until"] = _normalize_datetime(payload.valid_until)
+        updates['valid_until'] = _normalize_datetime(payload.valid_until)
 
     if payload.is_active is not None:
-        updates["is_active"] = payload.is_active
+        updates['is_active'] = payload.is_active
 
     if payload.first_purchase_only is not None:
-        updates["first_purchase_only"] = payload.first_purchase_only
+        updates['first_purchase_only'] = payload.first_purchase_only
 
     if payload.promo_group_id is not None:
-        updates["promo_group_id"] = payload.promo_group_id
+        updates['promo_group_id'] = payload.promo_group_id
 
     if payload.tariff_id is not None:
-        updates["tariff_id"] = payload.tariff_id if payload.tariff_id != 0 else None
+        updates['tariff_id'] = payload.tariff_id if payload.tariff_id != 0 else None
 
     if not updates:
         return await _serialize_promocode(db, promocode)
@@ -535,23 +499,23 @@ async def update_promocode_endpoint(
 
 
 @router.delete(
-    "/{promocode_id}",
+    '/{promocode_id}',
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def delete_promocode_endpoint(
     promocode_id: int,
-    admin: User = Depends(require_permission("promocodes:delete")),
+    admin: User = Depends(require_permission('promocodes:delete')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> Response:
     """Delete a promocode."""
     promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo code not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo code not found')
 
     success = await delete_promocode(db, promocode)
     if not success:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Failed to delete promo code")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Failed to delete promo code')
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -564,12 +528,10 @@ class DeactivateDiscountResponse(BaseModel):
     user_id: int
 
 
-@router.post(
-    "/deactivate-discount/{user_id}", response_model=DeactivateDiscountResponse
-)
+@router.post('/deactivate-discount/{user_id}', response_model=DeactivateDiscountResponse)
 async def admin_deactivate_discount_promocode(
     user_id: int,
-    admin: User = Depends(require_permission("promocodes:edit")),
+    admin: User = Depends(require_permission('promocodes:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> DeactivateDiscountResponse:
     """Admin: deactivate a user's active discount (promo code or promo offer)."""
@@ -577,16 +539,16 @@ async def admin_deactivate_discount_promocode(
 
     target_user = await get_user(db, user_id)
     if not target_user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
 
-    current_discount = getattr(target_user, "promo_offer_discount_percent", 0) or 0
-    source = getattr(target_user, "promo_offer_discount_source", None)
+    current_discount = getattr(target_user, 'promo_offer_discount_percent', 0) or 0
+    source = getattr(target_user, 'promo_offer_discount_source', None)
 
     if current_discount <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "User has no active discount")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User has no active discount')
 
     # If source is a promo code, use the service to properly rollback usage
-    if source and source.startswith("promocode:"):
+    if source and source.startswith('promocode:'):
         from app.services.promocode_service import PromoCodeService
 
         service = PromoCodeService()
@@ -596,26 +558,26 @@ async def admin_deactivate_discount_promocode(
             admin_initiated=True,
         )
 
-        if result["success"]:
+        if result['success']:
             return DeactivateDiscountResponse(
                 success=True,
-                message=f"Discount promo code deactivated for user {user_id}",
-                deactivated_code=result.get("deactivated_code"),
-                discount_percent=result.get("discount_percent", 0),
+                message=f'Discount promo code deactivated for user {user_id}',
+                deactivated_code=result.get('deactivated_code'),
+                discount_percent=result.get('discount_percent', 0),
                 user_id=user_id,
             )
 
         error_messages = {
-            "user_not_found": "User not found",
-            "no_active_discount_promocode": "User has no active discount from a promo code",
-            "discount_already_expired": "Discount has already expired (cleaned up)",
-            "server_error": "Server error occurred",
+            'user_not_found': 'User not found',
+            'no_active_discount_promocode': 'User has no active discount from a promo code',
+            'discount_already_expired': 'Discount has already expired (cleaned up)',
+            'server_error': 'Server error occurred',
         }
 
-        error_code = result.get("error", "server_error")
+        error_code = result.get('error', 'server_error')
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            error_messages.get(error_code, "Failed to deactivate"),
+            error_messages.get(error_code, 'Failed to deactivate'),
         )
 
     # For non-promocode offers (admin offers, etc.) — just clear the fields
@@ -628,7 +590,7 @@ async def admin_deactivate_discount_promocode(
 
     return DeactivateDiscountResponse(
         success=True,
-        message=f"Promo offer deactivated for user {user_id}",
+        message=f'Promo offer deactivated for user {user_id}',
         deactivated_code=None,
         discount_percent=old_percent,
         user_id=user_id,
@@ -637,14 +599,12 @@ async def admin_deactivate_discount_promocode(
 
 # ============== PromoGroup Endpoints ==============
 
-promo_groups_router = APIRouter(
-    prefix="/admin/promo-groups", tags=["Admin Promo Groups"]
-)
+promo_groups_router = APIRouter(prefix='/admin/promo-groups', tags=['Admin Promo Groups'])
 
 
-@promo_groups_router.get("", response_model=PromoGroupListResponse)
+@promo_groups_router.get('', response_model=PromoGroupListResponse)
 async def list_promo_groups(
-    admin: User = Depends(require_permission("promo_groups:read")),
+    admin: User = Depends(require_permission('promo_groups:read')),
     db: AsyncSession = Depends(get_cabinet_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -658,37 +618,32 @@ async def list_promo_groups(
     )
 
     return PromoGroupListResponse(
-        items=[
-            _serialize_promo_group(group, members_count=count)
-            for group, count in groups_with_counts
-        ],
+        items=[_serialize_promo_group(group, members_count=count) for group, count in groups_with_counts],
         total=total,
         limit=limit,
         offset=offset,
     )
 
 
-@promo_groups_router.get("/{group_id}", response_model=PromoGroupResponse)
+@promo_groups_router.get('/{group_id}', response_model=PromoGroupResponse)
 async def get_promo_group(
     group_id: int,
-    admin: User = Depends(require_permission("promo_groups:read")),
+    admin: User = Depends(require_permission('promo_groups:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoGroupResponse:
     """Get promo group details."""
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
 
     members_count = await count_promo_group_members(db, group_id)
     return _serialize_promo_group(group, members_count=members_count)
 
 
-@promo_groups_router.post(
-    "", response_model=PromoGroupResponse, status_code=status.HTTP_201_CREATED
-)
+@promo_groups_router.post('', response_model=PromoGroupResponse, status_code=status.HTTP_201_CREATED)
 async def create_promo_group_endpoint(
     payload: PromoGroupCreateRequest,
-    admin: User = Depends(require_permission("promo_groups:create")),
+    admin: User = Depends(require_permission('promo_groups:create')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoGroupResponse:
     """Create a new promo group."""
@@ -710,17 +665,17 @@ async def create_promo_group_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Promo group with this name already exists",
+            'Promo group with this name already exists',
         )
 
     return _serialize_promo_group(group, members_count=0)
 
 
-@promo_groups_router.patch("/{group_id}", response_model=PromoGroupResponse)
+@promo_groups_router.patch('/{group_id}', response_model=PromoGroupResponse)
 async def update_promo_group_endpoint(
     group_id: int,
     payload: PromoGroupUpdateRequest,
-    admin: User = Depends(require_permission("promo_groups:edit")),
+    admin: User = Depends(require_permission('promo_groups:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoGroupResponse:
     """Update a promo group."""
@@ -728,7 +683,7 @@ async def update_promo_group_endpoint(
 
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
 
     try:
         group = await update_promo_group(
@@ -747,28 +702,26 @@ async def update_promo_group_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Promo group with this name already exists",
+            'Promo group with this name already exists',
         )
 
     members_count = await count_promo_group_members(db, group_id)
     return _serialize_promo_group(group, members_count=members_count)
 
 
-@promo_groups_router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@promo_groups_router.delete('/{group_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_promo_group_endpoint(
     group_id: int,
-    admin: User = Depends(require_permission("promo_groups:delete")),
+    admin: User = Depends(require_permission('promo_groups:delete')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> Response:
     """Delete a promo group."""
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
 
     success = await delete_promo_group(db, group)
     if not success:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Cannot delete default promo group"
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Cannot delete default promo group')
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

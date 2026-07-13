@@ -23,9 +23,7 @@ from ...dependencies import get_cabinet_db, get_current_cabinet_user
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(
-    prefix="/subscriptions", tags=["Cabinet Multi-Tariff"], redirect_slashes=False
-)
+router = APIRouter(prefix='/subscriptions', tags=['Cabinet Multi-Tariff'], redirect_slashes=False)
 
 
 class SubscriptionListItem(BaseModel):
@@ -68,14 +66,14 @@ def _subscription_to_list_item(sub) -> SubscriptionListItem:
         subscription_url=sub.subscription_url,
         subscription_crypto_link=sub.subscription_crypto_link,
         is_trial=sub.is_trial or False,
-        is_daily=bool(sub.tariff and getattr(sub.tariff, "is_daily", False)),
-        is_daily_paused=bool(getattr(sub, "is_daily_paused", False)),
+        is_daily=bool(sub.tariff and getattr(sub.tariff, 'is_daily', False)),
+        is_daily_paused=bool(getattr(sub, 'is_daily_paused', False)),
         autopay_enabled=sub.autopay_enabled or False,
         connected_squads=sub.connected_squads,
     )
 
 
-@router.get("", response_model=SubscriptionsListResponse)
+@router.get('', response_model=SubscriptionsListResponse)
 async def list_subscriptions(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -89,7 +87,7 @@ async def list_subscriptions(
     )
 
 
-@router.get("/{subscription_id}", response_model=SubscriptionListItem)
+@router.get('/{subscription_id}', response_model=SubscriptionListItem)
 async def get_subscription_detail(
     subscription_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -100,12 +98,12 @@ async def get_subscription_detail(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subscription not found",
+            detail='Subscription not found',
         )
     return _subscription_to_list_item(subscription)
 
 
-@router.delete("/{subscription_id}")
+@router.delete('/{subscription_id}')
 async def delete_subscription(
     subscription_id: int,
     user: User = Depends(get_current_cabinet_user),
@@ -116,7 +114,7 @@ async def delete_subscription(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subscription not found",
+            detail='Subscription not found',
         )
 
     # Only expired/disabled subscriptions can be deleted
@@ -124,13 +122,10 @@ async def delete_subscription(
         SubscriptionStatus.EXPIRED.value,
         SubscriptionStatus.DISABLED.value,
     }
-    if (
-        getattr(subscription, "actual_status", subscription.status)
-        not in deletable_statuses
-    ):
+    if getattr(subscription, 'actual_status', subscription.status) not in deletable_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only expired or disabled subscriptions can be deleted",
+            detail='Only expired or disabled subscriptions can be deleted',
         )
 
     # Delete from RemnaWave panel (stops webhooks / phantom notifications)
@@ -141,15 +136,11 @@ async def delete_subscription(
 
             # Suppress the self-inflicted user.deleted webhook so its sibling-expiry
             # sweep never touches the user's other (still-active) subscriptions.
-            RemnaWaveWebhookService.mark_intentional_panel_deletion(
-                panel_uuids=[subscription.remnawave_uuid]
-            )
+            RemnaWaveWebhookService.mark_intentional_panel_deletion(panel_uuids=[subscription.remnawave_uuid])
             service = SubscriptionService()
             await service.delete_remnawave_user(subscription.remnawave_uuid)
         except Exception as e:
-            logger.warning(
-                "Failed to delete RemnaWave user on subscription delete", error=e
-            )
+            logger.warning('Failed to delete RemnaWave user on subscription delete', error=e)
 
     # Decrement server counts
     await decrement_subscription_server_counts(db, subscription)
@@ -159,10 +150,10 @@ async def delete_subscription(
     await db.commit()
 
     logger.info(
-        "Subscription deleted by user",
+        'Subscription deleted by user',
         subscription_id=subscription_id,
         user_id=user.id,
         tariff_id=subscription.tariff_id,
     )
 
-    return {"message": "Subscription deleted"}
+    return {'message': 'Subscription deleted'}

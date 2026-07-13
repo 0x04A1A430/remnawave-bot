@@ -20,35 +20,29 @@ from app.utils.bot_identity import sync_bot_username
 
 @pytest.mark.asyncio
 async def test_sync_overrides_stale_username(monkeypatch):
-    monkeypatch.setattr(settings, "BOT_USERNAME", "old_bot")
-    fake_bot = SimpleNamespace(
-        get_me=AsyncMock(return_value=SimpleNamespace(username="new_bot"))
-    )
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'old_bot')
+    fake_bot = SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(username='new_bot')))
 
     await sync_bot_username(fake_bot)
 
-    assert settings.BOT_USERNAME == "new_bot"
+    assert settings.BOT_USERNAME == 'new_bot'
 
 
 @pytest.mark.asyncio
 async def test_sync_keeps_config_on_get_me_failure(monkeypatch):
-    monkeypatch.setattr(settings, "BOT_USERNAME", "old_bot")
-    fake_bot = SimpleNamespace(
-        get_me=AsyncMock(side_effect=RuntimeError("network down"))
-    )
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'old_bot')
+    fake_bot = SimpleNamespace(get_me=AsyncMock(side_effect=RuntimeError('network down')))
 
     await sync_bot_username(fake_bot)
 
-    assert settings.BOT_USERNAME == "old_bot"
+    assert settings.BOT_USERNAME == 'old_bot'
 
 
 @pytest.mark.asyncio
 async def test_sync_noop_when_already_correct(monkeypatch):
-    monkeypatch.setattr(settings, "BOT_USERNAME", "same_bot")
-    fake_bot = SimpleNamespace(
-        get_me=AsyncMock(return_value=SimpleNamespace(username="same_bot"))
-    )
+    monkeypatch.setattr(settings, 'BOT_USERNAME', 'same_bot')
+    fake_bot = SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(username='same_bot')))
 
     await sync_bot_username(fake_bot)
 
-    assert settings.BOT_USERNAME == "same_bot"
+    assert settings.BOT_USERNAME == 'same_bot'

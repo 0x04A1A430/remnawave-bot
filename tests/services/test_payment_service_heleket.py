@@ -16,7 +16,7 @@ from app.services.payment_service import PaymentService
 
 @pytest.fixture
 def anyio_backend() -> str:
-    return "asyncio"
+    return 'asyncio'
 
 
 class DummySession:
@@ -63,7 +63,7 @@ class StubHeleketService:
         uuid: str | None = None,
         order_id: str | None = None,
     ) -> dict[str, Any] | None:
-        self.info_calls.append({"uuid": uuid, "order_id": order_id})
+        self.info_calls.append({'uuid': uuid, 'order_id': order_id})
         return self.info_response
 
     async def list_payments(
@@ -73,9 +73,7 @@ class StubHeleketService:
         date_to: str | None = None,
         cursor: str | None = None,
     ) -> dict[str, Any] | None:
-        self.list_calls.append(
-            {"date_from": date_from, "date_to": date_to, "cursor": cursor}
-        )
+        self.list_calls.append({'date_from': date_from, 'date_to': date_to, 'cursor': cursor})
         return self.list_response
 
 
@@ -92,20 +90,20 @@ def _make_service(stub: StubHeleketService | None) -> PaymentService:
     return service
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_heleket_payment_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response = {
-        "state": 0,
-        "result": {
-            "uuid": "heleket-uuid",
-            "order_id": "order-123",
-            "url": "https://heleket/pay",
-            "status": "check",
-            "payer_amount": "12.50",
-            "payer_currency": "USDT",
-            "discount_percent": -5,
-            "payer_amount_exchange_rate": "0.0125",
-            "expired_at": 1750000000,
+        'state': 0,
+        'result': {
+            'uuid': 'heleket-uuid',
+            'order_id': 'order-123',
+            'url': 'https://heleket/pay',
+            'status': 'check',
+            'payer_amount': '12.50',
+            'payer_currency': 'USDT',
+            'discount_percent': -5,
+            'payer_amount_exchange_rate': '0.0125',
+            'expired_at': 1750000000,
         },
     }
     stub = StubHeleketService(response)
@@ -120,7 +118,7 @@ async def test_create_heleket_payment_success(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(
         heleket_crud,
-        "create_heleket_payment",
+        'create_heleket_payment',
         fake_create_heleket_payment,
         raising=False,
     )
@@ -129,21 +127,21 @@ async def test_create_heleket_payment_success(monkeypatch: pytest.MonkeyPatch) -
         db=db,
         user_id=42,
         amount_kopeks=15000,
-        description="Пополнение",
-        language="ru",
+        description='Пополнение',
+        language='ru',
     )
 
     assert result is not None
-    assert result["local_payment_id"] == 555
-    assert result["uuid"] == "heleket-uuid"
-    assert result["order_id"] == "order-123"
-    assert result["payment_url"] == "https://heleket/pay"
-    assert stub.calls and stub.calls[0]["amount"] == "150.00"
-    assert captured_args["uuid"] == "heleket-uuid"
-    assert captured_args["user_id"] == 42
+    assert result['local_payment_id'] == 555
+    assert result['uuid'] == 'heleket-uuid'
+    assert result['order_id'] == 'order-123'
+    assert result['payment_url'] == 'https://heleket/pay'
+    assert stub.calls and stub.calls[0]['amount'] == '150.00'
+    assert captured_args['uuid'] == 'heleket-uuid'
+    assert captured_args['user_id'] == 42
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_heleket_payment_returns_none_without_service() -> None:
     service = _make_service(None)
     db = DummySession()
@@ -152,13 +150,13 @@ async def test_create_heleket_payment_returns_none_without_service() -> None:
         db=db,
         user_id=1,
         amount_kopeks=10000,
-        description="Пополнение",
+        description='Пополнение',
     )
 
     assert result is None
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_create_heleket_payment_handles_empty_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -175,7 +173,7 @@ async def test_create_heleket_payment_handles_empty_response(
 
     monkeypatch.setattr(
         heleket_crud,
-        "create_heleket_payment",
+        'create_heleket_payment',
         fake_create_heleket_payment,
         raising=False,
     )
@@ -184,24 +182,24 @@ async def test_create_heleket_payment_handles_empty_response(
         db=db,
         user_id=1,
         amount_kopeks=20000,
-        description="Пополнение",
+        description='Пополнение',
     )
 
     assert result is None
     assert called is False
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_sync_heleket_payment_status_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     info_response = {
-        "state": 0,
-        "result": {
-            "uuid": "heleket-uuid",
-            "order_id": "order-123",
-            "status": "paid",
-            "payment_amount": "100.00",
+        'state': 0,
+        'result': {
+            'uuid': 'heleket-uuid',
+            'order_id': 'order-123',
+            'status': 'paid',
+            'payment_amount': '100.00',
         },
     }
     stub = StubHeleketService(response=None, info_response=info_response)
@@ -210,9 +208,9 @@ async def test_sync_heleket_payment_status_success(
 
     payment = SimpleNamespace(
         id=55,
-        uuid="heleket-uuid",
-        order_id="order-123",
-        status="check",
+        uuid='heleket-uuid',
+        order_id='order-123',
+        status='check',
         user_id=7,
     )
 
@@ -223,27 +221,23 @@ async def test_sync_heleket_payment_status_success(
     captured: dict[str, Any] = {}
 
     async def fake_process(self, db, payload, *, metadata_key):
-        captured["payload"] = payload
-        captured["metadata_key"] = metadata_key
+        captured['payload'] = payload
+        captured['metadata_key'] = metadata_key
         return SimpleNamespace(transaction_id=999, **payload)
 
-    monkeypatch.setattr(
-        heleket_crud, "get_heleket_payment_by_id", fake_get_by_id, raising=False
-    )
-    monkeypatch.setattr(
-        PaymentService, "_process_heleket_payload", fake_process, raising=False
-    )
+    monkeypatch.setattr(heleket_crud, 'get_heleket_payment_by_id', fake_get_by_id, raising=False)
+    monkeypatch.setattr(PaymentService, '_process_heleket_payload', fake_process, raising=False)
 
     result = await service.sync_heleket_payment_status(db, local_payment_id=payment.id)
 
     assert result is not None
     assert result.transaction_id == 999
-    assert captured["metadata_key"] == "last_status_check"
-    assert captured["payload"]["uuid"] == payment.uuid
-    assert stub.info_calls == [{"uuid": payment.uuid, "order_id": payment.order_id}]
+    assert captured['metadata_key'] == 'last_status_check'
+    assert captured['payload']['uuid'] == payment.uuid
+    assert stub.info_calls == [{'uuid': payment.uuid, 'order_id': payment.order_id}]
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_sync_heleket_payment_status_without_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -253,9 +247,9 @@ async def test_sync_heleket_payment_status_without_response(
 
     payment = SimpleNamespace(
         id=12,
-        uuid="heleket-uuid",
-        order_id="order-123",
-        status="check",
+        uuid='heleket-uuid',
+        order_id='order-123',
+        status='check',
         user_id=5,
     )
 
@@ -264,39 +258,35 @@ async def test_sync_heleket_payment_status_without_response(
         return payment
 
     async def fake_process(*args, **kwargs):  # pragma: no cover - ensure not called
-        raise AssertionError("_process_heleket_payload should not be called")
+        raise AssertionError('_process_heleket_payload should not be called')
 
-    monkeypatch.setattr(
-        heleket_crud, "get_heleket_payment_by_id", fake_get_by_id, raising=False
-    )
-    monkeypatch.setattr(
-        PaymentService, "_process_heleket_payload", fake_process, raising=False
-    )
+    monkeypatch.setattr(heleket_crud, 'get_heleket_payment_by_id', fake_get_by_id, raising=False)
+    monkeypatch.setattr(PaymentService, '_process_heleket_payload', fake_process, raising=False)
 
     result = await service.sync_heleket_payment_status(db, local_payment_id=payment.id)
 
     assert result is payment
-    assert stub.info_calls == [{"uuid": payment.uuid, "order_id": payment.order_id}]
+    assert stub.info_calls == [{'uuid': payment.uuid, 'order_id': payment.order_id}]
     assert stub.list_calls  # fallback to history should be attempted
 
 
-@pytest.mark.anyio("asyncio")
+@pytest.mark.anyio('asyncio')
 async def test_sync_heleket_payment_status_history_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = StubHeleketService(response=None, info_response=None)
     stub.list_response = {
-        "state": 0,
-        "result": {
-            "items": [
+        'state': 0,
+        'result': {
+            'items': [
                 {
-                    "uuid": "heleket-uuid",
-                    "order_id": "order-123",
-                    "status": "paid",
-                    "payment_amount": "150.00",
+                    'uuid': 'heleket-uuid',
+                    'order_id': 'order-123',
+                    'status': 'paid',
+                    'payment_amount': '150.00',
                 }
             ],
-            "paginate": {"nextCursor": None},
+            'paginate': {'nextCursor': None},
         },
     }
     service = _make_service(stub)
@@ -304,9 +294,9 @@ async def test_sync_heleket_payment_status_history_fallback(
 
     payment = SimpleNamespace(
         id=77,
-        uuid="heleket-uuid",
-        order_id="order-123",
-        status="check",
+        uuid='heleket-uuid',
+        order_id='order-123',
+        status='check',
         user_id=8,
     )
 
@@ -317,19 +307,15 @@ async def test_sync_heleket_payment_status_history_fallback(
     captured: dict[str, Any] = {}
 
     async def fake_process(self, db, payload, *, metadata_key):
-        captured["payload"] = payload
-        captured["metadata_key"] = metadata_key
+        captured['payload'] = payload
+        captured['metadata_key'] = metadata_key
         return SimpleNamespace(**payload)
 
-    monkeypatch.setattr(
-        heleket_crud, "get_heleket_payment_by_id", fake_get_by_id, raising=False
-    )
-    monkeypatch.setattr(
-        PaymentService, "_process_heleket_payload", fake_process, raising=False
-    )
+    monkeypatch.setattr(heleket_crud, 'get_heleket_payment_by_id', fake_get_by_id, raising=False)
+    monkeypatch.setattr(PaymentService, '_process_heleket_payload', fake_process, raising=False)
 
     result = await service.sync_heleket_payment_status(db, local_payment_id=payment.id)
 
     assert result is not None
-    assert captured["payload"]["status"] == "paid"
+    assert captured['payload']['status'] == 'paid'
     assert stub.list_calls

@@ -27,7 +27,7 @@ class MenuLayoutHistoryService:
         history = MenuLayoutHistory(
             config_json=json.dumps(config, ensure_ascii=False),
             action=action,
-            changes_summary=changes_summary or f"Action: {action}",
+            changes_summary=changes_summary or f'Action: {action}',
             user_info=user_info,
         )
         db.add(history)
@@ -44,20 +44,17 @@ class MenuLayoutHistoryService:
     ) -> list[dict[str, Any]]:
         """Получить историю изменений."""
         result = await db.execute(
-            select(MenuLayoutHistory)
-            .order_by(desc(MenuLayoutHistory.created_at))
-            .limit(limit)
-            .offset(offset)
+            select(MenuLayoutHistory).order_by(desc(MenuLayoutHistory.created_at)).limit(limit).offset(offset)
         )
         entries = result.scalars().all()
 
         return [
             {
-                "id": entry.id,
-                "action": entry.action,
-                "changes_summary": entry.changes_summary,
-                "user_info": entry.user_info,
-                "created_at": entry.created_at,
+                'id': entry.id,
+                'action': entry.action,
+                'changes_summary': entry.changes_summary,
+                'user_info': entry.user_info,
+                'created_at': entry.created_at,
             }
             for entry in entries
         ]
@@ -75,21 +72,19 @@ class MenuLayoutHistoryService:
         history_id: int,
     ) -> dict[str, Any] | None:
         """Получить конкретную запись истории с конфигурацией."""
-        result = await db.execute(
-            select(MenuLayoutHistory).where(MenuLayoutHistory.id == history_id)
-        )
+        result = await db.execute(select(MenuLayoutHistory).where(MenuLayoutHistory.id == history_id))
         entry = result.scalar_one_or_none()
 
         if not entry:
             return None
 
         return {
-            "id": entry.id,
-            "action": entry.action,
-            "changes_summary": entry.changes_summary,
-            "user_info": entry.user_info,
-            "created_at": entry.created_at,
-            "config": json.loads(entry.config_json),
+            'id': entry.id,
+            'action': entry.action,
+            'changes_summary': entry.changes_summary,
+            'user_info': entry.user_info,
+            'created_at': entry.created_at,
+            'config': json.loads(entry.config_json),
         }
 
     @classmethod
@@ -113,17 +108,17 @@ class MenuLayoutHistoryService:
         """
         entry = await cls.get_history_entry(db, history_id)
         if not entry:
-            raise KeyError(f"History entry {history_id} not found")
+            raise KeyError(f'History entry {history_id} not found')
 
-        config = entry["config"]
+        config = entry['config']
 
         # Сохраняем текущую конфигурацию в историю перед откатом
         current_config = await get_config_func(db)
         await cls.save_history(
             db,
             current_config,
-            "rollback_backup",
-            f"Backup before rollback to history #{history_id}",
+            'rollback_backup',
+            f'Backup before rollback to history #{history_id}',
             user_info,
         )
 
@@ -131,8 +126,6 @@ class MenuLayoutHistoryService:
         await save_config_func(db, config)
 
         # Сохраняем запись об откате
-        await cls.save_history(
-            db, config, "rollback", f"Rollback to history #{history_id}", user_info
-        )
+        await cls.save_history(db, config, 'rollback', f'Rollback to history #{history_id}', user_info)
 
         return config

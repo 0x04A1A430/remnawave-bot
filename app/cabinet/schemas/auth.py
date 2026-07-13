@@ -8,133 +8,123 @@ from pydantic import BaseModel, EmailStr, Field
 class TelegramAuthRequest(BaseModel):
     """Request for Telegram WebApp initData authentication."""
 
-    init_data: str = Field(
-        ..., max_length=4096, description="Telegram WebApp initData string"
-    )
+    init_data: str = Field(..., max_length=4096, description='Telegram WebApp initData string')
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug from web link",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug from web link',
     )
     referral_code: str | None = Field(
         None,
         max_length=32,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Referral code of inviter",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Referral code of inviter',
     )
 
 
 class TelegramWidgetAuthRequest(BaseModel):
     """Request for Telegram Login Widget authentication."""
 
-    id: int = Field(..., description="Telegram user ID")
+    id: int = Field(..., description='Telegram user ID')
     first_name: str = Field(..., max_length=64, description="User's first name")
     last_name: str | None = Field(None, max_length=64, description="User's last name")
     username: str | None = Field(None, max_length=32, description="User's username")
     photo_url: str | None = Field(None, max_length=512, description="User's photo URL")
-    auth_date: int = Field(..., description="Unix timestamp of authentication")
-    hash: str = Field(
-        ..., min_length=64, max_length=64, description="Authentication hash"
-    )
+    auth_date: int = Field(..., description='Unix timestamp of authentication')
+    hash: str = Field(..., min_length=64, max_length=64, description='Authentication hash')
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug from web link",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug from web link',
     )
     referral_code: str | None = Field(
         None,
         max_length=32,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Referral code of inviter",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Referral code of inviter',
     )
 
 
 class TelegramOIDCAuthRequest(BaseModel):
     """Request for Telegram OIDC authentication (popup flow)."""
 
-    id_token: str = Field(
-        ..., max_length=4096, description="JWT id_token from Telegram OIDC popup"
-    )
+    id_token: str = Field(..., max_length=4096, description='JWT id_token from Telegram OIDC popup')
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug from web link",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug from web link',
     )
     referral_code: str | None = Field(
         None,
         max_length=32,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Referral code of inviter",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Referral code of inviter',
     )
 
 
 class EmailRegisterRequest(BaseModel):
     """Request to register/link email to existing Telegram account."""
 
-    email: EmailStr = Field(..., description="Email address")
-    password: str = Field(
-        ..., min_length=8, max_length=128, description="Password (min 8 chars)"
-    )
+    email: EmailStr = Field(..., description='Email address')
+    password: str = Field(..., min_length=8, max_length=128, description='Password (min 8 chars)')
 
 
 class EmailVerifyRequest(BaseModel):
     """Request to verify email with token."""
 
-    token: str = Field(..., max_length=2048, description="Email verification token")
+    token: str = Field(..., max_length=2048, description='Email verification token')
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug from web link",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug from web link',
     )
 
 
 class EmailLoginRequest(BaseModel):
     """Request to login with email and password."""
 
-    email: EmailStr = Field(..., description="Email address")
-    password: str = Field(..., min_length=1, max_length=128, description="Password")
+    email: EmailStr = Field(..., description='Email address')
+    password: str = Field(..., min_length=1, max_length=128, description='Password')
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug from web link",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug from web link',
     )
 
 
 class RefreshTokenRequest(BaseModel):
     """Request to refresh access token."""
 
-    refresh_token: str = Field(..., max_length=2048, description="Refresh token")
+    refresh_token: str = Field(..., max_length=2048, description='Refresh token')
 
 
 class PasswordForgotRequest(BaseModel):
     """Request to initiate password reset."""
 
-    email: EmailStr = Field(..., description="Email address")
+    email: EmailStr = Field(..., description='Email address')
 
 
 class PasswordResetRequest(BaseModel):
     """Request to reset password with token."""
 
-    token: str = Field(..., max_length=2048, description="Password reset token")
-    password: str = Field(
-        ..., min_length=8, max_length=128, description="New password (min 8 chars)"
-    )
+    token: str = Field(..., max_length=2048, description='Password reset token')
+    password: str = Field(..., min_length=8, max_length=128, description='New password (min 8 chars)')
 
 
 class AutoLoginRequest(BaseModel):
     """Request for auto-login from guest purchase success page."""
 
-    token: str = Field(..., max_length=2048, description="Auto-login JWT token")
+    token: str = Field(..., max_length=2048, description='Auto-login JWT token')
 
 
 class TokenResponse(BaseModel):
@@ -142,8 +132,8 @@ class TokenResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int = Field(..., description="Access token expiration in seconds")
+    token_type: str = 'bearer'
+    expires_in: int = Field(..., description='Access token expiration in seconds')
 
 
 class UserResponse(BaseModel):
@@ -159,9 +149,9 @@ class UserResponse(BaseModel):
     balance_kopeks: int = 0
     balance_rubles: float = 0.0
     referral_code: str | None = None
-    language: str = "ru"
+    language: str = 'ru'
     created_at: datetime
-    auth_type: str = "telegram"  # "telegram" или "email"
+    auth_type: str = 'telegram'  # "telegram" или "email"
 
     class Config:
         from_attributes = True
@@ -170,29 +160,27 @@ class UserResponse(BaseModel):
 class EmailRegisterStandaloneRequest(BaseModel):
     """Request to register new account with email (no Telegram required)."""
 
-    email: EmailStr = Field(..., description="Email address")
-    password: str = Field(
-        ..., min_length=8, max_length=128, description="Password (min 8 chars)"
-    )
-    first_name: str | None = Field(None, max_length=64, description="First name")
+    email: EmailStr = Field(..., description='Email address')
+    password: str = Field(..., min_length=8, max_length=128, description='Password (min 8 chars)')
+    first_name: str | None = Field(None, max_length=64, description='First name')
     language: str = Field(
-        "ru",
+        'ru',
         max_length=5,
-        pattern=r"^[a-z]{2}$",
-        description="Preferred language (ISO 639-1)",
+        pattern=r'^[a-z]{2}$',
+        description='Preferred language (ISO 639-1)',
     )
     referral_code: str | None = Field(
         None,
         max_length=32,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Referral code of inviter",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Referral code of inviter',
     )
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug from web link",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug from web link',
     )
 
 
@@ -211,7 +199,7 @@ class AuthResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = 'bearer'
     expires_in: int
     user: UserResponse
     campaign_bonus: CampaignBonusInfo | None = None
@@ -220,17 +208,15 @@ class AuthResponse(BaseModel):
 class RegisterResponse(BaseModel):
     """Response for email registration (before verification)."""
 
-    message: str = Field(..., description="Success message")
-    email: str = Field(..., description="Email address to verify")
-    requires_verification: bool = Field(
-        True, description="Whether email verification is required"
-    )
+    message: str = Field(..., description='Success message')
+    email: str = Field(..., description='Email address to verify')
+    requires_verification: bool = Field(True, description='Whether email verification is required')
 
 
 class EmailChangeRequest(BaseModel):
     """Request to initiate email change."""
 
-    new_email: EmailStr = Field(..., description="New email address")
+    new_email: EmailStr = Field(..., description='New email address')
 
 
 class EmailChangeVerifyRequest(BaseModel):
@@ -240,8 +226,8 @@ class EmailChangeVerifyRequest(BaseModel):
         ...,
         min_length=6,
         max_length=6,
-        pattern=r"^\d{6}$",
-        description="6-digit verification code",
+        pattern=r'^\d{6}$',
+        description='6-digit verification code',
     )
 
 
@@ -252,25 +238,25 @@ class EmailMergeVerifyRequest(BaseModel):
         ...,
         min_length=6,
         max_length=6,
-        pattern=r"^\d{6}$",
-        description="6-digit confirmation code",
+        pattern=r'^\d{6}$',
+        description='6-digit confirmation code',
     )
 
 
 class EmailChangeResponse(BaseModel):
     """Response for email change initiation."""
 
-    message: str = Field(..., description="Success message")
-    new_email: str = Field(..., description="New email address pending verification")
-    expires_in_minutes: int = Field(..., description="Code expiration time in minutes")
+    message: str = Field(..., description='Success message')
+    new_email: str = Field(..., description='New email address pending verification')
+    expires_in_minutes: int = Field(..., description='Code expiration time in minutes')
 
 
 class DeepLinkTokenResponse(BaseModel):
     """Response with deep link auth token."""
 
-    token: str = Field(..., description="One-time auth token")
-    bot_username: str = Field(..., description="Bot username for deep link")
-    expires_in: int = Field(..., description="Token TTL in seconds")
+    token: str = Field(..., description='One-time auth token')
+    bot_username: str = Field(..., description='Bot username for deep link')
+    expires_in: int = Field(..., description='Token TTL in seconds')
 
 
 class DeepLinkPollRequest(BaseModel):
@@ -280,13 +266,11 @@ class DeepLinkPollRequest(BaseModel):
     Only campaign_slug is supported (campaign bonus can apply to existing users).
     """
 
-    token: str = Field(
-        ..., min_length=16, max_length=128, description="Deep link auth token"
-    )
+    token: str = Field(..., min_length=16, max_length=128, description='Deep link auth token')
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="Campaign slug captured from cabinet URL",
+        pattern=r'^[a-zA-Z0-9_-]+$',
+        description='Campaign slug captured from cabinet URL',
     )

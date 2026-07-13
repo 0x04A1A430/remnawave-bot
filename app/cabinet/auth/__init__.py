@@ -15,14 +15,14 @@ from .telegram_auth import (
 )
 
 __all__ = [
-    "create_access_token",
-    "create_auto_login_token",
-    "create_refresh_token",
-    "decode_token",
-    "get_token_payload",
-    "hash_password",
-    "validate_telegram_init_data",
-    "validate_telegram_login_widget",
-    "validate_telegram_oidc_token",
-    "verify_password",
+    'create_access_token',
+    'create_auto_login_token',
+    'create_refresh_token',
+    'decode_token',
+    'get_token_payload',
+    'hash_password',
+    'validate_telegram_init_data',
+    'validate_telegram_login_widget',
+    'validate_telegram_oidc_token',
+    'verify_password',
 ]

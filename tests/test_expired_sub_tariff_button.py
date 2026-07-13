@@ -13,12 +13,7 @@ import app.keyboards.inline as kb
 
 
 def _callbacks(markup) -> list[str]:
-    return [
-        btn.callback_data
-        for row in markup.inline_keyboard
-        for btn in row
-        if btn.callback_data
-    ]
+    return [btn.callback_data for row in markup.inline_keyboard for btn in row if btn.callback_data]
 
 
 def _fake_sub(actual_status: str, status: str) -> SimpleNamespace:
@@ -38,59 +33,59 @@ def _patch_tariffs_mode(monkeypatch):
 
     # is_tariffs_mode/is_multi_tariff_enabled are methods on the pydantic Settings
     # class — patch them on the class (the singleton instance can't take new attrs).
-    monkeypatch.setattr(Settings, "is_tariffs_mode", lambda self: True)
-    monkeypatch.setattr(Settings, "is_multi_tariff_enabled", lambda self: True)
-    monkeypatch.setattr(kb, "get_display_subscription_link", lambda sub: None)
+    monkeypatch.setattr(Settings, 'is_tariffs_mode', lambda self: True)
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(kb, 'get_display_subscription_link', lambda sub: None)
 
 
 def test_expired_sub_offers_buy_not_switch(monkeypatch):
     _patch_tariffs_mode(monkeypatch)
     markup = kb.get_subscription_keyboard(
-        "ru",
+        'ru',
         has_subscription=True,
         is_trial=False,
-        subscription=_fake_sub("expired", "expired"),
+        subscription=_fake_sub('expired', 'expired'),
     )
     cbs = _callbacks(markup)
-    assert "menu_buy" in cbs  # fresh-purchase entry shown instead
-    assert "instant_switch" not in cbs
-    assert "tariff_switch" not in cbs
+    assert 'menu_buy' in cbs  # fresh-purchase entry shown instead
+    assert 'instant_switch' not in cbs
+    assert 'tariff_switch' not in cbs
 
 
 def test_disabled_sub_offers_buy_not_switch(monkeypatch):
     _patch_tariffs_mode(monkeypatch)
     markup = kb.get_subscription_keyboard(
-        "ru",
+        'ru',
         has_subscription=True,
         is_trial=False,
-        subscription=_fake_sub("disabled", "disabled"),
+        subscription=_fake_sub('disabled', 'disabled'),
     )
     cbs = _callbacks(markup)
-    assert "menu_buy" in cbs
-    assert "instant_switch" not in cbs
+    assert 'menu_buy' in cbs
+    assert 'instant_switch' not in cbs
 
 
 def test_active_sub_keeps_change_tariff(monkeypatch):
     _patch_tariffs_mode(monkeypatch)
     markup = kb.get_subscription_keyboard(
-        "ru",
+        'ru',
         has_subscription=True,
         is_trial=False,
-        subscription=_fake_sub("active", "active"),
+        subscription=_fake_sub('active', 'active'),
     )
     cbs = _callbacks(markup)
-    assert "instant_switch" in cbs  # normal switch flow untouched
-    assert "menu_buy" not in cbs
+    assert 'instant_switch' in cbs  # normal switch flow untouched
+    assert 'menu_buy' not in cbs
 
 
 def test_limited_sub_keeps_change_tariff(monkeypatch):
     """'limited' = traffic exhausted but time remaining (end_date>now) — switch still valid."""
     _patch_tariffs_mode(monkeypatch)
     markup = kb.get_subscription_keyboard(
-        "ru",
+        'ru',
         has_subscription=True,
         is_trial=False,
-        subscription=_fake_sub("limited", "limited"),
+        subscription=_fake_sub('limited', 'limited'),
     )
     cbs = _callbacks(markup)
-    assert "instant_switch" in cbs
+    assert 'instant_switch' in cbs
