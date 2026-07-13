@@ -41,6 +41,8 @@ def test_activity_sources_shape() -> None:
         'referral_earning',
         'cabinet_login',
         'withdrawal',
+        'button_click',
+        'cabinet_action',
     }
     for query, count_query, ts_column, mapper in sources.values():
         assert callable(mapper)
@@ -165,3 +167,15 @@ async def test_activity_types_filter_limits_sources() -> None:
     # Только счётчик и выборка тикетов — другие таблицы не опрашиваются
     assert len(executed_sql) == 2
     assert all('tickets' in sql for sql in executed_sql)
+
+
+def test_button_click_sources_split_by_type() -> None:
+    """Клики бота и действия кабинета — раздельные источники одной таблицы."""
+    sources = _activity_sources(1)
+
+    bot_sql = str(sources['button_click'][0])
+    cabinet_sql = str(sources['cabinet_action'][0])
+    assert 'button_click_logs' in bot_sql
+    assert 'button_click_logs' in cabinet_sql
+    assert 'button_type' in bot_sql
+    assert 'button_type' in cabinet_sql

@@ -937,6 +937,13 @@ class Settings(BaseSettings):
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не
     # сможет скачать картинку, меню продолжит отправляться без логотипа до рестарта.
     MAIN_MENU_RICH_LOGO_URL: str = ''
+
+    # Лог действий пользователя (нажатия кнопок в боте + мутационные запросы в
+    # кабинете) в button_click_logs — источник таймлайна «Активность» в карточке
+    # юзера админ-кабинета.
+    USER_ACTION_LOG_ENABLED: bool = True
+    # Сколько дней хранить записи логов действий (0 = не чистить).
+    USER_ACTION_LOG_RETENTION_DAYS: int = 90
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'

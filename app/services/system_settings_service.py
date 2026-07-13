@@ -382,6 +382,8 @@ class BotConfigurationService:
         'MAIN_MENU_RICH_ENABLED': 'INTERFACE',
         'MAIN_MENU_RICH_EFFECT_ID': 'INTERFACE',
         'MAIN_MENU_RICH_LOGO_URL': 'INTERFACE',
+        'USER_ACTION_LOG_ENABLED': 'MONITORING',
+        'USER_ACTION_LOG_RETENTION_DAYS': 'MONITORING',
         'CABINET_BUTTON_STYLE': 'INTERFACE',
         'CONNECT_BUTTON_MODE': 'CONNECT_BUTTON',
         'MINIAPP_CUSTOM_URL': 'CONNECT_BUTTON',
@@ -716,6 +718,26 @@ class BotConfigurationService:
                 'бот один раз повторит отправку без логотипа и отключит его до рестарта.'
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, WEBHOOK_URL, LOGO_FILE',
+        },
+        'USER_ACTION_LOG_ENABLED': {
+            'description': (
+                'Лог действий пользователя: нажатия кнопок в боте и действия в кабинете. '
+                'Показывается на вкладке «Активность» в карточке юзера админ-кабинета.'
+            ),
+            'format': 'Булево значение.',
+            'example': 'true',
+            'warning': (
+                'Каждое нажатие кнопки — строка в button_click_logs. '
+                'Старые записи чистятся автоматически (USER_ACTION_LOG_RETENTION_DAYS).'
+            ),
+            'dependencies': 'USER_ACTION_LOG_RETENTION_DAYS',
+        },
+        'USER_ACTION_LOG_RETENTION_DAYS': {
+            'description': 'Сколько дней хранить записи лога действий пользователей (button_click_logs).',
+            'format': 'Целое число дней; 0 — не удалять.',
+            'example': '90',
+            'warning': 'Чистка выполняется раз в сутки циклом мониторинга.',
+            'dependencies': 'USER_ACTION_LOG_ENABLED',
         },
         'MULTI_TARIFF_ENABLED': {
             'description': (

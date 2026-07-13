@@ -100,8 +100,9 @@ class ButtonStatsMiddleware(BaseMiddleware):
         if not isinstance(event, CallbackQuery):
             return await handler(event, data)
 
-        # Пропускаем, если статистика отключена
-        if not settings.MENU_LAYOUT_ENABLED:
+        # Пропускаем, если выключены и статистика конструктора меню,
+        # и лог действий юзера (таймлайн активности в карточке).
+        if not (settings.MENU_LAYOUT_ENABLED or settings.USER_ACTION_LOG_ENABLED):
             return await handler(event, data)
 
         # Логируем клик асинхронно, не блокируя обработку

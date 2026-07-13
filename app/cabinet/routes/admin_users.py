@@ -36,6 +36,7 @@ from app.database.crud.user_device_alias import (
 )
 from app.database.crud.user_promo_group import sync_user_primary_promo_group
 from app.database.models import (
+    ButtonClickLog,
     CabinetRefreshToken,
     Coupon,
     GuestPurchase,
@@ -3050,6 +3051,32 @@ def _activity_sources(user_id: int) -> dict[str, tuple]:
             timestamp=w.created_at,
         )
 
+    def _map_button_click(c: ButtonClickLog) -> UserActivityItem:
+        return UserActivityItem(
+            type='button_click',
+            source='bot',
+            title=c.button_text or c.callback_data or c.button_id,
+            timestamp=c.clicked_at,
+            meta={'callback_data': c.callback_data} if c.callback_data else None,
+        )
+
+    def _map_cabinet_action(c: ButtonClickLog) -> UserActivityItem:
+        return UserActivityItem(
+            type='cabinet_action',
+            source='cabinet',
+            title=c.button_id,
+            timestamp=c.clicked_at,
+            meta={'path': c.callback_data} if c.callback_data else None,
+        )
+
+    # button_click_logs делится на нажатия кнопок бота (пишет ButtonStatsMiddleware)
+    # и действия в кабинете (button_type='cabinet', пишет user_action_log_service).
+    bot_clicks_where = and_(
+        ButtonClickLog.user_id == user_id,
+        or_(ButtonClickLog.button_type.is_(None), ButtonClickLog.button_type != 'cabinet'),
+    )
+    cabinet_actions_where = and_(ButtonClickLog.user_id == user_id, ButtonClickLog.button_type == 'cabinet')
+
     return {
         'transaction': (
             select(Transaction).where(transactions_where),
@@ -3130,6 +3157,18 @@ def _activity_sources(user_id: int) -> dict[str, tuple]:
             select(func.count(WithdrawalRequest.id)).where(WithdrawalRequest.user_id == user_id),
             WithdrawalRequest.created_at,
             _map_withdrawal,
+        ),
+        'button_click': (
+            select(ButtonClickLog).where(bot_clicks_where),
+            select(func.count(ButtonClickLog.id)).where(bot_clicks_where),
+            ButtonClickLog.clicked_at,
+            _map_button_click,
+        ),
+        'cabinet_action': (
+            select(ButtonClickLog).where(cabinet_actions_where),
+            select(func.count(ButtonClickLog.id)).where(cabinet_actions_where),
+            ButtonClickLog.clicked_at,
+            _map_cabinet_action,
         ),
     }
 
