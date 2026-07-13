@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.64.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.63.0...v3.64.0) (2026-07-13)
+
+
+### New Features
+
+* **broadcasts:** поддержать icon_custom_emoji_id у кастомных кнопок рассылки ([ff029c7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/ff029c7073b5a72885e2e53283bb088995072057))
+* **broadcasts:** поддержать icon_custom_emoji_id у кастомных кнопок рассылки ([c690351](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/c69035111c90b44fc25baf06561bebf9976c97df))
+* **cabinet:** команды бота (/start и др.) в логе действий пользователя ([fd3efd7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/fd3efd714d57a62be174e674cb58c6d9fe8ad225))
+* **cabinet:** нажатия кнопок бота и действия в кабинете в таймлайне активности ([2ceb615](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/2ceb615a3db763ac2422d6ef9fdf05341eba3592))
+* **cabinet:** таймлайн активности пользователя в карточке юзера ([be1f67a](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/be1f67adc01d77a06782097f14f8f3f46508fe7b))
+* **menu:** rich-главное меню на Bot API 10.1 с фоллбеком на классику ([20c129e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/20c129ea7e55e13555e4d1aa28a8f0825f1c303f))
+* **menu:** rich-меню v2 — продление из кабинета, расход, логотип, эффект 🎉 ([242ed40](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/242ed405f22d9d5b9771baef5ac3aeb4c37c036d))
+* **menu:** rich-меню v3 — кнопки «Подключить» и «Активировать триал» в таблице ([734773f](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/734773f3921620a2ebd1ffab76cfb92d2bdbe30b))
+* **menu:** сворачиваемый блок подписок в rich-меню при нескольких подписках ([cfdce75](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/cfdce75865ecfdc35c5a939b240cdf4aa05abc4c))
+
+
+### Bug Fixes
+
+* **admin:** честное сообщение при сохранении настройки, прибитой переменной окружения ([f9dc3d4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f9dc3d4c243a8c9a68773fe08c4f634b50fa3e91))
+* **admin:** честное сообщение при сохранении настройки, прибитой переменной окружения ([f63bee0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f63bee0d814f7dde9538e1d56e8600c5fb1687b3))
+* **maintenance:** не разворачивать traceback для ожидаемых отказов Telegram ([27b02e4](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/27b02e4f363914e8b0982d13c4a213ab4c1982d5))
+* **menu:** кнопки таблицы в видимую строку + эфемерное подтверждение триала ([f7809b7](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/f7809b7b323ecbb493eae9f1f2b8f440c5869367))
+* **menu:** не разворачивать traceback для ожидаемых ошибок rich-меню ([1ca972d](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/1ca972d6d6f01b18d474d9363eaae86294c797af))
+* **monitoring:** поддержать плейсхолдер {days} в SUBSCRIPTION_EXPIRING_PAID ([d445dfa](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/d445dfaf5ba72617711cdc6e2224f83b3c787a95))
+* **monitoring:** поддержать плейсхолдер {days} в SUBSCRIPTION_EXPIRING_PAID ([bc51a06](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/bc51a0624739b322c3e67d646ecfd3526385bb80))
+* **subscription:** block prorated instant switch from free tariffs ([6aca902](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6aca9024cf6d3d0a79cd329d188a4a3d66251c80))
+* **subscription:** block prorated instant switch from free tariffs ([6ef7d0e](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/6ef7d0e4146f18b7afe2a6701b2c74388ff2a0b6))
+
 ## [3.63.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.62.0...v3.63.0) (2026-07-12)
 
 
