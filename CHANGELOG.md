@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/cy7su/remnawave-bot/compare/v0.2.0...v0.2.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* address CodeQL security alerts - weak hash, ReDoS, URL sanitization, exception exposure ([4c19317](https://github.com/cy7su/remnawave-bot/commit/4c19317868d217a5dcb74cbf5800d66d208926fd))
+* remove unused variable after error message change ([b73e800](https://github.com/cy7su/remnawave-bot/commit/b73e800794361b1e6e246119c89dad2feef7e304))
+
 ## [0.2.0](https://github.com/cy7su/remnawave-bot/compare/v0.1.0...v0.2.0) (2026-07-13)
 
 
