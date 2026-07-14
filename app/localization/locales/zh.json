@@ -1688,7 +1688,6 @@
   "BALANCE_TOPPED_UP_CART_INSUFFICIENT": "✅ 余额已充值 {amount}！\n\n💰 当前余额：{balance}\n\n🛒 您有一个已保存的购物车，金额为 {cart_total}\n还差：{missing}",
   "TRAFFIC_WARNING_ALERT": "⚠️ <b>流量警告</b>\n\n已使用：{used:.1f} / {limit} GB ({percent:.0f}%)\n\n您的流量限制即将用完。",
   "LOW_BALANCE_ALERT": "⚠️ <b>余额不足</b>\n\n您的余额：{balance} ₽\n通知阈值：{threshold} ₽\n\n请充值以确保订阅自动续费成功。",
-
   "SUBSCRIPTION_REVOKE_BTN": "🔄 重新签发订阅",
   "SUBSCRIPTION_REVOKE_TITLE": "⚠️ 重新签发订阅",
   "SUBSCRIPTION_REVOKE_WARNING": "⚠️ <b>重新签发订阅</b>\n\n此操作将：\n• 生成新的连接链接\n• 断开所有已连接的设备\n• 旧链接将失效\n\n是否继续？",
@@ -1988,5 +1987,6 @@
   "BUY_TARIFF_BUTTON": "📦 购买套餐",
   "CONTEST_UNKNOWN": "不支持此竞赛类型。",
   "PERIOD": "周期",
-  "ADMIN_CONTESTS_LIST": "📋 当前竞赛"
+  "ADMIN_CONTESTS_LIST": "📋 当前竞赛",
+  "ADMIN_PROMOCODE_TYPE_BALANCE_DAYS": "💰📅 余额 + 天数"
 }
