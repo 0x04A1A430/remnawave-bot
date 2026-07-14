@@ -293,14 +293,6 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
     if LOGO_PATH.exists():
         try:
-            import sys
-
-            print(
-                'DEBUG CAPTION:',
-                repr(text[:300] if text else None),
-                file=sys.stderr,
-                flush=True,
-            )
             result = await self.answer_photo(get_logo_media(), caption=text, **kwargs)
             _cache_logo_file_id(result)
             return result
