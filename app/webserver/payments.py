@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import ipaddress
@@ -115,25 +116,45 @@ def _verify_mulenpay_signature(request: Request, raw_body: bytes) -> bool:
     return False
 
 
+# Bound concurrent payment-callback processing. Each callback holds a DB session
+# for its whole processing duration (incl. external calls to the panel/provider).
+# A burst of provider webhooks (e.g. a daily recurring-charge run firing 100+
+# callbacks/min) would otherwise open a session per callback and exhaust the
+# connection pool, starving the cabinet/admin API. Excess callbacks wait for a
+# slot (without holding a DB connection); providers retry on timeout and
+# processing is idempotent per order id.
+_WEBHOOK_CALLBACK_CONCURRENCY = 16
+_webhook_callback_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_webhook_callback_semaphore() -> asyncio.Semaphore:
+    # Lazily created inside the running loop to avoid binding to the wrong loop.
+    global _webhook_callback_semaphore
+    if _webhook_callback_semaphore is None:
+        _webhook_callback_semaphore = asyncio.Semaphore(_WEBHOOK_CALLBACK_CONCURRENCY)
+    return _webhook_callback_semaphore
+
+
 async def _process_payment_service_callback(
     payment_service: PaymentService,
     payload: dict,
     method_name: str,
 ) -> bool:
-    db_generator = get_db()
-    try:
-        db = await db_generator.__anext__()
-    except StopAsyncIteration:  # pragma: no cover - defensive guard
-        return False
-
-    try:
-        process_callback = getattr(payment_service, method_name)
-        return await process_callback(db, payload)
-    finally:
+    async with _get_webhook_callback_semaphore():
+        db_generator = get_db()
         try:
-            await db_generator.__anext__()
-        except StopAsyncIteration:
-            pass
+            db = await db_generator.__anext__()
+        except StopAsyncIteration:  # pragma: no cover - defensive guard
+            return False
+
+        try:
+            process_callback = getattr(payment_service, method_name)
+            return await process_callback(db, payload)
+        finally:
+            try:
+                await db_generator.__anext__()
+            except StopAsyncIteration:
+                pass
 
 
 async def _parse_pal24_payload(request: Request) -> dict[str, str]:
