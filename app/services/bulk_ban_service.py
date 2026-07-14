@@ -1,14 +1,13 @@
 """
-Модуль для массовой блокировки пользователей по списку Telegram ID
+Модуль для массовой блокировки и разблокировки пользователей
 """
 
 import structlog
-from aiogram import Bot
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import UserStatus
-from app.services.admin_notification_service import AdminNotificationService
+from app.database.crud.user import get_user_by_telegram_id, update_user
+from app.database.models import User, UserStatus
 from app.services.user_service import UserService
 
 
@@ -176,6 +175,76 @@ class BulkBanService:
                 seen.add(tid)
 
         return unique_ids
+
+    async def unban_users_by_telegram_ids(
+        self,
+        db: AsyncSession,
+        telegram_ids: list[int],
+    ) -> tuple[int, int, list[int]]:
+        """
+        Массовая разблокировка пользователей по Telegram ID (без уведомлений).
+
+        Returns:
+            Кортеж из (успешно разблокированных, не найденных, список ID с ошибками)
+        """
+        successfully_unbanned = 0
+        not_found_users = []
+        error_ids = []
+
+        for telegram_id in telegram_ids:
+            try:
+                user = await get_user_by_telegram_id(db, telegram_id)
+
+                if not user:
+                    logger.warning('Пользователь с Telegram ID не найден', telegram_id=telegram_id)
+                    not_found_users.append(telegram_id)
+                    continue
+
+                if user.status == UserStatus.ACTIVE.value:
+                    logger.info('Пользователь уже активен', telegram_id=telegram_id)
+                    continue
+
+                await update_user(db, user, status=UserStatus.ACTIVE.value)
+                successfully_unbanned += 1
+                logger.info('Пользователь успешно разблокирован', telegram_id=telegram_id)
+
+            except Exception as e:
+                logger.error('Ошибка при разблокировке пользователя', telegram_id=telegram_id, error=e)
+                error_ids.append(telegram_id)
+
+        logger.info(
+            'Массовая разблокировка завершена',
+            successfully_unbanned=successfully_unbanned,
+            not_found_users_count=len(not_found_users),
+            error_ids_count=len(error_ids),
+        )
+
+        return successfully_unbanned, len(not_found_users), error_ids
+
+    async def unban_all_blocked_users(
+        self,
+        db: AsyncSession,
+    ) -> tuple[int, list[int]]:
+        """
+        Разблокировка всех заблокированных пользователей (без уведомлений).
+
+        Returns:
+            Кортеж из (количество разблокированных, список telegram_id с ошибками)
+        """
+        result = await db.execute(select(User).where(User.status == UserStatus.BLOCKED.value))
+        blocked_users = result.scalars().all()
+
+        telegram_ids = [u.telegram_id for u in blocked_users if u.telegram_id]
+
+        if not telegram_ids:
+            return 0, []
+
+        successfully, not_found, error_ids = await self.unban_users_by_telegram_ids(
+            db=db,
+            telegram_ids=telegram_ids,
+        )
+
+        return successfully, error_ids
 
 
 # Создаем глобальный экземпляр сервиса

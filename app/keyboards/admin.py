@@ -539,7 +539,15 @@ def get_admin_users_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
                         "<tg-emoji emoji-id='5881702736843511327'>⚠️</tg-emoji> Массовый бан",
                     ),
                     callback_data='admin_bulk_ban_start',
-                )
+                ),
+                make_button(
+                    text=_t(
+                        texts,
+                        'ADMIN_USERS_BULK_UNBAN',
+                        "<tg-emoji emoji-id='5881702736843511327'>✅</tg-emoji> Массовый разбан",
+                    ),
+                    callback_data='admin_bulk_unban_start',
+                ),
             ],
             [
                 make_button(
