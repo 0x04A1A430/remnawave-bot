@@ -86,6 +86,7 @@ class NotificationType(Enum):
     # Other
     BROADCAST = 'broadcast'
     PAYMENT_RECEIVED = 'payment_received'
+    PROMO_OFFER = 'promo_offer'
 
     # Guest purchase notifications
     GUEST_SUBSCRIPTION_DELIVERED = 'guest_subscription_delivered'
