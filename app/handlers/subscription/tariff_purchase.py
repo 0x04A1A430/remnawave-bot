@@ -1110,13 +1110,12 @@ async def handle_custom_confirm(
     try:
         # Обновляем пользователя в Remnawave
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+        if settings.is_multi_tariff_enabled():
+            _should_create = not subscription.remnawave_uuid
+        else:
+            _should_create = not getattr(db_user, 'remnawave_uuid', None)
         try:
             subscription_service = SubscriptionService()
-            if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
-            else:
-                _should_create = not getattr(db_user, 'remnawave_uuid', None)
-
             if _should_create:
                 await subscription_service.create_remnawave_user(
                     db,
@@ -1135,10 +1134,12 @@ async def handle_custom_confirm(
             logger.error('Ошибка обновления Remnawave', error=e)
             from app.services.remnawave_retry_queue import remnawave_retry_queue
 
+            # То же mode-aware решение, что и синк выше: конвертированный из
+            # триала ретраится как 'update', а не плодит дубль панельного юзера.
             remnawave_retry_queue.enqueue(
                 subscription_id=subscription.id,
                 user_id=db_user.id,
-                action='create',
+                action='create' if _should_create else 'update',
             )
 
         # Создаем транзакцию
@@ -1159,7 +1160,8 @@ async def handle_custom_confirm(
                 subscription,
                 None,
                 custom_days,
-                was_trial_conversion=False,
+                # Маркер ставит extend_subscription при конверсии живого триала
+                was_trial_conversion=bool(getattr(subscription, '_converted_from_trial', False)),
                 amount_kopeks=total_price,
                 purchase_type='renewal' if existing_subscription else 'first_purchase',
             )
@@ -1545,8 +1547,13 @@ async def confirm_tariff_purchase(
                     connected_squads=squads,
                 )
             else:
-                # Guard: enforce MAX_ACTIVE_SUBSCRIPTIONS limit
-                active_count = len(await get_active_subscriptions_by_user_id(db, db_user.id))
+                # Guard: enforce MAX_ACTIVE_SUBSCRIPTIONS limit.
+                # Живой триал не считаем: create_paid_subscription конвертирует
+                # его на месте (строка переиспользуется), количество подписок не
+                # растёт — блокировать такую покупку лимитом нельзя, иначе юзер
+                # на пределе лимита не может превратить триал в платный тариф.
+                _alive_subs = await get_active_subscriptions_by_user_id(db, db_user.id)
+                active_count = len([s for s in _alive_subs if not s.is_trial])
                 if active_count >= settings.get_max_active_subscriptions():
                     from app.database.crud.user import add_user_balance
 
@@ -1709,16 +1716,15 @@ async def confirm_tariff_purchase(
 
     # Обновляем пользователя в Remnawave
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
+    # In multi-tariff mode, each subscription has its own panel user.
+    # A new subscription has no remnawave_uuid yet, so always CREATE.
+    # In single-tariff mode, reuse the user-level UUID if available.
+    if settings.is_multi_tariff_enabled():
+        _should_create = not subscription.remnawave_uuid
+    else:
+        _should_create = not getattr(db_user, 'remnawave_uuid', None)
     try:
         subscription_service = SubscriptionService()
-        # In multi-tariff mode, each subscription has its own panel user.
-        # A new subscription has no remnawave_uuid yet, so always CREATE.
-        # In single-tariff mode, reuse the user-level UUID if available.
-        if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_uuid
-        else:
-            _should_create = not getattr(db_user, 'remnawave_uuid', None)
-
         if _should_create:
             await subscription_service.create_remnawave_user(
                 db,
@@ -1737,10 +1743,16 @@ async def confirm_tariff_purchase(
         logger.error('Ошибка обновления Remnawave', error=e)
         from app.services.remnawave_retry_queue import remnawave_retry_queue
 
+        # Ретрай повторяет то же mode-aware решение, что и синк выше: у
+        # конвертированного из триала (или реанимированной #3004) подписки уже
+        # есть панельный юзер — его надо ОБНОВИТЬ, а не создать дубль. Хардкод
+        # 'update' по subscription.remnawave_uuid здесь не годится: в
+        # single-tariff вебхук панели чистит user.remnawave_uuid при удалении
+        # юзера, а на подписке остаётся стухший UUID.
         remnawave_retry_queue.enqueue(
             subscription_id=subscription.id,
             user_id=db_user.id,
-            action='create',
+            action='create' if _should_create else 'update',
         )
 
     # Создаем транзакцию
@@ -1764,7 +1776,9 @@ async def confirm_tariff_purchase(
             subscription,
             None,  # Транзакция отсутствует, оплата с баланса
             period,
-            was_trial_conversion=False,
+            # Маркер выставляют extend_subscription/_convert_trial_subscription_to_paid,
+            # когда покупка конвертировала живой триал (та же строка, тот же панельный юзер).
+            was_trial_conversion=bool(getattr(subscription, '_converted_from_trial', False)),
             amount_kopeks=final_price,
             purchase_type='renewal' if existing_subscription else 'first_purchase',
         )
