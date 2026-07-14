@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud.user import get_user_by_telegram_id, update_user
 from app.database.models import User, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.user_revival_service import revive_deleted_user
 from app.services.user_service import UserService
 
 
@@ -247,6 +248,41 @@ class BulkBanService:
         )
 
         return successfully, error_ids
+
+    async def restore_all_deleted_users(
+        self,
+        db: AsyncSession,
+    ) -> tuple[int, list[int]]:
+        """
+        Восстанавливает всех удалённых пользователей (DELETED → ACTIVE).
+
+        Returns:
+            Кортеж из (количество восстановленных, список telegram_id с ошибками)
+        """
+        result = await db.execute(select(User).where(User.status == UserStatus.DELETED.value))
+        deleted_users = result.scalars().all()
+        error_ids = []
+        restored = 0
+
+        for user in deleted_users:
+            try:
+                await revive_deleted_user(db, user, source='admin_bulk_restore')
+                restored += 1
+                logger.info('Пользователь восстановлен из DELETED', telegram_id=user.telegram_id, user_id=user.id)
+            except Exception as e:
+                logger.error('Ошибка восстановления пользователя', user_id=user.id, error=e)
+                if user.telegram_id:
+                    error_ids.append(user.telegram_id)
+
+        await db.commit()
+
+        logger.info(
+            'Восстановление удалённых пользователей завершено',
+            restored=restored,
+            errors=len(error_ids),
+        )
+
+        return restored, error_ids
 
 
 # Создаем глобальный экземпляр сервиса
