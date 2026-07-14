@@ -5,9 +5,10 @@
 import structlog
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User
+from app.database.models import User, UserStatus
 from app.services.bulk_ban_service import bulk_ban_service
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -221,8 +222,83 @@ async def execute_unban_all(callback: types.CallbackQuery, db_user: User, state:
     await state.clear()
 
 
+@admin_required
+@error_handler
+async def confirm_restore_deleted(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.DELETED.value))
+    deleted_count = result.scalar()
+
+    if deleted_count == 0:
+        await callback.message.edit_text(
+            'Нет удалённых пользователей для восстановления.',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+            ),
+        )
+        await callback.answer()
+        return
+
+    await callback.message.edit_text(
+        f'<b>Восстановление удалённых пользователей</b>\n\n'
+        f'Вы уверены, что хотите восстановить <b>всех</b> удалённых пользователей?\n'
+        f'Всего удалено: <b>{deleted_count}</b>\n\n'
+        f'Пользователи получат статус "Активен".',
+        parse_mode='HTML',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text='Да, восстановить всех', callback_data='admin_restore_deleted_confirm'
+                    )
+                ],
+                [types.InlineKeyboardButton(text='Отмена', callback_data='admin_users')],
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def execute_restore_deleted(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    await callback.message.edit_text('Восстановление удалённых пользователей... Пожалуйста, подождите.')
+
+    try:
+        restored, error_ids = await bulk_ban_service.restore_all_deleted_users(db=db)
+
+        result_text = '<b>Восстановление завершено</b>\n\n'
+        result_text += f'Успешно восстановлено: {restored}\n'
+        result_text += f'Ошибок: {len(error_ids)}'
+
+        if error_ids:
+            result_text += '\n\n<b>Telegram ID с ошибками:</b>\n'
+            result_text += f'<code>{", ".join(map(str, error_ids[:10]))}</code>'
+            if len(error_ids) > 10:
+                result_text += f' и еще {len(error_ids) - 10}...'
+
+        await callback.message.edit_text(
+            result_text,
+            parse_mode='HTML',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text='К пользователям', callback_data='admin_users')]]
+            ),
+        )
+    except Exception as e:
+        logger.error('Ошибка при восстановлении удалённых пользователей', error=e)
+        await callback.message.edit_text(
+            'Произошла ошибка при восстановлении.',
+            reply_markup=types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text='Назад', callback_data='admin_users')]]
+            ),
+        )
+
+    await callback.answer()
+
+
 def register_bulk_unban_handlers(dp: Dispatcher):
     dp.callback_query.register(start_bulk_unban_process, F.data == 'admin_bulk_unban_start')
     dp.callback_query.register(confirm_unban_all, F.data == 'admin_bulk_unban_all')
     dp.callback_query.register(execute_unban_all, F.data == 'admin_bulk_unban_all_confirm')
+    dp.callback_query.register(confirm_restore_deleted, F.data == 'admin_restore_deleted')
+    dp.callback_query.register(execute_restore_deleted, F.data == 'admin_restore_deleted_confirm')
     dp.message.register(process_bulk_unban_list, AdminStates.waiting_for_bulk_unban_list)
