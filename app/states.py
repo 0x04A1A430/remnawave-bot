@@ -51,6 +51,8 @@ class PromoCodeStates(StatesGroup):
 class AdminStates(StatesGroup):
     waiting_for_user_search = State()
     waiting_for_bulk_ban_list = State()
+    waiting_for_bulk_unban_list = State()
+    waiting_for_bulk_unban_confirm_all = State()
     sending_user_message = State()
     editing_user_balance = State()
     extending_subscription = State()

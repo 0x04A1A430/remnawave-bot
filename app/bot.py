@@ -26,6 +26,7 @@ from app.handlers.admin import (
     blocked_users as admin_blocked_users,
     bot_configuration as admin_bot_configuration,
     bulk_ban as admin_bulk_ban,
+    bulk_unban as admin_bulk_unban,
     campaigns as admin_campaigns,
     contests as admin_contests,
     daily_contests as admin_daily_contests,
@@ -233,6 +234,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_trials.register_handlers(dp)
     admin_tariffs.register_handlers(dp)
     admin_bulk_ban.register_bulk_ban_handlers(dp)
+    admin_bulk_unban.register_bulk_unban_handlers(dp)
     admin_blacklist.register_blacklist_handlers(dp)
     admin_blocked_users.register_handlers(dp)
     admin_required_channels.register_handlers(dp)
