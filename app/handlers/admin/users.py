@@ -287,6 +287,7 @@ async def show_users_menu(callback: types.CallbackQuery, db_user: User, db: Asyn
 • Всего: {stats['total_users']}
 • Активных: {stats['active_users']}
 • Заблокированных: {stats['blocked_users']}
+• Удаленных: {stats['deleted_users']}
 
 <b>Новые пользователи:</b>
 • Сегодня: {stats['new_today']}

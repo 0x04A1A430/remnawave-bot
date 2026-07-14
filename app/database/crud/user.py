@@ -1345,10 +1345,17 @@ async def get_users_statistics(db: AsyncSession) -> dict:
     )
     new_month = month_result.scalar()
 
+    blocked_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.BLOCKED.value))
+    blocked_users = blocked_result.scalar()
+
+    deleted_result = await db.execute(select(func.count(User.id)).where(User.status == UserStatus.DELETED.value))
+    deleted_users = deleted_result.scalar()
+
     return {
         'total_users': total_users,
         'active_users': active_users,
-        'blocked_users': total_users - active_users,
+        'blocked_users': blocked_users,
+        'deleted_users': deleted_users,
         'new_today': new_today,
         'new_week': new_week,
         'new_month': new_month,
