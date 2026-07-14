@@ -3,11 +3,13 @@
 """
 
 import structlog
+from aiogram import Bot
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.user import get_user_by_telegram_id, update_user
 from app.database.models import User, UserStatus
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.user_service import UserService
 
 
