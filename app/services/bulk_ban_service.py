@@ -2,13 +2,15 @@
 Модуль для массовой блокировки и разблокировки пользователей
 """
 
+from datetime import UTC, datetime
+
 import structlog
 from aiogram import Bot
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.user import get_user_by_telegram_id, update_user
-from app.database.models import User, UserStatus
+from app.database.models import SubscriptionStatus, User, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.user_revival_service import revive_deleted_user
 from app.services.user_service import UserService
@@ -254,11 +256,14 @@ class BulkBanService:
         db: AsyncSession,
     ) -> tuple[int, list[int]]:
         """
-        Восстанавливает всех удалённых пользователей (DELETED → ACTIVE).
+        Восстанавливает всех удалённых пользователей (DELETED → ACTIVE)
+        и реактивирует их подписки в RemnaWave.
 
         Returns:
             Кортеж из (количество восстановленных, список telegram_id с ошибками)
         """
+        from app.services.subscription_service import SubscriptionService
+
         result = await db.execute(select(User).where(User.status == UserStatus.DELETED.value))
         deleted_users = result.scalars().all()
         error_ids = []
@@ -269,6 +274,26 @@ class BulkBanService:
                 await revive_deleted_user(db, user, source='admin_bulk_restore')
                 restored += 1
                 logger.info('Пользователь восстановлен из DELETED', telegram_id=user.telegram_id, user_id=user.id)
+
+                now = datetime.now(UTC)
+                for sub in getattr(user, 'subscriptions', None) or []:
+                    if sub.end_date and sub.end_date > now and sub.status != SubscriptionStatus.ACTIVE.value:
+                        sub.status = SubscriptionStatus.ACTIVE.value
+                        try:
+                            subscription_service = SubscriptionService()
+                            await subscription_service.update_remnawave_user(db, sub)
+                            logger.info(
+                                'RemnaWave подписка восстановлена при массовом восстановлении',
+                                subscription_id=sub.id,
+                                user_id=user.id,
+                            )
+                        except Exception as e:
+                            logger.error(
+                                'Ошибка восстановления RemnaWave подписки',
+                                subscription_id=sub.id,
+                                user_id=user.id,
+                                error=e,
+                            )
             except Exception as e:
                 logger.error('Ошибка восстановления пользователя', user_id=user.id, error=e)
                 if user.telegram_id:
