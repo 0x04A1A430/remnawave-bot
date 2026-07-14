@@ -283,6 +283,7 @@ def get_channel_sub_keyboard(
             make_button(
                 text=texts.t('CHANNEL_CHECK_BUTTON', 'Я подписался'),
                 callback_data='sub_channel_check',
+                style='success',
             )
         ]
     )
