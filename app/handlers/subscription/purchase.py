@@ -834,6 +834,28 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         await callback.answer()
         return
 
+    # Проверяем подписку на обязательные каналы
+    if settings.CHANNEL_IS_REQUIRED_SUB:
+        from app.services.channel_subscription_service import ChannelSubscriptionService
+
+        channel_service = ChannelSubscriptionService()
+        all_channels = await channel_service.get_channels_with_status(db_user.telegram_id)
+        unsubscribed = [ch for ch in all_channels if not ch.get('is_subscribed', False)]
+        if unsubscribed:
+            from app.keyboards.inline import get_channel_sub_keyboard
+
+            keyboard = get_channel_sub_keyboard(all_channels, language=db_user.language)
+            await callback.message.edit_text(
+                texts.t(
+                    'TRIAL_REQUIRES_CHANNEL_SUB',
+                    'Для активации пробного периода подпишитесь на наши каналы.\n\n'
+                    'После подписки нажмите кнопку "Я подписался" и повторите попытку.',
+                ),
+                reply_markup=keyboard,
+            )
+            await callback.answer()
+            return
+
     # Проверяем, платный ли триал
     trial_price_kopeks = get_trial_activation_charge_amount()
 
