@@ -421,6 +421,30 @@ async def test_payment_wins_over_grace_snapshot() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explicit_payment_completion_finishes_grace_without_waiting_for_reconcile() -> None:
+    now = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
+    clock = MutableClock(now)
+    billing = make_billing(status='expired', end_at=now - timedelta(days=1))
+    snapshot = make_snapshot(expire_at=billing.end_at)
+    service, store, panel, billing_gateway = make_service(billing=billing, snapshot=snapshot, clock=clock)
+    await service.start_if_eligible(billing, GraceReason.EXPIRED)
+
+    paid_billing = replace(
+        billing,
+        status='active',
+        end_at=now + timedelta(days=30),
+        used_traffic_bytes=0,
+    )
+    billing_gateway.state = paid_billing
+
+    assert await service.complete_after_payment(billing.subscription_id) is True
+    assert panel.applied_billing == [paid_billing]
+    completed = store.only_session()
+    assert completed.state is GraceSessionState.COMPLETED
+    assert completed.completion_reason is GraceCompletionReason.PAID
+
+
+@pytest.mark.asyncio
 async def test_canonical_squad_change_ends_grace_and_applies_fresh_billing() -> None:
     now = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
     clock = MutableClock(now)
