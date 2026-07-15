@@ -636,7 +636,7 @@ class TrafficMonitoringServiceV2:
 
                     # Получаем статистику за период
                     async with self.remnawave_service.get_api_client() as api:
-                        stats = await api.get_bandwidth_stats_user(user.uuid, start_date, end_date)
+                        stats = await api.get_bandwidth_stats_user(user.uuid, start_date, end_date, user_id=user.id)
 
                     if not stats:
                         return None

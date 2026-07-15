@@ -227,9 +227,11 @@ class SubscriptionService:
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 subscription.remnawave_uuid = updated_user.uuid
+                subscription.panel_user_id = updated_user.id
                 # Legacy field — keep in sync for single-mode backward compat
                 if not settings.is_multi_tariff_enabled():
                     user.remnawave_uuid = updated_user.uuid
+                    user.panel_user_id = updated_user.id
 
                 await db.commit()
 
@@ -290,15 +292,15 @@ class SubscriptionService:
         # If this subscription already has a Remnawave user — update it
         if subscription.remnawave_uuid:
             try:
-                existing = await api.get_user_by_uuid(subscription.remnawave_uuid)
+                existing = await api.get_user_by_uuid(subscription.remnawave_uuid, user_id=subscription.panel_user_id)
                 if existing:
                     if settings.RESET_DEVICES_ON_RENEWAL:
                         try:
-                            await api.reset_user_devices(existing.uuid)
+                            await api.reset_user_devices(existing.uuid, user_id=existing.id)
                         except Exception as hwid_error:
                             logger.warning('Не удалось сбросить HWID', hwid_error=hwid_error)
 
-                    updated = await api.update_user(uuid=existing.uuid, **common_kwargs)
+                    updated = await api.update_user(uuid=existing.uuid, user_id=existing.id, **common_kwargs)
                     if reset_traffic:
                         await self._reset_user_traffic(api, updated.uuid, user, reset_reason)
                     return updated
@@ -359,7 +361,7 @@ class SubscriptionService:
         existing_users = []
         if user.remnawave_uuid:
             try:
-                existing_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                existing_user = await api.get_user_by_uuid(user.remnawave_uuid, user_id=user.panel_user_id)
                 if existing_user:
                     existing_users = [existing_user]
             except Exception:
@@ -401,7 +403,7 @@ class SubscriptionService:
 
             if settings.RESET_DEVICES_ON_RENEWAL:
                 try:
-                    await api.reset_user_devices(remnawave_user.uuid)
+                    await api.reset_user_devices(remnawave_user.uuid, user_id=remnawave_user.id)
                     logger.info(
                         'Сброшены HWID устройства',
                         _format_user_log=self._format_user_log(user),
@@ -409,7 +411,7 @@ class SubscriptionService:
                 except Exception as hwid_error:
                     logger.warning('Не удалось сбросить HWID', hwid_error=hwid_error)
 
-            updated_user = await api.update_user(uuid=remnawave_user.uuid, **common_kwargs)
+            updated_user = await api.update_user(uuid=remnawave_user.uuid, user_id=remnawave_user.id, **common_kwargs)
             if reset_traffic:
                 await self._reset_user_traffic(api, updated_user.uuid, user, reset_reason)
             return updated_user
@@ -537,6 +539,7 @@ class SubscriptionService:
                 if sync_squads and ext_squad_uuid is not None:
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
+                update_kwargs['user_id'] = subscription.panel_user_id
                 updated_user = await api.update_user(**update_kwargs)
 
                 if reset_traffic:
@@ -599,7 +602,7 @@ class SubscriptionService:
             return
 
         try:
-            await api.reset_user_traffic(user_uuid)
+            await api.reset_user_traffic(user_uuid, user_id=user.panel_user_id)
             reason_text = f' ({reset_reason})' if reset_reason else ''
             logger.info(
                 'Сброшен трафик RemnaWave',
@@ -613,10 +616,10 @@ class SubscriptionService:
                 error=exc,
             )
 
-    async def disable_remnawave_user(self, user_uuid: str) -> bool:
+    async def disable_remnawave_user(self, user_uuid: str, user_id: str | None = None) -> bool:
         try:
             async with self.get_api_client() as api:
-                await api.disable_user(user_uuid)
+                await api.disable_user(user_uuid, user_id=user_id)
                 logger.info('Отключен RemnaWave пользователь', user_uuid=user_uuid)
                 return True
 
@@ -629,11 +632,11 @@ class SubscriptionService:
             logger.error('Ошибка отключения RemnaWave пользователя', error=e)
             return False
 
-    async def delete_remnawave_user(self, user_uuid: str) -> bool:
+    async def delete_remnawave_user(self, user_uuid: str, user_id: str | None = None) -> bool:
         """Полное удаление пользователя из панели RemnaWave (хуки прекращаются)."""
         try:
             async with self.get_api_client() as api:
-                await api.delete_user(user_uuid)
+                await api.delete_user(user_uuid, user_id=user_id)
                 logger.info('Удалён RemnaWave пользователь', user_uuid=user_uuid)
                 return True
 
@@ -645,11 +648,11 @@ class SubscriptionService:
             logger.error('Ошибка удаления RemnaWave пользователя', error=e, user_uuid=user_uuid)
             return False
 
-    async def enable_remnawave_user(self, user_uuid: str) -> bool:
+    async def enable_remnawave_user(self, user_uuid: str, user_id: str | None = None) -> bool:
         """Включить пользователя в RemnaWave (реактивация)."""
         try:
             async with self.get_api_client() as api:
-                await api.enable_user(user_uuid)
+                await api.enable_user(user_uuid, user_id=user_id)
                 logger.info('Включен RemnaWave пользователь', user_uuid=user_uuid)
                 return True
 
@@ -703,7 +706,7 @@ class SubscriptionService:
                 return None
 
             async with self.get_api_client() as api:
-                updated_user = await api.revoke_user_subscription(revoke_uuid)
+                updated_user = await api.revoke_user_subscription(revoke_uuid, user_id=subscription.panel_user_id)
 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
@@ -750,7 +753,7 @@ class SubscriptionService:
                 return False
 
             async with self.get_api_client() as api:
-                remnawave_user = await api.get_user_by_uuid(sync_uuid)
+                remnawave_user = await api.get_user_by_uuid(sync_uuid, user_id=subscription.panel_user_id)
                 if not remnawave_user:
                     return False
 
@@ -801,7 +804,7 @@ class SubscriptionService:
                 # Проверяем, существует ли пользователь в RemnaWave
                 try:
                     async with self.get_api_client() as api:
-                        remnawave_user = await api.get_user_by_uuid(sub_uuid)
+                        remnawave_user = await api.get_user_by_uuid(sub_uuid, user_id=subscription.panel_user_id)
                         if not remnawave_user:
                             needs_sync = True
                             logger.warning(
@@ -899,7 +902,7 @@ class SubscriptionService:
             if check_uuid:
                 try:
                     async with self.get_api_client() as api:
-                        remnawave_user = await api.get_user_by_uuid(check_uuid)
+                        remnawave_user = await api.get_user_by_uuid(check_uuid, user_id=subscription.panel_user_id)
 
                         if not remnawave_user:
                             logger.warning(
@@ -1133,6 +1136,7 @@ class SubscriptionService:
                         if ext_squad_uuid is not None:
                             update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
+                        update_kwargs['user_id'] = sub.panel_user_id
                         updated_user = await api.update_user(**update_kwargs)
 
                         # Сохраняем в памяти — commit будет после gather
@@ -1210,7 +1214,9 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     panel_disabled = False
     if panel_uuid:
         try:
-            panel_disabled = await SubscriptionService().disable_remnawave_user(panel_uuid)
+            panel_disabled = await SubscriptionService().disable_remnawave_user(
+                panel_uuid, user_id=subscription.panel_user_id
+            )
         except Exception as e:
             logger.warning(
                 'Не удалось отключить пользователя в RemnaWave при обнулении подписки',

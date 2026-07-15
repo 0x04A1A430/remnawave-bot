@@ -4032,6 +4032,9 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
                     await api.update_user(
                         uuid=_uuid,
                         active_internal_squads=current_squads,
+                        user_id=subscription.panel_user_id
+                        if settings.is_multi_tariff_enabled() and subscription
+                        else user.panel_user_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -4484,7 +4487,12 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
 
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
-            success = await api.reset_user_devices(_uuid)
+            success = await api.reset_user_devices(
+                _uuid,
+                user_id=subscription.panel_user_id
+                if subscription_id and settings.is_multi_tariff_enabled() and subscription
+                else user.panel_user_id,
+            )
 
         if success:
             await callback.message.edit_text(
@@ -4543,6 +4551,9 @@ async def _update_user_devices(
                     await api.update_user(
                         uuid=_uuid,
                         hwid_device_limit=devices,
+                        user_id=subscription.panel_user_id
+                        if settings.is_multi_tariff_enabled() and subscription
+                        else user.panel_user_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -4608,6 +4619,9 @@ async def _update_user_traffic(
                         traffic_limit_strategy=get_traffic_reset_strategy(
                             subscription.tariff if subscription else None
                         ),
+                        user_id=subscription.panel_user_id
+                        if settings.is_multi_tariff_enabled() and subscription
+                        else user.panel_user_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -5427,6 +5441,11 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                         if ext_squad_uuid is not None:
                             update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
+                        update_kwargs['user_id'] = (
+                            subscription.panel_user_id
+                            if settings.is_multi_tariff_enabled()
+                            else target_user.panel_user_id
+                        )
                         remnawave_user = await api.update_user(**update_kwargs)
                 else:
                     # При multi-tariff подписке username должен включать
