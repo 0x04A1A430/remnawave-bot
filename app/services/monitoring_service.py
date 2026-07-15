@@ -51,9 +51,9 @@ from app.external.remnawave_api import (
     RemnaWaveAPIError,
     RemnaWaveUser,
     UserStatus as RemnaWaveUserStatus,
-    is_user_not_found_error,
 )
 from app.localization.texts import get_texts
+from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
@@ -649,10 +649,7 @@ class MonitoringService:
                     expire_at=subscription.end_date
                     if is_active
                     else max(subscription.end_date, current_time + timedelta(minutes=1)),
-                    # _gb_to_bytes живёт в SubscriptionService — у MonitoringService своего
-                    # никогда не было, и self._gb_to_bytes ронял весь метод AttributeError-ом
-                    # ещё до запроса в панель (молча гасился общим except → return None).
-                    traffic_limit_bytes=self.subscription_service._gb_to_bytes(subscription.traffic_limit_gb),
+                    traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name, username=user.username, telegram_id=user.telegram_id
@@ -668,7 +665,11 @@ class MonitoringService:
                 # Внешний сквад НЕ пересылаем в рутинном sync — стейловый UUID
                 # вызывает FK violation → A039. Назначается при создании подписки.
 
-                updated_user = await api.update_user(**update_kwargs)
+                updated_user = await update_panel_user_grace_safe(
+                    api,
+                    subscription.id,
+                    **update_kwargs,
+                )
 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
@@ -683,10 +684,6 @@ class MonitoringService:
                 return updated_user
 
         except RemnaWaveAPIError as e:
-            if is_user_not_found_error(e):
-                # Пользователя удалили из панели при живой подписке в боте —
-                # пересоздаём (create-флоу сохранит новый UUID и ссылки в подписку).
-                return await self.subscription_service.recreate_deleted_panel_user(db, subscription)
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)
             return None
         except Exception as e:
