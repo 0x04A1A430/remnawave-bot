@@ -717,7 +717,7 @@ class DailySubscriptionService:
 
         try:
             async with service.get_api_client() as api:
-                panel_user = await api.get_user_by_uuid(uuid)
+                panel_user = await api.get_user_by_uuid(uuid, user_id=subscription.user_id)
         except Exception as exc:
             logger.warning(
                 'Не удалось получить used из панели для выравнивания докупки — применим понижение со страховкой',

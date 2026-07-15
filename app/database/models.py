@@ -1202,6 +1202,7 @@ class User(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
     last_activity = Column(AwareDateTime(), default=func.now())
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
+    panel_user_id = Column(Integer, nullable=True, index=True)
 
     # Cabinet authentication fields
     email = Column(String(255), unique=True, nullable=True, index=True)
@@ -1433,6 +1434,7 @@ class Subscription(Base):
 
     remnawave_short_uuid = Column(String(255), nullable=True)
     remnawave_uuid = Column(String(255), nullable=True)
+    panel_user_id = Column(Integer, nullable=True, index=True)
     remnawave_short_id = Column(
         String(16), nullable=False, unique=True, server_default=''
     )  # Permanent short ID for username suffix

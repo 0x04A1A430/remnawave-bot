@@ -67,7 +67,10 @@ async def verify_hwid_belongs_to_user(user: User, hwid: str) -> bool:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
             for panel_uuid in panel_uuids:
-                response = await api.get_user_devices_all(panel_uuid)
+                response = await api.get_user_devices_all(
+                    panel_uuid,
+                    user_id=user.panel_user_id,
+                )
                 hwids_on_panel = {
                     (d.get('hwid') or d.get('deviceId') or d.get('id')) for d in (response or {}).get('devices', [])
                 }

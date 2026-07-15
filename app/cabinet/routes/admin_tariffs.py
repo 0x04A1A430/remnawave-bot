@@ -691,6 +691,9 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                                 uuid=remnawave_uuid,
                                 active_internal_squads=new_squads,
                                 external_squad_uuid=ext_squad_uuid,
+                                user_id=sub.panel_user_id
+                                if settings.is_multi_tariff_enabled()
+                                else (sub.user.panel_user_id if sub.user else None),
                             )
                             sub.connected_squads = new_squads
                             updated += 1
@@ -812,6 +815,9 @@ async def sync_tariff_squads(
                         uuid=remnawave_uuid,
                         active_internal_squads=new_squads,
                         external_squad_uuid=ext_squad_uuid,
+                        user_id=sub.panel_user_id
+                        if settings.is_multi_tariff_enabled()
+                        else (sub.user.panel_user_id if sub.user else None),
                     )
                     # Update local DB only on successful API call
                     sub.connected_squads = new_squads

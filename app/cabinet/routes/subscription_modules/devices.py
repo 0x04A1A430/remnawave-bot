@@ -930,7 +930,12 @@ async def get_devices(
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            response = await api.get_user_devices_all(_puuid)
+            response = await api.get_user_devices_all(
+                _puuid,
+                user_id=subscription.panel_user_id
+                if settings.is_multi_tariff_enabled() and subscription
+                else user.panel_user_id,
+            )
 
             devices_list = response.get('devices', [])
             # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
@@ -1121,7 +1126,12 @@ async def delete_all_devices(
         service = RemnaWaveService()
         async with service.get_api_client() as api:
             # Get all devices first
-            response = await api.get_user_devices_all(_puuid)
+            response = await api.get_user_devices_all(
+                _puuid,
+                user_id=subscription.panel_user_id
+                if settings.is_multi_tariff_enabled() and subscription
+                else user.panel_user_id,
+            )
 
             if not response:
                 return {
@@ -1226,7 +1236,12 @@ async def get_device_reduction_info(
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api.get_user_devices_all(_puuid)
+                response = await api.get_user_devices_all(
+                    _puuid,
+                    user_id=subscription.panel_user_id
+                    if settings.is_multi_tariff_enabled() and subscription
+                    else user.panel_user_id,
+                )
                 if response:
                     connected_devices_count = response.get('total', 0)
         except Exception as e:
@@ -1315,7 +1330,12 @@ async def reduce_devices(
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api.get_user_devices_all(_puuid)
+                response = await api.get_user_devices_all(
+                    _puuid,
+                    user_id=subscription.panel_user_id
+                    if settings.is_multi_tariff_enabled() and subscription
+                    else user.panel_user_id,
+                )
                 if response:
                     devices_list = response.get('devices', [])
                     connected_devices_count = len(devices_list)

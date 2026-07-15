@@ -276,7 +276,7 @@ class BlockedUsersService:
 
         return result
 
-    async def delete_user_from_remnawave(self, remnawave_uuid: str) -> bool:
+    async def delete_user_from_remnawave(self, remnawave_uuid: str, user_id: int | None = None) -> bool:
         """Удаляет пользователя из панели Remnawave."""
         if not remnawave_uuid:
             return False
@@ -287,7 +287,7 @@ class BlockedUsersService:
                 return False
 
             async with self.remnawave_service.get_api_client() as api:
-                await api.delete_user(remnawave_uuid)
+                await api.delete_user(remnawave_uuid, user_id=user_id)
                 logger.info('Удален пользователь из Remnawave', remnawave_uuid=remnawave_uuid)
                 return True
         except Exception as e:
@@ -443,7 +443,7 @@ class BlockedUsersService:
                         [user_result.remnawave_uuid] if user_result.remnawave_uuid else []
                     )
                     for rw_uuid in uuids_to_delete:
-                        success = await self.delete_user_from_remnawave(rw_uuid)
+                        success = await self.delete_user_from_remnawave(rw_uuid, user_id=user_result.user_id)
                         if success:
                             result.deleted_from_remnawave += 1
                         else:

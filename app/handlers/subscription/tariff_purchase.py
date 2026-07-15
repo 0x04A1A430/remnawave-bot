@@ -3469,7 +3469,12 @@ async def confirm_tariff_switch(
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(_reset_uuid)
+                    await api.reset_user_devices(
+                        _reset_uuid,
+                        user_id=subscription.panel_user_id
+                        if settings.is_multi_tariff_enabled() and subscription
+                        else db_user.panel_user_id,
+                    )
                     logger.info(
                         'Сброшены устройства при смене тарифа для user_id',
                         db_user_id=db_user.id,
@@ -3750,7 +3755,12 @@ async def confirm_daily_tariff_switch(
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(_reset_uuid_daily)
+                    await api.reset_user_devices(
+                        _reset_uuid_daily,
+                        user_id=subscription.panel_user_id
+                        if settings.is_multi_tariff_enabled() and subscription
+                        else db_user.panel_user_id,
+                    )
                     logger.info(
                         'Сброшены устройства при смене на суточный тариф для user_id',
                         db_user_id=db_user.id,
@@ -4537,7 +4547,12 @@ async def confirm_instant_switch(
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(_reset_uuid_instant)
+                    await api.reset_user_devices(
+                        _reset_uuid_instant,
+                        user_id=subscription.panel_user_id
+                        if settings.is_multi_tariff_enabled() and subscription
+                        else db_user.panel_user_id,
+                    )
                     logger.info(
                         'Сброшены устройства при мгновенном переключении тарифа для user_id',
                         db_user_id=db_user.id,

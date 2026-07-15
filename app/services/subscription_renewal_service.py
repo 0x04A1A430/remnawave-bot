@@ -556,7 +556,7 @@ class SubscriptionRenewalService:
                 )
                 if _uuid:
                     async with rw_service.get_api_client() as api:
-                        await api.reset_user_devices(_uuid)
+                        await api.reset_user_devices(_uuid, user_id=user.id)
                     logger.info(
                         'Devices reset on renewal',
                         subscription_id=subscription_after.id,

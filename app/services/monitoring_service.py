@@ -747,6 +747,7 @@ class MonitoringService:
                 # Внешний сквад НЕ пересылаем в рутинном sync — стейловый UUID
                 # вызывает FK violation → A039. Назначается при создании подписки.
 
+                update_kwargs['user_id'] = subscription.panel_user_id
                 updated_user = await api.update_user(**update_kwargs)
 
                 subscription.subscription_url = updated_user.subscription_url

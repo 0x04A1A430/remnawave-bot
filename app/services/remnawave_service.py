@@ -77,7 +77,7 @@ class _UUIDMapMutation:
     def __init__(self, uuid_map: dict[str, 'User']):
         self.uuid_map = uuid_map
         self._map_original: dict[str, Any] = {}
-        self._user_original: dict[User, tuple[Any, Any]] = {}
+        self._user_original: dict[User, tuple[Any, Any, Any]] = {}
 
     def _capture_user_state(self, user: Optional['User']) -> None:
         if not user or user in self._user_original:
@@ -90,10 +90,14 @@ class _UUIDMapMutation:
         except Exception:
             uuid_val = _ATTR_NOT_CAPTURED
         try:
+            panel_id_val = getattr(user, 'panel_user_id', None)
+        except Exception:
+            panel_id_val = _ATTR_NOT_CAPTURED
+        try:
             updated_val = getattr(user, 'updated_at', None)
         except Exception:
             updated_val = _ATTR_NOT_CAPTURED
-        self._user_original[user] = (uuid_val, updated_val)
+        self._user_original[user] = (uuid_val, panel_id_val, updated_val)
 
     def _capture_map_entry(self, key: str | None) -> None:
         if key is None or key in self._map_original:
@@ -105,6 +109,12 @@ class _UUIDMapMutation:
             return
         self._capture_user_state(user)
         user.remnawave_uuid = value
+
+    def set_user_panel_id(self, user: Optional['User'], value: int | None) -> None:
+        if not user:
+            return
+        self._capture_user_state(user)
+        user.panel_user_id = value
 
     def set_user_updated_at(self, user: Optional['User'], value: datetime) -> None:
         if not user:
@@ -131,9 +141,11 @@ class _UUIDMapMutation:
         return bool(self._map_original or self._user_original)
 
     def rollback(self) -> None:
-        for user, (uuid_value, updated_at) in self._user_original.items():
+        for user, (uuid_value, panel_id_value, updated_at) in self._user_original.items():
             if uuid_value is not _ATTR_NOT_CAPTURED:
                 user.remnawave_uuid = uuid_value
+            if panel_id_value is not _ATTR_NOT_CAPTURED:
+                user.panel_user_id = panel_id_value
             if updated_at is not _ATTR_NOT_CAPTURED:
                 user.updated_at = updated_at
 
@@ -196,6 +208,7 @@ class RemnaWaveService:
         user: 'User',
         panel_uuid: str | None,
         uuid_map: dict[str, 'User'],
+        panel_user_id: int | None = None,
     ) -> tuple[bool, _UUIDMapMutation | None]:
         """Обновляет UUID пользователя, если он изменился в панели."""
 
@@ -224,6 +237,7 @@ class RemnaWaveService:
             mutation.remove_map_entry(current_uuid)
 
         mutation.set_user_uuid(user, panel_uuid)
+        mutation.set_user_panel_id(user, panel_user_id)
         mutation.set_user_updated_at(user, datetime.now(UTC))
         mutation.set_map_entry(panel_uuid, user)
 
@@ -1256,6 +1270,7 @@ class RemnaWaveService:
                     try:
                         await api.update_user(
                             uuid=_uuid,
+                            user_id=subscription.user.panel_user_id,
                             active_internal_squads=new_squads,
                         )
                         panel_updated += 1
@@ -1394,6 +1409,7 @@ class RemnaWaveService:
 
                     for user_obj in users_batch:
                         user_dict = {
+                            'id': user_obj.id,
                             'uuid': user_obj.uuid,
                             'shortUuid': user_obj.short_uuid,
                             'username': user_obj.username,
@@ -1543,6 +1559,7 @@ class RemnaWaveService:
                                 db_user,
                                 panel_user.get('uuid'),
                                 bot_users_by_uuid,
+                                panel_user_id=panel_user.get('id'),
                             )
 
                             if is_created:
@@ -1579,6 +1596,7 @@ class RemnaWaveService:
                             db_user,
                             panel_user.get('uuid'),
                             bot_users_by_uuid,
+                            panel_user_id=panel_user.get('id'),
                         )
 
                         # Используем async запрос вместо доступа к relationship,
@@ -1702,6 +1720,7 @@ class RemnaWaveService:
                             # Обновляем remnawave_uuid если нет
                             if panel_uuid and not db_user.remnawave_uuid:
                                 db_user.remnawave_uuid = panel_uuid
+                                db_user.panel_user_id = panel_user.get('id')
 
                             # Используем async запрос вместо доступа к relationship
                             if settings.is_multi_tariff_enabled():
@@ -2076,6 +2095,7 @@ class RemnaWaveService:
                             best = max(pool, key=lambda s: s.days_left)
                             if not best.remnawave_uuid:
                                 best.remnawave_uuid = panel_uuid
+                                best.panel_user_id = panel_user.get('id')
                                 subs_by_uuid[panel_uuid] = best
                                 subscription = best
                                 logger.info(
@@ -2172,6 +2192,7 @@ class RemnaWaveService:
                             device_limit=coerce_panel_device_limit(panel_user.get('hwidDeviceLimit')),
                             connected_squads=_squad_uuids,
                             remnawave_uuid=panel_uuid,
+                            panel_user_id=panel_user.get('id'),
                             remnawave_short_id=_short_id,
                             remnawave_short_uuid=panel_user.get('shortUuid'),
                             subscription_url=panel_user.get('subscriptionUrl', ''),
@@ -2682,14 +2703,20 @@ class RemnaWaveService:
                                     if sub.tariff and sub.tariff.external_squad_uuid:
                                         update_kwargs['external_squad_uuid'] = sub.tariff.external_squad_uuid
 
+                                    update_kwargs['user_id'] = user.panel_user_id
                                     try:
-                                        await api.update_user(**update_kwargs)
+                                        updated_panel_user = await api.update_user(**update_kwargs)
                                         # Сохраняем UUID если его не было
                                         if settings.is_multi_tariff_enabled():
                                             if not sub.remnawave_uuid:
                                                 sub.remnawave_uuid = panel_uuid
-                                        elif not user.remnawave_uuid:
-                                            user.remnawave_uuid = panel_uuid
+                                            if not sub.panel_user_id and updated_panel_user.id:
+                                                sub.panel_user_id = updated_panel_user.id
+                                        else:
+                                            if not user.remnawave_uuid:
+                                                user.remnawave_uuid = panel_uuid
+                                            if not user.panel_user_id and updated_panel_user.id:
+                                                user.panel_user_id = updated_panel_user.id
                                         return ('updated', sub, None)
                                     except RemnaWaveAPIError as api_error:
                                         # UUID в БД протух — панель-юзера уже нет. Разные версии
@@ -2728,8 +2755,10 @@ class RemnaWaveService:
                             if new_user and sub.user:
                                 if settings.is_multi_tariff_enabled():
                                     sub.remnawave_uuid = new_user.uuid
+                                    sub.panel_user_id = new_user.id
                                 else:
                                     sub.user.remnawave_uuid = new_user.uuid
+                                    sub.user.panel_user_id = new_user.id
                                 sub.remnawave_short_uuid = new_user.short_uuid
                             stats['created'] += 1
                         elif action == 'updated':
@@ -2800,7 +2829,9 @@ class RemnaWaveService:
             )
             return None
 
-    async def get_user_traffic_stats_by_uuid(self, remnawave_uuid: str) -> dict[str, Any] | None:
+    async def get_user_traffic_stats_by_uuid(
+        self, remnawave_uuid: str, user_id: int | None = None
+    ) -> dict[str, Any] | None:
         """
         Получить статистику трафика по RemnaWave UUID.
 
@@ -2808,7 +2839,7 @@ class RemnaWaveService:
         """
         try:
             async with self.get_api_client() as api:
-                user = await api.get_user_by_uuid(remnawave_uuid)
+                user = await api.get_user_by_uuid(remnawave_uuid, user_id=user_id)
 
                 if not user:
                     return None
@@ -3147,7 +3178,7 @@ class RemnaWaveService:
             for _uuid in _uuids_to_reset:
                 try:
                     async with self.get_api_client() as api:
-                        await api.reset_user_devices(_uuid)
+                        await api.reset_user_devices(_uuid, user_id=user.panel_user_id)
                 except Exception as e:
                     logger.warning('Failed to reset devices for UUID', uuid=_uuid, error=e)
 
@@ -3479,7 +3510,7 @@ class RemnaWaveService:
                         if not subscription.remnawave_short_uuid and _lookup_uuid:
                             try:
                                 async with self.get_api_client() as api:
-                                    rw_user = await api.get_user_by_uuid(_lookup_uuid)
+                                    rw_user = await api.get_user_by_uuid(_lookup_uuid, user_id=user.panel_user_id)
                                     if rw_user:
                                         subscription.remnawave_short_uuid = rw_user.short_uuid
                                         subscription.subscription_url = rw_user.subscription_url

@@ -293,6 +293,7 @@ async def _sync_transferred_subscriptions_to_panel(
                         description=new_description,
                         telegram_id=primary.telegram_id,
                         email=getattr(primary, 'email', None),
+                        user_id=primary.id,
                     )
                     logger.info(
                         'Synced transferred subscription description to panel',

@@ -235,6 +235,40 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
     return user
 
 
+async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> User | None:
+    """Находит пользователя по panel_user_id (числовой ID из панели Remnawave)."""
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.subscriptions).selectinload(Subscription.tariff),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
+        .where(User.panel_user_id == panel_user_id)
+    )
+    user = result.scalar_one_or_none()
+
+    # Multi-tariff: panel_user_id lives on Subscription, not User
+    if not user and settings.is_multi_tariff_enabled():
+        from app.database.models import Subscription as _Subscription
+
+        sub_result = await db.execute(
+            select(_Subscription)
+            .options(
+                selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
+            )
+            .where(_Subscription.panel_user_id == panel_user_id)
+        )
+        sub = sub_result.scalar_one_or_none()
+        if sub and sub.user:
+            user = sub.user
+
+    if user and user.subscription:
+        _ = user.subscription.is_active
+
+    return user
+
+
 async def create_unique_referral_code(db: AsyncSession) -> str:
     max_attempts = 10
 
