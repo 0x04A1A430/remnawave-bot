@@ -866,6 +866,32 @@ async def lock_grace_sensitive_panel_updates(
     return {int(value) for value in result.scalars().all()}
 
 
+async def complete_recovered_grace_locked(
+    db: AsyncSession,
+    subscription_id: int,
+    *,
+    source: str,
+) -> bool:
+    """Finish grace immediately after canonical billing has recovered.
+
+    The caller must already hold the subscription's grace-sensitive database
+    lock and keep the transaction open until the panel write and session update
+    are committed together. ``false`` and ``observe`` remain strictly
+    non-mutating; ``drain`` may still finish an already-open session.
+    """
+    if grace_access_runtime.mode not in {GraceAccessMode.ACTIVE, GraceAccessMode.DRAIN}:
+        return False
+
+    completed = await _build_core(db, subscription_id=subscription_id).complete_after_payment(subscription_id)
+    if completed:
+        logger.info(
+            'Grace access completed immediately after billing recovery',
+            subscription_id=subscription_id,
+            source=source,
+        )
+    return completed
+
+
 @asynccontextmanager
 async def grace_sensitive_panel_update(subscription_id: int):
     """Hold a grace lock and expose billing state read only after lock acquisition.
@@ -873,7 +899,8 @@ async def grace_sensitive_panel_update(subscription_id: int):
     Callers must build the Remnawave payload from ``lease.subscription`` rather
     than from an ORM object loaded before entering this context.  This makes a
     renewal that committed while a bulk sync was waiting win over that stale
-    sync instead of being overwritten by it.
+    sync instead of being overwritten by it. If canonical billing has already
+    recovered, the open grace session is completed before the caller's write.
     """
     async with grace_access_runtime._locks.hold(subscription_id):
         async with AsyncSessionLocal() as guard_db:
@@ -889,9 +916,30 @@ async def grace_sensitive_panel_update(subscription_id: int):
                     .where(Subscription.id == subscription_id)
                 )
                 subscription = result.scalar_one_or_none()
+                has_open_grace = subscription_id in open_ids
+                if subscription is not None and has_open_grace:
+                    try:
+                        completed = await complete_recovered_grace_locked(
+                            guard_db,
+                            subscription_id,
+                            source='grace_safe_panel_update',
+                        )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        # Keep grace-owned fields masked. The periodic worker
+                        # remains the retry path, so a panel outage never rolls
+                        # canonical billing back.
+                        logger.exception(
+                            'Immediate grace completion failed; reconciler will retry',
+                            subscription_id=subscription_id,
+                            source='grace_safe_panel_update',
+                        )
+                    else:
+                        has_open_grace = not completed
                 yield GracePanelUpdateLease(
                     subscription=subscription,
-                    has_open_grace=subscription_id in open_ids,
+                    has_open_grace=has_open_grace,
                 )
 
 
@@ -915,8 +963,9 @@ async def update_panel_user_grace_safe(
     """Apply a normal panel update without overwriting an open grace overlay.
 
     Metadata and device-limit changes are still allowed while grace is open.
-    Status, expiry, traffic and squad fields are deferred: the reconciler will
-    either keep the overlay or apply the newest canonical billing state.
+    A real billing recovery completes grace immediately. Otherwise status,
+    expiry, traffic and squad fields are deferred so the reconciler can keep
+    the overlay or restore the newest canonical billing state safely.
     """
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:

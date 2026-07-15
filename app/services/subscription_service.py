@@ -511,7 +511,10 @@ class SubscriptionService:
             # Routine outbound updates must not replace a temporary Telegram-only
             # overlay with the still-expired/limited billing state. A real renewal
             # changes actual_status to active and is intentionally allowed.
-            from app.services.grace_access_runtime import lock_grace_sensitive_panel_updates
+            from app.services.grace_access_runtime import (
+                complete_recovered_grace_locked,
+                lock_grace_sensitive_panel_updates,
+            )
 
             open_grace_ids = await lock_grace_sensitive_panel_updates(db, (subscription.id,))
             await db.flush((subscription, user))
@@ -520,6 +523,25 @@ class SubscriptionService:
             # an older sync cannot overwrite a renewal that just completed.
             await db.refresh(subscription)
             await db.refresh(user)
+            if subscription.id in open_grace_ids:
+                try:
+                    completed_grace = await complete_recovered_grace_locked(
+                        db,
+                        subscription.id,
+                        source='subscription_service.update_remnawave_user',
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # Billing is already durable. Continue the ordinary panel
+                    # sync and let the reconciler retry closing the DB session.
+                    logger.exception(
+                        'Immediate grace completion failed during subscription sync; reconciler will retry',
+                        subscription_id=subscription.id,
+                    )
+                else:
+                    if completed_grace:
+                        open_grace_ids.discard(subscription.id)
             preserve_open_grace = (
                 subscription.id in open_grace_ids
                 and user.status == 'active'
