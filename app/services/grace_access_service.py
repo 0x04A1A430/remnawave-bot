@@ -542,9 +542,8 @@ class GraceAccessService:
                 return await self._complete(session, GraceCompletionReason.REVOKED)
             _, completed = await self._restore_and_complete(session, GraceCompletionReason.REVOKED)
             return completed
-        if (
-            not billing_is_eligible(latest_billing, session.reason)
-            or not billing_still_matches_session(session, latest_billing)
+        if not billing_is_eligible(latest_billing, session.reason) or not billing_still_matches_session(
+            session, latest_billing
         ):
             _, completed = await self._restore_and_complete(session, GraceCompletionReason.CONFLICT)
             return completed
@@ -589,10 +588,7 @@ class GraceAccessService:
         # stale snapshot.  When the same panel user still belongs to billing,
         # canonical billing wins immediately; otherwise restore the old user by
         # compare-and-set and leave unrelated panel changes untouched.
-        if (
-            not billing_is_eligible(billing, session.reason)
-            or not billing_still_matches_session(session, billing)
-        ):
+        if not billing_is_eligible(billing, session.reason) or not billing_still_matches_session(session, billing):
             if billing.remnawave_uuid == session.remnawave_uuid:
                 await self._panel.apply_billing_state(billing)
                 await self._complete(session, GraceCompletionReason.CONFLICT)
@@ -616,11 +612,7 @@ class GraceAccessService:
             action, _ = await self._restore_and_complete(session, completion_reason)
             return action
 
-        if (
-            session.state is GraceSessionState.ACTIVE
-            and not force_restore
-            and now < _as_utc(session.grace_until)
-        ):
+        if session.state is GraceSessionState.ACTIVE and not force_restore and now < _as_utc(session.grace_until):
             current_panel = await self._panel.read_snapshot(session.remnawave_uuid)
             if current_panel is None:
                 await self._complete(session, GraceCompletionReason.CONFLICT)

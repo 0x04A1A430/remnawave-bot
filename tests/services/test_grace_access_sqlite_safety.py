@@ -51,10 +51,8 @@ def test_sqlite_delete_guard_preserves_open_snapshot_and_cascades_completed_hist
     database_path = tmp_path / 'grace-delete-guard.sqlite3'
     connection = _connect(database_path)
     _create_schema(connection)
-    connection.execute("INSERT INTO subscriptions(id) VALUES (1)")
-    connection.execute(
-        "INSERT INTO grace_access_sessions(id, subscription_id, state) VALUES ('open', 1, 'active')"
-    )
+    connection.execute('INSERT INTO subscriptions(id) VALUES (1)')
+    connection.execute("INSERT INTO grace_access_sessions(id, subscription_id, state) VALUES ('open', 1, 'active')")
     connection.commit()
 
     with pytest.raises(sqlite3.IntegrityError, match='open grace-access session'):

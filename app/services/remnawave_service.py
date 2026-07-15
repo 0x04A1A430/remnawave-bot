@@ -2504,11 +2504,7 @@ class RemnaWaveService:
                         break
 
                     # Фильтруем подписки у которых есть пользователь
-                    valid_subscriptions = [
-                        subscription
-                        for subscription in subscriptions
-                        if subscription.user
-                    ]
+                    valid_subscriptions = [subscription for subscription in subscriptions if subscription.user]
 
                     if not valid_subscriptions:
                         if len(subscriptions) < batch_size:
@@ -2520,9 +2516,7 @@ class RemnaWaveService:
                     async def process_subscription(sub):
                         db_sub = sub
                         async with semaphore, AsyncExitStack() as stack:
-                            lease = await stack.enter_async_context(
-                                grace_sensitive_panel_update(sub.id)
-                            )
+                            lease = await stack.enter_async_context(grace_sensitive_panel_update(sub.id))
                             if not lease.allowed:
                                 logger.debug(
                                     'Bot-to-panel sync skipped missing subscription or active grace overlay',

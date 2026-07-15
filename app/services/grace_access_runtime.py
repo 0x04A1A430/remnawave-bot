@@ -149,9 +149,7 @@ class SQLAlchemyGraceSessionStore:
             )
             current_model = refreshed.scalar_one_or_none()
             if current_model is None:
-                raise GraceSnapshotError(
-                    f'Grace session {session.id} disappeared after its durable create checkpoint'
-                )
+                raise GraceSnapshotError(f'Grace session {session.id} disappeared after its durable create checkpoint')
             return _model_to_session(current_model)
         except IntegrityError:
             # Webhook and discovery worker may observe the same incident.  The
@@ -296,10 +294,7 @@ class RemnawaveGracePanelGateway:
             )
             if detached.external_squad_uuid != overlay.external_squad_uuid:
                 verified_detach = await api.get_user_by_uuid(remnawave_uuid)
-                if (
-                    verified_detach is None
-                    or verified_detach.external_squad_uuid != overlay.external_squad_uuid
-                ):
+                if verified_detach is None or verified_detach.external_squad_uuid != overlay.external_squad_uuid:
                     raise GracePanelError('Remnawave did not detach the external squad; overlay was not granted')
 
             updated = await api.update_user(
@@ -517,9 +512,7 @@ class GraceAccessRuntime:
                 eligible=eligible,
                 source=source,
             )
-            return GraceStartResult(
-                GraceStartDecision.NOT_ELIGIBLE if not eligible else GraceStartDecision.OBSERVED
-            )
+            return GraceStartResult(GraceStartDecision.NOT_ELIGIBLE if not eligible else GraceStartDecision.OBSERVED)
 
         try:
             processed_before = datetime.now(UTC)
@@ -647,9 +640,9 @@ class GraceAccessRuntime:
     async def open_count(self) -> int:
         async with AsyncSessionLocal() as db:
             result = await db.execute(
-                select(func.count()).select_from(GraceAccessSessionModel).where(
-                    GraceAccessSessionModel.state.in_(_OPEN_STATES)
-                )
+                select(func.count())
+                .select_from(GraceAccessSessionModel)
+                .where(GraceAccessSessionModel.state.in_(_OPEN_STATES))
             )
             return int(result.scalar_one())
 
@@ -686,15 +679,11 @@ class GraceAccessRuntime:
         expired_recently = and_(
             Subscription.end_date >= cutoff,
             Subscription.end_date <= now,
-            Subscription.status.in_(
-                (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.EXPIRED.value)
-            ),
+            Subscription.status.in_((SubscriptionStatus.ACTIVE.value, SubscriptionStatus.EXPIRED.value)),
         )
         marked_candidate = and_(
             Subscription.grace_candidate_at >= cutoff,
-            Subscription.grace_candidate_reason.in_(
-                (GraceReason.EXPIRED.value, GraceReason.LIMITED.value)
-            ),
+            Subscription.grace_candidate_reason.in_((GraceReason.EXPIRED.value, GraceReason.LIMITED.value)),
         )
 
         async with AsyncSessionLocal() as db:
@@ -831,9 +820,7 @@ class GraceAccessRuntime:
                 await _acquire_database_lock(db, subscription_id)
                 core = _build_core(db, subscription_id=subscription_id)
                 result = (
-                    await core.drain(limit=1, force_restore=force_restore)
-                    if drain
-                    else await core.reconcile(limit=1)
+                    await core.drain(limit=1, force_restore=force_restore) if drain else await core.reconcile(limit=1)
                 )
                 await db.commit()
                 return result
@@ -842,9 +829,7 @@ class GraceAccessRuntime:
 async def get_open_grace_subscription_ids(db: AsyncSession) -> set[int]:
     """One-query guard shared by both directions of full synchronization."""
     result = await db.execute(
-        select(GraceAccessSessionModel.subscription_id).where(
-            GraceAccessSessionModel.state.in_(_OPEN_STATES)
-        )
+        select(GraceAccessSessionModel.subscription_id).where(GraceAccessSessionModel.state.in_(_OPEN_STATES))
     )
     return {int(value) for value in result.scalars().all()}
 
@@ -865,9 +850,7 @@ async def lock_grace_sensitive_panel_updates(
         return set()
     if db.get_bind().dialect.name == 'sqlite':
         await db.execute(
-            update(Subscription)
-            .where(Subscription.id.in_(normalized_ids))
-            .values(updated_at=Subscription.updated_at)
+            update(Subscription).where(Subscription.id.in_(normalized_ids)).values(updated_at=Subscription.updated_at)
         )
     else:
         for subscription_id in normalized_ids:
@@ -937,9 +920,7 @@ async def update_panel_user_grace_safe(
     """
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:
-            raise GracePanelError(
-                f'Subscription {subscription_id} disappeared before its Remnawave update'
-            )
+            raise GracePanelError(f'Subscription {subscription_id} disappeared before its Remnawave update')
 
         supplied_uuid = str(update_kwargs.get('uuid') or '')
         fresh_subscription = lease.subscription
@@ -949,9 +930,7 @@ async def update_panel_user_grace_safe(
             else (fresh_subscription.user.remnawave_uuid if fresh_subscription.user else None)
         )
         if expected_uuid and supplied_uuid != str(expected_uuid):
-            raise GracePanelError(
-                f'Remnawave UUID changed before subscription {subscription_id} update'
-            )
+            raise GracePanelError(f'Remnawave UUID changed before subscription {subscription_id} update')
 
         if not lease.has_open_grace:
             return await api.update_user(**update_kwargs)
@@ -959,11 +938,7 @@ async def update_panel_user_grace_safe(
         protected_present = _GRACE_OWNED_UPDATE_FIELDS.intersection(update_kwargs)
         if not protected_present:
             return await api.update_user(**update_kwargs)
-        safe_kwargs = {
-            key: value
-            for key, value in update_kwargs.items()
-            if key not in _GRACE_OWNED_UPDATE_FIELDS
-        }
+        safe_kwargs = {key: value for key, value in update_kwargs.items() if key not in _GRACE_OWNED_UPDATE_FIELDS}
         logger.info(
             'Deferred grace-owned fields from routine Remnawave update',
             subscription_id=subscription_id,
@@ -974,9 +949,7 @@ async def update_panel_user_grace_safe(
 
         current = await api.get_user_by_uuid(supplied_uuid)
         if current is None:
-            raise GracePanelError(
-                f'Remnawave user {supplied_uuid} disappeared while grace was open'
-            )
+            raise GracePanelError(f'Remnawave user {supplied_uuid} disappeared while grace was open')
         return current
 
 
@@ -988,9 +961,7 @@ async def create_panel_user_grace_safe(
     """Create a panel user only while the subscription cannot have an overlay."""
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:
-            raise GracePanelError(
-                f'Subscription {subscription_id} disappeared before Remnawave user creation'
-            )
+            raise GracePanelError(f'Subscription {subscription_id} disappeared before Remnawave user creation')
         if lease.has_open_grace:
             raise GracePanelError(
                 f'Remnawave user creation deferred while subscription {subscription_id} has open grace'
@@ -1012,9 +983,7 @@ async def grace_sensitive_global_panel_update():
                     },
                 )
             else:
-                first_subscription_id = (
-                    await guard_db.execute(select(func.min(Subscription.id)))
-                ).scalar_one_or_none()
+                first_subscription_id = (await guard_db.execute(select(func.min(Subscription.id)))).scalar_one_or_none()
                 if first_subscription_id is not None:
                     await guard_db.execute(
                         update(Subscription)
@@ -1052,9 +1021,7 @@ async def set_panel_user_enabled_state_grace_safe(
                 int(value)
                 for value in (
                     await guard_db.execute(
-                        select(Subscription.id)
-                        .join(User, Subscription.user_id == User.id)
-                        .where(uuid_mapping_filter)
+                        select(Subscription.id).join(User, Subscription.user_id == User.id).where(uuid_mapping_filter)
                     )
                 ).scalars()
             }
@@ -1092,8 +1059,7 @@ async def set_panel_user_enabled_state_grace_safe(
                 enable_target_ids.update(
                     subscription.id
                     for subscription in subscriptions
-                    if subscription.actual_status
-                    in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+                    if subscription.actual_status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
                 )
                 if not enable_target_ids and subscriptions:
                     latest = max(
@@ -1127,9 +1093,7 @@ async def set_panel_user_enabled_state_grace_safe(
                 deferred_disable_error = error
             except Exception as error:
                 normalized_error = str(error).lower()
-                already_in_state = (
-                    enabled and 'already enabled' in normalized_error
-                ) or (
+                already_in_state = (enabled and 'already enabled' in normalized_error) or (
                     not enabled and 'already disabled' in normalized_error
                 )
                 if not already_in_state:
@@ -1176,9 +1140,7 @@ async def ensure_no_open_grace_for_subscriptions(
     # candidate activation always persists PENDING before touching the panel.
     if db.get_bind().dialect.name == 'sqlite':
         await db.execute(
-            update(Subscription)
-            .where(Subscription.id.in_(normalized_ids))
-            .values(updated_at=Subscription.updated_at)
+            update(Subscription).where(Subscription.id.in_(normalized_ids)).values(updated_at=Subscription.updated_at)
         )
     else:
         for subscription_id in normalized_ids:
@@ -1222,10 +1184,7 @@ async def ensure_no_open_grace_for_users(db: AsyncSession, user_ids: Sequence[in
         await db.execute(update(User).where(User.id.in_(normalized_user_ids)).values(id=User.id))
     else:
         await db.execute(
-            select(User.id)
-            .where(User.id.in_(normalized_user_ids))
-            .order_by(User.id.asc())
-            .with_for_update()
+            select(User.id).where(User.id.in_(normalized_user_ids)).order_by(User.id.asc()).with_for_update()
         )
     result = await db.execute(select(Subscription.id).where(Subscription.user_id.in_(normalized_user_ids)))
     await ensure_no_open_grace_for_subscriptions(db, tuple(int(value) for value in result.scalars().all()))
@@ -1307,9 +1266,7 @@ def _subscription_to_billing(subscription: Subscription) -> GraceBillingState:
         is_free_tariff=bool(tariff and tariff.is_free),
         user_status=user.status,
         grace_suppressed_until=(
-            _as_utc(subscription.grace_suppressed_until)
-            if subscription.grace_suppressed_until
-            else None
+            _as_utc(subscription.grace_suppressed_until) if subscription.grace_suppressed_until else None
         ),
     )
 
@@ -1324,11 +1281,7 @@ def _panel_user_to_snapshot(panel_user: Any) -> GracePanelSnapshot:
         squad_uuids=_extract_panel_squads(panel_user.active_internal_squads),
         external_squad_uuid=panel_user.external_squad_uuid,
         traffic_is_known=panel_user.user_traffic is not None,
-        last_traffic_reset_at=(
-            _as_utc(panel_user.last_traffic_reset_at)
-            if panel_user.last_traffic_reset_at
-            else None
-        ),
+        last_traffic_reset_at=(_as_utc(panel_user.last_traffic_reset_at) if panel_user.last_traffic_reset_at else None),
     )
 
 
@@ -1388,8 +1341,7 @@ def _panel_matches_target(snapshot: GracePanelSnapshot, target: _PanelTarget) ->
     else:
         status_matches = actual_status == expected_status
         expiry_matches = bool(
-            snapshot.expire_at
-            and abs((_as_utc(snapshot.expire_at) - _as_utc(target.expire_at)).total_seconds()) <= 2
+            snapshot.expire_at and abs((_as_utc(snapshot.expire_at) - _as_utc(target.expire_at)).total_seconds()) <= 2
         )
     return (
         status_matches

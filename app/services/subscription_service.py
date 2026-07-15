@@ -184,8 +184,7 @@ class SubscriptionService:
             preserve_open_grace = (
                 subscription.id in open_grace_ids
                 and user.status == 'active'
-                and subscription.actual_status
-                in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value)
+                and subscription.actual_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value)
             )
 
             # Загружаем tariff заранее, чтобы избежать lazy loading в async контексте
@@ -204,9 +203,7 @@ class SubscriptionService:
 
                 if preserve_open_grace:
                     remnawave_uuid = (
-                        subscription.remnawave_uuid
-                        if settings.is_multi_tariff_enabled()
-                        else user.remnawave_uuid
+                        subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
                     )
                     if not remnawave_uuid:
                         logger.warning(
@@ -321,9 +318,7 @@ class SubscriptionService:
         common_kwargs = dict(
             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
             expire_at=(
-                subscription.end_date
-                if is_actually_active
-                else max(subscription.end_date, now + timedelta(minutes=1))
+                subscription.end_date if is_actually_active else max(subscription.end_date, now + timedelta(minutes=1))
             ),
             traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
             traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
@@ -436,9 +431,7 @@ class SubscriptionService:
         common_kwargs = dict(
             status=UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED,
             expire_at=(
-                subscription.end_date
-                if is_actually_active
-                else max(subscription.end_date, now + timedelta(minutes=1))
+                subscription.end_date if is_actually_active else max(subscription.end_date, now + timedelta(minutes=1))
             ),
             traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
             traffic_limit_strategy=get_traffic_reset_strategy(subscription.tariff),
@@ -530,8 +523,7 @@ class SubscriptionService:
             preserve_open_grace = (
                 subscription.id in open_grace_ids
                 and user.status == 'active'
-                and subscription.actual_status
-                in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value)
+                and subscription.actual_status in (SubscriptionStatus.EXPIRED.value, SubscriptionStatus.LIMITED.value)
             )
             if preserve_open_grace:
                 logger.info(
