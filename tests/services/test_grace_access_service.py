@@ -421,7 +421,7 @@ async def test_payment_wins_over_grace_snapshot() -> None:
 
 
 @pytest.mark.asyncio
-async def test_explicit_payment_completion_finishes_grace_without_waiting_for_reconcile() -> None:
+async def test_confirmed_panel_sync_can_finish_payment_without_duplicate_panel_update() -> None:
     now = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
     clock = MutableClock(now)
     billing = make_billing(status='expired', end_at=now - timedelta(days=1))
@@ -437,8 +437,14 @@ async def test_explicit_payment_completion_finishes_grace_without_waiting_for_re
     )
     billing_gateway.state = paid_billing
 
-    assert await service.complete_after_payment(billing.subscription_id) is True
-    assert panel.applied_billing == [paid_billing]
+    assert (
+        await service.complete_after_payment(
+            billing.subscription_id,
+            apply_billing_state=False,
+        )
+        is True
+    )
+    assert panel.applied_billing == []
     completed = store.only_session()
     assert completed.state is GraceSessionState.COMPLETED
     assert completed.completion_reason is GraceCompletionReason.PAID
