@@ -44,6 +44,19 @@ class EmailNotificationTemplates:
             NotificationType.SUBSCRIPTION_EXPIRED: self._subscription_expired_template,
             NotificationType.SUBSCRIPTION_RENEWED: self._subscription_renewed_template,
             NotificationType.SUBSCRIPTION_ACTIVATED: self._subscription_activated_template,
+            NotificationType.WEBHOOK_SUB_EXPIRED: lambda language, context, _k='sub_expired': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_DISABLED: lambda language, context, _k='sub_disabled': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_ENABLED: lambda language, context, _k='sub_enabled': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_LIMITED: lambda language, context, _k='sub_limited': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_TRAFFIC_RESET: lambda language, context, _k='sub_traffic_reset': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_DELETED: lambda language, context, _k='sub_deleted': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_REVOKED: lambda language, context, _k='sub_revoked': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_FIRST_CONNECTED: lambda language, context, _k='sub_first_connected': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD: lambda language, context, _k='sub_bandwidth_threshold': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_USER_NOT_CONNECTED: lambda language, context, _k='user_not_connected': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_DEVICE_ADDED: lambda language, context, _k='device_added': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_DEVICE_DELETED: lambda language, context, _k='device_deleted': self._webhook_event_email(_k, language, context),
+            NotificationType.WEBHOOK_TORRENT_DETECTED: lambda language, context, _k='torrent_detected': self._webhook_event_email(_k, language, context),
             NotificationType.AUTOPAY_SUCCESS: self._autopay_success_template,
             NotificationType.AUTOPAY_FAILED: self._autopay_failed_template,
             NotificationType.AUTOPAY_INSUFFICIENT_FUNDS: self._autopay_insufficient_funds_template,
@@ -518,6 +531,82 @@ class EmailNotificationTemplates:
         return {
             'subject': subjects.get(language, subjects['ru']),
             'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    _WEBHOOK_EMAIL_COPY = {
+        'sub_expired': {
+            'ru': ('Подписка закончилась', '<p>Ваша VPN-подписка истекла — доступ отключён.</p><p>Продлите подписку, чтобы вернуться в сервис.</p>'),
+            'en': ('Subscription expired', '<p>Your VPN subscription has expired and access is off.</p><p>Renew it to get back online.</p>'),
+        },
+        'sub_disabled': {
+            'ru': ('Подписка приостановлена', '<p>Ваша подписка временно отключена.</p><p>Проверьте личный кабинет или напишите в поддержку.</p>'),
+            'en': ('Subscription suspended', '<p>Your subscription has been temporarily disabled.</p><p>Check your dashboard or contact support.</p>'),
+        },
+        'sub_enabled': {
+            'ru': ('Подписка снова активна', '<p>Доступ к VPN восстановлен — можно пользоваться.</p>'),
+            'en': ('Subscription re-activated', '<p>Your VPN access has been restored.</p>'),
+        },
+        'sub_limited': {
+            'ru': ('Достигнут лимит трафика', '<p>Трафик по подписке исчерпан.</p><p>Докупите трафик или дождитесь сброса, чтобы продолжить.</p>'),
+            'en': ('Traffic limit reached', '<p>You have used up your subscription traffic.</p><p>Top up traffic or wait for the reset to continue.</p>'),
+        },
+        'sub_traffic_reset': {
+            'ru': ('Трафик обновлён', '<p>Счётчик трафика сброшен — лимит снова доступен.</p>'),
+            'en': ('Traffic reset', '<p>Your traffic counter has been reset — the limit is available again.</p>'),
+        },
+        'sub_deleted': {
+            'ru': ('Подписка удалена', '<p>Ваша подписка была удалена.</p><p>Если это ошибка — напишите в поддержку.</p>'),
+            'en': ('Subscription deleted', '<p>Your subscription has been deleted.</p><p>If this is a mistake, contact support.</p>'),
+        },
+        'sub_revoked': {
+            'ru': ('Ссылка-подписка обновлена', '<p>Ваша ссылка-подписка была перевыпущена.</p><p>Импортируйте новую ссылку из личного кабинета.</p>'),
+            'en': ('Subscription link reissued', '<p>Your subscription link has been reissued.</p><p>Import the new link from your dashboard.</p>'),
+        },
+        'sub_first_connected': {
+            'ru': ('Подключение установлено', '<p>Вы успешно подключились к VPN. Приятного пользования!</p>'),
+            'en': ('You are connected', '<p>You have successfully connected to the VPN. Enjoy!</p>'),
+        },
+        'sub_bandwidth_threshold': {
+            'ru': ('Трафик на исходе', '<p>Вы израсходовали большую часть трафика.</p><p>Докупите трафик, чтобы не остаться без доступа.</p>'),
+            'en': ('Traffic running low', '<p>You have used most of your traffic.</p><p>Top up to avoid losing access.</p>'),
+        },
+        'user_not_connected': {
+            'ru': ('Нужна помощь с подключением VPN?', '<p>Ваша подписка <strong>активна</strong>, но приложение пока не настроено — поэтому VPN не работает.</p><p>Это занимает 5 минут: установите приложение и импортируйте ссылку-подписку. Если что-то не выходит — напишите в поддержку, поможем.</p>'),
+            'en': ('Need help connecting your VPN?', '<p>Your subscription is <strong>active</strong>, but the app is not set up yet — so the VPN is not working.</p><p>It takes 5 minutes: install the app and import your subscription link. If anything goes wrong, contact support.</p>'),
+        },
+        'device_added': {
+            'ru': ('Новое устройство подключено', '<p>К вашей подписке добавлено устройство{device}.</p><p>Если это были не вы — напишите в поддержку.</p>'),
+            'en': ('New device connected', '<p>A device{device} was added to your subscription.</p><p>If this was not you, contact support.</p>'),
+        },
+        'device_deleted': {
+            'ru': ('Устройство отключено', '<p>Устройство{device} отвязано от вашей подписки.</p>'),
+            'en': ('Device removed', '<p>A device{device} was removed from your subscription.</p>'),
+        },
+        'torrent_detected': {
+            'ru': ('Обнаружен торрент-трафик', '<p>Зафиксирована torrent-активность.</p><p>На VPN она заблокирована — используйте обычные приложения.</p>'),
+            'en': ('Torrent traffic detected', '<p>Torrent activity was detected.</p><p>It is blocked on the VPN — please use regular apps.</p>'),
+        },
+    }
+
+    def _webhook_event_email(self, kind: str, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Generic email for Remnawave webhook notifications (email-only users).
+
+        Each WEBHOOK_* notification type routes through notification_delivery_service,
+        which sends email to email-only users — but these types had no email template,
+        so email was silently skipped. This covers all of them.
+        """
+        lang = language if language in ('ru', 'en') else 'ru'
+        copy = self._WEBHOOK_EMAIL_COPY.get(kind, self._WEBHOOK_EMAIL_COPY['user_not_connected'])
+        subject, body = copy.get(lang, copy['ru'])
+
+        device = str(context.get('device') or context.get('device_name') or '').strip()
+        device_suffix = f' — {html.escape(device)}' if device and device != '—' else ''
+        body = body.replace('{device}', device_suffix)
+
+        content = f'<h2>{subject}</h2><div class="highlight">{body}</div>{self._get_cabinet_button(language)}'
+        return {
+            'subject': subject,
+            'body_html': self._get_base_template(content, language),
         }
 
     def _subscription_activated_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
