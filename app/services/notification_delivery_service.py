@@ -34,6 +34,9 @@ class NotificationType(Enum):
     SUBSCRIPTION_EXPIRING = 'subscription_expiring'
     SUBSCRIPTION_EXPIRED = 'subscription_expired'
     SUBSCRIPTION_RENEWED = 'subscription_renewed'
+    WINBACK_EXPIRED_1D = 'winback_expired_1d'
+    WINBACK_DISCOUNT = 'winback_discount'
+    WINBACK_TRIAL_ENDING = 'winback_trial_ending'
 
     # Autopay notifications
     AUTOPAY_SUCCESS = 'autopay_success'
