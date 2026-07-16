@@ -410,6 +410,21 @@ async def _process_single_subscription(
             except Exception as notify_error:
                 logger.warning('Ошибка уведомления об автоплатеже', notify_error=notify_error)
 
+        if not user.telegram_id and result.get('paid') and user.email and getattr(user, 'email_verified', False):
+            try:
+                from app.services.notification_delivery_service import (
+                    NotificationType,
+                    notification_delivery_service,
+                )
+
+                await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=NotificationType.AUTOPAY_SUCCESS,
+                    context={'formatted_amount': settings.format_price(topup_amount_kopeks)},
+                )
+            except Exception as email_error:
+                logger.warning('Ошибка email-уведомления об автоплатеже', email_error=email_error)
+
         return 'created'
 
     # Все карты не сработали — уведомляем пользователя
@@ -433,5 +448,20 @@ async def _process_single_subscription(
             )
         except Exception as notify_error:
             logger.warning('Ошибка уведомления о неудачном автоплатеже', notify_error=notify_error)
+
+    if not user.telegram_id and user.email and getattr(user, 'email_verified', False):
+        try:
+            from app.services.notification_delivery_service import (
+                NotificationType,
+                notification_delivery_service,
+            )
+
+            await notification_delivery_service.send_notification(
+                user=user,
+                notification_type=NotificationType.AUTOPAY_FAILED,
+                context={'formatted_amount': settings.format_price(topup_amount_kopeks)},
+            )
+        except Exception as email_error:
+            logger.warning('Ошибка email-уведомления о неудачном автоплатеже', email_error=email_error)
 
     return 'all_cards_failed'
