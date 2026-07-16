@@ -343,11 +343,28 @@ class GraceAccessService:
         )
         return GraceStartResult(decision, active_session)
 
-    async def complete_after_payment(self, subscription_id: int) -> bool:
-        """End grace after payment and push canonical billing values to Remnawave.
+    async def payment_has_recovered(self, subscription_id: int) -> bool:
+        """Return whether fresh canonical billing represents a real recovery."""
+        session = await self._store.get_open(subscription_id)
+        if not session:
+            return False
+
+        billing = await self._billing.get_subscription(subscription_id)
+        return bool(billing and billing_has_recovered(session, billing))
+
+    async def complete_after_payment(
+        self,
+        subscription_id: int,
+        *,
+        apply_billing_state: bool = True,
+    ) -> bool:
+        """End grace after payment and optionally push canonical panel values.
 
         This method is safe to call explicitly after a successful payment.  The
         periodic reconciliation path performs the same operation as a fallback.
+        A caller that already applied and verified the canonical panel update
+        under the same lock may set ``apply_billing_state=False`` to avoid a
+        duplicate Remnawave PATCH.
         """
         session = await self._store.get_open(subscription_id)
         if not session:
@@ -357,7 +374,8 @@ class GraceAccessService:
         if not billing or not billing_has_recovered(session, billing):
             return False
 
-        await self._panel.apply_billing_state(billing)
+        if apply_billing_state:
+            await self._panel.apply_billing_state(billing)
         await self._complete(session, GraceCompletionReason.PAID)
         return True
 

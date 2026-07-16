@@ -89,6 +89,7 @@ class GracePanelUpdateLease:
 
     subscription: Subscription | None
     has_open_grace: bool
+    db: AsyncSession
 
     @property
     def allowed(self) -> bool:
@@ -866,30 +867,62 @@ async def lock_grace_sensitive_panel_updates(
     return {int(value) for value in result.scalars().all()}
 
 
-async def complete_recovered_grace_locked(
+async def apply_recovered_grace_update_locked(
     db: AsyncSession,
+    api: Any,
     subscription_id: int,
     *,
+    update_kwargs: Mapping[str, Any],
     source: str,
-) -> bool:
-    """Finish grace immediately after canonical billing has recovered.
+) -> tuple[bool, Any | None]:
+    """Apply one canonical panel PATCH and finish a recovered grace session.
 
     The caller must already hold the subscription's grace-sensitive database
-    lock and keep the transaction open until the panel write and session update
-    are committed together. ``false`` and ``observe`` remain strictly
-    non-mutating; ``drain`` may still finish an already-open session.
+    lock and keep the transaction open until both the verified panel write and
+    the session update are committed. ``false`` and ``observe`` remain strictly
+    non-mutating; ``drain`` may finish an already-open session.
     """
     if grace_access_runtime.mode not in {GraceAccessMode.ACTIVE, GraceAccessMode.DRAIN}:
-        return False
+        return False, None
 
-    completed = await _build_core(db, subscription_id=subscription_id).complete_after_payment(subscription_id)
-    if completed:
-        logger.info(
-            'Grace access completed immediately after billing recovery',
-            subscription_id=subscription_id,
-            source=source,
-        )
-    return completed
+    core = _build_core(db, subscription_id=subscription_id)
+    if not await core.payment_has_recovered(subscription_id):
+        return False, None
+
+    billing = await SQLAlchemyGraceBillingGateway(db).get_subscription(subscription_id)
+    if billing is None or not billing.remnawave_uuid:
+        raise GracePanelError('Recovered canonical subscription has no Remnawave UUID')
+
+    target = _build_billing_target(billing, now=datetime.now(UTC))
+    canonical_kwargs = dict(update_kwargs)
+    canonical_kwargs.update(
+        uuid=billing.remnawave_uuid,
+        status=target.status,
+        expire_at=target.expire_at,
+        traffic_limit_bytes=target.traffic_limit_bytes,
+        active_internal_squads=list(target.squad_uuids),
+        external_squad_uuid=target.external_squad_uuid,
+    )
+    if target.device_limit is not None:
+        canonical_kwargs['hwid_device_limit'] = target.device_limit
+
+    updated = await api.update_user(**canonical_kwargs)
+    if updated is None or not _panel_matches_target(_panel_user_to_snapshot(updated), target):
+        raise GracePanelError('Remnawave did not confirm canonical billing state after renewal')
+
+    completed = await core.complete_after_payment(
+        subscription_id,
+        apply_billing_state=False,
+    )
+    if not completed:
+        raise GracePanelError('Recovered grace session changed before it could be completed')
+
+    logger.info(
+        'Grace access completed by the canonical renewal update',
+        subscription_id=subscription_id,
+        source=source,
+    )
+    return True, updated
 
 
 @asynccontextmanager
@@ -899,8 +932,7 @@ async def grace_sensitive_panel_update(subscription_id: int):
     Callers must build the Remnawave payload from ``lease.subscription`` rather
     than from an ORM object loaded before entering this context.  This makes a
     renewal that committed while a bulk sync was waiting win over that stale
-    sync instead of being overwritten by it. If canonical billing has already
-    recovered, the open grace session is completed before the caller's write.
+    sync instead of being overwritten by it.
     """
     async with grace_access_runtime._locks.hold(subscription_id):
         async with AsyncSessionLocal() as guard_db:
@@ -916,30 +948,10 @@ async def grace_sensitive_panel_update(subscription_id: int):
                     .where(Subscription.id == subscription_id)
                 )
                 subscription = result.scalar_one_or_none()
-                has_open_grace = subscription_id in open_ids
-                if subscription is not None and has_open_grace:
-                    try:
-                        completed = await complete_recovered_grace_locked(
-                            guard_db,
-                            subscription_id,
-                            source='grace_safe_panel_update',
-                        )
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        # Keep grace-owned fields masked. The periodic worker
-                        # remains the retry path, so a panel outage never rolls
-                        # canonical billing back.
-                        logger.exception(
-                            'Immediate grace completion failed; reconciler will retry',
-                            subscription_id=subscription_id,
-                            source='grace_safe_panel_update',
-                        )
-                    else:
-                        has_open_grace = not completed
                 yield GracePanelUpdateLease(
                     subscription=subscription,
-                    has_open_grace=has_open_grace,
+                    has_open_grace=subscription_id in open_ids,
+                    db=guard_db,
                 )
 
 
@@ -983,6 +995,16 @@ async def update_panel_user_grace_safe(
 
         if not lease.has_open_grace:
             return await api.update_user(**update_kwargs)
+
+        completed, updated = await apply_recovered_grace_update_locked(
+            lease.db,
+            api,
+            subscription_id,
+            update_kwargs=update_kwargs,
+            source='grace_safe_panel_update',
+        )
+        if completed:
+            return updated
 
         protected_present = _GRACE_OWNED_UPDATE_FIELDS.intersection(update_kwargs)
         if not protected_present:

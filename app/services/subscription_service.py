@@ -512,7 +512,7 @@ class SubscriptionService:
             # overlay with the still-expired/limited billing state. A real renewal
             # changes actual_status to active and is intentionally allowed.
             from app.services.grace_access_runtime import (
-                complete_recovered_grace_locked,
+                apply_recovered_grace_update_locked,
                 lock_grace_sensitive_panel_updates,
             )
 
@@ -523,25 +523,6 @@ class SubscriptionService:
             # an older sync cannot overwrite a renewal that just completed.
             await db.refresh(subscription)
             await db.refresh(user)
-            if subscription.id in open_grace_ids:
-                try:
-                    completed_grace = await complete_recovered_grace_locked(
-                        db,
-                        subscription.id,
-                        source='subscription_service.update_remnawave_user',
-                    )
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    # Billing is already durable. Continue the ordinary panel
-                    # sync and let the reconciler retry closing the DB session.
-                    logger.exception(
-                        'Immediate grace completion failed during subscription sync; reconciler will retry',
-                        subscription_id=subscription.id,
-                    )
-                else:
-                    if completed_grace:
-                        open_grace_ids.discard(subscription.id)
             preserve_open_grace = (
                 subscription.id in open_grace_ids
                 and user.status == 'active'
@@ -650,7 +631,20 @@ class SubscriptionService:
                 if sync_squads and ext_squad_uuid is not None:
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
-                updated_user = await api.update_user(**update_kwargs)
+                completed_grace = False
+                updated_user = None
+                if subscription.id in open_grace_ids:
+                    completed_grace, updated_user = await apply_recovered_grace_update_locked(
+                        db,
+                        api,
+                        subscription.id,
+                        update_kwargs=update_kwargs,
+                        source='subscription_service.update_remnawave_user',
+                    )
+                if not completed_grace:
+                    updated_user = await api.update_user(**update_kwargs)
+                if updated_user is None:
+                    raise RemnaWaveAPIError('Remnawave returned no user after subscription renewal update')
 
                 if reset_traffic:
                     if settings.is_multi_tariff_enabled():
