@@ -413,14 +413,13 @@ async def _process_single_subscription(
         if not user.telegram_id and result.get('paid') and user.email and getattr(user, 'email_verified', False):
             try:
                 from app.services.notification_delivery_service import (
-                    NotificationType,
                     notification_delivery_service,
                 )
 
-                await notification_delivery_service.send_notification(
+                await notification_delivery_service.notify_autopay_success(
                     user=user,
-                    notification_type=NotificationType.AUTOPAY_SUCCESS,
-                    context={'formatted_amount': settings.format_price(topup_amount_kopeks)},
+                    amount_kopeks=topup_amount_kopeks,
+                    new_expires_at=subscription.end_date,
                 )
             except Exception as email_error:
                 logger.warning('Ошибка email-уведомления об автоплатеже', email_error=email_error)
@@ -452,14 +451,12 @@ async def _process_single_subscription(
     if not user.telegram_id and user.email and getattr(user, 'email_verified', False):
         try:
             from app.services.notification_delivery_service import (
-                NotificationType,
                 notification_delivery_service,
             )
 
-            await notification_delivery_service.send_notification(
+            await notification_delivery_service.notify_autopay_failed(
                 user=user,
-                notification_type=NotificationType.AUTOPAY_FAILED,
-                context={'formatted_amount': settings.format_price(topup_amount_kopeks)},
+                reason='',
             )
         except Exception as email_error:
             logger.warning('Ошибка email-уведомления о неудачном автоплатеже', email_error=email_error)
