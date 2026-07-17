@@ -494,6 +494,14 @@ class Settings(BaseSettings):
     YOOKASSA_WEBHOOK_HOST: str = '0.0.0.0'
     YOOKASSA_WEBHOOK_PORT: int = 8082
     YOOKASSA_TRUSTED_PROXY_NETWORKS: str = ''
+    # Отключает проверку IP-адреса отправителя вебхука (allowlist сетей YooKassa).
+    # Нужно для развёртываний за Anti-DDoS/прокси, который НЕ пробрасывает реальный
+    # IP клиента: до бота доходит только адрес прокси, и allowlist всегда отклоняет
+    # вебхук как forbidden_ip. Когда флаг включён, IP-гейт снимается, но подлинность
+    # платежа подтверждается обязательным (fail-closed) запросом статуса в API YooKassa
+    # внутри process_yookassa_webhook — без подтверждения баланс не начисляется.
+    # По умолчанию выключен: IP-проверка остаётся основным барьером.
+    YOOKASSA_SKIP_IP_CHECK: bool = False
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_RECURRENT_ENABLED: bool = False
