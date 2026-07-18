@@ -678,12 +678,12 @@ async def send_nalogo_receipt_notifications(
                     db_user = await get_user_by_telegram_id(session, telegram_user_id)
 
                 if db_user:
-                    if db_user.username:
-                        recipient_lines.append(f'👤 Username: @{db_user.username}')
+                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
                     full_name = ' '.join(filter(None, [db_user.first_name, db_user.last_name])).strip()
                     if full_name:
                         recipient_lines.append(f'📛 Имя: {full_name}')
-                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    if db_user.username:
+                        recipient_lines.append(f'👤 Username: @{db_user.username}')
                     if db_user.email:
                         recipient_lines.append(f'📧 Почта: {db_user.email}')
                 else:
