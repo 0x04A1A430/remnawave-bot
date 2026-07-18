@@ -666,7 +666,39 @@ async def send_nalogo_receipt_notifications(
     chat_id = settings.get_admin_notifications_chat_id()
     if chat_id:
         topic_id = settings.ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID
-        recipient_line = f'\n👤 Получатель: <code>{telegram_user_id}</code>' if telegram_user_id else '\n👤 Получатель: без Telegram (email/гость)'
+
+        # Подгружаем данные пользователя для подробного блока «Получатель»
+        recipient_lines: list[str] = []
+        if telegram_user_id:
+            try:
+                from app.database.crud.user import get_user_by_telegram_id
+                from app.database.database import AsyncSessionLocal
+
+                async with AsyncSessionLocal() as session:
+                    db_user = await get_user_by_telegram_id(session, telegram_user_id)
+
+                if db_user:
+                    if db_user.username:
+                        recipient_lines.append(f'👤 Username: @{db_user.username}')
+                    full_name = ' '.join(filter(None, [db_user.first_name, db_user.last_name])).strip()
+                    if full_name:
+                        recipient_lines.append(f'📛 Имя: {full_name}')
+                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    if db_user.email:
+                        recipient_lines.append(f'📧 Почта: {db_user.email}')
+                else:
+                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+            except Exception as user_error:
+                logger.warning(
+                    'Не удалось загрузить данные пользователя для уведомления о чеке',
+                    telegram_user_id=telegram_user_id,
+                    error=user_error,
+                )
+                recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+        else:
+            recipient_lines.append('👤 Получатель: без Telegram (email/гость)')
+
+        recipient_block = '\n'.join(recipient_lines)
         context_line = f'\nℹ️ {context_label}' if context_label else ''
         try:
             await bot.send_message(
@@ -674,8 +706,8 @@ async def send_nalogo_receipt_notifications(
                 message_thread_id=topic_id,
                 text=(
                     '🧾 <b>Новый чек NaloGO создан</b>\n\n'
-                    f'💰 Сумма: {amount_text}'
-                    f'{recipient_line}'
+                    f'💰 Сумма: {amount_text}\n'
+                    f'{recipient_block}'
                     f'{context_line}'
                 ),
                 parse_mode='HTML',
