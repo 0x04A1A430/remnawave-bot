@@ -432,24 +432,21 @@ class NaloGoService:
     def get_receipt_print_url(self, receipt_uuid: str | None) -> str | None:
         """Строит публичную ссылку на чек для отправки клиенту.
 
-        Пытается использовать client.receipt().print_url(), который берёт ИНН
-        из профиля, загруженного при аутентификации. Если профиль ещё не
-        загружен в этом процессе (например, чек был создан ранее другим
-        воркером), собираем ссылку вручную по известному self.inn — формат
-        идентичен: {base_url}/receipt/{inn}/{uuid}/print.
+        ВАЖНО: библиотечный client.receipt().print_url() содержит баг — он
+        собирает URL от base_url БЕЗ '/v1' (client.py передаёт в ReceiptAPI
+        self.base_url, тогда как HTTP-клиент работает с base_url + '/v1').
+        Рабочий формат ссылки: {base_url}/v1/receipt/{inn}/{uuid}/print,
+        поэтому собираем URL вручную.
         """
         if not self.configured or not receipt_uuid:
             return None
 
         try:
-            return self.client.receipt().print_url(receipt_uuid)
-        except Exception:
-            try:
-                base = self.client.base_url.rstrip('/')
-                return f'{base}/receipt/{self.inn}/{receipt_uuid.strip()}/print'
-            except Exception as error:
-                logger.warning('Не удалось построить ссылку на чек NaloGO', error=sanitize_proxy_error(error))
-                return None
+            base = self.client.base_url.rstrip('/')
+            return f'{base}/v1/receipt/{self.inn}/{receipt_uuid.strip()}/print'
+        except Exception as error:
+            logger.warning('Не удалось построить ссылку на чек NaloGO', error=sanitize_proxy_error(error))
+            return None
 
     async def get_queue_length(self) -> int:
         """Получить количество чеков в очереди."""
