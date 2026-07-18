@@ -678,14 +678,16 @@ async def send_nalogo_receipt_notifications(
                     db_user = await get_user_by_telegram_id(session, telegram_user_id)
 
                 if db_user:
+                    from html import escape as html_escape
+
                     recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
                     full_name = ' '.join(filter(None, [db_user.first_name, db_user.last_name])).strip()
                     if full_name:
-                        recipient_lines.append(f'📛 Имя: {full_name}')
+                        recipient_lines.append(f'📛 Имя: <code>{html_escape(full_name)}</code>')
                     if db_user.username:
                         recipient_lines.append(f'👤 Username: @{db_user.username}')
                     if db_user.email:
-                        recipient_lines.append(f'📧 Почта: {db_user.email}')
+                        recipient_lines.append(f'📧 Почта: <code>{html_escape(db_user.email)}</code>')
                 else:
                     recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
             except Exception as user_error:
