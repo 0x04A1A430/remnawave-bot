@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.65.1](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.65.0...v3.65.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* **nalogo:** не терять чек, если Telegram отверг файл, и не слать HTML как чек ([abde46c](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/abde46cbe501c5d2712f2aaf2b2f61fc09085a5d))
+* **subscription:** NameError при продлении тарифа после списания денег ([82b7131](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/commit/82b7131154e93f2bc4719cae4c64c171648e0f96))
+
 ## [3.65.0](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/compare/v3.64.0...v3.65.0) (2026-07-19)
 
 
