@@ -1671,6 +1671,61 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # cisPay webhook (api.cispay.app)
+    if settings.is_cispay_enabled():
+
+        @router.get(settings.CISPAY_WEBHOOK_PATH)
+        async def cispay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'cispay_webhook',
+                    'enabled': settings.is_cispay_enabled(),
+                }
+            )
+
+        @router.post(settings.CISPAY_WEBHOOK_PATH)
+        async def cispay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.cispay_service import cispay_service
+
+            # X-Signature — HMAC-SHA256 от сырого тела запроса, ключ — X-Api-Key магазина
+            received_signature = request.headers.get('X-Signature')
+            if not cispay_service.verify_webhook_signature(raw_body, received_signature):
+                logger.warning('cisPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('cisPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_cispay_callback',
+                )
+            except Exception as e:
+                logger.exception('cisPay webhook processing error', error=e)
+                success = False
+
+            if not success:
+                logger.error(
+                    'cisPay webhook processing failed',
+                    order_id=payload.get('order_id'),
+                    payment_id=payload.get('id'),
+                )
+                # Не-2xx заставит cisPay повторить вебхук по расписанию
+                # (через 1 мин, 5 мин, 15 мин, 1 час — всего 5 попыток)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # Donut webhook (Donut P2P)
     if settings.is_donut_enabled():
 
@@ -1747,6 +1802,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'jupiter_enabled': settings.is_jupiter_enabled(),
                     'donut_enabled': settings.is_donut_enabled(),
                     'lava_enabled': settings.is_lava_enabled(),
+                    'cispay_enabled': settings.is_cispay_enabled(),
                 }
             )
 
