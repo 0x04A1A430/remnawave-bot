@@ -8,15 +8,29 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from aiogram.exceptions import TelegramForbiddenError
 
 from app.config import settings
 from app.services.nalogo_service import send_nalogo_receipt_notifications
 
 
+@pytest.fixture(autouse=True)
+def _no_receipt_download(monkeypatch):
+    """По умолчанию скачивание чека недоступно — тесты проверяют фолбэк-путь
+    (текст со ссылкой), не выходя в сеть. Тесты файловой доставки переопределяют
+    мок точечно."""
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(return_value=None),
+    )
+
+
 def _bot() -> MagicMock:
     bot = MagicMock()
     bot.send_message = AsyncMock()
+    bot.send_photo = AsyncMock()
+    bot.send_document = AsyncMock()
     return bot
 
 
@@ -155,3 +169,80 @@ def test_get_receipt_print_url_builds_v1_link():
 
     service.configured = False
     assert service.get_receipt_print_url('uuid-42') is None
+
+
+async def test_receipt_delivered_as_photo_when_download_succeeds(monkeypatch):
+    """lknpd недоступен клиентам за VPN — при успешном серверном скачивании чек
+    уходит фотографией (юзеру и в админ-топик), ссылка остаётся кнопкой."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', 77, raising=False)
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(return_value=(b'jpeg-bytes', 'image/jpeg')),
+    )
+    _patch_user_lookup(monkeypatch, SimpleNamespace(first_name='Вася', last_name=None, username=None, email=None))
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    bot.send_message.assert_not_awaited()
+    assert bot.send_photo.await_count == 2
+    user_call, admin_call = bot.send_photo.await_args_list
+    assert user_call.kwargs['chat_id'] == 111
+    assert 'Чек по вашему платежу' in user_call.kwargs['caption']
+    assert user_call.kwargs['photo'].filename == 'receipt_uuid-1.jpg'
+    assert user_call.kwargs['reply_markup'].inline_keyboard[0][0].url.endswith('/print')
+    assert admin_call.kwargs['chat_id'] == -100500
+    assert admin_call.kwargs['message_thread_id'] == 77
+
+
+async def test_receipt_delivered_as_document_for_pdf(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(return_value=(b'%PDF-1.4', 'application/pdf')),
+    )
+    _patch_user_lookup(monkeypatch, None)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    bot.send_message.assert_not_awaited()
+    bot.send_photo.assert_not_awaited()
+    assert bot.send_document.await_count == 1
+    assert bot.send_document.await_args_list[0].kwargs['document'].filename == 'receipt_uuid-1.pdf'
+
+
+async def test_download_failure_falls_back_to_link(monkeypatch):
+    """Сбой скачивания (сеть/503 ФНС) не ломает доставку — уходит текст со ссылкой."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(side_effect=RuntimeError('boom')),
+    )
+    _patch_user_lookup(monkeypatch, None)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    bot.send_photo.assert_not_awaited()
+    assert bot.send_message.await_count == 1
+    assert bot.send_message.await_args_list[0].kwargs['chat_id'] == 111
