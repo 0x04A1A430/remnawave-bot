@@ -54,6 +54,7 @@ from app.external.remnawave_api import (
     is_user_not_found_error,
 )
 from app.localization.texts import get_texts
+from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
     notification_delivery_service,
 )
@@ -668,7 +669,11 @@ class MonitoringService:
                 # Внешний сквад НЕ пересылаем в рутинном sync — стейловый UUID
                 # вызывает FK violation → A039. Назначается при создании подписки.
 
-                updated_user = await api.update_user(**update_kwargs)
+                updated_user = await update_panel_user_grace_safe(
+                    api,
+                    subscription.id,
+                    **update_kwargs,
+                )
 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link

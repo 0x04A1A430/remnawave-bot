@@ -1910,10 +1910,20 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     синк) — операция тяжёлая. Подписку, у которой удаление в панели не удалось (транзиент),
     в БД НЕ трогаем (иначе снова orphan + воскрешение) — её подхватит следующий запуск.
     Чистит устаревший single-tariff `user.remnawave_uuid`. НЕ коммитит — это делает
-    вызывающий. Возвращает число реально удалённых подписок.
+    вызывающий; исключение — когда НИ ОДНО панельное удаление не удалось: тогда в БД
+    мутировать нечего и транзакция откатывается, чтобы снять grace-локи pre-delete
+    guard'а (не вызывайте с несохранёнными изменениями в сессии). Возвращает число
+    реально удалённых подписок.
     """
     if not subscriptions:
         return 0
+
+    from app.services.grace_access_runtime import ensure_no_open_grace_for_subscriptions
+
+    await ensure_no_open_grace_for_subscriptions(
+        db,
+        tuple(int(subscription.id) for subscription in subscriptions),
+    )
 
     import asyncio
 
@@ -1964,6 +1974,9 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
         to_reset = list(subscriptions)
 
     if not to_reset:
+        # Release the pre-delete transaction lock when every external delete
+        # failed and there is intentionally nothing to mutate in the database.
+        await db.rollback()
         return 0
 
     for subscription in to_reset:
