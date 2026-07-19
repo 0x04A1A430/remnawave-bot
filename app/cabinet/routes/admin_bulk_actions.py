@@ -548,7 +548,7 @@ async def _do_delete_subscription(
             from app.services.subscription_service import SubscriptionService
 
             subscription_service = SubscriptionService()
-            await subscription_service.disable_remnawave_user(_sub_uuid)
+            await subscription_service.disable_remnawave_user(_sub_uuid, db=db)
         except Exception as e:
             logger.warning('Failed to disable user in RemnaWave during subscription delete', error=e)
 

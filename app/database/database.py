@@ -99,10 +99,15 @@ if IS_SQLITE:
 
     @event.listens_for(engine.sync_engine, 'connect')
     def _configure_sqlite_connection(dbapi_connection, _connection_record) -> None:
-        """Enable integrity and concurrency settings on every SQLite connection."""
+        """Enable concurrency settings on every SQLite connection.
+
+        PRAGMA foreign_keys здесь сознательно НЕ включаем: у существующих
+        SQLite-инсталляций могут быть orphan-строки из старых версий схемы,
+        и глобальный флип enforcement ломал бы их DELETE/UPDATE. Защита
+        grace-снимка держится на DB-триггере, а не на FK.
+        """
         cursor = dbapi_connection.cursor()
         try:
-            cursor.execute('PRAGMA foreign_keys=ON')
             cursor.execute('PRAGMA busy_timeout=60000')
             cursor.execute('PRAGMA journal_mode=WAL')
         finally:

@@ -32,6 +32,7 @@ from app.external.remnawave_api import (
     RemnaWaveAPI,
     RemnaWaveAPIError,
     UserStatus,
+    is_user_not_found_error,
 )
 from app.services.subscription_service import get_traffic_reset_strategy
 from app.utils.subscription_utils import (
@@ -2142,23 +2143,42 @@ class RemnaWaveService:
 
                     # Persist only trusted status observations for the grace
                     # worker. Generic updated_at must never resurrect old rows.
-                    if not grace_open:
+                    # Полный проход по панели занимает минуты (cursor-пагинация
+                    # всего списка ДО применения) — снапшот статуса может быть
+                    # протухшим. Свежее webhook-обновление (оплата/продление во
+                    # время прохода) важнее снапшота, иначе только что оплаченная
+                    # подписка откатывается в LIMITED/EXPIRED и уезжает в grace.
+                    from app.database.crud.subscription import is_recently_updated_by_webhook
+
+                    if not grace_open and not is_recently_updated_by_webhook(subscription):
                         panel_status = str(panel_user.get('status') or '').upper()
                         now = self._now_utc()
                         if panel_status == 'LIMITED':
-                            if subscription.status != SubscriptionStatus.LIMITED.value:
+                            # Флип только когда bot-side данные согласны с панелью
+                            # (трафик действительно исчерпан) и подписка живая:
+                            # DISABLED — намеренное решение админа, не воскрешаем.
+                            traffic_exhausted = bool(subscription.traffic_limit_gb) and (
+                                subscription.traffic_used_gb >= subscription.traffic_limit_gb - 0.01
+                            )
+                            if traffic_exhausted and subscription.status in (
+                                SubscriptionStatus.ACTIVE.value,
+                                SubscriptionStatus.TRIAL.value,
+                            ):
                                 subscription.status = SubscriptionStatus.LIMITED.value
                                 subscription.grace_candidate_reason = 'limited'
                                 subscription.grace_candidate_at = now
                         elif panel_status == 'EXPIRED' and subscription.end_date:
                             local_end = self._local_to_utc(subscription.end_date)
-                            if local_end <= now:
+                            if local_end <= now and subscription.status in (
+                                SubscriptionStatus.ACTIVE.value,
+                                SubscriptionStatus.TRIAL.value,
+                                SubscriptionStatus.LIMITED.value,
+                            ):
                                 is_fresh = local_end >= now - timedelta(
                                     minutes=settings.GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES
                                 )
-                                status_changed = subscription.status != SubscriptionStatus.EXPIRED.value
                                 subscription.status = SubscriptionStatus.EXPIRED.value
-                                if status_changed and is_fresh:
+                                if is_fresh:
                                     subscription.grace_candidate_reason = 'expired'
                                     subscription.grace_candidate_at = now
 
@@ -2671,12 +2691,10 @@ class RemnaWaveService:
                                             user.remnawave_uuid = panel_uuid
                                         return ('updated', db_sub, None)
                                     except RemnaWaveAPIError as api_error:
-                                        # UUID в БД протух — панель-юзера уже нет. Разные версии
-                                        # RemnaWave сообщают это по-разному: A018 или A063, и не всегда
-                                        # со статусом 404. Пересоздаём по любому из этих признаков, чтобы
-                                        # синхронизация в панель чинила рассинхрон, а не падала в ошибку.
-                                        error_code = (api_error.response_data or {}).get('errorCode', '')
-                                        if api_error.status_code == 404 or error_code in ('A018', 'A063'):
+                                        # UUID в БД протух — панель-юзера уже нет. Пересоздаём,
+                                        # чтобы синхронизация в панель чинила рассинхрон,
+                                        # а не падала в ошибку.
+                                        if is_user_not_found_error(api_error):
                                             new_user = await api.create_user(**create_kwargs)
                                             if settings.is_multi_tariff_enabled():
                                                 sub.remnawave_uuid = new_user.uuid

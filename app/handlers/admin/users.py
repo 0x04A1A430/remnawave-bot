@@ -3459,7 +3459,7 @@ async def confirm_subscription_deletion(callback: types.CallbackQuery, db_user: 
     _uuid = getattr(subscription, 'remnawave_uuid', None)
     if _uuid:
         subscription_service = SubscriptionService()
-        await subscription_service.disable_remnawave_user(_uuid)
+        await subscription_service.disable_remnawave_user(_uuid, db=db)
 
     # Delete traffic purchases
     from sqlalchemy import delete as sql_delete

@@ -12,7 +12,14 @@ from app.config import settings
 from app.database.crud.server_squad import get_all_server_squads
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus, User
-from app.external.remnawave_api import RemnaWaveAPI, RemnaWaveAPIError, RemnaWaveUser, TrafficLimitStrategy, UserStatus
+from app.external.remnawave_api import (
+    RemnaWaveAPI,
+    RemnaWaveAPIError,
+    RemnaWaveUser,
+    TrafficLimitStrategy,
+    UserStatus,
+    is_user_not_found_error,
+)
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -685,13 +692,56 @@ class SubscriptionService:
             await db.rollback()
             raise
         except RemnaWaveAPIError as e:
+            # Rollback ДО пересоздания: advisory-локи grace должны быть отпущены
+            # прежде, чем recreate re-входит в create_remnawave_user со своим локом.
             await db.rollback()
+            if is_user_not_found_error(e):
+                # Пользователя удалили из панели, пока подписка жива в боте, —
+                # пересоздаём вместо ошибки (create-флоу сам найдёт/создаст
+                # панель-юзера и сохранит новый UUID и ссылки в подписку).
+                return await self.recreate_deleted_panel_user(
+                    db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+                )
             logger.error('Ошибка RemnaWave API', error=e)
             return None
         except Exception as e:
             await db.rollback()
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)
             return None
+
+    async def recreate_deleted_panel_user(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        *,
+        reset_traffic: bool = False,
+        reset_reason: str | None = None,
+    ) -> RemnaWaveUser | None:
+        """Пересоздаёт панель-юзера, удалённого из RemnaWave при живой подписке.
+
+        Только для действующих подписок: пересоздавать DISABLED-юзера ради
+        истёкшей подписки не нужно — админ удалил его намеренно.
+        """
+        is_actually_active = subscription.status in (
+            SubscriptionStatus.ACTIVE.value,
+            SubscriptionStatus.TRIAL.value,
+        ) and subscription.end_date > datetime.now(UTC)
+        if not is_actually_active:
+            logger.info(
+                'Панель-юзер удалён из RemnaWave, подписка неактивна — пересоздание не требуется',
+                subscription_id=subscription.id,
+                user_id=subscription.user_id,
+            )
+            return None
+
+        logger.warning(
+            '⚠️ Панель-юзер удалён из RemnaWave при активной подписке — пересоздаём',
+            subscription_id=subscription.id,
+            user_id=subscription.user_id,
+        )
+        return await self.create_remnawave_user(
+            db, subscription, reset_traffic=reset_traffic, reset_reason=reset_reason
+        )
 
     @staticmethod
     def _format_user_log(user) -> str:
@@ -723,7 +773,10 @@ class SubscriptionService:
                 '⚠️ Не удалось сбросить трафик RemnaWave', _format_user_log=self._format_user_log(user), error=exc
             )
 
-    async def disable_remnawave_user(self, user_uuid: str) -> bool:
+    async def disable_remnawave_user(self, user_uuid: str, db: AsyncSession | None = None) -> bool:
+        """``db`` — сессия вызывающего, уже держащего grace-локи (пути удаления
+        после ensure_no_open_grace_*): без её проброса grace-обёртка открыла бы
+        вторую сессию и самодедлочилась об advisory-локи первой."""
         try:
             from app.services.grace_access_runtime import set_panel_user_enabled_state_grace_safe
 
@@ -732,6 +785,7 @@ class SubscriptionService:
                     api,
                     user_uuid,
                     enabled=False,
+                    db=db,
                 )
                 logger.info('✅ Отключен RemnaWave пользователь', user_uuid=user_uuid)
                 return True
@@ -761,8 +815,11 @@ class SubscriptionService:
             logger.error('Ошибка удаления RemnaWave пользователя', error=e, user_uuid=user_uuid)
             return False
 
-    async def enable_remnawave_user(self, user_uuid: str) -> bool:
-        """Включить пользователя в RemnaWave (реактивация)."""
+    async def enable_remnawave_user(self, user_uuid: str, db: AsyncSession | None = None) -> bool:
+        """Включить пользователя в RemnaWave (реактивация).
+
+        ``db`` — сессия вызывающего, уже держащего grace-локи этих подписок
+        (см. disable_remnawave_user)."""
         try:
             from app.services.grace_access_runtime import set_panel_user_enabled_state_grace_safe
 
@@ -771,6 +828,7 @@ class SubscriptionService:
                     api,
                     user_uuid,
                     enabled=True,
+                    db=db,
                 )
                 logger.info('✅ Включен RemnaWave пользователь', user_uuid=user_uuid)
                 return True
@@ -1180,7 +1238,6 @@ class SubscriptionService:
 
                         update_kwargs = dict(
                             uuid=remnawave_uuid,
-                            active_internal_squads=sub.connected_squads,
                             description=settings.format_remnawave_user_description(
                                 full_name=user.full_name,
                                 username=user.username,
@@ -1189,6 +1246,12 @@ class SubscriptionService:
                                 user_id=user.id,
                             ),
                         )
+
+                        # Пустой список не шлём: [] снял бы у панель-юзера ВСЕ
+                        # сквады (у подписки без connected_squads это не намерение
+                        # «отключить», а просто отсутствие данных) — как в dev.
+                        if sub.connected_squads:
+                            update_kwargs['active_internal_squads'] = sub.connected_squads
 
                         # Не отправляем null — RemnaWave API не принимает null для externalSquadUuid (A039)
                         if ext_squad_uuid is not None:

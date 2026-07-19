@@ -2695,6 +2695,14 @@ async def full_delete_user(
         db, user_id, admin_id_val, force_panel_delete=request.delete_from_panel
     )
 
+    if delete_result.grace_blocked:
+        # Паритет с обычным delete-эндпоинтом: блокировка открытым grace — это
+        # конфликт состояния, а не «успешный» ответ с success=false.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Open grace access must be drained or restored before permanent deletion.',
+        )
+
     reason_text = f' (reason: {request.reason})' if request.reason else ''
     logger.info(
         'Admin fully deleted user',
@@ -2841,12 +2849,12 @@ async def reset_user_subscription(
                 for sub in subs:
                     if sub.remnawave_uuid:
                         try:
-                            await subscription_service.disable_remnawave_user(sub.remnawave_uuid)
+                            await subscription_service.disable_remnawave_user(sub.remnawave_uuid, db=db)
                         except Exception:
                             pass
                 panel_deactivated = True
             elif user.remnawave_uuid:
-                panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid, db=db)
             if panel_deactivated:
                 logger.info('Disabled Remnawave users for subscription reset', user_id=user_id)
         except Exception as e:
@@ -2923,12 +2931,12 @@ async def disable_user(
                 for sub in subs:
                     if sub.remnawave_uuid:
                         try:
-                            await subscription_service.disable_remnawave_user(sub.remnawave_uuid)
+                            await subscription_service.disable_remnawave_user(sub.remnawave_uuid, db=db)
                         except Exception:
                             pass
                 panel_deactivated = True
             elif user.remnawave_uuid:
-                panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid, db=db)
             if panel_deactivated:
                 logger.info('Disabled Remnawave user(s)', user_id=user_id)
         except Exception as e:

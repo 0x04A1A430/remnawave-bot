@@ -89,16 +89,32 @@ async def _ensure_runtime_schema_guards() -> None:
                     """
                 )
             )
-            await conn.execute(text('DROP TRIGGER IF EXISTS trg_guard_open_grace_subscription_delete ON subscriptions'))
-            await conn.execute(
-                text(
-                    """
-                    CREATE TRIGGER trg_guard_open_grace_subscription_delete
-                    BEFORE DELETE ON subscriptions
-                    FOR EACH ROW EXECUTE FUNCTION guard_open_grace_subscription_delete()
-                    """
+            # CREATE TRIGGER берёт ACCESS EXCLUSIVE на subscriptions — на каждом
+            # старте это лишний lock-риск (боот может зависнуть об чужую
+            # транзакцию). Создаём только при отсутствии; тело логики живёт в
+            # функции выше, которую CREATE OR REPLACE обновляет без такого лока.
+            trigger_exists = (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT 1 FROM pg_trigger
+                        WHERE tgname = 'trg_guard_open_grace_subscription_delete'
+                          AND tgrelid = 'subscriptions'::regclass
+                          AND NOT tgisinternal
+                        """
+                    )
                 )
-            )
+            ).scalar() is not None
+            if not trigger_exists:
+                await conn.execute(
+                    text(
+                        """
+                        CREATE TRIGGER trg_guard_open_grace_subscription_delete
+                        BEFORE DELETE ON subscriptions
+                        FOR EACH ROW EXECUTE FUNCTION guard_open_grace_subscription_delete()
+                        """
+                    )
+                )
         elif dialect == 'sqlite':
             await conn.execute(
                 text(

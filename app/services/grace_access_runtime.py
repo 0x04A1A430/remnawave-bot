@@ -572,6 +572,10 @@ class GraceAccessRuntime:
         *,
         db: AsyncSession | None = None,
     ) -> bool:
+        if self._mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+            # Non-mutating grace: оверлеев нет, эхо подавлять нечего — и не
+            # тратим запрос к БД на каждый входящий webhook.
+            return False
         try:
             if db is not None:
                 core = _build_core(db, subscription_id=subscription_id)
@@ -829,6 +833,10 @@ class GraceAccessRuntime:
 
 async def get_open_grace_subscription_ids(db: AsyncSession) -> set[int]:
     """One-query guard shared by both directions of full synchronization."""
+    if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+        # Non-mutating grace: оверлеи не поддерживаются — синк идёт как до фичи,
+        # без лишнего запроса на каждый webhook/цикл синхронизации.
+        return set()
     result = await db.execute(
         select(GraceAccessSessionModel.subscription_id).where(GraceAccessSessionModel.state.in_(_OPEN_STATES))
     )
@@ -846,6 +854,11 @@ async def lock_grace_sensitive_panel_updates(
     and then commit or roll back, otherwise the check and PATCH are not atomic
     with respect to grace.
     """
+    if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+        # Non-mutating grace: локи не берём и оверлеи не защищаем — вызывающие
+        # идут прямым панельным путём, как до фичи. Остаточные открытые сессии
+        # в этих режимах отрапортованы CRITICAL-логом на старте runtime.
+        return set()
     normalized_ids = tuple(sorted({int(value) for value in subscription_ids}))
     if not normalized_ids:
         return set()
@@ -979,6 +992,12 @@ async def update_panel_user_grace_safe(
     expiry, traffic and squad fields are deferred so the reconciler can keep
     the overlay or restore the newest canonical billing state safely.
     """
+    if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+        # Non-mutating grace: обычный панельный апдейт без guard-сессии и локов —
+        # поведение и стоимость как до фичи. Оверлеи в этих режимах не защищаются:
+        # рутинный синк приводит панель к каноническому биллингу (остаточные
+        # открытые сессии отрапортованы CRITICAL-логом на старте).
+        return await api.update_user(**update_kwargs)
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:
             raise GracePanelError(f'Subscription {subscription_id} disappeared before its Remnawave update')
@@ -1030,6 +1049,9 @@ async def create_panel_user_grace_safe(
     **create_kwargs: Any,
 ) -> Any:
     """Create a panel user only while the subscription cannot have an overlay."""
+    if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+        # Non-mutating grace: оверлеев не существует/не защищаются — создаём напрямую.
+        return await api.create_user(**create_kwargs)
     async with grace_sensitive_panel_update(subscription_id) as lease:
         if lease.subscription is None:
             raise GracePanelError(f'Subscription {subscription_id} disappeared before Remnawave user creation')
@@ -1077,118 +1099,150 @@ async def set_panel_user_enabled_state_grace_safe(
     remnawave_uuid: str,
     *,
     enabled: bool,
+    db: AsyncSession | None = None,
 ) -> Any:
-    """Serialize an intentional enable/disable and its grace suppression marker."""
-    action_result: Any = None
-    deferred_disable_error: BaseException | None = None
+    """Serialize an intentional enable/disable and its grace suppression marker.
+
+    ``db`` — сессия вызывающего, который УЖЕ держит grace-локи затронутых
+    подписок (пути удаления после ensure_no_open_grace_*). Advisory-локи
+    PostgreSQL реентерабельны только в рамках одной сессии: вторая сессия здесь
+    самодедлочилась бы об транзакционные локи первой. Suppression-маркеры в этом
+    режиме коммитит транзакция вызывающего (откат удаления откатит и их — тогда
+    и намеренного отключения не было).
+    """
+    if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+        # Non-mutating grace: не трогаем ни БД, ни suppression-маркеры —
+        # поведение панельного enable/disable как до фичи. Остаточные открытые
+        # сессии в этих режимах уже отрапортованы CRITICAL-логом на старте.
+        if enabled:
+            return await api.enable_user(remnawave_uuid)
+        return await api.disable_user(remnawave_uuid)
+
+    if db is not None:
+        action_result, deferred_disable_error = await _set_panel_user_enabled_state_locked(
+            db, api, remnawave_uuid, enabled=enabled
+        )
+        if deferred_disable_error is not None:
+            raise deferred_disable_error
+        return action_result
+
     async with AsyncSessionLocal() as guard_db:
         async with guard_db.begin():
-            uuid_mapping_filter = (
-                Subscription.remnawave_uuid == remnawave_uuid
-                if settings.is_multi_tariff_enabled()
-                else User.remnawave_uuid == remnawave_uuid
+            action_result, deferred_disable_error = await _set_panel_user_enabled_state_locked(
+                guard_db, api, remnawave_uuid, enabled=enabled
             )
-            mapped_ids = {
-                int(value)
-                for value in (
-                    await guard_db.execute(
-                        select(Subscription.id).join(User, Subscription.user_id == User.id).where(uuid_mapping_filter)
-                    )
-                ).scalars()
-            }
-            open_subscription_ids = {
-                int(value)
-                for value in (
-                    await guard_db.execute(
-                        select(GraceAccessSessionModel.subscription_id).where(
-                            GraceAccessSessionModel.remnawave_uuid == remnawave_uuid,
-                            GraceAccessSessionModel.state.in_(_OPEN_STATES),
-                        )
-                    )
-                ).scalars()
-            }
-            mapped_ids.update(open_subscription_ids)
-
-            for subscription_id in sorted(mapped_ids):
-                await _acquire_database_lock(guard_db, subscription_id)
-
-            subscriptions: list[Subscription] = []
-            if mapped_ids:
-                subscriptions = list(
-                    (
-                        await guard_db.execute(
-                            select(Subscription)
-                            .execution_options(populate_existing=True)
-                            .where(Subscription.id.in_(sorted(mapped_ids)))
-                        )
-                    ).scalars()
-                )
-
-            now = datetime.now(UTC)
-            enable_target_ids = set(open_subscription_ids)
-            if enabled:
-                enable_target_ids.update(
-                    subscription.id
-                    for subscription in subscriptions
-                    if subscription.actual_status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
-                )
-                if not enable_target_ids and subscriptions:
-                    latest = max(
-                        subscriptions,
-                        key=lambda subscription: (
-                            _as_utc(subscription.end_date)
-                            if subscription.end_date
-                            else datetime.min.replace(tzinfo=UTC),
-                            subscription.id,
-                        ),
-                    )
-                    enable_target_ids.add(latest.id)
-            for subscription in subscriptions:
-                if enabled:
-                    if subscription.id in enable_target_ids:
-                        subscription.grace_suppressed_until = None
-                else:
-                    subscription.grace_suppressed_until = (
-                        _as_utc(subscription.end_date) if subscription.end_date else now
-                    )
-            await guard_db.flush()
-
-            try:
-                if enabled:
-                    action_result = await api.enable_user(remnawave_uuid)
-                else:
-                    action_result = await api.disable_user(remnawave_uuid)
-            except asyncio.CancelledError as error:
-                if enabled:
-                    raise
-                deferred_disable_error = error
-            except Exception as error:
-                normalized_error = str(error).lower()
-                already_in_state = (enabled and 'already enabled' in normalized_error) or (
-                    not enabled and 'already disabled' in normalized_error
-                )
-                if not already_in_state:
-                    if enabled:
-                        raise
-                    # The disable request may have reached Remnawave despite a
-                    # timeout. Commit suppression so grace can never re-enable
-                    # an intentionally revoked client, then report the error.
-                    deferred_disable_error = error
-                else:
-                    current = await api.get_user_by_uuid(remnawave_uuid)
-                    if current is None:
-                        state_error = GracePanelError(
-                            f'Remnawave user {remnawave_uuid} disappeared during status update'
-                        )
-                        if enabled:
-                            raise state_error from error
-                        deferred_disable_error = state_error
-                    else:
-                        action_result = current
-
     if deferred_disable_error is not None:
         raise deferred_disable_error
     return action_result
+
+
+async def _set_panel_user_enabled_state_locked(
+    guard_db: AsyncSession,
+    api: Any,
+    remnawave_uuid: str,
+    *,
+    enabled: bool,
+) -> tuple[Any, BaseException | None]:
+    action_result: Any = None
+    deferred_disable_error: BaseException | None = None
+    uuid_mapping_filter = (
+        Subscription.remnawave_uuid == remnawave_uuid
+        if settings.is_multi_tariff_enabled()
+        else User.remnawave_uuid == remnawave_uuid
+    )
+    mapped_ids = {
+        int(value)
+        for value in (
+            await guard_db.execute(
+                select(Subscription.id).join(User, Subscription.user_id == User.id).where(uuid_mapping_filter)
+            )
+        ).scalars()
+    }
+    open_subscription_ids = {
+        int(value)
+        for value in (
+            await guard_db.execute(
+                select(GraceAccessSessionModel.subscription_id).where(
+                    GraceAccessSessionModel.remnawave_uuid == remnawave_uuid,
+                    GraceAccessSessionModel.state.in_(_OPEN_STATES),
+                )
+            )
+        ).scalars()
+    }
+    mapped_ids.update(open_subscription_ids)
+
+    for subscription_id in sorted(mapped_ids):
+        await _acquire_database_lock(guard_db, subscription_id)
+
+    subscriptions: list[Subscription] = []
+    if mapped_ids:
+        subscriptions = list(
+            (
+                await guard_db.execute(
+                    select(Subscription)
+                    .execution_options(populate_existing=True)
+                    .where(Subscription.id.in_(sorted(mapped_ids)))
+                )
+            ).scalars()
+        )
+
+    now = datetime.now(UTC)
+    enable_target_ids = set(open_subscription_ids)
+    if enabled:
+        enable_target_ids.update(
+            subscription.id
+            for subscription in subscriptions
+            if subscription.actual_status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+        )
+        if not enable_target_ids and subscriptions:
+            latest = max(
+                subscriptions,
+                key=lambda subscription: (
+                    _as_utc(subscription.end_date) if subscription.end_date else datetime.min.replace(tzinfo=UTC),
+                    subscription.id,
+                ),
+            )
+            enable_target_ids.add(latest.id)
+    for subscription in subscriptions:
+        if enabled:
+            if subscription.id in enable_target_ids:
+                subscription.grace_suppressed_until = None
+        else:
+            subscription.grace_suppressed_until = _as_utc(subscription.end_date) if subscription.end_date else now
+    await guard_db.flush()
+
+    try:
+        if enabled:
+            action_result = await api.enable_user(remnawave_uuid)
+        else:
+            action_result = await api.disable_user(remnawave_uuid)
+    except asyncio.CancelledError as error:
+        if enabled:
+            raise
+        deferred_disable_error = error
+    except Exception as error:
+        normalized_error = str(error).lower()
+        already_in_state = (enabled and 'already enabled' in normalized_error) or (
+            not enabled and 'already disabled' in normalized_error
+        )
+        if not already_in_state:
+            if enabled:
+                raise
+            # The disable request may have reached Remnawave despite a
+            # timeout. Commit suppression so grace can never re-enable
+            # an intentionally revoked client, then report the error.
+            deferred_disable_error = error
+        else:
+            current = await api.get_user_by_uuid(remnawave_uuid)
+            if current is None:
+                state_error = GracePanelError(f'Remnawave user {remnawave_uuid} disappeared during status update')
+                if enabled:
+                    raise state_error from error
+                deferred_disable_error = state_error
+            else:
+                action_result = current
+
+    return action_result, deferred_disable_error
 
 
 async def ensure_no_open_grace_for_subscriptions(
