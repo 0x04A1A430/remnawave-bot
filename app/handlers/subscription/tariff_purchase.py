@@ -2724,6 +2724,8 @@ async def confirm_tariff_extend(
     state: FSMContext,
 ):
     """Подтверждает продление по тарифу."""
+    texts = get_texts(db_user.language)
+
     # tariff_ext_confirm:{sub_id}:{tariff_id}:{period}
     parts = callback.data.split(':')
     try:
