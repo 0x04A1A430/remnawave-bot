@@ -643,7 +643,9 @@ async def send_nalogo_receipt_notifications(
                 reply_markup=keyboard,
                 disable_web_page_preview=True,
             )
-            logger.info('Чек NaloGO отправлен пользователю', telegram_user_id=telegram_user_id, receipt_uuid=receipt_uuid)
+            logger.info(
+                'Чек NaloGO отправлен пользователю', telegram_user_id=telegram_user_id, receipt_uuid=receipt_uuid
+            )
         except Exception as error:
             from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
 
@@ -706,12 +708,7 @@ async def send_nalogo_receipt_notifications(
             await bot.send_message(
                 chat_id=chat_id,
                 message_thread_id=topic_id,
-                text=(
-                    '🧾 <b>Новый чек NaloGO создан</b>\n\n'
-                    f'💰 Сумма: {amount_text}\n'
-                    f'{recipient_block}'
-                    f'{context_line}'
-                ),
+                text=(f'🧾 <b>Новый чек NaloGO создан</b>\n\n💰 Сумма: {amount_text}\n{recipient_block}{context_line}'),
                 parse_mode='HTML',
                 reply_markup=keyboard,
                 disable_web_page_preview=True,

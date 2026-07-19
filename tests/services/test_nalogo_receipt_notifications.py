@@ -1,0 +1,157 @@
+"""Доставка чеков NaloGO (#3082): клиенту в Telegram + дубль в админ-топик.
+
+Раньше чек создавался и сохранялся в транзакцию, но никуда не отправлялся —
+покупатель его не видел (по 422-ФЗ самозанятый обязан передать чек), а админ
+узнавал о чеках только из ЛК налоговой.
+"""
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+from aiogram.exceptions import TelegramForbiddenError
+
+from app.config import settings
+from app.services.nalogo_service import send_nalogo_receipt_notifications
+
+
+def _bot() -> MagicMock:
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+    return bot
+
+
+def _nalogo(url: str | None = 'https://lknpd.nalog.ru/api/v1/receipt/123456789/uuid-1/print') -> SimpleNamespace:
+    return SimpleNamespace(get_receipt_print_url=lambda receipt_uuid: url)
+
+
+class _FakeSessionCtx:
+    async def __aenter__(self):
+        return SimpleNamespace()
+
+    async def __aexit__(self, *args):
+        return False
+
+
+def _patch_user_lookup(monkeypatch, db_user):
+    monkeypatch.setattr('app.database.database.AsyncSessionLocal', lambda: _FakeSessionCtx())
+    monkeypatch.setattr('app.database.crud.user.get_user_by_telegram_id', AsyncMock(return_value=db_user))
+
+
+async def test_sends_to_user_and_duplicates_to_admin_topic(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', 77, raising=False)
+    _patch_user_lookup(
+        monkeypatch,
+        SimpleNamespace(first_name='Вася', last_name='<Пупкин>', username='vasya', email='v@example.com'),
+    )
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+        context_label='Источник: YooKassa',
+    )
+
+    assert bot.send_message.await_count == 2
+    user_call, admin_call = bot.send_message.await_args_list
+    assert user_call.kwargs['chat_id'] == 111
+    assert 'Чек по вашему платежу' in user_call.kwargs['text']
+    assert user_call.kwargs['reply_markup'].inline_keyboard[0][0].url.endswith('/print')
+
+    assert admin_call.kwargs['chat_id'] == -100500
+    assert admin_call.kwargs['message_thread_id'] == 77
+    admin_text = admin_call.kwargs['text']
+    assert 'Источник: YooKassa' in admin_text
+    assert '&lt;Пупкин&gt;' in admin_text  # имя экранировано — сырой HTML не ломает разметку
+    assert '<Пупкин>' not in admin_text
+    assert 'v@example.com' in admin_text
+
+
+async def test_no_telegram_id_admin_only_with_guest_mark(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', None, raising=False)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=None,
+    )
+
+    assert bot.send_message.await_count == 1
+    admin_call = bot.send_message.await_args_list[0]
+    assert admin_call.kwargs['chat_id'] == -100500
+    assert 'без Telegram' in admin_call.kwargs['text']
+
+
+async def test_user_send_failure_does_not_block_admin_duplicate(monkeypatch):
+    """Юзер заблокировал бота — админ-топик всё равно получает чек."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', None, raising=False)
+    _patch_user_lookup(monkeypatch, None)
+    bot = _bot()
+    forbidden = TelegramForbiddenError(method=MagicMock(), message='blocked')
+    bot.send_message = AsyncMock(side_effect=[forbidden, None])
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    assert bot.send_message.await_count == 2  # упавший юзер-send + успешный админ-send
+
+
+async def test_no_print_url_sends_nothing():
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(url=None),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    bot.send_message.assert_not_awaited()
+
+
+async def test_no_admin_chat_user_only(monkeypatch):
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    _patch_user_lookup(monkeypatch, None)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    assert bot.send_message.await_count == 1
+    assert bot.send_message.await_args_list[0].kwargs['chat_id'] == 111
+
+
+def test_get_receipt_print_url_builds_v1_link():
+    """Ссылка обязана содержать /v1 — библиотечный print_url() строит без него
+    (нерабочая), поэтому URL собирается вручную."""
+    from app.services.nalogo_service import NaloGoService
+
+    service = NaloGoService.__new__(NaloGoService)
+    service.configured = True
+    service.client = SimpleNamespace(base_url='https://lknpd.nalog.ru/api/')
+    service.inn = '123456789012'
+
+    url = service.get_receipt_print_url(' uuid-42 ')
+    assert url == 'https://lknpd.nalog.ru/api/v1/receipt/123456789012/uuid-42/print'
+
+    service.configured = False
+    assert service.get_receipt_print_url('uuid-42') is None
