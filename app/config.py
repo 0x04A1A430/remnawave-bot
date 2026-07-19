@@ -49,10 +49,6 @@ class Settings(BaseSettings):
     MINIAPP_SUPPORT_URL: str = ''  # Custom URL to redirect when tickets disabled (only for url type)
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
-    # Rich-вид сообщений админ-чата (Bot API 10.1): заголовки, таблицы,
-    # сворачиваемые трейсбеки в error-отчётах. При недоступности сервера
-    # бот сам откатывается на классический вид до рестарта.
-    ADMIN_NOTIFICATIONS_RICH_ENABLED: bool = True
     ADMIN_NOTIFICATIONS_CHAT_ID: str | None = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: int | None = None
@@ -171,6 +167,19 @@ class Settings(BaseSettings):
     # mem-DoS при компрометации webhook-секрета). См. RemnaWaveWebhookService.
     REMNAWAVE_WEBHOOK_NODE_COALESCE_WINDOW_SECONDS: float = 10.0
     REMNAWAVE_WEBHOOK_NODE_BUFFER_MAX: int = 500
+
+    # Ограниченный grace-доступ для продления истёкшей подписки.
+    # Режимы: false (выключено), observe (только журнал), true (активно),
+    # drain (не выдавать новые grace-сессии, но завершать уже открытые).
+    GRACE_ACCESS_MODE: Literal['false', 'observe', 'true', 'drain'] = 'false'
+    GRACE_ACCESS_DURATION_HOURS: int = 72
+    GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
+    GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    GRACE_ACCESS_EXPIRED_TRAFFIC_GB: int = 1
+    GRACE_ACCESS_LIMITED_TRAFFIC_GB: int = 1
+    GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
+    GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
+    GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
 
     # Webhook user notification toggles (what Telegram messages users receive from webhook events)
     WEBHOOK_NOTIFY_USER_ENABLED: bool = True
@@ -1252,6 +1261,40 @@ class Settings(BaseSettings):
         if mode not in {'default', 'cabinet'}:
             raise ValueError('MAIN_MENU_MODE must be one of: default, cabinet')
         return mode
+
+    @field_validator('GRACE_ACCESS_MODE', mode='before')
+    @classmethod
+    def normalize_grace_access_mode(cls, value: str | None) -> str:
+        normalized = str(value or 'false').strip().lower()
+        if normalized not in {'false', 'observe', 'true', 'drain'}:
+            raise ValueError('GRACE_ACCESS_MODE must be one of: false, observe, true, drain')
+        return normalized
+
+    @field_validator(
+        'GRACE_ACCESS_DURATION_HOURS',
+        'GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS',
+        'GRACE_ACCESS_RECONCILE_BATCH_SIZE',
+        'GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES',
+        mode='before',
+    )
+    @classmethod
+    def ensure_positive_grace_access_value(cls, value: int | str) -> int:
+        parsed = int(value)
+        if parsed < 1:
+            raise ValueError('Grace access duration, intervals, batch size and lookback must be positive')
+        return parsed
+
+    @field_validator(
+        'GRACE_ACCESS_EXPIRED_TRAFFIC_GB',
+        'GRACE_ACCESS_LIMITED_TRAFFIC_GB',
+        mode='before',
+    )
+    @classmethod
+    def ensure_nonnegative_grace_access_traffic(cls, value: int | str) -> int:
+        parsed = int(value)
+        if parsed < 0:
+            raise ValueError('Grace access traffic must not be negative')
+        return parsed
 
     @field_validator('SERVER_STATUS_MODE', mode='before')
     @classmethod

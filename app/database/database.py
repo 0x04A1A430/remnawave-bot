@@ -74,6 +74,12 @@ _pg_connect_args = {
     'command_timeout': 30,  # Уменьшен с 60, быстрее обнаруживать зависшие запросы
     'timeout': 10,  # Уменьшен с 60, быстрый провал при недоступности PostgreSQL
 }
+_sqlite_connect_args = {
+    # Grace-safe panel writes deliberately hold a SQLite writer transaction
+    # across one HTTP request.  Let competing local work wait instead of
+    # failing with a short default "database is locked" timeout.
+    'timeout': 60,
+}
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -82,12 +88,25 @@ engine = create_async_engine(
     future=True,
     # Кеш скомпилированных запросов (правильное размещение)
     query_cache_size=500,
-    connect_args=_pg_connect_args if not IS_SQLITE else {},
+    connect_args=_pg_connect_args if not IS_SQLITE else _sqlite_connect_args,
     execution_options={
         'isolation_level': 'READ COMMITTED',
     },
     **pool_kwargs,
 )
+
+if IS_SQLITE:
+
+    @event.listens_for(engine.sync_engine, 'connect')
+    def _configure_sqlite_connection(dbapi_connection, _connection_record) -> None:
+        """Enable integrity and concurrency settings on every SQLite connection."""
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute('PRAGMA foreign_keys=ON')
+            cursor.execute('PRAGMA busy_timeout=60000')
+            cursor.execute('PRAGMA journal_mode=WAL')
+        finally:
+            cursor.close()
 
 # ============================================================================
 # SESSION FACTORY WITH OPTIMIZATIONS

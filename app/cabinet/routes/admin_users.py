@@ -307,6 +307,10 @@ async def _sync_subscription_to_panel(
     try:
         from app.config import settings
         from app.external.remnawave_api import UserStatus as PanelUserStatus
+        from app.services.grace_access_runtime import (
+            create_panel_user_grace_safe,
+            update_panel_user_grace_safe,
+        )
         from app.services.remnawave_service import RemnaWaveService
         from app.services.subscription_service import get_traffic_reset_strategy
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
@@ -419,7 +423,11 @@ async def _sync_subscription_to_panel(
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                 try:
-                    updated_panel_user = await api.update_user(**update_kwargs)
+                    updated_panel_user = await update_panel_user_grace_safe(
+                        api,
+                        subscription.id,
+                        **update_kwargs,
+                    )
                     subscription.subscription_url = updated_panel_user.subscription_url
                     subscription.subscription_crypto_link = updated_panel_user.happ_crypto_link
                     subscription.remnawave_short_uuid = updated_panel_user.short_uuid
@@ -455,7 +463,11 @@ async def _sync_subscription_to_panel(
                 # multi-tariff suffix уже встроен в `username` через
                 # build_remnawave_subscription_username — больше ничего не клеим.
 
-                new_panel_user = await api.create_user(**create_kwargs)
+                new_panel_user = await create_panel_user_grace_safe(
+                    api,
+                    subscription.id,
+                    **create_kwargs,
+                )
                 subscription.remnawave_uuid = new_panel_user.uuid
                 subscription.remnawave_short_uuid = new_panel_user.short_uuid
                 subscription.subscription_url = new_panel_user.subscription_url
@@ -1301,11 +1313,16 @@ async def update_user_subscription(
             )
 
         # Сокращение через отрицательный аргумент: extend_subscription(-N) уменьшает end_date
-        await extend_subscription(db, subscription, -request.days)
+        await extend_subscription(db, subscription, -request.days, commit=False)
+        now = datetime.now(UTC)
+        if subscription.end_date <= now:
+            subscription.status = SubscriptionStatus.EXPIRED.value
+            subscription.grace_suppressed_until = now
+        await db.commit()
         await db.refresh(subscription)
 
         # Check if subscription expired after shortening
-        if subscription.end_date <= datetime.now(UTC):
+        if subscription.end_date <= now:
             subscription.status = SubscriptionStatus.EXPIRED.value
             await db.commit()
             await db.refresh(subscription)
@@ -1335,6 +1352,7 @@ async def update_user_subscription(
             subscription.status = SubscriptionStatus.ACTIVE.value
         else:
             subscription.status = SubscriptionStatus.EXPIRED.value
+            subscription.grace_suppressed_until = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(subscription)
@@ -1489,6 +1507,7 @@ async def update_user_subscription(
     if request.action == 'cancel':
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
+        subscription.grace_suppressed_until = subscription.end_date
         # For daily tariffs: mark as paused to prevent auto-resume by DailySubscriptionService
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             subscription.is_daily_paused = True
@@ -2617,6 +2636,18 @@ async def delete_user(
         await soft_delete_user(db, user)
         action = 'soft deleted'
     else:
+        from app.services.grace_access_runtime import (
+            GraceAccessDeletionBlocked,
+            ensure_no_open_grace_for_user,
+        )
+
+        try:
+            await ensure_no_open_grace_for_user(db, user.id)
+        except GraceAccessDeletionBlocked as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='Open grace access must be drained or restored before permanent deletion.',
+            ) from error
         # Hard delete
         await db.delete(user)
         await db.commit()
@@ -2786,6 +2817,19 @@ async def reset_user_subscription(
             subscription_deleted=False,
             panel_deactivated=False,
         )
+
+    from app.services.grace_access_runtime import (
+        GraceAccessDeletionBlocked,
+        ensure_no_open_grace_for_subscriptions,
+    )
+
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Open grace access must be drained or restored before resetting subscriptions.',
+        ) from error
 
     # Deactivate in Remnawave panel if requested
     if request.deactivate_in_panel:
@@ -3847,6 +3891,10 @@ async def sync_user_to_panel(
     try:
         from app.config import settings
         from app.external.remnawave_api import UserStatus as PanelUserStatus
+        from app.services.grace_access_runtime import (
+            create_panel_user_grace_safe,
+            update_panel_user_grace_safe,
+        )
         from app.services.remnawave_service import RemnaWaveService
         from app.services.subscription_service import get_traffic_reset_strategy
         from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
@@ -3973,7 +4021,11 @@ async def sync_user_to_panel(
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                 try:
-                    await api.update_user(**update_kwargs)
+                    await update_panel_user_grace_safe(
+                        api,
+                        sub.id,
+                        **update_kwargs,
+                    )
                     action = 'updated'
                 except Exception as update_error:
                     error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
@@ -4007,7 +4059,11 @@ async def sync_user_to_panel(
                 # multi-tariff suffix уже встроен в `username` через
                 # build_remnawave_subscription_username — больше ничего не клеим.
 
-                new_panel_user = await api.create_user(**create_kwargs)
+                new_panel_user = await create_panel_user_grace_safe(
+                    api,
+                    sub.id,
+                    **create_kwargs,
+                )
                 panel_uuid = new_panel_user.uuid
                 sub.remnawave_uuid = new_panel_user.uuid
                 sub.remnawave_short_uuid = new_panel_user.short_uuid

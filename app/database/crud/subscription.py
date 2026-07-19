@@ -1915,6 +1915,13 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     if not subscriptions:
         return 0
 
+    from app.services.grace_access_runtime import ensure_no_open_grace_for_subscriptions
+
+    await ensure_no_open_grace_for_subscriptions(
+        db,
+        tuple(int(subscription.id) for subscription in subscriptions),
+    )
+
     import asyncio
 
     from sqlalchemy import update
@@ -1964,6 +1971,9 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
         to_reset = list(subscriptions)
 
     if not to_reset:
+        # Release the pre-delete transaction lock when every external delete
+        # failed and there is intentionally nothing to mutate in the database.
+        await db.rollback()
         return 0
 
     for subscription in to_reset:

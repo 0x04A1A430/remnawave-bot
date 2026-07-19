@@ -34,7 +34,6 @@ from app.database.models import (
     User,
 )
 from app.utils.message_patch import caption_exceeds_telegram_limit
-from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
 from app.utils.timezone import format_local_datetime
 
 
@@ -1474,27 +1473,13 @@ class AdminNotificationService:
             logger.debug('Уведомление подавлено (категория отключена)', category=category.value)
             return False
 
-        thread_id = self._resolve_topic_id(category)
-
-        # Rich-вид (Bot API 10.1): заголовок, разделители, footer с tg-time.
-        # При недоступности/ошибке молча продолжаем классическим путём ниже
-        # (там ретраи и обработка flood control).
-        try:
-            rich_html = classic_admin_html_to_rich(text)
-            if await try_send_rich_admin_message(
-                self.bot, self.chat_id, rich_html, thread_id=thread_id, reply_markup=reply_markup
-            ):
-                logger.info('Rich-уведомление отправлено в чат', chat_id=self.chat_id, category=category)
-                return True
-        except Exception as rich_error:
-            logger.warning('Сбой rich-рендера админ-уведомления', error=str(rich_error))
-
         message_kwargs: dict[str, Any] = {
             'chat_id': self.chat_id,
             'text': text,
             'parse_mode': 'HTML',
             'disable_web_page_preview': True,
         }
+        thread_id = self._resolve_topic_id(category)
         if thread_id:
             message_kwargs['message_thread_id'] = thread_id
         if reply_markup is not None:
