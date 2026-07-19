@@ -429,6 +429,25 @@ class NaloGoService:
                 logger.error('Ошибка создания чека в NaloGO', error=sanitize_proxy_error(error))
             return None
 
+    def get_receipt_print_url(self, receipt_uuid: str | None) -> str | None:
+        """Строит публичную ссылку на чек для отправки клиенту.
+
+        ВАЖНО: библиотечный client.receipt().print_url() содержит баг — он
+        собирает URL от base_url БЕЗ '/v1' (client.py передаёт в ReceiptAPI
+        self.base_url, тогда как HTTP-клиент работает с base_url + '/v1').
+        Рабочий формат ссылки: {base_url}/v1/receipt/{inn}/{uuid}/print,
+        поэтому собираем URL вручную.
+        """
+        if not self.configured or not receipt_uuid:
+            return None
+
+        try:
+            base = self.client.base_url.rstrip('/')
+            return f'{base}/v1/receipt/{self.inn}/{receipt_uuid.strip()}/print'
+        except Exception as error:
+            logger.warning('Не удалось построить ссылку на чек NaloGO', error=sanitize_proxy_error(error))
+            return None
+
     async def get_queue_length(self) -> int:
         """Получить количество чеков в очереди."""
         return await cache.llen(NALOGO_QUEUE_KEY)
@@ -567,3 +586,136 @@ class NaloGoService:
             else:
                 logger.error('Ошибка получения списка доходов', error=sanitize_proxy_error(error))
             return None  # None = ошибка, [] = нет чеков
+
+
+async def send_nalogo_receipt_notifications(
+    bot: Any,
+    nalogo_service: 'NaloGoService | None',
+    receipt_uuid: str | None,
+    amount_kopeks: int,
+    telegram_user_id: int | None = None,
+    context_label: str | None = None,
+) -> None:
+    """Отправляет ссылку на созданный чек NaloGO пользователю и дублирует её в
+    админский топик чеков (settings.ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID).
+
+    Используется из всех точек создания чека (YooKassa, отложенная очередь,
+    гостевые покупки с лендинга), чтобы не дублировать логику отправки.
+
+    Args:
+        bot: экземпляр aiogram Bot (может быть None — тогда функция не делает ничего)
+        nalogo_service: сервис NaloGO для построения ссылки на чек
+        receipt_uuid: UUID созданного чека
+        amount_kopeks: сумма чека в копейках (для отображения)
+        telegram_user_id: telegram_id получателя чека (None — пользователю не отправляем,
+            но в админский топик чек всё равно продублируется)
+        context_label: доп. пояснение для админского уведомления (например, источник платежа)
+    """
+    if not bot or not nalogo_service or not receipt_uuid:
+        return
+
+    receipt_url = nalogo_service.get_receipt_print_url(receipt_uuid)
+    if not receipt_url:
+        logger.warning(
+            'Не удалось получить ссылку на чек NaloGO, уведомления не отправлены',
+            receipt_uuid=receipt_uuid,
+        )
+        return
+
+    from aiogram import types
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text='🧾 Открыть чек', url=receipt_url)]]
+    )
+    amount_text = settings.format_price(amount_kopeks)
+
+    # --- Отправка пользователю ---
+    if telegram_user_id:
+        try:
+            await bot.send_message(
+                chat_id=telegram_user_id,
+                text=(
+                    '🧾 <b>Чек по вашему платежу сформирован</b>\n\n'
+                    f'💰 Сумма: {amount_text}\n\n'
+                    'Чек зарегистрирован в ФНС через сервис «Мой налог» и доступен по кнопке ниже.'
+                ),
+                parse_mode='HTML',
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+            logger.info(
+                'Чек NaloGO отправлен пользователю', telegram_user_id=telegram_user_id, receipt_uuid=receipt_uuid
+            )
+        except Exception as error:
+            from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError
+
+            if isinstance(error, (TelegramNetworkError, TelegramServerError, TelegramForbiddenError)):
+                logger.warning(
+                    'Не доставлен чек NaloGO пользователю (транзиент)',
+                    telegram_user_id=telegram_user_id,
+                    error=str(error)[:200],
+                    error_type=type(error).__name__,
+                )
+            else:
+                logger.error(
+                    'Ошибка отправки чека NaloGO пользователю',
+                    telegram_user_id=telegram_user_id,
+                    error=error,
+                    exc_info=True,
+                )
+
+    # --- Дублирование в админский топик чеков ---
+    chat_id = settings.get_admin_notifications_chat_id()
+    if chat_id:
+        topic_id = settings.ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID
+
+        # Подгружаем данные пользователя для подробного блока «Получатель»
+        recipient_lines: list[str] = []
+        if telegram_user_id:
+            try:
+                from app.database.crud.user import get_user_by_telegram_id
+                from app.database.database import AsyncSessionLocal
+
+                async with AsyncSessionLocal() as session:
+                    db_user = await get_user_by_telegram_id(session, telegram_user_id)
+
+                if db_user:
+                    from html import escape as html_escape
+
+                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    full_name = ' '.join(filter(None, [db_user.first_name, db_user.last_name])).strip()
+                    if full_name:
+                        recipient_lines.append(f'📛 Имя: <code>{html_escape(full_name)}</code>')
+                    if db_user.username:
+                        recipient_lines.append(f'👤 Username: @{db_user.username}')
+                    if db_user.email:
+                        recipient_lines.append(f'📧 Почта: <code>{html_escape(db_user.email)}</code>')
+                else:
+                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+            except Exception as user_error:
+                logger.warning(
+                    'Не удалось загрузить данные пользователя для уведомления о чеке',
+                    telegram_user_id=telegram_user_id,
+                    error=user_error,
+                )
+                recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+        else:
+            recipient_lines.append('👤 Получатель: без Telegram (email/гость)')
+
+        recipient_block = '\n'.join(recipient_lines)
+        context_line = f'\nℹ️ {context_label}' if context_label else ''
+        try:
+            await bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=topic_id,
+                text=(f'🧾 <b>Новый чек NaloGO создан</b>\n\n💰 Сумма: {amount_text}\n{recipient_block}{context_line}'),
+                parse_mode='HTML',
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+        except Exception as error:
+            logger.warning(
+                'Не удалось продублировать чек NaloGO в админский топик',
+                receipt_uuid=receipt_uuid,
+                error=error,
+            )
