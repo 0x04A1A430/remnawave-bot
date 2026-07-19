@@ -432,11 +432,12 @@ class NaloGoService:
     def get_receipt_print_url(self, receipt_uuid: str | None) -> str | None:
         """Строит публичную ссылку на чек для отправки клиенту.
 
-        ВАЖНО: библиотечный client.receipt().print_url() содержит баг — он
-        собирает URL от base_url БЕЗ '/v1' (client.py передаёт в ReceiptAPI
-        self.base_url, тогда как HTTP-клиент работает с base_url + '/v1').
-        Рабочий формат ссылки: {base_url}/v1/receipt/{inn}/{uuid}/print,
-        поэтому собираем URL вручную.
+        Собираем URL вручную, а не через client.receipt().print_url():
+        receipt() требует аутентифицированный профиль (иначе ValueError),
+        тогда как ссылка строится из одной конфигурации (base_url + ИНН) и
+        должна работать, например, для чеков из отложенной очереди до/без
+        успешной аутентификации. Формат: {base_url}/v1/receipt/{inn}/{uuid}/print
+        (баг библиотеки с потерянным '/v1' исправлен в #3083).
         """
         if not self.configured or not receipt_uuid:
             return None
