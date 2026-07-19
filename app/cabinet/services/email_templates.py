@@ -5,6 +5,7 @@ Supports multiple languages: ru, en, zh, ua, fa
 """
 
 import html
+from functools import partial
 from typing import Any
 
 from app.config import settings
@@ -44,45 +45,6 @@ class EmailNotificationTemplates:
             NotificationType.SUBSCRIPTION_EXPIRED: self._subscription_expired_template,
             NotificationType.SUBSCRIPTION_RENEWED: self._subscription_renewed_template,
             NotificationType.SUBSCRIPTION_ACTIVATED: self._subscription_activated_template,
-            NotificationType.WEBHOOK_SUB_EXPIRED: lambda language, context, _k='sub_expired': self._webhook_event_email(
-                _k, language, context
-            ),
-            NotificationType.WEBHOOK_SUB_DISABLED: lambda language,
-            context,
-            _k='sub_disabled': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_SUB_ENABLED: lambda language, context, _k='sub_enabled': self._webhook_event_email(
-                _k, language, context
-            ),
-            NotificationType.WEBHOOK_SUB_LIMITED: lambda language, context, _k='sub_limited': self._webhook_event_email(
-                _k, language, context
-            ),
-            NotificationType.WEBHOOK_SUB_TRAFFIC_RESET: lambda language,
-            context,
-            _k='sub_traffic_reset': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_SUB_DELETED: lambda language, context, _k='sub_deleted': self._webhook_event_email(
-                _k, language, context
-            ),
-            NotificationType.WEBHOOK_SUB_REVOKED: lambda language, context, _k='sub_revoked': self._webhook_event_email(
-                _k, language, context
-            ),
-            NotificationType.WEBHOOK_SUB_FIRST_CONNECTED: lambda language,
-            context,
-            _k='sub_first_connected': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD: lambda language,
-            context,
-            _k='sub_bandwidth_threshold': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_USER_NOT_CONNECTED: lambda language,
-            context,
-            _k='user_not_connected': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_DEVICE_ADDED: lambda language,
-            context,
-            _k='device_added': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_DEVICE_DELETED: lambda language,
-            context,
-            _k='device_deleted': self._webhook_event_email(_k, language, context),
-            NotificationType.WEBHOOK_TORRENT_DETECTED: lambda language,
-            context,
-            _k='torrent_detected': self._webhook_event_email(_k, language, context),
             NotificationType.AUTOPAY_SUCCESS: self._autopay_success_template,
             NotificationType.AUTOPAY_FAILED: self._autopay_failed_template,
             NotificationType.AUTOPAY_INSUFFICIENT_FUNDS: self._autopay_insufficient_funds_template,
@@ -107,6 +69,26 @@ class EmailNotificationTemplates:
             NotificationType.GUEST_GIFT_RECEIVED: self._guest_gift_received_template,
             NotificationType.GUEST_CABINET_CREDENTIALS: self._guest_cabinet_credentials_template,
         }
+
+        # WEBHOOK_* уведомления делят один generic-билдер: тип -> ключ копирайта.
+        webhook_email_kinds = {
+            NotificationType.WEBHOOK_SUB_EXPIRED: 'sub_expired',
+            NotificationType.WEBHOOK_SUB_DISABLED: 'sub_disabled',
+            NotificationType.WEBHOOK_SUB_ENABLED: 'sub_enabled',
+            NotificationType.WEBHOOK_SUB_LIMITED: 'sub_limited',
+            NotificationType.WEBHOOK_SUB_TRAFFIC_RESET: 'sub_traffic_reset',
+            NotificationType.WEBHOOK_SUB_DELETED: 'sub_deleted',
+            NotificationType.WEBHOOK_SUB_REVOKED: 'sub_revoked',
+            NotificationType.WEBHOOK_SUB_EXPIRING: 'sub_expiring',
+            NotificationType.WEBHOOK_SUB_FIRST_CONNECTED: 'sub_first_connected',
+            NotificationType.WEBHOOK_SUB_BANDWIDTH_THRESHOLD: 'sub_bandwidth_threshold',
+            NotificationType.WEBHOOK_USER_NOT_CONNECTED: 'user_not_connected',
+            NotificationType.WEBHOOK_DEVICE_ADDED: 'device_added',
+            NotificationType.WEBHOOK_DEVICE_DELETED: 'device_deleted',
+            NotificationType.WEBHOOK_TORRENT_DETECTED: 'torrent_detected',
+        }
+        for webhook_type, webhook_kind in webhook_email_kinds.items():
+            template_map[webhook_type] = partial(self._webhook_event_email, webhook_kind)
 
         template_func = template_map.get(notification_type)
         if not template_func:
@@ -561,6 +543,14 @@ class EmailNotificationTemplates:
 
     _WEBHOOK_EMAIL_COPY = {
         'sub_expired': {
+            'zh': (
+                '订阅已到期',
+                '<p>您的 VPN 订阅已到期，访问已关闭。</p><p>请续订以恢复使用。</p>',
+            ),
+            'ua': (
+                'Підписка закінчилася',
+                '<p>Ваша VPN-підписка закінчилася — доступ вимкнено.</p><p>Продовжте підписку, щоб повернутися до сервісу.</p>',
+            ),
             'ru': (
                 'Подписка закончилась',
                 '<p>Ваша VPN-подписка истекла — доступ отключён.</p><p>Продлите подписку, чтобы вернуться в сервис.</p>',
@@ -571,6 +561,14 @@ class EmailNotificationTemplates:
             ),
         },
         'sub_disabled': {
+            'zh': (
+                '订阅已暂停',
+                '<p>您的订阅已被暂时停用。</p><p>请查看个人中心或联系客服。</p>',
+            ),
+            'ua': (
+                'Підписку призупинено',
+                '<p>Вашу підписку тимчасово вимкнено.</p><p>Перевірте особистий кабінет або напишіть у підтримку.</p>',
+            ),
             'ru': (
                 'Подписка приостановлена',
                 '<p>Ваша подписка временно отключена.</p><p>Проверьте личный кабинет или напишите в поддержку.</p>',
@@ -581,10 +579,26 @@ class EmailNotificationTemplates:
             ),
         },
         'sub_enabled': {
+            'zh': (
+                '订阅已恢复',
+                '<p>VPN 访问已恢复，可以继续使用。</p>',
+            ),
+            'ua': (
+                'Підписка знову активна',
+                '<p>Доступ до VPN відновлено — можна користуватися.</p>',
+            ),
             'ru': ('Подписка снова активна', '<p>Доступ к VPN восстановлен — можно пользоваться.</p>'),
             'en': ('Subscription re-activated', '<p>Your VPN access has been restored.</p>'),
         },
         'sub_limited': {
+            'zh': (
+                '流量已达上限',
+                '<p>订阅流量已用完。</p><p>请购买流量或等待重置后继续使用。</p>',
+            ),
+            'ua': (
+                'Досягнуто ліміт трафіку',
+                '<p>Трафік за підпискою вичерпано.</p><p>Докупіть трафік або дочекайтеся скидання, щоб продовжити.</p>',
+            ),
             'ru': (
                 'Достигнут лимит трафика',
                 '<p>Трафик по подписке исчерпан.</p><p>Докупите трафик или дождитесь сброса, чтобы продолжить.</p>',
@@ -595,10 +609,26 @@ class EmailNotificationTemplates:
             ),
         },
         'sub_traffic_reset': {
+            'zh': (
+                '流量已重置',
+                '<p>流量计数已重置，限额再次可用。</p>',
+            ),
+            'ua': (
+                'Трафік оновлено',
+                '<p>Лічильник трафіку скинуто — ліміт знову доступний.</p>',
+            ),
             'ru': ('Трафик обновлён', '<p>Счётчик трафика сброшен — лимит снова доступен.</p>'),
             'en': ('Traffic reset', '<p>Your traffic counter has been reset — the limit is available again.</p>'),
         },
         'sub_deleted': {
+            'zh': (
+                '订阅已删除',
+                '<p>您的订阅已被删除。</p><p>如属误操作，请联系客服。</p>',
+            ),
+            'ua': (
+                'Підписку видалено',
+                '<p>Вашу підписку було видалено.</p><p>Якщо це помилка — напишіть у підтримку.</p>',
+            ),
             'ru': (
                 'Подписка удалена',
                 '<p>Ваша подписка была удалена.</p><p>Если это ошибка — напишите в поддержку.</p>',
@@ -609,6 +639,14 @@ class EmailNotificationTemplates:
             ),
         },
         'sub_revoked': {
+            'zh': (
+                '订阅链接已更新',
+                '<p>您的订阅链接已重新签发。</p><p>请从个人中心导入新链接。</p>',
+            ),
+            'ua': (
+                'Посилання-підписку оновлено',
+                '<p>Ваше посилання-підписку було перевипущено.</p><p>Імпортуйте нове посилання з особистого кабінету.</p>',
+            ),
             'ru': (
                 'Ссылка-подписка обновлена',
                 '<p>Ваша ссылка-подписка была перевыпущена.</p><p>Импортируйте новую ссылку из личного кабинета.</p>',
@@ -618,11 +656,45 @@ class EmailNotificationTemplates:
                 '<p>Your subscription link has been reissued.</p><p>Import the new link from your dashboard.</p>',
             ),
         },
+        'sub_expiring': {
+            'ru': (
+                'Подписка скоро закончится',
+                '<p>Срок действия вашей VPN-подписки подходит к концу.</p><p>Продлите её заранее, чтобы не остаться без доступа.</p>',
+            ),
+            'en': (
+                'Subscription expiring soon',
+                '<p>Your VPN subscription is about to expire.</p><p>Renew it in advance to avoid losing access.</p>',
+            ),
+            'zh': (
+                '订阅即将到期',
+                '<p>您的 VPN 订阅即将到期。</p><p>请提前续订，以免失去访问。</p>',
+            ),
+            'ua': (
+                'Підписка скоро закінчиться',
+                '<p>Термін дії вашої VPN-підписки добігає кінця.</p><p>Продовжте її заздалегідь, щоб не залишитися без доступу.</p>',
+            ),
+        },
         'sub_first_connected': {
+            'zh': (
+                '连接成功',
+                '<p>您已成功连接到 VPN，祝使用愉快！</p>',
+            ),
+            'ua': (
+                'Підключення встановлено',
+                '<p>Ви успішно підключилися до VPN. Приємного користування!</p>',
+            ),
             'ru': ('Подключение установлено', '<p>Вы успешно подключились к VPN. Приятного пользования!</p>'),
             'en': ('You are connected', '<p>You have successfully connected to the VPN. Enjoy!</p>'),
         },
         'sub_bandwidth_threshold': {
+            'zh': (
+                '流量即将用完',
+                '<p>您已使用大部分流量。</p><p>请及时购买流量，以免失去访问。</p>',
+            ),
+            'ua': (
+                'Трафік закінчується',
+                '<p>Ви використали більшу частину трафіку.</p><p>Докупіть трафік, щоб не залишитися без доступу.</p>',
+            ),
             'ru': (
                 'Трафик на исходе',
                 '<p>Вы израсходовали большую часть трафика.</p><p>Докупите трафик, чтобы не остаться без доступа.</p>',
@@ -633,6 +705,14 @@ class EmailNotificationTemplates:
             ),
         },
         'user_not_connected': {
+            'zh': (
+                '需要帮助连接 VPN 吗？',
+                '<p>您的订阅<strong>有效</strong>，但应用尚未配置，因此 VPN 无法使用。</p><p>只需 5 分钟：安装应用并导入订阅链接。如有问题，请联系客服。</p>',
+            ),
+            'ua': (
+                'Потрібна допомога з підключенням VPN?',
+                '<p>Ваша підписка <strong>активна</strong>, але застосунок ще не налаштовано — тому VPN не працює.</p><p>Це займає 5 хвилин: встановіть застосунок та імпортуйте посилання-підписку. Якщо щось не виходить — напишіть у підтримку, допоможемо.</p>',
+            ),
             'ru': (
                 'Нужна помощь с подключением VPN?',
                 '<p>Ваша подписка <strong>активна</strong>, но приложение пока не настроено — поэтому VPN не работает.</p><p>Это занимает 5 минут: установите приложение и импортируйте ссылку-подписку. Если что-то не выходит — напишите в поддержку, поможем.</p>',
@@ -643,6 +723,14 @@ class EmailNotificationTemplates:
             ),
         },
         'device_added': {
+            'zh': (
+                '已连接新设备',
+                '<p>您的订阅新增了一台设备{device}。</p><p>如果不是您本人操作，请联系客服。</p>',
+            ),
+            'ua': (
+                'Підключено новий пристрій',
+                '<p>До вашої підписки додано пристрій{device}.</p><p>Якщо це були не ви — напишіть у підтримку.</p>',
+            ),
             'ru': (
                 'Новое устройство подключено',
                 '<p>К вашей подписке добавлено устройство{device}.</p><p>Если это были не вы — напишите в поддержку.</p>',
@@ -653,10 +741,26 @@ class EmailNotificationTemplates:
             ),
         },
         'device_deleted': {
+            'zh': (
+                '设备已断开',
+                '<p>设备{device}已从您的订阅解绑。</p>',
+            ),
+            'ua': (
+                'Пристрій відключено',
+                '<p>Пристрій{device} відв’язано від вашої підписки.</p>',
+            ),
             'ru': ('Устройство отключено', '<p>Устройство{device} отвязано от вашей подписки.</p>'),
             'en': ('Device removed', '<p>A device{device} was removed from your subscription.</p>'),
         },
         'torrent_detected': {
+            'zh': (
+                '检测到种子流量',
+                '<p>检测到 torrent 活动。</p><p>VPN 上已封锁此类流量，请使用常规应用。</p>',
+            ),
+            'ua': (
+                'Виявлено торент-трафік',
+                '<p>Зафіксовано torrent-активність.</p><p>У VPN її заблоковано — використовуйте звичайні застосунки.</p>',
+            ),
             'ru': (
                 'Обнаружен торрент-трафик',
                 '<p>Зафиксирована torrent-активность.</p><p>На VPN она заблокирована — используйте обычные приложения.</p>',
@@ -675,7 +779,7 @@ class EmailNotificationTemplates:
         which sends email to email-only users — but these types had no email template,
         so email was silently skipped. This covers all of them.
         """
-        lang = language if language in ('ru', 'en') else 'ru'
+        lang = language if language in ('ru', 'en', 'zh', 'ua') else 'ru'
         copy = self._WEBHOOK_EMAIL_COPY.get(kind, self._WEBHOOK_EMAIL_COPY['user_not_connected'])
         subject, body = copy.get(lang, copy['ru'])
 
