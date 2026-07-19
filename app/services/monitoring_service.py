@@ -56,6 +56,7 @@ from app.external.remnawave_api import (
 from app.localization.texts import get_texts
 from app.services.grace_access_runtime import update_panel_user_grace_safe
 from app.services.notification_delivery_service import (
+    NotificationType,
     notification_delivery_service,
 )
 from app.services.notification_settings_service import NotificationSettingsService
@@ -1746,6 +1747,12 @@ class MonitoringService:
         self, user: User, subscription: Subscription, *, tariff_name: str | None = None
     ) -> bool:
         try:
+            if not user.telegram_id:
+                return await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=NotificationType.SUBSCRIPTION_EXPIRED,
+                    context={'tariff_name': tariff_name or ''},
+                )
             tariff_label = ''
             if settings.is_multi_tariff_enabled():
                 if tariff_name:
@@ -1914,6 +1921,12 @@ class MonitoringService:
 
     async def _send_trial_ending_notification(self, user: User, subscription: Subscription) -> bool:
         try:
+            if not user.telegram_id:
+                return await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=NotificationType.WINBACK_TRIAL_ENDING,
+                    context={},
+                )
             get_texts(user.language)
 
             tariff_label = ''
@@ -2045,6 +2058,12 @@ class MonitoringService:
 
     async def _send_expired_day1_notification(self, db: AsyncSession, user: User, subscription: Subscription) -> bool:
         try:
+            if not user.telegram_id:
+                return await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=NotificationType.WINBACK_EXPIRED_1D,
+                    context={'end_date': format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')},
+                )
             texts = get_texts(user.language)
             tariff = getattr(subscription, 'tariff', None)
             tariff_label = ''
@@ -2144,6 +2163,16 @@ class MonitoringService:
         trigger_days: int = None,
     ) -> bool:
         try:
+            if not user.telegram_id:
+                return await notification_delivery_service.send_notification(
+                    user=user,
+                    notification_type=NotificationType.WINBACK_DISCOUNT,
+                    context={
+                        'percent': percent,
+                        'expires_at': format_local_datetime(expires_at, '%d.%m.%Y %H:%M'),
+                        'trigger_days': trigger_days or '',
+                    },
+                )
             texts = get_texts(user.language)
 
             tariff_label = ''
