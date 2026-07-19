@@ -589,6 +589,11 @@ class NaloGoService:
             return None  # None = ошибка, [] = нет чеков
 
 
+# Telegram принимает фото до 10 МБ; печатная форма чека — десятки килобайт,
+# так что лимит здесь исключительно как предохранитель от чтения мусора в память.
+_RECEIPT_MAX_BYTES = 10 * 1024 * 1024
+
+
 async def _download_receipt_file(receipt_url: str) -> tuple[bytes, str] | None:
     """Скачивает печатную форму чека для отправки файлом в Telegram.
 
@@ -610,10 +615,26 @@ async def _download_receipt_file(receipt_url: str) -> tuple[bytes, str] | None:
             if resp.status != 200:
                 logger.warning('Не удалось скачать чек NaloGO для отправки файлом', status=resp.status)
                 return None
-            data = await resp.read()
+
+            content_type = (resp.headers.get('Content-Type') or '').lower()
+            # ФНС может отдать HTML (страница ошибки, техработы) с кодом 200 —
+            # отправлять её как «чек» нельзя, лучше откатиться на ссылку.
+            if not content_type.startswith('image/') and 'pdf' not in content_type:
+                logger.warning('Неожиданный формат печатной формы чека NaloGO', content_type=content_type)
+                return None
+
+            if resp.content_length and resp.content_length > _RECEIPT_MAX_BYTES:
+                logger.warning('Печатная форма чека NaloGO слишком велика', content_length=resp.content_length)
+                return None
+
+            # Читаем с запасом в 1 байт, чтобы отличить «ровно лимит» от «больше лимита»
+            data = await resp.content.read(_RECEIPT_MAX_BYTES + 1)
             if not data:
                 return None
-            content_type = (resp.headers.get('Content-Type') or '').lower()
+            if len(data) > _RECEIPT_MAX_BYTES:
+                logger.warning('Печатная форма чека NaloGO превысила лимит при чтении')
+                return None
+
             return data, content_type
 
 
@@ -682,33 +703,47 @@ async def send_nalogo_receipt_notifications(
 
     async def _deliver(chat_id: int, caption: str, thread_id: int | None = None) -> None:
         """Отправляет чек файлом (если скачался) или текстом со ссылкой."""
-        if receipt_file is not None and receipt_is_image:
-            await bot.send_photo(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                photo=receipt_file,
-                caption=caption,
-                parse_mode='HTML',
-                reply_markup=keyboard,
-            )
-        elif receipt_file is not None:
-            await bot.send_document(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                document=receipt_file,
-                caption=caption,
-                parse_mode='HTML',
-                reply_markup=keyboard,
-            )
-        else:
-            await bot.send_message(
-                chat_id=chat_id,
-                message_thread_id=thread_id,
-                text=caption,
-                parse_mode='HTML',
-                reply_markup=keyboard,
-                disable_web_page_preview=True,
-            )
+        if receipt_file is not None:
+            from aiogram.exceptions import TelegramBadRequest, TelegramEntityTooLarge
+
+            try:
+                if receipt_is_image:
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        message_thread_id=thread_id,
+                        photo=receipt_file,
+                        caption=caption,
+                        parse_mode='HTML',
+                        reply_markup=keyboard,
+                    )
+                else:
+                    await bot.send_document(
+                        chat_id=chat_id,
+                        message_thread_id=thread_id,
+                        document=receipt_file,
+                        caption=caption,
+                        parse_mode='HTML',
+                        reply_markup=keyboard,
+                    )
+                return
+            except (TelegramBadRequest, TelegramEntityTooLarge) as file_error:
+                # Telegram отверг сам файл (битая картинка, превышен размер,
+                # caption > 1024 символов). По 422-ФЗ чек обязан дойти до
+                # покупателя, поэтому не теряем его, а шлём ссылкой.
+                logger.warning(
+                    'Telegram отклонил файл чека NaloGO, отправляем ссылкой',
+                    chat_id=chat_id,
+                    error=str(file_error)[:200],
+                )
+
+        await bot.send_message(
+            chat_id=chat_id,
+            message_thread_id=thread_id,
+            text=caption,
+            parse_mode='HTML',
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
+        )
 
     # --- Отправка пользователю ---
     if telegram_user_id:
