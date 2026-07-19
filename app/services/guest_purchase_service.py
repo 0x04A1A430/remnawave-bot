@@ -253,6 +253,7 @@ async def _create_nalogo_receipt_for_purchase(
             payment_id=purchase.payment_id,
             telegram_user_id=user.telegram_id,
             amount_kopeks=purchase.amount_kopeks,
+            user_email=user.email,
         )
 
         if receipt_uuid:
@@ -278,7 +279,7 @@ async def _create_nalogo_receipt_for_purchase(
                     receipt_uuid=receipt_uuid,
                 )
 
-            # Отправляем чек покупателю (если есть telegram_id) и дублируем в админ-топик
+            # Отправляем чек покупателю (Telegram или почта) и дублируем в админ-топик
             try:
                 from app.bot_factory import create_bot
                 from app.services.nalogo_service import send_nalogo_receipt_notifications
@@ -291,6 +292,7 @@ async def _create_nalogo_receipt_for_purchase(
                         amount_kopeks=purchase.amount_kopeks,
                         telegram_user_id=user.telegram_id,
                         context_label=f'Источник: гостевая покупка с лендинга (purchase_id={purchase.id})',
+                        user_email=user.email,
                     )
             except Exception as notify_error:
                 logger.warning(
