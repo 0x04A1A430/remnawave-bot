@@ -45,6 +45,9 @@ class EmailNotificationTemplates:
             NotificationType.SUBSCRIPTION_EXPIRED: self._subscription_expired_template,
             NotificationType.SUBSCRIPTION_RENEWED: self._subscription_renewed_template,
             NotificationType.SUBSCRIPTION_ACTIVATED: self._subscription_activated_template,
+            NotificationType.WINBACK_EXPIRED_1D: self._winback_expired_1d_template,
+            NotificationType.WINBACK_DISCOUNT: self._winback_discount_template,
+            NotificationType.WINBACK_TRIAL_ENDING: self._winback_trial_ending_template,
             NotificationType.AUTOPAY_SUCCESS: self._autopay_success_template,
             NotificationType.AUTOPAY_FAILED: self._autopay_failed_template,
             NotificationType.AUTOPAY_INSUFFICIENT_FUNDS: self._autopay_insufficient_funds_template,
@@ -792,6 +795,66 @@ class EmailNotificationTemplates:
         return {
             'subject': subject,
             'body_html': self._get_base_template(content, language),
+        }
+
+    def _winback_expired_1d_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Email: subscription lapsed 1 day ago (email-only users)."""
+        end_date = html.escape(str(context.get('end_date', '')))
+        subjects = {
+            'ru': 'Подписка закончилась',
+            'en': 'Your subscription has ended',
+            'zh': '订阅已结束',
+            'ua': 'Підписка закінчилася',
+        }
+        bodies = {
+            'ru': f'<h2>Подписка закончилась</h2><div class="highlight danger"><p>Ваша VPN-подписка истекла{f" ({end_date})" if end_date else ""} — доступ отключён.</p><p>Продлите подписку, чтобы вернуться в сервис.</p></div>{self._get_cabinet_button(language)}',
+            'en': f'<h2>Your subscription has ended</h2><div class="highlight danger"><p>Your VPN subscription has expired — access is off.</p><p>Renew it to get back online.</p></div>{self._get_cabinet_button(language)}',
+            'zh': f'<h2>订阅已结束</h2><div class="highlight danger"><p>您的 VPN 订阅已到期{f"（{end_date}）" if end_date else ""}，访问已关闭。</p><p>请续订以恢复使用。</p></div>{self._get_cabinet_button(language)}',
+            'ua': f'<h2>Підписка закінчилася</h2><div class="highlight danger"><p>Ваша VPN-підписка закінчилася{f" ({end_date})" if end_date else ""} — доступ вимкнено.</p><p>Продовжте підписку, щоб повернутися до сервісу.</p></div>{self._get_cabinet_button(language)}',
+        }
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _winback_discount_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Email: winback discount offer (email-only users). Offer is already on the account."""
+        percent = context.get('percent', '')
+        expires_at = html.escape(str(context.get('expires_at', '')))
+        subjects = {
+            'ru': f'Скидка {percent}% на продление',
+            'en': f'{percent}% off your renewal',
+            'zh': f'续订享 {percent}% 折扣',
+            'ua': f'Знижка {percent}% на продовження',
+        }
+        bodies = {
+            'ru': f'<h2>Скидка {percent}% на продление</h2><div class="highlight"><p>Возвращайтесь со скидкой <strong>{percent}%</strong>{f" — действует до {expires_at}" if expires_at else ""}.</p><p>Скидка уже привязана к вашему аккаунту и суммируется с промогруппой — просто продлите подписку в кабинете.</p></div>{self._get_cabinet_button(language)}',
+            'en': f'<h2>{percent}% off your renewal</h2><div class="highlight"><p>Come back with a <strong>{percent}%</strong> discount{f", valid until {expires_at}" if expires_at else ""}.</p><p>The discount is already applied to your account and stacks with your promo group — just renew in the dashboard.</p></div>{self._get_cabinet_button(language)}',
+            'zh': f'<h2>续订享 {percent}% 折扣</h2><div class="highlight"><p>回来享受 <strong>{percent}%</strong> 折扣{f"（有效期至 {expires_at}）" if expires_at else ""}。</p><p>折扣已绑定到您的账户，并与促销组叠加 — 只需在个人中心续订即可。</p></div>{self._get_cabinet_button(language)}',
+            'ua': f'<h2>Знижка {percent}% на продовження</h2><div class="highlight"><p>Повертайтеся зі знижкою <strong>{percent}%</strong>{f" — діє до {expires_at}" if expires_at else ""}.</p><p>Знижка вже прив’язана до вашого акаунта й сумується з промогрупою — просто продовжте підписку в кабінеті.</p></div>{self._get_cabinet_button(language)}',
+        }
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _winback_trial_ending_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Email: trial ending soon (email-only users)."""
+        subjects = {
+            'ru': 'Пробная подписка скоро закончится',
+            'en': 'Your trial is ending soon',
+            'zh': '试用即将结束',
+            'ua': 'Пробна підписка скоро закінчиться',
+        }
+        bodies = {
+            'ru': f'<h2>Пробная подписка скоро закончится</h2><div class="highlight warning"><p>Ваша тестовая подписка скоро истекает.</p><p>Оформите подписку, чтобы не остаться без VPN — конфиг и устройства сохранятся.</p></div>{self._get_cabinet_button(language)}',
+            'en': f'<h2>Your trial is ending soon</h2><div class="highlight warning"><p>Your trial subscription is about to expire.</p><p>Subscribe to keep your VPN — your config and devices stay.</p></div>{self._get_cabinet_button(language)}',
+            'zh': f'<h2>试用即将结束</h2><div class="highlight warning"><p>您的试用订阅即将到期。</p><p>订阅以继续使用 VPN — 配置和设备将保留。</p></div>{self._get_cabinet_button(language)}',
+            'ua': f'<h2>Пробна підписка скоро закінчиться</h2><div class="highlight warning"><p>Ваша тестова підписка скоро закінчується.</p><p>Оформіть підписку, щоб не залишитися без VPN — конфіг і пристрої збережуться.</p></div>{self._get_cabinet_button(language)}',
+        }
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
         }
 
     def _subscription_activated_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:

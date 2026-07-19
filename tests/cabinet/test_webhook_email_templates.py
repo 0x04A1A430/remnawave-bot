@@ -68,3 +68,37 @@ def test_device_name_is_html_escaped():
     )
     assert '<script>' not in template['body_html']
     assert '&lt;script&gt;' in template['body_html']
+
+
+# --- Winback / lifecycle email-шаблоны (#3079) ---
+
+WINBACK_TYPES = [
+    NotificationType.WINBACK_EXPIRED_1D,
+    NotificationType.WINBACK_DISCOUNT,
+    NotificationType.WINBACK_TRIAL_ENDING,
+]
+
+
+def test_winback_types_have_email_template_in_every_language():
+    templates = EmailNotificationTemplates()
+    missing = []
+    for notification_type in WINBACK_TYPES:
+        for language in EMAIL_LANGUAGES:
+            template = templates.get_template(notification_type, language, {'percent': 20})
+            if not template or not template.get('subject') or not template.get('body_html'):
+                missing.append(f'{notification_type.value}/{language}')
+    assert not missing, 'WINBACK типы без email-шаблона: ' + ', '.join(missing)
+
+
+def test_winback_discount_renders_percent_everywhere():
+    templates = EmailNotificationTemplates()
+    for language in EMAIL_LANGUAGES:
+        template = templates.get_template(NotificationType.WINBACK_DISCOUNT, language, {'percent': 25})
+        assert '25%' in template['subject'], language
+        assert '25%' in template['body_html'], language
+
+
+def test_winback_expired_1d_escapes_end_date():
+    templates = EmailNotificationTemplates()
+    template = templates.get_template(NotificationType.WINBACK_EXPIRED_1D, 'ru', {'end_date': '<b>x</b>'})
+    assert '<b>x</b>' not in template['body_html']
