@@ -406,28 +406,32 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.YOOKASSA_WEBHOOK_PATH)
         async def yookassa_webhook(request: Request) -> JSONResponse:
-            header_ip_candidates = yookassa_webhook_module.collect_yookassa_ip_candidates(
-                request.headers.get('X-Forwarded-For'),
-                request.headers.get('X-Real-IP'),
-                request.headers.get('Cf-Connecting-Ip'),
-            )
-            remote_ip = request.client.host if request.client else None
-            client_ip = yookassa_webhook_module.resolve_yookassa_ip(
-                header_ip_candidates,
-                remote=remote_ip,
-            )
-
-            if client_ip is None:
-                return JSONResponse(
-                    {'status': 'error', 'reason': 'unknown_ip'},
-                    status_code=status.HTTP_403_FORBIDDEN,
+            # IP-гейт можно отключить (YOOKASSA_SKIP_IP_CHECK) для схем за Anti-DDoS/прокси,
+            # который не пробрасывает реальный IP отправителя. В этом режиме подлинность
+            # платежа гарантирует fail-closed API-проверка в process_yookassa_webhook.
+            if not settings.YOOKASSA_SKIP_IP_CHECK:
+                header_ip_candidates = yookassa_webhook_module.collect_yookassa_ip_candidates(
+                    request.headers.get('X-Forwarded-For'),
+                    request.headers.get('X-Real-IP'),
+                    request.headers.get('Cf-Connecting-Ip'),
+                )
+                remote_ip = request.client.host if request.client else None
+                client_ip = yookassa_webhook_module.resolve_yookassa_ip(
+                    header_ip_candidates,
+                    remote=remote_ip,
                 )
 
-            if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
-                return JSONResponse(
-                    {'status': 'error', 'reason': 'forbidden_ip'},
-                    status_code=status.HTTP_403_FORBIDDEN,
-                )
+                if client_ip is None:
+                    return JSONResponse(
+                        {'status': 'error', 'reason': 'unknown_ip'},
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
+
+                if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
+                    return JSONResponse(
+                        {'status': 'error', 'reason': 'forbidden_ip'},
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
 
             body_bytes = await request.body()
             if not body_bytes:
