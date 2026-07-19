@@ -1178,6 +1178,7 @@ class UserService:
                 AntilopayPayment,
                 AppleTransaction,
                 AuraPayPayment,
+                CisPayPayment,
                 DonutPayment,
                 EtoplatezhiPayment,
                 JupiterPayment,
@@ -1201,6 +1202,7 @@ class UserService:
                 JupiterPayment,
                 DonutPayment,
                 LavaPayment,
+                CisPayPayment,
             )
             for model in extra_payment_models:
                 try:
