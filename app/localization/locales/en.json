@@ -1809,7 +1809,6 @@
   "WEBHOOK_CLOSE_BUTTON": "✖️ Close",
   "TRAFFIC_WARNING_ALERT": "⚠️ <b>Traffic Warning</b>\n\nUsed: {used:.1f} / {limit} GB ({percent:.0f}%)\n\nYour traffic limit is almost reached.",
   "LOW_BALANCE_ALERT": "⚠️ <b>Low Balance</b>\n\nYour balance: {balance} ₽\nNotification threshold: {threshold} ₽\n\nTop up your balance to ensure automatic subscription renewal.",
-
   "SUBSCRIPTION_REVOKE_BTN": "🔄 Reissue Subscription",
   "SUBSCRIPTION_REVOKE_TITLE": "⚠️ Reissue Subscription",
   "SUBSCRIPTION_REVOKE_WARNING": "⚠️ <b>Reissue Subscription</b>\n\nThis action will:\n• Generate a new connection link\n• Disconnect all devices\n• The old link will stop working\n\nContinue?",
@@ -2102,5 +2101,6 @@
   "TARIFF_SWITCH_UPGRADE_NOTE": "⬆️ Upgrade = pay the difference",
   "TARIFF_SWITCH_UPGRADE_PREVIEW": "⬆️ <b>Plan upgrade</b>\n\n📌 Current: <b>{current}</b>\n   • Traffic: {current_traffic}\n   • Devices: {current_devices}\n\n📦 New: <b>{name}</b>\n   • Traffic: {traffic}\n   • Devices: {devices}\n\n⏰ Days remaining: <b>{days}</b>\n💰 <b>Surcharge: {cost}</b>\n\n💳 Your balance: {balance}\nAfter payment: {after}",
   "TARIFF_SWITCH_WILL_SET_LINE": "⏰ Will be set to: {days} days",
-  "BUY_TARIFF_BUTTON": "📦 Buy a plan"
+  "BUY_TARIFF_BUTTON": "📦 Buy a plan",
+  "ADMIN_PROMOCODE_TYPE_BALANCE_DAYS": "💰📅 Balance + Days"
 }
