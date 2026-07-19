@@ -60,6 +60,7 @@ class EmailNotificationTemplates:
             NotificationType.WITHDRAWAL_REJECTED: self._withdrawal_rejected_template,
             NotificationType.TRAFFIC_RESET: self._traffic_reset_template,
             NotificationType.PAYMENT_RECEIVED: self._payment_received_template,
+            NotificationType.PROMO_OFFER: self._promo_offer_template,
             NotificationType.EMAIL_VERIFICATION: self._email_verification_template,
             NotificationType.PASSWORD_RESET: self._password_reset_template,
             NotificationType.EMAIL_CHANGE_CODE: self._email_change_code_template,
@@ -925,6 +926,84 @@ class EmailNotificationTemplates:
                     {f'<p>Thanks to: {referral_name}</p>' if referral_name else ''}
                 </div>
                 <p>Keep inviting friends and earn more!</p>
+                {self._get_cabinet_button(language)}
+            """,
+        }
+
+        return {
+            'subject': subjects.get(language, subjects['ru']),
+            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+        }
+
+    def _promo_offer_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
+        """Template for personal promo offer notification.
+
+        ``message_html`` — уже отрендеренный текст предложения (Telegram-HTML:
+        b/i/code — валидный HTML-фрагмент, переносы строк заменены на <br>).
+        Пишется админом или собирается дефолтным билдером — доверенный контент,
+        не экранируем.
+        """
+        message_html = context.get('message_html', '')
+        valid_hours = int(context.get('valid_hours', 0) or 0)
+        discount_percent = int(context.get('discount_percent', 0) or 0)
+
+        if discount_percent > 0:
+            subjects = {
+                'ru': f'🎁 Персональное предложение: скидка {discount_percent}%',
+                'en': f'🎁 Personal offer: {discount_percent}% off',
+                'zh': f'🎁 专属优惠：{discount_percent}% 折扣',
+                'ua': f'🎁 Персональна пропозиція: знижка {discount_percent}%',
+            }
+        else:
+            subjects = {
+                'ru': '🎁 Персональное предложение',
+                'en': '🎁 Personal offer',
+                'zh': '🎁 专属优惠',
+                'ua': '🎁 Персональна пропозиція',
+            }
+
+        valid_lines = {
+            'ru': f'<p>⏰ Предложение действует <b>{valid_hours} ч.</b></p>' if valid_hours else '',
+            'en': f'<p>⏰ The offer is valid for <b>{valid_hours} h.</b></p>' if valid_hours else '',
+            'zh': f'<p>⏰ 优惠有效期 <b>{valid_hours} 小时</b></p>' if valid_hours else '',
+            'ua': f'<p>⏰ Пропозиція діє <b>{valid_hours} год.</b></p>' if valid_hours else '',
+        }
+
+        bodies = {
+            'ru': f"""
+                <h2>Персональное предложение</h2>
+                <div class="highlight">
+                    <p>{message_html}</p>
+                </div>
+                {valid_lines['ru']}
+                <p>Активировать предложение можно в личном кабинете.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'en': f"""
+                <h2>Personal Offer</h2>
+                <div class="highlight">
+                    <p>{message_html}</p>
+                </div>
+                {valid_lines['en']}
+                <p>You can activate the offer in your account.</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'zh': f"""
+                <h2>专属优惠</h2>
+                <div class="highlight">
+                    <p>{message_html}</p>
+                </div>
+                {valid_lines['zh']}
+                <p>您可以在个人中心激活该优惠。</p>
+                {self._get_cabinet_button(language)}
+            """,
+            'ua': f"""
+                <h2>Персональна пропозиція</h2>
+                <div class="highlight">
+                    <p>{message_html}</p>
+                </div>
+                {valid_lines['ua']}
+                <p>Активувати пропозицію можна в особистому кабінеті.</p>
                 {self._get_cabinet_button(language)}
             """,
         }
