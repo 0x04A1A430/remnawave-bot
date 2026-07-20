@@ -3402,6 +3402,25 @@ class Settings(BaseSettings):
 
         return None
 
+    def is_support_contact_telegram(self) -> bool:
+        """Резолвнутый контакт поддержки ведёт в Telegram, а не на внешний хелпдеск.
+
+        SUPPORT_USERNAME принимает и @username, и произвольный URL, поэтому клиенту
+        нужен явный признак: телеграм-ссылку открывают через openTelegramLink,
+        внешнюю — обычным переходом.
+        """
+        url = self.get_support_contact_url()
+
+        if not url:
+            return False
+
+        if url.startswith('tg://'):
+            return True
+
+        host = (urlparse(url).hostname or '').lower().removeprefix('www.')
+
+        return host in {'t.me', 'telegram.me', 'telegram.dog'}
+
     def get_support_contact_display(self) -> str:
         contact = self._clean_support_contact()
 
