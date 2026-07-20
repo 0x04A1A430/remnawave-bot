@@ -307,16 +307,50 @@ async def test_blocked_user_is_not_retried_as_message(monkeypatch):
     bot.send_message.assert_not_awaited()
 
 
+class _FakeStreamContent:
+    """Эмулирует aiohttp StreamReader посегментно (портировано из #3096).
+
+    Ключевое: read(n) с положительным n отдаёт лишь то, что «уже накопилось в
+    буфере» — не больше одной сетевой порции за вызов, а не всё тело до n байт.
+    Именно на этой семантике ловится регресс: код, вызывающий read(n) в расчёте
+    «прочитает всё до лимита», получает обрезанный файл. Фейк, отдающий тело
+    целиком одним вызовом, баг замаскировал бы (и маскировал до #3094/#3096).
+    """
+
+    def __init__(self, body: bytes, network_chunk_size: int = 8192):
+        self._body = body
+        self._network_chunk_size = network_chunk_size
+        self._pos = 0
+
+    async def read(self, n: int = -1) -> bytes:
+        if n < 0:
+            # как настоящий StreamReader с n < 0 — дочитываем поток до конца
+            chunk = self._body[self._pos :]
+        else:
+            chunk = self._body[self._pos : self._pos + min(n, self._network_chunk_size)]
+        self._pos += len(chunk)
+        return chunk
+
+    async def iter_chunked(self, requested_size: int):
+        # настоящий iter_chunked(n) — это ровно AsyncStreamIterator(read(n))
+        while chunk := await self.read(requested_size):
+            yield chunk
+
+
 class _FakeResponse:
-    def __init__(self, *, status=200, content_type='image/jpeg', body=b'jpeg-bytes', content_length=None, chunks=None):
+    def __init__(
+        self,
+        *,
+        status=200,
+        content_type='image/jpeg',
+        body=b'jpeg-bytes',
+        content_length=None,
+        network_chunk_size=8192,
+    ):
         self.status = status
         self.headers = {'Content-Type': content_type}
         self.content_length = content_length if content_length is not None else len(body)
-        # Честная семантика StreamReader.read(n): отдаёт тело кусками («до n
-        # байт» за вызов), в конце — b'' (EOF). Одиночный read(n) в проде
-        # возвращал первый кусок и обрезал JPEG — фейк обязан это ловить.
-        pieces = list(chunks) if chunks is not None else [body]
-        self.content = SimpleNamespace(read=AsyncMock(side_effect=[*pieces, b'', b'']))
+        self.content = _FakeStreamContent(body, network_chunk_size=network_chunk_size)
 
     async def __aenter__(self):
         return self
@@ -361,18 +395,25 @@ async def test_download_accepts_image_and_pdf(monkeypatch):
     assert await _REAL_DOWNLOAD('https://x/print') == (b'%PDF', 'application/pdf')
 
 
-async def test_download_reads_multi_chunk_body_to_the_end(monkeypatch):
-    """Тело приходит несколькими кусками — файл обязан склеиться целиком.
+async def test_download_reads_full_body_not_just_first_network_chunk(monkeypatch):
+    """Тело длиннее одной сетевой порции обязано склеиться целиком.
 
-    Регрессия: одиночный resp.content.read(n) отдаёт «до n байт» (первый
-    буфер), чек уезжал клиенту обрезанным JPEG без хвоста.
+    Регрессия (#3094, #3096): resp.content.read(n) отдаёт только накопившийся
+    буфер — первую сетевую порцию, а не всё тело до n байт. Чек уезжал клиенту
+    физически обрезанным: валидный JPEG-заголовок, пустой/серый низ картинки.
+    Тело здесь заведомо больше network_chunk_size и неоднородно, поэтому
+    сравнение целиком ловит и обрыв, и перестановку, и потерю куска.
     """
-    _patch_aiohttp(
-        monkeypatch,
-        _FakeResponse(content_type='image/jpeg', chunks=[b'head-', b'middle-', b'tail'], content_length=0),
-    )
+    body = b'\xff\xd8' + bytes(range(256)) * 200 + b'\xff\xd9'  # ~51 КБ, 7 сетевых порций
+    _patch_aiohttp(monkeypatch, _FakeResponse(content_type='image/jpeg', body=body, network_chunk_size=8192))
 
-    assert await _REAL_DOWNLOAD('https://x/print') == (b'head-middle-tail', 'image/jpeg')
+    result = await _REAL_DOWNLOAD('https://x/print')
+
+    assert result is not None
+    data, content_type = result
+    assert content_type == 'image/jpeg'
+    assert data == body, f'ожидали {len(body)} байт, получили {len(data)} — печатная форма чека обрезана'
+    assert data.endswith(b'\xff\xd9'), 'файл должен заканчиваться JPEG-маркером EOI, а не обрывом на первом чанке'
 
 
 async def test_download_rejects_oversized_receipt(monkeypatch):
