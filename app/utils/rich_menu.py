@@ -69,6 +69,15 @@ _effect_unavailable = False
 # дальше собираем меню без логотипа, не роняя rich-рендер в классику.
 _logo_unavailable = False
 
+# Про кривой MAIN_MENU_RICH_LOGO_URL предупреждаем один раз: резолвер зовётся
+# на каждый рендер меню, а значение статичное.
+_logo_url_warned = False
+
+# MAIN_MENU_RICH_LOGO_URL с таким значением означает «шапка без логотипа».
+# Пустая строка занята под авто-режим (свой LOGO_FILE), поэтому нужен явный
+# способ выключить картинку, не выключая rich-меню целиком.
+_LOGO_DISABLED_VALUES = frozenset({'-', 'disabled', 'false', 'no', 'none', 'off'})
+
 # Маркеры ошибок загрузки медиа по URL со стороны Telegram.
 _MEDIA_FETCH_ERROR_MARKERS = (
     'http url',
@@ -96,24 +105,49 @@ def is_rich_menu_enabled() -> bool:
 
 def _reset_rich_menu_availability() -> None:
     """Сбрасывает флаги недоступности (используется в тестах)."""
-    global _rich_unavailable, _effect_unavailable, _logo_unavailable
+    global _rich_unavailable, _effect_unavailable, _logo_unavailable, _logo_url_warned
     _rich_unavailable = False
     _effect_unavailable = False
     _logo_unavailable = False
+    _logo_url_warned = False
+
+
+def _warn_bad_logo_url_once(value: str) -> None:
+    global _logo_url_warned
+    if _logo_url_warned:
+        return
+    _logo_url_warned = True
+    logger.warning(
+        'MAIN_MENU_RICH_LOGO_URL не похож на http(s)-ссылку — rich-меню отправляется без логотипа. '
+        'Чтобы убрать логотип намеренно, укажите none',
+        value=value[:100],
+    )
 
 
 def _resolve_rich_logo_url() -> str:
     """Публичный URL логотипа для шапки rich-меню ('' — без логотипа).
 
-    Явный MAIN_MENU_RICH_LOGO_URL приоритетнее. Иначе, если задан WEBHOOK_URL
-    (публичный origin нашего FastAPI) и файл LOGO_FILE существует, логотип
-    отдаётся собственным эндпоинтом /cabinet/branding/bot-logo.
+    Явный MAIN_MENU_RICH_LOGO_URL приоритетнее. Значение из _LOGO_DISABLED_VALUES
+    (none/off/no/false/disabled/-) выключает логотип совсем: пустая строка занята
+    под авто-режим, поэтому при существующем LOGO_FILE шапку иначе было не убрать,
+    а «подставлю ссылку не на картинку» роняло весь rich в классику. Значение,
+    не похожее на http(s)-ссылку, трактуем так же — скачать его Telegram всё
+    равно не сможет, а меню важнее логотипа.
+
+    Иначе, если задан WEBHOOK_URL (публичный origin нашего FastAPI) и файл
+    LOGO_FILE существует, логотип отдаётся собственным эндпоинтом
+    /cabinet/branding/bot-logo.
     """
     if _logo_unavailable:
         return ''
 
     explicit = (settings.MAIN_MENU_RICH_LOGO_URL or '').strip()
     if explicit:
+        if explicit.lower() in _LOGO_DISABLED_VALUES:
+            return ''
+        if not explicit.lower().startswith(('http://', 'https://')):
+            _warn_bad_logo_url_once(explicit)
+            return ''
         return explicit
 
     webhook_url = (settings.WEBHOOK_URL or '').strip()
@@ -128,6 +162,25 @@ def _resolve_rich_logo_url() -> str:
 def _is_media_fetch_error(error: Exception) -> bool:
     text = str(error).lower()
     return any(marker in text for marker in _MEDIA_FETCH_ERROR_MARKERS)
+
+
+def _retry_without_logo(error: Exception) -> bool:
+    """True — логотип был в меню, выключаем его и повторяем отправку.
+
+    Картинку по URL качает сам Telegram, и это самая частая причина отказа.
+    Известные маркеры ловим по тексту, но у rich-сообщений коды ошибок свои и
+    список заведомо неполон: раньше при незнакомой ошибке меню целиком уезжало
+    в классику («рич не включается»), хотя достаточно было убрать картинку.
+    Повтор ровно один — _mark_logo_unavailable_once взводит флаг до рестарта.
+    """
+    if not _resolve_rich_logo_url():
+        return False
+    if not _is_media_fetch_error(error):
+        logger.warning(
+            'Rich-меню отклонено незнакомой ошибкой — повторяем без логотипа',
+            error=str(error)[:200],
+        )
+    return _mark_logo_unavailable_once(error)
 
 
 def _mark_logo_unavailable_once(error: Exception) -> bool:
@@ -580,7 +633,7 @@ async def try_send_rich_main_menu(
     except (TelegramNotFound, TelegramBadRequest) as error:
         if _looks_like_unsupported(error):
             _mark_rich_unavailable(error)
-        elif _is_media_fetch_error(error) and _mark_logo_unavailable_once(error):
+        elif _retry_without_logo(error):
             # Логотип не скачался — единственный повтор уже без него (флаг взведён).
             return await try_send_rich_main_menu(bot, chat_id, db_user, texts, db, keyboard)
         else:
@@ -672,7 +725,7 @@ async def try_edit_rich_main_menu(
             return True
         if _looks_like_unsupported(error):
             _mark_rich_unavailable(error)
-        elif _is_media_fetch_error(error) and _mark_logo_unavailable_once(error):
+        elif _retry_without_logo(error):
             # Логотип не скачался — единственный повтор уже без него (флаг взведён).
             return await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard)
         else:

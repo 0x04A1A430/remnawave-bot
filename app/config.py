@@ -982,6 +982,8 @@ class Settings(BaseSettings):
     # при заданном WEBHOOK_URL и существующем LOGO_FILE логотип отдаётся своим
     # эндпоинтом {origin WEBHOOK_URL}/cabinet/branding/bot-logo. Если Telegram не
     # сможет скачать картинку, меню продолжит отправляться без логотипа до рестарта.
+    # `none` (а также off/no/false/disabled/-) — rich-меню БЕЗ логотипа: пустая
+    # строка занята под авто-режим, поэтому при своём LOGO_FILE шапку иначе не убрать.
     MAIN_MENU_RICH_LOGO_URL: str = ''
 
     # Лог действий пользователя (нажатия кнопок в боте + мутационные запросы в
