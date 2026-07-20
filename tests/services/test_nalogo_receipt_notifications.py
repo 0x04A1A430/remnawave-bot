@@ -9,7 +9,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramNotFound,
+    TelegramRetryAfter,
+)
 
 import app.services.nalogo_service as _nalogo_module
 from app.config import settings
@@ -571,3 +576,40 @@ async def test_email_not_sent_when_smtp_unconfigured(monkeypatch):
 
     send_mock.assert_not_called()
     assert bot.send_message.await_count == 1  # админ-топик
+
+
+@pytest.mark.parametrize(
+    'error',
+    [
+        TelegramNotFound(method=MagicMock(), message='chat not found'),
+        TelegramRetryAfter(method=MagicMock(), message='Too Many Requests', retry_after=30),
+    ],
+    ids=['chat_not_found', 'flood_control'],
+)
+async def test_routine_delivery_failures_are_warnings_not_errors(monkeypatch, error):
+    """«Чат не найден» и флуд-контроль — штатные исходы рассылки, не сбои кода.
+
+    Обе ошибки не входили в список транзиентных, поэтому рутинные ситуации
+    (пользователь не нажимал Start; 429 от Telegram) логировались как ERROR
+    с трейсбеком и зашумляли алерты.
+    """
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    _patch_user_lookup(monkeypatch, None)
+    _patch_email(monkeypatch, configured=False)
+    log = MagicMock()
+    monkeypatch.setattr(_nalogo_module, 'logger', log)
+    bot = _bot()
+    bot.send_message = AsyncMock(side_effect=error)
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    warned = [c for c in log.warning.call_args_list if 'транзиент' in c.args[0]]
+    assert warned, f'{type(error).__name__} должен логироваться как транзиент'
+    assert warned[0].kwargs['error_type'] == type(error).__name__
+    assert not [c for c in log.error.call_args_list if 'Ошибка отправки чека' in c.args[0]]
