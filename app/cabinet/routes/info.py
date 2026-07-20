@@ -351,8 +351,12 @@ async def update_user_language(
 @router.get('/support-config', response_model=SupportConfigResponse)
 async def get_support_config():
     """Get support/tickets configuration for cabinet."""
-    # Use SUPPORT_SYSTEM_MODE setting (configurable from admin panel)
-    support_mode = settings.get_support_system_mode()  # returns: tickets, contact, or both
+    # Режим берём через сервис: он владеет persisted-значением (data/support_settings.json)
+    # и синхронизирует его в settings. Чтение settings напрямую отдало бы значение
+    # из .env, если сервис в этом процессе ещё ни разу не загружался.
+    from app.services.support_settings_service import SupportSettingsService
+
+    support_mode = SupportSettingsService.get_system_mode()  # returns: tickets, contact, or both
 
     # Map support mode to support type for frontend
     # - "tickets" mode -> tickets only, no contact
