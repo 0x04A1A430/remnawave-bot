@@ -181,8 +181,10 @@ class Settings(BaseSettings):
     GRACE_ACCESS_DURATION_HOURS: int = 72
     GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
     GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
-    GRACE_ACCESS_EXPIRED_TRAFFIC_GB: int = 1
-    GRACE_ACCESS_LIMITED_TRAFFIC_GB: int = 1
+    GRACE_ACCESS_TRAFFIC_GB: int = 1
+    GRACE_ACCESS_TRIAL_ENABLED: bool = False
+    GRACE_ACCESS_DAILY_ENABLED: bool = False
+    GRACE_ACCESS_FREE_ENABLED: bool = False
     GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
     GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
     GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
@@ -1318,11 +1320,7 @@ class Settings(BaseSettings):
             raise ValueError('Grace access duration, intervals, batch size and lookback must be positive')
         return parsed
 
-    @field_validator(
-        'GRACE_ACCESS_EXPIRED_TRAFFIC_GB',
-        'GRACE_ACCESS_LIMITED_TRAFFIC_GB',
-        mode='before',
-    )
+    @field_validator('GRACE_ACCESS_TRAFFIC_GB', mode='before')
     @classmethod
     def ensure_nonnegative_grace_access_traffic(cls, value: int | str) -> int:
         parsed = int(value)
