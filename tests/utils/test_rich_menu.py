@@ -82,8 +82,86 @@ def _patch_content_sources(monkeypatch, *, promo=None, test_access=None, random_
     monkeypatch.setattr(rich_menu, 'get_random_active_message', fake_random)
 
 
+class PremiumEmojiTexts(DummyTexts):
+    """Оператор украсил тексты меню премиум-эмодзи через <tg-emoji>."""
+
+    EMOJI_ID = '6032921981795322802'
+
+    @classmethod
+    def _emoji(cls, char: str) -> str:
+        return f'<tg-emoji emoji-id="{cls.EMOJI_ID}">{char}</tg-emoji>'
+
+    def t(self, key, default=None):
+        decorated = {
+            'MAIN_MENU_RICH_SUBSCRIPTION_HEADING': f'{self._emoji("📱")} Подписка',
+            # многострочный шаблон со .format-плейсхолдерами — как в реальных текстах
+            'SUB_STATUS_ACTIVE_LONG': f'{self._emoji("💎")} Активна\n📅 до {{end_date}} ({{days}} дн.)',
+            'MAIN_MENU_RICH_DEVICES': f'{self._emoji("📱")} Устройства: {{devices}}',
+            'MAIN_MENU_RICH_BALANCE': f'{self._emoji("💰")} Баланс: {{balance}}',
+            'MAIN_MENU_ACTION_PROMPT': f'{self._emoji("👇")} Выберите действие:',
+        }
+        return decorated.get(key, default)
+
+
+class HostileTexts(DummyTexts):
+    """Тексты из админки — доверенный, но не безграничный источник разметки."""
+
+    def t(self, key, default=None):
+        if key == 'MAIN_MENU_ACTION_PROMPT':
+            return (
+                '<script>alert(1)</script>'
+                '<tg-emoji emoji-id="1" onload="steal()">💥</tg-emoji>'
+                '<a href="javascript:alert(1)">клик</a>'
+            )
+        return default
+
+
 def test_rich_flag_default_is_enabled():
     assert Settings.model_fields['MAIN_MENU_RICH_ENABLED'].default is True
+
+
+async def test_builder_keeps_premium_emoji_from_operator_texts(monkeypatch):
+    """Премиум-эмодзи из текстов меню должны доезжать тегом, а не текстом.
+
+    Регресс: rich-рендер гнал шаблоны через html.escape(), и клиент видел сырое
+    «<tg-emoji emoji-id="…">» вместо эмодзи — хотя rich-сообщения этот тег
+    поддерживают, и в классическом меню он работал.
+    """
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+    user = _make_user(_make_subscription(datetime.now(UTC)))
+
+    html_out = await rich_menu.build_main_menu_rich_html(user, PremiumEmojiTexts(), AsyncMock())
+
+    assert '&lt;tg-emoji' not in html_out, 'тег премиум-эмодзи ушёл клиенту экранированным'
+    # заголовок, статус, устройства, баланс, футер
+    assert html_out.count(f'<tg-emoji emoji-id="{PremiumEmojiTexts.EMOJI_ID}">') == 5
+    for fragment in ('Подписка', 'Активна', 'Устройства:', 'Баланс:', 'Выберите действие:'):
+        assert fragment in html_out
+    # плейсхолдеры шаблонов по-прежнему подставляются
+    assert '{balance}' not in html_out
+    assert '{devices}' not in html_out
+    # ...а данные пользователя остаются экранированными
+    assert 'Егор &lt;script&gt;' in html_out
+    assert '<script>' not in html_out
+
+
+async def test_builder_strips_disallowed_markup_from_operator_texts(monkeypatch):
+    """Из текстов пропускаем только подмножество sanitize_html, а не любой HTML."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+    user = _make_user(_make_subscription(datetime.now(UTC)))
+
+    html_out = await rich_menu.build_main_menu_rich_html(user, HostileTexts(), AsyncMock())
+
+    assert '<script>' not in html_out
+    assert '&lt;script&gt;' in html_out
+    assert 'onload' not in html_out
+    assert 'javascript:' not in html_out
+    # разрешённый тег остаётся — но без постороннего атрибута
+    assert '<tg-emoji emoji-id="1">💥</tg-emoji>' in html_out
 
 
 async def test_builder_single_subscription_structure(monkeypatch):
