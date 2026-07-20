@@ -11,11 +11,11 @@ from sqlalchemy.orm import selectinload
 
 from app.cabinet.routes.media import make_media_token
 from app.cabinet.routes.websocket import notify_admins_new_ticket, notify_admins_ticket_reply
-from app.config import settings
 from app.database.crud.ticket import TicketCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
 from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
+from app.services.support_settings_service import SupportSettingsService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.tickets import (
@@ -38,8 +38,14 @@ _PERMANENT_BLOCK_YEAR = 9999
 
 
 def _ensure_tickets_enabled() -> None:
-    """Отказать, если тикеты выключены (режим поддержки ``contact``)."""
-    if not settings.is_support_tickets_enabled():
+    """Отказать, если тикеты выключены (режим поддержки ``contact``).
+
+    Режим спрашиваем у сервиса, а не у ``settings``: persisted-значение живёт в
+    data/support_settings.json, а в ``settings`` оно попадает только при первой
+    загрузке сервиса в процессе. До неё ``settings`` отдаёт значение из ``.env``,
+    и свежеперезапущенный бот пускал бы в тикеты вопреки выключенному режиму.
+    """
+    if not SupportSettingsService.is_tickets_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail='Support tickets are disabled',

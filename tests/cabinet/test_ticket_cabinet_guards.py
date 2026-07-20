@@ -42,16 +42,27 @@ def user() -> User:
     return User(id=42, telegram_id=123456)
 
 
+def _set_mode(monkeypatch, mode: str) -> None:
+    """Выставить persisted-режим поддержки.
+
+    Guard читает режим у SupportSettingsService (а не у ``settings``), поэтому
+    подменяем его загруженные данные — реальная цепочка _load -> get_system_mode
+    -> is_tickets_enabled при этом исполняется целиком.
+    """
+    monkeypatch.setattr(tickets_route.SupportSettingsService, '_loaded', True)
+    monkeypatch.setattr(tickets_route.SupportSettingsService, '_data', {'system_mode': mode})
+
+
 @pytest.fixture
 def _tickets_enabled(monkeypatch) -> None:
     """Режим поддержки с включёнными тикетами (дефолт ``both``)."""
-    monkeypatch.setattr(tickets_route.settings, 'SUPPORT_SYSTEM_MODE', 'both')
+    _set_mode(monkeypatch, 'both')
 
 
 @pytest.fixture
 def _tickets_disabled(monkeypatch) -> None:
     """Режим ``contact`` — тикеты выключены."""
-    monkeypatch.setattr(tickets_route.settings, 'SUPPORT_SYSTEM_MODE', 'contact')
+    _set_mode(monkeypatch, 'contact')
 
 
 def _patch_crud(monkeypatch, *, blocked_until=None, has_active: bool = False) -> None:
