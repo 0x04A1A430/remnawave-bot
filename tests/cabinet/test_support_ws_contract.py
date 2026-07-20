@@ -33,6 +33,18 @@ def _session() -> support_ws.SupportWsSession:
     return support_ws.SupportWsSession(websocket=websocket, context=_context())
 
 
+@pytest.fixture(autouse=True)
+def _support_guards_open(monkeypatch):
+    """Контрактные тесты не про бан в поддержке и не про режим — открываем оба.
+
+    Подменяются источники, а не сами guard'ы: режим берётся из данных сервиса,
+    глобальная блокировка — из CRUD, так что реальная логика исполняется.
+    """
+    monkeypatch.setattr(support_ws.TicketCRUD, 'is_user_globally_blocked', AsyncMock(return_value=None))
+    monkeypatch.setattr(support_ws.SupportSettingsService, '_loaded', True)
+    monkeypatch.setattr(support_ws.SupportSettingsService, '_data', {'system_mode': 'both'})
+
+
 class _FakeDb:
     def __init__(self) -> None:
         self.added = []
@@ -173,6 +185,71 @@ async def test_owner_ticket_reply_respects_reply_block(monkeypatch) -> None:
 
     assert db.added == []
     assert session.idempotency == {}
+
+
+@pytest.mark.asyncio
+async def test_owner_ws_reply_rejected_for_globally_blocked_user(monkeypatch) -> None:
+    """REGRESSION: бан в поддержке обходился через веб-сокет.
+
+    REST-роут проверяет глобальную блокировку (_ensure_not_blocked), а WS смотрел
+    только per-ticket флаг — забаненный менял клиента и продолжал писать.
+    """
+    session = _session()
+    ticket = _ticket(user_id=session.context.user_id)
+    db = _FakeDb()
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(
+        support_ws.TicketCRUD,
+        'is_user_globally_blocked',
+        AsyncMock(return_value=datetime.max.replace(tzinfo=UTC)),
+    )
+
+    with pytest.raises(PermissionError):
+        await support_ws._handle_ticket_reply(
+            db,
+            session,
+            {
+                'ticketId': str(ticket.id),
+                'body': 'ban bypass',
+                'attachmentMediaIds': [],
+                'idempotencyKey': 'reply-blocked-1',
+            },
+        )
+
+    assert db.added == []
+    assert session.idempotency == {}
+
+
+@pytest.mark.asyncio
+async def test_owner_ws_reply_rejected_when_tickets_disabled(monkeypatch) -> None:
+    """REGRESSION: при SUPPORT_SYSTEM_MODE=contact сокет продолжал принимать ответы."""
+    session = _session()
+    ticket = _ticket(user_id=session.context.user_id)
+    db = _FakeDb()
+
+    async def fake_get_visible_ticket(_db, _context, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_get_visible_ticket', fake_get_visible_ticket)
+    monkeypatch.setattr(support_ws.SupportSettingsService, '_data', {'system_mode': 'contact'})
+
+    with pytest.raises(PermissionError):
+        await support_ws._handle_ticket_reply(
+            db,
+            session,
+            {
+                'ticketId': str(ticket.id),
+                'body': 'tickets are off',
+                'attachmentMediaIds': [],
+                'idempotencyKey': 'reply-disabled-1',
+            },
+        )
+
+    assert db.added == []
 
 
 @pytest.mark.asyncio

@@ -35,6 +35,7 @@ from app.cabinet.routes.media import (
 from app.cabinet.routes.websocket import notify_admins_ticket_reply, notify_user_ticket_reply
 from app.config import settings
 from app.database.crud.rbac import SUPERADMIN_LEVEL, UserRoleCRUD
+from app.database.crud.ticket import TicketCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
@@ -43,6 +44,7 @@ from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
 from app.services.permission_service import PermissionService
 from app.services.rbac_bootstrap_service import is_user_admin_by_env
+from app.services.support_settings_service import SupportSettingsService
 from app.services.user_revival_service import NotDeletedError, revive_deleted_user
 
 
@@ -833,6 +835,16 @@ async def _handle_ticket_reply(db: AsyncSession, session: SupportWsSession, payl
         raise RuntimeError('TICKET_CLOSED')
     if session.context.role == 'owner' and _is_ticket_reply_blocked(ticket):
         raise PermissionError('Replies to this ticket are blocked')
+    if session.context.role == 'owner':
+        # Паритет с REST-роутом (_ensure_tickets_enabled / _ensure_not_blocked).
+        # Здесь проверялась только per-ticket блокировка, поэтому глобальный бан в
+        # поддержке и выключённые тикеты обходились сменой клиента: сокет принимал
+        # ответ, который POST /cabinet/tickets/{id}/messages уже отклонял.
+        if not SupportSettingsService.is_tickets_enabled():
+            raise PermissionError('Support tickets are disabled')
+        blocked_until = await TicketCRUD.is_user_globally_blocked(db, session.context.user_id)
+        if blocked_until:
+            raise PermissionError('You are blocked from contacting support')
 
     replay = _check_idempotency(session, payload.get('idempotencyKey'), payload)
     if replay is not None:
