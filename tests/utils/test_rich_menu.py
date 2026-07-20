@@ -164,6 +164,42 @@ async def test_builder_strips_disallowed_markup_from_operator_texts(monkeypatch)
     assert '<tg-emoji emoji-id="1">💥</tg-emoji>' in html_out
 
 
+async def test_unlimited_devices_shown_as_infinity_not_hidden(monkeypatch):
+    """device_limit = 0 (HWID выключен) — безлимит, а не «нет устройств».
+
+    Регресс: строка про устройства пряталась целиком (`if device_limit:`),
+    поэтому у юзера с выключенным HWID её просто не было в меню.
+    """
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+    subscription = _make_subscription(datetime.now(UTC))
+    subscription.device_limit = 0
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(subscription), DummyTexts(), AsyncMock())
+
+    assert 'Устройства: ∞' in html_out
+    assert 'Устройства: 0' not in html_out
+
+
+async def test_unlimited_devices_in_multi_tariff_table(monkeypatch):
+    """То же для строки расхода в таблице мультитарифа."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+    subscription = _make_subscription(datetime.now(UTC))
+    subscription.device_limit = 0
+
+    async def fake_get_all(db, user_id):
+        return [subscription]
+
+    monkeypatch.setattr(rich_menu, 'get_all_subscriptions_by_user_id', fake_get_all)
+
+    html_out = await rich_menu.build_main_menu_rich_html(_make_user(subscription), DummyTexts(), AsyncMock())
+
+    assert '📱 ∞' in html_out
+    assert '📱 0' not in html_out
+
+
 async def test_builder_single_subscription_structure(monkeypatch):
     _patch_content_sources(monkeypatch)
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)

@@ -45,6 +45,7 @@ from app.database.crud.subscription import get_all_subscriptions_by_user_id
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user_message import get_random_active_message
 from app.database.models import User
+from app.localization.texts import Texts
 from app.utils.miniapp_buttons import build_miniapp_startapp_url
 from app.utils.promo_offer import build_promo_offer_hint, build_test_access_hint
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -407,8 +408,9 @@ def _build_subscriptions_table(subscriptions, texts) -> str:
         if actual_status in {'active', 'trial', 'limited'}:
             usage_parts = [f'📊 {html.escape(_traffic_usage_text(subscription, texts))}']
             device_limit = getattr(subscription, 'device_limit', None)
-            if device_limit:
-                usage_parts.append(f'📱 {device_limit}')
+            if device_limit is not None:
+                # 0 — безлимит (HWID выключен), а не «нет устройств»: строку не прячем
+                usage_parts.append(f'📱 {Texts.format_device_limit(device_limit)}')
             connect_link = _connect_link(subscription, texts)
             if connect_link:
                 usage_parts.append(connect_link)
@@ -468,9 +470,9 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
             _rich_text(traffic_template).replace('{traffic}', html.escape(_traffic_usage_text(subscription, texts)))
         )
         device_limit = getattr(subscription, 'device_limit', None)
-        if device_limit:
+        if device_limit is not None:
             devices_template = texts.t('MAIN_MENU_RICH_DEVICES', '📱 Устройства: {devices}')
-            lines.append(_rich_text(devices_template).replace('{devices}', str(device_limit)))
+            lines.append(_rich_text(devices_template).replace('{devices}', Texts.format_device_limit(device_limit)))
         connect_link = _connect_link(subscription, texts)
         if connect_link:
             lines.append(connect_link)

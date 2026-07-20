@@ -36,7 +36,7 @@ from app.keyboards.inline import (
     get_trial_keyboard,
     get_updated_subscription_settings_keyboard,
 )
-from app.localization.texts import get_texts
+from app.localization.texts import Texts, get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveConfigurationError
@@ -364,7 +364,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                     f'<b>📦 {html.escape(tariff.name)}</b>',
                     f'Тип: {tariff_type_str}',
                     f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит',
-                    f'Устройства: {tariff.device_limit}',
+                    f'Устройства: {Texts.format_device_limit(tariff.device_limit)}',
                 ]
 
                 if is_daily:
@@ -475,7 +475,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             '',
         )
 
-    device_limit_display = str(subscription.device_limit)
+    device_limit_display = Texts.format_device_limit(subscription.device_limit)
 
     message = message_template.format(
         full_name=html.escape(db_user.full_name or ''),
@@ -1810,7 +1810,7 @@ async def handle_extend_subscription(
     ]
 
     if settings.is_devices_selection_enabled():
-        renewal_lines.append(f'📱 Устройств: {subscription.device_limit}')
+        renewal_lines.append(f'📱 Устройств: {Texts.format_device_limit(subscription.device_limit)}')
 
     renewal_lines.extend(
         [
@@ -2975,7 +2975,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
             '',
         )
 
-    devices_limit_display = str(subscription.device_limit)
+    devices_limit_display = Texts.format_device_limit(subscription.device_limit)
 
     settings_text = settings_template.format(
         countries_count=len(subscription.connected_squads or []),
