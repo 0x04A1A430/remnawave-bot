@@ -2714,7 +2714,7 @@ class MonitoringService:
 
                 sla_enabled_runtime = SupportSettingsService.get_sla_enabled()
             except Exception:
-                sla_enabled_runtime = getattr(settings, 'SUPPORT_TICKET_SLA_ENABLED', True)
+                sla_enabled_runtime = getattr(settings, 'SUPPORT_TICKET_SLA_ENABLED', False)
             if not sla_enabled_runtime:
                 return
             if not self.bot:
@@ -2727,8 +2727,8 @@ class MonitoringService:
 
                 sla_minutes = max(1, int(SupportSettingsService.get_sla_minutes()))
             except Exception:
-                sla_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 5)))
-            cooldown_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES', 15)))
+                sla_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 60)))
+            cooldown_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES', 30)))
             now = datetime.now(UTC)
             stale_before = now - timedelta(minutes=sla_minutes)
             cooldown_before = now - timedelta(minutes=cooldown_minutes)
@@ -2803,7 +2803,7 @@ class MonitoringService:
 
     async def _sla_loop(self):
         try:
-            interval_seconds = max(10, int(getattr(settings, 'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS', 60)))
+            interval_seconds = max(10, int(getattr(settings, 'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS', 300)))
         except Exception:
             interval_seconds = 60
         while self.is_running:

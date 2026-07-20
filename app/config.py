@@ -37,11 +37,13 @@ class Settings(BaseSettings):
     SUPPORT_USERNAME: str = '@support'
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = 'both'  # one of: tickets, contact, both
-    # SLA for support tickets
-    SUPPORT_TICKET_SLA_ENABLED: bool = True
-    SUPPORT_TICKET_SLA_MINUTES: int = 5
-    SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 60
-    SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 15
+    # SLA for support tickets. Дефолты совпадают с .env.example: без него бот
+    # поднимался с включённым SLA, порогом 5 минут и повтором раз в 15 — админам
+    # летел спам напоминаний по каждому тикету.
+    SUPPORT_TICKET_SLA_ENABLED: bool = False
+    SUPPORT_TICKET_SLA_MINUTES: int = 60
+    SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 300
+    SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 30
 
     # MiniApp tickets settings
     MINIAPP_TICKETS_ENABLED: bool = True  # Enable/disable tickets section in miniapp

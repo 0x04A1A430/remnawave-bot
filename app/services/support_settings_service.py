@@ -171,7 +171,7 @@ class SupportSettingsService:
         cls._load()
         if 'ticket_sla_enabled' in cls._data:
             return bool(cls._data['ticket_sla_enabled'])
-        return bool(getattr(settings, 'SUPPORT_TICKET_SLA_ENABLED', True))
+        return bool(getattr(settings, 'SUPPORT_TICKET_SLA_ENABLED', False))
 
     @classmethod
     def set_sla_enabled(cls, enabled: bool) -> bool:
@@ -185,7 +185,7 @@ class SupportSettingsService:
         minutes = cls._data.get('ticket_sla_minutes')
         if isinstance(minutes, int) and minutes > 0:
             return minutes
-        return int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 5))
+        return int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 60))
 
     @classmethod
     def set_sla_minutes(cls, minutes: int) -> bool:
