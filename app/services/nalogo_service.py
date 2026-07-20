@@ -776,8 +776,12 @@ async def send_nalogo_receipt_notifications(
             error=sanitize_proxy_error(download_error),
         )
 
-    async def _deliver(chat_id: int, caption: str, thread_id: int | None = None) -> None:
-        """Отправляет чек файлом (если скачался) или текстом со ссылкой."""
+    async def _deliver(chat_id: int, caption: str, thread_id: int | None = None) -> bool:
+        """Отправляет чек файлом (если скачался) или текстом со ссылкой.
+
+        Возвращает True, если получателю ушёл сам файл чека, и False, если
+        досталась только ссылка (файла не было либо Telegram его отверг).
+        """
         if receipt_file is not None:
             from aiogram.exceptions import TelegramBadRequest, TelegramEntityTooLarge
 
@@ -800,7 +804,7 @@ async def send_nalogo_receipt_notifications(
                         parse_mode='HTML',
                         reply_markup=keyboard,
                     )
-                return
+                return True
             except (TelegramBadRequest, TelegramEntityTooLarge) as file_error:
                 # Telegram отверг сам файл (битая картинка, превышен размер,
                 # caption > 1024 символов). По 422-ФЗ чек обязан дойти до
@@ -819,12 +823,13 @@ async def send_nalogo_receipt_notifications(
             reply_markup=keyboard,
             disable_web_page_preview=True,
         )
+        return False
 
     # --- Отправка пользователю ---
     tg_delivered = False
     if telegram_user_id:
         try:
-            await _deliver(
+            file_delivered = await _deliver(
                 telegram_user_id,
                 (
                     '🧾 <b>Чек по вашему платежу сформирован</b>\n\n'
@@ -832,9 +837,16 @@ async def send_nalogo_receipt_notifications(
                     'Чек зарегистрирован в ФНС через сервис «Мой налог».'
                 ),
             )
-            tg_delivered = True
+            # Ссылка вместо файла — для клиента под VPN это не доставка:
+            # lknpd.nalog.ru у него не открывается (см. _download_receipt_file).
+            # Если файл чека у нас есть, а Telegram его отверг, ниже отработает
+            # email-фоллбек и довезёт чек вложением.
+            tg_delivered = file_delivered or receipt_file is None
             logger.info(
-                'Чек NaloGO отправлен пользователю', telegram_user_id=telegram_user_id, receipt_uuid=receipt_uuid
+                'Чек NaloGO отправлен пользователю',
+                telegram_user_id=telegram_user_id,
+                receipt_uuid=receipt_uuid,
+                as_file=file_delivered,
             )
         except Exception as error:
             from aiogram.exceptions import TelegramForbiddenError, TelegramNetworkError, TelegramServerError

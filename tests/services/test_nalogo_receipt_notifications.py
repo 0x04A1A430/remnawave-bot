@@ -460,6 +460,38 @@ async def test_blocked_bot_falls_back_to_email_from_db(monkeypatch):
     assert send_mock.call_args.args[4] is None
 
 
+async def test_telegram_rejected_file_falls_back_to_email_with_attachment(monkeypatch):
+    """Telegram отверг файл — ссылка в чате не считается доставкой чека.
+
+    Регрессия: _deliver молча деградировал до сообщения со ссылкой, флаг
+    «доставлено в Telegram» всё равно выставлялся, и email-фоллбек не
+    срабатывал. Клиент под VPN оставался с неоткрывающейся ссылкой lknpd,
+    хотя целый файл чека лежал у нас на руках.
+    """
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(return_value=(b'jpeg-bytes', 'image/jpeg')),
+    )
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+    bot.send_photo = AsyncMock(side_effect=TelegramBadRequest(method=MagicMock(), message='PHOTO_INVALID_DIMENSIONS'))
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+        user_email='buyer@example.com',
+    )
+
+    # ссылка в Telegram ушла, но сам файл — нет, поэтому догоняем письмом с вложением
+    assert bot.send_message.await_count == 1
+    send_mock.assert_called_once()
+    assert send_mock.call_args.args[4] == [('receipt_uuid-1.jpg', b'jpeg-bytes', 'image/jpeg')]
+
+
 async def test_delivered_to_telegram_skips_email(monkeypatch):
     """Чек дошёл в Telegram — письмо не дублируем."""
     monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
