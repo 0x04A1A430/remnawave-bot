@@ -256,13 +256,9 @@ def test_limited_incident_key_tracks_end_limit_and_reset_timestamp() -> None:
     assert unknown.endswith(':unknown')
     assert build_incident_key(billing, GraceReason.LIMITED) == unknown
     assert (
-        build_incident_key(replace(billing, end_at=billing.end_at + timedelta(days=30)), GraceReason.LIMITED)
-        != unknown
+        build_incident_key(replace(billing, end_at=billing.end_at + timedelta(days=30)), GraceReason.LIMITED) != unknown
     )
-    assert (
-        build_incident_key(replace(billing, traffic_limit_bytes=20 * GIB), GraceReason.LIMITED)
-        != unknown
-    )
+    assert build_incident_key(replace(billing, traffic_limit_bytes=20 * GIB), GraceReason.LIMITED) != unknown
     assert (
         build_incident_key(
             billing,
