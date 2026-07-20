@@ -308,11 +308,15 @@ async def test_blocked_user_is_not_retried_as_message(monkeypatch):
 
 
 class _FakeResponse:
-    def __init__(self, *, status=200, content_type='image/jpeg', body=b'jpeg-bytes', content_length=None):
+    def __init__(self, *, status=200, content_type='image/jpeg', body=b'jpeg-bytes', content_length=None, chunks=None):
         self.status = status
         self.headers = {'Content-Type': content_type}
         self.content_length = content_length if content_length is not None else len(body)
-        self.content = SimpleNamespace(read=AsyncMock(return_value=body))
+        # Честная семантика StreamReader.read(n): отдаёт тело кусками («до n
+        # байт» за вызов), в конце — b'' (EOF). Одиночный read(n) в проде
+        # возвращал первый кусок и обрезал JPEG — фейк обязан это ловить.
+        pieces = list(chunks) if chunks is not None else [body]
+        self.content = SimpleNamespace(read=AsyncMock(side_effect=[*pieces, b'', b'']))
 
     async def __aenter__(self):
         return self
@@ -355,6 +359,20 @@ async def test_download_accepts_image_and_pdf(monkeypatch):
 
     _patch_aiohttp(monkeypatch, _FakeResponse(content_type='application/pdf', body=b'%PDF'))
     assert await _REAL_DOWNLOAD('https://x/print') == (b'%PDF', 'application/pdf')
+
+
+async def test_download_reads_multi_chunk_body_to_the_end(monkeypatch):
+    """Тело приходит несколькими кусками — файл обязан склеиться целиком.
+
+    Регрессия: одиночный resp.content.read(n) отдаёт «до n байт» (первый
+    буфер), чек уезжал клиенту обрезанным JPEG без хвоста.
+    """
+    _patch_aiohttp(
+        monkeypatch,
+        _FakeResponse(content_type='image/jpeg', chunks=[b'head-', b'middle-', b'tail'], content_length=0),
+    )
+
+    assert await _REAL_DOWNLOAD('https://x/print') == (b'head-middle-tail', 'image/jpeg')
 
 
 async def test_download_rejects_oversized_receipt(monkeypatch):
