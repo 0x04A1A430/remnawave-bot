@@ -386,3 +386,115 @@ async def test_download_rejects_oversized_receipt(monkeypatch):
     # Content-Length занижен/отсутствует, но тело превышает лимит при чтении
     _patch_aiohttp(monkeypatch, _FakeResponse(body=b'x' * (_RECEIPT_MAX_BYTES + 1), content_length=0))
     assert await _REAL_DOWNLOAD('https://x/print') is None
+
+
+# --- Email-фоллбек: чек уходит на почту, когда Telegram-доставка невозможна ---
+
+
+def _patch_email(monkeypatch, configured=True):
+    # Пакет app.cabinet.services реэкспортирует синглтон email_service, который
+    # шадовит одноимённый сабмодуль при обычном import — берём модуль через
+    # importlib, чтобы патчить именно тот инстанс, что использует продовый код.
+    import importlib
+
+    _email_module = importlib.import_module('app.cabinet.services.email_service')
+
+    send_mock = MagicMock(return_value=True)
+    monkeypatch.setattr(_email_module.email_service, 'send_email', send_mock)
+    monkeypatch.setattr(_email_module.email_service, 'is_configured', lambda: configured)
+    return send_mock
+
+
+async def test_email_only_user_gets_receipt_by_email(monkeypatch):
+    """У покупателя нет Telegram (кабинет/лендинг) — чек уходит на почту файлом."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    monkeypatch.setattr(
+        'app.services.nalogo_service._download_receipt_file',
+        AsyncMock(return_value=(b'jpeg-bytes', 'image/jpeg; charset=binary')),
+    )
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=None,
+        user_email='buyer@example.com',
+    )
+
+    bot.send_photo.assert_not_awaited()
+    bot.send_message.assert_not_awaited()
+    send_mock.assert_called_once()
+    to_email, subject, body_html, body_text, attachments = send_mock.call_args.args
+    assert to_email == 'buyer@example.com'
+    assert 'Чек' in subject
+    assert '/print' in body_html
+    # charset-суффикс Content-Type отрезан, вложение — исходные байты чека
+    assert attachments == [('receipt_uuid-1.jpg', b'jpeg-bytes', 'image/jpeg')]
+
+
+async def test_blocked_bot_falls_back_to_email_from_db(monkeypatch):
+    """Юзер заблокировал бота — почту берём из БД, чек уходит письмом."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    _patch_user_lookup(
+        monkeypatch,
+        SimpleNamespace(first_name='Вася', last_name=None, username=None, email='vasya@example.com'),
+    )
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+    bot.send_message = AsyncMock(side_effect=TelegramForbiddenError(method=MagicMock(), message='blocked'))
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+    )
+
+    send_mock.assert_called_once()
+    assert send_mock.call_args.args[0] == 'vasya@example.com'
+    # файл не скачался (autouse-мок) — письмо уходит без вложений, только со ссылкой
+    assert send_mock.call_args.args[4] is None
+
+
+async def test_delivered_to_telegram_skips_email(monkeypatch):
+    """Чек дошёл в Telegram — письмо не дублируем."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None, raising=False)
+    _patch_user_lookup(monkeypatch, None)
+    send_mock = _patch_email(monkeypatch)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=111,
+        user_email='buyer@example.com',
+    )
+
+    assert bot.send_message.await_count == 1
+    send_mock.assert_not_called()
+
+
+async def test_email_not_sent_when_smtp_unconfigured(monkeypatch):
+    """SMTP не настроен — не падаем, чек остаётся хотя бы в админ-топике."""
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', '-100500', raising=False)
+    monkeypatch.setattr(settings, 'ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID', None, raising=False)
+    send_mock = _patch_email(monkeypatch, configured=False)
+    bot = _bot()
+
+    await send_nalogo_receipt_notifications(
+        bot=bot,
+        nalogo_service=_nalogo(),
+        receipt_uuid='uuid-1',
+        amount_kopeks=10000,
+        telegram_user_id=None,
+        user_email='buyer@example.com',
+    )
+
+    send_mock.assert_not_called()
+    assert bot.send_message.await_count == 1  # админ-топик
