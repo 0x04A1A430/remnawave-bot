@@ -16,12 +16,16 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+permissions:
+  contents: read
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      security-events: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -88,6 +92,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -102,6 +107,26 @@ jobs:
             VCS_REF=${{ steps.version.outputs.short_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Trivy сканирует запушенный образ по digest и выгружает SARIF в
+      # Security → Code scanning (персистентные находки, в т.ч. на push в main,
+      # где Docker Scout не запускается). Пока non-blocking (exit-code: 0).
+      - name: Scan image with Trivy
+        if: steps.version.outputs.should_push == 'true'
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Upload Trivy results to Security tab
+        if: steps.version.outputs.should_push == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
 
       - name: Generate security report
         uses: docker/scout-action@v1
