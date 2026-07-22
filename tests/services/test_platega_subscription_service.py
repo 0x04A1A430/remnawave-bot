@@ -76,6 +76,29 @@ async def test_create_subscription_omits_description_when_not_provided(monkeypat
     assert 'description' not in captured['json_data']
 
 
+@pytest.mark.asyncio
+async def test_create_subscription_truncates_long_cyrillic_description(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure(monkeypatch)
+    service = PlategaService()
+    captured = {}
+
+    async def fake_request(method, endpoint, *, json_data=None, params=None):
+        captured.update(json_data=json_data)
+        return {'transactionId': 'tx-4', 'status': 'PENDING'}
+
+    monkeypatch.setattr(service, '_request', fake_request)
+    long_description = 'Премиум тариф на 3 месяца безлимит и ещё немного текста'
+    await service.create_subscription(amount=199.0, currency='RUB', interval=3, description=long_description)
+
+    description_in_body = captured['json_data']['description']
+    # Verify truncated to 64 bytes
+    assert len(description_in_body.encode('utf-8')) <= 64
+    # Verify it's a valid UTF-8 string and a prefix of the original
+    assert long_description.startswith(description_in_body)
+    # Verify it's not empty
+    assert description_in_body
+
+
 # --- get_subscription ---
 
 

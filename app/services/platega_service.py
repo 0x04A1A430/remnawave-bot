@@ -114,7 +114,7 @@ class PlategaService:
         }
 
         if description:
-            body['description'] = description
+            body['description'] = self._sanitize_description(description, self._description_max_length)
 
         # Тот же выбор версии эндпоинта, что и в create_payment (см. #2934):
         # v1 POST /transaction/process, v2 POST /v2/transaction/process.
