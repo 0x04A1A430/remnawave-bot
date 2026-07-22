@@ -768,3 +768,38 @@ def test_bridge_only_emits_whitelisted_event_names():
         'message.created',
     }
     assert {'message.created', 'ticket.status.updated'} <= allowed
+
+
+@pytest.mark.asyncio
+async def test_bridge_consumes_cabinet_emit_payload(monkeypatch):
+    # The cabinet/mini-app reply routes emit this exact payload shape; the bridge
+    # must consume it and produce a contract-valid message.created event.
+    captured = {}
+
+    async def fake_broadcast(_db, _ticket, event):
+        captured['event'] = event
+
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+    monkeypatch.setattr(support_ws, 'AsyncSessionLocal', lambda: _SessionCtx())
+
+    msg = _message(id=501, ticket_id=3, message_text='from cabinet')
+    ticket = _ticket(id=3, messages=[msg])
+
+    async def fake_load(_db, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_load_ticket_for_event', fake_load)
+
+    cabinet_payload = {
+        'ticket_id': 3,
+        'message_id': 501,
+        'user_id': 10,
+        'is_from_admin': False,
+        'message_text': 'from cabinet',
+        'has_media': False,
+        'status': 'open',
+    }
+    await support_ws._bridge_message_added(cabinet_payload)
+
+    assert captured['event']['event'] == 'message.created'
+    assert captured['event']['payload']['message']['id'] == '501'
