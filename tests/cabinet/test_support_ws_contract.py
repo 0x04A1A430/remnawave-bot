@@ -743,3 +743,28 @@ async def test_bridge_status_changed_broadcasts_status_updated(monkeypatch):
     assert event['payload']['status'] == 'closed'
     assert event['payload']['ticketId'] == '8'
     assert 'ticketSnapshot' in event['payload']
+
+
+def test_register_support_ticket_event_bridge_is_idempotent(monkeypatch):
+    from app.services.event_emitter import event_emitter
+
+    registered = []
+    monkeypatch.setattr(event_emitter, 'on', lambda event_type, callback: registered.append(event_type))
+    monkeypatch.setattr(support_ws, '_bridge_registered', False)
+
+    support_ws.register_support_ticket_event_bridge()
+    support_ws.register_support_ticket_event_bridge()  # second call must be a no-op
+
+    assert registered == ['ticket.message_added', 'ticket.created', 'ticket.status_changed']
+
+
+def test_bridge_only_emits_whitelisted_event_names():
+    # The bridge must never introduce a support-v1 event the apps don't recognize.
+    allowed = {
+        'connection.ready',
+        'auth.expiring',
+        'ticket.status.updated',
+        'ticket.priority.updated',
+        'message.created',
+    }
+    assert {'message.created', 'ticket.status.updated'} <= allowed

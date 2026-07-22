@@ -1619,3 +1619,44 @@ async def _bridge_status_changed(payload: dict[str, Any]) -> None:
         if ticket is None:
             return
         await _broadcast_status_updated(db, ticket, payload.get('old_status'))
+
+
+async def _run_bridge(handler: Any, payload: dict[str, Any]) -> None:
+    try:
+        await handler(payload)
+    except Exception as exc:  # never let a bridge failure escape into the emitter
+        logger.warning('Support ticket bridge delivery failed', error=str(exc))
+
+
+def _schedule_bridge(handler: Any, event_data: dict[str, Any]) -> None:
+    raw = event_data.get('payload')
+    payload = raw if isinstance(raw, dict) else {}
+    task = asyncio.create_task(_run_bridge(handler, payload))
+    _bridge_tasks.add(task)
+    task.add_done_callback(_bridge_tasks.discard)
+
+
+def _bridge_listener_message_added(event_data: dict[str, Any]) -> None:
+    _schedule_bridge(_bridge_message_added, event_data)
+
+
+def _bridge_listener_ticket_created(event_data: dict[str, Any]) -> None:
+    _schedule_bridge(_bridge_ticket_created, event_data)
+
+
+def _bridge_listener_status_changed(event_data: dict[str, Any]) -> None:
+    _schedule_bridge(_bridge_status_changed, event_data)
+
+
+def register_support_ticket_event_bridge() -> None:
+    """Attach the support-socket bridge to the global event emitter (idempotent)."""
+    global _bridge_registered
+    if _bridge_registered:
+        return
+    from app.services.event_emitter import event_emitter
+
+    event_emitter.on('ticket.message_added', _bridge_listener_message_added)
+    event_emitter.on('ticket.created', _bridge_listener_ticket_created)
+    event_emitter.on('ticket.status_changed', _bridge_listener_status_changed)
+    _bridge_registered = True
+    logger.info('Support ticket event bridge registered')
