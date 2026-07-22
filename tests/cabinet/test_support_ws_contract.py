@@ -601,3 +601,95 @@ async def test_ws_owner_reply_sets_open_status_and_resets_sla(monkeypatch) -> No
 
     assert ticket.status == 'open'
     assert ticket.last_sla_reminder_at is None
+
+
+# ---------------------------------------------------------------------------
+# Support ticket event bridge (event_emitter -> support socket)
+# ---------------------------------------------------------------------------
+
+
+def _message(**overrides):
+    base = {
+        'id': 501,
+        'ticket_id': 3,
+        'user_id': 10,
+        'is_from_admin': False,
+        'message_text': 'hello',
+        'media_items': None,
+        'media_file_id': None,
+        'media_type': None,
+        'media_caption': None,
+        'created_at': datetime(2026, 7, 9, 0, 2, tzinfo=UTC),
+    }
+    base.update(overrides)
+    return types.SimpleNamespace(**base)
+
+
+class _SessionCtx:
+    """Minimal async context manager standing in for AsyncSessionLocal()."""
+
+    async def __aenter__(self):
+        return _FakeDb()
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+def test_pick_message_prefers_id_then_last():
+    m1 = _message(id=1, created_at=datetime(2026, 7, 9, 0, 0, tzinfo=UTC))
+    m2 = _message(id=2, created_at=datetime(2026, 7, 9, 0, 5, tzinfo=UTC))
+    ticket = _ticket(messages=[m1, m2])
+    assert support_ws._pick_message(ticket, 1) is m1
+    assert support_ws._pick_message(ticket, None) is m2
+    assert support_ws._pick_message(ticket, 999) is m2
+    assert support_ws._pick_message(_ticket(messages=[]), None) is None
+
+
+@pytest.mark.asyncio
+async def test_bridge_message_added_broadcasts_contract_message_created(monkeypatch):
+    captured = {}
+
+    async def fake_broadcast(_db, ticket, event):
+        captured['ticket'] = ticket
+        captured['event'] = event
+
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+    monkeypatch.setattr(support_ws, 'AsyncSessionLocal', lambda: _SessionCtx())
+
+    msg = _message(id=501, ticket_id=3, user_id=10, is_from_admin=False, message_text='hi')
+    ticket = _ticket(id=3, messages=[msg])
+
+    async def fake_load(_db, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_load_ticket_for_event', fake_load)
+
+    await support_ws._bridge_message_added({'ticket_id': 3, 'message_id': 501})
+
+    event = captured['event']
+    assert event['event'] == 'message.created'
+    assert event['payload']['ticketId'] == '3'
+    assert event['payload']['message']['id'] == '501'
+    assert event['payload']['message']['body'] == 'hi'
+    assert 'ticketSnapshot' in event['payload']
+    assert captured['ticket'] is ticket
+
+
+@pytest.mark.asyncio
+async def test_bridge_message_added_noops_when_ticket_missing(monkeypatch):
+    called = False
+
+    async def fake_broadcast(_db, _ticket, _event):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+    monkeypatch.setattr(support_ws, 'AsyncSessionLocal', lambda: _SessionCtx())
+
+    async def fake_load(_db, _ticket_id):
+        return None
+
+    monkeypatch.setattr(support_ws, '_load_ticket_for_event', fake_load)
+
+    await support_ws._bridge_message_added({'ticket_id': 999})
+    assert called is False

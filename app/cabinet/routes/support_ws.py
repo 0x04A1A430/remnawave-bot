@@ -1512,3 +1512,71 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
                 await websocket.close()
             except RuntimeError:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# Support ticket event bridge
+#
+# Republishes the global event_emitter ticket events onto this mobile support
+# socket so live updates reach the admin apps for ALL origins (Telegram, Web
+# API, cabinet, mini-app) — not just this socket's own self-echo. Registered
+# once at app startup (see app/webserver/unified_app.py). Emits ONLY the
+# whitelisted support-v1 events (message.created / ticket.status.updated).
+# ---------------------------------------------------------------------------
+
+_bridge_registered = False
+_bridge_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _coerce_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _load_ticket_for_event(db: AsyncSession, ticket_id: int) -> Ticket | None:
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.id == ticket_id)
+        .options(selectinload(Ticket.messages), selectinload(Ticket.user))
+    )
+    return result.scalar_one_or_none()
+
+
+def _pick_message(ticket: Ticket, message_id: int | None) -> TicketMessage | None:
+    messages = sorted(ticket.messages or [], key=lambda item: item.created_at)
+    if not messages:
+        return None
+    if message_id is not None:
+        for message in messages:
+            if message.id == message_id:
+                return message
+    return messages[-1]
+
+
+async def _broadcast_message_created(db: AsyncSession, ticket: Ticket, message: TicketMessage) -> None:
+    event = _message_event(
+        'message.created',
+        {
+            'ticketId': str(ticket.id),
+            'message': _message_snapshot(message),
+            'ticketSnapshot': _ticket_snapshot(ticket),
+        },
+        ticket=ticket,
+    )
+    await support_ws_manager.broadcast_ticket_event(db, ticket, event)
+
+
+async def _bridge_message_added(payload: dict[str, Any]) -> None:
+    ticket_id = _coerce_int(payload.get('ticket_id'))
+    if ticket_id is None:
+        return
+    async with AsyncSessionLocal() as db:
+        ticket = await _load_ticket_for_event(db, ticket_id)
+        if ticket is None:
+            return
+        message = _pick_message(ticket, _coerce_int(payload.get('message_id')))
+        if message is None:
+            return
+        await _broadcast_message_created(db, ticket, message)
