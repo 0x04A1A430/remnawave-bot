@@ -129,7 +129,7 @@ Reconciler (_monitoring_cycle)
 `app/handlers/subscription/autopay.py` (рядом с существующим меню автоплатежа):
 - Пункт «⚡ Автопродление через СБП» на управлении подпиской (виден при `is_platega_recurrent_enabled()`).
 - Включить → создать подписку → отдать кнопку-ссылку «Подтвердить привязку в банке» (`redirect`). Статус PENDING до `SUBSCRIPTION_ACTIVATED`.
-- Показ статуса (ACTIVE/PENDING/PAST_DUE), кнопка «Отключить».
+- Показ статуса (ACTIVE/PENDING/PAST_DUE) и **кнопка «Отменить автооплату»** → `cancel_platega_sbp_subscription` (`POST /subscription/{id}/cancel` в Platega + status=CANCELLED локально). Идемпотентно.
 - Уведомления по коллбекам (`CONFIRMED` — «продлено», `CANCELED`/`PAST_DUE` — «списание не прошло»). Тексты в `app/localization`.
 - Включение гасит balance-autopay-тоггл (и наоборот) — общий guard.
 
@@ -137,13 +137,28 @@ Reconciler (_monitoring_cycle)
 
 - **API** `src/api/subscription.ts` (через `bodyWithSubId`/`withSubId`): `enableSbpRecurring`, `getSbpRecurring`, `cancelSbpRecurring`. Экспорт в `src/api/index.ts`. Бэкенд-эндпоинты — в `app/cabinet/routes/subscription_modules/` (новый модуль рядом с `autopay.py`).
 - **Типы** `src/types/index.ts` рядом с `SavedCard`: `SbpRecurring { status, interval, amount_kopeks, next_charge_at, redirect_url? }`.
-- **UI**:
+- **UI (пользователь)**:
   - Тоггл «Автопродление через СБП» на `Subscription.tsx` рядом с autopay-блоком (:1034), **взаимоисключение** с autopay в UI + на бэке. Pending-состояние с кнопкой «Подтвердить в банке» → `openPaymentUrl(redirect)` (важно для СБП-хендофа в Telegram WebView).
-  - СБП-привязка выводится в списке `SavedCards.tsx` (гейт `recurrent_enabled`) как метод автопродления с «Отвязать» → `cancelSbpRecurring`.
-- **i18n**: строки во все 4 локали (`ru/en/fa/zh`) под `subscription.*` и `balance.savedCards.*`; `locales.test.ts` держит паритет.
+  - Явная **кнопка «Отменить автооплату»** (когда статус ACTIVE/PENDING) → `cancelSbpRecurring`. СБП-привязка также выводится в списке `SavedCards.tsx` (гейт `recurrent_enabled`) с «Отвязать» → тот же `cancelSbpRecurring`.
+- **i18n**: строки во все 4 локали (`ru/en/fa/zh`) под `subscription.*`, `balance.savedCards.*`, `admin.users.*`; `locales.test.ts` держит паритет.
 - **WS**: события `sbp_recurring.confirmed` / `.failed` / `.activated` в `WebSocketNotifications.tsx` рядом с `autopay.*`.
 
-## 9. Спецификация коллбеков
+### Админка кабинета (раздел юзеров)
+- **Бэкенд** (`app/cabinet/routes/admin_users.py`): `_build_subscription_info` / `UserSubscriptionInfo` (~:227/:254) дополняется полями `sbp_recurring_status` и `sbp_recurring_id`, чтобы `get_user_detail` (:698) отдавал статус автооплаты по каждой подписке. Новый эндпоинт **`POST /{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring`** → `cancel_platega_sbp_subscription` (проверка прав админа, идемпотентно).
+- **Фронтенд**: в `src/components/admin/userDetail/SubscriptionTab.tsx` — по каждой подписке юзера показать **статус автооплаты** (если включена) и **кнопку «Отменить автооплату»** → новый admin-эндпоинт. В списке `src/pages/AdminUsers.tsx` — индикатор у юзера, если автооплата включена хотя бы на одной подписке. API — в админском клиенте (`src/api/admin*`), инвалидация `['admin-user-detail', userId]`.
+
+## 9. Отмена автосписания при удалении/отзыве подписки
+
+Если подписка удаляется или отзывается, Platega **обязана** перестать списывать — иначе юзер платит за несуществующую подписку. Общий best-effort хелпер `cancel_platega_recurring_for_subscription(db, subscription_id)` (находит активную `PlategaSubscription` по `subscription_id`, вызывает `cancel_platega_sbp_subscription`) вызывается из **каждой** точки удаления/отзыва:
+
+- **Бот, админ:** `app/handlers/admin/users.py` `confirm_subscription_deletion` (~:6443, лог «Админ удалил подписку пользователя» :3475).
+- **Кабинет, юзер:** `app/cabinet/routes/subscription_modules/multi_tariff.py:108` `delete_subscription`.
+- **Кабинет, админ:** `app/cabinet/routes/admin_users.py:2794` `reset-subscription` (и прочие admin-пути удаления/сброса подписки).
+- **Сервис:** `subscription_service.py:866` `revoke_subscription` (общий низкоуровневый отзыв).
+
+Best-effort: провал отмены в Platega **не блокирует** удаление подписки (логируем, reconciler добьёт через `list_subscriptions`). Идемпотентно (повторная отмена уже отменённой — no-op).
+
+## 10. Спецификация коллбеков
 
 Оба коллбека — `POST` на `/platega-webhook`, тело PascalCase:
 ```json
@@ -155,7 +170,7 @@ Reconciler (_monitoring_cycle)
 - По статусу: `Status` ∈ `SUBSCRIPTION_ACTIVATED` / `SUBSCRIPTION_PAST_DUE` / `SUBSCRIPTION_CANCELLED` / `SUBSCRIPTION_FAILED`.
 - Идемпотентность: charge — по (`SubscriptionId`, `Id`); статус — по (`SubscriptionId`, `Status`, переход). Ответ всегда `200`.
 
-## 10. Обработка сбоев и краевые случаи
+## 11. Обработка сбоев и краевые случаи
 
 - **PENDING завис** (юзер не подтвердил привязку за ~30 мин) → reconciler/`get` → FAILED, тоггл сбрасывается.
 - **Списание не прошло** (`CANCELED`/`PAST_DUE`) → уведомление; подписка догорает штатно (balance-autopay недоступен — был эксклюзивным). Следующая попытка — на усмотрение Platega; при финальном провале → `SUBSCRIPTION_FAILED`.
@@ -165,23 +180,25 @@ Reconciler (_monitoring_cycle)
 - **Дробная сумма** → отправляем 2 знака; при отказе Platega — округление до рубля + лог.
 - **Дрейф month vs 30 дней / year vs 360** → продлеваем на `charge_days`, календарный дрейф Platega несущественен для VPN.
 
-## 11. Тестирование
+## 12. Тестирование
 
 - **Чистые юниты:** `resolve_platega_interval` (все периоды, is_daily, неровные → month), расчёт суммы, формат рублей (целое/дробное).
 - **Callback-обработчик:** каждая ветка `Status`, идемпотентность (повторный `CONFIRMED` не продлевает дважды), продление на верное число дней, аудит-Transaction, баланс не тронут.
 - **Взаимоисключение:** включение СБП гасит autopay и наоборот.
 - **Webhook-роутинг:** подписочное тело → subscription handler, разовое → существующий; header-auth 401 без секрета.
 - **Пересоздание** при смене цены (cancel old + create new).
+- **Отмена при удалении подписки:** `cancel_platega_recurring_for_subscription` вызывается из каждой точки удаления/отзыва (бот-админ, кабинет-юзер, кабинет-админ, `revoke_subscription`); провал Platega-отмены не блокирует удаление; повторная отмена — no-op.
+- **Админ-отмена:** admin-эндпоинт отменяет автооплату юзера; `UserSubscriptionInfo` отдаёт статус; права проверяются.
 - **Кабинет:** юнит на утилиту резолва каденса/лейбла; type-check; biome; паритет локалей.
 - Полный прогон бэкенда (`pytest`) и `ruff check`/`format` зелёные; кабинет — `npm test`/`type-check`/`biome`.
 
-## 12. Вне scope v1
+## 13. Вне scope v1
 
 - Нативное списание раз в 90/180 дней (Platega не умеет — приклеено к month).
 - Перенос уже активного balance-autopay на СБП.
 - Ретро-миграция существующих подписок.
 - Списание сохранённого метода по нашей инициативе (Platega не предоставляет).
 
-## 13. Открытые вопросы
+## 14. Открытые вопросы
 
 Нет — все решения приняты (модель = привязка к тарифу; каденс из дней тарифа; неровные → month@30д; взаимоисключение с balance-autopay; отдельный push-движок продления).
