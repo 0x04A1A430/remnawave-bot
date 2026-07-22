@@ -1537,9 +1537,7 @@ def _coerce_int(value: Any) -> int | None:
 
 async def _load_ticket_for_event(db: AsyncSession, ticket_id: int) -> Ticket | None:
     result = await db.execute(
-        select(Ticket)
-        .where(Ticket.id == ticket_id)
-        .options(selectinload(Ticket.messages), selectinload(Ticket.user))
+        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.messages), selectinload(Ticket.user))
     )
     return result.scalar_one_or_none()
 
