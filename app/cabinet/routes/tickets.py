@@ -203,7 +203,6 @@ async def create_ticket(
                 'priority': ticket.priority or 'normal',
                 'has_media': bool(primary_file_id),
             },
-            db=db,
         )
     except Exception as error:
         logger.warning('Failed to emit ticket.created from cabinet', error=error)
@@ -358,7 +357,6 @@ async def add_ticket_message(
                 'has_media': bool(primary_file_id),
                 'status': ticket.status,
             },
-            db=db,
         )
     except Exception as error:
         logger.warning('Failed to emit ticket.message_added from cabinet', error=error)

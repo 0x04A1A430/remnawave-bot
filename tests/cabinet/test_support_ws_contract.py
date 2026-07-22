@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import types
@@ -803,3 +804,37 @@ async def test_bridge_consumes_cabinet_emit_payload(monkeypatch):
 
     assert captured['event']['event'] == 'message.created'
     assert captured['event']['payload']['message']['id'] == '501'
+
+
+@pytest.mark.asyncio
+async def test_bridge_listener_is_nonblocking_and_isolates_failures():
+    # The event_emitter listener must return immediately (never block the emitting request)
+    # and a failing bridge handler must never raise into the emitter. The scheduled task is
+    # tracked then drained.
+    support_ws._bridge_tasks.clear()
+
+    async def boom(_payload):
+        raise RuntimeError('bridge failed')
+
+    # Sync scheduling returns immediately and tracks exactly one task.
+    support_ws._schedule_bridge(boom, {'payload': {'ticket_id': 1}})
+    assert len(support_ws._bridge_tasks) == 1
+
+    # Draining swallows the handler error (gather does not raise) and the done-callback
+    # removes the task from the tracking set.
+    await asyncio.gather(*support_ws._bridge_tasks)
+    await asyncio.sleep(0)
+    assert len(support_ws._bridge_tasks) == 0
+
+
+@pytest.mark.asyncio
+async def test_schedule_bridge_coerces_non_dict_payload_to_empty():
+    support_ws._bridge_tasks.clear()
+    seen = {}
+
+    async def capture(payload):
+        seen['payload'] = payload
+
+    support_ws._schedule_bridge(capture, {'payload': None})
+    await asyncio.gather(*support_ws._bridge_tasks)
+    assert seen['payload'] == {}
