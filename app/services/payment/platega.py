@@ -131,6 +131,82 @@ class PlategaPaymentMixin:
             'payload': payload_token,
         }
 
+    async def create_platega_sbp_subscription(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        subscription: Any,
+        tariff: Any,
+    ) -> dict[str, Any]:
+        """Создаёт рекуррентную СБП-подписку Platega, привязанную к тарифу подписки.
+
+        Каденс списания выбирается по той же иерархии периодов, что и
+        balance-autopay (см. ``monitoring_service._process_autopayments``):
+        выбор пользователя → глобальный дефолт → самый короткий период тарифа
+        → жёсткий fallback 30 дней. Сумма — базовая цена тарифа за период
+        списания (``get_purchasable_price_for_period``), а не
+        ``calculate_renewal_price`` — мы намеренно не замораживаем временные
+        промо-скидки в повторяющемся списании.
+
+        После создания подписки выключает ``subscription.autopay_enabled``:
+        Platega-рекуррент и баланс-автосписание — взаимоисключающие движки
+        продления одной подписки.
+        """
+        # Ленивый импорт: monitoring_service импортирует платёжный слой,
+        # прямой импорт на уровне модуля создал бы циклическую зависимость.
+        from app.database.crud import platega_subscription as sub_crud
+        from app.services.monitoring_service import resolve_autopay_period_candidate
+        from app.services.platega_recurrent import resolve_platega_interval
+
+        period_days = (
+            resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
+            or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
+            or (tariff.get_shortest_period() if tariff else None)
+            or 30
+        )
+        is_daily = bool(getattr(tariff, 'is_daily', False))
+        interval, charge_days = resolve_platega_interval(period_days, is_daily)
+
+        amount_kopeks = tariff.get_purchasable_price_for_period(charge_days)
+        if amount_kopeks is None:
+            raise ValueError(f'Тариф не имеет цены за период {charge_days} дней — СБП-автопродление недоступно')
+
+        response = await self.platega_service.create_subscription(
+            amount=amount_kopeks / 100,
+            currency=settings.PLATEGA_CURRENCY,
+            interval=interval,
+            description=getattr(tariff, 'name', None) or 'Подписка',
+        )
+
+        platega_id = (response or {}).get('transactionId')
+        if not platega_id:
+            raise RuntimeError('Platega не вернула transactionId при создании подписки')
+        redirect_url = (response or {}).get('redirect')
+
+        record = await sub_crud.create_platega_subscription(
+            db,
+            user_id=user_id,
+            subscription_id=subscription.id,
+            tariff_id=getattr(tariff, 'id', None),
+            interval=interval,
+            charge_days=charge_days,
+            amount_kopeks=amount_kopeks,
+            redirect_url=redirect_url,
+            platega_subscription_id=platega_id,
+        )
+
+        # Взаимоисключение: у подписки может быть только один движок продления.
+        subscription.autopay_enabled = False
+        await db.commit()
+
+        return {
+            'local_id': record.id,
+            'platega_subscription_id': platega_id,
+            'redirect_url': redirect_url,
+            'status': (response or {}).get('status', 'PENDING'),
+        }
+
     async def process_platega_webhook(
         self,
         db: AsyncSession,
