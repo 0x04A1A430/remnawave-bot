@@ -693,3 +693,53 @@ async def test_bridge_message_added_noops_when_ticket_missing(monkeypatch):
 
     await support_ws._bridge_message_added({'ticket_id': 999})
     assert called is False
+
+
+@pytest.mark.asyncio
+async def test_bridge_ticket_created_broadcasts_opening_message(monkeypatch):
+    captured = {}
+
+    async def fake_broadcast(_db, _ticket, event):
+        captured['event'] = event
+
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+    monkeypatch.setattr(support_ws, 'AsyncSessionLocal', lambda: _SessionCtx())
+
+    opening = _message(id=700, ticket_id=8, message_text='first!')
+    ticket = _ticket(id=8, messages=[opening])
+
+    async def fake_load(_db, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_load_ticket_for_event', fake_load)
+
+    await support_ws._bridge_ticket_created({'ticket_id': 8})
+
+    assert captured['event']['event'] == 'message.created'
+    assert captured['event']['payload']['message']['id'] == '700'
+
+
+@pytest.mark.asyncio
+async def test_bridge_status_changed_broadcasts_status_updated(monkeypatch):
+    captured = {}
+
+    async def fake_broadcast(_db, _ticket, event):
+        captured['event'] = event
+
+    monkeypatch.setattr(support_ws.support_ws_manager, 'broadcast_ticket_event', fake_broadcast)
+    monkeypatch.setattr(support_ws, 'AsyncSessionLocal', lambda: _SessionCtx())
+
+    ticket = _ticket(id=8, status='closed')
+
+    async def fake_load(_db, _ticket_id):
+        return ticket
+
+    monkeypatch.setattr(support_ws, '_load_ticket_for_event', fake_load)
+
+    await support_ws._bridge_status_changed({'ticket_id': 8, 'old_status': 'open', 'new_status': 'closed'})
+
+    event = captured['event']
+    assert event['event'] == 'ticket.status.updated'
+    assert event['payload']['status'] == 'closed'
+    assert event['payload']['ticketId'] == '8'
+    assert 'ticketSnapshot' in event['payload']

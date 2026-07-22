@@ -1580,3 +1580,42 @@ async def _bridge_message_added(payload: dict[str, Any]) -> None:
         if message is None:
             return
         await _broadcast_message_created(db, ticket, message)
+
+
+async def _broadcast_status_updated(db: AsyncSession, ticket: Ticket, previous_status: str | None) -> None:
+    event = _message_event(
+        'ticket.status.updated',
+        {
+            'ticketId': str(ticket.id),
+            'previousStatus': previous_status,
+            'status': ticket.status,
+            'ticketSnapshot': _ticket_snapshot(ticket),
+        },
+        ticket=ticket,
+    )
+    await support_ws_manager.broadcast_ticket_event(db, ticket, event)
+
+
+async def _bridge_ticket_created(payload: dict[str, Any]) -> None:
+    ticket_id = _coerce_int(payload.get('ticket_id'))
+    if ticket_id is None:
+        return
+    async with AsyncSessionLocal() as db:
+        ticket = await _load_ticket_for_event(db, ticket_id)
+        if ticket is None:
+            return
+        message = _pick_message(ticket, None)
+        if message is None:
+            return
+        await _broadcast_message_created(db, ticket, message)
+
+
+async def _bridge_status_changed(payload: dict[str, Any]) -> None:
+    ticket_id = _coerce_int(payload.get('ticket_id'))
+    if ticket_id is None:
+        return
+    async with AsyncSessionLocal() as db:
+        ticket = await _load_ticket_for_event(db, ticket_id)
+        if ticket is None:
+            return
+        await _broadcast_status_updated(db, ticket, payload.get('old_status'))
