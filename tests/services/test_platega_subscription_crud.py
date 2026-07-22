@@ -15,7 +15,7 @@ def test_model_table_and_columns():
     assert {'platega_subscription_id', 'interval', 'charge_days', 'amount_kopeks', 'status'} <= cols
 
 
-def _ensure_real_aiosqlite() -> None:
+def _ensure_real_aiosqlite(monkeypatch) -> None:
     """Снять фиктивный sys.modules['aiosqlite'] перед созданием реального engine.
 
     ``tests/conftest.py`` подставляет пустой ``ModuleType('aiosqlite')`` через
@@ -29,18 +29,18 @@ def _ensure_real_aiosqlite() -> None:
     """
     stub = sys.modules.get('aiosqlite')
     if stub is not None and not hasattr(stub, 'connect'):
-        del sys.modules['aiosqlite']
+        monkeypatch.delitem(sys.modules, 'aiosqlite', raising=False)
 
 
 @contextlib.asynccontextmanager
-async def _memory_session():
+async def _memory_session(monkeypatch):
     """Реальная in-memory SQLite сессия только с таблицей platega_subscriptions.
 
     Полный create_all не годится (другие таблицы используют JSONB, SQLite не
     компилирует), а FK в SQLite по умолчанию не форсятся — поэтому user_id/
     subscription_id можно ставить произвольными (1), реальные строки не нужны.
     """
-    _ensure_real_aiosqlite()
+    _ensure_real_aiosqlite(monkeypatch)
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=[PlategaSubscription.__table__]))
@@ -52,9 +52,9 @@ async def _memory_session():
         await engine.dispose()
 
 
-async def test_create_and_fetch_round_trip():
+async def test_create_and_fetch_round_trip(monkeypatch):
     """create → get_by_platega_id / get_active_by_subscription → update → CANCELLED больше не активна."""
-    async with _memory_session() as db:
+    async with _memory_session(monkeypatch) as db:
         created = await crud.create_platega_subscription(
             db,
             user_id=1,
