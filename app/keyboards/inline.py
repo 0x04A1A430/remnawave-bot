@@ -3636,7 +3636,8 @@ def get_updated_subscription_settings_keyboard(
     show_traffic_topup = False
     if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
         if has_tariff:
-            show_traffic_topup = tariff.can_topup_traffic() and settings.BUY_TRAFFIC_BUTTON_VISIBLE
+            # В режиме тарифов показываем кнопку, детальная проверка настроек тарифа в хендлере
+            show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
         elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
             show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
 
