@@ -1,8 +1,16 @@
 """Тесты подписочных методов PlategaService (SBP recurring, задача 4)."""
 
+import contextlib
+import sys
+from datetime import UTC, datetime, timedelta
+
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.database.crud import platega_subscription as sub_crud
+from app.database.models import Base, PlategaSubscription
+from app.services.monitoring_service import MonitoringService
 from app.services.platega_service import PlategaService
 
 
@@ -205,3 +213,70 @@ def test_recurrent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.is_platega_recurrent_enabled() is False
     monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', True, raising=False)
     assert settings.is_platega_recurrent_enabled() is True
+
+
+# --- MonitoringService._reconcile_platega_subscriptions (Task 10, reconciler loop) ---
+
+
+def _ensure_real_aiosqlite(monkeypatch: pytest.MonkeyPatch) -> None:
+    """See identical helper in test_platega_recurrent_cancel_hooks.py: tests/conftest.py
+    stubs sys.modules['aiosqlite'] with a non-functional shim that shadows the real
+    installed package and breaks create_async_engine('sqlite+aiosqlite:///:memory:').
+    """
+    stub = sys.modules.get('aiosqlite')
+    if stub is not None and not hasattr(stub, 'connect'):
+        monkeypatch.delitem(sys.modules, 'aiosqlite', raising=False)
+
+
+@contextlib.asynccontextmanager
+async def _memory_session(monkeypatch: pytest.MonkeyPatch):
+    _ensure_real_aiosqlite(monkeypatch)
+    engine = create_async_engine('sqlite+aiosqlite:///:memory:')
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=[PlategaSubscription.__table__]))
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with maker() as session:
+            yield session
+    finally:
+        await engine.dispose()
+
+
+async def test_reconcile_gate_off_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The reconciler must be a no-op when PLATEGA_RECURRENT_ENABLED is off — the
+    guard must short-circuit before touching the DB session at all."""
+    monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', False, raising=False)
+
+    service = MonitoringService()
+    # db=None would blow up on first use if the guard didn't return immediately.
+    await service._reconcile_platega_subscriptions(db=None)
+
+
+async def test_reconcile_marks_stuck_pending_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Safety net: a PENDING record that never got a platega_subscription_id back
+    (so there's nothing to look up on Platega's side) and is older than 30 minutes
+    gets marked FAILED — the stuck-pending branch of platega_reconcile_decision."""
+    _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
+
+    async with _memory_session(monkeypatch) as db:
+        record = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id=None,
+            status='PENDING',
+        )
+        record.created_at = datetime.now(UTC) - timedelta(minutes=45)
+        await db.commit()
+        await db.refresh(record)
+
+        service = MonitoringService()
+        await service._reconcile_platega_subscriptions(db)
+
+        await db.refresh(record)
+        assert record.status == 'FAILED'

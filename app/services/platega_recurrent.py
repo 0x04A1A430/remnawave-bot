@@ -37,3 +37,24 @@ def resolve_platega_interval(period_days: int, is_daily: bool) -> tuple[int, int
     if 350 <= period_days <= 380:
         return INTERVAL_YEAR, period_days
     return INTERVAL_MONTH, 30
+
+
+def platega_reconcile_decision(local_status: str, remote_status: str | None, age_minutes: float) -> str | None:
+    """New local status given the Platega-reported status, or None for no change.
+
+    remote_status is normalized lowercase (Platega get-subscription `status`), or
+    None when Platega has no record / the lookup failed. Used by the monitoring
+    reconciler (safety net for lost callbacks / stuck PENDING records) — first
+    matching rule wins.
+    """
+    if remote_status == 'active' and local_status in ('PENDING', 'PAST_DUE'):
+        return 'ACTIVE'
+    if remote_status in ('cancelled', 'canceled') and local_status != 'CANCELLED':
+        return 'CANCELLED'
+    if remote_status == 'failed' and local_status != 'FAILED':
+        return 'FAILED'
+    if remote_status in ('pastdue', 'past_due', 'past due') and local_status not in ('PAST_DUE', 'CANCELLED'):
+        return 'PAST_DUE'
+    if remote_status is None and local_status == 'PENDING' and age_minutes > 30:
+        return 'FAILED'
+    return None
