@@ -892,14 +892,35 @@ class PlategaPaymentMixin:
         return payment
 
 
-class _PlategaCancelAgent(PlategaPaymentMixin):
-    """Минимальный носитель ``PlategaPaymentMixin`` для точек удаления/отзыва
-    подписки (Task 11): несёт только ``platega_service``, в отличие от
-    полного ``PaymentService`` с ещё 23 провайдерами, которые для отмены
-    СБП-автопродления не нужны."""
+class _PlategaSbpAgent(PlategaPaymentMixin):
+    """Минимальный носитель ``PlategaPaymentMixin`` для модульных точек входа
+    СБП-автопродления Platega: несёт только ``platega_service``, в отличие от
+    полного ``PaymentService`` с ещё 23 провайдерами, которые для СБП-автопродления
+    не нужны. Обслуживает и создание (``enable_platega_sbp_recurring``), и отмену/
+    отзыв подписки (Task 11, ``cancel_platega_recurring_for_subscription_safe``) —
+    несёт весь ``PlategaPaymentMixin``, а не только его часть."""
 
     def __init__(self) -> None:
         self.platega_service = PlategaService()
+
+
+async def enable_platega_sbp_recurring(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    subscription: Any,
+    tariff: Any,
+) -> dict[str, Any]:
+    """Создать СБП-автопродление. Возвращает {local_id, platega_subscription_id, redirect_url, status}.
+
+    НЕ best-effort: пробрасывает ValueError (нет цены за период) / RuntimeError
+    (Platega не отдала transactionId), чтобы UI показал ошибку. Гейт на фичу.
+    """
+    if not settings.is_platega_recurrent_enabled():
+        raise RuntimeError('Platega recurrent is disabled')
+    return await _PlategaSbpAgent().create_platega_sbp_subscription(
+        db, user_id=user_id, subscription=subscription, tariff=tariff
+    )
 
 
 async def cancel_platega_recurring_for_subscription_safe(db: AsyncSession, subscription_id: int) -> None:
@@ -915,7 +936,7 @@ async def cancel_platega_recurring_for_subscription_safe(db: AsyncSession, subsc
     if not settings.is_platega_recurrent_enabled():
         return
     try:
-        await _PlategaCancelAgent().cancel_platega_recurring_for_subscription(db, subscription_id)
+        await _PlategaSbpAgent().cancel_platega_recurring_for_subscription(db, subscription_id)
     except Exception as error:  # pragma: no cover - defensive; mixin already best-effort
         logger.warning(
             'Не удалось отменить СБП-автопродление при удалении подписки',

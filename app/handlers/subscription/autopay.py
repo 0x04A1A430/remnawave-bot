@@ -1,3 +1,6 @@
+from typing import Any
+
+import structlog
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -28,6 +31,7 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.user_cart_service import user_cart_service
 from app.states import SubscriptionStates
+from app.utils.formatters import format_datetime
 
 from .countries import (
     _build_countries_selection_text,
@@ -36,6 +40,9 @@ from .countries import (
     _should_show_countries_management,
 )
 from .pricing import _build_subscription_period_prompt
+
+
+logger = structlog.get_logger(__name__)
 
 
 async def _resolve_subscription(callback, db_user, db, state=None):
@@ -94,9 +101,23 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
         ),
     ).format(status=status, days=days, period=period_text)
 
+    keyboard = get_autopay_keyboard(db_user.language, sub_id=sub_id)
+    if settings.is_platega_recurrent_enabled():
+        # Вставляем перед последней строкой (Back), чтобы кнопка СБП была
+        # среди основных действий, а не под ней.
+        keyboard.inline_keyboard.insert(
+            -1,
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('SBP_RECURRING_MENU_BUTTON', '⚡ Автопродление через СБП'),
+                    callback_data='sbp_recurring_menu',
+                )
+            ],
+        )
+
     await callback.message.edit_text(
         text,
-        reply_markup=get_autopay_keyboard(db_user.language, sub_id=sub_id),
+        reply_markup=keyboard,
         parse_mode='HTML',
     )
     await callback.answer()
@@ -270,6 +291,224 @@ async def set_autopay_period(callback: types.CallbackQuery, db_user: User, db: A
         await callback.answer(texts.t('AUTOPAY_PERIOD_SET', '✅ Период автоплатежа: {days} дн.').format(days=days))
 
     await handle_autopay_menu(callback, db_user, db, state)
+
+
+def _platega_sbp_status_text(record: Any, texts) -> str:
+    """Pure builder: человекочитаемая строка статуса СБП-автопродления Platega.
+
+    ``record`` — ``PlategaSubscription``-подобный объект (реальная модель или
+    ``SimpleNamespace`` в тестах) с атрибутами ``status``/``next_charge_at``,
+    либо ``None`` (автопродление не подключено). Не трогает БД/сеть — чистая
+    функция для unit-тестов и переиспользования в других UI (бот/кабинет).
+    """
+    if record is None:
+        return texts.t('SBP_RECURRING_STATUS_NONE', 'не подключено')
+
+    status = getattr(record, 'status', None)
+
+    if status == 'PENDING':
+        return texts.t('SBP_RECURRING_STATUS_PENDING', 'ожидает подтверждения в банке')
+
+    if status == 'ACTIVE':
+        next_charge_at = getattr(record, 'next_charge_at', None)
+        when = (
+            format_datetime(next_charge_at)
+            if next_charge_at
+            else texts.t('SBP_RECURRING_NEXT_CHARGE_UNKNOWN', 'уточняется')
+        )
+        return texts.t(
+            'SBP_RECURRING_STATUS_ACTIVE',
+            'активно (следующее списание {next_charge_at})',
+        ).format(next_charge_at=when)
+
+    if status == 'PAST_DUE':
+        return texts.t('SBP_RECURRING_STATUS_PAST_DUE', 'просрочено')
+
+    if status == 'CANCELLED':
+        return texts.t('SBP_RECURRING_STATUS_CANCELLED', 'отменено')
+
+    if status == 'FAILED':
+        return texts.t('SBP_RECURRING_STATUS_FAILED', 'не удалось подключить')
+
+    return texts.t('SBP_RECURRING_STATUS_UNKNOWN', 'статус неизвестен ({status})').format(status=status)
+
+
+async def handle_sbp_recurring_menu(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """СБП-автопродление Platega: статус текущей подписки + Enable/Cancel."""
+    texts = get_texts(db_user.language)
+
+    if not settings.is_platega_recurrent_enabled():
+        await callback.answer(
+            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
+            show_alert=True,
+        )
+        return
+
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if not subscription:
+        await callback.answer(
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            show_alert=True,
+        )
+        return
+
+    from app.database.crud.platega_subscription import get_active_platega_subscription_by_subscription
+
+    record = await get_active_platega_subscription_by_subscription(db, subscription.id)
+    status_text = _platega_sbp_status_text(record, texts)
+
+    text = texts.t(
+        'SBP_RECURRING_MENU_TEXT',
+        '⚡ <b>Автопродление через СБП</b>\n\n📊 <b>Статус:</b> {status}',
+    ).format(status=status_text)
+
+    if record is not None:
+        # get_active_platega_subscription_by_subscription уже фильтрует по
+        # PENDING/ACTIVE/PAST_DUE — любая непустая запись «активна» для целей UI.
+        action_button = types.InlineKeyboardButton(
+            text=texts.t('SBP_RECURRING_CANCEL_BUTTON', '❌ Отменить автооплату'),
+            callback_data='sbp_recurring_cancel',
+        )
+    else:
+        action_button = types.InlineKeyboardButton(
+            text=texts.t('SBP_RECURRING_ENABLE_BUTTON', '✅ Подключить'),
+            callback_data='sbp_recurring_enable',
+        )
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [action_button],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')],
+        ]
+    )
+
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    await callback.answer()
+
+
+async def handle_sbp_recurring_enable(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Подключить СБП-автопродление: создать рекуррентную Platega-подписку и
+    показать кнопку подтверждения в банке."""
+    texts = get_texts(db_user.language)
+
+    if not settings.is_platega_recurrent_enabled():
+        await callback.answer(
+            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
+            show_alert=True,
+        )
+        return
+
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if not subscription:
+        await callback.answer(
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            show_alert=True,
+        )
+        return
+
+    # tariff обязателен: create_platega_sbp_subscription вызывает
+    # tariff.get_purchasable_price_for_period(...) без None-guard'а (контракт
+    # Task 5 — тариф считается обязательным для СБП-автопродления).
+    try:
+        await db.refresh(subscription, ['tariff'])
+    except Exception:
+        pass
+
+    tariff = getattr(subscription, 'tariff', None)
+    if tariff is None:
+        await callback.answer(
+            texts.t(
+                'SBP_RECURRING_NO_TARIFF',
+                '⚠️ Автопродление через СБП доступно только для подписок с тарифом.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    from app.services.payment.platega import enable_platega_sbp_recurring
+
+    try:
+        result = await enable_platega_sbp_recurring(db, user_id=db_user.id, subscription=subscription, tariff=tariff)
+    except (ValueError, RuntimeError) as error:
+        logger.warning(
+            'Не удалось подключить СБП-автопродление',
+            error=str(error),
+            subscription_id=subscription.id,
+        )
+        await callback.answer(
+            texts.t(
+                'SBP_RECURRING_ENABLE_ERROR',
+                '❌ Не удалось подключить автопродление через СБП. Попробуйте позже.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    redirect_url = result.get('redirect_url')
+    if not redirect_url:
+        # Идемпотентный возврат уже существующей подписки без сохранённой
+        # ссылки — показываем статус вместо кнопки с пустым url (Telegram
+        # такую кнопку не примет).
+        await callback.answer(texts.t('SBP_RECURRING_ALREADY_ACTIVE', 'СБП-автопродление уже подключено.'))
+        await handle_sbp_recurring_menu(callback, db_user, db, state)
+        return
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('SBP_RECURRING_CONFIRM_BUTTON', '🏦 Подтвердить в банке'),
+                    url=redirect_url,
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data='sbp_recurring_menu')],
+        ]
+    )
+
+    await callback.message.edit_text(
+        texts.t(
+            'SBP_RECURRING_ENABLE_SUCCESS',
+            '⚡ <b>Автопродление через СБП</b>\n\n'
+            'Подтвердите подключение в банковском приложении по кнопке ниже.\n'
+            'После подтверждения автопродление станет активным.',
+        ),
+        reply_markup=keyboard,
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+async def handle_sbp_recurring_cancel(
+    callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
+):
+    """Отменить активное СБП-автопродление и обновить статус-вью."""
+    texts = get_texts(db_user.language)
+
+    if not settings.is_platega_recurrent_enabled():
+        await callback.answer(
+            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
+            show_alert=True,
+        )
+        return
+
+    subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
+    if not subscription:
+        await callback.answer(
+            texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            show_alert=True,
+        )
+        return
+
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await callback.answer(texts.t('SBP_RECURRING_CANCELLED', '✅ Автопродление через СБП отменено'))
+    await handle_sbp_recurring_menu(callback, db_user, db, state)
 
 
 async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession):

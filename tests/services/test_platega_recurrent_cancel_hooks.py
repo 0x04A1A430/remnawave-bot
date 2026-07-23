@@ -228,6 +228,64 @@ async def test_cancel_safe_never_raises_on_platega_error(monkeypatch):
         assert rec.status == 'CANCELLED'
 
 
+def _make_subscription_and_tariff() -> tuple[SimpleNamespace, SimpleNamespace]:
+    """Real subscription/tariff stubs, same shape as Task 5's
+    ``test_create_sbp_subscription_persists_and_disables_autopay`` — the
+    ``_PlategaSbpAgent().create_platega_sbp_subscription`` path this module's
+    helper delegates to needs a tariff with real pricing methods, not a bare mock.
+    """
+    subscription = SimpleNamespace(id=1, autopay_enabled=True, autopay_period_days=30)
+    tariff = SimpleNamespace(
+        id=5,
+        is_daily=False,
+        name='Стандарт',
+        get_available_periods=lambda: [30, 90],
+        get_shortest_period=lambda: 30,
+        get_purchasable_price_for_period=lambda d: 19900,
+    )
+    return subscription, tariff
+
+
+async def test_enable_sbp_recurring_raises_when_gate_off(monkeypatch):
+    """enable_platega_sbp_recurring: гейт выключен -> RuntimeError сразу, до
+    любого обращения к БД или Platega. В отличие от best-effort
+    ``cancel_platega_recurring_for_subscription_safe``, эта функция не должна
+    проглатывать ошибку — вызывающий UI (бот/кабинет) обязан показать
+    пользователю, что фича недоступна, а не промолчать. ``db=None`` доказывает,
+    что БД не трогается до гейт-проверки: любое обращение к ней до raise
+    провалило бы тест AttributeError'ом вместо ожидаемого RuntimeError.
+    """
+    from app.services.payment.platega import enable_platega_sbp_recurring
+
+    monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', False, raising=False)
+    subscription, tariff = _make_subscription_and_tariff()
+
+    with pytest.raises(RuntimeError):
+        await enable_platega_sbp_recurring(None, user_id=777, subscription=subscription, tariff=tariff)
+
+
+async def test_enable_sbp_recurring_gate_on_returns_redirect_url(monkeypatch):
+    """Гейт включён + ``PlategaService.create_subscription`` застаблен ->
+    возвращает dict с redirect_url. Доказывает, что модульный хелпер реально
+    строит ``_PlategaSbpAgent`` (несущий ПОЛНЫЙ ``PlategaPaymentMixin``, а не
+    только отменяющую его часть) и доходит до ``create_platega_sbp_subscription``.
+    """
+    from app.services.payment.platega import enable_platega_sbp_recurring
+
+    _configure_gate_on(monkeypatch)
+    mock_create = AsyncMock(return_value={'transactionId': 'tx-42', 'redirect': 'https://pay/42', 'status': 'PENDING'})
+    monkeypatch.setattr(PlategaService, 'create_subscription', mock_create)
+    subscription, tariff = _make_subscription_and_tariff()
+
+    async with _memory_session(monkeypatch) as db:
+        result = await enable_platega_sbp_recurring(db, user_id=777, subscription=subscription, tariff=tariff)
+
+        assert result['redirect_url'] == 'https://pay/42'
+        assert result['platega_subscription_id'] == 'tx-42'
+        assert result['status'] == 'PENDING'
+        mock_create.assert_awaited_once()
+
+
 async def test_cancel_safe_wiring_proof_multi_tariff_delete_subscription(monkeypatch):
     """Доказательство подключения (Task 11) на самом маленьком вызываемом шве:
     роут ``multi_tariff.delete_subscription`` резолвит зависимости через

@@ -119,6 +119,9 @@ from app.utils.timezone import format_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
+    handle_sbp_recurring_cancel,
+    handle_sbp_recurring_enable,
+    handle_sbp_recurring_menu,
     handle_subscription_cancel,
     handle_subscription_config_back,
     set_autopay_days,
@@ -4210,6 +4213,12 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_autopay_days, F.data == 'autopay_set_days')
 
     dp.callback_query.register(show_autopay_period, F.data == 'autopay_set_period')
+
+    dp.callback_query.register(handle_sbp_recurring_menu, F.data == 'sbp_recurring_menu')
+
+    dp.callback_query.register(handle_sbp_recurring_enable, F.data == 'sbp_recurring_enable')
+
+    dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
 
     dp.callback_query.register(handle_subscription_config_back, F.data == 'subscription_config_back')
 
