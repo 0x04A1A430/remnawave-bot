@@ -288,6 +288,18 @@ async def _build_subscription_info_async(db: AsyncSession, subscription: Subscri
     info = _build_subscription_info(subscription, tariff_name=tariff_name)
     info.purchased_traffic_gb = getattr(subscription, 'purchased_traffic_gb', 0) or 0
     info.traffic_purchases = traffic_purchase_items
+
+    # Platega SBP auto-renewal status — admin-only, needs a DB query, so it
+    # lives here rather than in the sync builder. Gated to avoid a needless
+    # query when the feature is off.
+    if settings.is_platega_recurrent_enabled():
+        from app.database.crud import platega_subscription as sub_crud
+
+        record = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription.id)
+        if record:
+            info.sbp_recurring_status = record.status
+            info.sbp_recurring_id = record.id
+
     return info
 
 
@@ -1709,6 +1721,40 @@ async def update_user_subscription(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail=f'Unknown action: {request.action}',
     )
+
+
+@router.post('/{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring')
+async def cancel_user_sbp_recurring(
+    user_id: int,
+    sub_id: int,
+    admin: User = Depends(require_permission('users:subscription')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Admin best-effort cancel of a user's active Platega SBP auto-renewal.
+
+    Verifies ``sub_id`` belongs to ``user_id`` (IDOR guard, same as the
+    devices/traffic endpoints) before delegating to the same best-effort
+    helper the reset/delete subscription flows already use (Task 11);
+    idempotent — calling it with no active record is a no-op.
+    """
+    from app.database.crud.subscription import get_subscription_by_id_for_user
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, sub_id)
+
+    logger.info(
+        'Admin cancelled SBP auto-renewal for subscription',
+        admin_id=admin.id,
+        user_id=user_id,
+        subscription_id=sub_id,
+    )
+
+    return {'status': 'cancelled'}
 
 
 # === Available Tariffs ===
