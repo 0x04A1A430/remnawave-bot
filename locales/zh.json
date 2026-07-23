@@ -1169,7 +1169,7 @@
 "PLATEGA_AMOUNT_TOO_LOW": "通过Platega支付的最低金额为：{amount}",
 "PLATEGA_AMOUNT_TOO_HIGH": "通过Platega支付的最高金额为：{amount}",
 "PLATEGA_PAYMENT_ERROR": "创建Platega付款失败。请稍后再试或联系支持。",
-“PLATEGA_PAYMENT_INSTRUCTIONS”: “<b>通过Platega({method})付款</b>\n\n金额：<code>{amount}</code>\n交易ID：<tg-spoiler>{transaction}</tg-spoiler>”,
+"PLATEGA_PAYMENT_INSTRUCTIONS": "<b>通过Platega({method})付款</b>\n\n金额：<code>{amount}</code>\n交易ID：<tg-spoiler>{transaction}</tg-spoiler>",
 "PLATEGA_PAY_BUTTON": "通过{method}支付",
 "PLATEGA_PAYMENT_ALREADY_CONFIRMED": "付款已到账",
 "PLATEGA_PAYMENT_STATUS": "当前付款状态：{status}",
