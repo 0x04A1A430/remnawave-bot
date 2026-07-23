@@ -20,6 +20,63 @@ DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS: list[str] = [
 
 USER_TAG_PATTERN = re.compile(r'^[A-Z0-9_]{1,16}$')
 
+# Транслитерация кириллицы для идентификаторов RemnaWave: панель принимает только
+# [A-Za-z0-9_-], поэтому без неё кириллические имена выпадают из username целиком.
+_CYRILLIC_TO_LATIN: dict[str, str] = {
+    'а': 'a',
+    'б': 'b',
+    'в': 'v',
+    'г': 'g',
+    'д': 'd',
+    'е': 'e',
+    'ё': 'e',
+    'ж': 'zh',
+    'з': 'z',
+    'и': 'i',
+    'й': 'y',
+    'к': 'k',
+    'л': 'l',
+    'м': 'm',
+    'н': 'n',
+    'о': 'o',
+    'п': 'p',
+    'р': 'r',
+    'с': 's',
+    'т': 't',
+    'у': 'u',
+    'ф': 'f',
+    'х': 'kh',
+    'ц': 'ts',
+    'ч': 'ch',
+    'ш': 'sh',
+    'щ': 'shch',
+    'ъ': '',
+    'ы': 'y',
+    'ь': '',
+    'э': 'e',
+    'ю': 'yu',
+    'я': 'ya',
+    'є': 'ie',
+    'і': 'i',
+    'ї': 'i',
+    'ґ': 'g',
+    'ў': 'u',
+}
+
+
+def transliterate_cyrillic(value: str) -> str:
+    """Заменяет кириллические буквы латинскими, сохраняя регистр («Шмель» → «Shmel»)."""
+    result: list[str] = []
+    for char in value:
+        mapped = _CYRILLIC_TO_LATIN.get(char.lower())
+        if mapped is None:
+            result.append(char)
+        elif char.isupper():
+            result.append(mapped.capitalize())
+        else:
+            result.append(mapped)
+    return ''.join(result)
+
 
 logger = structlog.get_logger(__name__)
 
@@ -1659,9 +1716,10 @@ class Settings(BaseSettings):
         username_clean = (username or '').lstrip('@')
         full_name_value = full_name or ''
 
-        # Remnawave разрешает только буквы, цифры, подчёркивания и дефисы
+        # Remnawave разрешает только буквы, цифры, подчёркивания и дефисы;
+        # кириллицу переводим в латиницу, чтобы имя не выпадало из username целиком.
         def _sanitize(value: str) -> str:
-            result = re.sub(r'[^0-9A-Za-z_-]+', '_', value)
+            result = re.sub(r'[^0-9A-Za-z_-]+', '_', transliterate_cyrillic(value))
             return re.sub(r'_+', '_', result).strip('_-')
 
         # Для email-пользователей формируем уникальный identifier
