@@ -68,13 +68,30 @@ async def handle_autopay_menu(callback: types.CallbackQuery, db_user: User, db: 
     except Exception:
         pass
     if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
-        await callback.answer(
+        # Баланс-автоплатёж для суточных тарифов недоступен, но СБП-автопродление
+        # Platega суточный интервал поддерживает (`day`) — вход в него должен
+        # оставаться достижимым, поэтому кнопку добавляем в тот же экран.
+        daily_keyboard_rows: list[list[types.InlineKeyboardButton]] = []
+        if settings.is_platega_recurrent_enabled():
+            daily_keyboard_rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('SBP_RECURRING_MENU_BUTTON', '⚡ Автопродление через СБП'),
+                        callback_data='sbp_recurring_menu',
+                    )
+                ]
+            )
+        back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
+        daily_keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data=back_cb)])
+
+        await callback.message.edit_text(
             texts.t(
                 'AUTOPAY_NOT_AVAILABLE_FOR_DAILY',
                 'Автоплатеж недоступен для суточных тарифов. Списание происходит автоматически раз в сутки.',
             ),
-            show_alert=True,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=daily_keyboard_rows),
         )
+        await callback.answer()
         return
 
     status = (
@@ -406,6 +423,18 @@ async def handle_sbp_recurring_enable(
     if not subscription:
         await callback.answer(
             texts.t('SUBSCRIPTION_ACTIVE_REQUIRED', '⚠️ У вас нет активной подписки!'),
+            show_alert=True,
+        )
+        return
+
+    # Trial subscriptions cannot authorize a real recurring bank payment
+    # (same guard as toggle_autopay's balance-autopay enable path).
+    if subscription.is_trial or subscription.is_trial is None:
+        await callback.answer(
+            texts.t(
+                'AUTOPAY_NOT_AVAILABLE_TRIAL',
+                'Автоплатеж недоступен для пробных подписок.',
+            ),
             show_alert=True,
         )
         return

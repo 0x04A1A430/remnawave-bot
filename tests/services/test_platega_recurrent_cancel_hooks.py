@@ -189,7 +189,7 @@ async def test_cancel_safe_noop_when_gate_off(monkeypatch):
 async def test_cancel_safe_gate_on_cancels_active_record(monkeypatch):
     """Гейт включён + есть активная запись + ``PlategaService.cancel_subscription``
     замокан -> запись переходит в CANCELLED. Доказывает, что модульный хелпер
-    сам конструирует лёгкого ``_PlategaCancelAgent`` (только ``PlategaService``,
+    сам конструирует лёгкого ``_PlategaSbpAgent`` (только ``PlategaService``,
     без остальных провайдеров ``PaymentService``) и реально доходит до миксина.
     """
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe

@@ -1,5 +1,6 @@
 """Integration-style tests for the СБП-автопродление handlers
-(``handle_sbp_recurring_menu`` / ``_enable`` / ``_cancel``,
+(``handle_sbp_recurring_menu`` / ``_enable`` / ``_cancel``, plus the daily-tariff
+SBP-entry reachability branch inside ``handle_autopay_menu``,
 ``app/handlers/subscription/autopay.py``).
 
 Drives the real handler functions with the heavy I/O mocked (DB session,
@@ -47,6 +48,45 @@ def _keyboard_callbacks(markup) -> list[str]:
 
 def _keyboard_urls(markup) -> list[str]:
     return [btn.url for row in markup.inline_keyboard for btn in row if btn.url]
+
+
+# --- handle_autopay_menu (daily-tariff SBP-entry reachability) ---
+
+
+async def test_autopay_menu_daily_tariff_still_shows_sbp_entry(monkeypatch):
+    """Daily-tariff subscriptions can't use balance-autopay, but Platega's SBP
+    auto-renewal supports the `day` interval on the backend — the daily-tariff
+    early return in handle_autopay_menu must still surface a reachable
+    '⚡ Автопродление через СБП' button instead of a dead-end alert.
+    Fails before Fix 1 (daily branch only called callback.answer() and never
+    touched the message/keyboard, so no button was ever reachable)."""
+    _configure_gate(monkeypatch, True)
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(is_daily=True))
+
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
+
+    await autopay_mod.handle_autopay_menu(cb, user, db)
+
+    cb.message.edit_text.assert_awaited_once()
+    _, kwargs = cb.message.edit_text.call_args
+    assert 'sbp_recurring_menu' in _keyboard_callbacks(kwargs['reply_markup'])
+
+
+async def test_autopay_menu_daily_tariff_gate_off_hides_sbp_entry(monkeypatch):
+    """Counterpart of the reachability test: with the Platega recurrent gate
+    OFF, the daily-tariff screen must not offer a dead SBP button."""
+    _configure_gate(monkeypatch, False)
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(is_daily=True))
+
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
+
+    await autopay_mod.handle_autopay_menu(cb, user, db)
+
+    cb.message.edit_text.assert_awaited_once()
+    _, kwargs = cb.message.edit_text.call_args
+    assert 'sbp_recurring_menu' not in _keyboard_callbacks(kwargs['reply_markup'])
 
 
 # --- handle_sbp_recurring_menu ---
@@ -129,6 +169,28 @@ async def test_enable_gate_off_shows_alert(monkeypatch):
     cb.message.edit_text.assert_not_awaited()
 
 
+async def test_enable_trial_subscription_blocked_before_helper(monkeypatch):
+    """Trial subscriptions must not be able to authorize a real recurring bank
+    payment via SBP — same guard as toggle_autopay's balance-autopay enable
+    path (`if subscription.is_trial or subscription.is_trial is None`).
+    Fails before Fix 2 (only `tariff is not None` was checked; a trial
+    subscription with a tariff_id sailed straight through to the helper)."""
+    _configure_gate(monkeypatch, True)
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5), is_trial=True)
+
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
+    mock_enable = AsyncMock()
+    monkeypatch.setattr('app.services.payment.platega.enable_platega_sbp_recurring', mock_enable)
+
+    await autopay_mod.handle_sbp_recurring_enable(cb, user, db)
+
+    mock_enable.assert_not_awaited()
+    cb.answer.assert_awaited_once()
+    assert cb.answer.await_args.kwargs.get('show_alert') is True
+    cb.message.edit_text.assert_not_awaited()
+
+
 async def test_enable_without_tariff_shows_alert_and_skips_helper(monkeypatch):
     """No tariff on the subscription -> must short-circuit BEFORE calling the
     enable helper: create_platega_sbp_subscription has no None-guard on
@@ -136,7 +198,7 @@ async def test_enable_without_tariff_shows_alert_and_skips_helper(monkeypatch):
     calling through would be an AttributeError, not a friendly message."""
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10, tariff=None)
+    subscription = SimpleNamespace(id=10, tariff=None, is_trial=False)
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     mock_enable = AsyncMock()
@@ -152,7 +214,7 @@ async def test_enable_without_tariff_shows_alert_and_skips_helper(monkeypatch):
 async def test_enable_value_error_shows_friendly_alert(monkeypatch):
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5))
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5), is_trial=False)
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     monkeypatch.setattr(
@@ -170,7 +232,7 @@ async def test_enable_value_error_shows_friendly_alert(monkeypatch):
 async def test_enable_runtime_error_shows_friendly_alert(monkeypatch):
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5))
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5), is_trial=False)
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     monkeypatch.setattr(
@@ -188,7 +250,7 @@ async def test_enable_runtime_error_shows_friendly_alert(monkeypatch):
 async def test_enable_success_shows_redirect_url_button(monkeypatch):
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5))
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5), is_trial=False)
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     monkeypatch.setattr(
@@ -216,7 +278,7 @@ async def test_enable_idempotent_return_without_redirect_shows_status(monkeypatc
     back to re-rendering the status view instead."""
     _configure_gate(monkeypatch, True)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
-    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5))
+    subscription = SimpleNamespace(id=10, tariff=SimpleNamespace(id=5), is_trial=False)
 
     monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     monkeypatch.setattr(
