@@ -192,3 +192,16 @@ def test_format_amount_integer_and_decimal() -> None:
     assert PlategaService._format_amount(149.5) == 149.5
     assert isinstance(PlategaService._format_amount(199.0), int)
     assert isinstance(PlategaService._format_amount(149.5), float)
+
+
+# --- config gate ---
+
+
+def test_recurrent_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_MERCHANT_ID', 'm', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_SECRET', 's', raising=False)
+    monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', False, raising=False)
+    assert settings.is_platega_recurrent_enabled() is False
+    monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', True, raising=False)
+    assert settings.is_platega_recurrent_enabled() is True
