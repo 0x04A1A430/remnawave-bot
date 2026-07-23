@@ -498,6 +498,23 @@ class PlategaPaymentMixin:
         завершиться 200 OK независимо от того, доставилось ли сообщение в
         Telegram.
         """
+        try:
+            from app.cabinet.routes.websocket import cabinet_ws_manager
+
+            await cabinet_ws_manager.send_to_user(
+                record.user_id,
+                {
+                    'type': f'sbp_recurring.{kind}',
+                    'status': record.status,
+                    'amount_kopeks': record.amount_kopeks,
+                    'amount_rubles': record.amount_kopeks / 100,
+                    'next_charge_at': record.next_charge_at.isoformat() if record.next_charge_at else None,
+                    'subscription_id': record.subscription_id,
+                },
+            )
+        except Exception as ws_error:  # pragma: no cover — best-effort
+            logger.warning('Не удалось отправить WS-событие СБП-автопродления', error=str(ws_error), kind=kind)
+
         bot = getattr(self, 'bot', None)
         if not bot:
             return

@@ -142,8 +142,10 @@ async def test_create_sbp_subscription_is_idempotent_on_repeat_call(monkeypatch)
 
 # --- process_platega_subscription_callback ---
 #
-# Во всех тестах ниже Svc — миксин без атрибута ``bot``, поэтому
-# ``_notify_sbp_recurring`` тихо возвращается на первой же строке
+# Во всех тестах ниже Svc — миксин без атрибута ``bot``. ``_notify_sbp_recurring``
+# сначала best-effort шлёт WS-событие в кабинет (без зарегистрированных
+# подключений ``cabinet_ws_manager.send_to_user`` — no-op, БД не трогает), а
+# затем возвращается на bot/telegram_id early-return
 # (``getattr(self, 'bot', None)`` -> None) и не требует таблицы users.
 
 
@@ -487,6 +489,145 @@ async def test_subscription_activated_status_transition(monkeypatch):
 
         await db.refresh(rec)
         assert rec.status == 'ACTIVE'
+
+
+# --- WS-события sbp_recurring.* для кабинета ---
+#
+# Кабинет-фронтенд слушает WS-события ``sbp_recurring.{kind}`` — единственный
+# канал для email-only пользователей без telegram_id (у которых нет доступа к
+# сообщениям бота). Эмиссия должна происходить ДО early-return по
+# bot/telegram_id и не должна ломать коллбек при сбое отправки.
+
+
+async def test_confirmed_charge_emits_ws_event_to_cabinet(monkeypatch):
+    """CONFIRMED-коллбек должен отправить WS-событие sbp_recurring.confirmed
+    с полной формой сообщения — включая next_charge_at из коллбека Platega.
+    """
+    from app.cabinet.routes.websocket import cabinet_ws_manager
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot — email-only путь."""
+
+    mock_send = AsyncMock(return_value=None)
+    monkeypatch.setattr(cabinet_ws_manager, 'send_to_user', mock_send)
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-ws-1',
+            status='ACTIVE',
+        )
+
+        payload = {
+            'Status': 'CONFIRMED',
+            'Id': 'charge-ws-1',
+            'SubscriptionId': 'ps-ws-1',
+            'NextChargeAt': '2026-09-01T00:00:00Z',
+        }
+        await Svc().process_platega_subscription_callback(db, payload)
+
+    mock_send.assert_awaited_once()
+    call = mock_send.await_args
+    assert call.args[0] == 1  # record.user_id
+    message = call.args[1]
+    assert message == {
+        'type': 'sbp_recurring.confirmed',
+        'status': 'ACTIVE',
+        'amount_kopeks': 19900,
+        'amount_rubles': 199.0,
+        'next_charge_at': '2026-09-01T00:00:00+00:00',
+        'subscription_id': 1,
+    }
+
+
+async def test_ws_emission_failure_does_not_break_callback(monkeypatch):
+    """Сбой отправки WS-события (соединения нет / менеджер упал) — best-effort,
+    не должен прерывать обработку коллбека: продление подписки и счётчики
+    должны примениться как обычно.
+    """
+    from app.cabinet.routes.websocket import cabinet_ws_manager
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    monkeypatch.setattr(cabinet_ws_manager, 'send_to_user', AsyncMock(side_effect=RuntimeError('ws down')))
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        rec = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-ws-2',
+            status='ACTIVE',
+        )
+
+        payload = {
+            'Status': 'CONFIRMED',
+            'Id': 'charge-ws-2',
+            'SubscriptionId': 'ps-ws-2',
+        }
+        await Svc().process_platega_subscription_callback(db, payload)  # не должен бросить
+
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date >= end0 + timedelta(days=29)
+        assert rec.charges_success == 1
+
+
+async def test_ws_emission_fires_without_bot_attribute(monkeypatch):
+    """Эмиссия WS-события должна происходить ДО early-return по
+    ``bot``/``telegram_id`` в ``_notify_sbp_recurring`` — иначе email-only
+    пользователи кабинета (без Telegram) не получают вообще ничего.
+    """
+    from app.cabinet.routes.websocket import cabinet_ws_manager
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot — воспроизводит email-only сервис-инстанс."""
+
+    mock_send = AsyncMock(return_value=None)
+    monkeypatch.setattr(cabinet_ws_manager, 'send_to_user', mock_send)
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-ws-3')
+
+        svc = Svc()
+        assert not hasattr(svc, 'bot')
+
+        await svc.process_platega_subscription_callback(
+            db, {'Status': 'SUBSCRIPTION_PAST_DUE', 'SubscriptionId': 'ps-ws-3'}
+        )
+
+        await db.refresh(rec)
+        assert rec.status == 'PAST_DUE'
+
+    mock_send.assert_awaited_once()
+    message = mock_send.await_args.args[1]
+    assert message['type'] == 'sbp_recurring.past_due'
 
 
 async def test_callback_noops_on_missing_or_unknown_subscription_id(monkeypatch):
