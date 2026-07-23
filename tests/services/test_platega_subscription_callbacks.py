@@ -228,6 +228,106 @@ async def test_confirmed_charge_extends_subscription_and_is_idempotent(monkeypat
         assert subscription.end_date == end_after_first_charge
 
 
+async def test_confirmed_charge_syncs_remnawave_panel_after_extension(monkeypatch):
+    """CONFIRMED: после коммита продления должен best-effort синкнуться в панель
+    RemnaWave через ``SubscriptionService.update_remnawave_user`` — иначе панель
+    продолжает отдавать пользователю старый end_date, и оплативший продление
+    через СБП пользователь всё равно отваливается по старой дате истечения,
+    хотя бот репортит "продлено". Зеркалит balance-autopay
+    (``monitoring_service._process_autopayments``, синк после extend_subscription).
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+    from app.services.subscription_service import SubscriptionService
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    mock_sync = AsyncMock(return_value=None)
+    monkeypatch.setattr(SubscriptionService, 'update_remnawave_user', mock_sync)
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-sync',
+            status='ACTIVE',
+        )
+
+        payload = {
+            'Status': 'CONFIRMED',
+            'Id': 'charge-sync-1',
+            'SubscriptionId': 'ps-sync',
+        }
+        await Svc().process_platega_subscription_callback(db, payload)
+
+        mock_sync.assert_awaited_once()
+        call = mock_sync.await_args
+        assert call.args[0] is db
+        assert call.args[1] is subscription
+        assert call.kwargs.get('reset_reason') == 'СБП-автопродление'
+
+
+async def test_confirmed_charge_panel_sync_failure_is_best_effort(monkeypatch):
+    """Сбой синка панели (Remnawave недоступна) — best-effort: не должен
+    пробрасывать исключение наружу (коллбек обязан вернуть 200 OK), а
+    продление в БД (end_date, счётчики, last_charge_external_id) уже
+    закоммичено и не откатывается синком, упавшим ПОСЛЕ commit.
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+    from app.services.subscription_service import SubscriptionService
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    monkeypatch.setattr(SubscriptionService, 'update_remnawave_user', AsyncMock(side_effect=RuntimeError('panel down')))
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        rec = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-sync-fail',
+            status='ACTIVE',
+        )
+
+        payload = {
+            'Status': 'CONFIRMED',
+            'Id': 'charge-sync-fail-1',
+            'SubscriptionId': 'ps-sync-fail',
+        }
+        await Svc().process_platega_subscription_callback(db, payload)  # не должен бросить
+
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date >= end0 + timedelta(days=29)
+        assert rec.charges_success == 1
+        assert rec.last_charge_external_id == 'charge-sync-fail-1'
+
+        transactions = (await db.execute(select(Transaction))).scalars().all()
+        assert len(transactions) >= 1
+
+
 async def test_confirmed_charge_with_empty_id_does_not_extend(monkeypatch):
     """CONFIRMED без Id (или с пустым Id) — недоверенный коллбек: без id
     идемпотентность по ``last_charge_external_id`` не сработает, поэтому

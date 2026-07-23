@@ -191,6 +191,16 @@ async def toggle_autopay(callback: types.CallbackQuery, db_user: User, db: Async
 
     await update_subscription_autopay(db, subscription, enable)
 
+    if enable:
+        # Обратное взаимоисключение: включение баланс-автоплатежа должно
+        # отменить активную СБП-автоподписку Platega у той же подписки —
+        # иначе оба движка продления начнут списывать параллельно (двойное
+        # списание). Прямое взаимоисключение (СБП -> выключение
+        # balance-autopay) уже реализовано в create_platega_sbp_subscription.
+        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
     texts = get_texts(db_user.language)
     status = texts.t('AUTOPAY_STATUS_ENABLED', 'включен') if enable else texts.t('AUTOPAY_STATUS_DISABLED', 'выключен')
     await callback.answer(texts.t('AUTOPAY_TOGGLE_SUCCESS', '✅ Автоплатеж {status}!').format(status=status))

@@ -424,6 +424,35 @@ class PlategaPaymentMixin:
             )
 
             await self._notify_sbp_recurring(db, record, 'confirmed')
+
+            # Синк панели RemnaWave — лучшее-усилие, намеренно ПОСЛЕДНИЙ шаг
+            # ветки: продление уже закоммичено в БД, так же поступает
+            # balance-autopay (см. monitoring_service._process_autopayments,
+            # комментарий "Синк панели — лучшее-усилие"). Без этого шага панель
+            # продолжает отдавать пользователю СТАРЫЙ end_date — бот говорит
+            # "продлено", а VPN всё равно обрывается по старой дате истечения.
+            # Порядок важен: при сбое update_remnawave_user делает db.rollback()
+            # изнутри, который экспайрит ВСЕ атрибуты объектов сессии (включая
+            # PK) — если синк стоит раньше emit_transaction_side_effects/notify,
+            # их чтения record.amount_kopeks/record.user_id падают
+            # MissingGreenlet вместо тихого best-effort. Поэтому синк — последним,
+            # а id для лога берём заранее, до вызова, чтобы сам except не упал.
+            subscription_id_for_log = subscription.id
+            try:
+                from app.services.subscription_service import SubscriptionService
+
+                await SubscriptionService().update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                    reset_reason='СБП-автопродление',
+                )
+            except Exception as sync_error:  # best-effort: продление уже в БД, не откатываем
+                logger.warning(
+                    'Синк панели после СБП-автопродления не удался',
+                    error=str(sync_error),
+                    subscription_id=subscription_id_for_log,
+                )
             return
 
         if status in pr.CHARGE_FAILED:

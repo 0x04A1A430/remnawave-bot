@@ -344,3 +344,72 @@ async def test_cancel_gate_on_calls_helper_and_refreshes_menu(monkeypatch):
     cb.message.edit_text.assert_awaited_once()
     _, kwargs = cb.message.edit_text.call_args
     assert 'sbp_recurring_enable' in _keyboard_callbacks(kwargs['reply_markup'])
+
+
+# --- toggle_autopay (reverse mutual exclusion) -------------------------------
+#
+# Task 5's create_platega_sbp_subscription already implements the forward
+# direction: enabling SBP disables balance-autopay. These tests cover the
+# missing reverse hook — enabling balance-autopay must best-effort cancel any
+# active Platega SBP recurring subscription on the same subscription, or both
+# renewal engines would drive it in parallel and double-charge the user.
+
+
+def _autopay_subscription(**overrides) -> SimpleNamespace:
+    base = dict(id=10, tariff_id=5, tariff=None, is_trial=False, autopay_enabled=False)
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+async def test_toggle_autopay_enable_cancels_active_sbp_recurring(monkeypatch):
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    cb.data = 'autopay_enable'
+    subscription = _autopay_subscription()
+
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
+    monkeypatch.setattr(autopay_mod, 'update_subscription_autopay', AsyncMock(return_value=subscription))
+    monkeypatch.setattr(autopay_mod, 'handle_autopay_menu', AsyncMock())
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', mock_cancel)
+
+    await autopay_mod.toggle_autopay(cb, user, db)
+
+    mock_cancel.assert_awaited_once_with(db, 10)
+
+
+async def test_toggle_autopay_disable_does_not_touch_sbp(monkeypatch):
+    """Disabling balance-autopay must NOT cancel SBP — only the enable path
+    triggers the reverse mutual-exclusion cancel; SBP has its own independent
+    cancel flow (handle_sbp_recurring_cancel)."""
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    cb.data = 'autopay_disable'
+    subscription = _autopay_subscription(autopay_enabled=True)
+
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
+    monkeypatch.setattr(autopay_mod, 'update_subscription_autopay', AsyncMock(return_value=subscription))
+    monkeypatch.setattr(autopay_mod, 'handle_autopay_menu', AsyncMock())
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', mock_cancel)
+
+    await autopay_mod.toggle_autopay(cb, user, db)
+
+    mock_cancel.assert_not_awaited()
+
+
+async def test_toggle_autopay_enable_blocked_before_cancel_for_trial(monkeypatch):
+    """A trial subscription is rejected before update_subscription_autopay is
+    even reached — the SBP-cancel hook must not fire on a rejected toggle."""
+    cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    cb.data = 'autopay_enable'
+    subscription = _autopay_subscription(is_trial=True)
+
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
+    mock_update = AsyncMock(return_value=subscription)
+    monkeypatch.setattr(autopay_mod, 'update_subscription_autopay', mock_update)
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', mock_cancel)
+
+    await autopay_mod.toggle_autopay(cb, user, db)
+
+    mock_update.assert_not_awaited()
+    mock_cancel.assert_not_awaited()
