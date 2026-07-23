@@ -96,6 +96,64 @@ class PlategaService:
         endpoint = f'/transaction/{transaction_id}'
         return await self._request('GET', endpoint)
 
+    async def create_subscription(
+        self,
+        *,
+        amount: float,
+        currency: str,
+        interval: int,
+        description: str | None = None,
+    ) -> dict[str, Any] | None:
+        body: dict[str, Any] = {
+            'paymentMethod': 6,
+            'paymentDetails': {
+                'amount': self._format_amount(amount),
+                'currency': currency,
+                'interval': interval,
+            },
+        }
+
+        if description:
+            body['description'] = self._sanitize_description(description, self._description_max_length)
+
+        # Тот же выбор версии эндпоинта, что и в create_payment (см. #2934):
+        # v1 POST /transaction/process, v2 POST /v2/transaction/process.
+        endpoint = '/v2/transaction/process' if self.api_version == 'v2' else '/transaction/process'
+        return await self._request('POST', endpoint, json_data=body)
+
+    async def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
+        # Как и статусный GET транзакции, эндпоинт подписки не версионируется.
+        endpoint = f'/subscription/{subscription_id}'
+        return await self._request('GET', endpoint)
+
+    async def list_subscriptions(
+        self,
+        *,
+        status: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        page: int | None = None,
+        size: int | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, Any] = {}
+        if status is not None:
+            params['status'] = status
+        if date_from is not None:
+            params['from'] = date_from
+        if date_to is not None:
+            params['to'] = date_to
+        if page is not None:
+            params['page'] = page
+        if size is not None:
+            params['size'] = size
+
+        return await self._request('GET', '/subscription', params=params)
+
+    async def cancel_subscription(self, subscription_id: str) -> dict[str, Any] | None:
+        # Неверсионированный эндпоинт, аналогично get_subscription/get_transaction.
+        endpoint = f'/subscription/{subscription_id}/cancel'
+        return await self._request('POST', endpoint)
+
     async def _request(
         self,
         method: str,
@@ -219,6 +277,12 @@ class PlategaService:
                 return trimmed_bytes.decode('utf-8')
             except UnicodeDecodeError:
                 trimmed_bytes = trimmed_bytes[:-1]
+
+    @staticmethod
+    def _format_amount(amount: float) -> int | float:
+        """Platega ждёт целое число для суммы без копеек и float — иначе (SBP-подписки)."""
+
+        return int(amount) if amount == int(amount) else round(amount, 2)
 
     @classmethod
     def _normalize_api_version(cls, raw: str | None) -> str:
