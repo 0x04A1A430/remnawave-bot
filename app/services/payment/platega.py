@@ -289,7 +289,17 @@ class PlategaPaymentMixin:
             return
 
         if status in pr.CHARGE_SUCCESS:
-            if charge_id and record.last_charge_external_id == charge_id:
+            if not charge_id:
+                # CONFIRMED без Id доверять нельзя: без id идемпотентность ниже
+                # не сработает, и каждый повтор такого коллбека продлевал бы
+                # подписку заново. Поэтому не продлеваем, а просто выходим.
+                logger.warning(
+                    'Platega subscription callback: CONFIRMED без charge Id',
+                    platega_subscription_id=platega_id,
+                )
+                return
+
+            if record.last_charge_external_id == charge_id:
                 logger.info(
                     'Platega subscription callback: списание уже обработано',
                     platega_subscription_id=platega_id,
@@ -299,24 +309,28 @@ class PlategaPaymentMixin:
 
             from app.database.crud.transaction import create_transaction
 
-            record.last_charge_external_id = charge_id
-
             subscription = await db.get(Subscription, record.subscription_id)
-            if subscription is not None:
-                subscription.extend_subscription(record.charge_days)
-            else:
+            if subscription is None:
+                # Не отмечаем charge_id/счётчики — реального продления не было,
+                # репортить успех нельзя. Практически недостижимо (CASCADE FK на
+                # subscription_id сносит и саму запись record), но на случай гонки
+                # молча притворяться успехом хуже, чем залогировать и выйти.
                 logger.error(
                     'Platega subscription callback: Subscription не найдена для продления',
                     subscription_id=record.subscription_id,
                     platega_subscription_id=platega_id,
                 )
+                return
 
+            subscription.extend_subscription(record.charge_days)
+
+            record.last_charge_external_id = charge_id
             record.status = 'ACTIVE'
             record.last_charge_at = datetime.now(UTC)
             record.charges_success += 1
             record.next_charge_at = _parse_next_charge(payload.get('NextChargeAt'))
 
-            await create_transaction(
+            tx = await create_transaction(
                 db,
                 user_id=record.user_id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -328,6 +342,24 @@ class PlategaPaymentMixin:
             )
 
             await db.commit()
+
+            # Emit deferred side-effects after the atomic commit — mirrors
+            # _finalize_platega_payment's DEPOSIT flow. Fires transaction.created,
+            # promo-group auto-assignment and referral-contest tracking; never
+            # raises (swallows its own exceptions), so no extra guarding needed.
+            from app.database.crud.transaction import emit_transaction_side_effects
+
+            await emit_transaction_side_effects(
+                db,
+                tx,
+                amount_kopeks=record.amount_kopeks,
+                user_id=record.user_id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                payment_method=PaymentMethod.PLATEGA,
+                external_id=charge_id,
+                description='СБП-автопродление Platega',
+            )
+
             await self._notify_sbp_recurring(db, record, 'confirmed')
             return
 

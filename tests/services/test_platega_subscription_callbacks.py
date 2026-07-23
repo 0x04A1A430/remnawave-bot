@@ -228,6 +228,81 @@ async def test_confirmed_charge_extends_subscription_and_is_idempotent(monkeypat
         assert subscription.end_date == end_after_first_charge
 
 
+async def test_confirmed_charge_with_empty_id_does_not_extend(monkeypatch):
+    """CONFIRMED без Id (или с пустым Id) — недоверенный коллбек: без id
+    идемпотентность по ``last_charge_external_id`` не сработает, поэтому
+    каждый повтор продлевал бы подписку заново. Такой коллбек не должен
+    продлевать подписку и не должен засчитываться как успешное списание.
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        rec = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-empty-id',
+            status='ACTIVE',
+        )
+
+        svc = Svc()
+        for missing_id in (None, ''):
+            payload = {'Status': 'CONFIRMED', 'Id': missing_id, 'SubscriptionId': 'ps-empty-id'}
+            await svc.process_platega_subscription_callback(db, payload)
+
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date == end0
+        assert rec.charges_success == 0
+        assert rec.last_charge_external_id is None
+
+        transactions = (await db.execute(select(Transaction))).scalars().all()
+        assert len(transactions) == 0
+
+
+async def test_confirmed_charge_missing_subscription_does_not_report_false_success(monkeypatch):
+    """CONFIRMED, но привязанная Subscription отсутствует (гонка/рассинхрон,
+    практически недостижимо благодаря CASCADE FK на subscription_id) — не
+    должен инкрементить charges_success, писать аудитную транзакцию или
+    помечать charge_id как обработанный: реального продления не произошло,
+    репортить успех нельзя.
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        # subscription_id=1 указывает на несуществующую Subscription — FK в
+        # SQLite не форсится (см. docstring _memory_session).
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-9')
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'CONFIRMED', 'Id': 'charge-9', 'SubscriptionId': 'ps-9'}
+        )
+
+        await db.refresh(rec)
+        assert rec.charges_success == 0
+        assert rec.last_charge_external_id is None
+        assert rec.status == 'ACTIVE'
+
+        transactions = (await db.execute(select(Transaction))).scalars().all()
+        assert len(transactions) == 0
+
+
 async def test_canceled_charge_marks_past_due_and_counts_failure(monkeypatch):
     from app.services.payment.platega import PlategaPaymentMixin
 
