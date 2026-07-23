@@ -2839,6 +2839,25 @@ async def reset_user_subscription(
             detail='Open grace access must be drained or restored before resetting subscriptions.',
         ) from error
 
+    # Best-effort: stop Platega SBP autopay before any irreversible panel/DB
+    # step. Each cancellation commits its own transaction internally, which
+    # releases the grace-guard's Postgres advisory lock acquired just above.
+    # It therefore runs BEFORE panel deactivation and the DB deletes, and the
+    # guard is re-acquired immediately below — closing that window before
+    # anything that can't be undone happens.
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    for sub in subs:
+        await cancel_platega_recurring_for_subscription_safe(db, sub.id)
+
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Open grace access must be drained or restored before resetting subscriptions.',
+        ) from error
+
     # Deactivate in Remnawave panel if requested
     if request.deactivate_in_panel:
         try:

@@ -890,3 +890,35 @@ class PlategaPaymentMixin:
         )
 
         return payment
+
+
+class _PlategaCancelAgent(PlategaPaymentMixin):
+    """Минимальный носитель ``PlategaPaymentMixin`` для точек удаления/отзыва
+    подписки (Task 11): несёт только ``platega_service``, в отличие от
+    полного ``PaymentService`` с ещё 23 провайдерами, которые для отмены
+    СБП-автопродления не нужны."""
+
+    def __init__(self) -> None:
+        self.platega_service = PlategaService()
+
+
+async def cancel_platega_recurring_for_subscription_safe(db: AsyncSession, subscription_id: int) -> None:
+    """Точка входа для путей удаления/отзыва подписки: отменяет активную
+    СБП-автоподписку Platega, привязанную к ``subscription_id``.
+
+    Best-effort и никогда не бросает исключение — вызывающий код (удаление
+    подписки администратором, пользователем из кабинета и т.д.) не должен
+    блокироваться недоступностью Platega. Гейтится
+    ``is_platega_recurrent_enabled()``: при выключенном рекурренте выходит
+    немедленно, не трогая ни БД, ни Platega.
+    """
+    if not settings.is_platega_recurrent_enabled():
+        return
+    try:
+        await _PlategaCancelAgent().cancel_platega_recurring_for_subscription(db, subscription_id)
+    except Exception as error:  # pragma: no cover - defensive; mixin already best-effort
+        logger.warning(
+            'Не удалось отменить СБП-автопродление при удалении подписки',
+            error=str(error),
+            subscription_id=subscription_id,
+        )

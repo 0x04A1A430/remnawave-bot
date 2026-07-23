@@ -1,7 +1,8 @@
 """Тесты отмены СБП-подписки Platega через миксин: идемпотентная точечная
-отмена (``cancel_platega_sbp_subscription``) и best-effort хелпер по
-``subscription_id`` (``cancel_platega_recurring_for_subscription``), который
-будет вызываться из путей удаления подписки (Task 11).
+отмена (``cancel_platega_sbp_subscription``), best-effort хелпер по
+``subscription_id`` (``cancel_platega_recurring_for_subscription``) и
+модульная точка входа для путей удаления подписки
+(``cancel_platega_recurring_for_subscription_safe``, Task 11).
 """
 
 import contextlib
@@ -9,10 +10,13 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.config import settings
 from app.database.crud import platega_subscription as sub_crud
 from app.database.models import Base, PlategaSubscription
+from app.services.platega_service import PlategaService
 
 
 def _ensure_real_aiosqlite(monkeypatch) -> None:
@@ -146,3 +150,145 @@ async def test_cancel_pending_without_platega_id_skips_api(monkeypatch):
         await db.refresh(rec)
         assert rec.status == 'CANCELLED'
         svc.platega_service.cancel_subscription.assert_not_awaited()
+
+
+# --- cancel_platega_recurring_for_subscription_safe (Task 11 module-level entry point) ---
+
+
+def _configure_gate_on(monkeypatch: pytest.MonkeyPatch, **overrides) -> None:
+    values = {
+        'PLATEGA_ENABLED': True,
+        'PLATEGA_MERCHANT_ID': 'm',
+        'PLATEGA_SECRET': 's',
+        'PLATEGA_RECURRENT_ENABLED': True,
+    }
+    values.update(overrides)
+    for key, value in values.items():
+        monkeypatch.setattr(settings, key, value, raising=False)
+
+
+async def test_cancel_safe_noop_when_gate_off(monkeypatch):
+    """Гейт выключен (``PLATEGA_RECURRENT_ENABLED=False``) — модульная
+    точка входа должна выйти немедленно, не трогая ни БД, ни Platega.
+    Активная запись остаётся ACTIVE — это доказывает ранний возврат, а не
+    случайно безопасный побочный эффект.
+    """
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', False, raising=False)
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-gate-off')
+
+        await cancel_platega_recurring_for_subscription_safe(db, rec.subscription_id)
+
+        await db.refresh(rec)
+        assert rec.status == 'ACTIVE'
+
+
+async def test_cancel_safe_gate_on_cancels_active_record(monkeypatch):
+    """Гейт включён + есть активная запись + ``PlategaService.cancel_subscription``
+    замокан -> запись переходит в CANCELLED. Доказывает, что модульный хелпер
+    сам конструирует лёгкого ``_PlategaCancelAgent`` (только ``PlategaService``,
+    без остальных провайдеров ``PaymentService``) и реально доходит до миксина.
+    """
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    _configure_gate_on(monkeypatch)
+    mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-gate-on')
+
+        await cancel_platega_recurring_for_subscription_safe(db, rec.subscription_id)
+
+        mock_cancel.assert_awaited_once_with('ps-gate-on')
+        await db.refresh(rec)
+        assert rec.status == 'CANCELLED'
+
+
+async def test_cancel_safe_never_raises_on_platega_error(monkeypatch):
+    """Даже если ``PlategaService.cancel_subscription`` бросает исключение
+    (сеть/5xx), модульная точка входа не должна пробрасывать его дальше —
+    пути удаления подписки вызывают её fire-and-forget. Локальный статус
+    всё равно переходит в CANCELLED (best-effort семантика миксина).
+    """
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    _configure_gate_on(monkeypatch)
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', AsyncMock(side_effect=RuntimeError('platega down')))
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-error')
+
+        await cancel_platega_recurring_for_subscription_safe(db, rec.subscription_id)  # не должен бросить
+
+        await db.refresh(rec)
+        assert rec.status == 'CANCELLED'
+
+
+async def test_cancel_safe_wiring_proof_multi_tariff_delete_subscription(monkeypatch):
+    """Доказательство подключения (Task 11) на самом маленьком вызываемом шве:
+    роут ``multi_tariff.delete_subscription`` резолвит зависимости через
+    FastAPI ``Depends`` — вызываем его как обычную корутину с руками
+    собранными аргументами и подменяем ``cancel_platega_recurring_for_subscription_safe``
+    ровно там, где её резолвит ленивый импорт внутри функции (атрибут модуля
+    ``app.services.payment.platega`` на момент вызова).
+    """
+    import app.services.payment.platega as platega_module
+    from app.cabinet.routes.subscription_modules import multi_tariff
+    from app.database.models import SubscriptionStatus
+
+    recorded: list[tuple[object, int]] = []
+
+    call_order: list[str] = []
+
+    async def fake_cancel(db, subscription_id):
+        recorded.append((db, subscription_id))
+        call_order.append('platega_cancel')
+
+    monkeypatch.setattr(platega_module, 'cancel_platega_recurring_for_subscription_safe', fake_cancel)
+
+    class FakeSubscription(SimpleNamespace):
+        pass
+
+    subscription = FakeSubscription(
+        id=42,
+        status=SubscriptionStatus.EXPIRED.value,
+        actual_status=SubscriptionStatus.EXPIRED.value,
+        remnawave_uuid=None,
+        tariff_id=None,
+    )
+    user = SimpleNamespace(id=1)
+
+    async def fake_get_subscription(db, subscription_id, user_id):
+        return subscription
+
+    async def fake_ensure_no_open_grace(db, subscription_ids):
+        call_order.append('grace_check')
+
+    async def fake_decrement_counts(db, subscription):
+        return None
+
+    monkeypatch.setattr(multi_tariff, 'get_subscription_by_id_for_user', fake_get_subscription)
+    monkeypatch.setattr(multi_tariff, 'decrement_subscription_server_counts', fake_decrement_counts)
+    monkeypatch.setattr(
+        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions',
+        fake_ensure_no_open_grace,
+    )
+
+    db = AsyncMock()
+    db.delete = AsyncMock()
+
+    result = await multi_tariff.delete_subscription(subscription_id=42, user=user, db=db)
+
+    assert result == {'message': 'Subscription deleted'}
+    assert recorded == [(db, 42)]  # cancel called with the subscription being deleted, before db.delete
+    db.delete.assert_awaited_once_with(subscription)
+    # The Platega cancel commits its own transaction, releasing the grace
+    # guard's advisory lock acquired by the first check — so the guard MUST
+    # be re-acquired (called again) right after cancel and before db.delete,
+    # closing that window before the irreversible delete. Regression guard
+    # for that ordering, not just its net effect.
+    assert call_order == ['grace_check', 'platega_cancel', 'grace_check']
