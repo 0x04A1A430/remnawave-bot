@@ -86,3 +86,44 @@ async def test_create_sbp_subscription_persists_and_disables_autopay(monkeypatch
         assert stored.interval == 3
         assert stored.charge_days == 30
         assert stored.amount_kopeks == 19900
+
+
+async def test_create_sbp_subscription_is_idempotent_on_repeat_call(monkeypatch):
+    """Повторный вызов (двойной тап / ретрай клиента) не должен плодить вторую
+    Platega-подписку и не должен повторно звать Platega API — иначе пользователя
+    спишут дважды за цикл, а первая привязка станет невидимой для отмены
+    (get_active_platega_subscription_by_subscription отдаёт только последнюю запись).
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    subscription = SimpleNamespace(id=1, autopay_enabled=True, autopay_period_days=30)
+    tariff = SimpleNamespace(
+        id=5,
+        is_daily=False,
+        name='Стандарт',
+        get_available_periods=lambda: [30, 90],
+        get_shortest_period=lambda: 30,
+        get_purchasable_price_for_period=lambda d: 19900,
+    )
+
+    class Svc(PlategaPaymentMixin):
+        def __init__(self):
+            self.platega_service = SimpleNamespace(
+                create_subscription=AsyncMock(
+                    return_value={'transactionId': 'tx-9', 'redirect': 'https://pay/9', 'status': 'PENDING'}
+                )
+            )
+
+    async with _memory_session(monkeypatch) as db:
+        svc = Svc()
+        stub = svc.platega_service
+
+        first = await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
+        second = await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
+
+        assert stub.create_subscription.await_count == 1
+        assert second['platega_subscription_id'] == first['platega_subscription_id']
+        assert second['local_id'] == first['local_id']
+
+        rows = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
+        assert len([r for r in rows if r.subscription_id == subscription.id]) == 1

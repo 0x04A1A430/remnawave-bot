@@ -159,6 +159,15 @@ class PlategaPaymentMixin:
         from app.services.monitoring_service import resolve_autopay_period_candidate
         from app.services.platega_recurrent import resolve_platega_interval
 
+        existing = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription.id)
+        if existing:
+            return {
+                'local_id': existing.id,
+                'platega_subscription_id': existing.platega_subscription_id,
+                'redirect_url': existing.redirect_url,
+                'status': existing.status,
+            }
+
         period_days = (
             resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
             or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)
