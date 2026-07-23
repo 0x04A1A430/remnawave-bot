@@ -233,6 +233,69 @@ class PlategaPaymentMixin:
             'status': (response or {}).get('status', 'PENDING'),
         }
 
+    async def cancel_platega_sbp_subscription(
+        self,
+        db: AsyncSession,
+        *,
+        local_id: int,
+    ) -> bool:
+        """Отменяет одну СБП-подписку Platega по локальному id записи.
+
+        Идемпотентна: уже отменённая запись возвращает ``True`` без обращения
+        к Platega API. Сама отмена на стороне Platega — best-effort: сетевая
+        ошибка логируется, но не мешает пометить запись ``CANCELLED``
+        локально — иначе временная недоступность Platega блокировала бы
+        отмену навсегда, а повторная отмена уже отменённой Platega-подписки
+        безопасна (идемпотентна на их стороне), так что рассинхрон не страшен.
+        """
+        from app.database.crud import platega_subscription as sub_crud
+
+        record = await sub_crud.get_platega_subscription_by_id(db, local_id)
+        if not record:
+            return False
+
+        if record.status == 'CANCELLED':
+            return True
+
+        if record.platega_subscription_id:
+            try:
+                await self.platega_service.cancel_subscription(record.platega_subscription_id)
+            except Exception as error:  # pragma: no cover - network errors
+                logger.warning(
+                    'Не удалось отменить Platega-подписку на стороне провайдера',
+                    platega_subscription_id=record.platega_subscription_id,
+                    error=str(error),
+                )
+
+        record.status = 'CANCELLED'
+        await db.commit()
+        return True
+
+    async def cancel_platega_recurring_for_subscription(
+        self,
+        db: AsyncSession,
+        subscription_id: int,
+    ) -> None:
+        """Best-effort отмена активной СБП-подписки Platega, привязанной к
+        ``subscription_id``.
+
+        Вызывается из путей удаления/замены подписки (Task 11) — никогда не
+        должна бросать исключение и блокировать удаление сбоем Platega.
+        """
+        from app.database.crud import platega_subscription as sub_crud
+
+        try:
+            record = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription_id)
+            if not record:
+                return
+            await self.cancel_platega_sbp_subscription(db, local_id=record.id)
+        except Exception as error:  # pragma: no cover - best-effort cleanup
+            logger.warning(
+                'Не удалось отменить СБП-автопродление Platega по подписке',
+                subscription_id=subscription_id,
+                error=str(error),
+            )
+
     async def process_platega_subscription_callback(
         self,
         db: AsyncSession,
