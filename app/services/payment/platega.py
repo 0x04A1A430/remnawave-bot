@@ -10,10 +10,27 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import PaymentMethod, TransactionType
+from app.database.models import PaymentMethod, Subscription, TransactionType
 from app.services.platega_service import PlategaService
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
+
+
+def _parse_next_charge(raw: Any) -> datetime | None:
+    """Парсит ``NextChargeAt`` коллбека Platega в aware datetime.
+
+    Значение приходит с суффиксом ``Z`` (UTC), который ``datetime.fromisoformat``
+    понимает только после замены на ``+00:00``. Отсутствие поля или невалидный
+    формат не фатальны — следующее списание останется без даты до следующего
+    коллбека.
+    """
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 class PlategaPaymentMixin:
@@ -215,6 +232,170 @@ class PlategaPaymentMixin:
             'redirect_url': redirect_url,
             'status': (response or {}).get('status', 'PENDING'),
         }
+
+    async def process_platega_subscription_callback(
+        self,
+        db: AsyncSession,
+        payload: dict[str, Any],
+    ) -> None:
+        """Обрабатывает коллбек Platega по рекуррентной СБП-подписке.
+
+        Один и тот же PascalCase-пейлоад Platega шлёт и на списание (charge), и
+        на смену статуса самой подписки — маршрутизация обоих коллбеков сюда
+        сделана в Task 9. Баланс пользователя НЕ трогается: продление —
+        прямой вызов ``Subscription.extend_subscription``, а не начисление
+        суммы платежа на баланс (в отличие от balance-autopay).
+
+        Идемпотентность успешных списаний — по паре
+        ``(platega_subscription_id, charge Id)`` через сохранённый
+        ``last_charge_external_id``: повторная доставка того же коллбека
+        (ретрай Platega) не должна продлевать подписку дважды.
+        """
+        from app.database.crud import platega_subscription as sub_crud
+        from app.services import platega_recurrent as pr
+
+        status = payload.get('Status')
+        platega_id = payload.get('SubscriptionId')
+        charge_id = payload.get('Id')
+
+        if not platega_id:
+            logger.warning('Platega subscription callback без SubscriptionId', status=status)
+            return
+
+        found = await sub_crud.get_platega_subscription_by_platega_id(db, platega_id)
+        if not found:
+            logger.warning(
+                'Platega subscription callback: подписка не найдена',
+                platega_subscription_id=platega_id,
+                status=status,
+            )
+            return
+
+        # Блокируем строку перед изменением статуса/счётчиков — конкурентные
+        # коллбеки (ретрай Platega) не должны продлевать/учитывать дважды.
+        record = await sub_crud.get_platega_subscription_by_id_for_update(db, found.id)
+        if not record:
+            logger.warning(
+                'Platega subscription callback: запись исчезла после блокировки',
+                platega_subscription_id=platega_id,
+                status=status,
+            )
+            return
+
+        if status == pr.SUB_ACTIVATED:
+            record.status = 'ACTIVE'
+            await db.commit()
+            await self._notify_sbp_recurring(db, record, 'activated')
+            return
+
+        if status in pr.CHARGE_SUCCESS:
+            if charge_id and record.last_charge_external_id == charge_id:
+                logger.info(
+                    'Platega subscription callback: списание уже обработано',
+                    platega_subscription_id=platega_id,
+                    charge_id=charge_id,
+                )
+                return
+
+            from app.database.crud.transaction import create_transaction
+
+            record.last_charge_external_id = charge_id
+
+            subscription = await db.get(Subscription, record.subscription_id)
+            if subscription is not None:
+                subscription.extend_subscription(record.charge_days)
+            else:
+                logger.error(
+                    'Platega subscription callback: Subscription не найдена для продления',
+                    subscription_id=record.subscription_id,
+                    platega_subscription_id=platega_id,
+                )
+
+            record.status = 'ACTIVE'
+            record.last_charge_at = datetime.now(UTC)
+            record.charges_success += 1
+            record.next_charge_at = _parse_next_charge(payload.get('NextChargeAt'))
+
+            await create_transaction(
+                db,
+                user_id=record.user_id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=record.amount_kopeks,
+                description='СБП-автопродление Platega',
+                payment_method=PaymentMethod.PLATEGA,
+                external_id=charge_id,
+                commit=False,
+            )
+
+            await db.commit()
+            await self._notify_sbp_recurring(db, record, 'confirmed')
+            return
+
+        if status in pr.CHARGE_FAILED:
+            record.status = 'PAST_DUE'
+            record.charges_failed += 1
+            await db.commit()
+            await self._notify_sbp_recurring(db, record, 'failed')
+            return
+
+        if status == pr.SUB_PAST_DUE:
+            record.status = 'PAST_DUE'
+            await db.commit()
+            await self._notify_sbp_recurring(db, record, 'past_due')
+            return
+
+        if status == pr.SUB_CANCELLED:
+            record.status = 'CANCELLED'
+            await db.commit()
+            await self._notify_sbp_recurring(db, record, 'cancelled')
+            return
+
+        if status == pr.SUB_FAILED:
+            record.status = 'FAILED'
+            await db.commit()
+            await self._notify_sbp_recurring(db, record, 'failed')
+            return
+
+        logger.warning(
+            'Platega subscription callback: неизвестный статус',
+            status=status,
+            platega_subscription_id=platega_id,
+        )
+
+    async def _notify_sbp_recurring(
+        self,
+        db: AsyncSession,
+        record: Any,
+        kind: str,
+    ) -> None:
+        """Best-effort уведомление пользователя о событии СБП-автопродления.
+
+        Никогда не бросает исключение наружу — коллбек Platega должен
+        завершиться 200 OK независимо от того, доставилось ли сообщение в
+        Telegram.
+        """
+        bot = getattr(self, 'bot', None)
+        if not bot:
+            return
+        try:
+            from app.database.models import User
+
+            user = await db.get(User, record.user_id)
+            if not user or not user.telegram_id:
+                return
+
+            messages = {
+                'confirmed': '✅ Подписка продлена автосписанием через СБП.',
+                'failed': '⚠️ Не удалось списать оплату по СБП-автопродлению.',
+                'past_due': '⚠️ СБП-автопродление просрочено.',
+                'cancelled': 'ℹ️ СБП-автопродление отменено.',
+                'activated': '✅ СБП-автопродление активировано.',
+            }
+            text = messages.get(kind)
+            if text:
+                await bot.send_message(chat_id=user.telegram_id, text=text)
+        except Exception as error:  # pragma: no cover - best-effort notify
+            logger.warning('Не удалось отправить уведомление о СБП-автопродлении', error=str(error), kind=kind)
 
     async def process_platega_webhook(
         self,

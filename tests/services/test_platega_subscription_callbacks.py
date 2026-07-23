@@ -1,14 +1,18 @@
-"""Тесты создания СБП-подписки Platega через миксин: персист + отключение balance-autopay."""
+"""Тесты СБП-подписки Platega через миксин: создание (персист + отключение
+balance-autopay) и обработка коллбеков (продление, идемпотентность, статусы).
+"""
 
 import contextlib
 import sys
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database.crud import platega_subscription as sub_crud
-from app.database.models import Base, PlategaSubscription
+from app.database.models import Base, PlategaSubscription, Subscription, Transaction
 
 
 def _ensure_real_aiosqlite(monkeypatch) -> None:
@@ -30,16 +34,23 @@ def _ensure_real_aiosqlite(monkeypatch) -> None:
 
 @contextlib.asynccontextmanager
 async def _memory_session(monkeypatch):
-    """Реальная in-memory SQLite сессия только с таблицей platega_subscriptions.
+    """Реальная in-memory SQLite сессия с таблицами platega_subscriptions,
+    subscriptions и transactions (последние две нужны коллбек-тестам — продление
+    через ``Subscription.extend_subscription`` и аудит через ``create_transaction``).
 
     Полный create_all не годится (другие таблицы используют JSONB, SQLite не
     компилирует), а FK в SQLite по умолчанию не форсятся — поэтому user_id/
-    subscription_id можно ставить произвольными, реальные строки не нужны.
+    subscription_id можно ставить произвольными; реальная строка Subscription
+    нужна только тестам, которые проверяют фактическое продление end_date.
     """
     _ensure_real_aiosqlite(monkeypatch)
     engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     async with engine.begin() as conn:
-        await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=[PlategaSubscription.__table__]))
+        await conn.run_sync(
+            lambda c: Base.metadata.create_all(
+                c, tables=[PlategaSubscription.__table__, Subscription.__table__, Transaction.__table__]
+            )
+        )
     maker = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with maker() as session:
@@ -127,3 +138,208 @@ async def test_create_sbp_subscription_is_idempotent_on_repeat_call(monkeypatch)
 
         rows = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
         assert len([r for r in rows if r.subscription_id == subscription.id]) == 1
+
+
+# --- process_platega_subscription_callback ---
+#
+# Во всех тестах ниже Svc — миксин без атрибута ``bot``, поэтому
+# ``_notify_sbp_recurring`` тихо возвращается на первой же строке
+# (``getattr(self, 'bot', None)`` -> None) и не требует таблицы users.
+
+
+async def _create_recurring_record(db, *, platega_subscription_id: str, status: str = 'ACTIVE'):
+    """Создаёт запись Platega-подписки без реальной привязанной Subscription —
+    для тестов статусных переходов, которым продление не нужно.
+    """
+    return await sub_crud.create_platega_subscription(
+        db,
+        user_id=1,
+        subscription_id=1,
+        tariff_id=None,
+        interval=3,
+        charge_days=30,
+        amount_kopeks=19900,
+        redirect_url=None,
+        platega_subscription_id=platega_subscription_id,
+        status=status,
+    )
+
+
+async def test_confirmed_charge_extends_subscription_and_is_idempotent(monkeypatch):
+    """CONFIRMED: продлевает Subscription.end_date на charge_days, пишет аудитную
+    транзакцию SUBSCRIPTION_PAYMENT, инкрементит charges_success и сохраняет
+    next_charge_at. Повтор того же charge Id (ретрай доставки коллбека от
+    Platega) не должен продлевать подписку повторно.
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        rec = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-1',
+            status='ACTIVE',
+        )
+
+        svc = Svc()
+        payload = {
+            'Status': 'CONFIRMED',
+            'Id': 'charge-1',
+            'Amount': 199,
+            'Currency': 'RUB',
+            'PaymentMethod': 6,
+            'SubscriptionId': 'ps-1',
+            'NextChargeAt': '2026-09-01T00:00:00Z',
+        }
+        await svc.process_platega_subscription_callback(db, payload)
+
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date >= end0 + timedelta(days=29)
+        assert rec.charges_success == 1
+        assert rec.next_charge_at is not None
+        assert rec.status == 'ACTIVE'
+        assert rec.last_charge_external_id == 'charge-1'
+
+        transactions = (await db.execute(select(Transaction))).scalars().all()
+        assert len(transactions) >= 1
+
+        end_after_first_charge = subscription.end_date
+
+        # Реплей того же коллбека — идемпотентно, без повторного продления.
+        await svc.process_platega_subscription_callback(db, payload)
+        await db.refresh(rec)
+        await db.refresh(subscription)
+        assert rec.charges_success == 1
+        assert subscription.end_date == end_after_first_charge
+
+
+async def test_canceled_charge_marks_past_due_and_counts_failure(monkeypatch):
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-2')
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'CANCELED', 'Id': 'charge-fail-1', 'SubscriptionId': 'ps-2'}
+        )
+
+        await db.refresh(rec)
+        assert rec.status == 'PAST_DUE'
+        assert rec.charges_failed == 1
+
+
+async def test_subscription_past_due_status_transition(monkeypatch):
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-3')
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'SUBSCRIPTION_PAST_DUE', 'SubscriptionId': 'ps-3'}
+        )
+
+        await db.refresh(rec)
+        assert rec.status == 'PAST_DUE'
+
+
+async def test_subscription_cancelled_status_transition(monkeypatch):
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-4')
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'SUBSCRIPTION_CANCELLED', 'SubscriptionId': 'ps-4'}
+        )
+
+        await db.refresh(rec)
+        assert rec.status == 'CANCELLED'
+
+
+async def test_subscription_failed_status_transition(monkeypatch):
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-5')
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'SUBSCRIPTION_FAILED', 'SubscriptionId': 'ps-5'}
+        )
+
+        await db.refresh(rec)
+        assert rec.status == 'FAILED'
+
+
+async def test_subscription_activated_status_transition(monkeypatch):
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-6', status='PENDING')
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'SUBSCRIPTION_ACTIVATED', 'SubscriptionId': 'ps-6'}
+        )
+
+        await db.refresh(rec)
+        assert rec.status == 'ACTIVE'
+
+
+async def test_callback_noops_on_missing_or_unknown_subscription_id(monkeypatch):
+    """Отсутствующий/неизвестный SubscriptionId и нераспознанный статус — не
+    должны бросать исключение (коллбек обязан вернуть 200 OK на любой валидный
+    JSON от Platega), просто ничего не меняют.
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-7')
+        svc = Svc()
+
+        # Без SubscriptionId — просто лог + выход.
+        await svc.process_platega_subscription_callback(db, {'Status': 'CONFIRMED', 'Id': 'x'})
+
+        # Неизвестный SubscriptionId — запись не найдена.
+        await svc.process_platega_subscription_callback(
+            db, {'Status': 'CONFIRMED', 'Id': 'x', 'SubscriptionId': 'ps-missing'}
+        )
+
+        # Нераспознанный статус для существующей записи.
+        await svc.process_platega_subscription_callback(db, {'Status': 'SOMETHING_ELSE', 'SubscriptionId': 'ps-7'})
+
+        await db.refresh(rec)
+        assert rec.status == 'ACTIVE'
+        assert rec.charges_success == 0
+        assert rec.charges_failed == 0
