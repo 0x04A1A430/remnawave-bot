@@ -208,7 +208,7 @@ def get_blocked_list_keyboard(
         if page < total_pages:
             nav_row.append(
                 InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'{BlockedUsersCallback.VIEW_LIST_PAGE.value}{page + 1}',
                 )
             )

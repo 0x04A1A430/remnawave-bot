@@ -1168,7 +1168,7 @@ def _build_categories_keyboard(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='',
+                    text='←',
                     callback_data=f'botcfg_group:{group_key}:{page - 1}',
                 )
             )
@@ -1181,7 +1181,7 @@ def _build_categories_keyboard(
         if page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=f'botcfg_group:{group_key}:{page + 1}',
                 )
             )
@@ -1312,7 +1312,7 @@ def _build_settings_keyboard(
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='',
+                    text='←',
                     callback_data=(f'botcfg_cat:{group_key}:{category_key}:{category_page}:{page - 1}'),
                 )
             )
@@ -1320,7 +1320,7 @@ def _build_settings_keyboard(
         if page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text='',
+                    text='→',
                     callback_data=(f'botcfg_cat:{group_key}:{category_key}:{category_page}:{page + 1}'),
                 )
             )
