@@ -3632,6 +3632,26 @@ def get_updated_subscription_settings_keyboard(
             ]
         )
 
+    # Докупка трафика
+    show_traffic_topup = False
+    if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
+        if has_tariff:
+            show_traffic_topup = tariff.can_topup_traffic() and settings.BUY_TRAFFIC_BUTTON_VISIBLE
+        elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
+            show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
+
+    if show_traffic_topup:
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t(
+                        'BUY_TRAFFIC_BUTTON', "<tg-emoji emoji-id='5778550614669660455'>⏲️</tg-emoji> Докупить трафик"
+                    ),
+                    callback_data='buy_traffic',
+                )
+            ]
+        )
+
     # Устройства: для тарифов - только если указана цена за устройство
     if has_tariff:
         tariff_device_price = getattr(tariff, 'device_price_kopeks', None)
@@ -3639,7 +3659,10 @@ def get_updated_subscription_settings_keyboard(
             keyboard.append(
                 [
                     make_button(
-                        text=texts.t('CHANGE_DEVICES_BUTTON', 'Изменить устройства'),
+                        text=texts.t(
+                            'CHANGE_DEVICES_BUTTON',
+                            "<tg-emoji emoji-id='5900084389416537799'>🪟</tg-emoji> Докупка устройств",
+                        ),
                         callback_data='subscription_change_devices',
                     )
                 ]
@@ -3648,7 +3671,10 @@ def get_updated_subscription_settings_keyboard(
         keyboard.append(
             [
                 make_button(
-                    text=texts.t('CHANGE_DEVICES_BUTTON', 'Изменить устройства'),
+                    text=texts.t(
+                        'CHANGE_DEVICES_BUTTON',
+                        "<tg-emoji emoji-id='5900084389416537799'>🪟</tg-emoji> Докупка устройств",
+                    ),
                     callback_data='subscription_change_devices',
                 )
             ]
