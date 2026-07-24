@@ -1016,3 +1016,71 @@ async def test_sbp_purchase_gate_off_raises(monkeypatch):
             await platega_module.purchase_tariff_with_sbp_recurring(
                 db, user=SimpleNamespace(id=1), tariff=_purchase_tariff()
             )
+
+
+async def test_concurrent_enable_race_returns_winner_and_cancels_orphan(monkeypatch):
+    """Гонка конкурентного enable: оба прошли идемпотентную проверку, второй
+    insert отбивается partial unique uq_platega_subscriptions_alive —
+    проигравший отменяет свою осиротевшую remote-подписку и возвращает
+    запись победителя."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    subscription = SimpleNamespace(id=1, autopay_enabled=False, autopay_period_days=30)
+    tariff = SimpleNamespace(
+        id=5,
+        is_daily=False,
+        name='Стандарт',
+        get_available_periods=lambda: [30],
+        get_shortest_period=lambda: 30,
+        get_purchasable_price_for_period=lambda d: 19900,
+    )
+
+    class Svc(PlategaPaymentMixin):
+        def __init__(self):
+            self.platega_service = SimpleNamespace(
+                create_subscription=AsyncMock(
+                    return_value={'transactionId': 'tx-loser', 'redirect': 'https://pay/l', 'status': 'PENDING'}
+                ),
+                cancel_subscription=AsyncMock(return_value={'status': 'cancelled'}),
+            )
+
+    async with _memory_session(monkeypatch) as db:
+        # «Победитель» уже вставился (конкурентный запрос).
+        winner = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=5,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url='https://pay/w',
+            platega_subscription_id='tx-winner',
+            status='PENDING',
+        )
+
+        # Симулируем гонку: идемпотентная проверка «проигравшего» прошла до
+        # вставки победителя — первый вызов lookup'а возвращает None.
+        real_lookup = sub_crud.get_active_platega_subscription_by_subscription
+        calls = {'n': 0}
+
+        async def racy_lookup(inner_db, sub_id):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                return None
+            return await real_lookup(inner_db, sub_id)
+
+        monkeypatch.setattr(sub_crud, 'get_active_platega_subscription_by_subscription', racy_lookup)
+
+        svc = Svc()
+        result = await svc.create_platega_sbp_subscription(db, user_id=1, subscription=subscription, tariff=tariff)
+
+        assert result['local_id'] == winner.id
+        assert result['platega_subscription_id'] == 'tx-winner'
+        svc.platega_service.cancel_subscription.assert_awaited_once_with('tx-loser')
+
+        rows = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
+        assert len([r for r in rows if r.subscription_id == 1]) == 1  # сирота не вставилась

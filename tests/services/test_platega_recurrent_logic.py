@@ -64,3 +64,17 @@ def test_is_daily_wins_over_period_days():
 )
 def test_platega_reconcile_decision(local_status, remote_status, age_minutes, expected):
     assert platega_reconcile_decision(local_status, remote_status, age_minutes) == expected
+
+
+def test_reconcile_outage_does_not_bury_stuck_pending():
+    """Транспортный сбой (remote_missing=False) — зависший PENDING не хороним:
+    провайдер может быть жив, решение откладывается до следующего цикла.
+    Достоверное отсутствие (404 → remote_missing=True) по-прежнему даёт FAILED."""
+    from app.services.platega_recurrent import platega_reconcile_decision
+
+    assert platega_reconcile_decision('PENDING', None, 45.0, remote_missing=False) is None
+    assert platega_reconcile_decision('PENDING', None, 45.0, remote_missing=True) == 'FAILED'
+    # Дефолт (легаси-вызовы без kwarg) сохраняет старое поведение.
+    assert platega_reconcile_decision('PENDING', None, 45.0) == 'FAILED'
+    # Живой remote-статус решает независимо от remote_missing.
+    assert platega_reconcile_decision('PENDING', 'active', 45.0, remote_missing=False) == 'ACTIVE'

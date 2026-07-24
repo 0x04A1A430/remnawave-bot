@@ -2730,11 +2730,13 @@ class MonitoringService:
 
             for record in records:
                 try:
-                    remote = (
-                        await service.get_subscription(record.platega_subscription_id)
-                        if record.platega_subscription_id
-                        else None
-                    )
+                    if record.platega_subscription_id:
+                        remote, http_status = await service.get_subscription_status(record.platega_subscription_id)
+                        # 404 = провайдер достоверно не знает подписку; None-статус =
+                        # транспортный сбой — зависший PENDING хоронить рано.
+                        remote_missing = http_status == 404
+                    else:
+                        remote, remote_missing = None, True
                     remote_status = (
                         str(remote.get('status')).strip().lower()
                         if remote and remote.get('status') is not None
@@ -2746,7 +2748,9 @@ class MonitoringService:
                         else 0.0
                     )
 
-                    new_status = platega_reconcile_decision(record.status, remote_status, age_minutes)
+                    new_status = platega_reconcile_decision(
+                        record.status, remote_status, age_minutes, remote_missing=remote_missing
+                    )
                     if new_status and new_status != record.status:
                         previous_status = record.status
                         await sub_crud.update_platega_subscription(db, record, status=new_status)

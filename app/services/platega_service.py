@@ -126,6 +126,16 @@ class PlategaService:
         endpoint = f'/subscription/{subscription_id}'
         return await self._request('GET', endpoint)
 
+    async def get_subscription_status(self, subscription_id: str) -> tuple[dict[str, Any] | None, int | None]:
+        """GET подписки с HTTP-статусом: (payload, status).
+
+        Нужен reconciler'у, чтобы отличать «подписки нет у провайдера»
+        (HTTP 404 → можно хоронить локальную запись) от «Platega недоступна»
+        (status=None → решение откладывается до следующего цикла).
+        """
+        endpoint = f'/subscription/{subscription_id}'
+        return await self._request('GET', endpoint, return_status=True)
+
     async def list_subscriptions(
         self,
         *,
@@ -161,10 +171,23 @@ class PlategaService:
         *,
         json_data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        return_status: bool = False,
+    ) -> Any:
+        """HTTP-запрос к Platega.
+
+        По умолчанию возвращает payload или None (любой сбой). С
+        ``return_status=True`` — кортеж ``(payload, http_status | None)``:
+        status=None означает транспортный сбой (таймаут/сеть/неконфигурация),
+        а не ответ провайдера — вызывающий может отличить «404: объекта нет»
+        от «Platega недоступна».
+        """
+
+        def _result(data: dict[str, Any] | None, status: int | None) -> Any:
+            return (data, status) if return_status else data
+
         if not self.is_configured:
             logger.error('Platega service is not configured')
-            return None
+            return _result(None, None)
 
         url = f'{self.base_url}{endpoint}'
         headers = {
@@ -196,9 +219,9 @@ class PlategaService:
                         if response.status in self._retryable_statuses and attempt < self._max_retries:
                             await asyncio.sleep(self._retry_delay * attempt)
                             continue
-                        return None
+                        return _result(None, response.status)
 
-                    return data
+                    return _result(data, response.status)
             except asyncio.CancelledError:
                 logger.debug('Platega request cancelled', method=method, endpoint=endpoint)
                 raise
@@ -223,7 +246,7 @@ class PlategaService:
                 )
             except Exception as error:  # pragma: no cover - safety
                 logger.exception('Unexpected Platega error', error=error)
-                return None
+                return _result(None, None)
 
             if attempt < self._max_retries:
                 await asyncio.sleep(self._retry_delay * attempt)
@@ -237,7 +260,7 @@ class PlategaService:
                 last_error=last_error,
             )
 
-        return None
+        return _result(None, None)
 
     @staticmethod
     async def _deserialize_response(

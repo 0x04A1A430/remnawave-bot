@@ -712,7 +712,19 @@ class PlategaSubscription(Base):
     user = relationship('User', backref='platega_subscriptions')
     subscription = relationship('Subscription', backref='platega_subscriptions')
 
-    __table_args__ = (Index('ix_platega_subscriptions_user_active', 'user_id', 'status'),)
+    __table_args__ = (
+        Index('ix_platega_subscriptions_user_active', 'user_id', 'status'),
+        # Одна живая привязка на подписку: гонка конкурентного enable проходит
+        # идемпотентную проверку ДО вставки — индекс делает вторую вставку
+        # IntegrityError, сервис возвращает существующую запись (миграция 0100).
+        Index(
+            'uq_platega_subscriptions_alive',
+            'subscription_id',
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+            sqlite_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+        ),
+    )
 
     @property
     def amount_rubles(self) -> float:

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from importlib import import_module
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -218,17 +219,48 @@ class PlategaPaymentMixin:
             raise RuntimeError('Platega не вернула transactionId при создании подписки')
         redirect_url = (response or {}).get('redirect')
 
-        record = await sub_crud.create_platega_subscription(
-            db,
-            user_id=user_id,
-            subscription_id=subscription.id,
-            tariff_id=getattr(tariff, 'id', None),
-            interval=interval,
-            charge_days=charge_days,
-            amount_kopeks=amount_kopeks,
-            redirect_url=redirect_url,
-            platega_subscription_id=platega_id,
-        )
+        try:
+            record = await sub_crud.create_platega_subscription(
+                db,
+                user_id=user_id,
+                subscription_id=subscription.id,
+                tariff_id=getattr(tariff, 'id', None),
+                interval=interval,
+                charge_days=charge_days,
+                amount_kopeks=amount_kopeks,
+                redirect_url=redirect_url,
+                platega_subscription_id=platega_id,
+            )
+        except IntegrityError:
+            # Гонка конкурентного enable: оба запроса прошли идемпотентную
+            # проверку выше, победитель вставился первым, нас отбил partial
+            # unique uq_platega_subscriptions_alive. Наша remote-подписка уже
+            # создана и осталась бы сиротой — отменяем best-effort и
+            # возвращаем запись победителя.
+            await db.rollback()
+            try:
+                await self.platega_service.cancel_subscription(platega_id)
+            except Exception as orphan_error:  # pragma: no cover - best-effort
+                logger.warning(
+                    'Не удалось отменить осиротевшую Platega-подписку после гонки enable',
+                    platega_subscription_id=platega_id,
+                    error=str(orphan_error),
+                )
+            winner = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription.id)
+            if winner is None:  # pragma: no cover - победитель успел отмениться
+                raise RuntimeError('Platega-подписка не создана: конкурентная гонка enable') from None
+            logger.info(
+                'Гонка конкурентного enable СБП: возвращаю запись победителя',
+                subscription_id=subscription.id,
+                winner_local_id=winner.id,
+                orphan_platega_id=platega_id,
+            )
+            return {
+                'local_id': winner.id,
+                'platega_subscription_id': winner.platega_subscription_id,
+                'redirect_url': winner.redirect_url,
+                'status': winner.status,
+            }
 
         # Взаимоисключение: у подписки может быть только один движок продления.
         subscription.autopay_enabled = False

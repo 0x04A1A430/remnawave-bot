@@ -42,11 +42,21 @@ def resolve_platega_interval(period_days: int, is_daily: bool) -> tuple[int, int
     return INTERVAL_MONTH, 30
 
 
-def platega_reconcile_decision(local_status: str, remote_status: str | None, age_minutes: float) -> str | None:
+def platega_reconcile_decision(
+    local_status: str,
+    remote_status: str | None,
+    age_minutes: float,
+    *,
+    remote_missing: bool = True,
+) -> str | None:
     """New local status given the Platega-reported status, or None for no change.
 
     remote_status is normalized lowercase (Platega get-subscription `status`), or
-    None when Platega has no record / the lookup failed. Used by the monitoring
+    None when Platega has no record / the lookup failed. ``remote_missing``
+    disambiguates the None case: True — провайдер ДОСТОВЕРНО не знает такой
+    подписки (HTTP 404, либо у записи вовсе нет platega_subscription_id);
+    False — Platega недоступна (транспортный сбой) и хоронить зависший PENDING
+    рано: решение откладывается до следующего цикла. Used by the monitoring
     reconciler (safety net for lost callbacks / stuck PENDING records) — first
     matching rule wins.
     """
@@ -58,6 +68,6 @@ def platega_reconcile_decision(local_status: str, remote_status: str | None, age
         return 'FAILED'
     if remote_status in ('pastdue', 'past_due', 'past due') and local_status not in ('PAST_DUE', 'CANCELLED'):
         return 'PAST_DUE'
-    if remote_status is None and local_status == 'PENDING' and age_minutes > 30:
+    if remote_status is None and remote_missing and local_status == 'PENDING' and age_minutes > 30:
         return 'FAILED'
     return None
