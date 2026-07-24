@@ -1595,6 +1595,22 @@ async def update_subscription_autopay(
     await db.commit()
     await db.refresh(subscription)
 
+    if enabled:
+        # Взаимоисключение движков продления ЦЕНТРАЛИЗОВАНО здесь: включение
+        # balance-autopay отменяет активное СБП-автопродление Platega. Точечные
+        # вызовы на отдельных поверхностях (бот/кабинет) пропускали новые точки
+        # включения (миниапп, админ-тоглы) — и юзер платил дважды за цикл.
+        try:
+            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+        except Exception as platega_error:  # pragma: no cover - хелпер сам best-effort
+            logger.warning(
+                'Не удалось отменить СБП-автопродление при включении автоплатежа',
+                subscription_id=getattr(subscription, 'id', None),
+                error=str(platega_error),
+            )
+
     status = 'включен' if enabled else 'выключен'
     logger.info('💳 Автоплатеж для подписки пользователя', user_id=subscription.user_id, status=status)
     return subscription

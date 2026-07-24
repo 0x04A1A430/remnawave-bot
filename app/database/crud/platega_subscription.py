@@ -95,3 +95,22 @@ async def update_platega_subscription(
 async def list_platega_subscriptions_by_statuses(db: AsyncSession, statuses: list[str]) -> list[PlategaSubscription]:
     result = await db.execute(select(PlategaSubscription).where(PlategaSubscription.status.in_(statuses)))
     return list(result.scalars().all())
+
+
+async def list_recently_cancelled_platega_subscriptions(
+    db: AsyncSession, updated_after: Any
+) -> list[PlategaSubscription]:
+    """Недавно отменённые локально записи с remote-идентификатором.
+
+    Нужны reconciler'у для контрольной сверки: локальная отмена могла не
+    дойти до Platega (сеть/аутентификация), и провайдер продолжил бы
+    списывать. Окно ``updated_after`` ограничивает свип свежими отменами.
+    """
+    result = await db.execute(
+        select(PlategaSubscription).where(
+            PlategaSubscription.status == 'CANCELLED',
+            PlategaSubscription.platega_subscription_id.isnot(None),
+            PlategaSubscription.updated_at >= updated_after,
+        )
+    )
+    return list(result.scalars().all())

@@ -167,23 +167,50 @@ def _configure_gate_on(monkeypatch: pytest.MonkeyPatch, **overrides) -> None:
         monkeypatch.setattr(settings, key, value, raising=False)
 
 
-async def test_cancel_safe_noop_when_gate_off(monkeypatch):
-    """Гейт выключен (``PLATEGA_RECURRENT_ENABLED=False``) — модульная
-    точка входа должна выйти немедленно, не трогая ни БД, ни Platega.
-    Активная запись остаётся ACTIVE — это доказывает ранний возврат, а не
-    случайно безопасный побочный эффект.
+async def test_cancel_safe_works_even_when_gate_off(monkeypatch):
+    """Гейт выключен (``PLATEGA_RECURRENT_ENABLED=False``) — отмена ВСЁ РАВНО
+    выполняется: это safety-операция. Если бы отмена гейтилась, выключение
+    фичи бросало бы юзеров с живыми привязками, по которым Platega
+    продолжила бы списывать без возможности отписаться.
     """
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
-    monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', False, raising=False)
+    _configure_gate_on(monkeypatch, PLATEGA_RECURRENT_ENABLED=False)
+    mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
 
     async with _memory_session(monkeypatch) as db:
         rec = await _create_recurring_record(db, platega_subscription_id='ps-gate-off')
 
         await cancel_platega_recurring_for_subscription_safe(db, rec.subscription_id)
 
+        mock_cancel.assert_awaited_once_with('ps-gate-off')
         await db.refresh(rec)
-        assert rec.status == 'ACTIVE'
+        assert rec.status == 'CANCELLED'
+
+
+async def test_cancel_safe_commit_false_defers_to_caller_transaction(monkeypatch):
+    """``commit=False`` (мерж аккаунтов): локальный CANCELLED уходит flush'ем
+    без коммита — откат транзакции вызывающего откатывает и его. Remote-отмена
+    при этом выполняется (её при откате добьёт reconciler по remote-статусу).
+    """
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    _configure_gate_on(monkeypatch)
+    mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-no-commit')
+
+        await cancel_platega_recurring_for_subscription_safe(db, rec.subscription_id, commit=False)
+
+        mock_cancel.assert_awaited_once_with('ps-no-commit')
+        assert rec.status == 'CANCELLED'  # в сессии — уже отменена
+
+        await db.rollback()  # транзакция вызывающего откатилась
+        await db.refresh(rec)
+        assert rec.status == 'ACTIVE'  # CANCELLED не был закоммичен хелпером
 
 
 async def test_cancel_safe_gate_on_cancels_active_record(monkeypatch):

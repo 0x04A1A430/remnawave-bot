@@ -105,15 +105,27 @@ async def test_get_403_when_gate_disabled(monkeypatch, user):
     db.execute.assert_not_awaited()
 
 
-async def test_cancel_403_when_gate_disabled(monkeypatch, user):
+async def test_cancel_works_even_when_gate_disabled(monkeypatch, user):
+    """Отмена НЕ гейтится: выключение фичи не должно бросать юзеров с живыми
+    привязками, по которым Platega продолжает списывать без кнопки отписки."""
     _configure_gate(monkeypatch, enabled=False)
+    subscription = _Subscription()
     db = AsyncMock()
 
-    with pytest.raises(HTTPException) as exc_info:
-        await route.cancel_platega_recurrent(user=user, db=db, subscription_id=None)
+    async def fake_resolve(resolve_db, u, subscription_id):
+        return subscription
 
-    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    db.execute.assert_not_awaited()
+    mock_cancel = AsyncMock(return_value=None)
+    monkeypatch.setattr(route, 'resolve_subscription', fake_resolve)
+    monkeypatch.setattr(
+        'app.services.payment.platega.cancel_platega_recurring_for_subscription_safe',
+        mock_cancel,
+    )
+
+    result = await route.cancel_platega_recurrent(user=user, db=db, subscription_id=None)
+
+    assert result == {'status': 'cancelled'}
+    mock_cancel.assert_awaited_once_with(db, subscription.id)
 
 
 # --- enable -------------------------------------------------------------
@@ -131,6 +143,25 @@ async def test_enable_404_when_no_subscription(monkeypatch, user):
         await route.enable_platega_recurrent(user=user, db=AsyncMock(), subscription_id=None)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_enable_400_for_trial_subscription(monkeypatch, user):
+    """Триал — пробник: подключать к нему рекуррентное списание нельзя
+    (списывали бы полную цену тарифа за бесплатный период)."""
+    _configure_gate(monkeypatch, enabled=True)
+    subscription = _Subscription()
+    subscription.is_trial = True
+
+    async def fake_resolve(db, u, subscription_id):
+        return subscription
+
+    monkeypatch.setattr(route, 'resolve_subscription', fake_resolve)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await route.enable_platega_recurrent(user=user, db=AsyncMock(), subscription_id=None)
+
+    assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'Trial' in exc_info.value.detail
 
 
 async def test_enable_400_when_subscription_has_no_tariff(monkeypatch, user):

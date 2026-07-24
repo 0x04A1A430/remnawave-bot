@@ -280,3 +280,73 @@ async def test_reconcile_marks_stuck_pending_as_failed(monkeypatch: pytest.Monke
 
         await db.refresh(record)
         assert record.status == 'FAILED'
+
+
+async def test_reconcile_recancels_remotely_active_cancelled_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Контрольный свип отменённых: локальный CANCELLED, но remote-статус
+    активный (cancel-запрос когда-то не дошёл) — reconciler должен повторить
+    удалённую отмену, иначе Platega продолжит списывать по «отменённой» у
+    нас подписке.
+    """
+    from unittest.mock import AsyncMock
+
+    _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
+
+    mock_get = AsyncMock(return_value={'status': 'ACTIVE'})
+    mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
+    monkeypatch.setattr(PlategaService, 'get_subscription', mock_get)
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
+
+    async with _memory_session(monkeypatch) as db:
+        record = await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-zombie',
+            status='CANCELLED',
+        )
+
+        service = MonitoringService()
+        await service._reconcile_platega_subscriptions(db)
+
+        mock_get.assert_awaited_once_with('ps-zombie')
+        mock_cancel.assert_awaited_once_with('ps-zombie')
+        await db.refresh(record)
+        assert record.status == 'CANCELLED'  # локальный статус не трогаем
+
+
+async def test_reconcile_skips_cancelled_record_confirmed_remotely(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CANCELLED-запись, у которой remote-статус тоже cancelled, — свип не
+    должен дёргать cancel_subscription повторно (лишний трафик к провайдеру)."""
+    from unittest.mock import AsyncMock
+
+    _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=True)
+
+    mock_get = AsyncMock(return_value={'status': 'CANCELLED'})
+    mock_cancel = AsyncMock()
+    monkeypatch.setattr(PlategaService, 'get_subscription', mock_get)
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
+
+    async with _memory_session(monkeypatch) as db:
+        await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-done',
+            status='CANCELLED',
+        )
+
+        service = MonitoringService()
+        await service._reconcile_platega_subscriptions(db)
+
+        mock_cancel.assert_not_awaited()

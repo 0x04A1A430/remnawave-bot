@@ -1387,6 +1387,15 @@ async def update_user_subscription(
                 detail='tariff_id parameter is required',
             )
 
+        # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила
+        # бы списывать СТАРУЮ сумму со СТАРЫМ каденсом. Отменяем привязку — юзер
+        # переподключит СБП-автопродление под новый тариф (нужна новая
+        # банковская авторизация, молча пересоздать нельзя).
+        if request.tariff_id != subscription.tariff_id:
+            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
         tariff = await get_tariff_by_id(db, request.tariff_id)
         if not tariff:
             raise HTTPException(
@@ -1507,6 +1516,13 @@ async def update_user_subscription(
         await db.commit()
         await db.refresh(subscription)
 
+        if request.autopay_enabled:
+            # Взаимоисключение движков продления: включение balance-autopay
+            # отменяет активное СБП-автопродление Platega (иначе двойное списание).
+            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
         state = 'enabled' if request.autopay_enabled else 'disabled'
         logger.info('Admin autopay for user', admin_id=admin.id, state=state, user_id=user_id)
 
@@ -1517,6 +1533,13 @@ async def update_user_subscription(
         )
 
     if request.action == 'cancel':
+        # Подписку убивают — СБП-автопродление Platega обязано умереть вместе с
+        # ней, иначе следующий коллбек продлит и воскресит её, а банк продолжит
+        # списывать.
+        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
         subscription.status = SubscriptionStatus.EXPIRED.value
         subscription.end_date = datetime.now(UTC)
         subscription.grace_suppressed_until = subscription.end_date

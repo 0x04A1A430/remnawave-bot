@@ -14,7 +14,10 @@ INTERVAL_YEAR = 4
 
 # Статусы коллбеков
 CHARGE_SUCCESS = {'CONFIRMED'}
-CHARGE_FAILED = {'CANCELED'}
+# Провальный чардж: докам известен CANCELED, но словарь разовых платежей Platega
+# в этом же проекте включает FAILED/EXPIRED — неизвестный провальный статус
+# уронил бы переход в PAST_DUE (ни счётчика, ни уведомления юзеру).
+CHARGE_FAILED = {'CANCELED', 'FAILED', 'EXPIRED'}
 SUB_ACTIVATED = 'SUBSCRIPTION_ACTIVATED'
 SUB_PAST_DUE = 'SUBSCRIPTION_PAST_DUE'
 SUB_CANCELLED = 'SUBSCRIPTION_CANCELLED'

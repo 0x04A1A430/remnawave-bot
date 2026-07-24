@@ -2124,5 +2124,10 @@
   "SBP_RECURRING_ALREADY_ACTIVE": "СБП-автопродление уже подключено.",
   "SBP_RECURRING_CONFIRM_BUTTON": "🏦 Подтвердить в банке",
   "SBP_RECURRING_ENABLE_SUCCESS": "⚡ <b>Автопродление через СБП</b>\n\nПодтвердите подключение в банковском приложении по кнопке ниже.\nПосле подтверждения автопродление станет активным.",
-  "SBP_RECURRING_CANCELLED": "✅ Автопродление через СБП отменено"
+  "SBP_RECURRING_CANCELLED": "✅ Автопродление через СБП отменено",
+  "SBP_RECURRING_NOTIFY_CONFIRMED": "✅ Подписка продлена автосписанием через СБП.",
+  "SBP_RECURRING_NOTIFY_FAILED": "⚠️ Не удалось списать оплату по СБП-автопродлению.",
+  "SBP_RECURRING_NOTIFY_PAST_DUE": "⚠️ СБП-автопродление просрочено.",
+  "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ СБП-автопродление отменено.",
+  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ СБП-автопродление активировано."
 }

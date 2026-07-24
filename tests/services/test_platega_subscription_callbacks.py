@@ -659,3 +659,188 @@ async def test_callback_noops_on_missing_or_unknown_subscription_id(monkeypatch)
         assert rec.status == 'ACTIVE'
         assert rec.charges_success == 0
         assert rec.charges_failed == 0
+
+
+# --- Аудит-фиксы: воскрешение отменённой записи, поздний ределивери, словарь провалов ---
+
+
+async def test_confirmed_charge_on_cancelled_record_extends_but_stays_cancelled(monkeypatch):
+    """Списание по локально ОТМЕНЁННОЙ записи (удалённая отмена не прошла):
+    деньги взяты — подписка продлевается честно, но запись НЕ воскрешается в
+    ACTIVE (иначе отмена юзера молча стирается и цикл продолжается вечно), и
+    удалённая отмена немедленно повторяется.
+    """
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        def __init__(self):
+            self.platega_service = SimpleNamespace(cancel_subscription=AsyncMock(return_value={'status': 'cancelled'}))
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-res', status='CANCELLED')
+
+        svc = Svc()
+        await svc.process_platega_subscription_callback(
+            db, {'Status': 'CONFIRMED', 'Id': 'charge-res-1', 'SubscriptionId': 'ps-res'}
+        )
+
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date >= end0 + timedelta(days=29)  # деньги взяты — продлено
+        assert rec.status == 'CANCELLED'  # но запись не воскрешена
+        assert rec.charges_success == 1
+        svc.platega_service.cancel_subscription.assert_awaited_once_with('ps-res')
+
+
+async def test_confirmed_late_redelivery_of_older_charge_is_skipped(monkeypatch):
+    """last_charge_external_id хранит только ПОСЛЕДНИЙ charge Id: поздний
+    ределивери СТАРОГО списания (N после N+1) проходит мимо быстрой проверки —
+    его должна поймать полноисторийная сверка с transactions.external_id.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.database.models import PaymentMethod, TransactionType
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=32)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        # Старое списание charge-N уже обработано и записано в transactions,
+        # но last_charge_external_id уже перезаписан более новым charge-N+1.
+        db.add(
+            Transaction(
+                user_id=1,
+                type=TransactionType.SUBSCRIPTION_PAYMENT.value,
+                amount_kopeks=19900,
+                description='СБП-автопродление Platega',
+                payment_method=PaymentMethod.PLATEGA.value,
+                external_id='charge-N',
+            )
+        )
+        await db.commit()
+
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-late')
+        rec.last_charge_external_id = 'charge-N+1'
+        await db.commit()
+
+        await Svc().process_platega_subscription_callback(
+            db, {'Status': 'CONFIRMED', 'Id': 'charge-N', 'SubscriptionId': 'ps-late'}
+        )
+
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date == end0  # повторного продления не было
+        assert rec.charges_success == 0
+        assert rec.last_charge_external_id == 'charge-N+1'  # не затёрт старым Id
+
+
+async def test_failed_and_expired_charge_statuses_mark_past_due(monkeypatch):
+    """Словарь провального списания не ограничен CANCELED: разовые платежи
+    Platega знают FAILED и EXPIRED — оба должны давать PAST_DUE + счётчик,
+    а не проваливаться в 'неизвестный статус' (молча теряя провал списания).
+    """
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    class Svc(PlategaPaymentMixin):
+        """Без атрибута bot."""
+
+    for i, status in enumerate(('FAILED', 'EXPIRED')):
+        async with _memory_session(monkeypatch) as db:
+            rec = await _create_recurring_record(db, platega_subscription_id=f'ps-fail-{i}')
+
+            await Svc().process_platega_subscription_callback(
+                db, {'Status': status, 'Id': f'charge-{status}', 'SubscriptionId': f'ps-fail-{i}'}
+            )
+
+            await db.refresh(rec)
+            assert rec.status == 'PAST_DUE', status
+            assert rec.charges_failed == 1, status
+
+
+async def test_create_sbp_subscription_rejects_zero_price(monkeypatch):
+    """Нулевая цена отклоняется наравне с отсутствующей: подписка Platega на
+    0 ₽ бессмысленна и вела бы к пустым регулярным «списаниям». Platega API
+    при этом вызываться не должен.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    subscription = SimpleNamespace(id=1, autopay_enabled=False, autopay_period_days=30)
+    tariff = SimpleNamespace(
+        id=5,
+        is_daily=False,
+        name='Бесплатный',
+        get_available_periods=lambda: [30],
+        get_shortest_period=lambda: 30,
+        get_purchasable_price_for_period=lambda d: 0,
+    )
+
+    class Svc(PlategaPaymentMixin):
+        def __init__(self):
+            self.platega_service = SimpleNamespace(create_subscription=AsyncMock())
+
+    async with _memory_session(monkeypatch) as db:
+        svc = Svc()
+        with pytest.raises(ValueError, match='не имеет цены'):
+            await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
+
+        svc.platega_service.create_subscription.assert_not_awaited()
+        rows = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
+        assert rows == []
+
+
+async def test_create_sbp_short_circuit_reenforces_autopay_off(monkeypatch):
+    """Идемпотентный повтор create при живой записи: если между вызовами юзер
+    успел включить balance-autopay, short-circuit обязан заново выключить его —
+    иначе оба движка продления останутся включёнными одновременно.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.services.payment.platega import PlategaPaymentMixin
+
+    subscription = SimpleNamespace(id=1, autopay_enabled=True, autopay_period_days=30)
+    tariff = SimpleNamespace(
+        id=5,
+        is_daily=False,
+        name='Стандарт',
+        get_available_periods=lambda: [30],
+        get_shortest_period=lambda: 30,
+        get_purchasable_price_for_period=lambda d: 19900,
+    )
+
+    class Svc(PlategaPaymentMixin):
+        def __init__(self):
+            self.platega_service = SimpleNamespace(
+                create_subscription=AsyncMock(
+                    return_value={'transactionId': 'tx-re', 'redirect': 'https://pay/re', 'status': 'PENDING'}
+                )
+            )
+
+    async with _memory_session(monkeypatch) as db:
+        svc = Svc()
+        await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
+        assert subscription.autopay_enabled is False
+
+        subscription.autopay_enabled = True  # юзер включил balance-autopay между вызовами
+        await svc.create_platega_sbp_subscription(db, user_id=777, subscription=subscription, tariff=tariff)
+
+        assert subscription.autopay_enabled is False  # short-circuit заново выключил
+        assert svc.platega_service.create_subscription.await_count == 1

@@ -2124,5 +2124,10 @@
   "SBP_RECURRING_ALREADY_ACTIVE": "SBP auto-renewal is already enabled.",
   "SBP_RECURRING_CONFIRM_BUTTON": "🏦 Confirm in bank",
   "SBP_RECURRING_ENABLE_SUCCESS": "⚡ <b>Auto-renewal via SBP</b>\n\nConfirm the connection in your banking app using the button below.\nAuto-renewal will become active once confirmed.",
-  "SBP_RECURRING_CANCELLED": "✅ Auto-renewal via SBP cancelled"
+  "SBP_RECURRING_CANCELLED": "✅ Auto-renewal via SBP cancelled",
+  "SBP_RECURRING_NOTIFY_CONFIRMED": "✅ Subscription renewed via SBP auto-payment.",
+  "SBP_RECURRING_NOTIFY_FAILED": "⚠️ SBP auto-renewal charge failed.",
+  "SBP_RECURRING_NOTIFY_PAST_DUE": "⚠️ SBP auto-renewal is past due.",
+  "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ SBP auto-renewal cancelled.",
+  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ SBP auto-renewal activated."
 }

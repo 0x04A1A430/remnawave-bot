@@ -43,6 +43,14 @@ async def enable_platega_recurrent(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
+    # Паритет с бот-флоу: триальная подписка не должна авторизовывать реальное
+    # рекуррентное списание в банке (бот блокирует это в handle_sbp_recurring_enable).
+    if getattr(subscription, 'is_trial', False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Trial subscriptions cannot enable SBP auto-payment',
+        )
+
     # Load the tariff explicitly — subscription.tariff is an async lazy-load
     # relationship that would raise MissingGreenlet if touched here.
     if not subscription.tariff_id:
@@ -113,12 +121,12 @@ async def cancel_platega_recurrent(
     db: AsyncSession = Depends(get_cabinet_db),
     subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
-    """Cancel Platega SBP auto-renewal for the resolved subscription (best-effort)."""
-    from app.config import settings
+    """Cancel Platega SBP auto-renewal for the resolved subscription (best-effort).
 
-    if not settings.is_platega_recurrent_enabled():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Platega recurrent disabled')
-
+    НЕ гейтится флагом рекуррента: отмена — операция безопасности. Если фичу
+    выключили при живых привязках, Platega продолжает списывать — юзер обязан
+    иметь путь остановить это (гейт оставлен только на enable/get).
+    """
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')

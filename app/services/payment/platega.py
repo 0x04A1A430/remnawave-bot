@@ -178,6 +178,12 @@ class PlategaPaymentMixin:
 
         existing = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription.id)
         if existing:
+            # Идемпотентный повтор обязан ТОЖЕ восстановить взаимоисключение:
+            # если balance-autopay успели включить обратно (например, пока фича
+            # была выключена), оба движка продления остались бы взведёнными.
+            if getattr(subscription, 'autopay_enabled', False):
+                subscription.autopay_enabled = False
+                await db.commit()
             return {
                 'local_id': existing.id,
                 'platega_subscription_id': existing.platega_subscription_id,
@@ -195,7 +201,9 @@ class PlategaPaymentMixin:
         interval, charge_days = resolve_platega_interval(period_days, is_daily)
 
         amount_kopeks = tariff.get_purchasable_price_for_period(charge_days)
-        if amount_kopeks is None:
+        # Нулевая цена отклоняется наравне с отсутствующей: подписка Platega на
+        # 0 ₽ бессмысленна и вела бы к пустым регулярным «списаниям».
+        if not amount_kopeks:
             raise ValueError(f'Тариф не имеет цены за период {charge_days} дней — СБП-автопродление недоступно')
 
         response = await self.platega_service.create_subscription(
@@ -238,6 +246,7 @@ class PlategaPaymentMixin:
         db: AsyncSession,
         *,
         local_id: int,
+        commit: bool = True,
     ) -> bool:
         """Отменяет одну СБП-подписку Platega по локальному id записи.
 
@@ -259,7 +268,17 @@ class PlategaPaymentMixin:
 
         if record.platega_subscription_id:
             try:
-                await self.platega_service.cancel_subscription(record.platega_subscription_id)
+                result = await self.platega_service.cancel_subscription(record.platega_subscription_id)
+                if result is None:
+                    # _request сам глотает HTTP-ошибки и возвращает None — сюда
+                    # попадает КАЖДЫЙ реальный сбой провайдера. Локально запись
+                    # всё равно станет CANCELLED, а reconciler повторит удалённую
+                    # отмену (свип CANCELLED-записей), чтобы Platega не продолжила
+                    # списывать по «отменённой» у нас подписке.
+                    logger.warning(
+                        'Отмена Platega-подписки не подтверждена провайдером — reconciler повторит',
+                        platega_subscription_id=record.platega_subscription_id,
+                    )
             except Exception as error:  # pragma: no cover - network errors
                 logger.warning(
                     'Не удалось отменить Platega-подписку на стороне провайдера',
@@ -268,13 +287,22 @@ class PlategaPaymentMixin:
                 )
 
         record.status = 'CANCELLED'
-        await db.commit()
+        if commit:
+            await db.commit()
+        else:
+            # commit=False — вызывающий держит собственную транзакцию (например,
+            # мерж аккаунтов с flush-секвенированием): CANCELLED войдёт в неё и
+            # закоммитится/откатится вместе с остальным. При откате remote уже
+            # отменён — reconciler добьёт локальный статус по remote-состоянию.
+            await db.flush()
         return True
 
     async def cancel_platega_recurring_for_subscription(
         self,
         db: AsyncSession,
         subscription_id: int,
+        *,
+        commit: bool = True,
     ) -> None:
         """Best-effort отмена активной СБП-подписки Platega, привязанной к
         ``subscription_id``.
@@ -288,7 +316,7 @@ class PlategaPaymentMixin:
             record = await sub_crud.get_active_platega_subscription_by_subscription(db, subscription_id)
             if not record:
                 return
-            await self.cancel_platega_sbp_subscription(db, local_id=record.id)
+            await self.cancel_platega_sbp_subscription(db, local_id=record.id, commit=commit)
         except Exception as error:  # pragma: no cover - best-effort cleanup
             logger.warning(
                 'Не удалось отменить СБП-автопродление Platega по подписке',
@@ -370,6 +398,31 @@ class PlategaPaymentMixin:
                 )
                 return
 
+            # Полноисторийная идемпотентность: last_charge_external_id хранит
+            # только ПОСЛЕДНИЙ charge Id, поэтому поздний ределивери старого
+            # списания (N после N+1) прошёл бы мимо быстрой проверки выше и
+            # продлил бы подписку второй раз. Каждый обработанный чардж уже
+            # записан в transactions.external_id — сверяемся с ним.
+            from sqlalchemy import select as sa_select
+
+            from app.database.models import Transaction
+
+            duplicate_tx = (
+                await db.execute(
+                    sa_select(Transaction.id).where(
+                        Transaction.external_id == charge_id,
+                        Transaction.payment_method == PaymentMethod.PLATEGA.value,
+                    )
+                )
+            ).scalar_one_or_none()
+            if duplicate_tx is not None:
+                logger.info(
+                    'Platega subscription callback: поздний ределивери старого списания',
+                    platega_subscription_id=platega_id,
+                    charge_id=charge_id,
+                )
+                return
+
             from app.database.crud.transaction import create_transaction
 
             subscription = await db.get(Subscription, record.subscription_id)
@@ -387,8 +440,16 @@ class PlategaPaymentMixin:
 
             subscription.extend_subscription(record.charge_days)
 
+            # Списание по локально ОТМЕНЁННОЙ записи = удалённая отмена не
+            # прошла (сбой Platega в момент cancel). Деньги взяты — продлеваем
+            # честно, но запись НЕ воскрешаем в ACTIVE (иначе отмена юзера
+            # молча стирается и цикл продолжается вечно) и тут же повторяем
+            # удалённую отмену.
+            was_cancelled = record.status == 'CANCELLED'
+
             record.last_charge_external_id = charge_id
-            record.status = 'ACTIVE'
+            if not was_cancelled:
+                record.status = 'ACTIVE'
             record.last_charge_at = datetime.now(UTC)
             record.charges_success += 1
             record.next_charge_at = _parse_next_charge(payload.get('NextChargeAt'))
@@ -422,6 +483,22 @@ class PlategaPaymentMixin:
                 external_id=charge_id,
                 description='СБП-автопродление Platega',
             )
+
+            if was_cancelled:
+                logger.error(
+                    'Platega списала по отменённой СБП-подписке — повторяю удалённую отмену',
+                    platega_subscription_id=platega_id,
+                    charge_id=charge_id,
+                )
+                if record.platega_subscription_id:
+                    try:
+                        await self.platega_service.cancel_subscription(record.platega_subscription_id)
+                    except Exception as recancel_error:  # pragma: no cover - best-effort
+                        logger.warning(
+                            'Повторная отмена Platega-подписки не удалась',
+                            platega_subscription_id=record.platega_subscription_id,
+                            error=str(recancel_error),
+                        )
 
             await self._notify_sbp_recurring(db, record, 'confirmed')
 
@@ -520,17 +597,19 @@ class PlategaPaymentMixin:
             return
         try:
             from app.database.models import User
+            from app.localization.texts import get_texts
 
             user = await db.get(User, record.user_id)
             if not user or not user.telegram_id:
                 return
 
+            texts = get_texts(user.language)
             messages = {
-                'confirmed': '✅ Подписка продлена автосписанием через СБП.',
-                'failed': '⚠️ Не удалось списать оплату по СБП-автопродлению.',
-                'past_due': '⚠️ СБП-автопродление просрочено.',
-                'cancelled': 'ℹ️ СБП-автопродление отменено.',
-                'activated': '✅ СБП-автопродление активировано.',
+                'confirmed': texts.t('SBP_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием через СБП.'),
+                'failed': texts.t('SBP_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по СБП-автопродлению.'),
+                'past_due': texts.t('SBP_RECURRING_NOTIFY_PAST_DUE', '⚠️ СБП-автопродление просрочено.'),
+                'cancelled': texts.t('SBP_RECURRING_NOTIFY_CANCELLED', 'ℹ️ СБП-автопродление отменено.'),
+                'activated': texts.t('SBP_RECURRING_NOTIFY_ACTIVATED', '✅ СБП-автопродление активировано.'),
             }
             text = messages.get(kind)
             if text:
@@ -969,20 +1048,33 @@ async def enable_platega_sbp_recurring(
     )
 
 
-async def cancel_platega_recurring_for_subscription_safe(db: AsyncSession, subscription_id: int) -> None:
+async def cancel_platega_recurring_for_subscription_safe(
+    db: AsyncSession,
+    subscription_id: int,
+    *,
+    commit: bool = True,
+) -> None:
     """Точка входа для путей удаления/отзыва подписки: отменяет активную
     СБП-автоподписку Platega, привязанную к ``subscription_id``.
 
     Best-effort и никогда не бросает исключение — вызывающий код (удаление
     подписки администратором, пользователем из кабинета и т.д.) не должен
-    блокироваться недоступностью Platega. Гейтится
-    ``is_platega_recurrent_enabled()``: при выключенном рекурренте выходит
-    немедленно, не трогая ни БД, ни Platega.
+    блокироваться недоступностью Platega.
+
+    НЕ гейтится флагом рекуррента НАМЕРЕННО: отмена — операция безопасности,
+    а не фича. Выключение PLATEGA_RECURRENT_ENABLED при живых привязках не
+    останавливает списания Platega — коллбеки продолжают приходить; если бы
+    отмена гейтилась, юзер с выключенной фичей не мог бы остановить списания
+    ни с одной поверхности (двойной биллинг при повторном включении autopay).
+    Быстрый выход при выключенном Platega целиком не нужен: без активной
+    записи в БД функция завершается одним дешёвым SELECT.
+
+    ``commit=False`` — для вызова внутри чужой транзакции (мерж аккаунтов):
+    локальный CANCELLED уходит flush'ем и коммитится вместе с транзакцией
+    вызывающего.
     """
-    if not settings.is_platega_recurrent_enabled():
-        return
     try:
-        await _PlategaSbpAgent().cancel_platega_recurring_for_subscription(db, subscription_id)
+        await _PlategaSbpAgent().cancel_platega_recurring_for_subscription(db, subscription_id, commit=commit)
     except Exception as error:  # pragma: no cover - defensive; mixin already best-effort
         logger.warning(
             'Не удалось отменить СБП-автопродление при удалении подписки',

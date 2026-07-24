@@ -2764,6 +2764,37 @@ class MonitoringService:
                         local_id=getattr(record, 'id', None),
                         error=record_error,
                     )
+
+            # Контрольный свип недавних отмен: локальный CANCELLED мог не дойти
+            # до Platega (сеть при cancel-запросе) — тогда провайдер продолжит
+            # списывать. Сверяем remote-статус и добиваем отмену повторно.
+            cancelled_records = await sub_crud.list_recently_cancelled_platega_subscriptions(
+                db, datetime.now(UTC) - timedelta(days=30)
+            )
+            for record in cancelled_records:
+                try:
+                    remote = await service.get_subscription(record.platega_subscription_id)
+                    remote_status = (
+                        str(remote.get('status')).strip().lower()
+                        if remote and remote.get('status') is not None
+                        else None
+                    )
+                    if remote_status in (None, 'cancelled', 'canceled', 'failed'):
+                        continue
+                    cancel_result = await service.cancel_subscription(record.platega_subscription_id)
+                    logger.warning(
+                        'Platega-подписка осталась активной после локальной отмены — повторил отмену',
+                        local_id=record.id,
+                        platega_subscription_id=record.platega_subscription_id,
+                        remote_status=remote_status,
+                        cancel_confirmed=cancel_result is not None,
+                    )
+                except Exception as record_error:
+                    logger.warning(
+                        'Не удалось досверить отменённую Platega-подписку',
+                        local_id=getattr(record, 'id', None),
+                        error=record_error,
+                    )
         except Exception as e:
             logger.warning('Ошибка реконсиляции Platega-подписок', error=e)
 
