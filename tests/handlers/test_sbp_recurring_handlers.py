@@ -309,18 +309,24 @@ async def test_enable_idempotent_return_without_redirect_shows_status(monkeypatc
 # --- handle_sbp_recurring_cancel ---
 
 
-async def test_cancel_gate_off_shows_alert_and_skips_helper(monkeypatch):
+async def test_cancel_works_even_when_gate_off(monkeypatch):
+    """Отмена НЕ гейтится (паритет с кабинетным cancel): выключение фичи при
+    живых привязках не останавливает списания Platega — юзер с существующей
+    кнопкой отмены обязан суметь отписаться. Меню при выключенном флаге не
+    перерисовывается (оно гейтится) — второго алерта «недоступно» нет."""
     _configure_gate(monkeypatch, False)
     cb, user, db = _make_callback(), _make_user(), AsyncMock()
+    subscription = SimpleNamespace(id=10)
 
+    monkeypatch.setattr(autopay_mod, '_resolve_subscription', AsyncMock(return_value=(subscription, 10)))
     mock_cancel = AsyncMock()
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', mock_cancel)
 
     await autopay_mod.handle_sbp_recurring_cancel(cb, user, db)
 
-    mock_cancel.assert_not_awaited()
+    mock_cancel.assert_awaited_once_with(db, 10)
     cb.answer.assert_awaited_once()
-    assert cb.answer.await_args.kwargs.get('show_alert') is True
+    cb.message.edit_text.assert_not_awaited()
 
 
 async def test_cancel_gate_on_calls_helper_and_refreshes_menu(monkeypatch):

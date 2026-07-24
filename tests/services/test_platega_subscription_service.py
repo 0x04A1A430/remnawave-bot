@@ -250,14 +250,51 @@ async def _memory_session(monkeypatch: pytest.MonkeyPatch):
         await engine.dispose()
 
 
-async def test_reconcile_gate_off_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The reconciler must be a no-op when PLATEGA_RECURRENT_ENABLED is off — the
-    guard must short-circuit before touching the DB session at all."""
+async def test_reconcile_unconfigured_platega_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Неконфигурированный Platega (нет мерчанта/секрета) — no-op до БД.
+
+    Флаг PLATEGA_RECURRENT_ENABLED reconciler больше НЕ гейтит: выключение
+    фичи при живых привязках не останавливает списания, а cancel-свип и
+    доначисление пропущенных чарджей должны продолжать работать."""
+    monkeypatch.setattr(settings, 'PLATEGA_ENABLED', False, raising=False)
     monkeypatch.setattr(settings, 'PLATEGA_RECURRENT_ENABLED', False, raising=False)
 
     service = MonitoringService()
-    # db=None would blow up on first use if the guard didn't return immediately.
+    # db=None would blow up on first use if the is_configured guard didn't return.
     await service._reconcile_platega_subscriptions(db=None)
+
+
+async def test_reconcile_cancelled_sweep_runs_with_recurrent_flag_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cancelled-свип (ретрай недошедших отмен) обязан работать и при
+    выключенном PLATEGA_RECURRENT_ENABLED — иначе транзиентный сбой отмены
+    никогда не ретраится и Platega продолжает списывать."""
+    from unittest.mock import AsyncMock
+
+    _configure(monkeypatch, PLATEGA_RECURRENT_ENABLED=False)
+
+    mock_get = AsyncMock(return_value={'status': 'ACTIVE'})
+    mock_cancel = AsyncMock(return_value={'status': 'cancelled'})
+    monkeypatch.setattr(PlategaService, 'get_subscription', mock_get)
+    monkeypatch.setattr(PlategaService, 'cancel_subscription', mock_cancel)
+
+    async with _memory_session(monkeypatch) as db:
+        await sub_crud.create_platega_subscription(
+            db,
+            user_id=1,
+            subscription_id=1,
+            tariff_id=None,
+            interval=3,
+            charge_days=30,
+            amount_kopeks=19900,
+            redirect_url=None,
+            platega_subscription_id='ps-flagoff',
+            status='CANCELLED',
+        )
+
+        service = MonitoringService()
+        await service._reconcile_platega_subscriptions(db)
+
+        mock_cancel.assert_awaited_once_with('ps-flagoff')
 
 
 async def test_reconcile_marks_stuck_pending_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:

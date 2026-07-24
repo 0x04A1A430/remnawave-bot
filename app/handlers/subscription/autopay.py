@@ -455,6 +455,8 @@ async def handle_sbp_recurring_enable(
     try:
         await db.refresh(subscription, ['tariff'])
     except Exception:
+        # refresh может упасть на detached/уже загруженном объекте — тогда
+        # просто читаем то, что есть: None-guard ниже отработает.
         pass
 
     tariff = getattr(subscription, 'tariff', None)
@@ -524,15 +526,14 @@ async def handle_sbp_recurring_enable(
 async def handle_sbp_recurring_cancel(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext = None
 ):
-    """Отменить активное СБП-автопродление и обновить статус-вью."""
-    texts = get_texts(db_user.language)
+    """Отменить активное СБП-автопродление и обновить статус-вью.
 
-    if not settings.is_platega_recurrent_enabled():
-        await callback.answer(
-            texts.t('SBP_RECURRING_UNAVAILABLE', '⚠️ Автопродление через СБП сейчас недоступно'),
-            show_alert=True,
-        )
-        return
+    НЕ гейтится PLATEGA_RECURRENT_ENABLED намеренно (паритет с кабинетным
+    cancel-эндпоинтом): отмена — операция безопасности. Выключение фичи при
+    живых привязках не останавливает списания Platega — юзер с существующей
+    кнопкой отмены обязан иметь путь отписаться с любой поверхности.
+    """
+    texts = get_texts(db_user.language)
 
     subscription, sub_id = await _resolve_subscription(callback, db_user, db, state)
     if not subscription:
@@ -547,7 +548,10 @@ async def handle_sbp_recurring_cancel(
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
     await callback.answer(texts.t('SBP_RECURRING_CANCELLED', '✅ Автопродление через СБП отменено'))
-    await handle_sbp_recurring_menu(callback, db_user, db, state)
+    # Меню гейтится флагом — при выключенной фиче не дёргаем его, чтобы после
+    # успешной отмены юзер не получил второй алерт «недоступно».
+    if settings.is_platega_recurrent_enabled():
+        await handle_sbp_recurring_menu(callback, db_user, db, state)
 
 
 async def handle_saved_cards_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession):

@@ -1084,3 +1084,76 @@ async def test_concurrent_enable_race_returns_winner_and_cancels_orphan(monkeypa
 
         rows = await sub_crud.list_platega_subscriptions_by_statuses(db, ['PENDING', 'ACTIVE', 'PAST_DUE'])
         assert len([r for r in rows if r.subscription_id == 1]) == 1  # сирота не вставилась
+
+
+# --- replay_missed_platega_charges (доначисление потерянных CONFIRMED) ---
+
+
+async def test_replay_missed_charges_extends_and_advances_counters(monkeypatch):
+    """Remote chargesSuccess > локального = потерянные коллбеки: подписка
+    продлевается на charge_days за каждое пропущенное списание через штатный
+    callback-процессор (аудит-транзакции с синтетическими Id, счётчики)."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.payment.platega import replay_missed_platega_charges
+
+    async with _memory_session(monkeypatch) as db:
+        end0 = datetime.now(UTC) + timedelta(days=2)
+        subscription = Subscription(id=1, user_id=1, status='active', end_date=end0)
+        db.add(subscription)
+        await db.commit()
+
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-replay')
+
+        remote = {
+            'status': 'Active',
+            'lastChargeAt': (datetime.now(UTC) - timedelta(hours=3)).isoformat(),
+            'chargeMetrics': {
+                'chargesSuccess': 2,
+                'chargesFailed': 0,
+                'nextChargeAt': '2026-09-01T00:00:00Z',
+            },
+        }
+
+        replayed = await replay_missed_platega_charges(db, rec, remote)
+
+        assert replayed == 2
+        await db.refresh(subscription)
+        await db.refresh(rec)
+        assert subscription.end_date >= end0 + timedelta(days=59)  # 2 × 30 дней
+        assert rec.charges_success == 2
+        assert rec.next_charge_at is not None
+
+        tx_ids = {t.external_id for t in (await db.execute(select(Transaction))).scalars().all()}
+        assert 'ps-replay:replay:1' in tx_ids
+        assert 'ps-replay:replay:2' in tx_ids
+
+        # Повторный проход — идемпотентен: счётчики уже сошлись.
+        assert await replay_missed_platega_charges(db, rec, remote) == 0
+
+
+async def test_replay_waits_out_fresh_charge_window(monkeypatch):
+    """lastChargeAt свежее 2 часов — настоящий коллбек ещё может доехать
+    (у него другой Id, дедуп его не поймает) — replay откладывается."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.payment.platega import replay_missed_platega_charges
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-fresh')
+        remote = {
+            'lastChargeAt': (datetime.now(UTC) - timedelta(minutes=30)).isoformat(),
+            'chargeMetrics': {'chargesSuccess': 1},
+        }
+        assert await replay_missed_platega_charges(db, rec, remote) == 0
+
+
+async def test_replay_noop_without_metrics_or_deficit(monkeypatch):
+    from app.services.payment.platega import replay_missed_platega_charges
+
+    async with _memory_session(monkeypatch) as db:
+        rec = await _create_recurring_record(db, platega_subscription_id='ps-even')
+        assert await replay_missed_platega_charges(db, rec, None) == 0
+        assert await replay_missed_platega_charges(db, rec, {'chargeMetrics': {}}) == 0
+        rec.charges_success = 3
+        assert await replay_missed_platega_charges(db, rec, {'chargeMetrics': {'chargesSuccess': 3}}) == 0

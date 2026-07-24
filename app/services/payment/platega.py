@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
@@ -1139,6 +1139,71 @@ async def purchase_tariff_with_sbp_recurring(
 
     result = await enable_platega_sbp_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff)
     return {**result, 'subscription_id': subscription.id}
+
+
+async def replay_missed_platega_charges(
+    db: AsyncSession,
+    record: Any,
+    remote: dict[str, Any] | None,
+) -> int:
+    """Доначисляет списания, чьи CONFIRMED-коллбеки потерялись.
+
+    Remote ``chargeMetrics.chargesSuccess`` > локального счётчика = юзер
+    заплатил, а продление не применилось (коллбек не дошёл) — доступ истёк бы
+    несмотря на успешное списание. Каждое пропущенное списание проигрывается
+    через штатный ``process_platega_subscription_callback`` с синтетическим
+    charge Id ``{platega_id}:replay:{ordinal}`` — вся идемпотентность
+    (полноисторийная сверка по transactions.external_id), продление, панель и
+    уведомления переиспользуются 1:1.
+
+    Гард 2 часа от remote lastChargeAt: запоздавший НАСТОЯЩИЙ коллбек имеет
+    другой Id и прошёл бы мимо дедупа — даём ему окно доехать. Худший случай
+    гонки после окна — двойное ПРОДЛЕНИЕ (подарок дней юзеру), не двойное
+    списание. Возвращает число доначисленных списаний.
+    """
+    metrics = (remote or {}).get('chargeMetrics') or {}
+    try:
+        remote_success = int(metrics.get('chargesSuccess') or 0)
+    except (TypeError, ValueError):
+        return 0
+    local_success = int(record.charges_success or 0)
+    missed = remote_success - local_success
+    if missed <= 0 or not record.platega_subscription_id:
+        return 0
+
+    last_charge_at = _parse_next_charge(metrics.get('lastChargeAt') or (remote or {}).get('lastChargeAt'))
+    if last_charge_at is None or (datetime.now(UTC) - last_charge_at) < timedelta(hours=2):
+        return 0
+
+    next_charge_raw = metrics.get('nextChargeAt') or (remote or {}).get('nextChargeAt')
+
+    # Снапшот ДО реплеев: best-effort панель-синк внутри коллбека может сделать
+    # rollback, который экспайрит атрибуты record — повторное чтение ORM-полей
+    # после первого реплея упало бы MissingGreenlet.
+    platega_id = record.platega_subscription_id
+
+    agent = _PlategaSbpAgent()
+    replayed = 0
+    # Кап на проход — защита от бесконечного цикла при рассинхроне счётчиков;
+    # остаток доначислит следующий цикл мониторинга.
+    for ordinal in range(local_success + 1, local_success + 1 + min(missed, 12)):
+        payload = {
+            'Status': 'CONFIRMED',
+            'Id': f'{platega_id}:replay:{ordinal}',
+            'SubscriptionId': platega_id,
+            'NextChargeAt': next_charge_raw,
+        }
+        await agent.process_platega_subscription_callback(db, payload)
+        replayed += 1
+
+    if replayed:
+        logger.warning(
+            'Platega: доначислены пропущенные списания (коллбеки не дошли)',
+            platega_subscription_id=platega_id,
+            replayed=replayed,
+            remote_charges_success=remote_success,
+        )
+    return replayed
 
 
 async def cancel_platega_recurring_for_subscription_safe(

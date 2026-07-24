@@ -2710,13 +2710,19 @@ class MonitoringService:
 
     async def _reconcile_platega_subscriptions(self, db: AsyncSession):
         """Safety net for Platega SBP-подписок: сверяет локальный статус с
-        Platega, если коллбек потерялся или запись зависла в PENDING.
+        Platega, если коллбек потерялся или запись зависла в PENDING; добивает
+        недошедшие отмены и доначисляет пропущенные списания.
         Best-effort — ошибки (общие и по отдельной записи) никогда не
         прерывают цикл мониторинга.
-        """
-        if not settings.is_platega_recurrent_enabled():
-            return
 
+        НЕ гейтится PLATEGA_RECURRENT_ENABLED намеренно: выключение фичи не
+        останавливает существующие привязки — Platega продолжает списывать и
+        слать коллбеки, а cancel-операции разгейчены на всех поверхностях.
+        Гейт здесь заморозил бы ретраи недошедших отмен (cancelled-свип) и
+        доначисление пропущенных списаний ровно тогда, когда они нужнее всего.
+        Без живых записей проход стоит один дешёвый SELECT; неконфигурированный
+        Platega отсекается ниже по is_configured.
+        """
         try:
             from app.database.crud import platega_subscription as sub_crud
             from app.services.platega_recurrent import platega_reconcile_decision
@@ -2762,6 +2768,16 @@ class MonitoringService:
                             new_status=new_status,
                             remote_status=remote_status,
                         )
+
+                    # Потерянный CONFIRMED при живом remote: статус чинится выше,
+                    # а деньги — здесь. Порядок важен: сначала статус-решение
+                    # (remote cancelled → локально CANCELLED), потом replay —
+                    # тогда доначисление по отменённой записи пройдёт через
+                    # was_cancelled-ветку коллбека (продлить, не воскрешая).
+                    if remote is not None:
+                        from app.services.payment.platega import replay_missed_platega_charges
+
+                        await replay_missed_platega_charges(db, record, remote)
                 except Exception as record_error:
                     logger.warning(
                         'Не удалось реконсилировать Platega-подписку',
