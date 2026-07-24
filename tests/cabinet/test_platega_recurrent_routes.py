@@ -417,3 +417,69 @@ async def test_cancel_returns_cancelled_and_awaits_safe_helper(monkeypatch, user
 
     assert result == {'status': 'cancelled'}
     mock_cancel.assert_awaited_once_with(db, subscription.id)
+
+
+# --- purchase -----------------------------------------------------------------
+
+
+async def test_purchase_403_when_gate_disabled(monkeypatch, user):
+    _configure_gate(monkeypatch, enabled=False)
+    db = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await route.purchase_with_platega_recurrent(tariff_id=5, user=user, db=db)
+
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+    db.execute.assert_not_awaited()
+
+
+async def test_purchase_400_when_tariff_not_found(monkeypatch, user):
+    _configure_gate(monkeypatch, enabled=True)
+    monkeypatch.setattr('app.database.crud.tariff.get_tariff_by_id', AsyncMock(return_value=None))
+
+    with pytest.raises(HTTPException) as exc_info:
+        await route.purchase_with_platega_recurrent(tariff_id=5, user=user, db=AsyncMock())
+
+    assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert exc_info.value.detail == 'Tariff not found'
+
+
+async def test_purchase_happy_path_returns_redirect_and_subscription_id(monkeypatch, user):
+    _configure_gate(monkeypatch, enabled=True)
+    tariff = SimpleNamespace(id=5, name='Стандарт', is_daily=False, is_active=True)
+    db = AsyncMock()
+
+    mock_purchase = AsyncMock(
+        return_value={
+            'status': 'PENDING',
+            'redirect_url': 'https://pay/x',
+            'subscription_id': 91,
+            'local_id': 1,
+            'platega_subscription_id': 'ps',
+        }
+    )
+    monkeypatch.setattr('app.database.crud.tariff.get_tariff_by_id', AsyncMock(return_value=tariff))
+    monkeypatch.setattr('app.services.payment.platega.purchase_tariff_with_sbp_recurring', mock_purchase)
+
+    result = await route.purchase_with_platega_recurrent(tariff_id=5, user=user, db=db)
+
+    assert result == {'status': 'PENDING', 'redirect_url': 'https://pay/x', 'subscription_id': 91}
+    mock_purchase.assert_awaited_once_with(db, user=user, tariff=tariff)
+
+
+async def test_purchase_value_error_maps_to_400(monkeypatch, user):
+    """Отказ сервиса (триал/чужой тариф/disabled) -> 400 с текстом причины."""
+    _configure_gate(monkeypatch, enabled=True)
+    tariff = SimpleNamespace(id=5, name='Стандарт', is_daily=False, is_active=True)
+
+    async def fake_purchase(db, *, user, tariff):
+        raise ValueError('СБП-оформление недоступно для триальной подписки — оплатите с баланса')
+
+    monkeypatch.setattr('app.database.crud.tariff.get_tariff_by_id', AsyncMock(return_value=tariff))
+    monkeypatch.setattr('app.services.payment.platega.purchase_tariff_with_sbp_recurring', fake_purchase)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await route.purchase_with_platega_recurrent(tariff_id=5, user=user, db=AsyncMock())
+
+    assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'триальной' in exc_info.value.detail

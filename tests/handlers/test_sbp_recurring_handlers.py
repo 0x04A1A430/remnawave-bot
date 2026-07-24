@@ -413,3 +413,48 @@ async def test_toggle_autopay_enable_blocked_before_cancel_for_trial(monkeypatch
 
     mock_update.assert_not_awaited()
     mock_cancel.assert_not_awaited()
+
+
+# --- СБП-кнопка на экране подтверждения покупки тарифа ---
+
+
+def _gate(monkeypatch, enabled: bool) -> None:
+    for key, value in {
+        'PLATEGA_ENABLED': True,
+        'PLATEGA_MERCHANT_ID': 'm',
+        'PLATEGA_SECRET': 's',
+        'PLATEGA_RECURRENT_ENABLED': enabled,
+    }.items():
+        monkeypatch.setattr(settings, key, value, raising=False)
+
+
+def _keyboard_callbacks(markup) -> list[str]:
+    return [btn.callback_data for row in markup.inline_keyboard for btn in row if btn.callback_data]
+
+
+def test_tariff_confirm_keyboard_shows_sbp_button_when_gate_on(monkeypatch):
+    from app.handlers.subscription.tariff_purchase import get_tariff_confirm_keyboard
+
+    _gate(monkeypatch, True)
+    callbacks = _keyboard_callbacks(get_tariff_confirm_keyboard(5, 30, 'ru'))
+    assert 'tariff_sbp:5' in callbacks
+    assert 'tariff_confirm:5:30' in callbacks
+
+
+def test_tariff_confirm_keyboard_hides_sbp_button_when_gate_off(monkeypatch):
+    from app.handlers.subscription.tariff_purchase import get_tariff_confirm_keyboard
+
+    _gate(monkeypatch, False)
+    callbacks = _keyboard_callbacks(get_tariff_confirm_keyboard(5, 30, 'ru'))
+    assert not any(cb.startswith('tariff_sbp:') for cb in callbacks)
+
+
+def test_daily_tariff_confirm_keyboard_gates_sbp_button(monkeypatch):
+    from app.handlers.subscription.tariff_purchase import get_daily_tariff_confirm_keyboard
+
+    _gate(monkeypatch, True)
+    assert 'tariff_sbp:7' in _keyboard_callbacks(get_daily_tariff_confirm_keyboard(7, 'ru'))
+    _gate(monkeypatch, False)
+    assert not any(
+        cb.startswith('tariff_sbp:') for cb in _keyboard_callbacks(get_daily_tariff_confirm_keyboard(7, 'ru'))
+    )

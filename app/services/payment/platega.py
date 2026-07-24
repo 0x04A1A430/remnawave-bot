@@ -1048,6 +1048,67 @@ async def enable_platega_sbp_recurring(
     )
 
 
+async def purchase_tariff_with_sbp_recurring(
+    db: AsyncSession,
+    *,
+    user: Any,
+    tariff: Any,
+) -> dict[str, Any]:
+    """Оформление подписки на тариф с оплатой через СБП-автопродление Platega.
+
+    Первое списание Platega = подтверждение привязки в банке, поэтому «купить
+    с автооплатой» — это привязка + первый чардж, который продлит/оживит
+    подписку по каденс-правилу (месячный тариф — помесячно, 90 дней —
+    помесячно по цене месяца, суточный — по дням).
+
+    Флоу по состоянию подписки юзера на этот тариф:
+    - непройденной подписки нет → создаётся EXPIRED-заготовка
+      (``create_sbp_pending_subscription``): доступа нет, панели нет; первый
+      CONFIRMED продлит и активирует, синк панели создаст panel-юзера;
+    - есть непройденная (active/expired, не триал) → привязка на неё;
+    - триал (живой или истёкший) → отказ ValueError: конверсию триала в
+      платную делает только balance-покупка (revive/convert), а активация
+      второй строки того же тарифа при живом триале упёрлась бы в partial
+      unique index прямо в чардж-коллбеке — деньги взяты, продление упало;
+    - в single-sub режиме подписка другого тарифа → отказ ValueError:
+      чарджи привязки продлевали бы подписку ЧУЖОГО тарифа по цене
+      выбранного (смену тарифа делает balance-покупка).
+
+    Возвращает результат enable + ``subscription_id``. Пробрасывает
+    ValueError/RuntimeError — UI показывает сообщение.
+    """
+    if not settings.is_platega_recurrent_enabled():
+        raise RuntimeError('Platega recurrent is disabled')
+
+    from app.database.crud.subscription import (
+        create_sbp_pending_subscription,
+        get_subscription_by_user_and_tariff,
+        get_subscription_by_user_id,
+    )
+
+    if settings.is_multi_tariff_enabled():
+        subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription is not None and subscription.tariff_id != tariff.id:
+            raise ValueError('СБП-оформление недоступно при подписке другого тарифа — оплатите с баланса')
+
+    if subscription is not None:
+        if getattr(subscription, 'is_trial', False):
+            raise ValueError('СБП-оформление недоступно для триальной подписки — оплатите с баланса')
+        # DISABLED чардж не оживит (extend_subscription активирует только
+        # EXPIRED/LIMITED) — деньги списались бы без выдачи доступа. PENDING —
+        # чужой незавершённый платёжный флоу (миниапп-ордер), не влезаем.
+        if subscription.status in ('disabled', 'pending'):
+            raise ValueError('СБП-оформление недоступно для этой подписки — оплатите с баланса')
+
+    if subscription is None:
+        subscription = await create_sbp_pending_subscription(db, user.id, tariff)
+
+    result = await enable_platega_sbp_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff)
+    return {**result, 'subscription_id': subscription.id}
+
+
 async def cancel_platega_recurring_for_subscription_safe(
     db: AsyncSession,
     subscription_id: int,

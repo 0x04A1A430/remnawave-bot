@@ -2129,5 +2129,7 @@
   "SBP_RECURRING_NOTIFY_FAILED": "⚠️ برداشت خودکار SBP ناموفق بود.",
   "SBP_RECURRING_NOTIFY_PAST_DUE": "⚠️ تمدید خودکار SBP معوق شده است.",
   "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ تمدید خودکار SBP لغو شد.",
-  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ تمدید خودکار SBP فعال شد."
+  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ تمدید خودکار SBP فعال شد.",
+  "SBP_PURCHASE_BUTTON": "⚡ اشتراک با پرداخت خودکار SBP",
+  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ اشتراک پس از تأیید و اولین برداشت فعال می‌شود."
 }

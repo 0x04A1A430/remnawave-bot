@@ -84,6 +84,48 @@ async def enable_platega_recurrent(
     return {'status': result['status'], 'redirect_url': result['redirect_url']}
 
 
+@router.post('/platega-recurrent/purchase')
+async def purchase_with_platega_recurrent(
+    tariff_id: int = Query(..., description='Tariff to subscribe to'),
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Оформление подписки на тариф через СБП-автопродление (оплата привязкой).
+
+    Альтернатива покупке с баланса: первое списание Platega = подтверждение
+    привязки в банке. Для нового тарифа создаётся EXPIRED-заготовка, которую
+    активирует первый чардж (см. ``purchase_tariff_with_sbp_recurring``).
+    """
+    from app.config import settings
+
+    if not settings.is_platega_recurrent_enabled():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Platega recurrent disabled')
+
+    from app.database.crud.tariff import get_tariff_by_id
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not getattr(tariff, 'is_active', False):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Tariff not found')
+
+    from app.services.payment.platega import purchase_tariff_with_sbp_recurring
+
+    try:
+        result = await purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Could not create Platega subscription',
+        ) from error
+
+    return {
+        'status': result['status'],
+        'redirect_url': result['redirect_url'],
+        'subscription_id': result['subscription_id'],
+    }
+
+
 @router.get('/platega-recurrent')
 async def get_platega_recurrent(
     user: User = Depends(get_current_cabinet_user),

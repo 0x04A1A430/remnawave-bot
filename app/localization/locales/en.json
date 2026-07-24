@@ -2129,5 +2129,7 @@
   "SBP_RECURRING_NOTIFY_FAILED": "⚠️ SBP auto-renewal charge failed.",
   "SBP_RECURRING_NOTIFY_PAST_DUE": "⚠️ SBP auto-renewal is past due.",
   "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ SBP auto-renewal cancelled.",
-  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ SBP auto-renewal activated."
+  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ SBP auto-renewal activated.",
+  "SBP_PURCHASE_BUTTON": "⚡ Subscribe with SBP auto-payment",
+  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ The subscription activates after confirmation and the first charge."
 }

@@ -2129,5 +2129,7 @@
   "SBP_RECURRING_NOTIFY_FAILED": "⚠️ Не удалось списать оплату по СБП-автопродлению.",
   "SBP_RECURRING_NOTIFY_PAST_DUE": "⚠️ СБП-автопродление просрочено.",
   "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ СБП-автопродление отменено.",
-  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ СБП-автопродление активировано."
+  "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ СБП-автопродление активировано.",
+  "SBP_PURCHASE_BUTTON": "⚡ Оформить с автооплатой СБП",
+  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ Подписка активируется после подтверждения и первого списания."
 }
