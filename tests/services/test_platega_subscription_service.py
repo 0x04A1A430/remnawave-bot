@@ -36,9 +36,10 @@ async def test_create_subscription_posts_method_6(monkeypatch: pytest.MonkeyPatc
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(method=method, endpoint=endpoint, json_data=json_data)
-        return {'transactionId': 'tx-1', 'redirect': 'https://pay/x', 'status': 'PENDING'}
+        payload = {'transactionId': 'tx-1', 'redirect': 'https://pay/x', 'status': 'PENDING'}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     res = await service.create_subscription(amount=199.0, currency='RUB', interval=3, description='Тариф')
@@ -57,9 +58,10 @@ async def test_create_subscription_uses_v2_endpoint_when_configured(monkeypatch:
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(method=method, endpoint=endpoint)
-        return {'transactionId': 'tx-2', 'status': 'PENDING'}
+        payload = {'transactionId': 'tx-2', 'status': 'PENDING'}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     await service.create_subscription(amount=149.5, currency='RUB', interval=1)
@@ -74,9 +76,10 @@ async def test_create_subscription_omits_description_when_not_provided(monkeypat
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(json_data=json_data)
-        return {'transactionId': 'tx-3', 'status': 'PENDING'}
+        payload = {'transactionId': 'tx-3', 'status': 'PENDING'}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     await service.create_subscription(amount=100.0, currency='RUB', interval=2)
@@ -90,9 +93,10 @@ async def test_create_subscription_truncates_long_cyrillic_description(monkeypat
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(json_data=json_data)
-        return {'transactionId': 'tx-4', 'status': 'PENDING'}
+        payload = {'transactionId': 'tx-4', 'status': 'PENDING'}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     long_description = 'Премиум тариф на 3 месяца безлимит и ещё немного текста'
@@ -116,9 +120,10 @@ async def test_get_subscription_is_unversioned(monkeypatch: pytest.MonkeyPatch) 
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(method=method, endpoint=endpoint)
-        return {'subscriptionId': 'sub-1', 'status': 'active'}
+        payload = {'subscriptionId': 'sub-1', 'status': 'active'}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     res = await service.get_subscription('sub-1')
@@ -136,9 +141,10 @@ async def test_list_subscriptions_builds_query_params(monkeypatch: pytest.Monkey
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(method=method, endpoint=endpoint, params=params)
-        return {'items': [], 'total': 0}
+        payload = {'items': [], 'total': 0}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     await service.list_subscriptions(status='active', date_from='2026-01-01', date_to='2026-02-01', page=2, size=10)
@@ -160,9 +166,10 @@ async def test_list_subscriptions_omits_none_params(monkeypatch: pytest.MonkeyPa
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(endpoint=endpoint, params=params)
-        return {'items': []}
+        payload = {'items': []}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     await service.list_subscriptions()
@@ -180,9 +187,10 @@ async def test_cancel_subscription_posts_cancel(monkeypatch: pytest.MonkeyPatch)
     service = PlategaService()
     captured = {}
 
-    async def fake_request(method, endpoint, *, json_data=None, params=None):
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
         captured.update(method=method, endpoint=endpoint, json_data=json_data)
-        return {'subscriptionId': 'sub-1', 'status': 'cancelled'}
+        payload = {'subscriptionId': 'sub-1', 'status': 'cancelled'}
+        return (payload, 200) if return_status else payload
 
     monkeypatch.setattr(service, '_request', fake_request)
     res = await service.cancel_subscription('sub-1')
@@ -350,3 +358,48 @@ async def test_reconcile_skips_cancelled_record_confirmed_remotely(monkeypatch: 
         await service._reconcile_platega_subscriptions(db)
 
         mock_cancel.assert_not_awaited()
+
+
+async def test_create_subscription_raises_actionable_error_on_val0001(monkeypatch: pytest.MonkeyPatch) -> None:
+    """VAL_0001 с key=paymentMethod (формат запроса совпадает с доками) =
+    метод Subscription не включён у мерчанта — ошибка должна нести
+    человекочитаемую причину и подсказку, а не превращаться в голый None."""
+    from app.services.platega_service import PlategaApiError
+
+    _configure(monkeypatch)
+    service = PlategaService()
+
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
+        assert return_status is True
+        return (
+            {
+                'code': 'Common:VAL_0001',
+                'type': 4001,
+                'message': 'Wrong input parameters',
+                'data': [{'key': 'paymentMethod', 'message': 'Subscription'}],
+            },
+            400,
+        )
+
+    monkeypatch.setattr(service, '_request', fake_request)
+
+    with pytest.raises(PlategaApiError) as exc_info:
+        await service.create_subscription(amount=199, currency='RUB', interval=3, description='x')
+
+    assert exc_info.value.http_status == 400
+    assert 'paymentMethod: Subscription' in str(exc_info.value)
+    assert 'не включён' in str(exc_info.value)
+
+
+async def test_create_subscription_transport_failure_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Транспортный сбой (status=None) — прежний контракт: None, без исключения."""
+    _configure(monkeypatch)
+    service = PlategaService()
+
+    async def fake_request(method, endpoint, *, json_data=None, params=None, return_status=False):
+        return (None, None)
+
+    monkeypatch.setattr(service, '_request', fake_request)
+
+    result = await service.create_subscription(amount=199, currency='RUB', interval=3)
+    assert result is None

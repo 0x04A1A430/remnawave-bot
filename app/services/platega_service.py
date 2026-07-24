@@ -16,6 +16,19 @@ from app.config import settings
 logger = structlog.get_logger(__name__)
 
 
+class PlategaApiError(RuntimeError):
+    """Platega ответила HTTP-ошибкой с телом (не транспортный сбой).
+
+    Наследует RuntimeError, чтобы существующие ``except RuntimeError``
+    у вызывающих продолжали работать; ``str(error)`` несёт человекочитаемую
+    причину провайдера для actionable-ответа UI/админу.
+    """
+
+    def __init__(self, http_status: int, message: str) -> None:
+        super().__init__(message)
+        self.http_status = http_status
+
+
 class PlategaService:
     """Обертка над Platega API с базовой повторной отправкой запросов."""
 
@@ -119,7 +132,40 @@ class PlategaService:
         # Тот же выбор версии эндпоинта, что и в create_payment (см. #2934):
         # v1 POST /transaction/process, v2 POST /v2/transaction/process.
         endpoint = '/v2/transaction/process' if self.api_version == 'v2' else '/transaction/process'
-        return await self._request('POST', endpoint, json_data=body)
+        data, http_status = await self._request('POST', endpoint, json_data=body, return_status=True)
+
+        if http_status is not None and http_status >= 400:
+            # Пробрасываем причину провайдера наверх: голое None превращалось в
+            # безликий 409 в кабинете, а реальная причина жила только в логах.
+            raise PlategaApiError(http_status, self._describe_subscription_error(data))
+
+        return data
+
+    @staticmethod
+    def _describe_subscription_error(data: Any) -> str:
+        """Человекочитаемая причина отказа Platega на создании подписки."""
+        detail = ''
+        payment_method_rejected = False
+        if isinstance(data, dict):
+            items = data.get('data')
+            if isinstance(items, list):
+                parts = []
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    parts.append(f'{item.get("key")}: {item.get("message")}')
+                    if item.get('key') == 'paymentMethod':
+                        payment_method_rejected = True
+                detail = '; '.join(parts)
+            detail = detail or str(data.get('message') or '')
+
+        message = f'Platega отклонила создание подписки ({detail or "без деталей"})'
+        if payment_method_rejected:
+            # VAL_0001 с key=paymentMethod на методе 6: формат запроса совпадает
+            # с документацией — так Platega отвечает, когда метод Subscription
+            # не включён для мерчанта (ср. карточные каскады в #2934).
+            message += '. Похоже, метод Subscription не включён для вашего мерчанта — запросите включение рекуррентных платежей в поддержке Platega'
+        return message
 
     async def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
         # Как и статусный GET транзакции, эндпоинт подписки не версионируется.
@@ -219,7 +265,9 @@ class PlategaService:
                         if response.status in self._retryable_statuses and attempt < self._max_retries:
                             await asyncio.sleep(self._retry_delay * attempt)
                             continue
-                        return _result(None, response.status)
+                        # В status-режиме отдаём и тело ошибки — вызывающий
+                        # может показать причину провайдера (VAL_* детали).
+                        return _result(data if return_status else None, response.status)
 
                     return _result(data, response.status)
             except asyncio.CancelledError:

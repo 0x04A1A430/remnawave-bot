@@ -75,11 +75,17 @@ async def enable_platega_recurrent(
         # No price configured for the resolved charge period.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except RuntimeError as error:
-        # Platega API didn't return a transactionId.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Could not create Platega subscription',
-        ) from error
+        # PlategaApiError несёт человекочитаемую причину провайдера (например,
+        # «метод Subscription не включён для мерчанта»); голый RuntimeError
+        # (нет transactionId / транспорт) остаётся с generic-текстом.
+        from app.services.platega_service import PlategaApiError
+
+        detail = (
+            f'Could not create Platega subscription: {error}'
+            if isinstance(error, PlategaApiError)
+            else 'Could not create Platega subscription'
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from error
 
     return {'status': result['status'], 'redirect_url': result['redirect_url']}
 
@@ -114,10 +120,14 @@ async def purchase_with_platega_recurrent(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except RuntimeError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Could not create Platega subscription',
-        ) from error
+        from app.services.platega_service import PlategaApiError
+
+        detail = (
+            f'Could not create Platega subscription: {error}'
+            if isinstance(error, PlategaApiError)
+            else 'Could not create Platega subscription'
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from error
 
     return {
         'status': result['status'],
