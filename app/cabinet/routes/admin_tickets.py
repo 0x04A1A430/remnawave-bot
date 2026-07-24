@@ -522,6 +522,7 @@ async def reply_to_ticket(
                 'has_media': has_media,
                 'status': ticket.status,
             },
+            db=db,
         )
     except Exception as error:
         logger.warning('Failed to emit ticket.message_added (admin) from cabinet', error=error)
