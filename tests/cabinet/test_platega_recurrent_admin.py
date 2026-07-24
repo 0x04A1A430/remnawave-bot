@@ -151,11 +151,10 @@ def test_sync_builder_never_sets_sbp_fields():
 # --- admin cancel endpoint ----------------------------------------------
 
 
-async def test_route_registered():
-    from app.cabinet.routes import router
-
-    paths = {route.path: getattr(route, 'methods', set()) for route in router.routes}
-    assert 'POST' in paths.get('/cabinet/admin/users/{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring', set())
+async def test_route_registered(registered_paths):
+    assert 'POST' in registered_paths.get(
+        '/cabinet/admin/users/{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring', set()
+    )
 
 
 async def test_cancel_sbp_recurring_owned_subscription_cancels_and_awaits_helper(monkeypatch):
