@@ -1065,6 +1065,13 @@ class Settings(BaseSettings):
     # достаточно MINIAPP_CUSTOM_URL. Пусто → в группах кнопка кабинета не строится.
     MINIAPP_APP_SHORT_NAME: str = ''
 
+    # Нижняя кнопка «Меню» в Telegram → открытие веб-кабинета (WebApp).
+    # Бот при этом продолжает работать через обычные сообщения/кнопки. При
+    # выключенной опции существующая кнопка меню не трогается.
+    MENU_BUTTON_WEBAPP_ENABLED: bool = False
+    MENU_BUTTON_WEBAPP_TEXT: str = 'Кабинет'
+    MENU_BUTTON_WEBAPP_URL: str = ''  # пусто → берётся MINIAPP_CUSTOM_URL
+
     # Media upload settings (news article images/videos)
     MEDIA_UPLOAD_DIR: str = './uploads'
     MEDIA_MAX_IMAGE_SIZE_MB: int = 10
