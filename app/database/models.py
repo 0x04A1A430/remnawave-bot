@@ -2070,8 +2070,13 @@ class User(Base):
         for sub in self.subscriptions:
             if sub.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value):
                 return sub
-        # Fallback to most recent (already ordered by created_at desc)
-        return self.subscriptions[0]
+        # Fallback to most recent real subscription (already ordered by created_at desc).
+        # Неоплаченные черновики триала пропускаем — иначе меню покажет незавершённую
+        # покупку триала как существующую подписку.
+        for sub in self.subscriptions:
+            if not sub.is_pending_trial:
+                return sub
+        return None
 
     def is_trial_already_used(self) -> bool:
         """Единый гейт доступности триала для бота И кабинета.
@@ -2084,9 +2089,7 @@ class User(Base):
         """
         if self.has_had_paid_subscription:
             return True
-        return any(
-            not (sub.status == SubscriptionStatus.PENDING.value and sub.is_trial) for sub in (self.subscriptions or [])
-        )
+        return any(not sub.is_pending_trial for sub in (self.subscriptions or []))
 
     transactions = relationship('Transaction', back_populates='user')
     referral_earnings = relationship('ReferralEarning', foreign_keys='ReferralEarning.user_id', back_populates='user')
@@ -2294,6 +2297,17 @@ class Subscription(Base):
         current_time = datetime.now(UTC)
         end = _aware(self.end_date)
         return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end > current_time
+
+    @property
+    def is_pending_trial(self) -> bool:
+        """Неоплаченный черновик триала (PENDING + is_trial).
+
+        Такой драфт создаётся при выборе способа оплаты платного триала и означает
+        «повторную попытку оплаты», а не реальную подписку. Он не считается
+        использованным триалом (см. User.is_trial_already_used) и не должен
+        отображаться в пользовательских меню как существующая подписка.
+        """
+        return self.status == SubscriptionStatus.PENDING.value and bool(self.is_trial)
 
     @property
     def is_expired(self) -> bool:
