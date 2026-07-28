@@ -500,6 +500,8 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
     if settings.is_multi_tariff_enabled():
         heading = texts.t('MAIN_MENU_RICH_SUBSCRIPTIONS_HEADING', '📱 Подписки')
         subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+        # Неоплаченные черновики триала не показываем как существующую подписку
+        subscriptions = [sub for sub in subscriptions if not getattr(sub, 'is_pending_trial', False)]
         subscription_block = _build_subscriptions_table(subscriptions, texts)
         if len(subscriptions) > 1 and settings.MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE:
             # Несколько подписок раздувают меню — сворачиваем таблицу в details;
