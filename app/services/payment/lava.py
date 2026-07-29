@@ -640,6 +640,57 @@ class LavaPaymentMixin:
                 return product
         return None
 
+    async def _notify_lava_recurring(
+        self,
+        db: AsyncSession,
+        record: Any,
+        kind: str,
+    ) -> None:
+        """Best-effort уведомление пользователя о событии автопродления Lava.
+
+        Никогда не бросает наружу — вебхук обязан завершиться 200 независимо
+        от доставки сообщения (зеркало ``_notify_sbp_recurring`` у Platega).
+        """
+        try:
+            from app.cabinet.routes.websocket import cabinet_ws_manager
+
+            await cabinet_ws_manager.send_to_user(
+                record.user_id,
+                {
+                    'type': f'lava_recurring.{kind}',
+                    'status': record.status,
+                    'amount_kopeks': record.amount_kopeks,
+                    'amount_rubles': record.amount_kopeks / 100,
+                    'next_charge_at': record.next_charge_at.isoformat() if record.next_charge_at else None,
+                    'subscription_id': record.subscription_id,
+                },
+            )
+        except Exception as ws_error:  # pragma: no cover — best-effort
+            logger.warning('Не удалось отправить WS-событие автопродления Lava', error=str(ws_error), kind=kind)
+
+        bot = getattr(self, 'bot', None)
+        if not bot:
+            return
+        try:
+            from app.database.models import User
+            from app.localization.texts import get_texts
+
+            user = await db.get(User, record.user_id)
+            if not user or not user.telegram_id:
+                return
+
+            texts = get_texts(user.language)
+            messages = {
+                'confirmed': texts.t('LAVA_RECURRING_NOTIFY_CONFIRMED', '✅ Подписка продлена автосписанием Lava.'),
+                'failed': texts.t('LAVA_RECURRING_NOTIFY_FAILED', '⚠️ Не удалось списать оплату по автопродлению Lava.'),
+                'cancelled': texts.t('LAVA_RECURRING_NOTIFY_CANCELLED', 'ℹ️ Автопродление Lava отменено.'),
+            }
+            text = messages.get(kind)
+            if text:
+                await bot.send_message(chat_id=user.telegram_id, text=text)
+        except Exception as error:  # pragma: no cover - best-effort notify
+            logger.warning('Не удалось отправить уведомление об автопродлении Lava', error=str(error), kind=kind)
+
     async def create_lava_recurrent_subscription(
         self,
         db: AsyncSession,
@@ -950,6 +1001,19 @@ class LavaPaymentMixin:
                 )
                 return True
 
+            # Фактически списанная сумма важнее снапшота времени оформления:
+            # продукт в кабинете Lava могли передобрить, и в транзакции должна
+            # оказаться настоящая сумма, а не цена годичной давности.
+            charged_kopeks = _lava_amount_to_kopeks(payload.get('amount'))
+            if charged_kopeks > 0 and abs(charged_kopeks - record.amount_kopeks) > 1:
+                logger.warning(
+                    'Lava: сумма списания отличается от сохранённой — обновляем запись',
+                    order_id=order_id,
+                    stored_kopeks=record.amount_kopeks,
+                    charged_kopeks=charged_kopeks,
+                )
+                record.amount_kopeks = charged_kopeks
+
             from app.database.crud.transaction import create_transaction
 
             subscription = await db.get(Subscription, record.subscription_id)
@@ -976,6 +1040,13 @@ class LavaPaymentMixin:
                         error=str(cancel_error),
                     )
                 return False
+
+            # Лок строки подписки: продление — read-modify-write ``end_date``,
+            # и конкурентное продление (ручное/другой коллбек) без него теряло
+            # бы одно из двух.
+            from app.database.crud.subscription import _lock_subscription_row
+
+            await _lock_subscription_row(db, subscription)
 
             subscription.extend_subscription(record.charge_days)
 
@@ -1021,6 +1092,8 @@ class LavaPaymentMixin:
                 external_id=charge_id,
                 description='Автопродление Lava',
             )
+
+            await self._notify_lava_recurring(db, record, 'confirmed')
 
             if was_cancelled:
                 logger.error(
@@ -1073,6 +1146,7 @@ class LavaPaymentMixin:
             if record.status != 'CANCELLED':
                 record.status = 'PAST_DUE'
             await db.commit()
+            await self._notify_lava_recurring(db, record, 'failed')
             return True
 
         logger.info(
@@ -1106,6 +1180,59 @@ async def enable_lava_recurring(
     return await _LavaRecurrentAgent().create_lava_recurrent_subscription(
         db, user_id=user_id, subscription=subscription, tariff=tariff
     )
+
+
+async def purchase_tariff_with_lava_recurring(
+    db: AsyncSession,
+    *,
+    user: Any,
+    tariff: Any,
+) -> dict[str, Any]:
+    """Оформление подписки на тариф оплатой через автопродление Lava.
+
+    Первое списание Lava = оплата первого счёта по ссылке из subscribe, поэтому
+    «купить с автооплатой» — это привязка + первый чардж, который продлит и
+    оживит подписку по каденсу продукта.
+
+    Зеркало ``purchase_tariff_with_sbp_recurring`` (Platega), включая отказы:
+    - подписки на этот тариф нет → создаётся EXPIRED-заготовка без доступа и
+      без панели; первый успешный чардж продлит её и создаст panel-юзера;
+    - триал (живой или истёкший) → отказ: конверсию триала делает только
+      покупка с баланса, а активация второй строки того же тарифа упёрлась бы
+      в partial unique прямо в чардж-коллбеке (деньги взяты, продления нет);
+    - DISABLED/PENDING → отказ: чардж не оживит такую подписку;
+    - в single-режиме подписка другого тарифа → отказ: чарджи продлевали бы
+      подписку ЧУЖОГО тарифа по цене выбранного.
+    """
+    if not settings.is_lava_recurrent_enabled():
+        raise RuntimeError('Lava recurrent is disabled')
+
+    from app.database.crud.subscription import (
+        create_sbp_pending_subscription,
+        get_subscription_by_user_and_tariff,
+        get_subscription_by_user_id,
+    )
+
+    if settings.is_multi_tariff_enabled():
+        subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription is not None and subscription.tariff_id != tariff.id:
+            raise ValueError('Оформление через Lava недоступно при подписке другого тарифа — оплатите с баланса')
+
+    if subscription is not None:
+        if getattr(subscription, 'is_trial', False):
+            raise ValueError('Оформление через Lava недоступно для триальной подписки — оплатите с баланса')
+        if subscription.status in ('disabled', 'pending'):
+            raise ValueError('Оформление через Lava недоступно для этой подписки — оплатите с баланса')
+
+    if subscription is None:
+        # Заготовка провайдер-агностична: EXPIRED, end_date=now, без панели —
+        # первый чардж её оживит (extend_subscription поднимает EXPIRED).
+        subscription = await create_sbp_pending_subscription(db, user.id, tariff)
+
+    result = await enable_lava_recurring(db, user_id=user.id, subscription=subscription, tariff=tariff)
+    return {**result, 'subscription_id': subscription.id}
 
 
 async def cancel_lava_recurring_for_subscription_safe(

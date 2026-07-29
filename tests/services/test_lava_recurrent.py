@@ -629,3 +629,30 @@ def test_real_lava_status_values_are_normalized():
     # И решения reconciler'а на них срабатывают
     assert lr.lava_reconcile_decision('PENDING', lr.normalize_remote_status('activated'), 1) == 'ACTIVE'
     assert lr.lava_reconcile_decision('ACTIVE', lr.normalize_remote_status('deactivated'), 1) == 'CANCELLED'
+
+
+async def test_purchase_rejects_trial_and_foreign_tariff(monkeypatch):
+    """Привязкой нельзя конвертировать триал и оплачивать чужой тариф."""
+    from app.services.payment.lava import purchase_tariff_with_lava_recurring
+
+    monkeypatch.setattr(type(settings), 'is_lava_recurrent_enabled', lambda self: True)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        _agent(monkeypatch)
+
+        from app.database.crud import subscription as sub_module
+
+        monkeypatch.setattr(sub_module, 'get_subscription_by_user_and_tariff', AsyncMock(return_value=subscription))
+
+        subscription.is_trial = True
+        await db.commit()
+        with pytest.raises(ValueError, match='триальной'):
+            await purchase_tariff_with_lava_recurring(db, user=user, tariff=tariff)
+
+        subscription.is_trial = False
+        subscription.status = 'disabled'
+        await db.commit()
+        with pytest.raises(ValueError, match='недоступно'):
+            await purchase_tariff_with_lava_recurring(db, user=user, tariff=tariff)

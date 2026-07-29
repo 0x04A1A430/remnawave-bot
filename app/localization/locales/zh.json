@@ -2131,5 +2131,13 @@
   "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ SBP自动续费已取消。",
   "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ SBP自动续费已激活。",
   "SBP_PURCHASE_BUTTON": "⚡ 通过SBP自动扣款订阅",
-  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ 订阅将在确认并完成首次扣款后激活。"
+  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ 订阅将在确认并完成首次扣款后激活。",
+  "LAVA_PURCHASE_BUTTON": "⚡ 使用 Lava 自动续订下单",
+  "LAVA_PURCHASE_PENDING_NOTE": "ℹ️ 支付首期账单后订阅即生效。",
+  "LAVA_RECURRING_ENABLE_ERROR": "❌ 无法开启 Lava 自动续订，请稍后再试。",
+  "LAVA_RECURRING_ENABLE_SUCCESS": "⚡ <b>Lava 自动续订</b>\n\n请点击下方按钮支付首期账单。\n支付后自动续订即生效。",
+  "LAVA_RECURRING_NOTIFY_CANCELLED": "ℹ️ 已取消 Lava 自动续订。",
+  "LAVA_RECURRING_NOTIFY_CONFIRMED": "✅ 订阅已通过 Lava 自动扣款续订。",
+  "LAVA_RECURRING_NOTIFY_FAILED": "⚠️ Lava 自动续订扣款失败。",
+  "LAVA_RECURRING_PAY_BUTTON": "💳 支付"
 }

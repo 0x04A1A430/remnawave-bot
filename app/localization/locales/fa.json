@@ -2131,5 +2131,13 @@
   "SBP_RECURRING_NOTIFY_CANCELLED": "ℹ️ تمدید خودکار SBP لغو شد.",
   "SBP_RECURRING_NOTIFY_ACTIVATED": "✅ تمدید خودکار SBP فعال شد.",
   "SBP_PURCHASE_BUTTON": "⚡ اشتراک با پرداخت خودکار SBP",
-  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ اشتراک پس از تأیید و اولین برداشت فعال می‌شود."
+  "SBP_PURCHASE_PENDING_NOTE": "ℹ️ اشتراک پس از تأیید و اولین برداشت فعال می‌شود.",
+  "LAVA_PURCHASE_BUTTON": "⚡ ثبت‌نام با تمدید خودکار Lava",
+  "LAVA_PURCHASE_PENDING_NOTE": "ℹ️ اشتراک پس از پرداخت صورتحساب اول فعال می‌شود.",
+  "LAVA_RECURRING_ENABLE_ERROR": "❌ فعال‌سازی تمدید خودکار Lava ناموفق بود. بعداً تلاش کنید.",
+  "LAVA_RECURRING_ENABLE_SUCCESS": "⚡ <b>تمدید خودکار Lava</b>\n\nصورتحساب اول را با دکمه زیر پرداخت کنید.\nپس از پرداخت، تمدید خودکار فعال می‌شود.",
+  "LAVA_RECURRING_NOTIFY_CANCELLED": "ℹ️ تمدید خودکار Lava لغو شد.",
+  "LAVA_RECURRING_NOTIFY_CONFIRMED": "✅ اشتراک با کسر خودکار Lava تمدید شد.",
+  "LAVA_RECURRING_NOTIFY_FAILED": "⚠️ کسر وجه تمدید خودکار Lava ناموفق بود.",
+  "LAVA_RECURRING_PAY_BUTTON": "💳 پرداخت"
 }

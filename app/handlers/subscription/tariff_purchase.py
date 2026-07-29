@@ -342,6 +342,15 @@ def get_tariff_confirm_keyboard(
                 )
             ]
         )
+    if settings.is_lava_recurrent_enabled():
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    callback_data=f'tariff_lava:{tariff_id}',
+                )
+            ]
+        )
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -390,17 +399,27 @@ def get_tariff_insufficient_balance_keyboard(
 
 
 def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]]:
-    """Ряд «Оформить с автооплатой СБП» — тот же, что на confirm-экранах."""
-    if not settings.is_platega_recurrent_enabled():
-        return []
-    return [
-        [
-            InlineKeyboardButton(
-                text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
-                callback_data=f'tariff_sbp:{tariff_id}',
-            )
-        ]
-    ]
+    """Ряды оформления привязкой провайдера — те же, что на confirm-экранах."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if settings.is_platega_recurrent_enabled():
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                    callback_data=f'tariff_sbp:{tariff_id}',
+                )
+            ]
+        )
+    if settings.is_lava_recurrent_enabled():
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    callback_data=f'tariff_lava:{tariff_id}',
+                )
+            ]
+        )
+    return rows
 
 
 def format_tariff_info_for_user(
@@ -454,6 +473,15 @@ def get_daily_tariff_confirm_keyboard(
                 InlineKeyboardButton(
                     text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
                     callback_data=f'tariff_sbp:{tariff_id}',
+                )
+            ]
+        )
+    if settings.is_lava_recurrent_enabled():
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('LAVA_PURCHASE_BUTTON', '⚡ Оформить с автооплатой Lava'),
+                    callback_data=f'tariff_lava:{tariff_id}',
                 )
             ]
         )
@@ -4705,6 +4733,60 @@ async def preview_instant_switch(
 
 
 @error_handler
+async def purchase_tariff_with_lava(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    """Оформление подписки на тариф через автопродление Lava.
+
+    Зеркало ``purchase_tariff_with_sbp``: первое списание оплачивается по
+    ссылке Lava и оживляет подписку (для нового тарифа создаётся заготовка).
+    Выбранный период игнорируется — каденс задан продуктом в кабинете Lava.
+    """
+    texts = get_texts(db_user.language)
+    tariff_id = int(callback.data.split(':')[1])
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not tariff.is_active:
+        await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
+        return
+
+    from app.services.payment.lava import purchase_tariff_with_lava_recurring
+
+    try:
+        result = await purchase_tariff_with_lava_recurring(db, user=db_user, tariff=tariff)
+    except ValueError as error:
+        await callback.answer(str(error), show_alert=True)
+        return
+    except Exception:
+        await callback.answer(
+            texts.t('LAVA_RECURRING_ENABLE_ERROR', '❌ Не удалось подключить автопродление Lava. Попробуйте позже.'),
+            show_alert=True,
+        )
+        return
+
+    redirect_url = result.get('redirect_url')
+    text = texts.t(
+        'LAVA_RECURRING_ENABLE_SUCCESS',
+        '⚡ <b>Автопродление Lava</b>\n\nОплатите первый счёт по кнопке ниже.\nПосле оплаты автопродление станет активным.',
+    )
+    text += '\n\n' + texts.t(
+        'LAVA_PURCHASE_PENDING_NOTE',
+        'ℹ️ Подписка активируется после оплаты первого счёта.',
+    )
+
+    buttons = []
+    if redirect_url:
+        buttons.append(
+            [InlineKeyboardButton(text=texts.t('LAVA_RECURRING_PAY_BUTTON', '💳 Оплатить'), url=redirect_url)]
+        )
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@error_handler
 async def confirm_instant_switch(
     callback: types.CallbackQuery,
     db_user: User,
@@ -5398,6 +5480,7 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
 
     # Оформление через СБП-автопродление Platega (альтернатива балансу)
     dp.callback_query.register(purchase_tariff_with_sbp, F.data.startswith('tariff_sbp:'))
+    dp.callback_query.register(purchase_tariff_with_lava, F.data.startswith('tariff_lava:'))
 
     # Подтверждение покупки суточного тарифа
     dp.callback_query.register(confirm_daily_tariff_purchase, F.data.startswith('daily_tariff_confirm:'))

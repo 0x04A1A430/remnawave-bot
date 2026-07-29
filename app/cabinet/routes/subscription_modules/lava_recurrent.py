@@ -85,6 +85,49 @@ async def enable_lava_recurrent(
     return {'status': result['status'], 'redirect_url': result['redirect_url']}
 
 
+@router.post('/lava-recurrent/purchase')
+async def purchase_with_lava_recurrent(
+    tariff_id: int = Query(..., description='Tariff to subscribe to'),
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Оформление подписки на тариф оплатой привязкой Lava.
+
+    Альтернатива покупке с баланса: первое списание Lava оплачивается по
+    ссылке из ответа и оживляет подписку (для нового тарифа создаётся
+    неактивная заготовка).
+    """
+    from app.config import settings
+
+    if not settings.is_lava_recurrent_enabled():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Lava recurrent disabled')
+
+    from app.database.crud.tariff import get_tariff_by_id
+
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if not tariff or not getattr(tariff, 'is_active', False):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Tariff not found')
+
+    from app.services.payment.lava import purchase_tariff_with_lava_recurring
+
+    try:
+        result = await purchase_tariff_with_lava_recurring(db, user=user, tariff=tariff)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except Exception as error:
+        logger.warning('Lava recurrent purchase failed', error=str(error), user_id=user.id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Could not create Lava subscription',
+        ) from error
+
+    return {
+        'status': result['status'],
+        'redirect_url': result['redirect_url'],
+        'subscription_id': result['subscription_id'],
+    }
+
+
 @router.get('/lava-recurrent')
 async def get_lava_recurrent(
     user: User = Depends(get_current_cabinet_user),

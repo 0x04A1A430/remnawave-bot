@@ -187,3 +187,43 @@ async def test_get_returns_binding_state(monkeypatch, user):
     assert result['charge_days'] == 30
     assert result['amount_kopeks'] == 10000
     assert result['next_charge_at'] == next_charge.isoformat()
+
+
+async def test_purchase_gated_and_maps_errors(monkeypatch, user):
+    """Покупка привязкой: гейт фичи, отказы доносятся как 400."""
+    _gate(monkeypatch, False)
+    with pytest.raises(HTTPException) as exc:
+        await route.purchase_with_lava_recurrent(tariff_id=5, user=user, db=object())
+    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
+
+    _gate(monkeypatch, True)
+    import app.database.crud.tariff as tariff_crud
+    import app.services.payment.lava as lava_module
+
+    monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=5, is_active=True)))
+    monkeypatch.setattr(
+        lava_module,
+        'purchase_tariff_with_lava_recurring',
+        AsyncMock(side_effect=ValueError('Оформление через Lava недоступно для триальной подписки')),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await route.purchase_with_lava_recurrent(tariff_id=5, user=user, db=object())
+    assert exc.value.status_code == status.HTTP_400_BAD_REQUEST
+    assert 'триальной' in exc.value.detail
+
+
+async def test_purchase_returns_payment_url_and_subscription(monkeypatch, user):
+    _gate(monkeypatch, True)
+    import app.database.crud.tariff as tariff_crud
+    import app.services.payment.lava as lava_module
+
+    monkeypatch.setattr(tariff_crud, 'get_tariff_by_id', AsyncMock(return_value=SimpleNamespace(id=5, is_active=True)))
+    monkeypatch.setattr(
+        lava_module,
+        'purchase_tariff_with_lava_recurring',
+        AsyncMock(return_value={'status': 'PENDING', 'redirect_url': 'https://pay.lava/y', 'subscription_id': 77}),
+    )
+
+    result = await route.purchase_with_lava_recurrent(tariff_id=5, user=user, db=object())
+
+    assert result == {'status': 'PENDING', 'redirect_url': 'https://pay.lava/y', 'subscription_id': 77}
