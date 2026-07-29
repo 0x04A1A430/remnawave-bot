@@ -1468,13 +1468,38 @@ async def select_tariff_period(
         await callback.answer(texts.t('TARIFF_PURCHASE_UNAVAILABLE', 'Тариф недоступен'), show_alert=True)
         return
 
-    # Получаем скидку для выбранного периода
-    group_pct, offer_pct, discount_percent = _get_user_period_discount(db_user, period)
+    # Существующая подписка этого тарифа нужна ДО расчёта цены: confirm передаёт
+    # её device_limit в движок, и превью обязано считать так же.
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
 
-    # Получаем цену
-    prices = tariff.period_prices or {}
-    base_price = prices.get(str(period), 0)
-    final_price = _apply_promo_discount(base_price, group_pct, offer_pct)
+        _existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
+    else:
+        _existing_sub = await get_subscription_by_user_id(db, db_user.id)
+
+    device_limit = None
+    if _existing_sub and _existing_sub.tariff_id == tariff.id:
+        device_limit = _existing_sub.device_limit
+
+    # Цена — тем же PricingEngine, что и confirm_tariff_purchase: ручной расчёт от
+    # period_prices не видел доплату за устройства сверх включённых в тариф, превью
+    # показывало заниженную цену («После оплаты: 0»), а подтверждение отбивало
+    # «Недостаточно средств».
+    from app.services.pricing_engine import pricing_engine
+
+    result = await pricing_engine.calculate_tariff_purchase_price(
+        tariff,
+        period,
+        device_limit=device_limit,
+        user=db_user,
+    )
+    final_price = result.final_total
+    original_price = result.original_total
+    total_discount = result.promo_group_discount + result.promo_offer_discount
+    discount_percent = (
+        round((1 - final_price / original_price) * 100) if original_price > 0 and total_discount > 0 else 0
+    )
+    shown_device_limit = device_limit if device_limit is not None else tariff.device_limit
 
     # Проверяем баланс
     user_balance = db_user.balance_kopeks or 0
@@ -1487,7 +1512,7 @@ async def select_tariff_period(
         if discount_percent > 0:
             discount_text = texts.t(
                 'TARIFF_PURCHASE_DISCOUNT_SHORT_LINE', '\n🎁 Скидка: {percent}% (-{amount})'
-            ).format(percent=discount_percent, amount=format_price_kopeks(base_price - final_price))
+            ).format(percent=discount_percent, amount=format_price_kopeks(total_discount))
 
         await callback.message.edit_text(
             texts.t(
@@ -1504,7 +1529,7 @@ async def select_tariff_period(
             ).format(
                 name=html.escape(tariff.name),
                 traffic=traffic,
-                devices=tariff.device_limit,
+                devices=shown_device_limit,
                 period=format_period(period),
                 discount=discount_text,
                 total=format_price_kopeks(final_price),
@@ -1518,14 +1543,6 @@ async def select_tariff_period(
         # Недостаточно средств - сохраняем корзину для автопокупки
         missing = final_price - user_balance
 
-        # Ищем существующую подписку для передачи subscription_id в корзину
-        if settings.is_multi_tariff_enabled():
-            from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-            _existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
-        else:
-            _existing_sub = await get_subscription_by_user_id(db, db_user.id)
-
         # Сохраняем данные корзины для автопокупки после пополнения
         cart_data = {
             'cart_mode': 'tariff_purchase',
@@ -1538,7 +1555,7 @@ async def select_tariff_period(
             'return_to_cart': True,
             'description': f'Покупка тарифа {tariff.name} на {period} дней',
             'traffic_limit_gb': tariff.traffic_limit_gb,
-            'device_limit': tariff.device_limit,
+            'device_limit': shown_device_limit,
             'allowed_squads': tariff.allowed_squads or [],
             'discount_percent': discount_percent,
             'subscription_id': _existing_sub.id if _existing_sub else None,
@@ -1571,7 +1588,7 @@ async def select_tariff_period(
             parse_mode='HTML',
         )
 
-    # Resolve target subscription_id at preview time and pin it in FSM.
+    # Pin the resolved subscription_id in FSM (resolved above, before pricing).
     # Without this, ``confirm_tariff_purchase`` re-queries by
     # ``(user_id, tariff_id)`` and can race with concurrent panel
     # webhooks that briefly flip the active sub's status — falling
@@ -1580,9 +1597,6 @@ async def select_tariff_period(
     # активен", refunds, leaves user confused).
     target_subscription_id: int | None = None
     if settings.is_multi_tariff_enabled():
-        from app.database.crud.subscription import get_subscription_by_user_and_tariff
-
-        _existing_sub = await get_subscription_by_user_and_tariff(db, db_user.id, tariff_id)
         target_subscription_id = _existing_sub.id if _existing_sub else None
 
     await state.update_data(
