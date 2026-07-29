@@ -115,3 +115,72 @@ async def test_video_used_even_when_logo_mode_disabled(monkeypatch):
 
         bot.send_video.assert_awaited_once()
         bot.send_message.assert_not_awaited()
+
+
+# ---- answer-путь (сама команда /start и меню после регистрации) ----------
+
+
+def _message() -> AsyncMock:
+    message = AsyncMock()
+    message.answer = AsyncMock()
+    message.answer_video = AsyncMock()
+    return message
+
+
+async def test_answer_path_sends_video(monkeypatch):
+    """/start отвечает через message.answer — видео обязано работать и там."""
+    from app.handlers.start import answer_menu_with_media
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        sms.reset_start_video_cache()
+        await sms.set_start_video_file_id(db, 'vid-777')
+
+        message = _message()
+        await answer_menu_with_media(message, 'Меню', KEYBOARD, db)
+
+        message.answer_video.assert_awaited_once()
+        assert message.answer_video.await_args.kwargs['video'] == 'vid-777'
+        message.answer.assert_not_awaited()
+
+
+async def test_answer_path_without_video_delegates_unchanged(monkeypatch):
+    """Без видео поведение обязано остаться ровно прежним (патченный answer)."""
+    from app.handlers.start import answer_menu_with_media
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        sms.reset_start_video_cache()
+
+        message = _message()
+        await answer_menu_with_media(message, 'Меню', KEYBOARD, db)
+
+        message.answer_video.assert_not_awaited()
+        message.answer.assert_awaited_once_with('Меню', reply_markup=KEYBOARD, parse_mode='HTML')
+
+
+async def test_answer_path_falls_back_when_video_broken(monkeypatch):
+    from app.handlers.start import answer_menu_with_media
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        sms.reset_start_video_cache()
+        await sms.set_start_video_file_id(db, 'broken')
+
+        message = _message()
+        message.answer_video = AsyncMock(side_effect=RuntimeError('wrong file identifier'))
+
+        await answer_menu_with_media(message, 'Меню', KEYBOARD, db)
+
+        message.answer.assert_awaited_once()
+
+
+async def test_answer_path_long_caption_delegates_to_text(monkeypatch):
+    from app.handlers.start import answer_menu_with_media
+
+    async with memory_session(monkeypatch, TABLES) as db:
+        sms.reset_start_video_cache()
+        await sms.set_start_video_file_id(db, 'vid-777')
+
+        message = _message()
+        await answer_menu_with_media(message, 'x' * 1100, KEYBOARD, db)
+
+        message.answer_video.assert_not_awaited()
+        message.answer.assert_awaited_once()

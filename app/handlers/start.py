@@ -96,6 +96,39 @@ def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]
     return head, tail
 
 
+async def answer_menu_with_media(message, text: str, keyboard, db) -> None:
+    """Отвечает меню с медиа-шапкой на входящее сообщение (например, /start).
+
+    Отличается от :func:`send_menu_with_media` тем, что при отсутствии видео
+    делегирует обычному ``message.answer`` — а он патчится
+    ``message_patch._answer_with_photo`` и несёт всю накопленную обработку
+    (фото-логотип, лимит подписи, топики форумов, privacy-restricted). Поэтому
+    без настроенного видео поведение остаётся ровно прежним.
+    """
+    from app.utils.message_patch import caption_exceeds_telegram_limit
+
+    if not caption_exceeds_telegram_limit(text):
+        from app.services.start_media_service import get_start_video_file_id
+
+        video_file_id = await get_start_video_file_id(db)
+        if video_file_id:
+            try:
+                await message.answer_video(
+                    video=video_file_id,
+                    caption=text,
+                    reply_markup=keyboard,
+                    parse_mode='HTML',
+                )
+                return
+            except Exception as video_error:
+                logger.warning(
+                    'Не удалось отправить видео меню — уходим на стандартный путь',
+                    error=str(video_error),
+                )
+
+    await message.answer(text, reply_markup=keyboard, parse_mode='HTML')
+
+
 async def send_menu_with_media(
     bot,
     chat_id: int,
@@ -1399,7 +1432,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         )
         if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
             menu_text = await get_main_menu_text(user, texts, db)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await answer_menu_with_media(message, menu_text, keyboard, db)
 
         if pinned_message and not pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2059,7 +2092,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
             if not await try_answer_rich_main_menu(callback.message, existing_user, texts, db, keyboard):
                 menu_text = await get_main_menu_text(existing_user, texts, db)
-                await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+                await answer_menu_with_media(callback.message, menu_text, keyboard, db)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2318,7 +2351,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             if not await try_answer_rich_main_menu(callback.message, user, texts, db, keyboard):
                 menu_text = await get_main_menu_text(user, texts, db)
-                await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+                await answer_menu_with_media(callback.message, menu_text, keyboard, db)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
@@ -2391,7 +2424,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
             if not await try_answer_rich_main_menu(message, existing_user, texts, db, keyboard):
                 menu_text = await get_main_menu_text(existing_user, texts, db)
-                await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+                await answer_menu_with_media(message, menu_text, keyboard, db)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2685,7 +2718,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
                 await _send_pinned_message(message.bot, db, user, pinned_message)
             if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
                 menu_text = await get_main_menu_text(user, texts, db)
-                await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+                await answer_menu_with_media(message, menu_text, keyboard, db)
             logger.info('✅ Главное меню показано пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
