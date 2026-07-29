@@ -155,6 +155,14 @@ class UsersListResponse(BaseModel):
     limit: int = 50
 
 
+class UserByRemnawaveResponse(BaseModel):
+    """Subscription-level owner resolved from an exact Remnawave UUID."""
+
+    user_id: int
+    subscription_id: int
+    matched_remnawave_uuid: str
+
+
 # === User Detail ===
 
 
