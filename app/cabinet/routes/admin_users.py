@@ -944,6 +944,10 @@ async def get_user_panel_info(
             detail='User not found',
         )
 
+    panel_uuid = None
+    if subscription_id is not None:
+        panel_uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
+
     try:
         from app.services.remnawave_service import RemnaWaveService
 
@@ -954,23 +958,25 @@ async def get_user_panel_info(
         async with service.get_api_client() as api:
             panel_user = None
 
-            # Multi-tariff: use per-subscription UUID
-            if settings.is_multi_tariff_enabled() and subscription_id is not None:
-                sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
-                if sub.remnawave_uuid:
-                    panel_user = await api.get_user_by_uuid(sub.remnawave_uuid)
-            # Single-tariff: user-level UUID
+            if subscription_id is not None and panel_uuid:
+                panel_user = await api.get_user_by_uuid(panel_uuid)
+            # Legacy fallback is only for callers that did not select a subscription.
             elif user.remnawave_uuid:
                 panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
 
             # Fallback: search by telegram_id (single-tariff only)
-            if not panel_user and not settings.is_multi_tariff_enabled() and user.telegram_id:
+            if (
+                not panel_user
+                and subscription_id is None
+                and not settings.is_multi_tariff_enabled()
+                and user.telegram_id
+            ):
                 panel_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if panel_users:
                     panel_user = panel_users[0]
 
             # Fallback: search by email (single-tariff, OAuth users)
-            if not panel_user and not settings.is_multi_tariff_enabled() and user.email:
+            if not panel_user and subscription_id is None and not settings.is_multi_tariff_enabled() and user.email:
                 panel_users_by_email = await api.get_user_by_email(user.email)
                 if panel_users_by_email:
                     panel_user = panel_users_by_email[0]
@@ -1032,9 +1038,8 @@ async def get_subscription_request_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     panel_uuid = None
-    if settings.is_multi_tariff_enabled() and subscription_id is not None:
-        sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
-        panel_uuid = sub.remnawave_uuid
+    if subscription_id is not None:
+        panel_uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
     else:
         panel_uuid = getattr(user, 'remnawave_uuid', None)
 
@@ -2517,9 +2522,8 @@ async def get_user_devices(
 
     # Resolve panel UUID
     _dev_uuid = None
-    if settings.is_multi_tariff_enabled() and subscription_id is not None:
-        sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
-        _dev_uuid = sub.remnawave_uuid
+    if subscription_id is not None:
+        _dev_uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
     else:
         _dev_uuid = user.remnawave_uuid
 
@@ -2595,9 +2599,8 @@ async def delete_user_device(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     _uuid = None
-    if settings.is_multi_tariff_enabled() and subscription_id is not None:
-        sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
-        _uuid = sub.remnawave_uuid
+    if subscription_id is not None:
+        _uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
     else:
         _uuid = user.remnawave_uuid
 

@@ -238,4 +238,9 @@ async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypa
     assert grace_checks == [(7, 8, 9), (7, 8, 9)]
     assert cancelled == [7, 8, 9]
     assert db.execute.await_count == 4  # three server cleanups plus one user-scoped subscription deletion
+    delete_statement = db.execute.await_args_list[-1].args[0]
+    compiled_delete = delete_statement.compile()
+    assert 'DELETE FROM subscriptions' in str(delete_statement)
+    assert 'subscriptions.user_id' in str(delete_statement)
+    assert 1 in compiled_delete.params.values()
     assert db.commit.await_count == 1

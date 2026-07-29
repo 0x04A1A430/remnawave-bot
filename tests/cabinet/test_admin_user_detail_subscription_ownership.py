@@ -63,7 +63,6 @@ def foreign_subscription() -> SimpleNamespace:
 @pytest.fixture
 def ownership_boundary(monkeypatch, owned_subscription, foreign_subscription):
     """Make the authoritative lookup return only the subscription owned by OWNER_ID."""
-    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
     user = _user(owned_subscription, foreign_subscription)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
 
@@ -82,7 +81,11 @@ def ownership_boundary(monkeypatch, owned_subscription, foreign_subscription):
 
 
 class _Api:
+    def __init__(self, calls: dict[str, int]):
+        self.calls = calls
+
     async def get_user_by_uuid(self, uuid):
+        self.calls['get_user_by_uuid'] += 1
         return SimpleNamespace(
             uuid=uuid,
             trojan_password='owned-secret',
@@ -99,29 +102,51 @@ class _Api:
         )
 
     async def get_user_devices_all(self, _uuid):
+        self.calls['get_user_devices_all'] += 1
         return {'devices': [{'hwid': 'owned-hwid', 'platform': 'ios'}], 'total': 1}
 
     async def get_subscription_request_history(self, _uuid, *, offset, limit):
+        self.calls['get_subscription_request_history'] += 1
         return {'total': 1, 'records': [{'ip': '192.0.2.1'}]}
 
     async def remove_device(self, _uuid, _hwid):
+        self.calls['remove_device'] += 1
         return True
-
-
-class _Service:
-    is_configured = True
-
-    def get_api_client(self):
-        context = MagicMock()
-        context.__aenter__ = AsyncMock(return_value=_Api())
-        context.__aexit__ = AsyncMock(return_value=None)
-        return context
 
 
 @pytest.fixture
 def panel_service(monkeypatch):
-    monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', _Service)
+    calls = {
+        'constructed': 0,
+        'get_api_client': 0,
+        'client_entered': 0,
+        'get_user_by_uuid': 0,
+        'get_user_devices_all': 0,
+        'get_subscription_request_history': 0,
+        'remove_device': 0,
+    }
+
+    class Service:
+        is_configured = True
+
+        def __init__(self):
+            calls['constructed'] += 1
+
+        def get_api_client(self):
+            calls['get_api_client'] += 1
+            context = MagicMock()
+
+            async def enter():
+                calls['client_entered'] += 1
+                return _Api(calls)
+
+            context.__aenter__ = AsyncMock(side_effect=enter)
+            context.__aexit__ = AsyncMock(return_value=None)
+            return context
+
+    monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
     monkeypatch.setattr(admin_users, 'get_aliases_for_user', AsyncMock(return_value={}))
+    return calls
 
 
 async def test_authoritative_subscription_lookup_constrains_id_and_user_id(owned_subscription):
@@ -148,10 +173,12 @@ async def test_authoritative_subscription_lookup_constrains_id_and_user_id(owned
     ],
     ids=['panel-info', 'devices', 'request-history', 'delete-device'],
 )
-async def test_subscription_reads_and_device_delete_are_ownership_isolated(
-    ownership_boundary, panel_service, route_name, kwargs, foreign_marker
+@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi-tariff', 'single-tariff'])
+async def test_subscription_reads_and_device_delete_accept_owned_subscription(
+    monkeypatch, ownership_boundary, panel_service, route_name, kwargs, foreign_marker, multi_tariff
 ):
-    """A foreign id must not disclose panel data or invoke the device mutation."""
+    """Every BP-S route uses the selected owned subscription in either mode."""
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
     route = getattr(admin_users, route_name)
     db = AsyncMock()
     admin = SimpleNamespace(id=1)
@@ -159,13 +186,73 @@ async def test_subscription_reads_and_device_delete_are_ownership_isolated(
     owned_result = await route(OWNER_ID, admin=admin, db=db, subscription_id=OWNED_ID, **kwargs)
     assert foreign_marker in str(owned_result)
 
-    with pytest.raises(HTTPException) as foreign:
-        await route(OWNER_ID, admin=admin, db=db, subscription_id=FOREIGN_ID, **kwargs)
-    assert foreign.value.status_code == 404
 
-    with pytest.raises(HTTPException) as missing:
-        await route(OWNER_ID, admin=admin, db=db, subscription_id=MISSING_ID, **kwargs)
-    assert missing.value.status_code == 404
+@pytest.mark.parametrize(
+    ('route_name', 'kwargs'),
+    [
+        ('get_user_panel_info', {}),
+        ('get_user_devices', {}),
+        ('get_subscription_request_history', {}),
+        ('delete_user_device', {'hwid': 'owned-hwid'}),
+    ],
+    ids=['panel-info', 'devices', 'request-history', 'delete-device'],
+)
+@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi-tariff', 'single-tariff'])
+async def test_subscription_reads_and_device_delete_reject_foreign_and_absent_without_panel_access(
+    monkeypatch, ownership_boundary, panel_service, route_name, kwargs, multi_tariff
+):
+    """No rejected BP-S request may construct or call the panel client in either mode."""
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
+    route = getattr(admin_users, route_name)
+    db = AsyncMock()
+    admin = SimpleNamespace(id=1)
+
+    for subscription_id in (FOREIGN_ID, MISSING_ID):
+        with pytest.raises(HTTPException) as rejected:
+            await route(OWNER_ID, admin=admin, db=db, subscription_id=subscription_id, **kwargs)
+        assert rejected.value.status_code == 404
+        assert panel_service == {
+            'constructed': 0,
+            'get_api_client': 0,
+            'client_entered': 0,
+            'get_user_by_uuid': 0,
+            'get_user_devices_all': 0,
+            'get_subscription_request_history': 0,
+            'remove_device': 0,
+        }
+
+
+@pytest.mark.parametrize('multi_tariff', [True, False], ids=['multi-tariff', 'single-tariff'])
+@pytest.mark.parametrize('subscription_id', [FOREIGN_ID, MISSING_ID], ids=['foreign', 'absent'])
+async def test_panel_info_validates_supplied_subscription_before_unconfigured_service_access(
+    monkeypatch, ownership_boundary, multi_tariff, subscription_id
+):
+    """Would fail if panel-info checks service configuration before ownership."""
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)
+    calls = {'constructed': 0, 'get_api_client': 0}
+
+    class UnconfiguredService:
+        is_configured = False
+
+        def __init__(self):
+            calls['constructed'] += 1
+
+        def get_api_client(self):
+            calls['get_api_client'] += 1
+            raise AssertionError('ownership rejection must not request a panel client')
+
+    monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', UnconfiguredService)
+
+    with pytest.raises(HTTPException) as rejected:
+        await admin_users.get_user_panel_info(
+            OWNER_ID,
+            admin=SimpleNamespace(id=1),
+            db=AsyncMock(),
+            subscription_id=subscription_id,
+        )
+
+    assert rejected.value.status_code == 404
+    assert calls == {'constructed': 0, 'get_api_client': 0}
 
 
 @pytest.mark.parametrize(
@@ -236,3 +323,6 @@ async def test_subscription_actions_reject_foreign_or_absent_ids_before_mutation
         await admin_users.update_user_subscription(OWNER_ID, missing_request, admin=SimpleNamespace(id=1), db=db)
     assert missing.value.status_code == 404
     assert getattr(foreign_subscription, state_field) == before
+    sync.assert_not_awaited()
+    reset.assert_not_awaited()
+    db.commit.assert_not_awaited()
