@@ -284,6 +284,12 @@ class Settings(BaseSettings):
     # чтобы разрешить перенос (тогда для триалов действует TRIAL_ADD_REMAINING_DAYS_TO_PAID).
     TARIFF_SWITCH_RESET_FREE_DAYS: bool = True
     MAX_DEVICES_LIMIT: int = 20
+    # Разрешать ли опускать лимит устройств НИЖЕ включённого в тариф.
+    # False (по умолчанию): нижняя граница уменьшения — device_limit тарифа.
+    # Уменьшают почти всегда не ради самоограничения, а чтобы платить меньше,
+    # либо промахиваются — и потом идут в поддержку с вопросом, почему устройств
+    # меньше, чем положено по тарифу. True — прежнее поведение (минимум 1).
+    ALLOW_DEVICES_BELOW_TARIFF_LIMIT: bool = False
 
     TRIAL_WARNING_HOURS: int = 2
     ENABLE_NOTIFICATIONS: bool = True

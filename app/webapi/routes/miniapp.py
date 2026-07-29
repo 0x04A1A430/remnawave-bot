@@ -6106,6 +6106,20 @@ async def update_subscription_devices_endpoint(
         )
 
     # Enforce tariff max device limit
+    # По умолчанию ниже включённого в тариф опускать нельзя
+    # (ALLOW_DEVICES_BELOW_TARIFF_LIMIT=True возвращает прежний минимум 1).
+    from app.utils.subscription_utils import resolve_min_device_limit
+
+    min_device_limit = resolve_min_device_limit(tariff)
+    if new_devices < min_device_limit:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={
+                'code': 'devices_below_tariff',
+                'message': f'Нельзя уменьшить количество устройств ниже {min_device_limit} — столько включено в тариф',
+            },
+        )
+
     if tariff_max_device_limit and new_devices > tariff_max_device_limit:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

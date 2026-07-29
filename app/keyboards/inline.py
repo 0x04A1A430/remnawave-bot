@@ -2724,8 +2724,12 @@ def get_change_devices_keyboard(
     else:
         max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100
 
-    # Минимум при уменьшении всегда 1 (device_limit тарифа — это "включено при покупке", а не нижняя граница)
-    min_devices = 1
+    # По умолчанию ниже включённого в тариф опускать нельзя — кнопки с меньшими
+    # значениями просто не показываем (ALLOW_DEVICES_BELOW_TARIFF_LIMIT=True
+    # возвращает прежний минимум 1).
+    from app.utils.subscription_utils import resolve_min_device_limit
+
+    min_devices = resolve_min_device_limit(tariff)
 
     start_range = max(min_devices, min(current_devices - 3, max_devices - 6))
     end_range = min(max_devices + 1, max(current_devices + 4, 7))
