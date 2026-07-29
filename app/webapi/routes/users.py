@@ -30,6 +30,7 @@ from app.database.crud.user import (
 from app.database.models import PaymentMethod, PromoGroup, Subscription, User, UserStatus
 from app.services.manual_topup_service import ManualTopupKeyConflict, credit_manual_topup
 from app.services.subscription_service import SubscriptionService
+from app.utils.text_search import contains_conditions
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.users import (
@@ -122,13 +123,13 @@ def _serialize_user(user: User) -> UserResponse:
 
 
 def _apply_search_filter(query, search: str):
-    search_lower = f'%{search.lower()}%'
-    conditions = [
-        func.lower(User.username).like(search_lower),
-        func.lower(User.first_name).like(search_lower),
-        func.lower(User.last_name).like(search_lower),
-        func.lower(User.referral_code).like(search_lower),
-    ]
+    # lower() в SQL сворачивает регистр по локали базы: под `C` (наш docker-compose)
+    # кириллица не сворачивается, и «поз» не находил «Позитив».
+    # См. app/utils/text_search.py.
+    conditions = contains_conditions(
+        (User.username, User.first_name, User.last_name, User.referral_code),
+        search,
+    )
 
     if search.isdigit():
         numeric_search = int(search)
