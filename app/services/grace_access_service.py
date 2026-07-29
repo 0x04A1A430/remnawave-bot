@@ -246,14 +246,24 @@ class GracePanelGateway(Protocol):
         remnawave_uuid: str,
         snapshot: GracePanelSnapshot,
         expected_overlay: GracePanelOverlay,
-    ) -> GraceRestoreOutcome: ...
+    ) -> GraceRestoreOutcome:
+        """Roll the panel back to ``snapshot``, but only if it still carries our overlay.
+
+        ``expected_overlay`` is the guard: someone else may have changed the panel
+        since the overlay was applied, and blindly restoring an old snapshot would
+        undo their change.
+        """
 
     async def apply_billing_state(
         self,
         billing: GraceBillingState,
         *,
         expected_overlay: GracePanelOverlay,
-    ) -> None: ...
+    ) -> None:
+        """Push the bot's canonical values onto the panel, replacing our overlay.
+
+        Guarded by ``expected_overlay`` for the same reason as ``restore_snapshot``.
+        """
 
 
 class GraceBillingGateway(Protocol):

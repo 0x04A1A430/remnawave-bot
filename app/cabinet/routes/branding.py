@@ -556,8 +556,14 @@ async def upload_bot_start_video(
         # Промежуточное сообщение удаляем — file_id живёт и после удаления.
         try:
             await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
-        except Exception:
-            pass
+        except Exception as delete_error:
+            # Не критично: file_id уже получен, видео загружено. Останется лишнее
+            # сообщение в служебном чате — это не повод валить загрузку.
+            logger.debug(
+                'Не удалось удалить промежуточное сообщение с видео',
+                message_id=message.message_id,
+                error=str(delete_error),
+            )
     except HTTPException:
         raise
     except Exception as error:

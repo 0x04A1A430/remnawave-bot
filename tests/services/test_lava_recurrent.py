@@ -22,6 +22,7 @@ from app.database.models import (
     tariff_promo_groups,
 )
 from app.services import lava_recurrent as lr
+from app.services.payment import lava as lava_module
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -151,8 +152,6 @@ async def _seed(db, *, autopay_enabled: bool = True, product_id: str | None = PR
 
 def _agent(monkeypatch, *, subscribe_response=None, unsubscribe=None):
     """Агент рекуррента с замоканным сетевым слоем Lava."""
-    import app.services.payment.lava as lava_module
-
     service = SimpleNamespace(
         list_recurrent_products=AsyncMock(return_value=[{'id': PRODUCT_ID, 'periodDays': 30, 'price': 100.0}]),
         create_recurrent_consumer=AsyncMock(return_value={'data': {}}),
@@ -240,8 +239,6 @@ async def test_enable_rejects_zero_price_product(monkeypatch):
             subscribe_response={'data': {'subscriptionId': 'lava-sub-1', 'url': 'u', 'amount': 0}},
         )
         # и продукт тоже без цены
-        import app.services.payment.lava as lava_module
-
         lava_module.lava_service.list_recurrent_products = AsyncMock(
             return_value=[{'id': PRODUCT_ID, 'periodDays': 30, 'price': 0}]
         )

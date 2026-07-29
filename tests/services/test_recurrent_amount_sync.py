@@ -26,6 +26,7 @@ from app.database.models import (
     UserStatus,
     tariff_promo_groups,
 )
+from app.services import recurrent_amount as ra
 from app.services.recurrent_amount import (
     resolve_true_renewal_amount,
     sync_recurrent_bindings_after_price_change,
@@ -191,7 +192,6 @@ async def test_device_purchase_triggers_sync(monkeypatch):
         _, _, subscription = await _seed(db, device_limit=1)
 
         called: list[int] = []
-        import app.services.recurrent_amount as ra
 
         async def fake_sync(db_, subscription_id):
             called.append(subscription_id)
