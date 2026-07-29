@@ -415,6 +415,9 @@ async def get_purchase_options(
                 # СБП-оформление (Platega recurrent): фронт показывает кнопку
                 # «Оформить с автооплатой СБП» рядом с покупкой с баланса.
                 'platega_recurrent_enabled': settings.is_platega_recurrent_enabled(),
+                # Автопродление Lava: фронт показывает переключатель на странице
+                # подписки, если фича включена.
+                'lava_recurrent_enabled': settings.is_lava_recurrent_enabled(),
             }
 
         # Classic mode - return periods
