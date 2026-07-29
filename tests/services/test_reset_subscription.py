@@ -228,6 +228,7 @@ async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypa
         'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', ensure_no_open_grace
     )
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', cancel_recurrent)
+    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', cancel_recurrent)
 
     result = await admin_users.reset_user_subscription(
         1,
@@ -238,9 +239,12 @@ async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypa
 
     assert result.subscription_deleted is True
     assert grace_checks == [(7, 8, 9), (7, 8, 9)]
-    assert cancelled == [7, 8, 9]
-    assert db.execute.await_count == 4  # three server cleanups plus one user-scoped subscription deletion
-    delete_statement = db.execute.await_args_list[-1].args[0]
+    # Отменяются оба рекуррента (Platega и Lava) по каждой подписке — иначе живая
+    # привязка спишет деньги и воскресит только что сброшенную подписку.
+    assert cancelled == [7, 7, 8, 8, 9, 9]
+    deletes = [call.args[0] for call in db.execute.await_args_list if str(call.args[0]).startswith('DELETE')]
+    assert len(deletes) == 4  # three server cleanups plus one user-scoped subscription deletion
+    delete_statement = deletes[-1]
     compiled_delete = delete_statement.compile()
     assert 'DELETE FROM subscriptions' in str(delete_statement)
     assert 'subscriptions.user_id' in str(delete_statement)
@@ -281,6 +285,7 @@ async def test_user_level_reset_panel_failure_preserves_all_subscription_retry_i
         'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', ensure_no_open_grace
     )
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', cancel_recurrent)
+    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', cancel_recurrent)
     monkeypatch.setattr('app.services.subscription_service.SubscriptionService', PanelService)
 
     result = await admin_users.reset_user_subscription(
@@ -295,5 +300,7 @@ async def test_user_level_reset_panel_failure_preserves_all_subscription_retry_i
     assert result.panel_deactivated is False
     assert panel_calls == (['SUB-7', 'SUB-8'] if len(outcomes) == 2 else ['SUB-7'])
     assert [sub.remnawave_uuid for sub in subscriptions] == ['SUB-7', 'SUB-8']
-    db.execute.assert_not_awaited()
+    assert not [call for call in db.execute.await_args_list if str(call.args[0]).startswith('DELETE')], (
+        'при незавершённой деактивации в панели ничего удалять нельзя'
+    )
     db.commit.assert_not_awaited()

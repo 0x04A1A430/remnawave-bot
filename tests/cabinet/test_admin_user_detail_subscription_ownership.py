@@ -310,6 +310,7 @@ async def test_subscription_actions_accept_an_owned_subscription(
     monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
     monkeypatch.setattr('app.database.crud.subscription.reset_subscription', reset_subscription)
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', AsyncMock())
     db = AsyncMock()
     request = UpdateSubscriptionRequest(action=action, subscription_id=OWNED_ID, **request_kwargs)
 
@@ -467,6 +468,7 @@ async def test_selected_reset_returns_unsuccessful_when_panel_deactivation_fails
     monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
     monkeypatch.setattr('app.database.crud.subscription.reset_subscription', reset_subscription)
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', AsyncMock())
     monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
 
     result = await admin_users.update_user_subscription(
@@ -490,6 +492,7 @@ async def test_selected_reset_without_link_does_not_substitute_legacy_identity(
     monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
     monkeypatch.setattr('app.database.crud.subscription.reset_subscription', reset_subscription)
     monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', AsyncMock())
     monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
 
     result = await admin_users.update_user_subscription(
@@ -502,6 +505,35 @@ async def test_selected_reset_without_link_does_not_substitute_legacy_identity(
     assert result.success is True
     panel_disable.assert_not_awaited()
     reset_subscription.assert_awaited_once()
+
+
+async def test_selected_reset_cancels_both_recurring_bindings(monkeypatch, ownership_boundary, owned_subscription):
+    """Живая привязка автопродления воскресила бы только что сброшенную подписку.
+
+    Ветка сброса выбранной подписки появилась раньше рекуррента Lava, поэтому
+    отменяла только Platega — как и остальные пути сброса, обязана снимать обе.
+    """
+    platega_cancel = AsyncMock()
+    lava_cancel = AsyncMock()
+    monkeypatch.setattr(
+        'app.services.subscription_service.SubscriptionService.disable_remnawave_user',
+        AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr('app.database.crud.subscription.reset_subscription', AsyncMock())
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', platega_cancel)
+    monkeypatch.setattr('app.services.payment.lava.cancel_lava_recurring_for_subscription_safe', lava_cancel)
+    monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
+
+    result = await admin_users.update_user_subscription(
+        OWNER_ID,
+        UpdateSubscriptionRequest(action='reset', subscription_id=OWNED_ID),
+        admin=SimpleNamespace(id=1),
+        db=AsyncMock(),
+    )
+
+    assert result.success is True
+    platega_cancel.assert_awaited_once()
+    lava_cancel.assert_awaited_once()
 
 
 @pytest.mark.parametrize(

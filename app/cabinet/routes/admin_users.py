@@ -345,8 +345,8 @@ async def _sync_subscription_to_panel(
         # поэтому без лога «продлил, а в панели не изменилось» диагностировать нечем.
         logger.warning(
             'Skipped panel sync: selected subscription has no panel UUID',
-            user_id=user.id,
-            subscription_id=subscription.id,
+            user_id=getattr(user, 'id', None),
+            subscription_id=getattr(subscription, 'id', None),
         )
         return {'skipped': True, 'reason': 'Selected subscription has no panel UUID'}
 
@@ -1668,10 +1668,14 @@ async def update_user_subscription(
             # legacy user UUID, and preserve the selected row for an exact
             # retry when panel deactivation fails.
             from app.database.crud.subscription import reset_subscription
+            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
             from app.services.subscription_service import SubscriptionService
 
+            # Обе привязки, как в reset_subscription_with_panel: иначе живой рекуррент
+            # спишет деньги и воскресит только что сброшенную подписку.
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
             panel_uuid = subscription.remnawave_uuid
             panel_disabled = False
             if panel_uuid:
