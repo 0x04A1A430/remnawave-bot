@@ -1290,6 +1290,14 @@ class Settings(BaseSettings):
     CABINET_PASSWORD_RESET_EXPIRE_HOURS: int = 1
     CABINET_EMAIL_CHANGE_CODE_EXPIRE_MINUTES: int = 15  # Email change verification code expiration
     CABINET_EMAIL_AUTH_ENABLED: bool = True  # Enable email registration/login in cabinet
+    # Согласие с офертой и политикой при ПЕРВОЙ авторизации в кабинете (для новых юзеров).
+    # False — чекбоксы не показываются и ничего не требуется (прежнее поведение).
+    # Гейт сам собой отключается, если ни оферта, ни политика не включены для веба:
+    # требовать согласие с несуществующим документом бессмысленно.
+    CABINET_REQUIRE_LEGAL_CONSENT: bool = True
+    # True — чекбоксы показываются уже отмеченными (пользователю остаётся не снимать).
+    # Юридически слабее явной галочки, поэтому по умолчанию выключено.
+    CABINET_LEGAL_CONSENT_PRECHECKED: bool = False
     CABINET_URL: str = 'https://example.com/cabinet'  # Base URL for cabinet (used in verification emails)
     CABINET_TRUSTED_PROXIES: str = (
         ''  # Comma-separated IPs/CIDRs of trusted reverse proxies (e.g. '127.0.0.1,10.0.0.0/8')

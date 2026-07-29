@@ -3140,6 +3140,29 @@ class PublicOffer(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
+class LegalConsent(Base):
+    """Отметка «ознакомлен» с офертой/политикой, поставленная при регистрации.
+
+    Смысл чекбокса — в доказательстве, поэтому пишем журнал: кто, с каким документом,
+    когда и откуда согласился. Таблица append-only, уникальности нет намеренно: когда
+    появится переподтверждение после смены редакции документа, новая запись должна
+    лечь рядом со старой, а не затереть её.
+    """
+
+    __tablename__ = 'legal_consents'
+    __table_args__ = (Index('ix_legal_consents_user_document', 'user_id', 'document'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    document = Column(String(32), nullable=False)
+    accepted_at = Column(AwareDateTime(), default=func.now(), nullable=False)
+    # Откуда поставлена галочка: cabinet_telegram / cabinet_email / …
+    source = Column(String(32), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+
+    user = relationship('User')
+
+
 class RecurrentPayments(Base):
     __tablename__ = 'recurrent_payments'
 
