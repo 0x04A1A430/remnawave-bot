@@ -39,6 +39,16 @@ LAVA_STATUS_MAP: dict[str, tuple[str, bool]] = {
 }
 
 
+def _lava_amount_to_kopeks(raw: Any) -> int:
+    """Сумма Lava (рубли, число/строка) в копейки; 0 при отсутствии/мусоре."""
+    if raw is None:
+        return 0
+    try:
+        return int(round(float(raw) * 100))
+    except (TypeError, ValueError):
+        return 0
+
+
 class LavaPaymentMixin:
     """Mixin для работы с платежами Lava Business."""
 
@@ -669,20 +679,25 @@ class LavaPaymentMixin:
         if not product_id:
             raise ValueError('Для тарифа не задан продукт Lava — автопродление недоступно')
 
-        # Взаимоисключение с рекуррентом Platega: оба движка push-модели, и две
-        # живые привязки на одной подписке списывали бы дважды за цикл.
-        # (Взаимоисключение с balance-autopay — ниже, снятием autopay_enabled.)
-        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
-
-        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
         payment_module = import_module('app.services.payment_service')
         user = await payment_module.get_user_by_id(db, user_id)
         if not user:
             raise ValueError('Пользователь не найден')
 
+        # Продукт обязателен: из него берутся шаг продления и цена. Догадка по
+        # умолчанию (30 дней) при недоступном product/list навсегда исказила бы
+        # каденс — годовой продукт продлевал бы подписку на месяц за списание.
         product = await self._resolve_lava_product(product_id)
+        if product is None:
+            raise ValueError('Продукт Lava недоступен — попробуйте позже')
         charge_days = resolve_product_charge_days(product)
+
+        # ВСЯ валидация — ДО обращения к Lava: subscribe создаёт живую привязку
+        # на их стороне, и любой raise после него оставил бы подписку, которая
+        # списывает вечно и которую нечем отменить (локальной записи нет).
+        amount_kopeks = _lava_amount_to_kopeks(product.get('price'))
+        if amount_kopeks <= 0:
+            raise ValueError('Продукт Lava не имеет цены — автопродление недоступно')
 
         consumer_id = self._lava_consumer_id(user)
         try:
@@ -706,17 +721,25 @@ class LavaPaymentMixin:
         lava_id = data.get('subscriptionId')
         redirect_url = data.get('url')
 
-        raw_amount = data.get('amount')
-        if raw_amount is None and product is not None:
-            raw_amount = product.get('price')
-        try:
-            amount_kopeks = int(round(float(raw_amount) * 100)) if raw_amount is not None else 0
-        except (TypeError, ValueError):
-            amount_kopeks = 0
-        if amount_kopeks <= 0:
-            # Нулевая сумма означала бы пустые регулярные «списания» —
-            # отклоняем наравне с отсутствующей ценой (зеркало Platega).
-            raise ValueError('Продукт Lava не имеет цены — автопродление недоступно')
+        # Фактическая сумма первого счёта, если Lava её вернула, иначе цена продукта.
+        response_amount = _lava_amount_to_kopeks(data.get('amount'))
+        if response_amount > 0:
+            amount_kopeks = response_amount
+
+        if not lava_id:
+            # Без subscriptionId молча отключаются обе страховки (отмена
+            # осиротевшей привязки и свип недошедших отмен) — зеркало Platega,
+            # которая в этом месте жёстко падает. Отменяем по orderId и падаем.
+            logger.error('Lava: subscribe без subscriptionId — отменяем привязку', order_id=order_id)
+            try:
+                await lava_service.unsubscribe_recurrent(order_id=order_id)
+            except Exception as cancel_error:  # pragma: no cover - network errors
+                logger.error(
+                    'Lava: не удалось отменить привязку без subscriptionId',
+                    order_id=order_id,
+                    error=str(cancel_error),
+                )
+            raise RuntimeError('Lava не вернула subscriptionId при создании подписки')
 
         try:
             record = await sub_crud.create_lava_subscription(
@@ -761,8 +784,16 @@ class LavaPaymentMixin:
                 'status': winner.status,
             }
 
+        # Взаимоисключение движков продления — ПОСЛЕ успешного создания записи:
+        # раньше отмена Platega шла до subscribe, и любой сбой оформления Lava
+        # оставлял пользователя вообще без автопродления (старую привязку уже
+        # погасили, новую не создали).
         subscription.autopay_enabled = False
         await db.commit()
+
+        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
         return {
             'local_id': record.id,
@@ -923,12 +954,27 @@ class LavaPaymentMixin:
 
             subscription = await db.get(Subscription, record.subscription_id)
             if subscription is None:
-                # Не отмечаем charge_id/счётчики — реального продления не было.
+                # Продлевать нечего (подписку удалили), а деньги уже списаны и
+                # ретраев не будет — вебхук всегда отвечает 200. Единственное
+                # полезное действие: немедленно остановить дальнейшие списания.
                 logger.error(
-                    'Lava subscription callback: Subscription не найдена для продления',
+                    'Lava subscription callback: Subscription не найдена — останавливаем автосписания',
                     subscription_id=record.subscription_id,
                     order_id=order_id,
                 )
+                try:
+                    await lava_service.unsubscribe_recurrent(
+                        subscription_id=record.lava_subscription_id,
+                        order_id=None if record.lava_subscription_id else record.order_id,
+                    )
+                    record.status = 'CANCELLED'
+                    await db.commit()
+                except Exception as cancel_error:  # pragma: no cover - network errors
+                    logger.error(
+                        'Lava: не удалось остановить списания по удалённой подписке',
+                        order_id=order_id,
+                        error=str(cancel_error),
+                    )
                 return False
 
             subscription.extend_subscription(record.charge_days)
@@ -938,11 +984,17 @@ class LavaPaymentMixin:
             # в ACTIVE и повторяем удалённую отмену.
             was_cancelled = record.status == 'CANCELLED'
 
+            charged_at = datetime.now(UTC)
             record.last_charge_external_id = charge_id
             if not was_cancelled:
                 record.status = 'ACTIVE'
-            record.last_charge_at = datetime.now(UTC)
+            record.last_charge_at = charged_at
             record.charges_success += 1
+            # Вебхук Lava не несёт дату следующего списания (в отличие от
+            # NextChargeAt у Platega) — считаем по каденсу продукта, иначе
+            # колонка и строка «следующее списание» в кабинете мертвы.
+            if not was_cancelled:
+                record.next_charge_at = charged_at + timedelta(days=record.charge_days)
 
             tx = await create_transaction(
                 db,
@@ -1011,8 +1063,15 @@ class LavaPaymentMixin:
             return True
 
         if lava_status in lr.CHARGE_FAILED:
-            record.status = 'PAST_DUE'
+            # CANCELLED не воскрешаем: истёкший счёт по уже отменённой привязке —
+            # рутина (включил → не оплатил → отменил → счёт протух). Перевод в
+            # PAST_DUE стирал бы отмену в UI, блокировал повторное включение
+            # (partial unique по «живым» статусам), выбрасывал запись из свипа
+            # недошедших отмен и — главное — обнулял бы was_cancelled, отключая
+            # повторную удалённую отмену при следующем успешном списании.
             record.charges_failed += 1
+            if record.status != 'CANCELLED':
+                record.status = 'PAST_DUE'
             await db.commit()
             return True
 

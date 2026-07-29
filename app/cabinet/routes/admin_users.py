@@ -1772,12 +1772,11 @@ async def cancel_user_sbp_recurring(
     if not subscription:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
 
-    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    # Эндпоинт отменяет именно СБП-автопродление Platega — привязку Lava он
+    # трогать не должен (у неё своя поверхность отмены).
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, sub_id)
-
-    await cancel_lava_recurring_for_subscription_safe(db, sub_id)
     logger.info(
         'Admin cancelled SBP auto-renewal for subscription',
         admin_id=admin.id,

@@ -1372,7 +1372,10 @@ async def extend_subscription(
     # за период, который пользователь уже оплатил другим способом. Наше
     # собственное рекуррентное списание сюда не заходит — оно продлевает через
     # метод модели Subscription.extend_subscription.
-    if days > 0:
+    # Только при commit=True: с commit=False вызывающий держит собственную
+    # открытую транзакцию, которая ещё может откатиться — сдвигать дату
+    # списания на стороне Lava до её коммита нельзя (откатить сдвиг нечем).
+    if days > 0 and commit:
         try:
             from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
 

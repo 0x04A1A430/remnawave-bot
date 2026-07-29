@@ -77,9 +77,12 @@ def normalize_remote_status(raw: str | None) -> str | None:
     value = str(raw).strip().lower().replace('-', '_').replace(' ', '_')
     if not value:
         return None
-    if value in ('active', 'subscribed', 'paid'):
+    # 'activated'/'deactivated' — фактические значения Lava (примеры в спеке
+    # SubscriptionStatusResource; у деактивированной подписки есть ещё
+    # deactivation_time/deactivated_reason). Без них reconciler был no-op.
+    if value in ('active', 'activated', 'subscribed', 'paid'):
         return 'active'
-    if value in ('cancelled', 'canceled', 'unsubscribed', 'stopped'):
+    if value in ('cancelled', 'canceled', 'deactivated', 'unsubscribed', 'stopped'):
         return 'cancelled'
     if value in ('failed', 'error', 'declined'):
         return 'failed'

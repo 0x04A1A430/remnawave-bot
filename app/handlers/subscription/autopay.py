@@ -545,12 +545,11 @@ async def handle_sbp_recurring_cancel(
         )
         return
 
-    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    # Это кнопка отмены именно СБП-автопродления Platega — привязку Lava она
+    # трогать не должна (у неё своя поверхность отмены).
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
-    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
     await callback.answer(texts.t('SBP_RECURRING_CANCELLED', '✅ Автопродление через СБП отменено'))
     # Меню гейтится флагом — при выключенной фиче не дёргаем его, чтобы после
     # успешной отмены юзер не получил второй алерт «недоступно».

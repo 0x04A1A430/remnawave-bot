@@ -354,7 +354,8 @@ class LavaService:
         if not subscription_id and not order_id:
             raise ValueError('Lava offset-next-pay-time: subscription_id or order_id required')
 
-        payload: dict[str, Any] = {'shopId': self.shop_id, 'days': int(days)}
+        # Контракт: days строго 1..365, иначе 422 «Validation failed».
+        payload: dict[str, Any] = {'shopId': self.shop_id, 'days': max(1, min(int(days), 365))}
         if subscription_id:
             payload['subscriptionId'] = str(subscription_id)
         if order_id:

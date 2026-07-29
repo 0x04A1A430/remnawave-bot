@@ -2839,7 +2839,7 @@ class MonitoringService:
         try:
             from app.database.crud import lava_subscription as sub_crud
             from app.services.lava_recurrent import lava_reconcile_decision, normalize_remote_status
-            from app.services.lava_service import lava_service
+            from app.services.lava_service import LavaAPIError, lava_service
 
             if not settings.is_lava_enabled():
                 return
@@ -2852,6 +2852,8 @@ class MonitoringService:
 
             for record in records:
                 try:
+                    # Нет ни одного идентификатора — провайдер о подписке точно
+                    # не знает (subscribe не дошёл).
                     remote_missing = True
                     remote_status = None
                     if record.lava_subscription_id or record.order_id:
@@ -2861,12 +2863,18 @@ class MonitoringService:
                                 order_id=None if record.lava_subscription_id else record.order_id,
                             )
                             remote_status = _remote_status(payload)
-                            # Ответ получен: провайдер знает подписку (или явно
-                            # не знает) — решение можно принимать.
                             remote_missing = remote_status is None
+                        except LavaAPIError as api_error:
+                            # 404/422 = провайдер ДОСТОВЕРНО не знает подписку;
+                            # прочие коды и транспортные сбои — временная
+                            # недоступность, зависший PENDING хоронить рано.
+                            # Без этого разделения _post поднимал исключение на
+                            # ЛЮБОЙ 4xx, remote_missing навсегда оставался False,
+                            # и правило «PENDING старше 30 мин → FAILED» было
+                            # недостижимо: запись висела вечно, а partial unique
+                            # не давал пользователю включить автопродление снова.
+                            remote_missing = api_error.status_code in (404, 422)
                         except Exception:
-                            # Транспортный сбой: хоронить зависший PENDING рано,
-                            # решение откладывается до следующего цикла.
                             remote_missing = False
 
                     age_minutes = (

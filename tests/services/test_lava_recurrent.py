@@ -498,3 +498,134 @@ async def test_shift_next_charge_swallows_provider_errors(monkeypatch):
         await sub_crud.update_lava_subscription(db, record, status='ACTIVE')
 
         await shift_lava_next_charge_after_manual_extension(db, subscription.id, 30)  # не бросает
+
+
+# ------------------------------------------------- фиксы адверсариального ревью
+
+
+async def test_zero_price_product_rejected_before_remote_subscribe(monkeypatch):
+    """Вся валидация — ДО subscribe: иначе остаётся живая привязка без локальной
+    записи, которая списывает вечно и которую нечем отменить."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, service = _agent(monkeypatch)
+        service.list_recurrent_products = AsyncMock(return_value=[{'id': PRODUCT_ID, 'periodDays': 30, 'price': 0}])
+
+        with pytest.raises(ValueError, match='цены'):
+            await agent.create_lava_recurrent_subscription(
+                db, user_id=user.id, subscription=subscription, tariff=tariff
+            )
+
+        service.subscribe_recurrent.assert_not_awaited()
+
+
+async def test_unavailable_product_list_does_not_guess_cadence(monkeypatch):
+    """Догадка «30 дней» навсегда исказила бы каденс годового продукта."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, service = _agent(monkeypatch)
+        service.list_recurrent_products = AsyncMock(side_effect=RuntimeError('5xx'))
+
+        with pytest.raises(ValueError, match='недоступен'):
+            await agent.create_lava_recurrent_subscription(
+                db, user_id=user.id, subscription=subscription, tariff=tariff
+            )
+        service.subscribe_recurrent.assert_not_awaited()
+
+
+async def test_subscribe_without_subscription_id_is_cancelled_and_raises(monkeypatch):
+    """Без subscriptionId отключаются обе страховки — отменяем по orderId."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        unsubscribe = AsyncMock(return_value={'data': {'unsubscribed': True}})
+        agent, service = _agent(
+            monkeypatch,
+            subscribe_response={'data': {'url': 'https://pay.lava/x', 'amount': 100.0}},
+            unsubscribe=unsubscribe,
+        )
+
+        with pytest.raises(RuntimeError, match='subscriptionId'):
+            await agent.create_lava_recurrent_subscription(
+                db, user_id=user.id, subscription=subscription, tariff=tariff
+            )
+
+        assert unsubscribe.await_args.kwargs['order_id'] is not None
+
+
+async def test_failed_charge_does_not_resurrect_cancelled_binding(monkeypatch):
+    """Протухший счёт по отменённой привязке не должен стирать отмену."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, service = _agent(monkeypatch)
+
+        created = await agent.create_lava_recurrent_subscription(
+            db, user_id=user.id, subscription=subscription, tariff=tariff
+        )
+        order_id = service.subscribe_recurrent.await_args.kwargs['order_id']
+        await agent.cancel_lava_recurrent_subscription(db, local_id=created['local_id'])
+
+        await agent.process_lava_subscription_callback(db, _charge(order_id, 'inv-exp', 'expired'))
+
+        from app.database.crud import lava_subscription as sub_crud
+
+        record = await sub_crud.get_lava_subscription_by_id(db, created['local_id'])
+        assert record.status == 'CANCELLED'
+        assert record.charges_failed == 1
+
+
+async def test_successful_charge_sets_next_charge_at(monkeypatch):
+    """Без этого колонка и строка «следующее списание» в кабинете мертвы."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, service = _agent(monkeypatch)
+        monkeypatch.setattr(settings, 'RESET_TRAFFIC_ON_PAYMENT', False)
+
+        created = await agent.create_lava_recurrent_subscription(
+            db, user_id=user.id, subscription=subscription, tariff=tariff
+        )
+        order_id = service.subscribe_recurrent.await_args.kwargs['order_id']
+        await agent.process_lava_subscription_callback(db, _charge(order_id, 'inv-1'))
+
+        from app.database.crud import lava_subscription as sub_crud
+
+        record = await sub_crud.get_lava_subscription_by_id(db, created['local_id'])
+        assert record.next_charge_at is not None
+        delta_days = (record.next_charge_at - record.last_charge_at).days
+        assert delta_days == record.charge_days
+
+
+async def test_charge_for_deleted_subscription_stops_further_charges(monkeypatch):
+    """Продлевать нечего и ретраев не будет — единственное полезное действие:
+    остановить дальнейшие списания."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        unsubscribe = AsyncMock(return_value={'data': {'unsubscribed': True}})
+        agent, service = _agent(monkeypatch, unsubscribe=unsubscribe)
+
+        created = await agent.create_lava_recurrent_subscription(
+            db, user_id=user.id, subscription=subscription, tariff=tariff
+        )
+        order_id = service.subscribe_recurrent.await_args.kwargs['order_id']
+
+        # Подписка исчезла (удалена админом), запись рекуррента осталась
+        from app.database.crud import lava_subscription as sub_crud
+
+        record = await sub_crud.get_lava_subscription_by_id(db, created['local_id'])
+        await sub_crud.update_lava_subscription(db, record, subscription_id=999999)
+        unsubscribe.reset_mock()
+
+        ok = await agent.process_lava_subscription_callback(db, _charge(order_id, 'inv-orphan'))
+
+        assert ok is False
+        unsubscribe.assert_awaited()
+        refreshed = await sub_crud.get_lava_subscription_by_id(db, created['local_id'])
+        assert refreshed.status == 'CANCELLED'
+
+
+def test_real_lava_status_values_are_normalized():
+    """Фактические значения Lava — activated/deactivated (примеры из спеки)."""
+    assert lr.normalize_remote_status('activated') == 'active'
+    assert lr.normalize_remote_status('deactivated') == 'cancelled'
+    # И решения reconciler'а на них срабатывают
+    assert lr.lava_reconcile_decision('PENDING', lr.normalize_remote_status('activated'), 1) == 'ACTIVE'
+    assert lr.lava_reconcile_decision('ACTIVE', lr.normalize_remote_status('deactivated'), 1) == 'CANCELLED'
