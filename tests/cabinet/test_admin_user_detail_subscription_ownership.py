@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -88,9 +88,9 @@ class _Api:
         self.calls['get_user_by_uuid'] += 1
         return SimpleNamespace(
             uuid=uuid,
-            trojan_password='owned-secret',
+            trojan_password='owned-panel-marker',  # pragma: allowlist secret
             vless_uuid='owned-vless',
-            ss_password='owned-ss',
+            ss_password='owned-ss',  # pragma: allowlist secret
             subscription_url='https://owned.example/sub',
             happ_link=None,
             used_traffic_bytes=1,
@@ -166,7 +166,7 @@ async def test_authoritative_subscription_lookup_constrains_id_and_user_id(owned
 @pytest.mark.parametrize(
     ('route_name', 'kwargs', 'foreign_marker'),
     [
-        ('get_user_panel_info', {}, 'owned-secret'),
+        ('get_user_panel_info', {}, 'owned-panel-marker'),
         ('get_user_devices', {}, 'owned-hwid'),
         ('get_subscription_request_history', {}, '192.0.2.1'),
         ('delete_user_device', {'hwid': 'owned-hwid'}, 'Device deleted'),
@@ -303,10 +303,13 @@ async def test_subscription_actions_accept_an_owned_subscription(
 ):
     """An ownership guard must not reject the requested user's own subscription."""
     sync = AsyncMock()
-    reset = AsyncMock(return_value={'panel_disabled': True})
+    panel_disable = AsyncMock(return_value=True)
+    reset_subscription = AsyncMock()
     monkeypatch.setattr(admin_users, '_sync_subscription_to_panel', sync)
     monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
-    monkeypatch.setattr('app.services.subscription_service.reset_subscription_with_panel', reset)
+    monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
+    monkeypatch.setattr('app.database.crud.subscription.reset_subscription', reset_subscription)
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
     db = AsyncMock()
     request = UpdateSubscriptionRequest(action=action, subscription_id=OWNED_ID, **request_kwargs)
 
@@ -314,10 +317,191 @@ async def test_subscription_actions_accept_an_owned_subscription(
 
     assert result.success is True
     if action == 'reset':
-        reset.assert_awaited_once_with(db, ownership_boundary, owned_subscription)
+        panel_disable.assert_awaited_once_with(owned_subscription.remnawave_uuid)
+        reset_subscription.assert_awaited_once_with(db, owned_subscription)
     else:
-        sync.assert_awaited_once_with(db, ownership_boundary, owned_subscription)
+        sync.assert_awaited_once_with(db, ownership_boundary, owned_subscription, pinned_subscription_identity=True)
         assert db.commit.await_count == 1
+
+
+@pytest.mark.parametrize(
+    ('action', 'request_kwargs'),
+    [
+        ('set_end_date', {'end_date': datetime.now(UTC) + timedelta(days=30)}),
+        ('set_traffic', {'traffic_limit_gb': 999}),
+        ('set_device_limit', {'device_limit': 99}),
+    ],
+    ids=['set-expiry', 'set-traffic', 'set-device-limit'],
+)
+async def test_selected_actions_pin_sync_to_the_selected_identity_when_legacy_mode_is_enabled(
+    monkeypatch, ownership_boundary, owned_subscription, action, request_kwargs
+):
+    """A supplied subscription id must opt out of all single-tariff fallbacks."""
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    ownership_boundary.remnawave_uuid = 'legacy-other-subscription-uuid'
+    owned_subscription.remnawave_uuid = 'selected-exact-uuid'
+    sync = AsyncMock()
+    monkeypatch.setattr(admin_users, '_sync_subscription_to_panel', sync)
+    monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
+
+    result = await admin_users.update_user_subscription(
+        OWNER_ID,
+        UpdateSubscriptionRequest(action=action, subscription_id=OWNED_ID, **request_kwargs),
+        admin=SimpleNamespace(id=1),
+        db=AsyncMock(),
+    )
+
+    assert result.success is True
+    sync.assert_awaited_once_with(
+        ANY,
+        ownership_boundary,
+        owned_subscription,
+        pinned_subscription_identity=True,
+    )
+
+
+async def test_selected_sync_uses_only_selected_uuid_when_legacy_mode_is_enabled(monkeypatch):
+    """The helper itself must not substitute the user's legacy panel UUID."""
+    looked_up: list[str] = []
+    updated: list[str] = []
+
+    class Api:
+        async def get_user_by_uuid(self, panel_uuid):
+            looked_up.append(panel_uuid)
+            return SimpleNamespace(uuid=panel_uuid)
+
+    class Service:
+        is_configured = True
+
+        def get_api_client(self):
+            context = MagicMock()
+            context.__aenter__ = AsyncMock(return_value=Api())
+            context.__aexit__ = AsyncMock(return_value=None)
+            return context
+
+    async def update_panel_user(_api, _subscription_id, **kwargs):
+        updated.append(kwargs['uuid'])
+        return SimpleNamespace(
+            subscription_url='https://selected.example/sub',
+            happ_crypto_link='crypto',
+            short_uuid='short',
+        )
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr('app.services.remnawave_service.RemnaWaveService', Service)
+    monkeypatch.setattr('app.services.grace_access_runtime.update_panel_user_grace_safe', update_panel_user)
+    monkeypatch.setattr('app.services.subscription_service.get_traffic_reset_strategy', lambda _tariff: 'NO_RESET')
+    monkeypatch.setattr('app.utils.subscription_utils.resolve_hwid_device_limit_for_payload', lambda _sub: None)
+    user = SimpleNamespace(
+        id=OWNER_ID,
+        full_name='Owner',
+        username=None,
+        telegram_id=1000,
+        email=None,
+        remnawave_uuid='legacy-other-subscription-uuid',
+        last_remnawave_sync=None,
+    )
+    subscription = SimpleNamespace(
+        id=OWNED_ID,
+        status='active',
+        end_date=datetime.now(UTC) + timedelta(days=30),
+        remnawave_uuid='selected-exact-uuid',
+        remnawave_short_id=None,
+        traffic_limit_gb=10,
+        tariff=None,
+        connected_squads=[],
+        device_limit=1,
+        subscription_url=None,
+        subscription_crypto_link=None,
+        remnawave_short_uuid=None,
+    )
+    db = AsyncMock()
+
+    await admin_users._sync_subscription_to_panel(db, user, subscription, pinned_subscription_identity=True)
+
+    assert looked_up == ['selected-exact-uuid']
+    assert updated == ['selected-exact-uuid']
+    assert user.remnawave_uuid == 'legacy-other-subscription-uuid'
+
+
+async def test_selected_sync_with_no_panel_link_does_not_substitute_legacy_identity(monkeypatch):
+    """A null selected link must cause no panel access, even in legacy mode."""
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    user = SimpleNamespace(id=OWNER_ID, remnawave_uuid='legacy-other-subscription-uuid')
+    subscription = SimpleNamespace(remnawave_uuid=None)
+    db = AsyncMock()
+
+    result = await admin_users._sync_subscription_to_panel(db, user, subscription, pinned_subscription_identity=True)
+
+    assert result == {'skipped': True, 'reason': 'Selected subscription has no panel UUID'}
+    db.commit.assert_not_awaited()
+
+
+async def test_selected_devices_return_selected_subscription_device_limit(monkeypatch, panel_service):
+    primary = _subscription(11, OWNER_ID, uuid='primary-uuid')
+    primary.device_limit = 2
+    selected = _subscription(OWNED_ID, OWNER_ID, uuid='selected-uuid')
+    selected.device_limit = 9
+    user = _user(primary, selected, remnawave_uuid='legacy-user-uuid')
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(admin_users, '_get_owned_subscription_or_404', AsyncMock(return_value=selected))
+
+    response = await admin_users.get_user_devices(
+        OWNER_ID, admin=SimpleNamespace(id=1), db=AsyncMock(), subscription_id=OWNED_ID
+    )
+
+    assert response.device_limit == 9
+
+
+@pytest.mark.parametrize('raises', [False, True], ids=['false-result', 'exception'])
+async def test_selected_reset_returns_unsuccessful_when_panel_deactivation_fails(
+    monkeypatch, ownership_boundary, owned_subscription, raises
+):
+    async def panel_disable(_self, _panel_uuid):
+        if raises:
+            raise RuntimeError('panel down')
+        return False
+
+    reset_subscription = AsyncMock()
+    monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
+    monkeypatch.setattr('app.database.crud.subscription.reset_subscription', reset_subscription)
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
+
+    result = await admin_users.update_user_subscription(
+        OWNER_ID,
+        UpdateSubscriptionRequest(action='reset', subscription_id=OWNED_ID),
+        admin=SimpleNamespace(id=1),
+        db=AsyncMock(),
+    )
+
+    assert result.success is False
+    reset_subscription.assert_not_awaited()
+
+
+async def test_selected_reset_without_link_does_not_substitute_legacy_identity(
+    monkeypatch, ownership_boundary, owned_subscription
+):
+    ownership_boundary.remnawave_uuid = 'legacy-other-subscription-uuid'
+    owned_subscription.remnawave_uuid = None
+    panel_disable = AsyncMock(return_value=True)
+    reset_subscription = AsyncMock()
+    monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
+    monkeypatch.setattr('app.database.crud.subscription.reset_subscription', reset_subscription)
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', AsyncMock())
+    monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
+
+    result = await admin_users.update_user_subscription(
+        OWNER_ID,
+        UpdateSubscriptionRequest(action='reset', subscription_id=OWNED_ID),
+        admin=SimpleNamespace(id=1),
+        db=AsyncMock(),
+    )
+
+    assert result.success is True
+    panel_disable.assert_not_awaited()
+    reset_subscription.assert_awaited_once()
 
 
 @pytest.mark.parametrize(

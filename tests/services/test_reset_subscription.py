@@ -9,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 import app.services.subscription_service as ss
 from app.cabinet.routes import admin_users
 from app.cabinet.schemas.users import ResetSubscriptionRequest
@@ -244,3 +246,54 @@ async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypa
     assert 'subscriptions.user_id' in str(delete_statement)
     assert 1 in compiled_delete.params.values()
     assert db.commit.await_count == 1
+
+
+@pytest.mark.parametrize(
+    'outcomes',
+    [(True, False), (RuntimeError('panel down'),)],
+    ids=['mixed-false-result', 'exception'],
+)
+async def test_user_level_reset_panel_failure_preserves_all_subscription_retry_identities(monkeypatch, outcomes):
+    subscriptions = [_sub(id=sub_id, remnawave_uuid=f'SUB-{sub_id}') for sub_id in (7, 8)]
+    user = SimpleNamespace(id=1, subscriptions=subscriptions, updated_at=None, remnawave_uuid='LEGACY_UUID')
+    db = AsyncMock()
+    panel_calls: list[str] = []
+    configured_outcomes = iter(outcomes)
+
+    monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
+    _set_multi_tariff(monkeypatch, True)
+
+    async def ensure_no_open_grace(_db, _subscription_ids):
+        return None
+
+    async def cancel_recurrent(_db, _subscription_id):
+        return None
+
+    class PanelService:
+        async def disable_remnawave_user(self, panel_uuid, *, db):
+            panel_calls.append(panel_uuid)
+            outcome = next(configured_outcomes)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    monkeypatch.setattr(
+        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', ensure_no_open_grace
+    )
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', cancel_recurrent)
+    monkeypatch.setattr('app.services.subscription_service.SubscriptionService', PanelService)
+
+    result = await admin_users.reset_user_subscription(
+        1,
+        ResetSubscriptionRequest(deactivate_in_panel=True),
+        admin=SimpleNamespace(id=99),
+        db=db,
+    )
+
+    assert result.success is False
+    assert result.subscription_deleted is False
+    assert result.panel_deactivated is False
+    assert panel_calls == (['SUB-7', 'SUB-8'] if len(outcomes) == 2 else ['SUB-7'])
+    assert [sub.remnawave_uuid for sub in subscriptions] == ['SUB-7', 'SUB-8']
+    db.execute.assert_not_awaited()
+    db.commit.assert_not_awaited()
