@@ -750,6 +750,20 @@ class LavaPaymentMixin:
         if amount_kopeks <= 0:
             raise ValueError('Продукт Lava не имеет цены — автопродление недоступно')
 
+        # Сумму диктует продукт в кабинете Lava — поменять её под конкретную
+        # подписку нельзя. Если продукт дешевле реальной цены продления (у
+        # подписки докуплены устройства/трафик), привязка недобирала бы разницу
+        # при каждом списании — отказываем с конкретными числами, чтобы
+        # оператор завёл продукт с нужной ценой.
+        from app.services.recurrent_amount import resolve_true_renewal_amount
+
+        true_amount = await resolve_true_renewal_amount(db, subscription, charge_days)
+        if true_amount and true_amount - amount_kopeks > 1:
+            raise ValueError(
+                f'Продукт Lava стоит {amount_kopeks / 100:.2f} ₽, а продление подписки — '
+                f'{true_amount / 100:.2f} ₽ за {charge_days} дн. Заведите продукт с актуальной ценой.'
+            )
+
         consumer_id = self._lava_consumer_id(user)
         try:
             await lava_service.create_recurrent_consumer(
