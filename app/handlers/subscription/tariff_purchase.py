@@ -358,9 +358,14 @@ def get_tariff_insufficient_balance_keyboard(
     показываем способы оплаты сразу, предзаполненные ровно недостающей суммой: после
     оплаты подписка оформится автоматически, без отдельного шага «Пополнить баланс».
     Иначе оставляем классический переход в пополнение баланса.
+
+    СБП-оформление показываем и здесь: привязке баланс не нужен (первое списание
+    Platega = подтверждение в банке), а без кнопки на этом экране фича была
+    недостижима для пользователей без денег на балансе.
     """
     texts = get_texts(language)
     back_button = InlineKeyboardButton(text=texts.BACK, callback_data=f'tariff_select:{tariff_id}')
+    sbp_rows = _sbp_purchase_rows(tariff_id, texts)
 
     if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
         from app.keyboards.inline import get_payment_methods_keyboard
@@ -373,14 +378,29 @@ def get_tariff_insufficient_balance_keyboard(
             if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
         ]
         if payment_rows:
-            return InlineKeyboardMarkup(inline_keyboard=[*payment_rows, [back_button]])
+            return InlineKeyboardMarkup(inline_keyboard=[*payment_rows, *sbp_rows, [back_button]])
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            *sbp_rows,
             [back_button],
         ]
     )
+
+
+def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]]:
+    """Ряд «Оформить с автооплатой СБП» — тот же, что на confirm-экранах."""
+    if not settings.is_platega_recurrent_enabled():
+        return []
+    return [
+        [
+            InlineKeyboardButton(
+                text=texts.t('SBP_PURCHASE_BUTTON', '⚡ Оформить с автооплатой СБП'),
+                callback_data=f'tariff_sbp:{tariff_id}',
+            )
+        ]
+    ]
 
 
 def format_tariff_info_for_user(
@@ -450,6 +470,7 @@ def get_daily_tariff_insufficient_balance_keyboard(
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            *_sbp_purchase_rows(tariff_id, texts),
             [InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')],
         ]
     )
