@@ -1602,9 +1602,11 @@ async def update_subscription_autopay(
         # вызовы на отдельных поверхностях (бот/кабинет) пропускали новые точки
         # включения (миниапп, админ-тоглы) — и юзер платил дважды за цикл.
         try:
+            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
             from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
         except Exception as platega_error:  # pragma: no cover - хелпер сам best-effort
             logger.warning(
                 'Не удалось отменить СБП-автопродление при включении автоплатежа',

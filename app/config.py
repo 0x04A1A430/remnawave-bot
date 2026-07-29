@@ -1011,6 +1011,10 @@ class Settings(BaseSettings):
     LAVA_SBP_ENABLED: bool = False
     LAVA_SBP_DISPLAY_NAME: str = 'СБП (Lava)'
 
+    # Рекуррентные подписки Lava. Подписка оформляется на ПРОДУКТ из кабинета Lava
+    # (цена и период заданы там), поэтому тарифу нужно проставить lava_product_id.
+    LAVA_RECURRENT_ENABLED: bool = False
+
     # Etoplatezhi (paymentpage.etoplatezhi.ru)
     ETOPLATEZHI_ENABLED: bool = False
     ETOPLATEZHI_PROJECT_ID: int | None = None
@@ -2890,6 +2894,9 @@ class Settings(BaseSettings):
 
     def get_lava_sbp_display_name_html(self) -> str:
         return html.escape(self.get_lava_sbp_display_name())
+
+    def is_lava_recurrent_enabled(self) -> bool:
+        return self.LAVA_RECURRENT_ENABLED and self.is_lava_enabled()
 
     def is_etoplatezhi_enabled(self) -> bool:
         return (

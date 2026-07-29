@@ -576,10 +576,12 @@ async def delete_user_subscription(
 
     # Подписка деактивируется — СБП-автопродление Platega обязано быть отменено,
     # иначе следующий push-коллбек продлит и заново включит её, а банк продолжит списывать.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
     await deactivate_subscription(db, subscription)
 
     # Деактивируем пользователя в RemnaWave, если есть UUID
