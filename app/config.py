@@ -1254,6 +1254,11 @@ class Settings(BaseSettings):
     WEB_API_TOKEN_HASH_ALGORITHM: str = 'sha256'
     WEB_API_TOKEN_HMAC_SECRET: str | None = None
     WEB_API_REQUEST_LOGGING: bool = True
+    # Потолок ОДНОЙ операции ручного пополнения через POST /users/{id}/deposit.
+    # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
+    # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
+    # человеку годовую подписку. 0 — без ограничения.
+    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
 
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600
