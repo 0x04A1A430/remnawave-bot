@@ -947,6 +947,8 @@ async def get_user_panel_info(
     panel_uuid = None
     if subscription_id is not None:
         panel_uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
+        if panel_uuid is None:
+            return UserPanelInfoResponse(found=False)
 
     try:
         from app.services.remnawave_service import RemnaWaveService
@@ -961,7 +963,7 @@ async def get_user_panel_info(
             if subscription_id is not None and panel_uuid:
                 panel_user = await api.get_user_by_uuid(panel_uuid)
             # Legacy fallback is only for callers that did not select a subscription.
-            elif user.remnawave_uuid:
+            elif subscription_id is None and user.remnawave_uuid:
                 panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
 
             # Fallback: search by telegram_id (single-tariff only)

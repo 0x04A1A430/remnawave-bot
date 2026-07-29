@@ -26,7 +26,7 @@ FOREIGN_ID = 202
 MISSING_ID = 303
 
 
-def _subscription(subscription_id: int, user_id: int, *, uuid: str) -> SimpleNamespace:
+def _subscription(subscription_id: int, user_id: int, *, uuid: str | None) -> SimpleNamespace:
     return SimpleNamespace(
         id=subscription_id,
         user_id=user_id,
@@ -40,12 +40,12 @@ def _subscription(subscription_id: int, user_id: int, *, uuid: str) -> SimpleNam
     )
 
 
-def _user(*subscriptions: SimpleNamespace) -> SimpleNamespace:
+def _user(*subscriptions: SimpleNamespace, remnawave_uuid: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         id=OWNER_ID,
         telegram_id=1000,
         email=None,
-        remnawave_uuid=None,
+        remnawave_uuid=remnawave_uuid,
         subscriptions=list(subscriptions),
     )
 
@@ -253,6 +253,39 @@ async def test_panel_info_validates_supplied_subscription_before_unconfigured_se
 
     assert rejected.value.status_code == 404
     assert calls == {'constructed': 0, 'get_api_client': 0}
+
+
+async def test_panel_info_does_not_fall_back_to_user_uuid_for_selected_unlinked_subscription(
+    monkeypatch, panel_service
+):
+    """Would fail if a selected null-link subscription leaked legacy panel information."""
+    selected = _subscription(OWNED_ID, OWNER_ID, uuid=None)
+    user = _user(selected, remnawave_uuid='legacy-user-uuid')
+    monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
+
+    async def get_selected(_db, subscription_id, user_id):
+        assert (subscription_id, user_id) == (OWNED_ID, OWNER_ID)
+        return selected
+
+    monkeypatch.setattr(admin_users, '_get_owned_subscription_or_404', get_selected)
+
+    response = await admin_users.get_user_panel_info(
+        OWNER_ID,
+        admin=SimpleNamespace(id=1),
+        db=AsyncMock(),
+        subscription_id=OWNED_ID,
+    )
+
+    assert response.found is False
+    assert panel_service == {
+        'constructed': 0,
+        'get_api_client': 0,
+        'client_entered': 0,
+        'get_user_by_uuid': 0,
+        'get_user_devices_all': 0,
+        'get_subscription_request_history': 0,
+        'remove_device': 0,
+    }
 
 
 @pytest.mark.parametrize(
