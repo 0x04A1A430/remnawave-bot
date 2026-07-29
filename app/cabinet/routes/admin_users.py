@@ -138,6 +138,26 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/admin/users', tags=['Cabinet Admin Users'])
 
 
+async def _get_owned_subscription_or_404(db: AsyncSession, subscription_id: int, user_id: int) -> Subscription:
+    """Load a subscription only when it belongs to the route's user.
+
+    Subscription ids are not authorization credentials: every admin
+    multi-tariff operation that receives one must constrain this lookup by the
+    path user id as well.  A single not-found response deliberately prevents
+    distinguishing an absent row from somebody else's subscription.
+    """
+    result = await db.execute(
+        select(Subscription).where(
+            Subscription.id == subscription_id,
+            Subscription.user_id == user_id,
+        )
+    )
+    subscription = result.scalar_one_or_none()
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found for this user')
+    return subscription
+
+
 def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListItem:
     """Build UserListItem from User model."""
     stats = spending_stats or {}
@@ -935,11 +955,9 @@ async def get_user_panel_info(
             panel_user = None
 
             # Multi-tariff: use per-subscription UUID
-            if settings.is_multi_tariff_enabled() and subscription_id:
-                from app.database.crud.subscription import get_subscription_by_id_for_user
-
-                sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-                if sub and sub.remnawave_uuid:
+            if settings.is_multi_tariff_enabled() and subscription_id is not None:
+                sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+                if sub.remnawave_uuid:
                     panel_user = await api.get_user_by_uuid(sub.remnawave_uuid)
             # Single-tariff: user-level UUID
             elif user.remnawave_uuid:
@@ -990,6 +1008,8 @@ async def get_user_panel_info(
                 last_connected_node_name=last_node_name,
             )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error('Error getting panel info for user', user_id=user_id, error=e)
         return UserPanelInfoResponse(found=False)
@@ -1012,12 +1032,9 @@ async def get_subscription_request_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     panel_uuid = None
-    if settings.is_multi_tariff_enabled() and subscription_id:
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-        if sub:
-            panel_uuid = sub.remnawave_uuid
+    if settings.is_multi_tariff_enabled() and subscription_id is not None:
+        sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+        panel_uuid = sub.remnawave_uuid
     else:
         panel_uuid = getattr(user, 'remnawave_uuid', None)
 
@@ -1248,13 +1265,8 @@ async def update_user_subscription(
     is_multi_tariff = settings.is_multi_tariff_enabled()
 
     # Select target subscription
-    if request.subscription_id:
-        subscription = next((s for s in subs if s.id == request.subscription_id), None)
-        if not subscription and request.action != 'create':
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f'Subscription {request.subscription_id} not found for this user',
-            )
+    if request.subscription_id is not None and request.action != 'create':
+        subscription = await _get_owned_subscription_or_404(db, request.subscription_id, user_id)
     else:
         subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
 
@@ -2505,12 +2517,9 @@ async def get_user_devices(
 
     # Resolve panel UUID
     _dev_uuid = None
-    if settings.is_multi_tariff_enabled() and subscription_id:
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-        if sub:
-            _dev_uuid = sub.remnawave_uuid
+    if settings.is_multi_tariff_enabled() and subscription_id is not None:
+        sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+        _dev_uuid = sub.remnawave_uuid
     else:
         _dev_uuid = user.remnawave_uuid
 
@@ -2586,12 +2595,9 @@ async def delete_user_device(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
     _uuid = None
-    if settings.is_multi_tariff_enabled() and subscription_id:
-        from app.database.crud.subscription import get_subscription_by_id_for_user
-
-        sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
-        if sub:
-            _uuid = sub.remnawave_uuid
+    if settings.is_multi_tariff_enabled() and subscription_id is not None:
+        sub = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+        _uuid = sub.remnawave_uuid
     else:
         _uuid = user.remnawave_uuid
 

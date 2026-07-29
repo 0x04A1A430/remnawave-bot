@@ -10,6 +10,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import app.services.subscription_service as ss
+from app.cabinet.routes import admin_users
+from app.cabinet.schemas.users import ResetSubscriptionRequest
 from app.config import Settings
 from app.database.crud.subscription import reset_subscription
 from app.database.models import SubscriptionStatus
@@ -202,3 +204,38 @@ async def test_user_modified_still_syncs_end_date_for_active():
     await svc._handle_user_modified(AsyncMock(), user, sub, data)
 
     assert abs((sub.end_date - new_expiry).total_seconds()) < 2  # synced from panel
+
+
+async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypatch):
+    """The user reset remains one user-scoped operation, not a selected-sub reset."""
+    subscriptions = [_sub(id=sub_id, remnawave_uuid=f'SUB-{sub_id}') for sub_id in (7, 8, 9)]
+    user = SimpleNamespace(id=1, subscriptions=subscriptions, updated_at=None, remnawave_uuid=None)
+    db = AsyncMock()
+    grace_checks: list[tuple[int, ...]] = []
+    cancelled: list[int] = []
+
+    monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
+
+    async def ensure_no_open_grace(_db, subscription_ids):
+        grace_checks.append(subscription_ids)
+
+    async def cancel_recurrent(_db, subscription_id):
+        cancelled.append(subscription_id)
+
+    monkeypatch.setattr(
+        'app.services.grace_access_runtime.ensure_no_open_grace_for_subscriptions', ensure_no_open_grace
+    )
+    monkeypatch.setattr('app.services.payment.platega.cancel_platega_recurring_for_subscription_safe', cancel_recurrent)
+
+    result = await admin_users.reset_user_subscription(
+        1,
+        ResetSubscriptionRequest(deactivate_in_panel=False),
+        admin=SimpleNamespace(id=99),
+        db=db,
+    )
+
+    assert result.subscription_deleted is True
+    assert grace_checks == [(7, 8, 9), (7, 8, 9)]
+    assert cancelled == [7, 8, 9]
+    assert db.execute.await_count == 4  # three server cleanups plus one user-scoped subscription deletion
+    assert db.commit.await_count == 1
