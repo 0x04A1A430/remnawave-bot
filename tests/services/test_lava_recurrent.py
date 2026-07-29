@@ -424,3 +424,77 @@ async def test_callback_for_unknown_order_is_reported(monkeypatch):
         agent, _ = _agent(monkeypatch)
 
         assert await agent.process_lava_subscription_callback(db, _charge('lavarec999_nope', 'inv-1')) is False
+
+
+async def test_enabling_lava_cancels_live_platega_binding(monkeypatch):
+    """Два push-провайдера на одной подписке списывали бы дважды за цикл."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, _ = _agent(monkeypatch)
+
+        cancelled: list[int] = []
+
+        async def fake_cancel_platega(db_, subscription_id, *, commit: bool = True):
+            cancelled.append(subscription_id)
+
+        import app.services.payment.platega as platega_module
+
+        monkeypatch.setattr(platega_module, 'cancel_platega_recurring_for_subscription_safe', fake_cancel_platega)
+
+        await agent.create_lava_recurrent_subscription(db, user_id=user.id, subscription=subscription, tariff=tariff)
+
+        assert cancelled == [subscription.id]
+        # И balance-autopay тоже снят
+        assert subscription.autopay_enabled is False
+
+
+async def test_manual_extension_shifts_next_charge(monkeypatch):
+    """Ручное продление при живой привязке двигает автосписание Lava."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, service = _agent(monkeypatch)
+        offset = AsyncMock(return_value={'data': {'next_pay_time': '2026-09-01'}})
+        service.offset_recurrent_next_pay_time = offset
+
+        created = await agent.create_lava_recurrent_subscription(
+            db, user_id=user.id, subscription=subscription, tariff=tariff
+        )
+
+        from app.database.crud import lava_subscription as sub_crud
+        from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
+
+        record = await sub_crud.get_lava_subscription_by_id(db, created['local_id'])
+
+        # PENDING (первый счёт ещё не оплачен) — двигать нечего
+        await shift_lava_next_charge_after_manual_extension(db, subscription.id, 30)
+        offset.assert_not_awaited()
+
+        await sub_crud.update_lava_subscription(db, record, status='ACTIVE')
+        await shift_lava_next_charge_after_manual_extension(db, subscription.id, 30)
+
+        offset.assert_awaited_once()
+        assert offset.await_args.kwargs['days'] == 30
+
+        # Нулевое/отрицательное продление ничего не двигает
+        offset.reset_mock()
+        await shift_lava_next_charge_after_manual_extension(db, subscription.id, 0)
+        offset.assert_not_awaited()
+
+
+async def test_shift_next_charge_swallows_provider_errors(monkeypatch):
+    """Продление уже закоммичено — сбой Lava не должен всплывать."""
+    async with memory_session(monkeypatch, TABLES) as db:
+        user, tariff, subscription = await _seed(db)
+        agent, service = _agent(monkeypatch)
+        service.offset_recurrent_next_pay_time = AsyncMock(side_effect=RuntimeError('network'))
+
+        created = await agent.create_lava_recurrent_subscription(
+            db, user_id=user.id, subscription=subscription, tariff=tariff
+        )
+        from app.database.crud import lava_subscription as sub_crud
+        from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
+
+        record = await sub_crud.get_lava_subscription_by_id(db, created['local_id'])
+        await sub_crud.update_lava_subscription(db, record, status='ACTIVE')
+
+        await shift_lava_next_charge_after_manual_extension(db, subscription.id, 30)  # не бросает

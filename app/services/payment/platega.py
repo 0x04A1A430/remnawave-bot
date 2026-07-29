@@ -192,6 +192,12 @@ class PlategaPaymentMixin:
                 'status': existing.status,
             }
 
+        # Взаимоисключение с рекуррентом Lava: оба движка push-модели, и две
+        # живые привязки на одной подписке списывали бы дважды за цикл.
+        from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+
+        await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+
         period_days = (
             resolve_autopay_period_candidate(getattr(subscription, 'autopay_period_days', None), tariff)
             or resolve_autopay_period_candidate(getattr(settings, 'DEFAULT_AUTOPAY_PERIOD_DAYS', 0), tariff)

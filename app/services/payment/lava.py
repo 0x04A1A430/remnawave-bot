@@ -669,6 +669,13 @@ class LavaPaymentMixin:
         if not product_id:
             raise ValueError('Для тарифа не задан продукт Lava — автопродление недоступно')
 
+        # Взаимоисключение с рекуррентом Platega: оба движка push-модели, и две
+        # живые привязки на одной подписке списывали бы дважды за цикл.
+        # (Взаимоисключение с balance-autopay — ниже, снятием autopay_enabled.)
+        from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+        await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
         payment_module = import_module('app.services.payment_service')
         user = await payment_module.get_user_by_id(db, user_id)
         if not user:
@@ -1093,3 +1100,56 @@ async def get_lava_recurring_status(db: AsyncSession, subscription_id: int) -> d
 async def cancel_lava_recurring_by_local_id(db: AsyncSession, local_id: int) -> bool:
     """Отмена привязки по локальному id (кабинет/бот). Идемпотентна."""
     return await _LavaRecurrentAgent().cancel_lava_recurrent_subscription(db, local_id=local_id)
+
+
+async def shift_lava_next_charge_after_manual_extension(
+    db: AsyncSession,
+    subscription_id: int,
+    days: int,
+) -> None:
+    """Сдвигает дату следующего списания Lava после РУЧНОГО продления подписки.
+
+    Пользователь с активной привязкой Lava может продлить подписку и другим
+    способом (оплата с баланса, промокод, бонусные дни от админа). Без сдвига
+    Lava спишет по своему прежнему расписанию — то есть возьмёт деньги за
+    период, который пользователь уже оплатил иначе. ``offset-next-pay-time``
+    двигает ближайшее списание ровно на добавленное количество дней.
+
+    Вызывается из CRUD ``extend_subscription``; наше собственное рекуррентное
+    списание идёт мимо (оно продлевает через метод модели
+    ``Subscription.extend_subscription``), поэтому расписание не «убегает»
+    от самого себя.
+
+    Best-effort: любая ошибка только логируется — продление уже закоммичено.
+    """
+    if days <= 0:
+        return
+
+    from app.database.crud import lava_subscription as sub_crud
+
+    try:
+        record = await sub_crud.get_active_lava_subscription_by_subscription(db, subscription_id)
+        if not record or record.status not in ('ACTIVE', 'PAST_DUE'):
+            # PENDING-привязка ещё не оплачена — двигать нечего.
+            return
+        if not (record.lava_subscription_id or record.order_id):
+            return
+
+        await lava_service.offset_recurrent_next_pay_time(
+            days=int(days),
+            subscription_id=record.lava_subscription_id,
+            order_id=None if record.lava_subscription_id else record.order_id,
+        )
+        logger.info(
+            'Lava: следующее списание сдвинуто после ручного продления',
+            subscription_id=subscription_id,
+            days=days,
+            lava_subscription_id=record.lava_subscription_id,
+        )
+    except Exception as error:  # pragma: no cover - best-effort
+        logger.warning(
+            'Lava: не удалось сдвинуть дату следующего списания',
+            subscription_id=subscription_id,
+            days=days,
+            error=str(error),
+        )

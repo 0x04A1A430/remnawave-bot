@@ -1367,6 +1367,19 @@ async def extend_subscription(
             except Exception:
                 pass
 
+    # Ручное продление (баланс/промокод/бонусные дни админа) при живой привязке
+    # Lava: двигаем ближайшее автосписание на добавленные дни, иначе Lava спишет
+    # за период, который пользователь уже оплатил другим способом. Наше
+    # собственное рекуррентное списание сюда не заходит — оно продлевает через
+    # метод модели Subscription.extend_subscription.
+    if days > 0:
+        try:
+            from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
+
+            await shift_lava_next_charge_after_manual_extension(db, subscription.id, days)
+        except Exception as lava_err:  # pragma: no cover - хелпер сам best-effort
+            logger.warning('Failed to shift Lava next charge on extend', error=lava_err)
+
     # Kill other trial subscriptions if this extension converts trial to paid
     if not subscription.is_trial and days > 0:
         try:
