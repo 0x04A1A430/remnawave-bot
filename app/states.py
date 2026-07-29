@@ -73,6 +73,7 @@ class AdminStates(StatesGroup):
     creating_coupon_batch_name = State()
     creating_coupon_batch_price = State()
     creating_coupon_batch_expiry = State()
+    creating_coupon_batch_per_user = State()
 
     creating_campaign_name = State()
     creating_campaign_start = State()

@@ -2788,6 +2788,10 @@ class CouponBatch(Base):
     period_days = Column(Integer, nullable=False)
     coupons_total = Column(Integer, nullable=False)
     wholesale_price_kopeks = Column(Integer, nullable=False, default=0)  # за купон; 0 — не указана
+    # Сколько купонов ЭТОЙ партии может активировать один пользователь.
+    # 0 — без ограничения (прежнее поведение); для раздач/конкурсов ставится 1,
+    # чтобы один человек не забрал всю партию.
+    max_per_user = Column(Integer, nullable=False, default=0)
     valid_until = Column(AwareDateTime(), nullable=True)
     # Display-only cache for list views; per-coupon Coupon.status is the
     # authority (redemption never consults this flag)
