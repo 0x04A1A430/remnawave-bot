@@ -2,6 +2,7 @@
 
 import math
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -115,6 +116,7 @@ from ..schemas.users import (
     UserActivityResponse,
     UserAvailableTariffItem,
     UserAvailableTariffsResponse,
+    UserByRemnawaveResponse,
     UserDetailResponse,
     UserDevicesResponse,
     UserListItem,
@@ -704,6 +706,43 @@ async def get_users_stats(
 
 
 # === User Detail ===
+
+
+@router.get('/by-remnawave/{remnawave_uuid}', response_model=UserByRemnawaveResponse)
+async def get_user_by_remnawave_uuid(
+    remnawave_uuid: str,
+    admin: User = Depends(require_permission('users:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Resolve an exact Remnawave UUID through its owning subscription only."""
+    try:
+        normalized = str(UUID(remnawave_uuid))
+    except (TypeError, ValueError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Remnawave UUID')
+
+    matches = (
+        (
+            await db.execute(
+                select(Subscription).where(Subscription.remnawave_uuid == normalized).limit(2)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not matches:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Remnawave UUID is not linked to a subscription')
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Remnawave UUID is linked to multiple subscriptions',
+        )
+
+    subscription = matches[0]
+    return UserByRemnawaveResponse(
+        user_id=subscription.user_id,
+        subscription_id=subscription.id,
+        matched_remnawave_uuid=normalized,
+    )
 
 
 @router.get('/{user_id}', response_model=UserDetailResponse)
