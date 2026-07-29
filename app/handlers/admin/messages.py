@@ -1624,34 +1624,38 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
         return result.scalar() or 0
 
     if target in ('expired', 'expired_subscribers'):
-        # Истекшие подписки — исключаем юзеров с хотя бы одной активной
+        # Зеркало одноимённых веток get_target_users: активная (ACTIVE и не истекшая)
+        # подписка исключает; иначе нужен хотя бы один истёкший сабж (EXPIRED/DISABLED
+        # или end_date в прошлом) либо платное прошлое без единой подписки. LIMITED с
+        # будущей датой истёкшим не считается, ACTIVE с прошедшей — активной не считается.
         now = datetime.now(UTC)
-        expired_statuses = [
-            SubscriptionStatus.EXPIRED.value,
-            SubscriptionStatus.DISABLED.value,
-            SubscriptionStatus.LIMITED.value,
-        ]
         has_active_sub = (
             select(Subscription.id)
             .where(
                 Subscription.user_id == User.id,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
             )
             .correlate(User)
             .exists()
         )
-        query = (
-            select(sql_func.count(distinct(User.id)))
-            .outerjoin(Subscription, User.id == Subscription.user_id)
+        has_expired_sub = (
+            select(Subscription.id)
             .where(
-                base_filter,
-                ~has_active_sub,
+                Subscription.user_id == User.id,
                 or_(
-                    Subscription.status.in_(expired_statuses),
-                    and_(Subscription.end_date <= now, Subscription.status != SubscriptionStatus.ACTIVE.value),
-                    and_(Subscription.id == None, User.has_had_paid_subscription == True),
+                    Subscription.status.in_([SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]),
+                    Subscription.end_date <= now,
                 ),
             )
+            .correlate(User)
+            .exists()
+        )
+        has_any_sub = select(Subscription.id).where(Subscription.user_id == User.id).correlate(User).exists()
+        query = select(sql_func.count(User.id)).where(
+            base_filter,
+            ~has_active_sub,
+            or_(has_expired_sub, and_(~has_any_sub, User.has_had_paid_subscription == True)),
         )
         result = await db.execute(query)
         return result.scalar() or 0
@@ -1697,35 +1701,6 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
                 or_(Subscription.traffic_used_gb == None, Subscription.traffic_used_gb <= 0),
             )
         )
-        result = await db.execute(query)
-        return result.scalar() or 0
-
-    if target == 'expired':
-        # Есть истёкшая подписка и нет ни одной активной — зеркало ветки в get_target_users
-        now = datetime.now(UTC)
-        has_active_sub = (
-            select(Subscription.id)
-            .where(
-                Subscription.user_id == User.id,
-                Subscription.status == SubscriptionStatus.ACTIVE.value,
-                Subscription.end_date > now,
-            )
-            .correlate(User)
-            .exists()
-        )
-        has_expired_sub = (
-            select(Subscription.id)
-            .where(
-                Subscription.user_id == User.id,
-                or_(
-                    Subscription.status.in_([SubscriptionStatus.EXPIRED.value, SubscriptionStatus.DISABLED.value]),
-                    Subscription.end_date <= now,
-                ),
-            )
-            .correlate(User)
-            .exists()
-        )
-        query = select(sql_func.count(User.id)).where(base_filter, ~has_active_sub, has_expired_sub)
         result = await db.execute(query)
         return result.scalar() or 0
 

@@ -74,8 +74,27 @@ async def _seed(db) -> None:
     autopay_broken = _user(5, balance_kopeks=100)
     # Заблокированный пользователь не должен попадать ни в один сегмент
     blocked = _user(6, status=UserStatus.BLOCKED.value, balance_kopeks=5000, last_activity=now - timedelta(days=200))
+    # Edge-case'ы сегмента expired, на которых SQL-ветка и Python-фильтр исторически расходились:
+    # ACTIVE-статус с прошедшей датой — получатель (подписка фактически истекла)
+    stale_active = _user(7)
+    # LIMITED с будущей датой — НЕ получатель (не истёк, просто исчерпал трафик)
+    limited_future = _user(8)
+    # Платное прошлое без единой подписки — получатель
+    paid_no_subs = _user(9, has_had_paid_subscription=True)
 
-    db.add_all([paid, expired_low_balance, trial_ending, long_gone, autopay_broken, blocked])
+    db.add_all(
+        [
+            paid,
+            expired_low_balance,
+            trial_ending,
+            long_gone,
+            autopay_broken,
+            blocked,
+            stale_active,
+            limited_future,
+            paid_no_subs,
+        ]
+    )
     await db.commit()
 
     db.add_all(
@@ -101,6 +120,16 @@ async def _seed(db) -> None:
                 blocked.id,
                 status=SubscriptionStatus.EXPIRED.value,
                 end_date=now - timedelta(days=15),
+            ),
+            _subscription(
+                stale_active.id,
+                status=SubscriptionStatus.ACTIVE.value,
+                end_date=now - timedelta(days=1),
+            ),
+            _subscription(
+                limited_future.id,
+                status=SubscriptionStatus.LIMITED.value,
+                end_date=now + timedelta(days=10),
             ),
         ]
     )
@@ -138,13 +167,52 @@ async def test_promo_segment_counts_are_not_all_zero(monkeypatch):
     async with memory_session(monkeypatch, SEGMENT_TABLES) as db:
         await _seed(db)
 
-        assert await get_target_users_count(db, 'expired') == 1
+        # expired_low_balance + stale_active (ACTIVE с прошедшей датой) + paid_no_subs;
+        # limited_future с будущей датой в сегмент не входит
+        assert await get_target_users_count(db, 'expired') == 3
         assert await get_target_users_count(db, 'trial_ending') == 1
         assert await get_target_users_count(db, 'autopay_failed') == 1
         assert await get_target_users_count(db, 'low_balance') == 2
         assert await get_target_users_count(db, 'inactive_30d') == 2
         assert await get_target_users_count(db, 'inactive_60d') == 1
         assert await get_target_users_count(db, 'inactive_90d') == 1
+
+
+async def test_expired_segment_edge_cases(monkeypatch):
+    """Каждый расходившийся случай — в отдельной БД, чтобы ошибки не сокращались.
+
+    На общем сиде недосчёт одного случая маскируется пересчётом другого (паритет
+    длин совпадает), поэтому здесь каждый случай проверяется изолированно.
+    """
+    now = datetime.now(UTC)
+
+    # ACTIVE-статус с прошедшей датой: подписка фактически истекла — получатель
+    async with memory_session(monkeypatch, SEGMENT_TABLES) as db:
+        user = _user(1)
+        db.add(user)
+        await db.commit()
+        db.add(_subscription(user.id, status=SubscriptionStatus.ACTIVE.value, end_date=now - timedelta(days=1)))
+        await db.commit()
+        assert await get_target_users_count(db, 'expired') == 1
+        assert len(await get_target_users(db, 'expired')) == 1
+
+    # LIMITED с будущей датой: не истёк, просто исчерпал трафик — НЕ получатель
+    async with memory_session(monkeypatch, SEGMENT_TABLES) as db:
+        user = _user(1)
+        db.add(user)
+        await db.commit()
+        db.add(_subscription(user.id, status=SubscriptionStatus.LIMITED.value, end_date=now + timedelta(days=10)))
+        await db.commit()
+        assert await get_target_users_count(db, 'expired') == 0
+        assert len(await get_target_users(db, 'expired')) == 0
+
+    # Платное прошлое без единой подписки — получатель
+    async with memory_session(monkeypatch, SEGMENT_TABLES) as db:
+        user = _user(1, has_had_paid_subscription=True)
+        db.add(user)
+        await db.commit()
+        assert await get_target_users_count(db, 'expired') == 1
+        assert len(await get_target_users(db, 'expired')) == 1
 
 
 async def test_unknown_segment_counts_zero(monkeypatch):
