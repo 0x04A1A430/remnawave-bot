@@ -340,6 +340,14 @@ async def _sync_subscription_to_panel(
     Returns dict with changes/errors.
     """
     if pinned_subscription_identity and not subscription.remnawave_uuid:
+        # Fail-closed по задумке: подменять личность выбранной подписки пользовательским
+        # UUID нельзя. Но вызывающие результат не смотрят и отвечают админу success=True,
+        # поэтому без лога «продлил, а в панели не изменилось» диагностировать нечем.
+        logger.warning(
+            'Skipped panel sync: selected subscription has no panel UUID',
+            user_id=user.id,
+            subscription_id=subscription.id,
+        )
         return {'skipped': True, 'reason': 'Selected subscription has no panel UUID'}
 
     try:
