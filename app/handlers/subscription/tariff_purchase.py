@@ -755,6 +755,11 @@ async def show_tariffs_list(
         await callback.answer()
         return
 
+    # Один доступный тариф — сразу к периоду/подтверждению, без экрана «выбора из одной кнопки»
+    if len(tariffs) == 1:
+        await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id)
+        return
+
     # В мульти-тарифе определяем какие тарифы уже куплены
     purchased_tariff_ids: set[int] = set()
     if settings.is_multi_tariff_enabled():
@@ -784,16 +789,19 @@ async def show_tariffs_list(
     await callback.answer()
 
 
-@error_handler
-async def select_tariff(
+async def _proceed_with_selected_tariff(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
     state: FSMContext,
-):
-    """Обрабатывает выбор тарифа."""
+    tariff_id: int,
+) -> None:
+    """Переход к периоду/подтверждению выбранного тарифа (первая покупка).
+
+    Вызывается и из ``select_tariff`` (кнопка в списке), и из ``show_tariffs_list``
+    при единственном доступном тарифе — без дублирования логики.
+    """
     texts = get_texts(db_user.language)
-    tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff or not tariff.is_active:
@@ -983,6 +991,18 @@ async def select_tariff(
 
     await state.update_data(selected_tariff_id=tariff_id)
     await callback.answer()
+
+
+@error_handler
+async def select_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает выбор тарифа."""
+    tariff_id = int(callback.data.split(':')[1])
+    await _proceed_with_selected_tariff(callback, db_user, db, state, tariff_id)
 
 
 @error_handler
