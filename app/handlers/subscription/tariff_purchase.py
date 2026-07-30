@@ -250,6 +250,7 @@ def get_tariff_periods_keyboard(
     tariff: Tariff,
     language: str,
     db_user: User | None = None,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам."""
     texts = get_texts(language)
@@ -274,7 +275,7 @@ def get_tariff_periods_keyboard(
         button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -283,6 +284,7 @@ def get_tariff_periods_keyboard_with_traffic(
     tariff: Tariff,
     language: str,
     db_user: User | None = None,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)."""
     texts = get_texts(language)
@@ -310,7 +312,7 @@ def get_tariff_periods_keyboard_with_traffic(
             [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
         )
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -456,6 +458,7 @@ def format_tariff_info_for_user(
 def get_daily_tariff_confirm_keyboard(
     tariff_id: int,
     language: str,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки суточного тарифа."""
     texts = get_texts(language)
@@ -485,13 +488,14 @@ def get_daily_tariff_confirm_keyboard(
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_daily_tariff_insufficient_balance_keyboard(
     tariff_id: int,
     language: str,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе для суточного тарифа."""
     texts = get_texts(language)
@@ -499,7 +503,7 @@ def get_daily_tariff_insufficient_balance_keyboard(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             *_sbp_purchase_rows(tariff_id, texts),
-            [InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')],
+            [InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)],
         ]
     )
 
@@ -518,6 +522,7 @@ def get_custom_tariff_keyboard(
     max_days: int = 365,
     min_traffic: int = 1,
     max_traffic: int = 1000,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру для настройки кастомных дней и трафика."""
     texts = get_texts(language)
@@ -593,7 +598,7 @@ def get_custom_tariff_keyboard(
     )
 
     # Кнопка назад
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -757,7 +762,7 @@ async def show_tariffs_list(
 
     # Один доступный тариф — сразу к периоду/подтверждению, без экрана «выбора из одной кнопки»
     if len(tariffs) == 1:
-        await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id)
+        await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id, skip_selection=True)
         return
 
     # В мульти-тарифе определяем какие тарифы уже куплены
@@ -795,13 +800,19 @@ async def _proceed_with_selected_tariff(
     db: AsyncSession,
     state: FSMContext,
     tariff_id: int,
+    *,
+    skip_selection: bool = False,
 ) -> None:
     """Переход к периоду/подтверждению выбранного тарифа (первая покупка).
 
     Вызывается и из ``select_tariff`` (кнопка в списке), и из ``show_tariffs_list``
     при единственном доступном тарифе — без дублирования логики.
+
+    ``skip_selection=True``: экран списка тарифов был пропущен, поэтому «Назад»
+    ведёт в главное меню (``back_to_menu``), а не в ``menu_buy`` / список.
     """
     texts = get_texts(db_user.language)
+    back_callback = 'back_to_menu' if skip_selection else 'menu_buy'
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff or not tariff.is_active:
@@ -864,7 +875,9 @@ async def _proceed_with_selected_tariff(
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
                 ),
-                reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_confirm_keyboard(
+                    tariff_id, db_user.language, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
         else:
@@ -917,7 +930,9 @@ async def _proceed_with_selected_tariff(
                     'TARIFF_PURCHASE_CART_SAVED_HINT',
                     '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
                 ),
-                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(
+                    tariff_id, db_user.language, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
     else:
@@ -966,6 +981,7 @@ async def _proceed_with_selected_tariff(
                     max_days=tariff.max_days,
                     min_traffic=tariff.min_traffic_gb,
                     max_traffic=tariff.max_traffic_gb,
+                    back_callback=back_callback,
                 ),
                 parse_mode='HTML',
             )
@@ -978,14 +994,18 @@ async def _proceed_with_selected_tariff(
                     'TARIFF_PURCHASE_TRAFFIC_SETUP_HINT',
                     '\n\n📊 <i>После выбора периода вы сможете настроить трафик</i>',
                 ),
-                reply_markup=get_tariff_periods_keyboard_with_traffic(tariff, db_user.language, db_user=db_user),
+                reply_markup=get_tariff_periods_keyboard_with_traffic(
+                    tariff, db_user.language, db_user=db_user, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
         else:
             # Для обычного тарифа показываем выбор периода
             await callback.message.edit_text(
                 format_tariff_info_for_user(tariff, db_user.language),
-                reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
+                reply_markup=get_tariff_periods_keyboard(
+                    tariff, db_user.language, db_user=db_user, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
 
