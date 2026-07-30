@@ -587,7 +587,7 @@ async def list_users(
     - **search**: Search by telegram_id, username, first_name, last_name
     - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count)
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
     """
     # Convert status enum to model enum
     user_status = None
@@ -600,6 +600,7 @@ async def list_users(
     order_by_last_activity = sort_by == SortByEnum.LAST_ACTIVITY
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
+    order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -626,6 +627,7 @@ async def list_users(
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
+        order_by_subscription_end=order_by_subscription_end,
     )
 
     total = await get_users_count(

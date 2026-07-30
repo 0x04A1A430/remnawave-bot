@@ -944,6 +944,7 @@ async def get_users_list(
     order_by_last_activity: bool = False,
     order_by_total_spent: bool = False,
     order_by_purchase_count: bool = False,
+    order_by_subscription_end: bool = False,
 ) -> list[User]:
     query = select(User).options(
         selectinload(User.subscriptions).selectinload(Subscription.tariff),
@@ -1009,10 +1010,11 @@ async def get_users_list(
         order_by_last_activity,
         order_by_total_spent,
         order_by_purchase_count,
+        order_by_subscription_end,
     ]
     if sum(int(flag) for flag in sort_flags) > 1:
         logger.debug(
-            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность'
+            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки'
         )
 
     transactions_stats = None
@@ -1041,6 +1043,18 @@ async def get_users_list(
         query = query.order_by(User.balance_kopeks.desc(), User.created_at.desc())
     elif order_by_last_activity:
         query = query.order_by(nullslast(User.last_activity.desc()), User.created_at.desc())
+    elif order_by_subscription_end:
+        # MIN(end_date) среди ACTIVE-подписок; без outerjoin — иначе дубли строк
+        # при нескольких подписках у одного пользователя.
+        soonest_end = (
+            select(func.min(Subscription.end_date))
+            .where(
+                Subscription.user_id == User.id,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+            )
+            .scalar_subquery()
+        )
+        query = query.order_by(nullslast(soonest_end.asc()), User.created_at.desc())
     else:
         query = query.order_by(User.created_at.desc())
 
