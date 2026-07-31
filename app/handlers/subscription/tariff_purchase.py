@@ -398,6 +398,51 @@ def get_tariff_insufficient_balance_keyboard(
     )
 
 
+def get_tariff_extend_insufficient_balance_keyboard(
+    tariff_id: int,
+    subscription_id: int | None,
+    period: int,
+    language: str,
+    missing_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
+    """Клавиатура «Недостаточно средств» при продлении тарифа.
+
+    Зеркало ``get_tariff_insufficient_balance_keyboard`` для buy-flow: при
+    ``AUTO_PURCHASE_AFTER_TOPUP_ENABLED`` встраивает кнопки прямой оплаты на
+    недостающую сумму (``topup_amount|метод|сумма``), иначе — классический
+    переход ``balance_topup``. «Назад» всегда ``subscription_extend`` (не
+    ``tariff_select``).
+
+    ``tariff_id`` / ``subscription_id`` / ``period`` — контекст вызывающего
+    (симметрия с insufficient-веткой); на состав кнопок сейчас влияют только
+    language, missing_kopeks и флаг автопокупки.
+
+    SBP/Lava-строки (``tariff_sbp`` / ``tariff_lava``) не добавляем: их
+    обработчики оформляют новую подписку с привязкой провайдера, а не продление
+    существующей — отдельных extend-callback'ов нет.
+    """
+    texts = get_texts(language)
+    back_button = InlineKeyboardButton(text=texts.BACK, callback_data='subscription_extend')
+
+    if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
+        from app.keyboards.inline import get_payment_methods_keyboard
+
+        payment_rows = [
+            row
+            for row in get_payment_methods_keyboard(missing_kopeks, language).inline_keyboard
+            if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
+        ]
+        if payment_rows:
+            return InlineKeyboardMarkup(inline_keyboard=[*payment_rows, [back_button]])
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [back_button],
+        ]
+    )
+
+
 def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]]:
     """Ряды оформления привязкой провайдера — те же, что на confirm-экранах."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -2802,15 +2847,12 @@ async def select_tariff_extend_period(
                 'TARIFF_RENEW_CART_SAVED_HINT',
                 '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет продлена автоматически.</i>',
             ),
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
-                        )
-                    ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='subscription_extend')],
-                ]
+            reply_markup=get_tariff_extend_insufficient_balance_keyboard(
+                tariff_id,
+                subscription.id if subscription else None,
+                period,
+                db_user.language,
+                missing_kopeks=missing,
             ),
             parse_mode='HTML',
         )
@@ -5235,8 +5277,12 @@ async def return_to_saved_tariff_cart(
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
                 ),
-                reply_markup=get_tariff_insufficient_balance_keyboard(
-                    tariff_id, period, db_user.language, missing_kopeks=missing
+                reply_markup=get_tariff_extend_insufficient_balance_keyboard(
+                    tariff_id,
+                    cart_data.get('subscription_id'),
+                    period,
+                    db_user.language,
+                    missing_kopeks=missing,
                 ),
                 parse_mode='HTML',
             )
