@@ -954,7 +954,7 @@ async def execute_merge_endpoint(
     # RemnaWave user deletions are DEFERRED until after commit: an external delete
     # can't be rolled back with the DB, so deleting before commit would (on a
     # failed merge) leave a deleted panel user while the DB merge is rolled back.
-    deferred_deletions: list[str] = []
+    deferred_deletions: list[tuple[str, int | None]] = []
     try:
         merged_user = await execute_merge(
             db=db,

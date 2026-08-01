@@ -709,15 +709,17 @@ class DailySubscriptionService:
         service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
             uuid = getattr(subscription, 'remnawave_uuid', None)
+            panel_user_id = getattr(subscription, 'panel_user_id', None)
         else:
             user = await get_user_by_id(db, subscription.user_id)
             uuid = getattr(user, 'remnawave_uuid', None) if user else None
-        if not uuid:
+            panel_user_id = getattr(user, 'panel_user_id', None) if user else None
+        if not uuid and panel_user_id is None:
             return None
 
         try:
             async with service.get_api_client() as api:
-                panel_user = await api.get_user_by_uuid(uuid, user_id=subscription.user_id)
+                panel_user = await api.get_user_by_uuid(uuid, user_id=panel_user_id)
         except Exception as exc:
             logger.warning(
                 'Не удалось получить used из панели для выравнивания докупки — применим понижение со страховкой',
