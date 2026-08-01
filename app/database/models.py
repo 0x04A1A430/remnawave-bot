@@ -1299,6 +1299,11 @@ class User(Base):
     restriction_subscription = Column(Boolean, default=False, nullable=False)  # Запрет продления/покупки
     restriction_reason = Column(String(500), nullable=True)  # Причина ограничения
 
+    # Персональная цена подписки (копейки). Если задана — заменяет базовую цену
+    # тарифа для этого пользователя (скидки промо-групп/офферов при этом не
+    # применяются). None = стандартная цена тарифа.
+    personal_price_kopeks = Column(Integer, nullable=True)
+
     # Партнёрская система
     partner_status = Column(String(20), default=PartnerStatus.NONE.value, nullable=False, index=True)
 
