@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.3](https://github.com/cy7su/remnawave-bot/compare/v0.2.2...v0.2.3) (2026-08-01)
+
+
+### New Features
+
+* add traffic top-up button and rename device top-up in subscription settings ([44d6806](https://github.com/cy7su/remnawave-bot/commit/44d680643ed59375f66d3cf4136ab26835d31f0b))
+* drop "Тип:" line from tariff info block in subscription menu ([d4ff6d5](https://github.com/cy7su/remnawave-bot/commit/d4ff6d553f0212cf759d5fd9abaef0958822bebe))
+* finish Remnawave v3.0.0 userId switch + startup panel_user_id backfill ([e4f7b3a](https://github.com/cy7su/remnawave-bot/commit/e4f7b3a585c506579131d714e3556c0c6f9454c9))
+* personal subscription price per user (overrides tariff price, disables promo discounts) ([2aecc49](https://github.com/cy7su/remnawave-bot/commit/2aecc495a30278a9d9b5198eff004a987c0c12f6))
+* prepare for Remnawave v3.0.0 userId switch ([857344d](https://github.com/cy7su/remnawave-bot/commit/857344dd9b8dad247aa025e663f832eef850fe99))
+* RemnaWave v3.0.0 integration + subscription pricing & fixes ([06aff84](https://github.com/cy7su/remnawave-bot/commit/06aff84060605b34f2df37520030b05dc27503e5))
+
+
+### Bug Fixes
+
+* add missing arrow text to pagination prev/next buttons in admin panel (bot_config, blocked_users) ([3f3392f](https://github.com/cy7su/remnawave-bot/commit/3f3392f62bb86a1a1a0fe5c58c38d09b7d55fb3d))
+* align traffic topup button visibility in subscription settings with main menu (remove tariff.can_topup_traffic check) ([4288b8d](https://github.com/cy7su/remnawave-bot/commit/4288b8db6eed5d60497fbfc982d850753dae3216))
+* repair locale JSON files (invalid single quotes from ruff format, curly quotes in zh.json) ([a692d26](https://github.com/cy7su/remnawave-bot/commit/a692d26c3e073943ef325464ad51595b86783e69))
+* sanitize panel_user_id against NaN/invalid values (Remnawave 3.0.0 numeric id) ([b85784f](https://github.com/cy7su/remnawave-bot/commit/b85784f836e68c551c59c2c5f783b56156fd88cf))
+* webhook device notifications show readable model instead of HWID/tag ([9fe2fcf](https://github.com/cy7su/remnawave-bot/commit/9fe2fcf2f9ed6a41ec7cd579f167c5329ebfb245))
+
 ## [0.2.2](https://github.com/cy7su/remnawave-bot/compare/v0.2.1...v0.2.2) (2026-07-14)
 
 
