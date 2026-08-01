@@ -1485,6 +1485,14 @@ async def show_user_management(callback: types.CallbackQuery, db_user: User, db:
             restriction_lines.append(f'Причина: {html.escape(restriction_reason)}')
         sections.append('\n'.join(restriction_lines))
 
+    # Персональная цена подписки
+    personal_price = getattr(user, 'personal_price_kopeks', None)
+    if personal_price is not None:
+        sections.append(
+            f'Личная цена подписки: <b>{settings.format_price(personal_price)}</b>\n'
+            f'<i>Заменяет стандартную цену тарифа (без скидок)</i>'
+        )
+
     text = '\n\n'.join(sections)
 
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
@@ -2592,6 +2600,171 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
         return
 
     await state.clear()
+
+
+# ============ ЛИЧНАЯ ЦЕНА ПОДПИСКИ ============
+
+
+@admin_required
+@error_handler
+async def show_user_personal_price(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    """Меню настройки персональной цены подписки пользователя."""
+    user_id = int(callback.data.split('_')[-1])
+    user = await get_user_by_id(db, user_id)
+
+    if not user:
+        await callback.answer('Пользователь не найден', show_alert=True)
+        return
+
+    current = getattr(user, 'personal_price_kopeks', None)
+    if current is not None:
+        price_text = (
+            f'Текущая личная цена: <b>{settings.format_price(current)}</b>\n\n'
+            'Заменяет стандартную цену тарифа для этого пользователя. '
+            'Промо-скидки не применяются.'
+        )
+    else:
+        price_text = 'Личная цена не задана — действует стандартная цена тарифа.'
+
+    keyboard = [
+        [
+            types.InlineKeyboardButton(
+                text='Изменить цену',
+                callback_data=f'admin_user_personal_price_set_{user_id}',
+            )
+        ]
+    ]
+    if current is not None:
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text='Убрать личную цену',
+                    callback_data=f'admin_user_personal_price_clear_{user_id}',
+                )
+            ]
+        )
+    keyboard.append(
+        [
+            types.InlineKeyboardButton(
+                text='Назад',
+                callback_data=f'admin_user_manage_{user_id}',
+            )
+        ]
+    )
+
+    await callback.message.edit_text(
+        f'<b>Личная цена подписки</b>\n\n{price_text}',
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode='HTML',
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def start_set_user_personal_price(callback: types.CallbackQuery, db_user: User, state: FSMContext):
+    user_id = int(callback.data.split('_')[-1])
+
+    await state.update_data(personal_price_user_id=user_id)
+
+    await callback.message.edit_text(
+        '<b>Личная цена подписки</b>\n\n'
+        'Введите цену в рублях (например: 299 или 99.5).\n'
+        'Цена будет применяться за любой период/день вместо стандартной цены тарифа.\n\n'
+        'Или нажмите /cancel для отмены',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text='Отмена', callback_data=f'admin_user_manage_{user_id}')]
+            ]
+        ),
+    )
+
+    await state.set_state(AdminStates.editing_user_personal_price)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_user_personal_price_input(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    user_id = data.get('personal_price_user_id')
+
+    if not user_id:
+        await message.answer('Ошибка: пользователь не найден')
+        await state.clear()
+        return
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await message.answer('Ошибка: пользователь не найден')
+        await state.clear()
+        return
+
+    try:
+        price_rubles = float(message.text.replace(',', '.'))
+        if price_rubles < 0:
+            raise ValueError
+        price_kopeks = int(round(price_rubles * 100))
+    except ValueError:
+        await message.answer('Введите корректную сумму в рублях (например: 299 или 99.5)')
+        return
+
+    if price_kopeks > 10000000:
+        await message.answer('Слишком большая сумма (максимум 100,000 ₽)')
+        return
+
+    user.personal_price_kopeks = price_kopeks
+    await db.commit()
+
+    await message.answer(
+        f'Личная цена подписки установлена: {settings.format_price(price_kopeks)}',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text='К пользователю',
+                        callback_data=f'admin_user_manage_{user_id}',
+                    )
+                ]
+            ]
+        ),
+    )
+
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def clear_user_personal_price(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    user_id = int(callback.data.split('_')[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer('Пользователь не найден', show_alert=True)
+        return
+
+    user.personal_price_kopeks = None
+    await db.commit()
+
+    await callback.message.edit_text(
+        'Личная цена подписки убрана. Действует стандартная цена тарифа.',
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text='К пользователю',
+                        callback_data=f'admin_user_manage_{user_id}',
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
 
 
 @admin_required
@@ -5616,12 +5789,18 @@ async def admin_buy_tariff(callback: types.CallbackQuery, db_user: User, db: Asy
     text = '<b>Покупка тарифа для пользователя</b>\n\n'
     text += f'{target_user_link} (ID: {target_user_id_display})\n'
     text += f'Баланс: {settings.format_price(target_user.balance_kopeks)}\n\n'
+    personal_price = getattr(target_user, 'personal_price_kopeks', None)
+    if personal_price is not None:
+        text += (
+            f'Персональная цена: <b>{settings.format_price(personal_price)}</b>\n'
+            '<i>Применяется за любой период вместо стандартной цены тарифа</i>\n\n'
+        )
     text += '<b>Выберите тариф:</b>\n\n'
 
     for tariff in tariffs:
         traffic = '∞' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
         prices = tariff.period_prices or {}
-        min_price = min(prices.values()) if prices else 0
+        min_price = personal_price if personal_price is not None else (min(prices.values()) if prices else 0)
         text += f'<b>{html.escape(tariff.name)}</b> — {traffic} / {tariff.device_limit}  от {settings.format_price(min_price)}\n'
 
     keyboard = []
@@ -5681,18 +5860,25 @@ async def admin_buy_tariff_period(callback: types.CallbackQuery, db_user: User, 
     text += f'Трафик: {traffic}\n'
     text += f'Устройств: {tariff.device_limit}\n'
     text += f'Серверов: {len(tariff.allowed_squads) if tariff.allowed_squads else 0}\n\n'
+    personal_price = getattr(target_user, 'personal_price_kopeks', None)
+    if personal_price is not None:
+        text += (
+            f'Персональная цена: <b>{settings.format_price(personal_price)}</b>\n'
+            '<i>Применяется за любой период вместо стандартной цены тарифа</i>\n\n'
+        )
     text += 'Выберите период:'
 
     prices = tariff.period_prices or {}
     keyboard = []
 
-    for period_str, price in sorted(prices.items(), key=lambda x: int(x[0])):
+    for period_str, _price in sorted(prices.items(), key=lambda x: int(x[0])):
         period = int(period_str)
+        button_price = personal_price if personal_price is not None else _price
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{period} дней — {settings.format_price(price)}',
-                    callback_data=f'admin_tariff_buy_confirm_{user_id}_{tariff_id}_{period}_{price}',
+                    text=f'{period} дней — {settings.format_price(button_price)}',
+                    callback_data=f'admin_tariff_buy_confirm_{user_id}_{tariff_id}_{period}_{button_price}',
                 )
             ]
         )
@@ -6728,6 +6914,25 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_balance_edit, F.data.startswith('admin_user_balance_'))
 
     dp.message.register(process_balance_edit, AdminStates.editing_user_balance)
+
+    dp.callback_query.register(
+        show_user_personal_price,
+        F.data.startswith('admin_user_personal_price_')
+        & ~F.data.contains('_set_')
+        & ~F.data.contains('_clear_'),
+    )
+
+    dp.callback_query.register(
+        start_set_user_personal_price,
+        F.data.startswith('admin_user_personal_price_set_'),
+    )
+
+    dp.callback_query.register(
+        clear_user_personal_price,
+        F.data.startswith('admin_user_personal_price_clear_'),
+    )
+
+    dp.message.register(process_user_personal_price_input, AdminStates.editing_user_personal_price)
 
     dp.callback_query.register(
         show_user_referrals,

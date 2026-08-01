@@ -490,6 +490,104 @@ class TestCalculateRenewalPriceTariffMode:
         assert result.promo_offer_discount == 0
 
 
+class TestPersonalPrice:
+    """Персональная цена подписки заменяет цену тарифа и отключает промо-скидки."""
+
+    @pytest.mark.asyncio
+    async def test_personal_price_overrides_tariff_price(self):
+        engine = PricingEngine()
+        db = AsyncMock()
+        subscription = MagicMock()
+        subscription.tariff_id = 1
+        subscription.tariff = MagicMock()
+        subscription.tariff.period_prices = {'30': 20000}
+        subscription.tariff.device_limit = 1
+        subscription.tariff.device_price_kopeks = None
+        subscription.tariff.id = 1
+        subscription.device_limit = 1
+        promo_group = MagicMock()
+        promo_group.get_discount_percent.return_value = 10
+        user = MagicMock()
+        user.promo_group = promo_group
+        user.get_primary_promo_group.return_value = promo_group
+        user.personal_price_kopeks = 15000
+        with (
+            patch(
+                'app.services.pricing_engine.get_user_active_promo_discount_percent',
+                return_value=5,
+            ),
+            patch('app.services.pricing_engine.settings') as ms,
+        ):
+            ms.PRICE_PER_DEVICE = 5000
+            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+        assert result.base_price == 15000
+        assert result.promo_group_discount == 0
+        assert result.promo_offer_discount == 0
+        assert result.final_total == 15000
+
+    @pytest.mark.asyncio
+    async def test_personal_price_none_keeps_discounts(self):
+        engine = PricingEngine()
+        db = AsyncMock()
+        subscription = MagicMock()
+        subscription.tariff_id = 1
+        subscription.tariff = MagicMock()
+        subscription.tariff.period_prices = {'30': 20000}
+        subscription.tariff.device_limit = 1
+        subscription.tariff.device_price_kopeks = None
+        subscription.tariff.id = 1
+        subscription.device_limit = 1
+        promo_group = MagicMock()
+        promo_group.get_discount_percent.return_value = 10
+        user = MagicMock()
+        user.promo_group = promo_group
+        user.get_primary_promo_group.return_value = promo_group
+        user.personal_price_kopeks = None
+        with (
+            patch(
+                'app.services.pricing_engine.get_user_active_promo_discount_percent',
+                return_value=5,
+            ),
+            patch('app.services.pricing_engine.settings') as ms,
+        ):
+            ms.PRICE_PER_DEVICE = 5000
+            result = await engine.calculate_renewal_price(db, subscription, 30, user=user)
+        assert result.base_price == 18000
+        assert result.promo_group_discount == 2000
+        assert result.final_total == 17100
+
+    @pytest.mark.asyncio
+    async def test_personal_price_daily(self):
+        engine = PricingEngine()
+        db = AsyncMock()
+        subscription = MagicMock()
+        subscription.tariff_id = 1
+        subscription.tariff = MagicMock()
+        subscription.tariff.period_prices = {'30': 20000}
+        subscription.tariff.device_limit = 1
+        subscription.tariff.device_price_kopeks = None
+        subscription.tariff.id = 1
+        subscription.tariff.is_daily = True
+        subscription.tariff.daily_price_kopeks = 600
+        subscription.device_limit = 1
+        user = MagicMock()
+        user.promo_group = None
+        user.get_primary_promo_group.return_value = None
+        user.personal_price_kopeks = 800
+        with (
+            patch(
+                'app.services.pricing_engine.get_user_active_promo_discount_percent',
+                return_value=5,
+            ),
+            patch('app.services.pricing_engine.settings') as ms,
+        ):
+            ms.PRICE_PER_DEVICE = 5000
+            result = await engine.calculate_renewal_price(db, subscription, 1, user=user)
+        assert result.base_price == 800
+        assert result.promo_offer_discount == 0
+        assert result.final_total == 800
+
+
 class TestCalculateRenewalPriceClassicMode:
     @pytest.mark.asyncio
     async def test_classic_all_components(self):

@@ -1429,6 +1429,12 @@ def get_user_management_keyboard(
         ],
         [
             make_button(
+                text=_t(texts, 'ADMIN_USER_PERSONAL_PRICE', 'Личная цена'),
+                callback_data=f'admin_user_personal_price_{user_id}',
+            )
+        ],
+        [
+            make_button(
                 text=_t(texts, 'ADMIN_USER_REFERRALS_BUTTON', 'Рефералы'),
                 callback_data=f'admin_user_referrals_{user_id}',
             )
