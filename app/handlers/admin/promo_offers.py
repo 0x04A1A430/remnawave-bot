@@ -1979,6 +1979,11 @@ async def _send_offer_to_users(
 
     async def send_single_offer(user):
         """Отправляет одно предложение с семафором ограничения"""
+        from app.utils.notification_prefs import is_promo_offers_enabled
+
+        if not settings.is_notifications_enabled() or not is_promo_offers_enabled(user):
+            return False
+
         # Email-only юзеры (без telegram_id) раньше пропускались целиком —
         # ни оффера, ни уведомления. Теперь оффер создаётся, а уведомление
         # уходит на подтверждённую почту (активация — в кабинете).
