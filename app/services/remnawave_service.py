@@ -139,6 +139,7 @@ class _UUIDMapMutation:
             return
         self._capture_user_state(user)
         user.panel_user_id = _sanitize_panel_user_id(value)
+
     def set_user_updated_at(self, user: Optional['User'], value: datetime) -> None:
         if not user:
             return

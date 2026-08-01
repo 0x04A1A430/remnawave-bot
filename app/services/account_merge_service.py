@@ -205,9 +205,7 @@ async def _get_remnawave_api() -> AsyncIterator[RemnaWaveAPI]:
         yield api
 
 
-async def _delete_remnawave_user_with_fallback(
-    remnawave_uuid: str, panel_user_id: int | None = None
-) -> None:
+async def _delete_remnawave_user_with_fallback(remnawave_uuid: str, panel_user_id: int | None = None) -> None:
     """Удаляет пользователя из RemnaWave. При неудаче — деактивирует как fallback."""
     try:
         async with _get_remnawave_api() as api:

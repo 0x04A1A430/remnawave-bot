@@ -377,11 +377,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                 # Формируем блок информации о тарифе
                 is_daily = getattr(tariff, 'is_daily', False)
-                tariff_type_str = 'Суточный' if is_daily else 'Периодный'
 
                 tariff_info_lines = [
                     f'<b> {html.escape(tariff.name)}</b>',
-                    f'Тип: {tariff_type_str}',
                     (f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит'),
                     f'Устройства: {tariff.device_limit}',
                 ]
@@ -390,9 +388,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                     # Для суточного тарифа показываем цену с учётом скидки промогруппы + promo-offer
                     from app.handlers.subscription.tariff_purchase import _effective_period_price
 
-                    raw_daily_kopeks = _effective_period_price(
-                        db_user, getattr(tariff, 'daily_price_kopeks', 0)
-                    )
+                    raw_daily_kopeks = _effective_period_price(db_user, getattr(tariff, 'daily_price_kopeks', 0))
                     promo_group = (
                         db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
                     )

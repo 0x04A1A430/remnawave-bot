@@ -126,11 +126,7 @@ async def _run_backfill() -> dict[str, int]:
                 not_found += 1
                 continue
             model = User if kind == _USER_ROW else Subscription
-            await db.execute(
-                update(model)
-                .where(model.id == row_id)
-                .values(panel_user_id=panel_user_id)
-            )
+            await db.execute(update(model).where(model.id == row_id).values(panel_user_id=panel_user_id))
             backfilled += 1
         await db.commit()
 
