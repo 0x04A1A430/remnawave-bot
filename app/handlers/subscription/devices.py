@@ -108,7 +108,11 @@ def _get_remnawave_identifiers(subscription, db_user):
 
 async def get_current_devices_detailed(db_user: User, subscription=None) -> dict:
     try:
-        uuid, panel_user_id = _get_remnawave_identifiers(subscription, db_user) if subscription else (db_user.remnawave_uuid, db_user.panel_user_id)
+        uuid, panel_user_id = (
+            _get_remnawave_identifiers(subscription, db_user)
+            if subscription
+            else (db_user.remnawave_uuid, db_user.panel_user_id)
+        )
         if not uuid and panel_user_id is None:
             return {'count': 0, 'devices': []}
 
@@ -184,7 +188,11 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
 
 async def get_current_devices_count(db_user: User, subscription=None) -> str:
     try:
-        uuid, panel_user_id = _get_remnawave_identifiers(subscription, db_user) if subscription else (db_user.remnawave_uuid, db_user.panel_user_id)
+        uuid, panel_user_id = (
+            _get_remnawave_identifiers(subscription, db_user)
+            if subscription
+            else (db_user.remnawave_uuid, db_user.panel_user_id)
+        )
         if not uuid and panel_user_id is None:
             return '—'
 
@@ -799,7 +807,9 @@ async def execute_change_devices(
                                 device_hwid = device.get('hwid')
                                 if device_hwid:
                                     try:
-                                        delete_data = api._fmt_hwid_delete_payload(remnawave_uuid, remnawave_user_id, device_hwid)
+                                        delete_data = api._fmt_hwid_delete_payload(
+                                            remnawave_uuid, remnawave_user_id, device_hwid
+                                        )
                                         await api._make_request(
                                             'POST',
                                             '/api/hwid/devices/delete',
@@ -1396,7 +1406,9 @@ async def handle_single_device_reset(
                             show_alert=True,
                         )
 
-                        updated_response = await api._make_request('GET', api._fmt_hwid_path(remnawave_uuid, remnawave_user_id))
+                        updated_response = await api._make_request(
+                            'GET', api._fmt_hwid_path(remnawave_uuid, remnawave_user_id)
+                        )
                         if updated_response and 'response' in updated_response:
                             updated_devices = updated_response['response'].get('devices', [])
 

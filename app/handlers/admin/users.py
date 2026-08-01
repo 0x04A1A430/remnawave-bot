@@ -2673,9 +2673,7 @@ async def start_set_user_personal_price(callback: types.CallbackQuery, db_user: 
         'Цена будет применяться за любой период/день вместо стандартной цены тарифа.\n\n'
         'Или нажмите /cancel для отмены',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text='Отмена', callback_data=f'admin_user_manage_{user_id}')]
-            ]
+            inline_keyboard=[[types.InlineKeyboardButton(text='Отмена', callback_data=f'admin_user_manage_{user_id}')]]
         ),
     )
 
@@ -6917,9 +6915,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(
         show_user_personal_price,
-        F.data.startswith('admin_user_personal_price_')
-        & ~F.data.contains('_set_')
-        & ~F.data.contains('_clear_'),
+        F.data.startswith('admin_user_personal_price_') & ~F.data.contains('_set_') & ~F.data.contains('_clear_'),
     )
 
     dp.callback_query.register(
