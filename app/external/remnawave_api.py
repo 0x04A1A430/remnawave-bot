@@ -567,6 +567,20 @@ class RemnaWaveAPI:
             return 'userId'
         return 'userUuid'
 
+    def _fmt_hwid_path(self, user_uuid: str, user_id: int | None = None) -> str:
+        """Path to a user's HWID devices. v3.0.0: numeric userId in the path."""
+        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
+        return f'/api/hwid/devices/{_uid}'
+
+    def _fmt_hwid_delete_payload(self, user_uuid: str, user_id: int | None, hwid: str) -> dict[str, str]:
+        """Body for POST /api/hwid/devices/delete.
+
+        v2: ``{'userUuid': uuid, 'hwid': hwid}``; v3.0.0: ``{'userId': id, 'hwid': hwid}``.
+        """
+        hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
+        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
+        return {hwid_key: _uid, 'hwid': hwid}
+
     async def get_user_by_uuid(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser | None:
         try:
             response = await self._make_request('GET', self._fmt_user_path(uuid, user_id))
@@ -578,6 +592,9 @@ class RemnaWaveAPI:
             raise
 
     async def get_user_by_telegram_id(self, telegram_id: int) -> list[RemnaWaveUser]:
+        # v3.0.0: GET /api/users/by-telegram-id/{id} удалён — используем /api/users/stream?telegramId=
+        if self._use_user_id():
+            return await self._get_users_by_stream_filter({'telegramId': telegram_id})
         try:
             response = await self._make_request('GET', f'/api/users/by-telegram-id/{telegram_id}')
             users_data = response.get('response', [])
@@ -589,6 +606,23 @@ class RemnaWaveAPI:
             if e.status_code == 404:
                 return []
             raise
+
+    async def _get_users_by_stream_filter(self, filters: dict[str, Any]) -> list[RemnaWaveUser]:
+        """Full walk of /api/users/stream filtered by query params (v3.0.0)."""
+        users: list[RemnaWaveUser] = []
+        cursor: str | None = None
+        while True:
+            params: dict[str, Any] = {'size': 500, **filters}
+            if cursor is not None:
+                params['cursor'] = cursor
+            response = await self._make_request('GET', '/api/users/stream', params=params)
+            data = response.get('response', {})
+            batch = data.get('users', [])
+            users.extend(self._parse_user(user) for user in batch)
+            if not data.get('hasMore') or not data.get('nextCursor'):
+                break
+            cursor = data['nextCursor']
+        return users
 
     async def get_user_by_username(self, username: str) -> RemnaWaveUser | None:
         try:
@@ -602,6 +636,9 @@ class RemnaWaveAPI:
 
     async def get_user_by_email(self, email: str) -> list[RemnaWaveUser]:
         """Get users by email address."""
+        # v3.0.0: GET /api/users/by-email/{email} удалён — используем /api/users/stream?email=
+        if self._use_user_id():
+            return await self._get_users_by_stream_filter({'email': email})
         try:
             response = await self._make_request('GET', f'/api/users/by-email/{email}')
             users_data = response.get('response', [])
@@ -708,8 +745,9 @@ class RemnaWaveAPI:
         return user
 
     async def delete_user(self, uuid: str, user_id: int | None = None) -> bool:
+        # v3.0.0: DELETE возвращает 204 без тела. Отсутствие ошибки == успех.
         response = await self._make_request('DELETE', self._fmt_user_path(uuid, user_id))
-        return response['response']['isDeleted']
+        return response.get('response', {}).get('isDeleted', True)
 
     async def enable_user(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser:
         response = await self._make_request('POST', f'{self._fmt_user_path(uuid, user_id)}/actions/enable')
@@ -750,6 +788,26 @@ class RemnaWaveAPI:
         response = await self._make_request('POST', f'{self._fmt_user_path(uuid, user_id)}/actions/revoke', data)
         user = self._parse_user(response['response'])
         return user
+
+    async def extend_user_subscription(
+        self,
+        uuid: str,
+        days: int,
+        user_id: int | None = None,
+    ) -> RemnaWaveUser:
+        """Продлевает подписку пользователя (Remnawave 3.0.0+).
+
+        ``POST /api/users/{userId}/actions/extend`` с телом ``{'days': N}``:
+        - если пользователь EXPIRED — новая дата считается от текущего момента,
+          пользователь становится ACTIVE;
+        - если пользователь ACTIVE — дни добавляются к текущей дате истечения.
+        """
+        response = await self._make_request(
+            'POST',
+            f'{self._fmt_user_path(uuid, user_id)}/actions/extend',
+            {'days': days},
+        )
+        return self._parse_user(response['response'])
 
     async def get_user_accessible_nodes(self, uuid: str, user_id: int | None = None) -> list[RemnaWaveAccessibleNode]:
         """Получает список доступных нод для пользователя"""
@@ -857,7 +915,7 @@ class RemnaWaveAPI:
 
     async def delete_internal_squad(self, uuid: str) -> bool:
         response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}')
-        return response['response']['isDeleted']
+        return response.get('response', {}).get('isDeleted', True)
 
     async def get_internal_squad_accessible_nodes(self, uuid: str) -> list[RemnaWaveAccessibleNode]:
         """Получает список доступных нод для Internal Squad"""
@@ -870,14 +928,17 @@ class RemnaWaveAPI:
             raise
 
     async def add_users_to_internal_squad(self, uuid: str) -> bool:
-        """Добавляет всех пользователей в Internal Squad (bulk action)"""
+        """Добавляет всех пользователей в Internal Squad (bulk action).
+
+        v3.0.0: bulk-операции возвращают 202/204 без тела — успех == True.
+        """
         response = await self._make_request('POST', f'/api/internal-squads/{uuid}/bulk-actions/add-users')
-        return response['response']['eventSent']
+        return response.get('response', {}).get('eventSent', True)
 
     async def remove_users_from_internal_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из Internal Squad (bulk action)"""
         response = await self._make_request('DELETE', f'/api/internal-squads/{uuid}/bulk-actions/remove-users')
-        return response['response']['eventSent']
+        return response.get('response', {}).get('eventSent', True)
 
     async def reorder_internal_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveInternalSquad]:
         """
@@ -947,17 +1008,17 @@ class RemnaWaveAPI:
     async def delete_external_squad(self, uuid: str) -> bool:
         """Удаляет External Squad"""
         response = await self._make_request('DELETE', f'/api/external-squads/{uuid}')
-        return response['response']['isDeleted']
+        return response.get('response', {}).get('isDeleted', True)
 
     async def add_users_to_external_squad(self, uuid: str) -> bool:
         """Добавляет всех пользователей в External Squad (bulk action)"""
         response = await self._make_request('POST', f'/api/external-squads/{uuid}/bulk-actions/add-users')
-        return response['response']['eventSent']
+        return response.get('response', {}).get('eventSent', True)
 
     async def remove_users_from_external_squad(self, uuid: str) -> bool:
         """Удаляет всех пользователей из External Squad (bulk action)"""
         response = await self._make_request('DELETE', f'/api/external-squads/{uuid}/bulk-actions/remove-users')
-        return response['response']['eventSent']
+        return response.get('response', {}).get('eventSent', True)
 
     async def reorder_external_squads(self, items: list[dict[str, Any]]) -> list[RemnaWaveExternalSquad]:
         data = {'items': items}
@@ -1007,14 +1068,15 @@ class RemnaWaveAPI:
     async def restart_node(self, uuid: str, force_restart: bool = False) -> bool:
         # Remnawave 2.8.0+: команда рестарта ноды принимает forceRestart в теле
         # запроса (раньше body не было). Старые панели игнорируют лишнее поле.
+        # 3.0.0: рестарт — bulk-операция, возвращает 202/204 без тела.
         data = {'forceRestart': force_restart}
         response = await self._make_request('POST', f'/api/nodes/{uuid}/actions/restart', data)
-        return response['response']['eventSent']
+        return response.get('response', {}).get('eventSent', True)
 
     async def restart_all_nodes(self, force_restart: bool = False) -> bool:
         data = {'forceRestart': force_restart}
         response = await self._make_request('POST', '/api/nodes/actions/restart-all', data)
-        return response['response']['eventSent']
+        return response.get('response', {}).get('eventSent', True)
 
     async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
         response = await self._make_request('GET', f'/api/sub/{short_uuid}/info')
@@ -1276,7 +1338,7 @@ class RemnaWaveAPI:
 
     async def delete_subscription_page_config(self, uuid: str) -> bool:
         response = await self._make_request('DELETE', f'/api/subscription-page-configs/{uuid}')
-        return response['response']['isDeleted']
+        return response.get('response', {}).get('isDeleted', True)
 
     async def reorder_subscription_page_configs(self, items: list[dict[str, Any]]) -> list[SubscriptionPageConfig]:
         data = {'items': items}
@@ -1490,7 +1552,9 @@ class RemnaWaveAPI:
             traffic_strategy = TrafficLimitStrategy.NO_RESET
 
         return RemnaWaveUser(
-            uuid=user_data['uuid'],
+            # v3.0.0: uuid поле удалено из объекта пользователя — пустая строка.
+            # Единственный идентификатор пользователя — числовой id.
+            uuid=user_data.get('uuid', ''),
             short_uuid=user_data['shortUuid'],
             username=user_data['username'],
             status=status,

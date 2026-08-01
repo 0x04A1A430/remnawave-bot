@@ -326,13 +326,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 if settings.is_multi_tariff_enabled() and subscription
                 else None
             ) or db_user.remnawave_uuid
-            if _device_uuid:
+            _device_user_id = (
+                getattr(subscription, 'panel_user_id', None)
+                if settings.is_multi_tariff_enabled() and subscription
+                else db_user.panel_user_id
+            )
+            if _device_uuid or _device_user_id is not None:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
 
                 async with service.get_api_client() as api:
-                    response = await api._make_request('GET', f'/api/hwid/devices/{_device_uuid}')
+                    response = await api._make_request('GET', api._fmt_hwid_path(_device_uuid, _device_user_id))
 
                     if response and 'response' in response:
                         devices_info = response['response']
