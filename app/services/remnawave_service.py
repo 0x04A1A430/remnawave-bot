@@ -45,6 +45,11 @@ from app.utils.timezone import get_local_timezone
 logger = structlog.get_logger(__name__)
 
 
+def _sanitize_panel_user_id(value) -> int | None:
+    """Нормализует панельный числовой id (отбрасывает NaN/infinity/мусор)."""
+    return RemnaWaveAPI._sanitize_user_id(value)
+
+
 def _get_user_traffic_bytes(panel_user: dict[str, Any]) -> int:
     """Извлекает usedTrafficBytes из панельного пользователя (совместимо с новым и старым API)"""
     # Новый формат: userTraffic.usedTrafficBytes
@@ -133,8 +138,7 @@ class _UUIDMapMutation:
         if not user:
             return
         self._capture_user_state(user)
-        user.panel_user_id = value
-
+        user.panel_user_id = _sanitize_panel_user_id(value)
     def set_user_updated_at(self, user: Optional['User'], value: datetime) -> None:
         if not user:
             return
@@ -236,6 +240,7 @@ class RemnaWaveService:
         """
         # v3.0.0: uuid отсутствует — сохраняем числовой id панели.
         if not panel_uuid:
+            panel_user_id = _sanitize_panel_user_id(panel_user_id)
             if panel_user_id is not None and getattr(user, 'panel_user_id', None) != panel_user_id:
                 user.panel_user_id = panel_user_id
                 return True, None
@@ -1743,7 +1748,7 @@ class RemnaWaveService:
                             # Обновляем remnawave_uuid если нет
                             if panel_uuid and not db_user.remnawave_uuid:
                                 db_user.remnawave_uuid = panel_uuid
-                                db_user.panel_user_id = panel_user.get('id')
+                                db_user.panel_user_id = _sanitize_panel_user_id(panel_user.get('id'))
 
                             # Используем async запрос вместо доступа к relationship
                             if settings.is_multi_tariff_enabled():
@@ -2122,7 +2127,7 @@ class RemnaWaveService:
                             best = max(pool, key=lambda s: s.days_left)
                             if not best.remnawave_uuid:
                                 best.remnawave_uuid = panel_uuid
-                                best.panel_user_id = panel_user.get('id')
+                                best.panel_user_id = _sanitize_panel_user_id(panel_user.get('id'))
                                 subs_by_uuid[panel_uuid] = best
                                 subscription = best
                                 logger.info(
@@ -2223,7 +2228,7 @@ class RemnaWaveService:
                             device_limit=coerce_panel_device_limit(panel_user.get('hwidDeviceLimit')),
                             connected_squads=_squad_uuids,
                             remnawave_uuid=panel_uuid,
-                            panel_user_id=panel_user.get('id'),
+                            panel_user_id=_sanitize_panel_user_id(panel_user.get('id')),
                             remnawave_short_id=_short_id,
                             remnawave_short_uuid=panel_user.get('shortUuid'),
                             subscription_url=panel_user.get('subscriptionUrl', ''),
