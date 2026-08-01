@@ -388,7 +388,11 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                 if is_daily:
                     # Для суточного тарифа показываем цену с учётом скидки промогруппы + promo-offer
-                    raw_daily_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+                    from app.handlers.subscription.tariff_purchase import _effective_period_price
+
+                    raw_daily_kopeks = _effective_period_price(
+                        db_user, getattr(tariff, 'daily_price_kopeks', 0)
+                    )
                     promo_group = (
                         db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
                     )
@@ -3212,7 +3216,9 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
 
     # При возобновлении проверяем баланс
     if needs_resume:
-        raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        from app.handlers.subscription.tariff_purchase import _effective_period_price
+
+        raw_daily_price = _effective_period_price(db_user, getattr(tariff, 'daily_price_kopeks', 0))
         from app.database.crud.user import lock_user_for_pricing
         from app.services.pricing_engine import PricingEngine
 
