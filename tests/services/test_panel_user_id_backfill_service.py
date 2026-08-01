@@ -116,6 +116,25 @@ async def test_unresolvable_uuid_is_skipped(monkeypatch):
     assert db.execute.await_count == 1
 
 
+async def test_nan_panel_user_id_is_skipped(monkeypatch):
+    _patch_v2(monkeypatch)
+    _patch_targets(
+        monkeypatch,
+        [
+            (1, 'ok-uuid', backfill._USER_ROW),
+            (2, 'nan-uuid', backfill._SUBSCRIPTION_ROW),
+        ],
+    )
+    _patch_resolver(monkeypatch, {'ok-uuid': 77, 'nan-uuid': float('nan')})
+    db = _patch_db(monkeypatch)
+
+    stats = await backfill.backfill_panel_user_ids()
+
+    assert stats == {'checked': 2, 'backfilled': 1, 'not_found': 1, 'errors': 0}
+    db.commit.assert_awaited_once()
+    assert db.execute.await_count == 1
+
+
 async def test_collect_targets_filters_nulls(monkeypatch):
     _patch_v2(monkeypatch)
 
