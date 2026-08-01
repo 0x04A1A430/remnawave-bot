@@ -165,9 +165,7 @@ async def test_collect_targets_filters_nulls(monkeypatch):
 
 async def test_resolve_panel_user_ids_uses_get_user_by_uuid(monkeypatch):
     api = AsyncMock()
-    api.get_user_by_uuid = AsyncMock(
-        side_effect=lambda uuid: _panel_user(uuid)
-    )
+    api.get_user_by_uuid = AsyncMock(side_effect=lambda uuid: _panel_user(uuid))
     acm = MagicMock()
     acm.__aenter__ = AsyncMock(return_value=api)
     acm.__aexit__ = AsyncMock(return_value=False)
