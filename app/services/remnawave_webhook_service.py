@@ -1958,9 +1958,18 @@ class RemnaWaveWebhookService:
             raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
             return '', html.escape(str(raw)) if raw else ''
 
-        tag = (device_obj.get('tag') or device_obj.get('deviceName') or device_obj.get('name') or '').strip()
         platform = (device_obj.get('platform') or '').strip()
-        hwid = (device_obj.get('hwid') or '').strip()
+        # Читаемое имя устройства (модель) приоритетнее HWID/tag:
+        # панель шлёт deviceModel/model/name, например "iPhone 14 Pro (27.0)".
+        tag = (
+            device_obj.get('deviceModel')
+            or device_obj.get('model')
+            or device_obj.get('name')
+            or device_obj.get('deviceName')
+            or device_obj.get('tag')
+            or ''
+        ).strip()
+        hwid = (device_obj.get('hwid') or device_obj.get('deviceId') or device_obj.get('id') or '').strip()
 
         emoji = cls._PLATFORM_EMOJI.get(platform, '')
         platform_display = f'{emoji} {html.escape(platform)}' if emoji else html.escape(platform)
@@ -1980,30 +1989,6 @@ class RemnaWaveWebhookService:
         if platform_display and tag:
             return f'{platform_display} ({tag})'
         return platform_display or tag
-        device_obj = data.get('hwidUserDevice')
-        if not isinstance(device_obj, dict):
-            # Fallback: top-level fields
-            raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
-            return html.escape(str(raw)) if raw else ''
-
-        tag = (device_obj.get('tag') or device_obj.get('deviceName') or device_obj.get('name') or '').strip()
-        platform = (device_obj.get('platform') or '').strip()
-        hwid = (device_obj.get('hwid') or '').strip()
-
-        if tag and platform:
-            return html.escape(f'{tag} ({platform})')
-        if tag:
-            return html.escape(tag)
-        if platform and hwid:
-            # Show platform + short hwid suffix for identification
-            hwid_short = hwid[:8] if len(hwid) > 8 else hwid
-            return html.escape(f'{platform} ({hwid_short})')
-        if platform:
-            return html.escape(platform)
-        if hwid:
-            hwid_short = hwid[:12] if len(hwid) > 12 else hwid
-            return html.escape(hwid_short)
-        return ''
 
     async def _handle_device_added(
         self,
