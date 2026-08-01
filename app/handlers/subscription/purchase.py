@@ -326,13 +326,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 if settings.is_multi_tariff_enabled() and subscription
                 else None
             ) or db_user.remnawave_uuid
-            if _device_uuid:
+            _device_user_id = (
+                getattr(subscription, 'panel_user_id', None)
+                if settings.is_multi_tariff_enabled() and subscription
+                else db_user.panel_user_id
+            )
+            if _device_uuid or _device_user_id is not None:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
 
                 async with service.get_api_client() as api:
-                    response = await api._make_request('GET', f'/api/hwid/devices/{_device_uuid}')
+                    response = await api._make_request('GET', api._fmt_hwid_path(_device_uuid, _device_user_id))
 
                     if response and 'response' in response:
                         devices_info = response['response']
@@ -372,18 +377,18 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
                 # Формируем блок информации о тарифе
                 is_daily = getattr(tariff, 'is_daily', False)
-                tariff_type_str = 'Суточный' if is_daily else 'Периодный'
 
                 tariff_info_lines = [
                     f'<b> {html.escape(tariff.name)}</b>',
-                    f'Тип: {tariff_type_str}',
                     (f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит'),
                     f'Устройства: {tariff.device_limit}',
                 ]
 
                 if is_daily:
                     # Для суточного тарифа показываем цену с учётом скидки промогруппы + promo-offer
-                    raw_daily_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
+                    from app.handlers.subscription.tariff_purchase import _effective_period_price
+
+                    raw_daily_kopeks = _effective_period_price(db_user, getattr(tariff, 'daily_price_kopeks', 0))
                     promo_group = (
                         db_user.get_primary_promo_group() if hasattr(db_user, 'get_primary_promo_group') else None
                     )
@@ -3207,7 +3212,9 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
 
     # При возобновлении проверяем баланс
     if needs_resume:
-        raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
+        from app.handlers.subscription.tariff_purchase import _effective_period_price
+
+        raw_daily_price = _effective_period_price(db_user, getattr(tariff, 'daily_price_kopeks', 0))
         from app.database.crud.user import lock_user_for_pricing
         from app.services.pricing_engine import PricingEngine
 

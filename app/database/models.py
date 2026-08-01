@@ -1202,6 +1202,7 @@ class User(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
     last_activity = Column(AwareDateTime(), default=func.now())
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
+    panel_user_id = Column(Integer, nullable=True, index=True)
 
     # Cabinet authentication fields
     email = Column(String(255), unique=True, nullable=True, index=True)
@@ -1297,6 +1298,11 @@ class User(Base):
     restriction_topup = Column(Boolean, default=False, nullable=False)  # Запрет пополнения
     restriction_subscription = Column(Boolean, default=False, nullable=False)  # Запрет продления/покупки
     restriction_reason = Column(String(500), nullable=True)  # Причина ограничения
+
+    # Персональная цена подписки (копейки). Если задана — заменяет базовую цену
+    # тарифа для этого пользователя (скидки промо-групп/офферов при этом не
+    # применяются). None = стандартная цена тарифа.
+    personal_price_kopeks = Column(Integer, nullable=True)
 
     # Партнёрская система
     partner_status = Column(String(20), default=PartnerStatus.NONE.value, nullable=False, index=True)
@@ -1433,6 +1439,7 @@ class Subscription(Base):
 
     remnawave_short_uuid = Column(String(255), nullable=True)
     remnawave_uuid = Column(String(255), nullable=True)
+    panel_user_id = Column(Integer, nullable=True, index=True)
     remnawave_short_id = Column(
         String(16), nullable=False, unique=True, server_default=''
     )  # Permanent short ID for username suffix

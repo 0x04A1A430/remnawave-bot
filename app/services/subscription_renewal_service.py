@@ -554,9 +554,14 @@ class SubscriptionRenewalService:
                     if settings.is_multi_tariff_enabled()
                     else getattr(user, 'remnawave_uuid', None)
                 )
-                if _uuid:
+                _panel_user_id = (
+                    getattr(subscription_after, 'panel_user_id', None)
+                    if settings.is_multi_tariff_enabled()
+                    else getattr(user, 'panel_user_id', None)
+                )
+                if _uuid or _panel_user_id is not None:
                     async with rw_service.get_api_client() as api:
-                        await api.reset_user_devices(_uuid)
+                        await api.reset_user_devices(_uuid, user_id=_panel_user_id)
                     logger.info(
                         'Devices reset on renewal',
                         subscription_id=subscription_after.id,

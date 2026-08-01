@@ -27,7 +27,20 @@ sys.modules.setdefault('aiosqlite', types.ModuleType('aiosqlite'))
 # Эмуляция redis.asyncio, чтобы модуль кеша мог импортироваться.
 if 'redis.asyncio' not in sys.modules:
     redis_module = types.ModuleType('redis')
+    redis_module.__path__ = []  # маркируем как пакет — иначе 'redis is not a package'
     redis_async_module = types.ModuleType('redis.asyncio')
+    redis_async_module.__path__ = []
+    redis_exceptions_module = types.ModuleType('redis.exceptions')
+
+    class _FakeRedisError(Exception):
+        pass
+
+    class _FakeNoScriptError(Exception):
+        pass
+
+    redis_exceptions_module.RedisError = _FakeRedisError
+    redis_exceptions_module.ConnectionError = _FakeRedisError
+    redis_exceptions_module.NoScriptError = _FakeNoScriptError
 
     class _FakeRedisClient:
         async def ping(self):
@@ -63,8 +76,10 @@ if 'redis.asyncio' not in sys.modules:
 
     redis_async_module.from_url = _from_url
     redis_async_module.Redis = _FakeRedisClient
+    redis_async_module.RedisError = _FakeRedisError
     sys.modules['redis'] = redis_module
     sys.modules['redis.asyncio'] = redis_async_module
+    sys.modules['redis.exceptions'] = redis_exceptions_module
 
 # Минимальная реализация SDK YooKassa, чтобы импорт сервисов не падал.
 if 'yookassa' not in sys.modules:

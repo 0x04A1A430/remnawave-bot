@@ -1822,7 +1822,12 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
                     return True  # в панели нечего удалять
                 async with semaphore:
                     try:
-                        await api.delete_user(panel_uuid)
+                        await api.delete_user(
+                            panel_uuid,
+                            user_id=subscription.panel_user_id
+                            if is_multi
+                            else (subscription.user.panel_user_id if subscription.user else None),
+                        )
                         return True
                     except Exception as error:
                         msg = str(error).lower()

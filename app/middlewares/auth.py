@@ -22,11 +22,13 @@ from app.utils.validators import sanitize_telegram_name
 logger = structlog.get_logger(__name__)
 
 
-async def _refresh_remnawave_description(remnawave_uuid: str, description: str, telegram_id: int) -> None:
+async def _refresh_remnawave_description(
+    remnawave_uuid: str, description: str, telegram_id: int, user_id: int | None = None
+) -> None:
     try:
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
-            await api.update_user(uuid=remnawave_uuid, description=description)
+            await api.update_user(uuid=remnawave_uuid, description=description, user_id=user_id)
         logger.info(
             '[Middleware] Описание пользователя обновлено в RemnaWave',
             telegram_id=telegram_id,
@@ -239,6 +241,7 @@ class AuthMiddleware(BaseMiddleware):
                                 remnawave_uuid=db_user.remnawave_uuid,
                                 description=description,
                                 telegram_id=db_user.telegram_id,
+                                user_id=db_user.panel_user_id,
                             )
                         )
 
@@ -256,6 +259,7 @@ class AuthMiddleware(BaseMiddleware):
                                         remnawave_uuid=sub.remnawave_uuid,
                                         description=description,
                                         telegram_id=db_user.telegram_id,
+                                        user_id=sub.panel_user_id,
                                     )
                                 )
 

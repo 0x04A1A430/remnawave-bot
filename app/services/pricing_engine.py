@@ -135,6 +135,21 @@ class PricingEngine:
         return getattr(user, 'promo_group', None)
 
     @staticmethod
+    def _get_personal_price_kopeks(user: User | None) -> int | None:
+        """Персональная цена подписки пользователя в копейках (или None).
+
+        Если задана — заменяет базовую цену тарифа; промо-скидки отключаются.
+        """
+        if not user:
+            return None
+        price = getattr(user, 'personal_price_kopeks', None)
+        if price is None:
+            return None
+        if not isinstance(price, (int, float)) or isinstance(price, bool):
+            return None
+        return max(0, int(price))
+
+    @staticmethod
     def get_addon_discount_percent(
         user: User | None,
         category: str,
@@ -585,6 +600,13 @@ class PricingEngine:
                     if custom_price is not None:
                         base_price = int(custom_price)
 
+        # Персональная цена подписки (задаётся админом в меню пользователя):
+        # заменяет базовую цену тарифа. При этом промо-скидки не применяются —
+        # админ явно назначил фиксированную цену.
+        personal_price = self._get_personal_price_kopeks(user)
+        if personal_price is not None:
+            base_price = personal_price
+
         # --- Extra devices (monthly × months) ---
         device_price_per_unit = (
             tariff.device_price_kopeks if tariff.device_price_kopeks is not None else settings.PRICE_PER_DEVICE
@@ -606,7 +628,7 @@ class PricingEngine:
         # --- Per-category group discounts ---
         period_pct = 0
         devices_pct = 0
-        promo_group = self.resolve_promo_group(user)
+        promo_group = None if personal_price is not None else self.resolve_promo_group(user)
         # Only apply promo group discount if the tariff is available for this group
         if promo_group is not None and not tariff.is_available_for_promo_group(promo_group.id):
             promo_group = None
@@ -614,7 +636,9 @@ class PricingEngine:
             period_pct = promo_group.get_discount_percent('period', period_days)
             devices_pct = promo_group.get_discount_percent('devices', period_days)
 
-        offer_pct = get_user_active_promo_discount_percent(user) if user else 0
+        offer_pct = 0
+        if personal_price is None and user:
+            offer_pct = get_user_active_promo_discount_percent(user)
 
         discounted_base = self.apply_discount(base_price, period_pct)
         discounted_devices = self.apply_discount(devices_price, devices_pct)

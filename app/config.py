@@ -154,6 +154,7 @@ class Settings(BaseSettings):
     REMNAWAVE_USER_DELETE_MODE: str = 'delete'  # "delete" или "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = '03:00'
+    REMNAWAVE_USE_USER_ID: bool = False  # v3.0.0: переключить на True для использования userId вместо uuid
     CABINET_REMNA_SUB_CONFIG: str | None = None  # UUID конфига страницы подписки из RemnaWave
 
     # RemnaWave incoming webhooks (real-time event delivery from backend)

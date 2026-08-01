@@ -886,7 +886,7 @@ class UserService:
 
                             if delete_mode == 'delete':
                                 async with remnawave_service.get_api_client() as api:
-                                    delete_success = await api.delete_user(panel_uuid)
+                                    delete_success = await api.delete_user(panel_uuid, user_id=user_id)
                                     if delete_success:
                                         result.panel_deleted = True
                                         logger.info(

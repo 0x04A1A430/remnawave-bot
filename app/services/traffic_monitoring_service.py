@@ -12,7 +12,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.user import get_user_by_remnawave_uuid
+from app.database.crud.user import get_user_by_panel_user_id, get_user_by_remnawave_uuid
 from app.database.database import AsyncSessionLocal
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
@@ -49,6 +49,15 @@ class TrafficViolation:
     last_node_uuid: str | None
     last_node_name: str | None
     check_type: str  # "fast" или "daily"
+    panel_user_id: int | None = None
+
+    @property
+    def identity(self) -> str:
+        """Стабильный ключ для кулдауна/кэша.
+
+        v3.0.0: uuid отсутствует — числовой panel_user_id становится ключом.
+        """
+        return str(self.panel_user_id) if self.panel_user_id is not None else self.user_uuid
 
 
 class TrafficMonitoringServiceV2:
@@ -570,6 +579,7 @@ class TrafficMonitoringServiceV2:
                     last_node_uuid=last_node_uuid,
                     last_node_name=node_name,
                     check_type='fast',
+                    panel_user_id=user.id,
                 )
                 violations.append(violation)
 
@@ -631,12 +641,13 @@ class TrafficMonitoringServiceV2:
         async def check_user_daily_traffic(user) -> TrafficViolation | None:
             async with semaphore:
                 try:
-                    if not user.uuid:
+                    # v3.0.0: uuid отсутствует — числовой id в пути bandwidth-stats
+                    if not user.uuid and user.id is None:
                         return None
 
                     # Получаем статистику за период
                     async with self.remnawave_service.get_api_client() as api:
-                        stats = await api.get_bandwidth_stats_user(user.uuid, start_date, end_date)
+                        stats = await api.get_bandwidth_stats_user(user.uuid, start_date, end_date, user_id=user.id)
 
                     if not stats:
                         return None
@@ -670,6 +681,7 @@ class TrafficMonitoringServiceV2:
                         last_node_uuid=last_node_uuid,
                         last_node_name=node_name,
                         check_type='daily',
+                        panel_user_id=user.id,
                     )
 
                 except Exception as e:
@@ -723,7 +735,7 @@ class TrafficMonitoringServiceV2:
 
         for i, violation in enumerate(violations):
             try:
-                if not await self.should_send_notification(violation.user_uuid):
+                if not await self.should_send_notification(violation.identity):
                     logger.info(
                         'Кулдаун: пропускаем уведомление',
                         user_uuid=violation.user_uuid[:8],
@@ -734,7 +746,12 @@ class TrafficMonitoringServiceV2:
                 # Получаем информацию о пользователе из БД
                 user_info = ''
                 async with AsyncSessionLocal() as db:
-                    db_user = await get_user_by_remnawave_uuid(db, violation.user_uuid)
+                    db_user = None
+                    # v3.0.0: идентификация по числовому panel_user_id, uuid может быть пустым
+                    if violation.panel_user_id is not None:
+                        db_user = await get_user_by_panel_user_id(db, violation.panel_user_id)
+                    if db_user is None and violation.user_uuid:
+                        db_user = await get_user_by_remnawave_uuid(db, violation.user_uuid)
                     if db_user:
                         user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
                         user_info = f'<b>{html.escape(db_user.full_name or "Без имени")}</b>\n ID: <code>{user_id_display}</code>\n'
@@ -775,7 +792,7 @@ class TrafficMonitoringServiceV2:
                 message += f'\n\n {datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")} UTC'
 
                 await admin_service.send_suspicious_traffic_notification(message, bot, topic_id)
-                await self.record_notification(violation.user_uuid)
+                await self.record_notification(violation.identity)
 
                 logger.info('Уведомление отправлено пользователю', user_uuid=violation.user_uuid)
 

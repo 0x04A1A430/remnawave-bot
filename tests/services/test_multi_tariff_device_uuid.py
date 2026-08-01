@@ -6,14 +6,18 @@ another tariff's devices, making the limit look "counted by the smallest tariff"
 
 from __future__ import annotations
 
-from app.cabinet.routes.subscription_modules.devices import _resolve_panel_uuid
+from app.cabinet.routes.subscription_modules.devices import (
+    _resolve_panel_identifiers,
+    _resolve_panel_uuid,
+)
 from app.config import Settings
-from app.handlers.subscription.devices import _get_remnawave_uuid
+from app.handlers.subscription.devices import _get_remnawave_identifiers, _get_remnawave_uuid
 
 
 class _Obj:
-    def __init__(self, uuid):
+    def __init__(self, uuid, panel_user_id=None):
         self.remnawave_uuid = uuid
+        self.panel_user_id = panel_user_id
 
 
 def _set_multi(monkeypatch, value: bool) -> None:
@@ -61,6 +65,35 @@ def test_cabinet_single_tariff_uses_user_uuid(monkeypatch):
 def test_cabinet_no_subscription_uses_user_uuid(monkeypatch):
     _set_multi(monkeypatch, True)
     assert _resolve_panel_uuid(None, _Obj('USER')) == 'USER'
+
+
+# ---- v3.0.0 identifier helpers: (uuid, panel_user_id) pairs ----
+
+
+def test_bot_multi_tariff_identifiers_from_subscription(monkeypatch):
+    _set_multi(monkeypatch, True)
+    assert _get_remnawave_identifiers(_Obj('SUB-B', 42), _Obj('USER', 7)) == ('SUB-B', 42)
+
+
+def test_bot_multi_tariff_identifiers_null_sub_no_user_fallback(monkeypatch):
+    _set_multi(monkeypatch, True)
+    # The bleed guard: a sub with no panel identifiers must NOT borrow the user's.
+    assert _get_remnawave_identifiers(_Obj(None, None), _Obj('USER', 7)) == (None, None)
+
+
+def test_bot_single_tariff_identifiers_use_user(monkeypatch):
+    _set_multi(monkeypatch, False)
+    assert _get_remnawave_identifiers(_Obj('SUB-B', None), _Obj('USER', 7)) == ('SUB-B', 7)
+
+
+def test_cabinet_multi_tariff_identifiers_from_subscription(monkeypatch):
+    _set_multi(monkeypatch, True)
+    assert _resolve_panel_identifiers(_Obj('SUB-B', 42), _Obj('USER', 7)) == ('SUB-B', 42)
+
+
+def test_cabinet_single_tariff_identifiers_use_user(monkeypatch):
+    _set_multi(monkeypatch, False)
+    assert _resolve_panel_identifiers(_Obj(None, None), _Obj('', 7)) == ('', 7)
 
 
 # ---- deterministic per-subscription panel username suffix (collision guard) ----

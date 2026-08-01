@@ -537,11 +537,6 @@ class BackupService:
 
             logger.info(message)
 
-            if self.bot:
-                await self._send_backup_notification('success', message, str(backup_path))
-
-                await self._send_backup_file_to_chat(str(backup_path))
-
             return True, message, str(backup_path)
 
         except Exception as e:
