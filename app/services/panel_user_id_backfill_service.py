@@ -31,6 +31,7 @@ from sqlalchemy import select, update
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, User
+from app.external.remnawave_api import RemnaWaveAPI
 from app.services.remnawave_service import RemnaWaveService
 
 
@@ -116,6 +117,11 @@ async def _run_backfill() -> dict[str, int]:
     async with AsyncSessionLocal() as db:
         for row_id, uuid, kind in targets:
             panel_user_id = resolved.get(uuid)
+            if panel_user_id is None:
+                not_found += 1
+                continue
+            # Guard against NaN/infinity parsed from JSON literals leaking into the DB
+            panel_user_id = RemnaWaveAPI._sanitize_user_id(panel_user_id)
             if panel_user_id is None:
                 not_found += 1
                 continue

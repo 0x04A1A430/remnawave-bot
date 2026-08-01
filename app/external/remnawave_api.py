@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import math
 import ssl
 from dataclasses import dataclass
 from datetime import datetime
@@ -553,22 +554,26 @@ class RemnaWaveAPI:
         return settings.REMNAWAVE_USE_USER_ID
 
     def _fmt_user_path(self, uuid: str, user_id: int | None = None) -> str:
+        user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return f'/api/users/{user_id}'
         return f'/api/users/{uuid}'
 
     def _fmt_user_body_id(self, uuid: str, user_id: int | None = None) -> dict[str, str | int]:
+        user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return {'id': user_id}
         return {'uuid': uuid}
 
     def _fmt_hwid_user_key(self, user_uuid: str, user_id: int | None = None) -> str:
+        user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return 'userId'
         return 'userUuid'
 
     def _fmt_hwid_path(self, user_uuid: str, user_id: int | None = None) -> str:
         """Path to a user's HWID devices. v3.0.0: numeric userId in the path."""
+        user_id = self._sanitize_user_id(user_id)
         _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
         return f'/api/hwid/devices/{_uid}'
 
@@ -577,6 +582,7 @@ class RemnaWaveAPI:
 
         v2: ``{'userUuid': uuid, 'hwid': hwid}``; v3.0.0: ``{'userId': id, 'hwid': hwid}``.
         """
+        user_id = self._sanitize_user_id(user_id)
         hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
         _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
         return {hwid_key: _uid, 'hwid': hwid}
@@ -1582,7 +1588,7 @@ class RemnaWaveAPI:
             happ_link=happ_link,
             happ_crypto_link=happ_crypto_link,
             external_squad_uuid=user_data.get('externalSquadUuid'),
-            id=user_data.get('id'),
+            id=self._sanitize_user_id(user_data.get('id')),
         )
 
     def _parse_optional_datetime(self, date_str: str | None) -> datetime | None:
@@ -1599,6 +1605,25 @@ class RemnaWaveAPI:
             return int(value)
         except (ValueError, TypeError):
             return default
+
+    @staticmethod
+    def _sanitize_user_id(user_id: Any) -> int | None:
+        """Return a valid numeric panel user id, or None.
+
+        Rejects ``float('nan')``/infinity (JSON literal ``NaN`` parsed by
+        ``json.loads``), bools and non-integer garbage so we never build
+        ``/api/users/nan`` style URLs (panel rejects those with 400 A063-ish).
+        """
+        if user_id is None or isinstance(user_id, bool):
+            return None
+        if isinstance(user_id, float):
+            if math.isnan(user_id) or math.isinf(user_id) or not user_id.is_integer():
+                return None
+            return int(user_id)
+        try:
+            return int(user_id)
+        except (ValueError, TypeError):
+            return None
 
     def _parse_inbound(self, inbound_data: dict) -> RemnaWaveInbound:
         """Парсит данные inbound"""
