@@ -90,19 +90,19 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Re-enable in RemnaWave panel
             service = SubscriptionService()
             for subscription in disabled_subs:
-                _uuid = (
-                    subscription.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                    else db_user.remnawave_uuid
+                panel_user_id = (
+                    subscription.remnawave_id
+                    if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+                    else db_user.remnawave_id
                 )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                if settings.is_multi_tariff_enabled() and not subscription.remnawave_id:
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                        'Multi-tariff: subscription missing remnawave_id, using user fallback',
                         subscription_id=getattr(subscription, 'id', None),
                     )
-                if _uuid:
+                if panel_user_id:
                     try:
-                        await service.enable_remnawave_user(_uuid)
+                        await service.enable_remnawave_user(panel_user_id)
                     except Exception as api_error:
                         logger.error('Failed to enable RemnaWave user', error=api_error)
 
@@ -174,19 +174,19 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Disable in RemnaWave panel
             service = SubscriptionService()
             for subscription in active_subs:
-                _uuid = (
-                    subscription.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                    else db_user.remnawave_uuid
+                panel_user_id = (
+                    subscription.remnawave_id
+                    if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+                    else db_user.remnawave_id
                 )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                if settings.is_multi_tariff_enabled() and not subscription.remnawave_id:
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                        'Multi-tariff: subscription missing remnawave_id, using user fallback',
                         subscription_id=getattr(subscription, 'id', None),
                     )
-                if _uuid:
+                if panel_user_id:
                     try:
-                        await service.disable_remnawave_user(_uuid)
+                        await service.disable_remnawave_user(panel_user_id)
                     except Exception as api_error:
                         logger.error('Failed to disable RemnaWave user', error=api_error)
 
