@@ -314,16 +314,15 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
         `subscriptions.remnawave_id` получает только одна строка: колонка
         частично уникальна, двум строкам один id не присвоить.
         """
-        if settings.is_multi_tariff_enabled():
-            # В multi-tariff у каждой подписки СВОЙ панельный аккаунт, поэтому
-            # совпадение — настоящая порча данных, а не норма. Проглотив его,
-            # мы бы молча закоммитили привязку мёртвой строки к чужому аккаунту
-            # и забрали бы у живой её последний ключ (shortUuid).
-            return False
         return claimed_owner.get(panel_user.id) == int(subscription.user_id)
 
     def record_expected_sibling(subscription: Subscription, panel_user: RemnaWaveUser) -> None:
-        report.by_strategy['sibling_shares_panel_account'] += 1
+        # НЕ конфликт и не откат: строка просто остаётся без id. В multi-tariff
+        # общий аккаунт у двух подписок — это ненормально, но ронять весь
+        # прогон из-за одной пары нельзя: инсталляция, переключённая из
+        # single-tariff в multi, штатно несёт такие пары, и откат заблокировал
+        # бы миграцию целиком. Ничего не записывается, оператор видит строку в
+        # отчёте и разбирается точечно.
         report.unresolved.append(
             UnresolvedRow(
                 kind='subscription',
@@ -408,6 +407,8 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
             continue
         assign(subscription, panel_user, strategy)
 
+    _prefer_alive_sibling(subscriptions, resolved_by_subscription, claimed, report)
+
     await _backfill_users(db, index, users_by_id, resolved_by_subscription, subscriptions, report)
     await _backfill_grace_sessions(db, resolved_by_subscription, report)
 
@@ -429,6 +430,63 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
 
     logger.info('backfill: finished', **report.as_dict())
     return report
+
+
+def _prefer_alive_sibling(
+    subscriptions: list[Subscription],
+    resolved_by_subscription: dict[int, int],
+    claimed: dict[int, str],
+    report: BackfillReport,
+) -> None:
+    """Передать панельный id живой подписке, если его забрала мёртвая.
+
+    Порядка обхода мало. Точный ключ (`shortUuid`) сплошь и рядом остаётся
+    ТОЛЬКО на мёртвой строке: при замене подписки `crud/subscription.py`
+    вставляет новую строку без него, а конвертированный триал свой сохраняет.
+    Первый проход берёт исключительно точные совпадения, поэтому id достаётся
+    мёртвой строке независимо от сортировки — а живая уходит в
+    `no_surviving_identifier`.
+
+    Последствия ровно те, ради которых сортировка и вводилась: grace-сессия
+    открывается на ТЕКУЩЕЙ подписке, и без id она становится нечитаемой
+    (жёсткий data fault), а вебхук резолвит события на мёртвую строку, потому
+    что фильтрует по `Subscription.remnawave_id` раньше, чем по shortUuid.
+
+    Только для single-tariff: там у пользователя один панельный аккаунт, и
+    любая его подписка адресует именно его. В multi-tariff у каждой подписки
+    свой аккаунт, и переносить id между ними нельзя.
+    """
+    if settings.is_multi_tariff_enabled():
+        return
+
+    by_user: dict[int, list[Subscription]] = defaultdict(list)
+    for subscription in subscriptions:
+        by_user[int(subscription.user_id)].append(subscription)
+
+    for rows in by_user.values():
+        resolved = [r for r in rows if int(r.id) in resolved_by_subscription]
+        if len(resolved) != 1:
+            continue
+        holder = resolved[0]
+        if holder.status in _ALIVE_STATUSES:
+            continue
+        alive = [r for r in rows if r.status in _ALIVE_STATUSES and int(r.id) not in resolved_by_subscription]
+        if len(alive) != 1:
+            continue
+        target = alive[0]
+
+        panel_id = resolved_by_subscription.pop(int(holder.id))
+        holder.remnawave_id = None
+        target.remnawave_id = panel_id
+        resolved_by_subscription[int(target.id)] = panel_id
+        claimed[panel_id] = str(target.id)
+        report.by_strategy['moved_to_alive_sibling'] += 1
+        logger.info(
+            'backfill: панельный id передан живой подписке',
+            panel_user_id=panel_id,
+            from_subscription_id=int(holder.id),
+            to_subscription_id=int(target.id),
+        )
 
 
 async def _backfill_users(

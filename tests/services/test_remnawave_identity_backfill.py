@@ -384,26 +384,28 @@ async def test_live_subscription_wins_the_panel_id_not_the_expired_one(monkeypat
     """
     tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
     async with memory_session(monkeypatch, tables) as db:
+        # Живая строка намеренно с МЕНЬШИМ id: иначе тест проходил бы на одном
+        # только тайбрейке `id DESC`, не проверяя ключ сортировки по статусу.
         await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')])
-        # 10 — истёкший триал, 20 — текущая подписка.
-        (await db.get(SubModel, 10)).status = 'expired'
-        (await db.get(SubModel, 20)).status = 'active'
+        (await db.get(SubModel, 10)).status = 'active'
+        (await db.get(SubModel, 20)).status = 'expired'
         await db.commit()
         _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
 
         await backfill_remnawave_ids(db, dry_run=False)
 
         db.expunge_all()
-        assert (await db.get(SubModel, 20)).remnawave_id == 77, 'живая подписка обязана получить id'
-        assert (await db.get(SubModel, 10)).remnawave_id is None
+        assert (await db.get(SubModel, 10)).remnawave_id == 77, 'живая подписка обязана получить id'
+        assert (await db.get(SubModel, 20)).remnawave_id is None
 
 
 @pytest.mark.asyncio
-async def test_multi_tariff_treats_a_shared_panel_account_as_a_real_conflict(monkeypatch):
-    """В multi-tariff у каждой подписки СВОЙ аккаунт — совпадение это порча данных.
+async def test_multi_tariff_shared_account_is_skipped_locally_not_aborted(monkeypatch):
+    """Общий аккаунт в multi-tariff ненормален, но не должен ронять весь прогон.
 
-    Проглотив его как «сиблинга», бэкфил молча привязал бы одну строку к чужому
-    аккаунту и забрал бы у второй последний ключ.
+    Инсталляция, переключённая из single-tariff в multi, штатно несёт такие
+    пары. Откат из-за одной пары заблокировал бы миграцию целиком, а строка и
+    так остаётся без id — записывать нечего.
     """
     from app.config import Settings
 
@@ -415,7 +417,58 @@ async def test_multi_tariff_treats_a_shared_panel_account_as_a_real_conflict(mon
 
         report = await backfill_remnawave_ids(db, dry_run=False)
 
-        assert report.conflicts, 'в multi-tariff общий аккаунт — конфликт, а не норма'
+        assert report.conflicts == [], 'одна пара не должна ронять весь прогон'
         db.expunge_all()
+        ids = {(await db.get(SubModel, 10)).remnawave_id, (await db.get(SubModel, 20)).remnawave_id}
+        assert ids == {77, None}, 'id достаётся одной строке, вторая остаётся в отчёте'
+
+
+@pytest.mark.asyncio
+async def test_id_moves_to_the_live_row_when_only_the_dead_one_kept_the_short_uuid(monkeypatch):
+    """Самая частая форма в single-tariff, и сортировкой её не решить.
+
+    При замене подписки новая строка вставляется БЕЗ `remnawave_short_uuid`, а
+    конвертированный триал свой сохраняет. Первый проход берёт только точные
+    совпадения, поэтому id уходит мёртвой строке независимо от сортировки —
+    а grace-сессия текущей подписки остаётся без идентичности и становится
+    нечитаемой.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, None, 'uuid-b')])
+        (await db.get(SubModel, 10)).status = 'expired'
+        (await db.get(SubModel, 20)).status = 'active'
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(SubModel, 20)).remnawave_id == 77, 'id обязан переехать на живую строку'
         assert (await db.get(SubModel, 10)).remnawave_id is None
+
+
+@pytest.mark.asyncio
+async def test_between_two_live_rows_the_later_end_date_wins(monkeypatch):
+    """Пинит саму сортировку, а не перенос id.
+
+    Когда обе строки живые, `_prefer_alive_sibling` неприменим (переносить
+    некуда), и решает только ORDER BY. Без этого случая ключ сортировки
+    проходил бы на одном тайбрейке по id.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')])
+        # Актуальна строка 10 (позже заканчивается), хотя её id МЕНЬШЕ.
+        sub10, sub20 = await db.get(SubModel, 10), await db.get(SubModel, 20)
+        sub10.status, sub20.status = 'active', 'active'
+        sub10.end_date = datetime(2031, 1, 1, tzinfo=UTC)
+        sub20.end_date = datetime(2027, 1, 1, tzinfo=UTC)
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(SubModel, 10)).remnawave_id == 77
         assert (await db.get(SubModel, 20)).remnawave_id is None
