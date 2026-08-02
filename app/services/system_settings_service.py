@@ -124,6 +124,7 @@ class BotConfigurationService:
     CATEGORY_TITLES: dict[str, str] = {
         'CORE': '🤖 Основные настройки',
         'SUPPORT': '💬 Поддержка и тикеты',
+        'REGISTRATION_ACCESS': '🔐 Регистрация и доступ',
         'LOCALIZATION': '🌍 Языки интерфейса',
         'CHANNEL': '📣 Обязательная подписка',
         'TIMEZONE': '🗂 Timezone',
@@ -198,6 +199,7 @@ class BotConfigurationService:
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
         'CORE': 'Базовые параметры работы бота и обязательные ссылки.',
         'SUPPORT': 'Контакты поддержки, SLA и режимы обработки обращений.',
+        'REGISTRATION_ACCESS': 'Закрытая регистрация и допустимые способы приглашения новых пользователей.',
         'LOCALIZATION': 'Доступные языки, локализация интерфейса и выбор языка.',
         'CHANNEL': 'Настройки обязательной подписки на канал или группу.',
         'TIMEZONE': 'Часовой пояс панели и отображение времени.',
@@ -284,6 +286,8 @@ class BotConfigurationService:
         'LOCALES_PATH': 'LOCALIZATION',
         'CHANNEL_IS_REQUIRED_SUB': 'CHANNEL',
         'BOT_USERNAME': 'CORE',
+        'INVITE_ONLY_ENABLED': 'REGISTRATION_ACCESS',
+        'INVITE_ONLY_ALLOW_GIFT_LINKS': 'REGISTRATION_ACCESS',
         'DEFAULT_LANGUAGE': 'LOCALIZATION',
         'AVAILABLE_LANGUAGES': 'LOCALIZATION',
         'REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS': 'ADMIN_NOTIFICATIONS',
