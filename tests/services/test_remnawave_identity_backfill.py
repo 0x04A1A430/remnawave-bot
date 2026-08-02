@@ -20,16 +20,20 @@ from app.services.remnawave_identity_backfill import (
 def _patch_roster(monkeypatch, panel_users):
     """Replace the panel sweep and the configuration check with local data."""
     import app.services.remnawave_identity_backfill as mod
+    from app.services.remnawave_service import RemnaWaveService
 
     async def fake_roster(_service):
         return panel_users
 
-    class _Svc:
+    # Наследуемся от НАСТОЯЩЕГО класса: самостоятельная заглушка однажды уже
+    # «реализовала» метод, которого у RemnaWaveService нет, и спрятала падение
+    # CLI по AttributeError. Здесь любой такой вызов упадёт в тестах.
+    class _Svc(RemnaWaveService):
         is_configured = True
         configuration_error = None
 
-        def _refresh_configuration(self):
-            return None
+        def __init__(self):
+            pass  # настройки панели в тестах не читаем
 
     monkeypatch.setattr(mod, '_load_panel_roster', fake_roster)
     monkeypatch.setattr(mod, 'RemnaWaveService', _Svc)
@@ -535,3 +539,100 @@ async def test_grace_session_on_the_donor_row_still_gets_an_id(monkeypatch):
         db.expunge_all()
         session = await db.get(GraceAccessSessionModel, 'g-old')
         assert session.remnawave_id == 77, 'сессия донора обязана получить идентичность'
+
+
+def _grace(session_id, subscription_id, remnawave_uuid, *, state='active'):
+    return GraceAccessSessionModel(
+        id=session_id,
+        subscription_id=subscription_id,
+        remnawave_uuid=remnawave_uuid,
+        reason='expired',
+        incident_key=f'inc-{session_id}',
+        state=state,
+        billing_before={},
+        panel_before={},
+        overlay={},
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        grace_until=datetime(2026, 2, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_multi_tariff_sibling_session_resolves_by_its_own_uuid(monkeypatch):
+    """Мультитариф: сессия на «сиблинге» тоже обязана получить идентичность.
+
+    Две подписки одного пользователя смотрят на один панельный аккаунт. Колонка
+    частично уникальна, поэтому id достаётся ровно одной строке, а вторая честно
+    отмечается `sibling_shares_panel_account` — и это единственная причина, при
+    которой инструкция разрешает продолжать. Но grace-сессия второй строки
+    раньше не имела ни одного источника: фолбэк по владельцу в мультитарифе
+    выключен намеренно. Пустая колонка делает сессию нечитаемой навсегда.
+    Её собственный uuid — точный ключ, и он у неё есть.
+    """
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'shared', 'uuid-shared'), (20, None, 'uuid-shared')])
+        db.add(_grace('g-sibling', 20, 'uuid-shared'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='shared', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(GraceAccessSessionModel, 'g-sibling')).remnawave_id == 77
+
+
+@pytest.mark.asyncio
+async def test_session_of_a_deleted_panel_account_is_not_given_the_live_one(monkeypatch):
+    """Сессия удалённого аккаунта не должна получить живой аккаунт владельца.
+
+    Аккаунт пересоздавали: у пользователя новый панельный аккаунт, а сессия
+    хранит uuid старого. Приписать ей текущий — значит разрешить грейсу писать
+    в ОПЛАЧЕННЫЙ аккаунт: `_activate_pending` зовёт `apply_billing_state`, а он
+    для не-LIMITED вызывает update_user без compare-and-set. Пусть лучше строка
+    останется неразрешённой — нечитаемая сессия инертна, а чужая запись нет.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'gone', 'uuid-dead'), (20, 'live', 'uuid-live')])
+        (await db.get(SubModel, 10)).status = 'expired'
+        db.add(_grace('g-dead', 10, 'uuid-of-deleted-account'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(200, short_uuid='live', username='u', telegram_id=551)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        session = await db.get(GraceAccessSessionModel, 'g-dead')
+        assert session.remnawave_id is None, 'нельзя приписывать сессии чужой живой аккаунт'
+        assert any(r.kind == 'grace_session' and r.row_id == 'g-dead' for r in report.unresolved)
+
+
+@pytest.mark.asyncio
+async def test_single_tariff_session_resolves_by_the_user_uuid_it_actually_stores(monkeypatch):
+    """Реальная форма однотарифных данных: в сессии лежит uuid ПОЛЬЗОВАТЕЛЯ.
+
+    `_subscription_to_billing` до 3.0.0 клала в сессию uuid подписки только в
+    мультитарифе, а в однотарифном — `user.remnawave_uuid`. Поэтому карты одних
+    только подписочных uuid недостаточно: у строки-донора после переноса id
+    сессия не нашла бы себя по своему же ключу.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, None, 'uuid-b')])
+        (await db.get(SubModel, 10)).status = 'expired'
+        (await db.get(SubModel, 20)).status = 'active'
+        # `_seed` даёт пользователю 1 именно 'legacy-1' — это и есть тот uuid,
+        # который однотарифный грейс записал бы в сессию.
+        db.add(_grace('g-user-uuid', 10, 'legacy-1'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(GraceAccessSessionModel, 'g-user-uuid')).remnawave_id == 77

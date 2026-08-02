@@ -22,8 +22,15 @@ import argparse
 import asyncio
 import sys
 
+import structlog
+
+from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.services.remnawave_identity_backfill import backfill_remnawave_ids
+from app.services.system_settings_service import bot_configuration_service
+
+
+logger = structlog.get_logger(__name__)
 
 
 def _print_report(report) -> None:
@@ -67,6 +74,19 @@ def _print_report(report) -> None:
 
 
 async def _run(apply: bool) -> int:
+    # Настройки, отредактированные из кабинета, живут в system_settings, а не в
+    # .env — их обязан подтянуть и одноразовый контейнер. Без этого
+    # MULTI_TARIFF_ENABLED (в .env.example его нет вовсе) читался бы как False,
+    # и на мультитарифе бэкфилл пошёл бы по однотарифной ветке: перенёс бы
+    # панельный id между подписками, чего в мультитарифе делать нельзя.
+    await bot_configuration_service.initialize()
+    logger.info(
+        'backfill: конфигурация загружена',
+        multi_tariff=settings.is_multi_tariff_enabled(),
+        sales_mode=settings.SALES_MODE,
+    )
+    print(f'  режим: {"МУЛЬТИТАРИФ" if settings.is_multi_tariff_enabled() else "однотарифный"}')
+
     async with AsyncSessionLocal() as db:
         report = await backfill_remnawave_ids(db, dry_run=not apply)
     _print_report(report)

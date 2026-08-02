@@ -209,8 +209,10 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     """
     report = BackfillReport(dry_run=dry_run)
 
+    # RemnaWaveService.__init__ читает get_remnawave_auth_params() сам, поэтому
+    # никакого «обновить конфигурацию» тут звать не нужно — и нечего: такого
+    # метода у класса нет, вызов ронял CLI с AttributeError ещё до запроса.
     service = RemnaWaveService()
-    service._refresh_configuration()
     if not service.is_configured:
         raise RuntimeError(f'RemnaWave panel is not configured: {service.configuration_error}')
 
@@ -285,12 +287,20 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # смотрят на один панельный аккаунт» (норма) от «на один аккаунт претендуют
     # РАЗНЫЕ пользователи» (настоящий конфликт).
     claimed_owner: dict[int, int] = dict(_primed_owner)
+    # Исторический uuid -> панельный id. Grace-сессия хранит РОВНО такой uuid:
+    # `_subscription_to_billing` до 3.0.0 клала uuid подписки в мультитарифе и
+    # uuid пользователя в однотарифном. Это точный ключ в обоих режимах, поэтому
+    # сессия не зависит ни от того, на какой строке в итоге осел id, ни от
+    # догадок по текущему владельцу.
+    panel_id_by_uuid: dict[str, int] = {}
 
     def assign(subscription: Subscription, panel_user: RemnaWaveUser, strategy: str) -> None:
         claimed[panel_user.id] = str(subscription.id)
         claimed_owner[panel_user.id] = int(subscription.user_id)
         resolved_by_subscription[int(subscription.id)] = panel_user.id
         subscription.remnawave_id = panel_user.id
+        if subscription.remnawave_uuid:
+            panel_id_by_uuid.setdefault(str(subscription.remnawave_uuid), panel_user.id)
         # Refresh the short uuid while we have authoritative data — it is the
         # key any future re-run depends on.
         if panel_user.short_uuid and not subscription.remnawave_short_uuid:
@@ -409,8 +419,12 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
 
     await _prefer_alive_sibling(db, subscriptions, resolved_by_subscription, claimed, report)
 
-    await _backfill_users(db, index, users_by_id, resolved_by_subscription, subscriptions, report)
-    await _backfill_grace_sessions(db, resolved_by_subscription, report)
+    await _backfill_users(db, index, users_by_id, resolved_by_subscription, subscriptions, report, panel_id_by_uuid)
+    # Прод-сессия живёт с autoflush=False, поэтому проставленный выше
+    # users.remnawave_id остаётся только в ORM: без явного флаша SELECT ниже
+    # прочитал бы дореформенный NULL и фоллбек по владельцу не сработал бы.
+    await db.flush()
+    await _backfill_grace_sessions(db, resolved_by_subscription, report, panel_id_by_uuid)
 
     if dry_run:
         await db.rollback()
@@ -515,6 +529,7 @@ async def _backfill_users(
     resolved_by_subscription: dict[int, int],
     subscriptions: list[Subscription],
     report: BackfillReport,
+    panel_id_by_uuid: dict[str, int],
 ) -> None:
     """Give each bot user the panel id of its own panel account.
 
@@ -551,10 +566,17 @@ async def _backfill_users(
 
     pending_users = (await db.execute(select(User).where(User.remnawave_id.is_(None), gate))).scalars().all()
 
+    def _remember(user: User, panel_id: int) -> None:
+        # Однотарифная grace-сессия хранит uuid ПОЛЬЗОВАТЕЛЯ — регистрируем его,
+        # чтобы сессия нашлась по точному ключу, а не по догадке о владельце.
+        if user.remnawave_uuid:
+            panel_id_by_uuid.setdefault(str(user.remnawave_uuid), int(panel_id))
+
     for user in pending_users:
         candidates = per_user.get(int(user.id), set())
         if len(candidates) == 1:
             user.remnawave_id = next(iter(candidates))
+            _remember(user, user.remnawave_id)
             report.users_resolved += 1
             report.by_strategy['user_from_subscription'] += 1
             continue
@@ -564,6 +586,7 @@ async def _backfill_users(
             panel_candidates = index.by_telegram_id.get(int(telegram_id), [])
             if len(panel_candidates) == 1:
                 user.remnawave_id = panel_candidates[0].id
+                _remember(user, user.remnawave_id)
                 report.users_resolved += 1
                 report.by_strategy['user_from_telegram_id'] += 1
                 continue
@@ -583,6 +606,7 @@ async def _backfill_grace_sessions(
     db: AsyncSession,
     resolved_by_subscription: dict[int, int],
     report: BackfillReport,
+    panel_id_by_uuid: dict[str, int],
 ) -> None:
     """Grace sessions inherit identity from their subscription (1:1 by FK).
 
@@ -611,14 +635,14 @@ async def _backfill_grace_sessions(
                 await db.execute(select(Subscription.remnawave_id).where(Subscription.id == session.subscription_id))
             ).scalar_one_or_none()
 
-        if panel_id is None and not settings.is_multi_tariff_enabled():
-            panel_id = (
-                await db.execute(
-                    select(User.remnawave_id)
-                    .join(Subscription, Subscription.user_id == User.id)
-                    .where(Subscription.id == session.subscription_id)
-                )
-            ).scalar_one_or_none()
+        if panel_id is None and session.remnawave_uuid:
+            # Точный ключ самой сессии. Работает в обоих режимах и, в отличие от
+            # «взять аккаунт текущего владельца», не припишет сессии чужой
+            # аккаунт: если её панельный аккаунт удалён, в карте его нет и
+            # строка честно останется неразрешённой.
+            panel_id = panel_id_by_uuid.get(str(session.remnawave_uuid))
+            if panel_id is not None:
+                report.by_strategy['grace_from_historical_uuid'] += 1
 
         if panel_id is None:
             report.unresolved.append(
