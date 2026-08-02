@@ -472,3 +472,25 @@ async def test_between_two_live_rows_the_later_end_date_wins(monkeypatch):
         db.expunge_all()
         assert (await db.get(SubModel, 10)).remnawave_id == 77
         assert (await db.get(SubModel, 20)).remnawave_id is None
+
+
+@pytest.mark.asyncio
+async def test_transfer_does_not_leave_the_target_marked_unresolved(monkeypatch):
+    """Отчёт — единственная поверхность принятия решения для оператора.
+
+    Строка-приёмник помечается нерешённой в основном проходе; после переноса
+    id она решена, и оставлять её в списке значит отправлять оператора
+    разбираться с тем, что уже в порядке.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, None, 'uuid-b')])
+        (await db.get(SubModel, 10)).status = 'expired'
+        (await db.get(SubModel, 20)).status = 'active'
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        target_rows = [r for r in report.unresolved if r.kind == 'subscription' and r.row_id == 20]
+        assert target_rows == [], 'решённая строка не должна оставаться в списке нерешённых'

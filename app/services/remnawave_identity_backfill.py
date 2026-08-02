@@ -407,7 +407,7 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
             continue
         assign(subscription, panel_user, strategy)
 
-    _prefer_alive_sibling(subscriptions, resolved_by_subscription, claimed, report)
+    await _prefer_alive_sibling(db, subscriptions, resolved_by_subscription, claimed, report)
 
     await _backfill_users(db, index, users_by_id, resolved_by_subscription, subscriptions, report)
     await _backfill_grace_sessions(db, resolved_by_subscription, report)
@@ -432,7 +432,8 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     return report
 
 
-def _prefer_alive_sibling(
+async def _prefer_alive_sibling(
+    db: AsyncSession,
     subscriptions: list[Subscription],
     resolved_by_subscription: dict[int, int],
     claimed: dict[int, str],
@@ -476,10 +477,24 @@ def _prefer_alive_sibling(
         target = alive[0]
 
         panel_id = resolved_by_subscription.pop(int(holder.id))
+
+        # Снять id со старой строки и СБРОСИТЬ отдельно, до присвоения новой.
+        # `uq_subscriptions_remnawave_id` проверяется на каждом стейтменте, а
+        # порядок UPDATE'ов внутри одного flush выбирает SQLAlchemy — без
+        # явного разделения обе строки могли бы на мгновение держать один id
+        # и словить IntegrityError на живой БД.
         holder.remnawave_id = None
+        await db.flush((holder,))
         target.remnawave_id = panel_id
+        await db.flush((target,))
+
         resolved_by_subscription[int(target.id)] = panel_id
         claimed[panel_id] = str(target.id)
+        # Строка-приёмник была записана как нерешённая в проходе выше — теперь
+        # у неё есть id, и в отчёте её быть не должно.
+        report.unresolved = [
+            row for row in report.unresolved if not (row.kind == 'subscription' and row.row_id == int(target.id))
+        ]
         report.by_strategy['moved_to_alive_sibling'] += 1
         logger.info(
             'backfill: панельный id передан живой подписке',
