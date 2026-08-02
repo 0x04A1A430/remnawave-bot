@@ -258,17 +258,20 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # whole transaction on the unique index.
     _persisted = (
         await db.execute(
-            select(Subscription.id, Subscription.remnawave_id, Subscription.user_id).where(
-                Subscription.remnawave_id.isnot(None)
-            )
+            select(
+                Subscription.id,
+                Subscription.remnawave_id,
+                Subscription.user_id,
+                Subscription.remnawave_uuid,
+            ).where(Subscription.remnawave_id.isnot(None))
         )
     ).all()
-    claimed: dict[int, str] = {int(panel_id): f'#{sub_id} (persisted)' for sub_id, panel_id, _ in _persisted}
+    claimed: dict[int, str] = {int(panel_id): f'#{sub_id} (persisted)' for sub_id, panel_id, _, _ in _persisted}
     # Владелец приминговывается ВМЕСТЕ с id. Без этого повторный прогон не мог
     # опознать сиблинга уже записанной строки, объявлял несуществующий
     # межпользовательский конфликт и откатывал весь прогон — а повторный прогон
     # здесь штатный сценарий, потому что первый всегда завершается «частично».
-    _primed_owner: dict[int, int] = {int(panel_id): int(user_id) for _, panel_id, user_id in _persisted}
+    _primed_owner: dict[int, int] = {int(panel_id): int(user_id) for _, panel_id, user_id, _ in _persisted}
     # Same for shortUuid: we must not copy one onto a row when another row
     # already stores it — the index is deliberately non-unique, so nothing in
     # the database would reject the duplicate, and webhook subscription lookup
@@ -292,7 +295,23 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # uuid пользователя в однотарифном. Это точный ключ в обоих режимах, поэтому
     # сессия не зависит ни от того, на какой строке в итоге осел id, ни от
     # догадок по текущему владельцу.
-    panel_id_by_uuid: dict[str, int] = {}
+    #
+    # Праймится из УЖЕ ЗАПИСАННЫХ строк — по той же причине, что `claimed` и
+    # `taken_short_uuids`. Такие строки отфильтрованы условием IS NULL и в этом
+    # прогоне не обрабатываются, а значит их uuid в карту бы не попал: сессия,
+    # чью подписку связал предыдущий прогон (или уже поднятый бот), осталась бы
+    # без источника навсегда — повторный прогон её тоже не починил бы.
+    panel_id_by_uuid: dict[str, int] = {str(uuid): int(panel_id) for _, panel_id, _, uuid in _persisted if uuid}
+    _persisted_users = (
+        await db.execute(select(User.remnawave_id, User.remnawave_uuid).where(User.remnawave_id.isnot(None)))
+    ).all()
+    for _panel_id, _uuid in _persisted_users:
+        if _uuid:
+            panel_id_by_uuid.setdefault(str(_uuid), int(_panel_id))
+    # Панельные id, уже принадлежащие бот-пользователям: колонка глобально
+    # уникальна, а `_backfill_users` иначе мог выдать занятый id второму
+    # пользователю и уронить весь прогон на IntegrityError вместо строки в отчёте.
+    taken_user_panel_ids: set[int] = {int(panel_id) for panel_id, _ in _persisted_users}
 
     def assign(subscription: Subscription, panel_user: RemnaWaveUser, strategy: str) -> None:
         claimed[panel_user.id] = str(subscription.id)
@@ -419,11 +438,9 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
 
     await _prefer_alive_sibling(db, subscriptions, resolved_by_subscription, claimed, report)
 
-    await _backfill_users(db, index, users_by_id, resolved_by_subscription, subscriptions, report, panel_id_by_uuid)
-    # Прод-сессия живёт с autoflush=False, поэтому проставленный выше
-    # users.remnawave_id остаётся только в ORM: без явного флаша SELECT ниже
-    # прочитал бы дореформенный NULL и фоллбек по владельцу не сработал бы.
-    await db.flush()
+    await _backfill_users(
+        db, index, users_by_id, resolved_by_subscription, subscriptions, report, panel_id_by_uuid, taken_user_panel_ids
+    )
     await _backfill_grace_sessions(db, resolved_by_subscription, report, panel_id_by_uuid)
 
     if dry_run:
@@ -530,6 +547,7 @@ async def _backfill_users(
     subscriptions: list[Subscription],
     report: BackfillReport,
     panel_id_by_uuid: dict[str, int],
+    taken_user_panel_ids: set[int],
 ) -> None:
     """Give each bot user the panel id of its own panel account.
 
@@ -572,23 +590,27 @@ async def _backfill_users(
         if user.remnawave_uuid:
             panel_id_by_uuid.setdefault(str(user.remnawave_uuid), int(panel_id))
 
+    def _take(user: User, panel_id: int, strategy: str) -> bool:
+        # Колонка глобально уникальна. Молча присвоить занятый id — это
+        # IntegrityError на весь прогон вместо одной строки в отчёте.
+        if int(panel_id) in taken_user_panel_ids:
+            return False
+        user.remnawave_id = int(panel_id)
+        taken_user_panel_ids.add(int(panel_id))
+        _remember(user, int(panel_id))
+        report.users_resolved += 1
+        report.by_strategy[strategy] += 1
+        return True
+
     for user in pending_users:
         candidates = per_user.get(int(user.id), set())
-        if len(candidates) == 1:
-            user.remnawave_id = next(iter(candidates))
-            _remember(user, user.remnawave_id)
-            report.users_resolved += 1
-            report.by_strategy['user_from_subscription'] += 1
+        if len(candidates) == 1 and _take(user, next(iter(candidates)), 'user_from_subscription'):
             continue
 
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id is not None:
             panel_candidates = index.by_telegram_id.get(int(telegram_id), [])
-            if len(panel_candidates) == 1:
-                user.remnawave_id = panel_candidates[0].id
-                _remember(user, user.remnawave_id)
-                report.users_resolved += 1
-                report.by_strategy['user_from_telegram_id'] += 1
+            if len(panel_candidates) == 1 and _take(user, panel_candidates[0].id, 'user_from_telegram_id'):
                 continue
 
         report.unresolved.append(

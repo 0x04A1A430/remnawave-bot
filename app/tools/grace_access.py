@@ -137,7 +137,7 @@ async def _run(args: argparse.Namespace) -> int:
     # Одноразовому контейнеру тоже нужны настройки из system_settings: адрес и
     # ключ панели редактируются из кабинета, и без загрузки восстановление
     # ушло бы в ненастроенный (или чужой) клиент.
-    await bot_configuration_service.initialize()
+    await bot_configuration_service.initialize(sync_web_api_token=False)
 
     if args.command == 'status':
         print(json.dumps(await _status(), ensure_ascii=False, indent=2))

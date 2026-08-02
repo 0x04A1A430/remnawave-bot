@@ -636,3 +636,53 @@ async def test_single_tariff_session_resolves_by_the_user_uuid_it_actually_store
 
         db.expunge_all()
         assert (await db.get(GraceAccessSessionModel, 'g-user-uuid')).remnawave_id == 77
+
+
+@pytest.mark.asyncio
+async def test_session_resolves_when_its_subscription_was_linked_by_an_earlier_run(monkeypatch):
+    """Карта uuid обязана праймиться из уже записанных строк.
+
+    Повторный прогон здесь штатный: первый почти всегда завершается «частично»,
+    а бот к этому моменту мог уже проставить идентичность сам. Такие строки
+    отфильтрованы условием IS NULL и в прогоне не участвуют — если не запраймить
+    карту, их uuid в неё не попадёт, и grace-сессия останется без источника
+    навсегда: следующий прогон её тоже не починит.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, None, 'uuid-b')])
+        (await db.get(SubModel, 10)).status = 'expired'
+        # Предыдущий прогон (или уже поднятый бот) связал живую строку и юзера.
+        (await db.get(SubModel, 20)).remnawave_id = 77
+        (await db.get(UserModel, 1)).remnawave_id = 77
+        db.add(_grace('g-earlier', 10, 'legacy-1'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(GraceAccessSessionModel, 'g-earlier')).remnawave_id == 77
+
+
+@pytest.mark.asyncio
+async def test_panel_id_already_owned_by_another_user_is_reported_not_assigned(monkeypatch):
+    """`users.remnawave_id` уникальна глобально — второй претендент идёт в отчёт.
+
+    Без учёта занятых id прогон присваивал дубликат и падал на IntegrityError
+    целиком: оператор получал трейсбек вместо списка неразрешённых строк, причём
+    и на холостом прогоне тоже.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        db.add(UserModel(id=1, telegram_id=551, remnawave_uuid='legacy-1', remnawave_id=77))
+        db.add(UserModel(id=2, telegram_id=999, remnawave_uuid='legacy-2'))
+        await db.commit()
+        # Панельный аккаунт 77 несёт telegramId юзера 2, но уже принадлежит юзеру 1.
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='s77', username='u', telegram_id=999)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(UserModel, 2)).remnawave_id is None
+        assert any(r.kind == 'user' and r.row_id == 2 for r in report.unresolved)

@@ -1766,7 +1766,13 @@ class BotConfigurationService:
         return ''.join(reversed(result))
 
     @classmethod
-    async def initialize(cls) -> None:
+    async def initialize(cls, *, sync_web_api_token: bool = True) -> None:
+        """Загрузить настройки из БД в память.
+
+        `sync_web_api_token=False` — для одноразовых CLI: им нужны только
+        значения, а бутстрап токена веб-API пишет в БД, и холостой прогон
+        (который обещает «ничего не записано») перестал бы быть холостым.
+        """
         cls.initialize_definitions()
 
         async with AsyncSessionLocal() as session:
@@ -1815,7 +1821,8 @@ class BotConfigurationService:
             cls._overrides_raw[key] = raw_value
             cls._apply_to_settings(key, parsed_value)
 
-        await cls._sync_default_web_api_token()
+        if sync_web_api_token:
+            await cls._sync_default_web_api_token()
 
         # После загрузки всех overrides (включая SALES_MODE) — пересчитать цены,
         # т.к. ensure_tariffs_synced мог загрузить тарифные цены до того как

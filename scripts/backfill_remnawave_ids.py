@@ -79,7 +79,7 @@ async def _run(apply: bool) -> int:
     # MULTI_TARIFF_ENABLED (в .env.example его нет вовсе) читался бы как False,
     # и на мультитарифе бэкфилл пошёл бы по однотарифной ветке: перенёс бы
     # панельный id между подписками, чего в мультитарифе делать нельзя.
-    await bot_configuration_service.initialize()
+    await bot_configuration_service.initialize(sync_web_api_token=False)
     logger.info(
         'backfill: конфигурация загружена',
         multi_tariff=settings.is_multi_tariff_enabled(),
