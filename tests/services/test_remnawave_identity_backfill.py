@@ -780,3 +780,30 @@ async def test_one_uuid_pointing_at_two_accounts_is_dropped_not_coin_flipped(mon
         session = await db.get(GraceAccessSessionModel, 'g-clash')
         assert session.remnawave_id is None, 'противоречивый uuid не должен резолвиться наугад'
         assert any(r.kind == 'grace_session' and r.row_id == 'g-clash' for r in report.unresolved)
+
+
+@pytest.mark.asyncio
+async def test_uuid_clash_discovered_during_matching_is_also_dropped(monkeypatch):
+    """Коллизия, всплывшая в `assign`, а не при прайминге, — тот же случай.
+
+    На ПЕРВОМ прогоне (главном) в БД ещё ничего не записано, поэтому все
+    противоречия обнаруживаются именно во время сопоставления. Отложенная
+    зачистка карты после прайминга здесь не срабатывала бы вовсе, и uuid остался
+    бы указывать на случайный из двух аккаунтов.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        # Ничего не проставлено заранее — чистая первая миграция.
+        await _seed(db, subs=[(10, 'a', 'uuid-clash'), (20, 'b', 'uuid-clash'), (30, None, 'uuid-clash')])
+        db.add(_grace('g-first-run', 30, 'uuid-clash'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(101, short_uuid='a'), panel_user(202, short_uuid='b')])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(SubModel, 10)).remnawave_id == 101
+        assert (await db.get(SubModel, 20)).remnawave_id == 202
+        session = await db.get(GraceAccessSessionModel, 'g-first-run')
+        assert session.remnawave_id is None, 'противоречивый uuid не должен резолвиться наугад'
+        assert any(r.kind == 'grace_session' and r.row_id == 'g-first-run' for r in report.unresolved)

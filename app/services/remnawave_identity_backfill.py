@@ -33,6 +33,7 @@ someone else's VPN account.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -307,6 +308,10 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # ценой ошибки будет grace-сессия, привязанная к чужому живому аккаунту.
     # Такой uuid выбрасываем из карты целиком — пусть строка честно останется
     # неразрешённой.
+    # Отравленные ключи выбрасываются НЕМЕДЛЕННО и больше в карту не попадают.
+    # Отложенная зачистка после прайминга не годилась бы: на первом прогоне
+    # ничего ещё не записано, поэтому все коллизии всплывают позже, в `assign`, —
+    # то есть защита не срабатывала бы именно на главном прогоне.
     panel_id_by_uuid: dict[str, int] = {}
     _ambiguous_uuids: set[str] = set()
 
@@ -314,12 +319,20 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
         if not raw_uuid:
             return
         key = str(raw_uuid)
+        if key in _ambiguous_uuids:
+            return
         value = int(panel_id)
         known = panel_id_by_uuid.get(key)
         if known is not None and known != value:
             _ambiguous_uuids.add(key)
+            panel_id_by_uuid.pop(key, None)
+            logger.warning(
+                'backfill: один uuid указывает на разные панельные аккаунты',
+                remnawave_uuid=key,
+                panel_ids=[known, value],
+            )
             return
-        panel_id_by_uuid.setdefault(key, value)
+        panel_id_by_uuid[key] = value
 
     for _, _panel_id, _, _uuid in _persisted:
         _remember_uuid(_uuid, _panel_id)
@@ -328,9 +341,6 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     ).all()
     for _panel_id, _uuid in _persisted_users:
         _remember_uuid(_uuid, _panel_id)
-    for key in _ambiguous_uuids:
-        panel_id_by_uuid.pop(key, None)
-        logger.warning('backfill: один uuid указывает на разные панельные аккаунты', remnawave_uuid=key)
     # Панельные id, уже принадлежащие бот-пользователям: колонка глобально
     # уникальна, а `_backfill_users` иначе мог выдать занятый id второму
     # пользователю и уронить весь прогон на IntegrityError вместо строки в отчёте.
@@ -467,7 +477,7 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
         resolved_by_subscription,
         subscriptions,
         report,
-        panel_id_by_uuid,
+        _remember_uuid,
         taken_user_panel_ids,
         claimed_owner,
     )
@@ -576,7 +586,7 @@ async def _backfill_users(
     resolved_by_subscription: dict[int, int],
     subscriptions: list[Subscription],
     report: BackfillReport,
-    panel_id_by_uuid: dict[str, int],
+    remember_uuid: Callable[[object, object], None],
     taken_user_panel_ids: set[int],
     claimed_owner: dict[int, int],
 ) -> None:
@@ -618,16 +628,9 @@ async def _backfill_users(
     def _remember(user: User, panel_id: int) -> None:
         # Однотарифная grace-сессия хранит uuid ПОЛЬЗОВАТЕЛЯ — регистрируем его,
         # чтобы сессия нашлась по точному ключу, а не по догадке о владельце.
-        if not user.remnawave_uuid:
-            return
-        key = str(user.remnawave_uuid)
-        known = panel_id_by_uuid.get(key)
-        if known is not None and known != int(panel_id):
-            # Тот же uuid уже указывает на другой аккаунт — доверять нечему.
-            panel_id_by_uuid.pop(key, None)
-            logger.warning('backfill: uuid пользователя противоречит карте', user_id=int(user.id))
-            return
-        panel_id_by_uuid.setdefault(key, int(panel_id))
+        # Через общий обработчик: он же следит за противоречиями и не даёт
+        # вернуть в карту уже отравленный ключ.
+        remember_uuid(user.remnawave_uuid, panel_id)
 
     def _blocked(user_id: int, panel_id: int) -> str | None:
         """Занят ли аккаунт кем-то другим. Колонка глобально уникальна."""
