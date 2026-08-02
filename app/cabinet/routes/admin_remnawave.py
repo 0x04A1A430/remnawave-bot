@@ -128,6 +128,7 @@ def _parse_datetime(value: Any) -> datetime | None:
 def _serialize_node(node_data: dict[str, Any]) -> NodeInfo:
     """Serialize node data to NodeInfo model."""
     return NodeInfo(
+        id=node_data.get('id'),
         uuid=node_data.get('uuid', ''),
         name=node_data.get('name', ''),
         address=node_data.get('address', ''),
