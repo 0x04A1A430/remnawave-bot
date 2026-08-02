@@ -9,9 +9,20 @@
 from app.utils.panel_node_usage import coerce_bytes, normalize_node_usage
 
 
-def test_normalizes_the_3_0_0_shape():
-    """`POST /api/bandwidth-stats/nodes/usage` даёт {id, totalBytes}."""
+def test_normalizes_the_legacy_2_8_shape():
+    """Форма 2.8: {userId, nodeUuid, total}. Оставлена ради старых ответов."""
     items = normalize_node_usage([{'userId': 8812, 'nodeUuid': 'n-1', 'total': 4096}], 'fallback')
+    assert items == [{'user_id': 8812, 'username': None, 'node_uuid': 'n-1', 'total_bytes': 4096}]
+
+
+def test_normalizes_the_3_0_0_shape():
+    """`POST /api/bandwidth-stats/nodes/usage` в 3.0.0 даёт {id, totalBytes}.
+
+    Ровно эти два ключа раньше не проверял ни один тест: их можно было убрать из
+    `_first_present`, и набор оставался зелёным, хотя обе админские поверхности
+    начали бы показывать пустого пользователя с нулём трафика.
+    """
+    items = normalize_node_usage([{'id': 8812, 'totalBytes': 4096}], 'n-1')
     assert items == [{'user_id': 8812, 'username': None, 'node_uuid': 'n-1', 'total_bytes': 4096}]
 
 
