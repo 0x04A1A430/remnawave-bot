@@ -1007,6 +1007,7 @@ class RemnaWaveService:
                     result.append(
                         {
                             'uuid': node.uuid,
+                            'id': node.id,
                             'name': node.name,
                             'address': node.address,
                             'country_code': node.country_code,
@@ -1055,6 +1056,7 @@ class RemnaWaveService:
 
                 return {
                     'uuid': node.uuid,
+                    'id': node.id,
                     'name': node.name,
                     'address': node.address,
                     'country_code': node.country_code,
