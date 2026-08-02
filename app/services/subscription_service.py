@@ -1217,8 +1217,16 @@ class SubscriptionService:
             needs_cleanup = False
             user_log = self._format_user_log(user)
 
-            # In multi-tariff mode, validate per-subscription panel id, not user-level id
-            check_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
+            # In multi-tariff mode, validate per-subscription panel id, not user-level id.
+            # В single-tariff берём id пользователя, но при пустом — id самой
+            # подписки: бэкфилл штатно оставляет строку пользователя
+            # неразрешённой, заполнив при этом подписку, и без этого фолбэка
+            # проверка считала бы аккаунт отсутствующим и стирала идентичность,
+            # которую только что восстановили, — с пересозданием дубля в панели.
+            if settings.is_multi_tariff_enabled():
+                check_id = subscription.remnawave_id
+            else:
+                check_id = user.remnawave_id or subscription.remnawave_id
 
             if check_id:
                 try:

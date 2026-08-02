@@ -1595,8 +1595,11 @@ class RemnaWaveWebhookService:
             other_sub.remnawave_short_uuid = None
             other_sub.connected_squads = []
             other_sub.updated_at = now
-            if settings.is_multi_tariff_enabled():
-                other_sub.remnawave_id = None
+            # Панель только что подтвердила, что аккаунта нет, а строка чистится
+            # целиком — держать числовой id смысла нет ни в одном режиме. Раньше
+            # в single-tariff он оставался и продолжал адресовать удалённого
+            # пользователя, из-за чего бэкфилл считал строку уже связанной.
+            other_sub.remnawave_id = None
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == other_sub.id))
             logger.info(
                 'Webhook user.deleted: deactivated sibling subscription (panel user gone)',

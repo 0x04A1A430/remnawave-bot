@@ -90,15 +90,16 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Re-enable in RemnaWave panel
             service = SubscriptionService()
             for subscription in disabled_subs:
-                panel_user_id = (
-                    subscription.remnawave_id
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-                    else db_user.remnawave_id
-                )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_id:
+                # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
+                # Раньше в single-tariff колонка подписки игнорировалась, и если
+                # бэкфилл оставил строку пользователя неразрешённой (штатный
+                # исход), вызов в панель молча не происходил вовсе.
+                panel_user_id = subscription.remnawave_id or db_user.remnawave_id
+                if not panel_user_id:
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_id, using user fallback',
+                        'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
+                        user_id=getattr(db_user, 'id', None),
                     )
                 if panel_user_id:
                     try:
@@ -174,15 +175,16 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Disable in RemnaWave panel
             service = SubscriptionService()
             for subscription in active_subs:
-                panel_user_id = (
-                    subscription.remnawave_id
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_id
-                    else db_user.remnawave_id
-                )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_id:
+                # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
+                # Раньше в single-tariff колонка подписки игнорировалась, и если
+                # бэкфилл оставил строку пользователя неразрешённой (штатный
+                # исход), вызов в панель молча не происходил вовсе.
+                panel_user_id = subscription.remnawave_id or db_user.remnawave_id
+                if not panel_user_id:
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_id, using user fallback',
+                        'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
+                        user_id=getattr(db_user, 'id', None),
                     )
                 if panel_user_id:
                     try:
