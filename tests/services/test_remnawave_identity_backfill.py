@@ -494,3 +494,44 @@ async def test_transfer_does_not_leave_the_target_marked_unresolved(monkeypatch)
 
         target_rows = [r for r in report.unresolved if r.kind == 'subscription' and r.row_id == 20]
         assert target_rows == [], 'решённая строка не должна оставаться в списке нерешённых'
+
+
+@pytest.mark.asyncio
+async def test_grace_session_on_the_donor_row_still_gets_an_id(monkeypatch):
+    """Перенос id не должен обесточивать grace-сессию строки-донора.
+
+    Ровно тот сценарий, ради которого перенос и существует: истёк триал, на нём
+    открыт грейс, покупка вставила новую строку без shortUuid. Перенос забирает
+    id у триала — и сессия остаётся с пустой колонкой, то есть нечитаемой
+    навсегда: `_model_to_session` бросает исключение, а повторный прогон уже
+    не поможет, id занят живой строкой.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, None, 'uuid-b')])
+        (await db.get(SubModel, 10)).status = 'expired'
+        (await db.get(SubModel, 20)).status = 'active'
+        db.add(
+            GraceAccessSessionModel(
+                id='g-old',
+                subscription_id=10,
+                remnawave_uuid='uuid-a',
+                reason='expired',
+                incident_key='inc-1',
+                state='active',
+                billing_before={},
+                panel_before={},
+                overlay={},
+                started_at=datetime(2026, 1, 1, tzinfo=UTC),
+                grace_until=datetime(2026, 2, 1, tzinfo=UTC),
+                updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+        )
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        session = await db.get(GraceAccessSessionModel, 'g-old')
+        assert session.remnawave_id == 77, 'сессия донора обязана получить идентичность'

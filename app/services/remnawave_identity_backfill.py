@@ -584,7 +584,18 @@ async def _backfill_grace_sessions(
     resolved_by_subscription: dict[int, int],
     report: BackfillReport,
 ) -> None:
-    """Grace sessions inherit identity from their subscription (1:1 by FK)."""
+    """Grace sessions inherit identity from their subscription (1:1 by FK).
+
+    В single-tariff есть второй, более широкий источник: у пользователя один
+    панельный аккаунт, поэтому сессия ЛЮБОЙ его подписки адресует именно его.
+    Без этого фолбэка сессия теряет идентичность каждый раз, когда
+    `_prefer_alive_sibling` переносит id с её строки на живую — а это ровно тот
+    сценарий, ради которого перенос и существует (истёк триал, на нём открыт
+    грейс, покупка вставляет новую строку). Пустая колонка делает сессию
+    нечитаемой: `_model_to_session` бросает `GraceSnapshotError`, `get_by_incident`
+    фильтра по состоянию не имеет, и подписка больше никогда не сможет открыть
+    грейс. Повторный прогон это не чинит — id уже занят живой строкой.
+    """
     sessions = (
         (await db.execute(select(GraceAccessSessionModel).where(GraceAccessSessionModel.remnawave_id.is_(None))))
         .scalars()
@@ -598,6 +609,15 @@ async def _backfill_grace_sessions(
             # run; fall back to reading it directly.
             panel_id = (
                 await db.execute(select(Subscription.remnawave_id).where(Subscription.id == session.subscription_id))
+            ).scalar_one_or_none()
+
+        if panel_id is None and not settings.is_multi_tariff_enabled():
+            panel_id = (
+                await db.execute(
+                    select(User.remnawave_id)
+                    .join(Subscription, Subscription.user_id == User.id)
+                    .where(Subscription.id == session.subscription_id)
+                )
             ).scalar_one_or_none()
 
         if panel_id is None:
