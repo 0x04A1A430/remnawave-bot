@@ -259,9 +259,14 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
         if value
     }
     resolved_by_subscription: dict[int, int] = {}
+    # panel id -> bot user, чтобы отличить «две подписки ОДНОГО пользователя
+    # смотрят на один панельный аккаунт» (норма) от «на один аккаунт претендуют
+    # РАЗНЫЕ пользователи» (настоящий конфликт).
+    claimed_owner: dict[int, int] = {}
 
     def assign(subscription: Subscription, panel_user: RemnaWaveUser, strategy: str) -> None:
         claimed[panel_user.id] = str(subscription.id)
+        claimed_owner[panel_user.id] = int(subscription.user_id)
         resolved_by_subscription[int(subscription.id)] = panel_user.id
         subscription.remnawave_id = panel_user.id
         # Refresh the short uuid while we have authoritative data — it is the
@@ -272,6 +277,34 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
                 taken_short_uuids.add(panel_user.short_uuid)
         report.subscriptions_resolved += 1
         report.by_strategy[strategy] += 1
+
+    def is_expected_sibling(subscription: Subscription, panel_user: RemnaWaveUser) -> bool:
+        """Тот же панельный аккаунт у ДРУГОЙ подписки того же пользователя.
+
+        В single-tariff это норма, а не ошибка: все подписки одного бот-юзера
+        по определению указывают на один панельный аккаунт (истёк триал →
+        вставляется новая строка, старая сохраняет тот же shortUuid).
+        Считать это конфликтом означало откатывать весь бэкфил на любой
+        инсталляции, которая когда-либо работала в single-tariff, — то есть
+        сделать обязательный шаг миграции невыполнимым.
+
+        Идентичность в этом случае живёт на `users.remnawave_id`, а
+        `subscriptions.remnawave_id` получает только одна строка: колонка
+        частично уникальна, двум строкам один id не присвоить.
+        """
+        return claimed_owner.get(panel_user.id) == int(subscription.user_id)
+
+    def record_expected_sibling(subscription: Subscription, panel_user: RemnaWaveUser) -> None:
+        report.by_strategy['sibling_shares_panel_account'] += 1
+        report.unresolved.append(
+            UnresolvedRow(
+                kind='subscription',
+                row_id=int(subscription.id),
+                reason='sibling_shares_panel_account',
+                remnawave_uuid=subscription.remnawave_uuid,
+                remnawave_short_uuid=subscription.remnawave_short_uuid,
+            )
+        )
 
     def record_conflict(subscription: Subscription, panel_user: RemnaWaveUser) -> None:
         report.conflicts.append(
@@ -308,7 +341,10 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
                 )
             continue
         if panel_user.id in claimed:
-            record_conflict(subscription, panel_user)
+            if is_expected_sibling(subscription, panel_user):
+                record_expected_sibling(subscription, panel_user)
+            else:
+                record_conflict(subscription, panel_user)
             continue
         assign(subscription, panel_user, strategy)
 
@@ -327,6 +363,9 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
             )
             continue
         if panel_user.id in claimed:
+            if is_expected_sibling(subscription, panel_user):
+                record_expected_sibling(subscription, panel_user)
+                continue
             # An exact match already owns this panel account — a weaker
             # strategy must never take it away.
             report.unresolved.append(
@@ -374,35 +413,36 @@ async def _backfill_users(
 ) -> None:
     """Give each bot user the panel id of its own panel account.
 
-    In single-tariff a bot user maps to exactly one panel user, so the id comes
-    straight from its subscription.  In multi-tariff ``users.remnawave_id``
-    denotes the *primary* panel account; when a user owns several resolved
-    subscriptions we only set it if they agree, otherwise the column stays NULL
-    rather than pointing at an arbitrary one.
+    ТОЛЬКО в single-tariff. Там бот-пользователю соответствует ровно один
+    панельный аккаунт, и `users.remnawave_id` — его канонический адрес.
+
+    В multi-tariff колонка не заполняется вообще. Идентичность живёт на
+    подписке, а на User колонка исторически пуста — именно поэтому около
+    десятка фолбэков вида `sub.remnawave_id or user.remnawave_id` (продление
+    из админки, платный сброс трафика, возврат в канал, экран устройств)
+    безопасно пропускали панель. Заполнив её, бэкфил оживил бы их: подписка,
+    чей собственный id не разрезолвился, начала бы адресовать панельный
+    аккаунт СОСЕДНЕГО тарифа — продление переписывало бы чужой expireAt и
+    сквады, а сброс трафика обнулял бы чужой счётчик.
+
+    Гейт по `users.remnawave_uuid` для этого недостаточен: инсталляция,
+    начинавшая в single-tariff и переключённая на multi-tariff, несёт эту
+    колонку заполненной у всех «дореформенных» пользователей.
     """
+    if settings.is_multi_tariff_enabled():
+        logger.info('backfill: multi-tariff — users.remnawave_id намеренно не заполняется')
+        return
+
     per_user: dict[int, set[int]] = defaultdict(set)
     for subscription in subscriptions:
         panel_id = resolved_by_subscription.get(int(subscription.id))
         if panel_id is not None:
             per_user[int(subscription.user_id)].add(panel_id)
 
-    # В multi-tariff колонку на User НЕ заполняем — только там, где она и
-    # раньше была осмысленной (единый панельный юзер на бота-пользователя).
-    #
-    # Ранее здесь стоял более широкий гейт: заполнять и тем, у кого никогда не
-    # было `users.remnawave_uuid`, но нашлась резолвнутая подписка. Это было
-    # ошибкой. В multi-tariff колонка на User исторически пуста, поэтому все
-    # фолбэк-цепочки вида `sub.remnawave_id or user.remnawave_id` (их около
-    # десятка: продление из админки, платный сброс трафика, возврат в канал)
-    # были МЁРТВЫМИ и безопасно пропускали панель. Заполнив колонку, бэкфил
-    # оживил бы их: подписка, чей собственный id не разрезолвился, начала бы
-    # адресовать панельный аккаунт СОСЕДНЕГО тарифа — продление переписывало бы
-    # чужой expireAt и сквады, а сброс трафика обнулял бы чужой счётчик.
     gate = User.remnawave_uuid.isnot(None)
-    if not settings.is_multi_tariff_enabled():
-        candidate_user_ids = set(per_user)
-        if candidate_user_ids:
-            gate = or_(gate, User.id.in_(candidate_user_ids))
+    candidate_user_ids = set(per_user)
+    if candidate_user_ids:
+        gate = or_(gate, User.id.in_(candidate_user_ids))
 
     pending_users = (await db.execute(select(User).where(User.remnawave_id.is_(None), gate))).scalars().all()
 

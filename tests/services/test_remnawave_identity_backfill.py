@@ -197,13 +197,16 @@ from app.database.models import GraceAccessSessionModel, Subscription as SubMode
 from tests.fixtures.sqlite_memory import memory_session
 
 
-async def _seed(session, *, subs):
-    session.add(UserModel(id=1, telegram_id=555, remnawave_uuid='legacy-user'))
+async def _seed(session, *, subs, owners=None):
+    """`subs` = [(sub_id, short_uuid, legacy_uuid)]; `owners` = {sub_id: user_id}."""
+    owners = owners or {}
+    for user_id in sorted({*owners.values(), 1}):
+        session.add(UserModel(id=user_id, telegram_id=550 + user_id, remnawave_uuid=f'legacy-{user_id}'))
     for sub_id, short_uuid, uuid in subs:
         session.add(
             SubModel(
                 id=sub_id,
-                user_id=1,
+                user_id=owners.get(sub_id, 1),
                 status='active',
                 end_date=datetime(2030, 1, 1, tzinfo=UTC),
                 remnawave_short_uuid=short_uuid,
@@ -270,13 +273,35 @@ async def test_dry_run_writes_nothing(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_conflict_rolls_back_instead_of_persisting_first_come(monkeypatch):
-    """Two rows claiming one panel account must not be half-committed.
+async def test_conflict_between_different_users_rolls_back(monkeypatch):
+    """Один панельный аккаунт, на который претендуют РАЗНЫЕ пользователи.
 
-    Duplicate `remnawave_short_uuid` values are a real pre-existing state, and
-    both rows then match the same panel user exactly. Persisting "whichever was
-    processed first" would silently point a subscription at another person's
-    VPN account, so the whole run must roll back.
+    Здесь минимум одна запись неверна и указала бы подписку на чужой VPN, —
+    коммитить «кто первый успел» нельзя, откатываем весь прогон.
+    """
+    async with memory_session(
+        monkeypatch, [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    ) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')], owners={10: 1, 20: 2})
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=555)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        assert report.conflicts, 'разные пользователи на один аккаунт — это конфликт'
+        db.expunge_all()
+        assert (await db.get(SubModel, 10)).remnawave_id is None
+        assert (await db.get(SubModel, 20)).remnawave_id is None
+
+
+@pytest.mark.asyncio
+async def test_sibling_rows_of_one_user_are_not_a_conflict(monkeypatch):
+    """Штатное состояние single-tariff, а не ошибка.
+
+    Истёк триал — вставляется НОВАЯ строка, старая сохраняет тот же
+    `remnawave_short_uuid`, потому что панельный аккаунт у пользователя один.
+    Считать это конфликтом означало откатывать весь бэкфил на любой
+    инсталляции, которая когда-либо работала в single-tariff, то есть сделать
+    обязательный шаг миграции невыполнимым.
     """
     async with memory_session(
         monkeypatch, [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
@@ -286,7 +311,39 @@ async def test_conflict_rolls_back_instead_of_persisting_first_come(monkeypatch)
 
         report = await backfill_remnawave_ids(db, dry_run=False)
 
-        assert report.conflicts, 'two rows matching one panel account must be reported'
+        assert report.conflicts == [], 'подписки одного пользователя — не конфликт'
         db.expunge_all()
-        assert (await db.get(SubModel, 10)).remnawave_id is None
-        assert (await db.get(SubModel, 20)).remnawave_id is None
+        # Колонка частично уникальна, поэтому id получает ровно одна строка.
+        ids = {(await db.get(SubModel, 10)).remnawave_id, (await db.get(SubModel, 20)).remnawave_id}
+        assert ids == {77, None}
+        # Идентичность пользователя сохранена — в single-tariff она каноническая.
+        assert (await db.get(UserModel, 1)).remnawave_id == 77
+
+
+@pytest.mark.asyncio
+async def test_multi_tariff_never_fills_the_user_level_column(monkeypatch):
+    """В multi-tariff `users.remnawave_id` обязан остаться пустым.
+
+    Идентичность там живёт на подписке, а колонка на User исторически пуста —
+    именно поэтому около десятка фолбэков `sub.remnawave_id or
+    user.remnawave_id` безопасно пропускали панель. Заполнив её, бэкфил оживил
+    бы их, и подписка с неразрезолвленным id начала бы адресовать панельный
+    аккаунт СОСЕДНЕГО тарифа.
+
+    Гейта по `users.remnawave_uuid` мало: инсталляция, начинавшая в
+    single-tariff и переключённая на multi, несёт эту колонку заполненной.
+    """
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
+    async with memory_session(
+        monkeypatch, [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    ) as db:
+        await _seed(db, subs=[(20, 'abc123', 'legacy-uuid')])
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='abc123', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(SubModel, 20)).remnawave_id == 77, 'подписка обязана быть привязана'
+        assert (await db.get(UserModel, 1)).remnawave_id is None, 'колонка на User должна остаться пустой'
