@@ -301,13 +301,36 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # прогоне не обрабатываются, а значит их uuid в карту бы не попал: сессия,
     # чью подписку связал предыдущий прогон (или уже поднятый бот), осталась бы
     # без источника навсегда — повторный прогон её тоже не починил бы.
-    panel_id_by_uuid: dict[str, int] = {str(uuid): int(panel_id) for _, panel_id, _, uuid in _persisted if uuid}
+    # Один uuid, указывающий на РАЗНЫЕ панельные id, — это рассогласованные
+    # данные (строку пересоздавали, обнулив id и оставив старый uuid). Молча
+    # взять первый попавшийся нельзя: запрос без ORDER BY, победитель случаен, а
+    # ценой ошибки будет grace-сессия, привязанная к чужому живому аккаунту.
+    # Такой uuid выбрасываем из карты целиком — пусть строка честно останется
+    # неразрешённой.
+    panel_id_by_uuid: dict[str, int] = {}
+    _ambiguous_uuids: set[str] = set()
+
+    def _remember_uuid(raw_uuid: object, panel_id: object) -> None:
+        if not raw_uuid:
+            return
+        key = str(raw_uuid)
+        value = int(panel_id)
+        known = panel_id_by_uuid.get(key)
+        if known is not None and known != value:
+            _ambiguous_uuids.add(key)
+            return
+        panel_id_by_uuid.setdefault(key, value)
+
+    for _, _panel_id, _, _uuid in _persisted:
+        _remember_uuid(_uuid, _panel_id)
     _persisted_users = (
         await db.execute(select(User.remnawave_id, User.remnawave_uuid).where(User.remnawave_id.isnot(None)))
     ).all()
     for _panel_id, _uuid in _persisted_users:
-        if _uuid:
-            panel_id_by_uuid.setdefault(str(_uuid), int(_panel_id))
+        _remember_uuid(_uuid, _panel_id)
+    for key in _ambiguous_uuids:
+        panel_id_by_uuid.pop(key, None)
+        logger.warning('backfill: один uuid указывает на разные панельные аккаунты', remnawave_uuid=key)
     # Панельные id, уже принадлежащие бот-пользователям: колонка глобально
     # уникальна, а `_backfill_users` иначе мог выдать занятый id второму
     # пользователю и уронить весь прогон на IntegrityError вместо строки в отчёте.
@@ -318,8 +341,7 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
         claimed_owner[panel_user.id] = int(subscription.user_id)
         resolved_by_subscription[int(subscription.id)] = panel_user.id
         subscription.remnawave_id = panel_user.id
-        if subscription.remnawave_uuid:
-            panel_id_by_uuid.setdefault(str(subscription.remnawave_uuid), panel_user.id)
+        _remember_uuid(subscription.remnawave_uuid, panel_user.id)
         # Refresh the short uuid while we have authoritative data — it is the
         # key any future re-run depends on.
         if panel_user.short_uuid and not subscription.remnawave_short_uuid:
@@ -439,7 +461,15 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     await _prefer_alive_sibling(db, subscriptions, resolved_by_subscription, claimed, report)
 
     await _backfill_users(
-        db, index, users_by_id, resolved_by_subscription, subscriptions, report, panel_id_by_uuid, taken_user_panel_ids
+        db,
+        index,
+        users_by_id,
+        resolved_by_subscription,
+        subscriptions,
+        report,
+        panel_id_by_uuid,
+        taken_user_panel_ids,
+        claimed_owner,
     )
     await _backfill_grace_sessions(db, resolved_by_subscription, report, panel_id_by_uuid)
 
@@ -548,6 +578,7 @@ async def _backfill_users(
     report: BackfillReport,
     panel_id_by_uuid: dict[str, int],
     taken_user_panel_ids: set[int],
+    claimed_owner: dict[int, int],
 ) -> None:
     """Give each bot user the panel id of its own panel account.
 
@@ -587,41 +618,69 @@ async def _backfill_users(
     def _remember(user: User, panel_id: int) -> None:
         # Однотарифная grace-сессия хранит uuid ПОЛЬЗОВАТЕЛЯ — регистрируем его,
         # чтобы сессия нашлась по точному ключу, а не по догадке о владельце.
-        if user.remnawave_uuid:
-            panel_id_by_uuid.setdefault(str(user.remnawave_uuid), int(panel_id))
+        if not user.remnawave_uuid:
+            return
+        key = str(user.remnawave_uuid)
+        known = panel_id_by_uuid.get(key)
+        if known is not None and known != int(panel_id):
+            # Тот же uuid уже указывает на другой аккаунт — доверять нечему.
+            panel_id_by_uuid.pop(key, None)
+            logger.warning('backfill: uuid пользователя противоречит карте', user_id=int(user.id))
+            return
+        panel_id_by_uuid.setdefault(key, int(panel_id))
 
-    def _take(user: User, panel_id: int, strategy: str) -> bool:
-        # Колонка глобально уникальна. Молча присвоить занятый id — это
-        # IntegrityError на весь прогон вместо одной строки в отчёте.
+    def _blocked(user_id: int, panel_id: int) -> str | None:
+        """Занят ли аккаунт кем-то другим. Колонка глобально уникальна."""
         if int(panel_id) in taken_user_panel_ids:
-            return False
+            return 'panel_account_owned_by_another_user'
+        owner = claimed_owner.get(int(panel_id))
+        if owner is not None and int(owner) != int(user_id):
+            # Аккаунт уже разобран подпиской ДРУГОГО бот-пользователя.
+            return 'panel_account_owned_by_another_user'
+        return None
+
+    def _take(user: User, panel_id: int, strategy: str) -> None:
         user.remnawave_id = int(panel_id)
         taken_user_panel_ids.add(int(panel_id))
         _remember(user, int(panel_id))
         report.users_resolved += 1
         report.by_strategy[strategy] += 1
-        return True
 
     for user in pending_users:
-        candidates = per_user.get(int(user.id), set())
-        if len(candidates) == 1 and _take(user, next(iter(candidates)), 'user_from_subscription'):
-            continue
+        user_id = int(user.id)
+        candidates = per_user.get(user_id, set())
+        reason: str | None = None
 
-        telegram_id = getattr(user, 'telegram_id', None)
-        if telegram_id is not None:
-            panel_candidates = index.by_telegram_id.get(int(telegram_id), [])
-            if len(panel_candidates) == 1 and _take(user, panel_candidates[0].id, 'user_from_telegram_id'):
+        if len(candidates) == 1:
+            panel_id = next(iter(candidates))
+            reason = _blocked(user_id, panel_id)
+            if reason is None:
+                _take(user, panel_id, 'user_from_subscription')
                 continue
+            # Сильнейшая улика — собственная подписка пользователя — заблокирована.
+            # Спускаться отсюда к телеграм-ветке НЕЛЬЗЯ: она привяжет ДРУГОЙ
+            # аккаунт, противоречащий его же подписке, и отчёт назовёт прогон
+            # полным. Лучше строка в отчёте, чем тихо неверная привязка.
+        else:
+            telegram_id = getattr(user, 'telegram_id', None)
+            if telegram_id is not None:
+                panel_candidates = index.by_telegram_id.get(int(telegram_id), [])
+                if len(panel_candidates) == 1:
+                    panel_id = panel_candidates[0].id
+                    reason = _blocked(user_id, panel_id)
+                    if reason is None:
+                        _take(user, panel_id, 'user_from_telegram_id')
+                        continue
 
         report.unresolved.append(
             UnresolvedRow(
                 kind='user',
-                row_id=int(user.id),
-                reason='ambiguous_or_missing_panel_account',
+                row_id=user_id,
+                reason=reason or 'ambiguous_or_missing_panel_account',
                 remnawave_uuid=user.remnawave_uuid,
             )
         )
-        users_by_id.setdefault(int(user.id), user)
+        users_by_id.setdefault(user_id, user)
 
 
 async def _backfill_grace_sessions(

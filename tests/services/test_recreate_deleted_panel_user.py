@@ -503,7 +503,21 @@ def _legacy_column_touch_sites() -> list[str]:
     for path in sorted(app_root.rglob('*.py')):
         tree = ast.parse(path.read_text(encoding='utf-8'))
         rel = path.relative_to(app_root.parent).as_posix()
+
+        # Обнуление колонки разрешено где угодно: опасность этого теста —
+        # ЧТЕНИЕ мёртвого uuid как гейта «создавать или обновлять», а `= None`
+        # наоборот убирает протухшее значение. Оставлять его нельзя: строка с
+        # uuid удалённого аккаунта и id нового ломает карту бэкфила.
+        cleared: set[int] = set()
         for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and node.value.value is None:
+                for target in node.targets:
+                    if isinstance(target, ast.Attribute) and target.attr == 'remnawave_uuid':
+                        cleared.add(id(target))
+
+        for node in ast.walk(tree):
+            if id(node) in cleared:
+                continue
             touched = isinstance(node, ast.Attribute) and node.attr == 'remnawave_uuid'
             if not touched and isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 # getattr(user, 'remnawave_uuid', None) — имя колонки прячется в литерале
@@ -923,3 +937,164 @@ async def test_update_gives_up_when_the_panel_is_unreachable(monkeypatch):
     assert await service.update_remnawave_user(AsyncMock(), sub) is None
     api.update_user.assert_not_awaited()
     assert sub.remnawave_id is None, 'битую идентичность записывать нельзя'
+
+
+async def test_single_mode_prefers_exact_keys_over_ambiguous_telegram_search(monkeypatch):
+    """Точный ключ обязан побеждать неоднозначный поиск по telegramId.
+
+    Бэкфилл оставляет `users.remnawave_id` пустым РОВНО потому, что телеграм-поиск
+    вернул несколько аккаунтов. Если после этого синк пойдёт тем же телеграм-поиском
+    и возьмёт первый попавшийся, он запишет в чужой аккаунт — хотя shortUuid и
+    `subscriptions.remnawave_id` называют нужный точно.
+    """
+    user = _make_user()
+    user.remnawave_id = None  # состояние после «частичного» бэкфила
+    user.status = 'active'
+    subscription = _make_subscription()
+    subscription.remnawave_short_uuid = 'exact'
+    subscription.actual_status = SubscriptionStatus.ACTIVE.value
+    subscription.traffic_used_gb = 0
+    subscription.device_limit = None
+    subscription.subscription_url = ''
+    subscription.subscription_crypto_link = ''
+
+    right = SimpleNamespace(id=555, short_uuid='exact', subscription_url='https://s/ok', happ_crypto_link=None)
+    wrong_a = SimpleNamespace(id=901, short_uuid='a', subscription_url='https://s/a', happ_crypto_link=None)
+    wrong_b = SimpleNamespace(id=902, short_uuid='b', subscription_url='https://s/b', happ_crypto_link=None)
+
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = right
+    api.find_users_by_telegram_id.return_value = [wrong_a, wrong_b]
+    api.update_user.return_value = right
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    service = SubscriptionService()
+    monkeypatch.setattr(subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)
+    _patch_api_client(monkeypatch, service, api)
+
+    async with service.get_api_client() as client:
+        await service._create_or_update_remnawave_user_single(
+            client,
+            user,
+            subscription,
+            user_tag=None,
+            hwid_limit=None,
+            ext_squad_uuid=None,
+            reset_traffic=False,
+            reset_reason=None,
+        )
+
+    assert api.update_user.await_count == 1
+    assert api.update_user.await_args.kwargs['user_id'] == 555, (
+        f'записали в аккаунт {api.update_user.await_args.kwargs["user_id"]} вместо точного 555'
+    )
+
+
+async def test_single_mode_uses_the_subscription_own_panel_id(monkeypatch):
+    """`subscriptions.remnawave_id` — тоже точный адрес, и в single-tariff его не спрашивали.
+
+    Бэкфилл заполняет эту колонку и в однотарифном режиме (например, перенося id
+    на живую строку), тогда как `users.remnawave_id` мог остаться пустым. Без
+    этого источника синк уходил в телеграм-поиск и мог записать в чужой аккаунт.
+    """
+    user = _make_user()
+    user.remnawave_id = None
+    user.status = 'active'
+    subscription = _make_subscription()
+    subscription.remnawave_id = 606
+    subscription.remnawave_short_uuid = None
+    subscription.actual_status = SubscriptionStatus.ACTIVE.value
+    subscription.traffic_used_gb = 0
+    subscription.device_limit = None
+    subscription.subscription_url = ''
+    subscription.subscription_crypto_link = ''
+
+    right = SimpleNamespace(id=606, short_uuid='s606', subscription_url='https://s/ok', happ_crypto_link=None)
+    api = AsyncMock()
+    api.get_user_by_id.return_value = right
+    api.find_users_by_telegram_id.return_value = [
+        SimpleNamespace(id=901, short_uuid='a', subscription_url='https://s/a', happ_crypto_link=None)
+    ]
+    api.update_user.return_value = right
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    service = SubscriptionService()
+    monkeypatch.setattr(subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)
+    _patch_api_client(monkeypatch, service, api)
+
+    async with service.get_api_client() as client:
+        await service._create_or_update_remnawave_user_single(
+            client,
+            user,
+            subscription,
+            user_tag=None,
+            hwid_limit=None,
+            ext_squad_uuid=None,
+            reset_traffic=False,
+            reset_reason=None,
+        )
+
+    api.find_users_by_telegram_id.assert_not_awaited()
+    assert api.update_user.await_args.kwargs['user_id'] == 606
+
+
+@pytest.mark.asyncio
+async def test_create_does_not_break_on_the_partial_unique_index(monkeypatch):
+    """Соседняя подписка уже держит этот панельный аккаунт — запись обязана уступить.
+
+    `uq_subscriptions_remnawave_id` частично уникален, а в single-tariff все
+    подписки одного человека адресуют ОДИН аккаунт — ровно то состояние, которое
+    штатно оставляет бэкфилл. Безусловная запись давала IntegrityError уже ПОСЛЕ
+    успешного PATCH в панель, и откат уносил вместе с собой оплату.
+    """
+    from app.database.models import Subscription as SubModel, User as UserModel
+    from tests.fixtures.sqlite_memory import memory_session
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+
+    async with memory_session(monkeypatch, [UserModel.__table__, SubModel.__table__]) as db:
+        db.add(UserModel(id=1, telegram_id=100, status='active'))
+        now = datetime.now(UTC)
+        db.add(
+            SubModel(
+                id=10,
+                user_id=1,
+                status='active',
+                end_date=now + timedelta(days=5),
+                remnawave_id=77,
+                remnawave_short_id='sid10',
+            )
+        )
+        db.add(
+            SubModel(
+                id=20,
+                user_id=1,
+                status='active',
+                end_date=now + timedelta(days=5),
+                remnawave_short_id='sid20',
+            )
+        )
+        await db.commit()
+
+        service = SubscriptionService()
+        target = await db.get(SubModel, 20)
+        updated = SimpleNamespace(id=77, short_uuid='s77', subscription_url='https://s/u', happ_crypto_link=None)
+
+        monkeypatch.setattr(
+            subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=await db.get(UserModel, 1))
+        )
+        monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)
+        monkeypatch.setattr(service, 'validate_and_clean_subscription', AsyncMock(return_value=True))
+        monkeypatch.setattr(service, '_create_or_update_remnawave_user_single', AsyncMock(return_value=updated))
+        monkeypatch.setattr(service, '_create_or_update_remnawave_user_multi', AsyncMock(return_value=updated))
+        _patch_api_client(monkeypatch, service, AsyncMock())
+
+        result = await service.create_remnawave_user(db, target)
+
+        assert result is updated, 'создание не должно падать из-за занятого соседом id'
+        db.expunge_all()
+        assert (await db.get(SubModel, 20)).remnawave_id is None, 'нельзя дублировать id второй строке'
+        assert (await db.get(SubModel, 10)).remnawave_id == 77, 'у соседа id забирать тоже нельзя'
+        assert (await db.get(UserModel, 1)).remnawave_id == 77, 'адресация остаётся через пользователя'

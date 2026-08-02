@@ -273,7 +273,20 @@ class SubscriptionService:
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
-                subscription.remnawave_id = updated_user.id
+                if await self._panel_id_is_free_for(db, subscription, updated_user.id):
+                    subscription.remnawave_id = updated_user.id
+                else:
+                    # `uq_subscriptions_remnawave_id` частично-уникален. В
+                    # single-tariff соседняя подписка того же человека уже держит
+                    # этот аккаунт — ровно то состояние, которое оставляет бэкфилл.
+                    # Записать id второй строке значит словить IntegrityError уже
+                    # ПОСЛЕ успешного PATCH в панель и откатить оплату вместе с ним.
+                    # Адресация не теряется: остаётся `users.remnawave_id`.
+                    logger.warning(
+                        '⚠️ Панельный id уже закреплён за другой подпиской — адресуем через пользователя',
+                        subscription_id=subscription.id,
+                        remnawave_id=updated_user.id,
+                    )
                 # Legacy field — keep in sync for single-mode backward compat
                 if not settings.is_multi_tariff_enabled():
                     user.remnawave_id = updated_user.id
@@ -326,6 +339,27 @@ class SubscriptionService:
             remnawave_id=panel_user.id,
         )
         return panel_user
+
+    async def _panel_id_is_free_for(self, db: AsyncSession, subscription, panel_id: int | None) -> bool:
+        """Не держит ли этот панельный id уже ДРУГАЯ строка подписок.
+
+        Колонка частично уникальна, и в single-tariff все подписки одного
+        человека адресуют один и тот же панельный аккаунт, поэтому конфликт —
+        штатная ситуация, а не аномалия.
+        """
+        if panel_id is None:
+            return False
+        other = (
+            await db.execute(
+                select(Subscription.id)
+                .where(
+                    Subscription.remnawave_id == int(panel_id),
+                    Subscription.id != getattr(subscription, 'id', None),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return other is None
 
     async def _adopt_panel_id_for_update(self, db: AsyncSession, subscription, user, multi_tariff: bool) -> int | None:
         """Достать числовой id панели по shortUuid и сохранить его на строке.
@@ -511,13 +545,29 @@ class SubscriptionService:
         # играют стрим-фильтры. Без этого шага бот создавал бы дубль панельного
         # пользователя на каждом проходе синка.
         existing_users: list[RemnaWaveUser] = []
-        if user.remnawave_id:
+        # Порядок — по убыванию точности. Сначала два ТОЧНЫХ адреса: id
+        # пользователя и id самой подписки. Второй бэкфилл заполняет и в
+        # single-tariff (например, перенося его на живую строку), а раньше его
+        # тут не спрашивали вовсе.
+        for exact_id in (user.remnawave_id, getattr(subscription, 'remnawave_id', None)):
+            if existing_users or not exact_id:
+                continue
             try:
-                existing_user = await api.get_user_by_id(user.remnawave_id)
+                existing_user = await api.get_user_by_id(exact_id)
                 if existing_user:
                     existing_users = [existing_user]
             except Exception:
                 pass
+
+        if not existing_users:
+            # shortUuid — тоже точный ключ, и он обязан идти ПЕРЕД поиском по
+            # telegramId: у человека может быть несколько панельных аккаунтов, и
+            # тогда телеграм-поиск вернёт список, из которого ниже берётся
+            # первый попавшийся. Именно поэтому бэкфилл в такой ситуации
+            # отказывается угадывать — здесь нельзя вести себя иначе.
+            adopted = await self._adopt_panel_user_by_short_uuid(api, subscription)
+            if adopted is not None:
+                existing_users = [adopted]
 
         if not existing_users and user.telegram_id:
             existing_users = await api.find_users_by_telegram_id(user.telegram_id)
@@ -528,13 +578,13 @@ class SubscriptionService:
             except Exception:
                 pass
 
-        if not existing_users:
-            # Последний якорь для строк, привязанных до апгрейда на 3.0.0:
-            # числового id ещё нет, telegramId/email могли не совпасть, но
-            # shortUuid панель по-прежнему знает.
-            adopted = await self._adopt_panel_user_by_short_uuid(api, subscription)
-            if adopted is not None:
-                existing_users = [adopted]
+        if len(existing_users) > 1:
+            logger.warning(
+                '⚠️ У пользователя несколько панельных аккаунтов, точного ключа нет — берём первый',
+                user_id=user.id,
+                subscription_id=getattr(subscription, 'id', None),
+                candidates=[u.id for u in existing_users],
+            )
 
         now = datetime.now(UTC)
         is_actually_active = (
@@ -1117,11 +1167,17 @@ class SubscriptionService:
                         'Не удалось обновить пользователя в RemnaWave, пробуем создать заново',
                         remnawave_id=panel_user_id,
                     )
-                    # Сбрасываем старый id, create_remnawave_user установит новый
+                    # Сбрасываем старый id, create_remnawave_user установит новый.
+                    # Исторический uuid обнуляем ВМЕСТЕ с ним (до 3.0.0 так и было):
+                    # иначе строка останется с uuid удалённого аккаунта при живом
+                    # новом id, а бэкфилл строит по этой паре карту uuid -> id и
+                    # выдаст grace-сессии мёртвого аккаунта живой, оплаченный.
                     if settings.is_multi_tariff_enabled():
                         subscription.remnawave_id = None
+                        subscription.remnawave_uuid = None
                     else:
                         user.remnawave_id = None
+                        user.remnawave_uuid = None
                     result = await self.create_remnawave_user(
                         db,
                         subscription,
@@ -1232,11 +1288,17 @@ class SubscriptionService:
 
                 subscription.remnawave_short_uuid = None
                 subscription.remnawave_id = None
+                # Вместе с id обнуляем и исторический uuid — иначе строка несёт
+                # uuid удалённого аккаунта, а следующий id будет уже от нового:
+                # бэкфилл строит по этой паре карту и свяжет grace-сессию
+                # мёртвого аккаунта с живым. До 3.0.0 uuid чистился здесь же.
+                subscription.remnawave_uuid = None
                 subscription.subscription_url = ''
                 subscription.subscription_crypto_link = ''
 
                 if not settings.is_multi_tariff_enabled():
                     user.remnawave_id = None
+                    user.remnawave_uuid = None
 
                 # Keep cleanup in the caller's transaction.  Committing here
                 # could burn a coupon/payment if the following panel create

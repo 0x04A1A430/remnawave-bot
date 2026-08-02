@@ -686,3 +686,97 @@ async def test_panel_id_already_owned_by_another_user_is_reported_not_assigned(m
         db.expunge_all()
         assert (await db.get(UserModel, 2)).remnawave_id is None
         assert any(r.kind == 'user' and r.row_id == 2 for r in report.unresolved)
+
+
+@pytest.mark.asyncio
+async def test_blocked_strongest_evidence_does_not_fall_through_to_a_weaker_one(monkeypatch):
+    """Заблокированная подписочная улика НЕ должна спускаться к телеграм-ветке.
+
+    Если аккаунт, на который указывает собственная подписка пользователя, занят,
+    единственный честный исход — строка в отчёте. Спуск к более слабой стратегии
+    привязывает ДРУГОЙ панельный аккаунт, противоречащий его же подписке, и
+    отчёт при этом называет прогон полным.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        # Аккаунт 77 уже закреплён за другим бот-пользователем.
+        db.add(UserModel(id=9, telegram_id=999, remnawave_uuid='legacy-9', remnawave_id=77))
+        await _seed(db, subs=[(10, 'dup', 'uuid-a')])
+        (await db.get(UserModel, 1)).telegram_id = 551
+        await db.commit()
+        # Подписка юзера 1 указывает на 77 (занят), а по telegram_id он матчится на 88.
+        _patch_roster(
+            monkeypatch,
+            [
+                panel_user(77, short_uuid='dup', username='u77', telegram_id=551),
+                panel_user(88, short_uuid='other', username='u88', telegram_id=551),
+            ],
+        )
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        user1 = await db.get(UserModel, 1)
+        assert user1.remnawave_id != 88, 'нельзя привязывать аккаунт, противоречащий собственной подписке'
+        assert user1.remnawave_id is None
+        assert not report.complete, 'прогон с заблокированной строкой не может считаться полным'
+        assert any(
+            r.kind == 'user' and r.row_id == 1 and r.reason == 'panel_account_owned_by_another_user'
+            for r in report.unresolved
+        ), [r.reason for r in report.unresolved]
+
+
+@pytest.mark.asyncio
+async def test_account_claimed_by_another_users_subscription_is_not_given_away(monkeypatch):
+    """Аккаунт, разобранный подпиской ДРУГОГО пользователя, нельзя отдать по telegram_id.
+
+    `_backfill_users` не видел `claimed_owner`, поэтому пользователь без подписки
+    мог забрать по слабой улике аккаунт, который в этом же прогоне точно связан
+    с подпиской другого человека. Отчёт при этом оставался «полным».
+    Порядок важен: юзер 1 обрабатывается раньше, и на тот момент аккаунт ещё не
+    записан ни за кем — блокировать может только `claimed_owner`.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a')], owners={10: 2})
+        await db.commit()
+        # У панельного аккаунта 77 telegramId юзера 1, но подписка на него — у юзера 2.
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u77', telegram_id=551)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(UserModel, 2)).remnawave_id == 77, 'владелец подписки должен получить аккаунт'
+        assert (await db.get(UserModel, 1)).remnawave_id is None, 'чужой аккаунт по telegram_id отдавать нельзя'
+        assert any(
+            r.kind == 'user' and r.row_id == 1 and r.reason == 'panel_account_owned_by_another_user'
+            for r in report.unresolved
+        ), [(r.row_id, r.reason) for r in report.unresolved]
+
+
+@pytest.mark.asyncio
+async def test_one_uuid_pointing_at_two_accounts_is_dropped_not_coin_flipped(monkeypatch):
+    """Противоречивый uuid нельзя разрешать «как повезёт».
+
+    Строку могли пересоздать, обнулив id и оставив старый uuid. Тогда один uuid
+    встречается на двух строках с РАЗНЫМИ панельными id, а запрос идёт без
+    ORDER BY — победитель случаен. Ценой ошибки будет grace-сессия, привязанная
+    к чужому живому аккаунту, поэтому такой uuid выбрасывается из карты целиком.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'a', 'uuid-clash'), (20, 'b', 'uuid-clash'), (30, None, 'uuid-clash')])
+        for sub_id, panel_id in ((10, 101), (20, 202)):
+            (await db.get(SubModel, sub_id)).remnawave_id = panel_id
+        # Сессия висит на строке 30, у которой своего id нет — единственный
+        # оставшийся источник это карта, и она обязана промолчать.
+        db.add(_grace('g-clash', 30, 'uuid-clash'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(101, short_uuid='a'), panel_user(202, short_uuid='b')])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        session = await db.get(GraceAccessSessionModel, 'g-clash')
+        assert session.remnawave_id is None, 'противоречивый uuid не должен резолвиться наугад'
+        assert any(r.kind == 'grace_session' and r.row_id == 'g-clash' for r in report.unresolved)
