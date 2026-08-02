@@ -172,6 +172,8 @@ class RemnaWaveNode:
     versions: dict[str, str] | None = None  # {xray, node}
     system: dict[str, Any] | None = None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
     active_plugin_uuid: str | None = None
+    # v3.1.0: панель возвращает числовой id рядом с uuid (additive; роуты по-прежнему принимают {uuid})
+    id: int | None = None
 
     @property
     def is_node_online(self) -> bool:
@@ -671,6 +673,10 @@ class RemnaWaveAPI:
 
         Returns dict with 'total' and 'records' list.
         Each record has: id, userId, requestAt, requestIp, userAgent.
+        v3.1.0: каждый record также несёт srrResponseType (string) и srrRuleName
+        (string|null) — какое правило запроса подписки обработало запрос.
+        Records передаются как есть (сырые dict с панели), поэтому эти поля
+        пробрасываются в бота автоматически.
 
         Remnawave 2.8.0+: поле ``userUuid`` (uuid) переименовано в ``userId``
         (числовой внутренний id пользователя панели).
@@ -1702,6 +1708,7 @@ class RemnaWaveAPI:
             versions=node_data.get('versions'),
             system=node_data.get('system'),
             active_plugin_uuid=node_data.get('activePluginUuid'),
+            id=self._sanitize_user_id(node_data.get('id')),  # v3.1.0
         )
 
     def _parse_subscription_info(self, data: dict) -> SubscriptionInfo:

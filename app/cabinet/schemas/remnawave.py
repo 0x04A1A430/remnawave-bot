@@ -99,6 +99,7 @@ class SystemStatsResponse(BaseModel):
 class NodeInfo(BaseModel):
     """Node information."""
 
+    id: int | None = None
     uuid: str
     name: str
     address: str

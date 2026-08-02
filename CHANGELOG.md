@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.2.3](https://github.com/cy7su/remnawave-bot/compare/v0.2.2...v0.2.3) (2026-08-01)
+
+
+### New Features
+
+* add traffic top-up button and rename device top-up in subscription settings ([44d6806](https://github.com/cy7su/remnawave-bot/commit/44d680643ed59375f66d3cf4136ab26835d31f0b))
+* drop "Тип:" line from tariff info block in subscription menu ([d4ff6d5](https://github.com/cy7su/remnawave-bot/commit/d4ff6d553f0212cf759d5fd9abaef0958822bebe))
+* finish Remnawave v3.0.0 userId switch + startup panel_user_id backfill ([e4f7b3a](https://github.com/cy7su/remnawave-bot/commit/e4f7b3a585c506579131d714e3556c0c6f9454c9))
+* personal subscription price per user (overrides tariff price, disables promo discounts) ([2aecc49](https://github.com/cy7su/remnawave-bot/commit/2aecc495a30278a9d9b5198eff004a987c0c12f6))
+* prepare for Remnawave v3.0.0 userId switch ([857344d](https://github.com/cy7su/remnawave-bot/commit/857344dd9b8dad247aa025e663f832eef850fe99))
+* RemnaWave v3.0.0 integration + subscription pricing & fixes ([06aff84](https://github.com/cy7su/remnawave-bot/commit/06aff84060605b34f2df37520030b05dc27503e5))
+
+
+### Bug Fixes
+
+* add missing arrow text to pagination prev/next buttons in admin panel (bot_config, blocked_users) ([3f3392f](https://github.com/cy7su/remnawave-bot/commit/3f3392f62bb86a1a1a0fe5c58c38d09b7d55fb3d))
+* align traffic topup button visibility in subscription settings with main menu (remove tariff.can_topup_traffic check) ([4288b8d](https://github.com/cy7su/remnawave-bot/commit/4288b8db6eed5d60497fbfc982d850753dae3216))
+* repair locale JSON files (invalid single quotes from ruff format, curly quotes in zh.json) ([a692d26](https://github.com/cy7su/remnawave-bot/commit/a692d26c3e073943ef325464ad51595b86783e69))
+* sanitize panel_user_id against NaN/invalid values (Remnawave 3.0.0 numeric id) ([b85784f](https://github.com/cy7su/remnawave-bot/commit/b85784f836e68c551c59c2c5f783b56156fd88cf))
+* webhook device notifications show readable model instead of HWID/tag ([9fe2fcf](https://github.com/cy7su/remnawave-bot/commit/9fe2fcf2f9ed6a41ec7cd579f167c5329ebfb245))
+
+## [0.2.2](https://github.com/cy7su/remnawave-bot/compare/v0.2.1...v0.2.2) (2026-07-14)
+
+
+### New Features
+
+* add mass unban by ID + unban all ([a6d838c](https://github.com/cy7su/remnawave-bot/commit/a6d838c57df0cac239e2a0d4be9692df20defbbe))
+* add restore deleted users button and handler ([0695490](https://github.com/cy7su/remnawave-bot/commit/06954901f1688cf4f52dc639ea2fa5e4f7850193))
+* require channel subscription before trial activation ([88fbc54](https://github.com/cy7su/remnawave-bot/commit/88fbc5482c2de525eab6ba1f079ec2523d81d806))
+
+
+### Bug Fixes
+
+* add missing quick_amounts field to PaymentMethodConfig model ([69be32c](https://github.com/cy7su/remnawave-bot/commit/69be32c688efc60b391a925de3d633c0d57617f4))
+* align release-please config with v17 combined format ([3eb4c8e](https://github.com/cy7su/remnawave-bot/commit/3eb4c8e9220f69e2e4a6a7b623080da04bf39cb6))
+* correct blocked_users count, add deleted_users to stats ([7344f88](https://github.com/cy7su/remnawave-bot/commit/7344f886bca093dc2ede6d407ec9362d63ecd927))
+* make 'I subscribed' button green (success) ([3aedf33](https://github.com/cy7su/remnawave-bot/commit/3aedf33c052bcf7f9582aa778d941a86391d1bc0))
+* reactivate RemnaWave subscriptions on user restore ([9ecb4ac](https://github.com/cy7su/remnawave-bot/commit/9ecb4acf2d0b4e989167ca44a8734adaf260e0d4))
+* restore Bot and AdminNotificationService imports for ban method ([eeb9fc0](https://github.com/cy7su/remnawave-bot/commit/eeb9fc0a591ebc34874498af1177a8aa83efc891))
+* restore separate release-please config and manifest files ([c9da60a](https://github.com/cy7su/remnawave-bot/commit/c9da60a9de819aab83ed10038f3ee662a48f4f05))
+
+## [0.2.1](https://github.com/cy7su/remnawave-bot/compare/v0.2.0...v0.2.1) (2026-07-13)
+
+
+### Bug Fixes
+
+* address CodeQL security alerts - weak hash, ReDoS, URL sanitization, exception exposure ([4c19317](https://github.com/cy7su/remnawave-bot/commit/4c19317868d217a5dcb74cbf5800d66d208926fd))
+* align release-please config with v17 combined format ([3eb4c8e](https://github.com/cy7su/remnawave-bot/commit/3eb4c8e9220f69e2e4a6a7b623080da04bf39cb6))
+* remove unused variable after error message change ([b73e800](https://github.com/cy7su/remnawave-bot/commit/b73e800794361b1e6e246119c89dad2feef7e304))
+* restore separate release-please config and manifest files ([c9da60a](https://github.com/cy7su/remnawave-bot/commit/c9da60a9de819aab83ed10038f3ee662a48f4f05))
+
 ## [0.2.1](https://github.com/cy7su/remnawave-bot/compare/v0.2.0...v0.2.1) (2026-07-13)
 
 
