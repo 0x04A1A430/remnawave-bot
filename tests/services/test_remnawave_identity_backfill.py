@@ -347,3 +347,75 @@ async def test_multi_tariff_never_fills_the_user_level_column(monkeypatch):
         db.expunge_all()
         assert (await db.get(SubModel, 20)).remnawave_id == 77, 'подписка обязана быть привязана'
         assert (await db.get(UserModel, 1)).remnawave_id is None, 'колонка на User должна остаться пустой'
+
+
+@pytest.mark.asyncio
+async def test_rerun_does_not_invent_a_conflict_for_a_sibling(monkeypatch):
+    """Повторный прогон — штатный сценарий, а не исключение.
+
+    Первый apply всегда завершается «частично» (у сиблинга нет id), и оператор
+    по инструкции перезапускает. `claimed` приминговывался уже записанными id,
+    а владелец — нет, поэтому сиблинг выглядел как претензия ДРУГОГО
+    пользователя, объявлялся конфликтом и откатывал весь прогон.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')])
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        first = await backfill_remnawave_ids(db, dry_run=False)
+        assert first.conflicts == []
+
+        second = await backfill_remnawave_ids(db, dry_run=False)
+
+        assert second.conflicts == [], 'сиблинг уже записанной строки — не конфликт'
+        db.expunge_all()
+        ids = {(await db.get(SubModel, 10)).remnawave_id, (await db.get(SubModel, 20)).remnawave_id}
+        assert ids == {77, None}, 'повторный прогон не должен ничего терять'
+
+
+@pytest.mark.asyncio
+async def test_live_subscription_wins_the_panel_id_not_the_expired_one(monkeypatch):
+    """id достаётся живой строке, а не самой старой.
+
+    По `order_by(id)` его получал конвертированный триал, и тогда grace-сессия
+    текущей подписки оставалась без идентичности (для ридера грейса это жёсткий
+    data fault), а вебхук резолвил события на мёртвую строку.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')])
+        # 10 — истёкший триал, 20 — текущая подписка.
+        (await db.get(SubModel, 10)).status = 'expired'
+        (await db.get(SubModel, 20)).status = 'active'
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(SubModel, 20)).remnawave_id == 77, 'живая подписка обязана получить id'
+        assert (await db.get(SubModel, 10)).remnawave_id is None
+
+
+@pytest.mark.asyncio
+async def test_multi_tariff_treats_a_shared_panel_account_as_a_real_conflict(monkeypatch):
+    """В multi-tariff у каждой подписки СВОЙ аккаунт — совпадение это порча данных.
+
+    Проглотив его как «сиблинга», бэкфил молча привязал бы одну строку к чужому
+    аккаунту и забрал бы у второй последний ключ.
+    """
+    from app.config import Settings
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'dup', 'uuid-a'), (20, 'dup', 'uuid-b')])
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='dup', username='u', telegram_id=551)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        assert report.conflicts, 'в multi-tariff общий аккаунт — конфликт, а не норма'
+        db.expunge_all()
+        assert (await db.get(SubModel, 10)).remnawave_id is None
+        assert (await db.get(SubModel, 20)).remnawave_id is None

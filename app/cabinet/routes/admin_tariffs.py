@@ -4,7 +4,7 @@ import asyncio
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -641,7 +641,11 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                     and_(
                         Subscription.tariff_id == tariff_id,
                         Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
-                        User.remnawave_id.isnot(None),
+                        # Тарифы существуют только в multi-tariff, а там панельная
+                        # идентичность живёт на подписке: `users.remnawave_id`
+                        # намеренно пуст, и фильтр по нему не выбирал бы никого —
+                        # синк сквадов молча возвращал бы «0 подписок» и 200 OK.
+                        or_(Subscription.remnawave_id.isnot(None), User.remnawave_id.isnot(None)),
                     )
                 )
             )
@@ -738,7 +742,9 @@ async def sync_tariff_squads(
             and_(
                 Subscription.tariff_id == tariff_id,
                 Subscription.status.in_([SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value]),
-                User.remnawave_id.isnot(None),
+                # См. комментарий в фоновом синке: в multi-tariff идентичность
+                # на подписке, фильтр только по User не выбрал бы никого.
+                or_(Subscription.remnawave_id.isnot(None), User.remnawave_id.isnot(None)),
             )
         )
     )

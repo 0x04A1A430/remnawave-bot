@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -47,6 +47,10 @@ from app.services.remnawave_service import RemnaWaveService
 
 
 logger = structlog.get_logger(__name__)
+
+# Статусы, при которых подписка считается живой — такая строка внутри
+# сиблинг-группы получает панельный id первой.
+_ALIVE_STATUSES = ('active', 'trial', 'limited')
 
 
 @dataclass
@@ -215,8 +219,21 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     index = _PanelIndex(panel_users)
     logger.info('backfill: panel roster loaded', panel_users=len(panel_users))
 
+    # Порядок решает, какая строка получит id внутри «сиблинг-группы» (несколько
+    # подписок одного пользователя на один панельный аккаунт). Колонка частично
+    # уникальна — id достанется ровно одной. Берём ЖИВУЮ: по id это был бы самый
+    # старый ряд, то есть конвертированный триал, и тогда grace-сессия текущей
+    # подписки осталась бы без идентичности (для неё это жёсткий data fault), а
+    # вебхук резолвил бы события на мёртвую строку.
+    _alive_first = case((Subscription.status.in_(_ALIVE_STATUSES), 0), else_=1)
     subscriptions = (
-        (await db.execute(select(Subscription).where(Subscription.remnawave_id.is_(None)).order_by(Subscription.id)))
+        (
+            await db.execute(
+                select(Subscription)
+                .where(Subscription.remnawave_id.is_(None))
+                .order_by(_alive_first, Subscription.end_date.desc(), Subscription.id.desc())
+            )
+        )
         .scalars()
         .all()
     )
@@ -237,14 +254,19 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # from `subscriptions` by the IS NULL filter, so without priming a re-run
     # would happily hand an already-owned panel id to another row and abort the
     # whole transaction on the unique index.
-    claimed: dict[int, str] = {
-        int(panel_id): f'#{sub_id} (persisted)'
-        for sub_id, panel_id in (
-            await db.execute(
-                select(Subscription.id, Subscription.remnawave_id).where(Subscription.remnawave_id.isnot(None))
+    _persisted = (
+        await db.execute(
+            select(Subscription.id, Subscription.remnawave_id, Subscription.user_id).where(
+                Subscription.remnawave_id.isnot(None)
             )
-        ).all()
-    }
+        )
+    ).all()
+    claimed: dict[int, str] = {int(panel_id): f'#{sub_id} (persisted)' for sub_id, panel_id, _ in _persisted}
+    # Владелец приминговывается ВМЕСТЕ с id. Без этого повторный прогон не мог
+    # опознать сиблинга уже записанной строки, объявлял несуществующий
+    # межпользовательский конфликт и откатывал весь прогон — а повторный прогон
+    # здесь штатный сценарий, потому что первый всегда завершается «частично».
+    _primed_owner: dict[int, int] = {int(panel_id): int(user_id) for _, panel_id, user_id in _persisted}
     # Same for shortUuid: we must not copy one onto a row when another row
     # already stores it — the index is deliberately non-unique, so nothing in
     # the database would reject the duplicate, and webhook subscription lookup
@@ -262,7 +284,7 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     # panel id -> bot user, чтобы отличить «две подписки ОДНОГО пользователя
     # смотрят на один панельный аккаунт» (норма) от «на один аккаунт претендуют
     # РАЗНЫЕ пользователи» (настоящий конфликт).
-    claimed_owner: dict[int, int] = {}
+    claimed_owner: dict[int, int] = dict(_primed_owner)
 
     def assign(subscription: Subscription, panel_user: RemnaWaveUser, strategy: str) -> None:
         claimed[panel_user.id] = str(subscription.id)
@@ -292,6 +314,12 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
         `subscriptions.remnawave_id` получает только одна строка: колонка
         частично уникальна, двум строкам один id не присвоить.
         """
+        if settings.is_multi_tariff_enabled():
+            # В multi-tariff у каждой подписки СВОЙ панельный аккаунт, поэтому
+            # совпадение — настоящая порча данных, а не норма. Проглотив его,
+            # мы бы молча закоммитили привязку мёртвой строки к чужому аккаунту
+            # и забрали бы у живой её последний ключ (shortUuid).
+            return False
         return claimed_owner.get(panel_user.id) == int(subscription.user_id)
 
     def record_expected_sibling(subscription: Subscription, panel_user: RemnaWaveUser) -> None:
