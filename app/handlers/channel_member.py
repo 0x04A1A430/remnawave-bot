@@ -101,6 +101,15 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                         subscription_id=getattr(subscription, 'id', None),
                         user_id=getattr(db_user, 'id', None),
                     )
+                elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
+                    # В мультитарифе у каждой подписки свой аккаунт, поэтому
+                    # падение на пользовательский id — это адресация соседнего
+                    # тарифа. Сигнал нужен: молча так делать нельзя.
+                    logger.warning(
+                        'Мультитариф: у подписки нет своего панельного id, адресуем через пользователя',
+                        subscription_id=getattr(subscription, 'id', None),
+                        remnawave_id=panel_user_id,
+                    )
                 if panel_user_id:
                     try:
                         await service.enable_remnawave_user(panel_user_id)
@@ -185,6 +194,15 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
                         'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
                         user_id=getattr(db_user, 'id', None),
+                    )
+                elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
+                    # В мультитарифе у каждой подписки свой аккаунт, поэтому
+                    # падение на пользовательский id — это адресация соседнего
+                    # тарифа. Сигнал нужен: молча так делать нельзя.
+                    logger.warning(
+                        'Мультитариф: у подписки нет своего панельного id, адресуем через пользователя',
+                        subscription_id=getattr(subscription, 'id', None),
+                        remnawave_id=panel_user_id,
                     )
                 if panel_user_id:
                     try:

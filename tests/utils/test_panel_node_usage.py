@@ -9,18 +9,25 @@
 from app.utils.panel_node_usage import coerce_bytes, normalize_node_usage
 
 
-def test_normalizes_the_legacy_2_8_shape():
-    """Форма 2.8: {userId, nodeUuid, total}. Оставлена ради старых ответов."""
+def test_normalizes_the_production_shape():
+    """ЕДИНСТВЕННАЯ форма, которая реально сюда приходит: {userId, nodeUuid, total}.
+
+    `RemnaWaveService.get_node_user_usage_by_range` уже перекладывает ответ
+    `POST /api/bandwidth-stats/nodes/usage` из {id, totalBytes} в эти ключи, так
+    что нормализатор видит именно их. Этот тест — единственный страж продового
+    пути; удалять его нельзя.
+    """
     items = normalize_node_usage([{'userId': 8812, 'nodeUuid': 'n-1', 'total': 4096}], 'fallback')
     assert items == [{'user_id': 8812, 'username': None, 'node_uuid': 'n-1', 'total_bytes': 4096}]
 
 
-def test_normalizes_the_3_0_0_shape():
-    """`POST /api/bandwidth-stats/nodes/usage` в 3.0.0 даёт {id, totalBytes}.
+def test_also_tolerates_the_raw_3_0_0_keys():
+    """Сырые ключи панели {id, totalBytes} — запас на случай, если сюда однажды
+    придёт неперелоденный ответ.
 
-    Ровно эти два ключа раньше не проверял ни один тест: их можно было убрать из
-    `_first_present`, и набор оставался зелёным, хотя обе админские поверхности
-    начали бы показывать пустого пользователя с нулём трафика.
+    Сейчас ни один вызывающий их не передаёт (сервис перекладывает ключи сам),
+    так что это терпимость, а не продовый путь. Тест держит её честной: без
+    ключей в `_first_present` он падает.
     """
     items = normalize_node_usage([{'id': 8812, 'totalBytes': 4096}], 'n-1')
     assert items == [{'user_id': 8812, 'username': None, 'node_uuid': 'n-1', 'total_bytes': 4096}]

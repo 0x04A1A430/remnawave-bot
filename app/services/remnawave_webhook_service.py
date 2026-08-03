@@ -1505,6 +1505,11 @@ class RemnaWaveWebhookService:
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
         # Clear remnawave linkage
+        # Запоминаем удалённый аккаунт ДО очистки: ниже по нему проверяются
+        # соседние подписки, а в single-tariff идентичность живёт именно здесь.
+        # Пока значение стиралось раньше цикла, соседям было нечем проверяться,
+        # и они молча оставались активными при удалённом панельном аккаунте.
+        deleted_panel_user_id = getattr(user, 'remnawave_id', None)
         if not settings.is_multi_tariff_enabled():
             if user.remnawave_id:
                 user.remnawave_id = None
@@ -1550,7 +1555,9 @@ class RemnaWaveWebhookService:
 
             # Resolve the sibling's panel id — fall back to user.remnawave_id in
             # BOTH modes, since pre-multi-tariff subs store the panel identity there.
-            sibling_panel_id = getattr(other_sub, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+            sibling_panel_id = (
+                getattr(other_sub, 'remnawave_id', None) or getattr(user, 'remnawave_id', None) or deleted_panel_user_id
+            )
 
             # Only expire when the panel POSITIVELY reports the user is gone. If we
             # cannot verify (no id, API not configured, or a transient error), leave
@@ -1600,6 +1607,10 @@ class RemnaWaveWebhookService:
             # в single-tariff он оставался и продолжал адресовать удалённого
             # пользователя, из-за чего бэкфилл считал строку уже связанной.
             other_sub.remnawave_id = None
+            # И исторический uuid — тот же инвариант, что в
+            # `validate_and_clean_subscription`: строка с uuid удалённого
+            # аккаунта отравляет карту бэкфила, если позже получит новый id.
+            other_sub.remnawave_uuid = None
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == other_sub.id))
             logger.info(
                 'Webhook user.deleted: deactivated sibling subscription (panel user gone)',
