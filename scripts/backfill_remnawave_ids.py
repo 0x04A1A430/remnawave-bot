@@ -42,10 +42,15 @@ def _write_audit(report, *, committed: bool) -> str | None:
     # запасное '.' — это /app, который НЕ том, и файл исчезал вместе с
     # `docker compose run --rm` ровно в тот момент, когда он и нужен.
     directory = Path(os.environ.get('BACKFILL_AUDIT_DIR') or settings.LOG_DIR or 'logs')
-    suffix = 'apply' if not report.dry_run else 'dryrun'
-    if not committed:
-        # Прогон откатился: это не след записей, а разбор конфликтов.
+    # Имя отражает ЧТО это за прогон, а не флаг committed: холостой прогон
+    # ничего не записывает по определению, и называть его файл `conflicts`
+    # (как было) — врать оператору, у которого конфликтов ноль.
+    if report.conflicts:
         suffix = 'conflicts'
+    elif report.dry_run:
+        suffix = 'dryrun'
+    else:
+        suffix = 'apply'
     # Уникальное имя: фиксированное затирало след предыдущего прогона — тот
     # самый, с которым инструкция велит сверяться.
     stamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')

@@ -11,6 +11,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.remnawave_identity_backfill import (
+    BackfillReport,
+    UnresolvedRow,
     _match_subscription,
     _PanelIndex,
     backfill_remnawave_ids,
@@ -918,3 +920,29 @@ async def test_every_write_is_recorded_in_the_audit_trail(monkeypatch):
         audit = report.as_audit()
         assert len(audit['applied']) == len(report.applied)
         assert audit['summary']['applied'] == len(report.applied)
+
+
+def test_audit_filename_reflects_the_kind_of_run_not_the_commit_flag(tmp_path, monkeypatch):
+    """Холостой прогон — это `dryrun`, а не `conflicts`.
+
+    Имя строилось по флагу «записано ли», а холостой прогон не записывает
+    по определению — и его файл получал имя `conflicts` при нуле конфликтов.
+    Оператор видит в отчёте слово «конфликты» там, где их нет.
+    """
+    import importlib.util
+
+    monkeypatch.setenv('BACKFILL_AUDIT_DIR', str(tmp_path))
+    spec = importlib.util.spec_from_file_location('bf_cli', 'scripts/backfill_remnawave_ids.py')
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+
+    dry = BackfillReport(dry_run=True)
+    dry.unresolved.append(UnresolvedRow(kind='subscription', row_id=1, reason='short_uuid_not_found_in_panel'))
+    assert 'dryrun' in cli._write_audit(dry, committed=False)
+
+    applied = BackfillReport(dry_run=False)
+    assert 'apply' in cli._write_audit(applied, committed=True)
+
+    clashed = BackfillReport(dry_run=False)
+    clashed.conflicts.append('sub#1 vs sub#2')
+    assert 'conflicts' in cli._write_audit(clashed, committed=False)
