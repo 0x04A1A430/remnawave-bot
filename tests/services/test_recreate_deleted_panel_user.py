@@ -1243,3 +1243,88 @@ async def test_degraded_short_uuid_endpoint_still_refuses_to_create_a_duplicate(
             )
 
     api.create_user.assert_not_awaited()
+
+
+async def test_foreign_account_is_cleaned_not_re_anchored(monkeypatch):
+    """Несовпадение владельца обязано вести в очистку, а не в перепривязку.
+
+    `needs_cleanup` ставят ДВА разных условия: «панель не знает id» и «аккаунт
+    принадлежит другому telegram_id». Стоило завязать спасение по shortUuid на
+    общий флаг, как второй случай начал уходить в перепривязку: панель знает
+    shortUuid — значит «нашли», — и бот оставлял себе ЧУЖОЙ аккаунт.
+    """
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    foreign = SimpleNamespace(id=777, telegram_id=999)
+    api = AsyncMock()
+    api.get_user_by_id.return_value = foreign  # панель id знает...
+    api.get_user_by_short_uuid.return_value = foreign  # ...и shortUuid тоже
+    service = SubscriptionService()
+    _patch_api_client(monkeypatch, service, api)
+
+    sub, user = _validation_subject()
+    sub.remnawave_id = 777
+    user.remnawave_id = 777
+    user.telegram_id = 100  # а аккаунт принадлежит 999
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    assert await service.validate_and_clean_subscription(db, sub, user) is True
+
+    assert sub.remnawave_id is None, 'чужой аккаунт нельзя оставлять привязанным'
+    assert sub.remnawave_short_uuid is None, 'ключ на чужой аккаунт тоже держать нельзя'
+
+
+async def test_short_uuid_rescue_refuses_a_foreign_account(monkeypatch):
+    """И сама перепривязка обязана проверять владельца.
+
+    Даже когда повод законный (панель забыла числовой id), найденный по
+    shortUuid аккаунт может принадлежать другому человеку — привязывать его
+    нельзя, иначе проверка владельца обходится с другой стороны.
+    """
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    api = AsyncMock()
+    api.get_user_by_id.return_value = None  # id протух
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812, telegram_id=999)
+    service = SubscriptionService()
+    _patch_api_client(monkeypatch, service, api)
+
+    sub, user = _validation_subject()
+    sub.remnawave_id = 4242
+    user.remnawave_id = None
+    user.telegram_id = 100
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    assert await service.validate_and_clean_subscription(db, sub, user) is True
+
+    assert sub.remnawave_id is None
+    assert user.remnawave_id is None, 'чужой аккаунт нельзя записывать и на пользователя'
+
+
+async def test_ownership_mismatch_is_not_rescued_by_a_telegram_less_account(monkeypatch):
+    """Несовпадение владельца нельзя «спасать» аккаунтом без telegramId.
+
+    Внутренняя проверка владельца молчит, когда у панельного аккаунта telegramId
+    пуст, — поэтому решает внешний гейт: перепривязка допустима только когда
+    панель ЗАБЫЛА id, а не когда она вернула чужой аккаунт. Иначе строка с
+    доказанным несовпадением остаётся привязанной.
+    """
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    api = AsyncMock()
+    api.get_user_by_id.return_value = SimpleNamespace(id=777, telegram_id=999)  # чужой
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812, telegram_id=None)
+    service = SubscriptionService()
+    _patch_api_client(monkeypatch, service, api)
+
+    sub, user = _validation_subject()
+    sub.remnawave_id = 777
+    user.remnawave_id = 777
+    user.telegram_id = 100
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    assert await service.validate_and_clean_subscription(db, sub, user) is True
+
+    api.get_user_by_short_uuid.assert_not_awaited()
+    assert sub.remnawave_id is None
+    assert sub.remnawave_short_uuid is None

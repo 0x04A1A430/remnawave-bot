@@ -1236,6 +1236,11 @@ class SubscriptionService:
     async def validate_and_clean_subscription(self, db: AsyncSession, subscription: Subscription, user: User) -> bool:
         try:
             needs_cleanup = False
+            # Отдельно от `needs_cleanup`: «панель не знает этот id» и «аккаунт
+            # принадлежит другому человеку» — разные вещи. Перепривязка по
+            # shortUuid допустима только для первого; для второго она означала бы
+            # «оставить чужой аккаунт», ровно то, ради чего проверка и стоит.
+            panel_lost_the_id = False
             user_log = self._format_user_log(user)
 
             # In multi-tariff mode, validate per-subscription panel id, not user-level id.
@@ -1261,6 +1266,7 @@ class SubscriptionService:
                                 remnawave_id=check_id,
                             )
                             needs_cleanup = True
+                            panel_lost_the_id = True
                         elif (
                             user.telegram_id
                             and remnawave_user.telegram_id
@@ -1279,12 +1285,12 @@ class SubscriptionService:
                     # duplicate Remnawave account.
                     return False
 
-            # Гейт по `needs_cleanup`, а НЕ по «не было check_id». Иначе строка с
-            # протухшим числовым id (панель его не знает) теряла последний шанс:
-            # проверка выше ставила needs_cleanup, а спасение по shortUuid
-            # пропускалось, потому что check_id был непустым, — и очистка стирала
-            # единственный точный ключ восстановления связи.
-            if subscription.remnawave_short_uuid and (needs_cleanup or not check_id):
+            # Гейт по `panel_lost_the_id`, а НЕ по «не было check_id»: строка с
+            # протухшим числовым id (панель его не знает) иначе теряла последний
+            # шанс — очистка стирала единственный точный ключ восстановления.
+            # И НЕ по `needs_cleanup`: тот же флаг ставит несовпадение владельца,
+            # а для него перепривязка недопустима.
+            if subscription.remnawave_short_uuid and (panel_lost_the_id or not check_id):
                 # Раньше это однозначно значило «мусорные данные». После апгрейда
                 # на 3.0.0 у той же комбинации есть второе прочтение: строка была
                 # привязана к панели, а числовой id ей ещё не проставил бэкфил.
@@ -1301,6 +1307,22 @@ class SubscriptionService:
                         api_error=api_error,
                     )
                     return False
+
+                panel_telegram_id = getattr(panel_user, 'telegram_id', None) if panel_user is not None else None
+                if (
+                    panel_user is not None
+                    and user.telegram_id
+                    and panel_telegram_id
+                    and panel_telegram_id != user.telegram_id
+                ):
+                    # Нашли по shortUuid, но аккаунт чужой — привязывать нельзя.
+                    logger.warning(
+                        '⚠️ Аккаунт по short_uuid принадлежит другому telegram_id — не привязываем',
+                        subscription_id=subscription.id,
+                        panel_telegram_id=panel_telegram_id,
+                    )
+                    panel_user = None
+                    needs_cleanup = True
 
                 if panel_user is not None:
                     logger.info(
