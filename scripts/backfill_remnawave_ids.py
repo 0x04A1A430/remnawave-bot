@@ -20,7 +20,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import os
 import sys
+from pathlib import Path
 
 import structlog
 
@@ -31,6 +34,22 @@ from app.services.system_settings_service import bot_configuration_service
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _write_audit(report) -> str | None:
+    directory = Path(os.environ.get('BACKFILL_AUDIT_DIR') or os.environ.get('LOG_DIR') or '.')
+    suffix = 'apply' if not report.dry_run else 'dryrun'
+    path = directory / f'remnawave_backfill_{suffix}.json'
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        with path.open('w', encoding='utf-8') as handle:
+            json.dump(report.as_audit(), handle, ensure_ascii=False, indent=2, default=str)
+    except OSError as error:
+        # Отчёт — не причина ронять прогон, но молчать о потере следа нельзя.
+        logger.warning('backfill: не удалось записать полный отчёт', path=path, error=str(error))
+        print(f'  !! полный отчёт записать не удалось: {error}')
+        return None
+    return str(path)
 
 
 def _print_report(report) -> None:
@@ -90,6 +109,14 @@ async def _run(apply: bool) -> int:
     async with AsyncSessionLocal() as db:
         report = await backfill_remnawave_ids(db, dry_run=not apply)
     _print_report(report)
+
+    # Полный след — в файл. В консоли списки усечены до 20 строк, а инструкция
+    # требует «разбирать по списку»: без файла полный перечень взять негде, как
+    # и ответить потом на вопрос «какие строки прогон изменил и на что».
+    audit_path = _write_audit(report)
+    if audit_path:
+        print(f'  полный отчёт: {audit_path}')
+
     if report.conflicts:
         return 2
     return 0 if report.complete else 1

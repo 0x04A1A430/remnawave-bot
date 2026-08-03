@@ -899,7 +899,10 @@ async def test_update_adopts_panel_id_by_short_uuid_instead_of_giving_up(monkeyp
     sub.remnawave_id = None
     sub.remnawave_short_uuid = 'aBcD12'
 
-    result = await service.update_remnawave_user(AsyncMock(), sub)
+    db = AsyncMock()
+    # Аккаунт свободен — защита частично-уникального индекса пропускает запись.
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+    result = await service.update_remnawave_user(db, sub)
 
     assert result is updated
     api.get_user_by_short_uuid.assert_awaited_once_with('aBcD12')

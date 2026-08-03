@@ -625,7 +625,11 @@ class RemnaWaveService:
                 total_upload = sum(node.get('uploadBytes', 0) for node in realtime_usage)
                 total_realtime_traffic = total_download + total_upload
 
-                total_user_traffic = int(system_stats.get('users', {}).get('totalTrafficBytes', '0'))
+                # В 3.0.0 (как и в 2.8.35) блок `users` содержит только
+                # statusCounts и totalUsers; суммарный трафик живёт в
+                # `nodes.totalBytesLifetime` и приходит СТРОКОЙ. Прежнее чтение
+                # несуществующего `users.totalTrafficBytes` всегда давало 0.
+                total_user_traffic = int(system_stats.get('nodes', {}).get('totalBytesLifetime') or 0)
 
                 nodes_weekly_data = []
                 if nodes_stats.get('lastSevenDays'):
@@ -3294,6 +3298,10 @@ class RemnaWaveService:
                         balance_kopeks=user.balance_kopeks,
                     )
                 user.remnawave_id = None
+                # force_cleanup удаляет панельного пользователя целиком, поэтому
+                # исторический uuid тоже теряет смысл: пара «мёртвый uuid + новый
+                # id» отравляет карту идентичностей бэкфила.
+                user.remnawave_uuid = None
                 user.updated_at = self._now_utc()
 
                 for sub in user_subscriptions:

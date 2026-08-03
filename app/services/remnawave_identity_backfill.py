@@ -68,6 +68,22 @@ class UnresolvedRow:
 
 
 @dataclass
+class AppliedRow:
+    """Что именно прогон записал — построчно.
+
+    Без этого «какие строки изменил прогон и на что» после факта установить
+    нечем: отчёт нёс только счётчики, а откатить чужую привязку вручную можно
+    лишь зная старое и новое значение.
+    """
+
+    kind: str  # 'subscription' | 'user' | 'grace_session'
+    row_id: Any
+    panel_id: int
+    strategy: str
+    previous_panel_id: int | None = None
+
+
+@dataclass
 class BackfillReport:
     dry_run: bool = True
     panel_users: int = 0
@@ -78,6 +94,7 @@ class BackfillReport:
     by_strategy: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     unresolved: list[UnresolvedRow] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
+    applied: list[AppliedRow] = field(default_factory=list)
 
     @property
     def complete(self) -> bool:
@@ -94,7 +111,17 @@ class BackfillReport:
             'by_strategy': dict(self.by_strategy),
             'unresolved': len(self.unresolved),
             'conflicts': len(self.conflicts),
+            'applied': len(self.applied),
             'complete': self.complete,
+        }
+
+    def as_audit(self) -> dict[str, Any]:
+        """Полный машиночитаемый след прогона — без усечений."""
+        return {
+            'summary': self.as_dict(),
+            'applied': [vars(row) for row in self.applied],
+            'unresolved': [vars(row) for row in self.unresolved],
+            'conflicts': list(self.conflicts),
         }
 
 
@@ -367,6 +394,9 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
                 taken_short_uuids.add(panel_user.short_uuid)
         report.subscriptions_resolved += 1
         report.by_strategy[strategy] += 1
+        report.applied.append(
+            AppliedRow(kind='subscription', row_id=int(subscription.id), panel_id=int(panel_user.id), strategy=strategy)
+        )
 
     def is_expected_sibling(subscription: Subscription, panel_user: RemnaWaveUser) -> bool:
         """Тот же панельный аккаунт у ДРУГОЙ подписки того же пользователя.
@@ -578,6 +608,15 @@ async def _prefer_alive_sibling(
             row for row in report.unresolved if not (row.kind == 'subscription' and row.row_id == int(target.id))
         ]
         report.by_strategy['moved_to_alive_sibling'] += 1
+        report.applied.append(
+            AppliedRow(
+                kind='subscription',
+                row_id=int(target.id),
+                panel_id=int(panel_id),
+                strategy='moved_to_alive_sibling',
+                previous_panel_id=int(holder.id),
+            )
+        )
         logger.info(
             'backfill: панельный id передан живой подписке',
             panel_user_id=panel_id,
@@ -680,6 +719,7 @@ async def _backfill_users(
         _remember(user, int(panel_id))
         report.users_resolved += 1
         report.by_strategy[strategy] += 1
+        report.applied.append(AppliedRow(kind='user', row_id=int(user.id), panel_id=int(panel_id), strategy=strategy))
 
     for user in pending_users:
         user_id = int(user.id)
@@ -731,8 +771,9 @@ async def _backfill_grace_sessions(
 ) -> None:
     """Grace sessions inherit identity from their subscription (1:1 by FK).
 
-    В single-tariff есть второй, более широкий источник: у пользователя один
-    панельный аккаунт, поэтому сессия ЛЮБОЙ его подписки адресует именно его.
+    Второй источник — исторический `remnawave_uuid` самой сессии: до 3.0.0
+    `_subscription_to_billing` клала туда uuid подписки в мультитарифе и uuid
+    пользователя в однотарифном, то есть это точный ключ в обоих режимах.
     Без этого фолбэка сессия теряет идентичность каждый раз, когда
     `_prefer_alive_sibling` переносит id с её строки на живую — а это ровно тот
     сценарий, ради которого перенос и существует (истёк триал, на нём открыт
@@ -778,3 +819,6 @@ async def _backfill_grace_sessions(
 
         session.remnawave_id = int(panel_id)
         report.grace_sessions_resolved += 1
+        report.applied.append(
+            AppliedRow(kind='grace_session', row_id=str(session.id), panel_id=int(panel_id), strategy='from_parent')
+        )

@@ -1533,6 +1533,10 @@ class RemnaWaveWebhookService:
                     if matched:
                         sub.remnawave_id = None
                         sub.remnawave_short_uuid = None
+                        # Тот же инвариант, что двумя ветками выше: аккаунт
+                        # удалён, поэтому исторический uuid тоже не должен
+                        # пережить его и отравить карту бэкфила.
+                        sub.remnawave_uuid = None
                         break
 
         # Deactivate sibling subscriptions whose panel user also no longer exists.
@@ -1878,7 +1882,17 @@ class RemnaWaveWebhookService:
             raw = data.get('deviceName') or data.get('tag') or data.get('hwid') or ''
             return html.escape(str(raw)) if raw else ''
 
-        tag = (device_obj.get('tag') or device_obj.get('deviceName') or device_obj.get('name') or '').strip()
+        # В 3.0.0 у устройства есть deviceModel/platform/osVersion/userAgent —
+        # полей `tag`/`deviceName`/`name` в схеме нет и не было, поэтому раньше
+        # человекочитаемое имя не подставлялось никогда. Оставляем их последними
+        # как терпимость к нестандартным полезным нагрузкам.
+        tag = (
+            device_obj.get('deviceModel')
+            or device_obj.get('tag')
+            or device_obj.get('deviceName')
+            or device_obj.get('name')
+            or ''
+        ).strip()
         platform = (device_obj.get('platform') or '').strip()
         hwid = (device_obj.get('hwid') or '').strip()
 

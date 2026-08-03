@@ -2085,7 +2085,7 @@ class User(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
     last_activity = Column(AwareDateTime(), default=func.now())
     # Панельный идентификатор пользователя (Remnawave 3.0.0: числовой id).
-    # remnawave_uuid оставлен как исторические данные, кодом не читается.
+    # remnawave_uuid оставлен как исторические данные, читается только одноразовым бэкфилом (восстановление идентичности).
     remnawave_id = Column(BigInteger, nullable=True, unique=True, index=True)
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
 
@@ -2346,7 +2346,7 @@ class Subscription(Base):
     remnawave_short_uuid = Column(String(255), nullable=True)
     # Панельный идентификатор пользователя. С Remnawave 3.0.0 это числовой id —
     # поле uuid из UsersSchema удалено. remnawave_uuid оставлен как исторические
-    # данные для аудита и разбора незарезолвленных строк; кодом не читается.
+    # данные для аудита и разбора незарезолвленных строк; читается только одноразовым бэкфилом (восстановление идентичности).
     remnawave_id = Column(BigInteger, nullable=True)
     remnawave_uuid = Column(String(255), nullable=True)
     remnawave_short_id = Column(

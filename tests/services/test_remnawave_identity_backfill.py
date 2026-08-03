@@ -889,3 +889,32 @@ async def test_a_dead_persisted_id_does_not_beat_a_live_telegram_match(monkeypat
 
         db.expunge_all()
         assert (await db.get(UserModel, 1)).remnawave_id == 909, 'живой аккаунт должен победить мёртвый id'
+
+
+@pytest.mark.asyncio
+async def test_every_write_is_recorded_in_the_audit_trail(monkeypatch):
+    """Прогон обязан оставлять построчный след того, что записал.
+
+    Без него на вопрос «какие строки прогон изменил и на что» после факта
+    ответить нечем: отчёт нёс одни счётчики, а откатить ошибочную привязку
+    вручную можно только зная строку и присвоенный аккаунт.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'abc', 'uuid-a')])
+        db.add(_grace('g-audit', 10, 'uuid-a'))
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(77, short_uuid='abc', username='u', telegram_id=551)])
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        kinds = {row.kind for row in report.applied}
+        assert kinds == {'subscription', 'user', 'grace_session'}, kinds
+        sub_row = next(r for r in report.applied if r.kind == 'subscription')
+        assert sub_row.row_id == 10
+        assert sub_row.panel_id == 77
+        assert sub_row.strategy == 'short_uuid'
+        # Полный след сериализуем без усечений — именно он уходит в файл.
+        audit = report.as_audit()
+        assert len(audit['applied']) == len(report.applied)
+        assert audit['summary']['applied'] == len(report.applied)
