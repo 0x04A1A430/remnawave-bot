@@ -252,6 +252,7 @@ class SubscriptionService:
                         api,
                         user,
                         subscription,
+                        db=db,
                         user_tag=user_tag,
                         hwid_limit=hwid_limit,
                         ext_squad_uuid=ext_squad_uuid,
@@ -408,6 +409,7 @@ class SubscriptionService:
         user: User,
         subscription: Subscription,
         *,
+        db: AsyncSession | None = None,
         user_tag: str | None,
         hwid_limit: int | None,
         ext_squad_uuid: str | None,
@@ -484,7 +486,17 @@ class SubscriptionService:
         # аккаунт при первом же продлении, а оплаченный оригинал осиротел бы.
         adopted = await self._adopt_panel_user_by_short_uuid(api, subscription)
         if adopted is not None:
-            subscription.remnawave_id = adopted.id
+            # Та же защита частично-уникального индекса, что и на других
+            # писателях: иначе IntegrityError прилетал бы уже ПОСЛЕ update_user,
+            # то есть панель изменена, а транзакция отката.
+            if db is None or await self._panel_id_is_free_for(db, subscription, adopted.id):
+                subscription.remnawave_id = adopted.id
+            else:
+                logger.warning(
+                    '⚠️ Панельный id уже закреплён за другой подпиской — колонку не трогаем',
+                    subscription_id=getattr(subscription, 'id', None),
+                    remnawave_id=adopted.id,
+                )
             if settings.RESET_DEVICES_ON_RENEWAL:
                 if not await api.reset_user_devices(adopted.id):
                     logger.error('⚠️ Не удалось сбросить HWID', panel_user_id=adopted.id)
@@ -1241,6 +1253,7 @@ class SubscriptionService:
             # shortUuid допустима только для первого; для второго она означала бы
             # «оставить чужой аккаунт», ровно то, ради чего проверка и стоит.
             panel_lost_the_id = False
+            foreign_short_uuid = False
             user_log = self._format_user_log(user)
 
             # In multi-tariff mode, validate per-subscription panel id, not user-level id.
@@ -1323,6 +1336,7 @@ class SubscriptionService:
                     )
                     panel_user = None
                     needs_cleanup = True
+                    foreign_short_uuid = True
 
                 if panel_user is not None:
                     logger.info(
@@ -1347,7 +1361,10 @@ class SubscriptionService:
                     await db.flush((subscription, user))
                     return True
 
-                logger.warning('⚠️ У подписки есть short_uuid, но панель его не знает')
+                if foreign_short_uuid:
+                    logger.warning('⚠️ short_uuid ведёт на аккаунт другого пользователя — связь рвём')
+                else:
+                    logger.warning('⚠️ У подписки есть short_uuid, но панель его не знает')
                 needs_cleanup = True
 
             if needs_cleanup:

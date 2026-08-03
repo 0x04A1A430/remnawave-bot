@@ -1499,8 +1499,12 @@ class RemnaWaveWebhookService:
             subscription.connected_squads = []
             subscription.updated_at = datetime.now(UTC)
 
-            # Always clear stale panel identity — panel user was deleted
+            # Always clear stale panel identity — panel user was deleted.
+            # Исторический uuid — вместе с ним: пара «мёртвый uuid + будущий
+            # новый id» отравляет карту бэкфила ровно так же, как на соседних
+            # строках ниже.
             subscription.remnawave_id = None
+            subscription.remnawave_uuid = None
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
@@ -1513,6 +1517,8 @@ class RemnaWaveWebhookService:
         if not settings.is_multi_tariff_enabled():
             if user.remnawave_id:
                 user.remnawave_id = None
+            # И uuid — тот же инвариант, что в `validate_and_clean_subscription`.
+            user.remnawave_uuid = None
         elif subscription is None:
             # Идентичность обязана быть непустой: сравнение None с None приклеило бы
             # очистку к первой попавшейся непровиженной подписке.
@@ -1555,9 +1561,28 @@ class RemnaWaveWebhookService:
 
             # Resolve the sibling's panel id — fall back to user.remnawave_id in
             # BOTH modes, since pre-multi-tariff subs store the panel identity there.
-            sibling_panel_id = (
-                getattr(other_sub, 'remnawave_id', None) or getattr(user, 'remnawave_id', None) or deleted_panel_user_id
-            )
+            sibling_panel_id = getattr(other_sub, 'remnawave_id', None) or getattr(user, 'remnawave_id', None)
+
+            # Свой shortUuid — точный ключ соседа, и спросить его надо ДО того,
+            # как падать на id удалённого аккаунта: тот по определению ответит
+            # «нет», и проверка превратилась бы в штамп, истекающий соседей без
+            # единого вопроса об их собственной идентичности.
+            sibling_short_uuid = (getattr(other_sub, 'remnawave_short_uuid', None) or '').strip()
+            if not sibling_panel_id and sibling_short_uuid and subscription_service.is_configured:
+                try:
+                    async with subscription_service.get_api_client() as api:
+                        own_account = await api.get_user_by_short_uuid(sibling_short_uuid)
+                except Exception as exc:
+                    logger.warning(
+                        'Webhook user.deleted: sibling short_uuid check failed, leaving subscription untouched',
+                        other_sub_id=other_sub.id,
+                        error=str(exc),
+                    )
+                    continue
+                if own_account is not None:
+                    continue  # у соседа собственный живой аккаунт — не трогаем
+
+            sibling_panel_id = sibling_panel_id or deleted_panel_user_id
 
             # Only expire when the panel POSITIVELY reports the user is gone. If we
             # cannot verify (no id, API not configured, or a transient error), leave

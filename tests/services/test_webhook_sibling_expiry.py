@@ -248,3 +248,70 @@ async def test_intentional_panel_deletion_suppresses_sibling_sweep():
         svc._notify_user.assert_not_awaited()
     finally:
         rw.RemnaWaveWebhookService._intentional_panel_deletions_by_id.clear()
+
+
+@asynccontextmanager
+async def _drive_single(svc, user, deleted, *, by_id=None, by_short_uuid=None):
+    """Однотарифный прогон: панель отвечает и по id, и по shortUuid."""
+    api = MagicMock()
+
+    async def _get_user_by_id(user_id):
+        coerce_panel_user_id(user_id)
+        return by_id
+
+    api.get_user_by_id = AsyncMock(side_effect=_get_user_by_id)
+    api.get_user_by_short_uuid = AsyncMock(return_value=by_short_uuid)
+
+    @asynccontextmanager
+    async def _client():
+        yield api
+
+    inst = MagicMock()
+    inst.is_configured = True
+    inst.get_api_client = _client
+
+    with (
+        patch.object(type(rw.settings), 'is_multi_tariff_enabled', MagicMock(return_value=False)),
+        patch('app.services.subscription_service.SubscriptionService', return_value=inst),
+        patch.object(rw, 'decrement_subscription_server_counts', AsyncMock()),
+    ):
+        await svc._handle_user_deleted(AsyncMock(), user, deleted, {'id': deleted.remnawave_id})
+        yield api
+
+
+@pytest.mark.asyncio
+async def test_single_tariff_sibling_with_its_own_live_account_is_not_expired():
+    """Однотарифный режим не покрывался ни одним тестом.
+
+    Сосед без своего числового id проверялся по id УДАЛЁННОГО аккаунта — тот по
+    определению отвечает «нет», и проверка превращалась в штамп: сосед истекал,
+    хотя его собственный shortUuid панель прекрасно знает.
+    """
+    deleted = _sub(1, SubscriptionStatus.EXPIRED.value, end_days=-10, remnawave_id=101, squads=[])
+    sibling = _sub(2, SubscriptionStatus.ACTIVE.value, end_days=-1, remnawave_id=None, squads=['sq1'])
+    user = SimpleNamespace(
+        id=7, telegram_id=100, remnawave_id=101, remnawave_uuid='legacy', subscriptions=[deleted, sibling]
+    )
+    svc = _service()
+
+    async with _drive_single(svc, user, deleted, by_id=None, by_short_uuid=SimpleNamespace(id=777)):
+        pass
+
+    assert sibling.status == SubscriptionStatus.ACTIVE.value, 'у соседа живой аккаунт — истекать нельзя'
+    assert sibling.connected_squads == ['sq1']
+
+
+@pytest.mark.asyncio
+async def test_single_tariff_sibling_without_any_live_account_is_expired():
+    """А если и его собственный ключ панель не знает — истекаем, это и есть смысл цикла."""
+    deleted = _sub(1, SubscriptionStatus.EXPIRED.value, end_days=-10, remnawave_id=101, squads=[])
+    sibling = _sub(2, SubscriptionStatus.ACTIVE.value, end_days=-1, remnawave_id=None, squads=['sq1'])
+    user = SimpleNamespace(
+        id=7, telegram_id=100, remnawave_id=101, remnawave_uuid='legacy', subscriptions=[deleted, sibling]
+    )
+    svc = _service()
+
+    async with _drive_single(svc, user, deleted, by_id=None, by_short_uuid=None):
+        pass
+
+    assert sibling.status == SubscriptionStatus.EXPIRED.value

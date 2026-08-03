@@ -823,8 +823,14 @@ async def test_user_takes_the_exact_id_from_a_previously_linked_subscription(mon
         await _seed(db, subs=[(10, 'linked', 'uuid-a')])
         (await db.get(SubModel, 10)).remnawave_id = 505  # связана раньше
         await db.commit()
-        # По telegram_id панель отдаёт ДРУГОЙ аккаунт.
-        _patch_roster(monkeypatch, [panel_user(909, short_uuid='other', username='u', telegram_id=551)])
+        # 505 в панели ЖИВ, а по telegram_id панель отдаёт ДРУГОЙ аккаунт.
+        _patch_roster(
+            monkeypatch,
+            [
+                panel_user(505, short_uuid='linked', username='u505'),
+                panel_user(909, short_uuid='other', username='u', telegram_id=551),
+            ],
+        )
 
         await backfill_remnawave_ids(db, dry_run=False)
 
@@ -859,3 +865,27 @@ async def test_user_with_two_different_panel_accounts_is_reported_not_guessed(mo
         assert (await db.get(UserModel, 1)).remnawave_id is None, 'нельзя выбирать один из двух наугад'
         assert not report.complete
         assert any(r.kind == 'user' and r.row_id == 1 for r in report.unresolved)
+
+
+@pytest.mark.asyncio
+async def test_a_dead_persisted_id_does_not_beat_a_live_telegram_match(monkeypatch):
+    """Сохранённый id, которого в панели уже нет, не должен ничего решать.
+
+    Подмешивая ранее связанные подписки, легко втянуть протухший id: аккаунт
+    удалили, а колонка осталась. Такой id становился бы каноническим адресом
+    пользователя и бил бы корректное совпадение по telegram_id — либо, попав в
+    компанию к живому, объявлял бы пользователя неоднозначным и блокировал бы
+    разбор целиком. Поэтому подмешиваем только то, что панель подтверждает.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'gone', 'uuid-a')])
+        (await db.get(SubModel, 10)).remnawave_id = 505  # аккаунта 505 в панели больше нет
+        (await db.get(SubModel, 10)).status = 'expired'
+        await db.commit()
+        _patch_roster(monkeypatch, [panel_user(909, short_uuid='live', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(UserModel, 1)).remnawave_id == 909, 'живой аккаунт должен победить мёртвый id'

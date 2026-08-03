@@ -53,6 +53,10 @@ logger = structlog.get_logger(__name__)
 # сиблинг-группы получает панельный id первой.
 _ALIVE_STATUSES = ('active', 'trial', 'limited')
 
+# Порог, за которым список id в IN(...) перестаёт быть разумным: asyncpg
+# отвергает запрос с более чем 32767 bind-параметрами.
+_MAX_INLINE_IDS = 10_000
+
 
 @dataclass
 class UnresolvedRow:
@@ -98,12 +102,15 @@ class _PanelIndex:
     """Local lookup tables over the full panel roster."""
 
     def __init__(self, panel_users: list[RemnaWaveUser]):
+        self.by_id: dict[int, RemnaWaveUser] = {}
         self.by_short_uuid: dict[str, RemnaWaveUser] = {}
         self.by_username: dict[str, RemnaWaveUser] = {}
         self.by_telegram_id: dict[int, list[RemnaWaveUser]] = defaultdict(list)
         self.by_email: dict[str, list[RemnaWaveUser]] = defaultdict(list)
 
         for panel_user in panel_users:
+            if panel_user.id is not None:
+                self.by_id[int(panel_user.id)] = panel_user
             if panel_user.short_uuid:
                 self.by_short_uuid[panel_user.short_uuid] = panel_user
             if panel_user.username:
@@ -626,14 +633,29 @@ async def _backfill_users(
             select(Subscription.user_id, Subscription.remnawave_id).where(Subscription.remnawave_id.isnot(None))
         )
     ).all():
-        per_user[int(_uid)].add(int(_pid))
+        # ТОЛЬКО живые аккаунты. Сохранённый id мог протухнуть (аккаунт удалили
+        # из панели), а здесь он становится каноническим адресом пользователя и
+        # бьёт корректное совпадение по telegram_id. Мёртвый id, попав сюда,
+        # либо прописывался бы пользователю, либо — вместе с живым — делал бы
+        # его «неоднозначным» и блокировал бы разбор целиком.
+        if int(_pid) in index.by_id:
+            per_user[int(_uid)].add(int(_pid))
 
     gate = User.remnawave_uuid.isnot(None)
     candidate_user_ids = set(per_user)
     if candidate_user_ids:
-        gate = or_(gate, User.id.in_(candidate_user_ids))
+        if len(candidate_user_ids) > _MAX_INLINE_IDS:
+            # Драйвер не примет столько bind-параметров (asyncpg рубит на 32767).
+            # Берём всех незаполненных: условие IS NULL ниже и так сужает выборку,
+            # а лишние строки честно уйдут в отчёт.
+            gate = None
+        else:
+            gate = or_(gate, User.id.in_(candidate_user_ids))
 
-    pending_users = (await db.execute(select(User).where(User.remnawave_id.is_(None), gate))).scalars().all()
+    conditions = [User.remnawave_id.is_(None)]
+    if gate is not None:
+        conditions.append(gate)
+    pending_users = (await db.execute(select(User).where(*conditions))).scalars().all()
 
     def _remember(user: User, panel_id: int) -> None:
         # Однотарифная grace-сессия хранит uuid ПОЛЬЗОВАТЕЛЯ — регистрируем его,
