@@ -637,6 +637,9 @@ class PlategaPaymentMixin:
         завершиться 200 OK независимо от того, доставилось ли сообщение в
         Telegram.
         """
+        if not settings.is_notifications_enabled():
+            return
+
         try:
             from app.cabinet.routes.websocket import cabinet_ws_manager
 
@@ -1027,7 +1030,7 @@ class PlategaPaymentMixin:
 
         method_title = settings.get_platega_method_display_title(payment.payment_method_code)
 
-        if getattr(self, 'bot', None) and user.telegram_id:
+        if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(

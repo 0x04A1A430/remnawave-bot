@@ -1496,8 +1496,7 @@ class AdminNotificationService:
         *,
         category: NotificationCategory | None = None,
     ) -> bool:
-        if not self.chat_id:
-            logger.warning('ADMIN_NOTIFICATIONS_CHAT_ID не настроен')
+        if not self._is_enabled():
             return False
 
         # Per-category suppression
@@ -2358,8 +2357,7 @@ class AdminNotificationService:
             bot: экземпляр бота для отправки сообщения
             topic_id: ID топика для отправки уведомления (если не указан, использует стандартный)
         """
-        if not self.chat_id:
-            logger.warning('ADMIN_NOTIFICATIONS_CHAT_ID не настроен')
+        if not self._is_enabled() or not self.category_enabled.get(NotificationCategory.INFRASTRUCTURE, True):
             return False
 
         # Используем специальный топик для подозрительной активности, если он задан

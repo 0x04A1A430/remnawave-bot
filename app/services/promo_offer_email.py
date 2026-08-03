@@ -44,7 +44,7 @@ async def send_promo_offer_email(
     from app.config import settings
     from app.services.notification_delivery_service import NotificationType
 
-    if not email:
+    if not email or not settings.is_notifications_enabled():
         return False
     if not email_service.is_configured():
         logger.debug('SMTP не настроен — промо-письмо пропущено', email=email)
