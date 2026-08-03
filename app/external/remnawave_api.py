@@ -1632,7 +1632,7 @@ class RemnaWaveAPI:
             return False
 
         try:
-            await self._make_request('POST', '/api/hwid/devices/delete-all', data={'userId': panel_user_id})
+            result = await self._make_request('POST', '/api/hwid/devices/delete-all', data={'userId': panel_user_id})
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return True  # пользователя/устройств уже нет — цель достигнута
@@ -1646,6 +1646,26 @@ class RemnaWaveAPI:
         except Exception as e:
             logger.error('Ошибка при сбросе устройств', panel_user_id=panel_user_id, error=e)
             return False
+
+        # Ответ несёт состояние ПОСЛЕ удаления (`{total, devices}` по контракту).
+        # Игнорировать его нельзя: панель может ответить 200, оставив устройства
+        # на месте, и вызывающий отрапортует пользователю ложный успех.
+        payload = (result or {}).get('response') if isinstance(result, dict) else None
+        if isinstance(payload, dict):
+            remaining = payload.get('total')
+            if remaining is None:
+                remaining = len(payload.get('devices') or [])
+            try:
+                remaining = int(remaining)
+            except (TypeError, ValueError):
+                remaining = 0
+            if remaining > 0:
+                logger.error(
+                    'Панель приняла сброс устройств, но устройства остались',
+                    panel_user_id=panel_user_id,
+                    remaining=remaining,
+                )
+                return False
 
         return True
 

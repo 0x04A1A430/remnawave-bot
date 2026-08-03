@@ -175,6 +175,11 @@ def test_coerce_panel_user_id_rejects_everything_else(value: Any):
 def test_invalid_user_id_error_is_a_remnawave_api_error():
     """Вызывающий код ловит RemnaWaveAPIError — новый тип не должен пролетать мимо."""
     assert issubclass(RemnaWaveInvalidUserIdError, RemnaWaveAPIError)
+    # Небезопасные формы, которые int() принял бы молча, подменив id
+    # ДРУГИМ пользователем, и не-ASCII цифры, проходящие str.isdigit().
+    for bad in ('4_2', '+42', '\u00b2', '\u0665', '\uff11\uff12'):
+        with pytest.raises(RemnaWaveInvalidUserIdError):
+            coerce_panel_user_id(bad)
 
 
 @pytest.mark.parametrize(
@@ -1043,3 +1048,38 @@ async def test_enrich_uses_local_encryption_without_network(monkeypatch):
         api._call_happ_crypto_api.assert_not_called()
     finally:
         _reset_happ_state()
+
+
+@pytest.mark.asyncio
+async def test_delete_all_devices_reports_failure_when_devices_remain(monkeypatch):
+    """Панель может ответить 200, оставив устройства — это не успех.
+
+    Ответ `delete-all` несёт состояние ПОСЛЕ удаления (`{total, devices}`).
+    Пока его игнорировали, кабинет рапортовал пользователю «готово», а
+    устройства оставались на месте.
+    """
+    from app.external.remnawave_api import RemnaWaveAPI
+
+    api = RemnaWaveAPI(base_url='http://x', api_key='k')
+    calls = []
+
+    async def fake(method, path, data=None, **kw):
+        calls.append((method, path))
+        return {'response': {'total': 3, 'devices': [{'hwid': 'a'}, {'hwid': 'b'}, {'hwid': 'c'}]}}
+
+    monkeypatch.setattr(api, '_make_request', fake)
+    assert await api.reset_user_devices(42) is False, 'остались устройства — успехом это не считается'
+    assert calls == [('POST', '/api/hwid/devices/delete-all')]
+
+
+@pytest.mark.asyncio
+async def test_delete_all_devices_reports_success_when_panel_is_empty(monkeypatch):
+    from app.external.remnawave_api import RemnaWaveAPI
+
+    api = RemnaWaveAPI(base_url='http://x', api_key='k')
+
+    async def fake(method, path, data=None, **kw):
+        return {'response': {'total': 0, 'devices': []}}
+
+    monkeypatch.setattr(api, '_make_request', fake)
+    assert await api.reset_user_devices(42) is True

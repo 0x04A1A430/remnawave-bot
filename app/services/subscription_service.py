@@ -393,17 +393,19 @@ class SubscriptionService:
             remnawave_id=adopted.id,
         )
         if multi_tariff:
-            # Четвёртый писатель в частично-уникальную колонку — та же защита,
-            # что у остальных трёх: соседняя подписка могла уже держать аккаунт,
-            # и безусловная запись падала бы на IntegrityError при flush ниже.
-            if await self._panel_id_is_free_for(db, subscription, adopted.id):
-                subscription.remnawave_id = adopted.id
-            else:
+            # Четвёртый писатель в частично-уникальную колонку. Но здесь мало
+            # НЕ ЗАПИСАТЬ колонку: возвращённый id вызывающий тут же отправляет
+            # в панель PATCH-ом. Если аккаунт держит соседняя подписка, такой
+            # PATCH перепишет ЕЁ срок, лимиты и сквады — и это необратимо, в
+            # отличие от отката транзакции. Поэтому отказываемся целиком.
+            if not await self._panel_id_is_free_for(db, subscription, adopted.id):
                 logger.warning(
-                    '⚠️ Панельный id уже закреплён за другой подпиской — колонку не трогаем',
+                    '⚠️ Панельный id уже закреплён за другой подпиской — обновление отменено',
                     subscription_id=getattr(subscription, 'id', None),
                     remnawave_id=adopted.id,
                 )
+                return None
+            subscription.remnawave_id = adopted.id
         else:
             # Только на User: в single-tariff все подписки одного пользователя
             # указывают на ОДИН панельный аккаунт, а `uq_subscriptions_remnawave_id`

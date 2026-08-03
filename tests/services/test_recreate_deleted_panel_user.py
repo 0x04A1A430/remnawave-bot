@@ -1347,3 +1347,29 @@ async def test_ownership_mismatch_is_not_rescued_by_a_telegram_less_account(monk
     api.get_user_by_short_uuid.assert_not_awaited()
     assert sub.remnawave_id is None
     assert sub.remnawave_short_uuid is None
+
+
+async def test_adoption_refuses_when_a_sibling_owns_the_account(monkeypatch):
+    """Занятый аккаунт — повод отменить операцию, а не только пропустить запись.
+
+    Возвращённый id вызывающий тут же отправляет в панель PATCH-ом. Если
+    аккаунт держит соседняя подписка, такой PATCH перепишет ЕЁ срок, лимиты и
+    сквады — и это необратимо, в отличие от отката транзакции. Поэтому
+    `_adopt_panel_id_for_update` обязан вернуть None.
+    """
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: True)
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
+    service = SubscriptionService()
+    _patch_api_client(monkeypatch, service, api)
+
+    sub, user = _validation_subject()
+    db = AsyncMock()
+    # Аккаунт 8812 уже держит подписка #99 того же человека.
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=99))
+
+    result = await service._adopt_panel_id_for_update(db, sub, user, True)
+
+    assert result is None, 'операция должна быть отменена целиком'
+    assert sub.remnawave_id is None
+    api.update_user.assert_not_awaited()

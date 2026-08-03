@@ -778,7 +778,9 @@ async def get_user_by_remnawave_identifier(
     которую видно в панели (и единственной у подписок без числового id).
     """
     identifier = (remnawave_identifier or '').strip()
-    if identifier.isdigit():
+    # Та же граница, что и в клиенте: `isdigit()` истинен для '²'/'٥', на
+    # которых int() либо падает, либо молча даёт ЧУЖОЙ id.
+    if identifier.isascii() and identifier.isdigit():
         panel_user_id = int(identifier)
         # BigInteger: значение вне диапазона — не «не найдено», а мусор на входе.
         if not 0 < panel_user_id < 2**63:

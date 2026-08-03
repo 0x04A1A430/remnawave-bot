@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import structlog
@@ -36,14 +37,30 @@ from app.services.system_settings_service import bot_configuration_service
 logger = structlog.get_logger(__name__)
 
 
-def _write_audit(report) -> str | None:
-    directory = Path(os.environ.get('BACKFILL_AUDIT_DIR') or os.environ.get('LOG_DIR') or '.')
+def _write_audit(report, *, committed: bool) -> str | None:
+    # settings.LOG_DIR, а не голое окружение: в контейнере смонтирован ./logs, а
+    # запасное '.' — это /app, который НЕ том, и файл исчезал вместе с
+    # `docker compose run --rm` ровно в тот момент, когда он и нужен.
+    directory = Path(os.environ.get('BACKFILL_AUDIT_DIR') or settings.LOG_DIR or 'logs')
     suffix = 'apply' if not report.dry_run else 'dryrun'
-    path = directory / f'remnawave_backfill_{suffix}.json'
+    if not committed:
+        # Прогон откатился: это не след записей, а разбор конфликтов.
+        suffix = 'conflicts'
+    # Уникальное имя: фиксированное затирало след предыдущего прогона — тот
+    # самый, с которым инструкция велит сверяться.
+    stamp = datetime.now(UTC).strftime('%Y%m%d-%H%M%S')
+    path = directory / f'remnawave_backfill_{suffix}_{stamp}.json'
     try:
         directory.mkdir(parents=True, exist_ok=True)
+        payload = report.as_audit()
+        # Явно, а не по признаку dry_run: после отката по конфликтам ничего не
+        # записано, хотя `applied` заполнен — инструкция обещает «не записано
+        # ничего», и файл не должен ей противоречить.
+        payload['summary']['committed'] = committed
+        if not committed:
+            payload['applied_but_rolled_back'] = payload.pop('applied')
         with path.open('w', encoding='utf-8') as handle:
-            json.dump(report.as_audit(), handle, ensure_ascii=False, indent=2, default=str)
+            json.dump(payload, handle, ensure_ascii=False, indent=2, default=str)
     except OSError as error:
         # Отчёт — не причина ронять прогон, но молчать о потере следа нельзя.
         logger.warning('backfill: не удалось записать полный отчёт', path=path, error=str(error))
@@ -113,7 +130,7 @@ async def _run(apply: bool) -> int:
     # Полный след — в файл. В консоли списки усечены до 20 строк, а инструкция
     # требует «разбирать по списку»: без файла полный перечень взять негде, как
     # и ответить потом на вопрос «какие строки прогон изменил и на что».
-    audit_path = _write_audit(report)
+    audit_path = _write_audit(report, committed=apply and not report.conflicts)
     if audit_path:
         print(f'  полный отчёт: {audit_path}')
 

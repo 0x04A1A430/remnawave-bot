@@ -80,7 +80,10 @@ class AppliedRow:
     row_id: Any
     panel_id: int
     strategy: str
-    previous_panel_id: int | None = None
+    # Откуда id переехал, если это перенос между строками. Раньше в это поле
+    # писался id СТРОКИ-донора под именем «предыдущий панельный id» — оператор,
+    # действуя по следу, направил бы живую подписку на посторонний аккаунт.
+    moved_from_subscription_id: int | None = None
 
 
 @dataclass
@@ -282,7 +285,14 @@ async def backfill_remnawave_ids(db: AsyncSession, *, dry_run: bool = True) -> B
     user_ids = {int(s.user_id) for s in subscriptions}
     users_by_id: dict[int, User] = {}
     if user_ids:
-        rows = (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
+        # Тот же порог, что и ниже: asyncpg рубит запрос после 32767
+        # bind-параметров, а здесь их по одному на владельца.
+        if len(user_ids) > _MAX_INLINE_IDS:
+            rows = (await db.execute(select(User))).scalars().all()
+            wanted = set(user_ids)
+            rows = [u for u in rows if int(u.id) in wanted]
+        else:
+            rows = (await db.execute(select(User).where(User.id.in_(user_ids)))).scalars().all()
         users_by_id = {int(u.id): u for u in rows}
 
     # panel id -> the subscription that claimed it, so a double-assignment is
@@ -608,13 +618,19 @@ async def _prefer_alive_sibling(
             row for row in report.unresolved if not (row.kind == 'subscription' and row.row_id == int(target.id))
         ]
         report.by_strategy['moved_to_alive_sibling'] += 1
+        # Запись донора, сделанная `assign()` до переноса, теперь ложна: строка
+        # осталась с NULL. Убираем её, иначе след показывает две подписки с одним
+        # панельным id — состояние, которое индекс делает невозможным.
+        report.applied = [
+            row for row in report.applied if not (row.kind == 'subscription' and row.row_id == int(holder.id))
+        ]
         report.applied.append(
             AppliedRow(
                 kind='subscription',
                 row_id=int(target.id),
                 panel_id=int(panel_id),
                 strategy='moved_to_alive_sibling',
-                previous_panel_id=int(holder.id),
+                moved_from_subscription_id=int(holder.id),
             )
         )
         logger.info(
@@ -789,6 +805,7 @@ async def _backfill_grace_sessions(
     )
 
     for session in sessions:
+        grace_strategy = 'from_parent'
         panel_id = resolved_by_subscription.get(int(session.subscription_id))
         if panel_id is None:
             # The subscription may already have been backfilled by an earlier
@@ -804,7 +821,8 @@ async def _backfill_grace_sessions(
             # строка честно останется неразрешённой.
             panel_id = panel_id_by_uuid.get(str(session.remnawave_uuid))
             if panel_id is not None:
-                report.by_strategy['grace_from_historical_uuid'] += 1
+                grace_strategy = 'grace_from_historical_uuid'
+                report.by_strategy[grace_strategy] += 1
 
         if panel_id is None:
             report.unresolved.append(
@@ -820,5 +838,5 @@ async def _backfill_grace_sessions(
         session.remnawave_id = int(panel_id)
         report.grace_sessions_resolved += 1
         report.applied.append(
-            AppliedRow(kind='grace_session', row_id=str(session.id), panel_id=int(panel_id), strategy='from_parent')
+            AppliedRow(kind='grace_session', row_id=str(session.id), panel_id=int(panel_id), strategy=grace_strategy)
         )

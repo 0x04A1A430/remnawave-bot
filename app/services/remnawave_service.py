@@ -629,7 +629,17 @@ class RemnaWaveService:
                 # statusCounts и totalUsers; суммарный трафик живёт в
                 # `nodes.totalBytesLifetime` и приходит СТРОКОЙ. Прежнее чтение
                 # несуществующего `users.totalTrafficBytes` всегда давало 0.
-                total_user_traffic = int(system_stats.get('nodes', {}).get('totalBytesLifetime') or 0)
+                # Контракт объявляет поле как z.string(). Голый int() валил ВЕСЬ
+                # ответ статистики на любой нечисловой форме, подменяя неверный,
+                # но безобидный ноль экраном ошибки.
+                try:
+                    total_user_traffic = int(str(system_stats.get('nodes', {}).get('totalBytesLifetime') or 0).strip())
+                except (TypeError, ValueError):
+                    logger.warning(
+                        'Панель вернула нечисловой totalBytesLifetime',
+                        value=system_stats.get('nodes', {}).get('totalBytesLifetime'),
+                    )
+                    total_user_traffic = 0
 
                 nodes_weekly_data = []
                 if nodes_stats.get('lastSevenDays'):
