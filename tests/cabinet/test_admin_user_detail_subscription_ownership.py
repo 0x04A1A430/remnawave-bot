@@ -25,12 +25,17 @@ OWNED_ID = 101
 FOREIGN_ID = 202
 MISSING_ID = 303
 
+# Remnawave 3.0.0: панельная запись идентифицируется числовым id, а не UUID.
+OWNED_PANEL_ID = 5001
+FOREIGN_PANEL_ID = 5002
+LEGACY_USER_PANEL_ID = 9999
 
-def _subscription(subscription_id: int, user_id: int, *, uuid: str | None) -> SimpleNamespace:
+
+def _subscription(subscription_id: int, user_id: int, *, panel_id: int | None) -> SimpleNamespace:
     return SimpleNamespace(
         id=subscription_id,
         user_id=user_id,
-        remnawave_uuid=uuid,
+        remnawave_id=panel_id,
         is_active=True,
         status='active',
         end_date=datetime.now(UTC) + timedelta(days=10),
@@ -40,30 +45,33 @@ def _subscription(subscription_id: int, user_id: int, *, uuid: str | None) -> Si
     )
 
 
-def _user(*subscriptions: SimpleNamespace, remnawave_uuid: str | None = None) -> SimpleNamespace:
+def _user(*subscriptions: SimpleNamespace, remnawave_id: int | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         id=OWNER_ID,
         telegram_id=1000,
         email=None,
-        remnawave_uuid=remnawave_uuid,
+        remnawave_id=remnawave_id,
         subscriptions=list(subscriptions),
     )
 
 
 @pytest.fixture
 def owned_subscription() -> SimpleNamespace:
-    return _subscription(OWNED_ID, OWNER_ID, uuid='owned-panel-uuid')
+    return _subscription(OWNED_ID, OWNER_ID, panel_id=OWNED_PANEL_ID)
 
 
 @pytest.fixture
 def foreign_subscription() -> SimpleNamespace:
-    return _subscription(FOREIGN_ID, 20, uuid='foreign-panel-uuid')
+    return _subscription(FOREIGN_ID, 20, panel_id=FOREIGN_PANEL_ID)
 
 
 @pytest.fixture
 def ownership_boundary(monkeypatch, owned_subscription, foreign_subscription):
     """Make the authoritative lookup return only the subscription owned by OWNER_ID."""
-    user = _user(owned_subscription, foreign_subscription)
+    # Легаси-идентичность пользователя заполнена намеренно: подстановка её вместо
+    # id выбранной подписки должна ловиться как «дёрнули не ту личность», а не
+    # маскироваться под «панель вообще не дёрнули».
+    user = _user(owned_subscription, foreign_subscription, remnawave_id=LEGACY_USER_PANEL_ID)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
 
     async def get_owned_subscription(_db, subscription_id, user_id):
@@ -81,13 +89,23 @@ def ownership_boundary(monkeypatch, owned_subscription, foreign_subscription):
 
 
 class _Api:
-    def __init__(self, calls: dict[str, int]):
+    """Двойник клиента 3.0.0: user-методы адресуют панельного юзера числовым id.
+
+    Каждый вызов кладёт полученный идентификатор в ``calls['panel_ids']`` —
+    так тест видит не только «панель дёрнули», но и «дёрнули за ту личность».
+    """
+
+    def __init__(self, calls: dict):
         self.calls = calls
 
-    async def get_user_by_uuid(self, uuid):
-        self.calls['get_user_by_uuid'] += 1
+    def _record(self, name: str, user_id) -> None:
+        self.calls[name] += 1
+        self.calls['panel_ids'].append(user_id)
+
+    async def get_user_by_id(self, user_id):
+        self._record('get_user_by_id', user_id)
         return SimpleNamespace(
-            uuid=uuid,
+            id=user_id,
             trojan_password='owned-panel-marker',  # pragma: allowlist secret
             vless_uuid='owned-vless',
             ss_password='owned-ss',  # pragma: allowlist secret
@@ -101,16 +119,17 @@ class _Api:
             user_traffic=None,
         )
 
-    async def get_user_devices_all(self, _uuid):
-        self.calls['get_user_devices_all'] += 1
+    async def get_user_devices_all(self, user_id):
+        self._record('get_user_devices_all', user_id)
         return {'devices': [{'hwid': 'owned-hwid', 'platform': 'ios'}], 'total': 1}
 
-    async def get_subscription_request_history(self, _uuid, *, offset, limit):
-        self.calls['get_subscription_request_history'] += 1
+    async def get_subscription_request_history(self, user_id):
+        # offset/limit убраны из клиента: панель их игнорировала.
+        self._record('get_subscription_request_history', user_id)
         return {'total': 1, 'records': [{'ip': '192.0.2.1'}]}
 
-    async def remove_device(self, _uuid, _hwid):
-        self.calls['remove_device'] += 1
+    async def remove_device(self, user_id, _hwid):
+        self._record('remove_device', user_id)
         return True
 
 
@@ -120,10 +139,11 @@ def panel_service(monkeypatch):
         'constructed': 0,
         'get_api_client': 0,
         'client_entered': 0,
-        'get_user_by_uuid': 0,
+        'get_user_by_id': 0,
         'get_user_devices_all': 0,
         'get_subscription_request_history': 0,
         'remove_device': 0,
+        'panel_ids': [],
     }
 
     class Service:
@@ -185,6 +205,8 @@ async def test_subscription_reads_and_device_delete_accept_owned_subscription(
 
     owned_result = await route(OWNER_ID, admin=admin, db=db, subscription_id=OWNED_ID, **kwargs)
     assert foreign_marker in str(owned_result)
+    # Панель адресуется id выбранной подписки, а не пользовательским/легаси.
+    assert panel_service['panel_ids'] == [OWNED_PANEL_ID]
 
 
 @pytest.mark.parametrize(
@@ -215,10 +237,11 @@ async def test_subscription_reads_and_device_delete_reject_foreign_and_absent_wi
             'constructed': 0,
             'get_api_client': 0,
             'client_entered': 0,
-            'get_user_by_uuid': 0,
+            'get_user_by_id': 0,
             'get_user_devices_all': 0,
             'get_subscription_request_history': 0,
             'remove_device': 0,
+            'panel_ids': [],
         }
 
 
@@ -255,12 +278,12 @@ async def test_panel_info_validates_supplied_subscription_before_unconfigured_se
     assert calls == {'constructed': 0, 'get_api_client': 0}
 
 
-async def test_panel_info_does_not_fall_back_to_user_uuid_for_selected_unlinked_subscription(
+async def test_panel_info_does_not_fall_back_to_user_panel_id_for_selected_unlinked_subscription(
     monkeypatch, panel_service
 ):
     """Would fail if a selected null-link subscription leaked legacy panel information."""
-    selected = _subscription(OWNED_ID, OWNER_ID, uuid=None)
-    user = _user(selected, remnawave_uuid='legacy-user-uuid')
+    selected = _subscription(OWNED_ID, OWNER_ID, panel_id=None)
+    user = _user(selected, remnawave_id=LEGACY_USER_PANEL_ID)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
 
     async def get_selected(_db, subscription_id, user_id):
@@ -281,10 +304,11 @@ async def test_panel_info_does_not_fall_back_to_user_uuid_for_selected_unlinked_
         'constructed': 0,
         'get_api_client': 0,
         'client_entered': 0,
-        'get_user_by_uuid': 0,
+        'get_user_by_id': 0,
         'get_user_devices_all': 0,
         'get_subscription_request_history': 0,
         'remove_device': 0,
+        'panel_ids': [],
     }
 
 
@@ -318,7 +342,7 @@ async def test_subscription_actions_accept_an_owned_subscription(
 
     assert result.success is True
     if action == 'reset':
-        panel_disable.assert_awaited_once_with(owned_subscription.remnawave_uuid)
+        panel_disable.assert_awaited_once_with(owned_subscription.remnawave_id)
         reset_subscription.assert_awaited_once_with(db, owned_subscription)
     else:
         sync.assert_awaited_once_with(db, ownership_boundary, owned_subscription, pinned_subscription_identity=True)
@@ -339,8 +363,8 @@ async def test_selected_actions_pin_sync_to_the_selected_identity_when_legacy_mo
 ):
     """A supplied subscription id must opt out of all single-tariff fallbacks."""
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-    ownership_boundary.remnawave_uuid = 'legacy-other-subscription-uuid'
-    owned_subscription.remnawave_uuid = 'selected-exact-uuid'
+    ownership_boundary.remnawave_id = LEGACY_USER_PANEL_ID
+    owned_subscription.remnawave_id = OWNED_PANEL_ID
     sync = AsyncMock()
     monkeypatch.setattr(admin_users, '_sync_subscription_to_panel', sync)
     monkeypatch.setattr(admin_users, '_build_subscription_info_async', AsyncMock(return_value=None))
@@ -361,15 +385,15 @@ async def test_selected_actions_pin_sync_to_the_selected_identity_when_legacy_mo
     )
 
 
-async def test_selected_sync_uses_only_selected_uuid_when_legacy_mode_is_enabled(monkeypatch):
-    """The helper itself must not substitute the user's legacy panel UUID."""
-    looked_up: list[str] = []
-    updated: list[str] = []
+async def test_selected_sync_uses_only_selected_panel_id_when_legacy_mode_is_enabled(monkeypatch):
+    """The helper itself must not substitute the user's legacy panel user id."""
+    looked_up: list[int] = []
+    updated: list[int] = []
 
     class Api:
-        async def get_user_by_uuid(self, panel_uuid):
-            looked_up.append(panel_uuid)
-            return SimpleNamespace(uuid=panel_uuid)
+        async def get_user_by_id(self, panel_user_id):
+            looked_up.append(panel_user_id)
+            return SimpleNamespace(id=panel_user_id)
 
     class Service:
         is_configured = True
@@ -381,7 +405,8 @@ async def test_selected_sync_uses_only_selected_uuid_when_legacy_mode_is_enabled
             return context
 
     async def update_panel_user(_api, _subscription_id, **kwargs):
-        updated.append(kwargs['uuid'])
+        # В 3.0.0 клиент адресует пользователя kwargs['user_id'], а не uuid.
+        updated.append(kwargs['user_id'])
         return SimpleNamespace(
             subscription_url='https://selected.example/sub',
             happ_crypto_link='crypto',
@@ -399,14 +424,14 @@ async def test_selected_sync_uses_only_selected_uuid_when_legacy_mode_is_enabled
         username=None,
         telegram_id=1000,
         email=None,
-        remnawave_uuid='legacy-other-subscription-uuid',
+        remnawave_id=LEGACY_USER_PANEL_ID,
         last_remnawave_sync=None,
     )
     subscription = SimpleNamespace(
         id=OWNED_ID,
         status='active',
         end_date=datetime.now(UTC) + timedelta(days=30),
-        remnawave_uuid='selected-exact-uuid',
+        remnawave_id=OWNED_PANEL_ID,
         remnawave_short_id=None,
         traffic_limit_gb=10,
         tariff=None,
@@ -418,32 +443,33 @@ async def test_selected_sync_uses_only_selected_uuid_when_legacy_mode_is_enabled
     )
     db = AsyncMock()
 
-    await admin_users._sync_subscription_to_panel(db, user, subscription, pinned_subscription_identity=True)
+    changes = await admin_users._sync_subscription_to_panel(db, user, subscription, pinned_subscription_identity=True)
 
-    assert looked_up == ['selected-exact-uuid']
-    assert updated == ['selected-exact-uuid']
-    assert user.remnawave_uuid == 'legacy-other-subscription-uuid'
+    assert changes.get('action') == 'updated'
+    assert looked_up == [OWNED_PANEL_ID]
+    assert updated == [OWNED_PANEL_ID]
+    assert user.remnawave_id == LEGACY_USER_PANEL_ID
 
 
 async def test_selected_sync_with_no_panel_link_does_not_substitute_legacy_identity(monkeypatch):
     """A null selected link must cause no panel access, even in legacy mode."""
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
-    user = SimpleNamespace(id=OWNER_ID, remnawave_uuid='legacy-other-subscription-uuid')
-    subscription = SimpleNamespace(remnawave_uuid=None)
+    user = SimpleNamespace(id=OWNER_ID, remnawave_id=LEGACY_USER_PANEL_ID)
+    subscription = SimpleNamespace(id=OWNED_ID, remnawave_id=None)
     db = AsyncMock()
 
     result = await admin_users._sync_subscription_to_panel(db, user, subscription, pinned_subscription_identity=True)
 
-    assert result == {'skipped': True, 'reason': 'Selected subscription has no panel UUID'}
+    assert result == {'skipped': True, 'reason': 'Selected subscription has no panel user id'}
     db.commit.assert_not_awaited()
 
 
 async def test_selected_devices_return_selected_subscription_device_limit(monkeypatch, panel_service):
-    primary = _subscription(11, OWNER_ID, uuid='primary-uuid')
+    primary = _subscription(11, OWNER_ID, panel_id=4001)
     primary.device_limit = 2
-    selected = _subscription(OWNED_ID, OWNER_ID, uuid='selected-uuid')
+    selected = _subscription(OWNED_ID, OWNER_ID, panel_id=OWNED_PANEL_ID)
     selected.device_limit = 9
-    user = _user(primary, selected, remnawave_uuid='legacy-user-uuid')
+    user = _user(primary, selected, remnawave_id=LEGACY_USER_PANEL_ID)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
     monkeypatch.setattr(admin_users, '_get_owned_subscription_or_404', AsyncMock(return_value=selected))
@@ -453,13 +479,14 @@ async def test_selected_devices_return_selected_subscription_device_limit(monkey
     )
 
     assert response.device_limit == 9
+    assert panel_service['panel_ids'] == [OWNED_PANEL_ID]
 
 
 @pytest.mark.parametrize('raises', [False, True], ids=['false-result', 'exception'])
 async def test_selected_reset_returns_unsuccessful_when_panel_deactivation_fails(
     monkeypatch, ownership_boundary, owned_subscription, raises
 ):
-    async def panel_disable(_self, _panel_uuid):
+    async def panel_disable(_self, _panel_user_id):
         if raises:
             raise RuntimeError('panel down')
         return False
@@ -485,8 +512,8 @@ async def test_selected_reset_returns_unsuccessful_when_panel_deactivation_fails
 async def test_selected_reset_without_link_does_not_substitute_legacy_identity(
     monkeypatch, ownership_boundary, owned_subscription
 ):
-    ownership_boundary.remnawave_uuid = 'legacy-other-subscription-uuid'
-    owned_subscription.remnawave_uuid = None
+    ownership_boundary.remnawave_id = LEGACY_USER_PANEL_ID
+    owned_subscription.remnawave_id = None
     panel_disable = AsyncMock(return_value=True)
     reset_subscription = AsyncMock()
     monkeypatch.setattr('app.services.subscription_service.SubscriptionService.disable_remnawave_user', panel_disable)
