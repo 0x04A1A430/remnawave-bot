@@ -21,8 +21,9 @@ from app.services.remnawave_identity_backfill import (
 
 def _patch_roster(monkeypatch, panel_users):
     """Replace the panel sweep and the configuration check with local data."""
-    import app.services.remnawave_identity_backfill as mod
     from app.services.remnawave_service import RemnaWaveService
+
+    target = 'app.services.remnawave_identity_backfill'
 
     async def fake_roster(_service):
         return panel_users
@@ -31,14 +32,19 @@ def _patch_roster(monkeypatch, panel_users):
     # «реализовала» метод, которого у RemnaWaveService нет, и спрятала падение
     # CLI по AttributeError. Здесь любой такой вызов упадёт в тестах.
     class _Svc(RemnaWaveService):
+        # Наследование намеренное: любой вызов метода, которого у настоящего
+        # класса нет, должен падать здесь, а не в проде. `is_configured`
+        # переопределён атрибутом класса и перекрывает property родителя.
         is_configured = True
         configuration_error = None
 
         def __init__(self):
-            pass  # настройки панели в тестах не читаем
+            # Родительский __init__ только читает настройки и складывает
+            # параметры — сеть он не трогает, поэтому вызвать его безопасно.
+            super().__init__()
 
-    monkeypatch.setattr(mod, '_load_panel_roster', fake_roster)
-    monkeypatch.setattr(mod, 'RemnaWaveService', _Svc)
+    monkeypatch.setattr(f'{target}._load_panel_roster', fake_roster)
+    monkeypatch.setattr(f'{target}.RemnaWaveService', _Svc)
 
 
 def panel_user(user_id, *, short_uuid=None, username=None, telegram_id=None, email=None):

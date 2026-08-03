@@ -958,11 +958,13 @@ async def test_happ_local_encryption_roundtrip(monkeypatch):
     from Crypto.Cipher import PKCS1_v1_5
     from Crypto.PublicKey import RSA
 
-    import app.external.remnawave_api as rw
     from app.config import settings
 
     keypair = RSA.generate(2048)
-    monkeypatch.setattr(rw, 'HAPP_CRYPTO_V4_PUBLIC_KEY', keypair.publickey().export_key().decode())
+    monkeypatch.setattr(
+        'app.external.remnawave_api.HAPP_CRYPTO_V4_PUBLIC_KEY',
+        keypair.publickey().export_key().decode(),
+    )
     monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_LOCAL_ENCRYPTION_ENABLED', True)
 
     api = _api()

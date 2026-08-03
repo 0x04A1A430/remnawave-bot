@@ -322,6 +322,8 @@ class RemnaWaveWebhookService:
             try:
                 candidate_telegram_ids.append(int(telegram_id))
             except (TypeError, ValueError):
+                # Конверт вебхука — внешние данные: непригодный telegramId это
+                # просто «кандидата нет», а не повод ронять обработку хука.
                 pass
 
         nested_tid = nested_user.get('telegramId')
@@ -329,7 +331,7 @@ class RemnaWaveWebhookService:
             try:
                 candidate_telegram_ids.append(int(nested_tid))
             except (TypeError, ValueError):
-                pass
+                pass  # см. выше: непригодный telegramId — просто отсутствие кандидата
 
         return any(pid in cls._intentional_panel_deletions_by_id for pid in candidate_ids) or any(
             tid in cls._intentional_panel_deletions_by_telegram_id for tid in candidate_telegram_ids
@@ -881,6 +883,8 @@ class RemnaWaveWebhookService:
                 try:
                     user = await get_user_by_telegram_id(db, int(telegram_id))
                 except (ValueError, TypeError):
+                    # Непригодный telegramId в конверте — значит по нему искать
+                    # нечего; ниже пробуем остальные ключи опознания.
                     pass
 
         # Try nested user object (e.g. user_hwid_devices events).
@@ -893,7 +897,7 @@ class RemnaWaveWebhookService:
                     try:
                         user = await get_user_by_telegram_id(db, int(nested_tid))
                     except (ValueError, TypeError):
-                        pass
+                        pass  # как и выше: непригодный telegramId — просто нет совпадения
 
         # Последняя попытка найти ПОЛЬЗОВАТЕЛЯ — через панельную идентичность
         # подписки. Не гейтится на multi-tariff намеренно: в single-tariff

@@ -24,16 +24,15 @@ Create Date: 2026-08-01
 
 """
 
-from typing import Sequence, Union
-
 import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = '0104'
-down_revision: Union[str, None] = '0103'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+# Стиль как у соседних ревизий: alembic читает эти имена по соглашению.
+revision = '0104'
+down_revision = '0103'
+branch_labels = None
+depends_on = None
 
 
 _SUBSCRIPTION_ID_NOT_NULL = 'remnawave_id IS NOT NULL'
