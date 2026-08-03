@@ -64,7 +64,23 @@ def test_coerce_panel_user_id_rejects_non_numeric_identifiers():
     """Мусорный идентификатор отсекается на границе клиента и не доходит до сети."""
     assert coerce_panel_user_id(42) == 42
     assert coerce_panel_user_id(' 42 ') == 42  # BigInteger может прийти строкой из FSM/JSON
-    for bad in (None, '', 'dead-uuid', '3fa85f64-5717-4562-b3fc-2c963f66afa6', 0, -1, True):
+    # '4_2' и '+42' int() молча превращает в 42 — то есть в id ДРУГОГО
+    # пользователя; '²'/'٥' проходят str.isdigit(), но десятичными не являются.
+    # Граничную проверку можно только сужать, поэтому все они — ошибка.
+    for bad in (
+        None,
+        '',
+        'dead-uuid',
+        '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        0,
+        -1,
+        True,
+        '4_2',
+        '+42',
+        '²',
+        '٥',
+        '１２',
+    ):
         try:
             coerce_panel_user_id(bad)
         except RemnaWaveInvalidUserIdError:

@@ -45,12 +45,13 @@ def test_tolerates_garbage_without_raising():
     assert _sum({'series': [{'total': None, 'data': [None, 4]}]}) == 4
 
 
-def test_daily_window_is_a_single_calendar_day():
-    """Порог назван суточным — окно обязано быть одними сутками.
+def test_daily_window_is_one_complete_previous_day():
+    """Окно обязано быть ОДНИМИ полными сутками, и не текущими.
 
-    Эндпоинт bandwidth-stats принимает только даты, поэтому прежнее окно
-    «сегодня-1 … сегодня» складывало ДВОЕ суток и сравнивало с суточным
-    порогом: ровный потребитель ниже порога получал ложное «нарушение».
+    Два дня — ложные срабатывания: ровный потребитель ниже суточного порога
+    перешагнёт его суммой двух дней. Текущий день — обратная беда: проверка по
+    умолчанию идёт в 00:00 UTC, когда сегодняшний день пуст, и она снова не
+    сработает ни разу. Верно только «вчера целиком».
     """
     import ast
     import inspect
@@ -65,8 +66,12 @@ def test_daily_window_is_a_single_calendar_day():
         if isinstance(t, ast.Name)
     }
     assert 'start_date' in assigns and 'end_date' in assigns
-    # end_date должен ссылаться на start_date, а не считаться отдельно от now
+    # Одни сутки: конец ссылается на начало, а не считается отдельно.
     assert isinstance(assigns['end_date'], ast.Name) and assigns['end_date'].id == 'start_date', (
         'окно снова разъехалось на два дня'
     )
-    assert 'timedelta' not in ast.dump(assigns['start_date']), 'start_date не должен отступать назад на сутки'
+    # И это НЕ сегодня: должен быть отступ назад на сутки.
+    dumped = ast.dump(assigns['start_date'])
+    assert 'timedelta' in dumped and 'days' in dumped, (
+        'окно указывает на текущий день — в 00:00 UTC он пуст, проверка не сработает'
+    )

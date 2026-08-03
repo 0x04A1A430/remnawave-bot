@@ -276,14 +276,13 @@ def coerce_panel_user_id(value: Any) -> int:
         raise RemnaWaveInvalidUserIdError(f'Invalid panel user id: {value!r}')
     if isinstance(value, int):
         candidate = value
-    elif isinstance(value, str):
-        # `isdigit()` истинен и для '²', '⑤', которые int() не принимает: без
-        # этой развилки наружу утекал бы голый ValueError, а весь код вокруг
-        # ловит RemnaWaveInvalidUserIdError.
-        try:
-            candidate = int(value.strip(), 10)
-        except ValueError:
-            raise RemnaWaveInvalidUserIdError(f'Invalid panel user id: {value!r}') from None
+    elif isinstance(value, str) and (stripped := value.strip()).isascii() and stripped.isdigit():
+        # Строго ASCII-цифры. `isdigit()` в одиночку истинен для '²' и '٥',
+        # которые int() либо не принимает вовсе, либо молча переводит в число;
+        # а голый int() вдобавок принимает '4_2' и '+42' и превращает их в 42,
+        # то есть в id ДРУГОГО пользователя. Для граничной проверки расширять
+        # приём нельзя — только сужать.
+        candidate = int(stripped)
     else:
         raise RemnaWaveInvalidUserIdError(f'Invalid panel user id: {value!r}')
     if candidate <= 0:
