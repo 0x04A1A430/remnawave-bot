@@ -174,7 +174,15 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     days_remaining = 0
 
     subs = getattr(user, 'subscriptions', None) or []
-    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    # Среди активных берём ту, что кончается РАНЬШЕ всех, а не самую свежую по
+    # дате создания (связь отсортирована по created_at). При мультитарифе иначе
+    # выходило расхождение: список отсортирован по ближайшему окончанию, а в
+    # строке показана дата другой подписки — сортировка выглядела сломанной.
+    _active_subs = [s for s in subs if s.is_active]
+    if _active_subs:
+        subscription = min(_active_subs, key=lambda s: (s.end_date is None, s.end_date))
+    else:
+        subscription = subs[0] if subs else None
     if subscription:
         has_subscription = True
         subscription_status = subscription.status
@@ -597,7 +605,7 @@ async def list_users(
     - **search**: Search by telegram_id, username, first_name, last_name
     - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count)
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
     """
     # Convert status enum to model enum
     user_status = None
@@ -610,6 +618,7 @@ async def list_users(
     order_by_last_activity = sort_by == SortByEnum.LAST_ACTIVITY
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
+    order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -636,6 +645,7 @@ async def list_users(
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
+        order_by_subscription_end=order_by_subscription_end,
     )
 
     total = await get_users_count(
