@@ -807,3 +807,55 @@ async def test_uuid_clash_discovered_during_matching_is_also_dropped(monkeypatch
         session = await db.get(GraceAccessSessionModel, 'g-first-run')
         assert session.remnawave_id is None, 'противоречивый uuid не должен резолвиться наугад'
         assert any(r.kind == 'grace_session' and r.row_id == 'g-first-run' for r in report.unresolved)
+
+
+@pytest.mark.asyncio
+async def test_user_takes_the_exact_id_from_a_previously_linked_subscription(monkeypatch):
+    """Точный id соседней строки бьёт догадку по telegram_id.
+
+    Подписки, связанные предыдущим прогоном (или уже поднятым ботом),
+    отфильтрованы условием IS NULL и в выборку не попадают. Пока их не
+    учитывали, пользователь уходил в телеграм-ветку и мог получить ДРУГОЙ
+    аккаунт, хотя точный ответ лежал строкой рядом.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'linked', 'uuid-a')])
+        (await db.get(SubModel, 10)).remnawave_id = 505  # связана раньше
+        await db.commit()
+        # По telegram_id панель отдаёт ДРУГОЙ аккаунт.
+        _patch_roster(monkeypatch, [panel_user(909, short_uuid='other', username='u', telegram_id=551)])
+
+        await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(UserModel, 1)).remnawave_id == 505
+
+
+@pytest.mark.asyncio
+async def test_user_with_two_different_panel_accounts_is_reported_not_guessed(monkeypatch):
+    """Две подписки на РАЗНЫЕ аккаунты — угадывать нечего, нужна строка в отчёте.
+
+    Ветка `len(candidates) == 1` не покрывала этот случай, и он проваливался в
+    телеграм-догадку: она вернула бы один из аккаунтов наугад и записала адрес,
+    противоречащий части подписок, а отчёт назвал бы прогон полным.
+    """
+    tables = [UserModel.__table__, SubModel.__table__, GraceAccessSessionModel.__table__]
+    async with memory_session(monkeypatch, tables) as db:
+        await _seed(db, subs=[(10, 'a', 'uuid-a'), (20, 'b', 'uuid-b')])
+        await db.commit()
+        _patch_roster(
+            monkeypatch,
+            [
+                panel_user(101, short_uuid='a', username='u1'),
+                panel_user(202, short_uuid='b', username='u2'),
+                panel_user(303, short_uuid='c', username='u3', telegram_id=551),
+            ],
+        )
+
+        report = await backfill_remnawave_ids(db, dry_run=False)
+
+        db.expunge_all()
+        assert (await db.get(UserModel, 1)).remnawave_id is None, 'нельзя выбирать один из двух наугад'
+        assert not report.complete
+        assert any(r.kind == 'user' and r.row_id == 1 for r in report.unresolved)

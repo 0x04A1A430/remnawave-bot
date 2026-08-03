@@ -6,7 +6,7 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -799,6 +799,10 @@ async def test_validation_adopts_panel_id_and_keeps_the_recovery_key(monkeypatch
     _patch_api_client(monkeypatch, service, api)
     sub, user = _validation_subject()
     db = AsyncMock()
+    # Никакая другая подписка этот аккаунт не держит — защита индекса пропускает.
+    # У AsyncMock дочерние атрибуты тоже асинхронные, поэтому результат execute
+    # подменяем обычным моком: `scalar_one_or_none()` вызывается без await.
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
 
     assert await service.validate_and_clean_subscription(db, sub, user) is True
 
@@ -1098,3 +1102,144 @@ async def test_create_does_not_break_on_the_partial_unique_index(monkeypatch):
         assert (await db.get(SubModel, 20)).remnawave_id is None, 'нельзя дублировать id второй строке'
         assert (await db.get(SubModel, 10)).remnawave_id == 77, 'у соседа id забирать тоже нельзя'
         assert (await db.get(UserModel, 1)).remnawave_id == 77, 'адресация остаётся через пользователя'
+
+
+async def test_stale_panel_id_still_gets_rescued_by_short_uuid(monkeypatch):
+    """Протухший числовой id не должен отменять спасение по shortUuid.
+
+    Гейт спасения раньше зависел от «id не было вовсе». Стоило добавить фолбэк
+    `user.remnawave_id or subscription.remnawave_id`, как строка с НЕВЕРНЫМ id
+    (панель его не знает) теряла последний шанс: очистка стирала
+    `remnawave_short_uuid` — единственный точный ключ восстановления связи, —
+    хотя панель по нему аккаунт прекрасно находит.
+    """
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    api = AsyncMock()
+    api.get_user_by_id.return_value = None  # id протух: панель его не знает
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
+    service = SubscriptionService()
+    _patch_api_client(monkeypatch, service, api)
+
+    sub, user = _validation_subject()
+    sub.remnawave_id = 4242
+    user.remnawave_id = None
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+
+    assert await service.validate_and_clean_subscription(db, sub, user) is True
+
+    api.get_user_by_short_uuid.assert_awaited_once()
+    assert sub.remnawave_short_uuid == 'aBcD12', 'ключ восстановления обязан уцелеть'
+    assert sub.remnawave_id == 8812, 'строку надо перепривязать к найденному аккаунту'
+
+
+async def test_short_uuid_adoption_respects_the_partial_unique_index(monkeypatch):
+    """Привязка по shortUuid обязана уступить, если аккаунт держит соседняя строка.
+
+    Это второй писатель в частично-уникальную `subscriptions.remnawave_id`, и
+    защиту к нему сначала не применили. После бэкфила состояние «сосед держит
+    тот же аккаунт» штатно: в single-tariff все подписки человека адресуют один
+    панельный аккаунт. Безусловная запись падала бы на IntegrityError.
+    """
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    api = AsyncMock()
+    api.get_user_by_short_uuid.return_value = SimpleNamespace(id=8812)
+    service = SubscriptionService()
+    _patch_api_client(monkeypatch, service, api)
+
+    sub, user = _validation_subject()
+    db = AsyncMock()
+    # Аккаунт 8812 уже держит подписка #10 того же человека.
+    db.execute.return_value = MagicMock(scalar_one_or_none=MagicMock(return_value=10))
+
+    assert await service.validate_and_clean_subscription(db, sub, user) is True
+
+    assert sub.remnawave_id is None, 'нельзя дублировать id второй строке'
+    assert user.remnawave_id == 8812, 'адресация остаётся через пользователя'
+    assert sub.remnawave_short_uuid == 'aBcD12', 'ключ восстановления обязан уцелеть'
+
+
+async def test_degraded_short_uuid_endpoint_does_not_abort_a_resolvable_sync(monkeypatch):
+    """Деградация точного ключа не должна ронять то, что решается другим ключом.
+
+    Проброс любого не-404 из `_adopt_panel_user_by_short_uuid` был безопасен,
+    пока шаг стоял последним. Подняв его вперёд ради точности, мы сделали 5xx на
+    этом одном эндпоинте фатальным для всех строк без числового id — то есть для
+    всех доапгрейдных строк до конца бэкфила.
+    """
+    user = _make_user()
+    user.remnawave_id = None
+    user.status = 'active'
+    subscription = _make_subscription()
+    subscription.remnawave_short_uuid = 'exact'
+    subscription.actual_status = SubscriptionStatus.ACTIVE.value
+    subscription.traffic_used_gb = 0
+    subscription.device_limit = None
+    subscription.subscription_url = ''
+    subscription.subscription_crypto_link = ''
+
+    only = SimpleNamespace(id=555, short_uuid='exact', subscription_url='https://s/ok', happ_crypto_link=None)
+    api = AsyncMock()
+    api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('panel restarting', 503, {})
+    api.find_users_by_telegram_id.return_value = [only]
+    api.update_user.return_value = only
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    service = SubscriptionService()
+    monkeypatch.setattr(subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)
+    _patch_api_client(monkeypatch, service, api)
+
+    async with service.get_api_client() as client:
+        await service._create_or_update_remnawave_user_single(
+            client,
+            user,
+            subscription,
+            user_tag=None,
+            hwid_limit=None,
+            ext_squad_uuid=None,
+            reset_traffic=False,
+            reset_reason=None,
+        )
+
+    assert api.update_user.await_args.kwargs['user_id'] == 555
+
+
+async def test_degraded_short_uuid_endpoint_still_refuses_to_create_a_duplicate(monkeypatch):
+    """Но если больше НИЧЕМ не опознали — создавать нельзя, надо честно упасть."""
+    user = _make_user()
+    user.remnawave_id = None
+    user.status = 'active'
+    user.telegram_id = None
+    user.email = None
+    subscription = _make_subscription()
+    subscription.remnawave_short_uuid = 'exact'
+    subscription.actual_status = SubscriptionStatus.ACTIVE.value
+    subscription.traffic_used_gb = 0
+    subscription.device_limit = None
+    subscription.subscription_url = ''
+    subscription.subscription_crypto_link = ''
+
+    api = AsyncMock()
+    api.get_user_by_short_uuid.side_effect = RemnaWaveAPIError('panel restarting', 503, {})
+
+    monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: False)
+    service = SubscriptionService()
+    monkeypatch.setattr(subscription_service_mod, 'get_user_by_id', AsyncMock(return_value=user))
+    monkeypatch.setattr(subscription_service_mod, 'resolve_hwid_device_limit_for_payload', lambda s: None)
+    _patch_api_client(monkeypatch, service, api)
+
+    with pytest.raises(RemnaWaveAPIError):
+        async with service.get_api_client() as client:
+            await service._create_or_update_remnawave_user_single(
+                client,
+                user,
+                subscription,
+                user_tag=None,
+                hwid_limit=None,
+                ext_squad_uuid=None,
+                reset_traffic=False,
+                reset_reason=None,
+            )
+
+    api.create_user.assert_not_awaited()

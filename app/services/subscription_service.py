@@ -559,13 +559,29 @@ class SubscriptionService:
             except Exception:
                 pass
 
+        adoption_error: Exception | None = None
         if not existing_users:
             # shortUuid — тоже точный ключ, и он обязан идти ПЕРЕД поиском по
             # telegramId: у человека может быть несколько панельных аккаунтов, и
             # тогда телеграм-поиск вернёт список, из которого ниже берётся
             # первый попавшийся. Именно поэтому бэкфилл в такой ситуации
             # отказывается угадывать — здесь нельзя вести себя иначе.
-            adopted = await self._adopt_panel_user_by_short_uuid(api, subscription)
+            try:
+                adopted = await self._adopt_panel_user_by_short_uuid(api, subscription)
+            except Exception as error:
+                # «Панель моргнула» — это «не знаем», а не «аккаунта нет». В
+                # прежней позиции последнего шанса такую ошибку можно было
+                # ронять сразу; теперь этот шаг идёт первым, и падение отменяло
+                # бы операции, которые прекрасно решаются по telegramId.
+                # Поэтому идём дальше, но запоминаем: если больше ничем не
+                # опознаем, создавать нового НЕЛЬЗЯ — упадём честно.
+                adoption_error = error
+                adopted = None
+                logger.warning(
+                    '⚠️ Не удалось опознать панельного пользователя по short_uuid — пробуем другие ключи',
+                    subscription_id=getattr(subscription, 'id', None),
+                    error=error,
+                )
             if adopted is not None:
                 existing_users = [adopted]
 
@@ -577,6 +593,11 @@ class SubscriptionService:
                 existing_users = await api.find_users_by_email(user.email)
             except Exception:
                 pass
+
+        if not existing_users and adoption_error is not None:
+            # Ничем не опознали, а точный ключ остался непроверенным: создание
+            # здесь завело бы дубль рядом с живым оплаченным аккаунтом.
+            raise adoption_error
 
         if len(existing_users) > 1:
             logger.warning(
@@ -1258,7 +1279,12 @@ class SubscriptionService:
                     # duplicate Remnawave account.
                     return False
 
-            if subscription.remnawave_short_uuid and not check_id:
+            # Гейт по `needs_cleanup`, а НЕ по «не было check_id». Иначе строка с
+            # протухшим числовым id (панель его не знает) теряла последний шанс:
+            # проверка выше ставила needs_cleanup, а спасение по shortUuid
+            # пропускалось, потому что check_id был непустым, — и очистка стирала
+            # единственный точный ключ восстановления связи.
+            if subscription.remnawave_short_uuid and (needs_cleanup or not check_id):
                 # Раньше это однозначно значило «мусорные данные». После апгрейда
                 # на 3.0.0 у той же комбинации есть второе прочтение: строка была
                 # привязана к панели, а числовой id ей ещё не проставил бэкфил.
@@ -1282,7 +1308,18 @@ class SubscriptionService:
                         subscription_id=subscription.id,
                         remnawave_id=panel_user.id,
                     )
-                    subscription.remnawave_id = panel_user.id
+                    # Та же защита частично-уникального индекса, что и в
+                    # `create_remnawave_user`: соседняя подписка того же человека
+                    # штатно держит этот аккаунт после бэкфила, и безусловная
+                    # запись падала бы здесь на IntegrityError.
+                    if await self._panel_id_is_free_for(db, subscription, panel_user.id):
+                        subscription.remnawave_id = panel_user.id
+                    else:
+                        logger.warning(
+                            '⚠️ Панельный id уже закреплён за другой подпиской — адресуем через пользователя',
+                            subscription_id=subscription.id,
+                            remnawave_id=panel_user.id,
+                        )
                     if not settings.is_multi_tariff_enabled() and not user.remnawave_id:
                         user.remnawave_id = panel_user.id
                     await db.flush((subscription, user))

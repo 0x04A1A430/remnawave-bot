@@ -617,6 +617,16 @@ async def _backfill_users(
         panel_id = resolved_by_subscription.get(int(subscription.id))
         if panel_id is not None:
             per_user[int(subscription.user_id)].add(panel_id)
+    # Плюс подписки, связанные РАНЬШЕ: они отфильтрованы условием IS NULL и в
+    # `subscriptions` не попали, но их id — такой же точный адрес пользователя.
+    # Без них пользователь уходил в догадку по telegram_id, хотя ответ лежал
+    # строкой рядом.
+    for _uid, _pid in (
+        await db.execute(
+            select(Subscription.user_id, Subscription.remnawave_id).where(Subscription.remnawave_id.isnot(None))
+        )
+    ).all():
+        per_user[int(_uid)].add(int(_pid))
 
     gate = User.remnawave_uuid.isnot(None)
     candidate_user_ids = set(per_user)
@@ -654,7 +664,12 @@ async def _backfill_users(
         candidates = per_user.get(user_id, set())
         reason: str | None = None
 
-        if len(candidates) == 1:
+        if len(candidates) > 1:
+            # Подписки этого человека указывают на РАЗНЫЕ панельные аккаунты.
+            # Догадка по telegram_id здесь тем более не поможет — она вернёт
+            # один из них наугад и запишет адрес, противоречащий части подписок.
+            reason = 'ambiguous_or_missing_panel_account'
+        elif len(candidates) == 1:
             panel_id = next(iter(candidates))
             reason = _blocked(user_id, panel_id)
             if reason is None:
