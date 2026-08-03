@@ -508,7 +508,11 @@ async def _sync_subscription_from_panel_by_email(db: AsyncSession, user: User) -
                     existing_sub.status = sub_status.value
                     existing_sub.remnawave_short_uuid = panel_user.short_uuid
                     existing_sub.subscription_url = panel_user.subscription_url
-                    existing_sub.subscription_crypto_link = panel_user.happ_crypto_link
+                    # Не затираем рабочую ссылку пустым значением: панель
+                    # отдаёт happ-ссылку не на всех путях, а потеря сохранённой
+                    # ломает кнопку подключения у живого клиента.
+                    if panel_user.happ_crypto_link:
+                        existing_sub.subscription_crypto_link = panel_user.happ_crypto_link
                     existing_sub.connected_squads = connected_squads
                     existing_sub.device_limit = device_limit
                     existing_sub.is_trial = False

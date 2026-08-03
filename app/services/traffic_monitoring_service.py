@@ -652,10 +652,15 @@ class TrafficMonitoringServiceV2:
         violations: list[TrafficViolation] = []
         threshold_bytes = self.get_daily_threshold_gb() * (1024**3)
 
-        # Получаем период за последние 24 часа
+        # ОДИН календарный день, а не «последние 24 часа». Эндпоинт
+        # bandwidth-stats принимает только даты (YYYY-MM-DD), поэтому окно
+        # `сегодня-1 … сегодня` захватывало ДВОЕ суток и сравнивалось с суточным
+        # порогом: пользователь с ровным потреблением ниже порога всё равно
+        # получал «нарушение», как только сумма двух дней его перекрывала.
+        # Раньше это не всплывало, потому что проверка не срабатывала вовсе.
         now = datetime.now(UTC)
-        start_date = (now - timedelta(hours=24)).strftime('%Y-%m-%d')
-        end_date = now.strftime('%Y-%m-%d')
+        start_date = now.strftime('%Y-%m-%d')
+        end_date = start_date
 
         users = await self.get_all_users_with_traffic()
         semaphore = asyncio.Semaphore(self.get_concurrency())

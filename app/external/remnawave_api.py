@@ -723,11 +723,13 @@ class RemnaWaveAPI:
 
         В 3.0.0 поиск живёт в ``GET /api/users/stream`` как query-фильтр.
         """
-        return await self.find_users(telegram_id=telegram_id)
+        # Обогащение включено: заменённый `GET /api/users/by-telegram-id` его
+        # делал, и вызывающие читают `happ_crypto_link` из результата.
+        return await self.find_users(telegram_id=telegram_id, enrich_happ_links=True)
 
     async def find_users_by_email(self, email: str) -> list[RemnaWaveUser]:
         """Замена удалённому ``GET /api/users/by-email/{email}``."""
-        return await self.find_users(email=email)
+        return await self.find_users(email=email, enrich_happ_links=True)
 
     async def find_users(
         self,

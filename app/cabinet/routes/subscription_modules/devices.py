@@ -1133,22 +1133,25 @@ async def delete_all_devices(
                     'deleted_count': 0,
                 }
 
-            deleted_count = 0
-            for device in devices_list:
-                device_hwid = device.get('hwid')
-                if device_hwid:
-                    try:
-                        if await api.remove_device(_panel_user_id, device_hwid):
-                            deleted_count += 1
-                    except Exception as device_error:
-                        logger.error('Error deleting device', device_hwid=device_hwid, device_error=device_error)
+            # 3.0.0 даёт атомарный `POST /api/hwid/devices/delete-all` — на него
+            # переведены все остальные места. Здесь оставался цикл «по одному
+            # запросу на устройство», и он ко всему прочему возвращал
+            # `success: true` даже когда не удалилось НИ ОДНО устройство.
+            total = len(devices_list)
+            if not await api.reset_user_devices(_panel_user_id):
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail='Failed to delete devices',
+                )
 
             return {
                 'success': True,
-                'message': f'Deleted {deleted_count} devices',
-                'deleted_count': deleted_count,
+                'message': f'Deleted {total} devices',
+                'deleted_count': total,
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error('Error deleting all devices', error=e)
         raise HTTPException(
