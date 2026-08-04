@@ -7,6 +7,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete as sa_delete, select
+from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -103,6 +104,26 @@ def _require_device_limit(params: BulkActionParams) -> int:
 # ---------------------------------------------------------------------------
 # Subscription resolver
 # ---------------------------------------------------------------------------
+
+
+def _known_subscriptions(user: User, fallback: Subscription | None = None) -> list[Subscription]:
+    """Подписки пользователя, если они уже в сессии; иначе — только целевая.
+
+    В режиме «по подписке» пользователь приходит из ``sub.user``, а его
+    коллекция подписок в этот запрос не грузится. В async-сессии обращение
+    к незагруженной коллекции не подтягивает её лениво, а роняет
+    MissingGreenlet — на удалении подписки это падало прямо в ответ админу.
+    """
+    try:
+        subs = getattr(user, 'subscriptions', None)
+    except MissingGreenlet:
+        subs = None
+    if subs is None:
+        # Коллекция недоступна — отдаём хотя бы целевую подписку.
+        return [fallback] if fallback is not None else []
+    # Загруженный пустой список — это ответ «подписок нет», а не пробел
+    # в данных: подставлять сюда целевую было бы враньём.
+    return list(subs)
 
 
 def _resolve_subscription(user: User, override: Subscription | None = None) -> Subscription | None:
@@ -513,7 +534,7 @@ async def _do_delete_subscription(
             success=False,
             message=f'Skipped: {tariff_name} is active and paid (enable force_delete_active_paid to override)',
             username=user.username,
-            subscriptions=_build_subscription_info(getattr(user, 'subscriptions', None) or []),
+            subscriptions=_build_subscription_info(_known_subscriptions(user, sub)),
         )
 
     if dry_run:
@@ -531,7 +552,7 @@ async def _do_delete_subscription(
 
     blocked_user_id = user.id
     blocked_username = user.username
-    blocked_subscriptions = _build_subscription_info(getattr(user, 'subscriptions', None) or [])
+    blocked_subscriptions = _build_subscription_info(_known_subscriptions(user, sub))
     try:
         await ensure_no_open_grace_for_subscriptions(db, (sub.id,))
     except GraceAccessDeletionBlocked:
@@ -868,8 +889,7 @@ async def _execute_for_user(
 
         # Attach subscription info to result when not already set
         if result.subscriptions is None:
-            subs = getattr(user, 'subscriptions', None) or []
-            result.subscriptions = _build_subscription_info(subs)
+            result.subscriptions = _build_subscription_info(_known_subscriptions(user))
 
         return result
 
