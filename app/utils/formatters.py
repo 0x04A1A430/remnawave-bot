@@ -1,3 +1,4 @@
+import html
 from datetime import UTC, datetime
 
 
@@ -172,6 +173,19 @@ def format_username(username: str | None, user_id: int, full_name: str | None = 
     if username:
         return f'@{username}'
     return f'ID{user_id}'
+
+
+def format_username_link(username: str | None, fallback: str = '') -> str:
+    """Format a Telegram username as an explicit HTML link for Rich messages."""
+    if not username:
+        return fallback
+
+    normalized_username = username.lstrip('@')
+    if not normalized_username:
+        return fallback
+
+    safe_username = html.escape(normalized_username, quote=True)
+    return f'<a href="https://t.me/{safe_username}">@{safe_username}</a>'
 
 
 def format_subscription_status(is_active: bool, is_trial: bool, end_date: datetime | str, language: str = 'ru') -> str:
