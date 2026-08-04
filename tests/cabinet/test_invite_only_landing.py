@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.database.models import GuestPurchaseStatus
+from app.services import guest_purchase_service as service
 from app.services.registration_access_service import (
     RegistrationAccessDecision,
     RegistrationAccessReason,
@@ -27,8 +28,6 @@ class _ScalarResult:
 
 @pytest.mark.asyncio
 async def test_find_guest_purchase_user_is_non_mutating_for_existing_email_user() -> None:
-    import app.services.guest_purchase_service as service
-
     finder = getattr(service, 'find_guest_purchase_user', None)
     assert finder is not None, 'landing admission needs a non-mutating lookup helper'
 
@@ -53,8 +52,6 @@ async def test_find_guest_purchase_user_is_non_mutating_for_existing_email_user(
 
 @pytest.mark.asyncio
 async def test_landing_access_uses_existing_user_and_requested_channel() -> None:
-    import app.services.guest_purchase_service as service
-
     evaluator = getattr(service, 'evaluate_guest_purchase_registration', None)
     assert evaluator is not None, 'landing admission needs a shared domain evaluator'
 
@@ -126,7 +123,6 @@ async def test_web_gift_claim_denies_missing_user_before_account_mutation() -> N
 
 def test_bot_gift_claim_link_uses_safe_prefix_threshold() -> None:
     from app.cabinet.routes.landing import _build_purchase_status_response
-    from app.services.guest_purchase_service import GIFT_TOKEN_MIN_PREFIX_LENGTH
 
     purchase = SimpleNamespace(
         token='A' * 64,
@@ -155,14 +151,12 @@ def test_bot_gift_claim_link_uses_safe_prefix_threshold() -> None:
         response = _build_purchase_status_response(purchase)
 
     assert response.bot_claim_link == (
-        f'https://t.me/ExampleBot?start=GIFT_{purchase.token[:GIFT_TOKEN_MIN_PREFIX_LENGTH]}'
+        f'https://t.me/ExampleBot?start=GIFT_{purchase.token[: service.GIFT_TOKEN_MIN_PREFIX_LENGTH]}'
     )
 
 
 @pytest.mark.asyncio
 async def test_paid_fulfillment_rechecks_access_before_find_or_create() -> None:
-    import app.services.guest_purchase_service as service
-
     purchase = SimpleNamespace(
         id=9,
         token='P' * 64,
@@ -193,8 +187,6 @@ async def test_paid_fulfillment_rechecks_access_before_find_or_create() -> None:
 
 @pytest.mark.asyncio
 async def test_paid_gift_fulfillment_never_creates_recipient_user() -> None:
-    import app.services.guest_purchase_service as service
-
     purchase = SimpleNamespace(
         id=10,
         token='G' * 64,

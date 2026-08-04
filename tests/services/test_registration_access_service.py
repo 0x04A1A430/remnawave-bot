@@ -10,6 +10,7 @@ from app.services.registration_access_service import (
     RegistrationChannel,
     RegistrationInviteEvidence,
     RegistrationInviteKind,
+    RegistrationInviteValidator,
     VerifiedRegistrationIdentity,
 )
 
@@ -132,3 +133,15 @@ async def test_gift_flag_is_forwarded_to_validator():
     await service.evaluate(object(), context(None, payload='GIFT_secret'))
 
     assert validator.calls[0][3] is False
+
+
+async def test_invite_validator_protocol_stub_is_not_executable():
+    with pytest.raises(NotImplementedError):
+        await RegistrationInviteValidator.validate(
+            object(),
+            object(),
+            start_parameter=None,
+            identity=VerifiedRegistrationIdentity(),
+            allow_gift=False,
+            lock_limited=False,
+        )

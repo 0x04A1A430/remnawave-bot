@@ -250,6 +250,7 @@ def get_tariff_periods_keyboard(
     tariff: Tariff,
     language: str,
     db_user: User | None = None,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру выбора периода для тарифа с учетом скидок по периодам."""
     texts = get_texts(language)
@@ -274,7 +275,7 @@ def get_tariff_periods_keyboard(
         button_text = f'{format_period(period)} — {price_text}'
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'tariff_period:{tariff.id}:{period}')])
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -283,6 +284,7 @@ def get_tariff_periods_keyboard_with_traffic(
     tariff: Tariff,
     language: str,
     db_user: User | None = None,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Клавиатура выбора периода для тарифа с кастомным трафиком (переход к настройке трафика)."""
     texts = get_texts(language)
@@ -310,7 +312,7 @@ def get_tariff_periods_keyboard_with_traffic(
             [InlineKeyboardButton(text=button_text, callback_data=f'tariff_period_traffic:{tariff.id}:{period}')]
         )
 
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -398,6 +400,58 @@ def get_tariff_insufficient_balance_keyboard(
     )
 
 
+def get_tariff_extend_insufficient_balance_keyboard(
+    tariff_id: int,
+    subscription_id: int | None,
+    period: int,
+    language: str,
+    missing_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
+    """Клавиатура «Недостаточно средств» при продлении тарифа.
+
+    Зеркало ``get_tariff_insufficient_balance_keyboard`` для buy-flow: при
+    ``AUTO_PURCHASE_AFTER_TOPUP_ENABLED`` встраивает кнопки прямой оплаты на
+    недостающую сумму (``topup_amount|метод|сумма``), иначе — классический
+    переход ``balance_topup``. «Назад» всегда ``subscription_extend`` (не
+    ``tariff_select``).
+
+    ``tariff_id`` / ``period`` — контекст вызывающего (симметрия с
+    insufficient-веткой). ``subscription_id`` определяет адрес «Назад»: в
+    мультитарифе — ``se:{id}``, потому что голый ``subscription_extend`` на
+    экране возврата после пополнения упирается в «Выберите подписку» и ничего
+    не перерисовывает (FSM к тому моменту мог быть очищен, а активная подписка
+    там не закрепляется). Идиома та же, что в monitoring_service и
+    recurrent_payment_service.
+
+    SBP/Lava-строки (``tariff_sbp`` / ``tariff_lava``) не добавляем: их
+    обработчики оформляют новую подписку с привязкой провайдера, а не продление
+    существующей — отдельных extend-callback'ов нет.
+    """
+    texts = get_texts(language)
+    back_callback = (
+        f'se:{subscription_id}' if settings.is_multi_tariff_enabled() and subscription_id else 'subscription_extend'
+    )
+    back_button = InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)
+
+    if settings.is_auto_purchase_after_topup_enabled() and missing_kopeks > 0:
+        from app.keyboards.inline import get_payment_methods_keyboard
+
+        payment_rows = [
+            row
+            for row in get_payment_methods_keyboard(missing_kopeks, language).inline_keyboard
+            if row and all((button.callback_data or '').startswith('topup_amount|') for button in row)
+        ]
+        if payment_rows:
+            return InlineKeyboardMarkup(inline_keyboard=[*payment_rows, [back_button]])
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
+            [back_button],
+        ]
+    )
+
+
 def _sbp_purchase_rows(tariff_id: int, texts) -> list[list[InlineKeyboardButton]]:
     """Ряды оформления привязкой провайдера — те же, что на confirm-экранах."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -456,6 +510,7 @@ def format_tariff_info_for_user(
 def get_daily_tariff_confirm_keyboard(
     tariff_id: int,
     language: str,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру подтверждения покупки суточного тарифа."""
     texts = get_texts(language)
@@ -485,13 +540,14 @@ def get_daily_tariff_confirm_keyboard(
                 )
             ]
         )
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_daily_tariff_insufficient_balance_keyboard(
     tariff_id: int,
     language: str,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру при недостаточном балансе для суточного тарифа."""
     texts = get_texts(language)
@@ -499,7 +555,7 @@ def get_daily_tariff_insufficient_balance_keyboard(
         inline_keyboard=[
             [InlineKeyboardButton(text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup')],
             *_sbp_purchase_rows(tariff_id, texts),
-            [InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')],
+            [InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)],
         ]
     )
 
@@ -518,6 +574,7 @@ def get_custom_tariff_keyboard(
     max_days: int = 365,
     min_traffic: int = 1,
     max_traffic: int = 1000,
+    back_callback: str = 'menu_buy',
 ) -> InlineKeyboardMarkup:
     """Создает клавиатуру для настройки кастомных дней и трафика."""
     texts = get_texts(language)
@@ -593,7 +650,7 @@ def get_custom_tariff_keyboard(
     )
 
     # Кнопка назад
-    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='tariff_list')])
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -755,6 +812,22 @@ async def show_tariffs_list(
         await callback.answer()
         return
 
+    # Один доступный тариф — сразу к периоду/подтверждению, без экрана «выбора из одной кнопки».
+    # Кроме случая, когда покупать нечего: в мультитарифе `_proceed_with_selected_tariff`
+    # на уже активном тарифе только показывает всплывающее уведомление и выходит,
+    # ничего не перерисовывая, — кнопка «Купить подписку» выглядела бы мёртвой.
+    # Тогда показываем список: там тариф помечен галочкой и понятно, почему.
+    if len(tariffs) == 1:
+        _already_owned = False
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+            _active = await get_active_subscriptions_by_user_id(db, db_user.id)
+            _already_owned = any(s.tariff_id == tariffs[0].id and not s.is_trial for s in _active)
+        if not _already_owned:
+            await _proceed_with_selected_tariff(callback, db_user, db, state, tariffs[0].id, skip_selection=True)
+            return
+
     # В мульти-тарифе определяем какие тарифы уже куплены
     purchased_tariff_ids: set[int] = set()
     if settings.is_multi_tariff_enabled():
@@ -784,16 +857,41 @@ async def show_tariffs_list(
     await callback.answer()
 
 
-@error_handler
-async def select_tariff(
+async def _tariff_back_callback(state: FSMContext) -> str:
+    """Куда ведёт «Назад» на экранах покупки тарифа.
+
+    Экран списка мог быть пропущен (единственный доступный тариф) — тогда
+    возвращать надо в главное меню. Признак живёт в состоянии, потому что
+    перерисовки (изменение дней, трафика, выбор периода) происходят в других
+    хендлерах, у которых этого контекста нет. Без него «Назад» после первого же
+    +/- деградировал до `menu_buy`, тот снова попадал на пропуск и возвращал на
+    тот же экран, попутно сбрасывая уже выбранные дни.
+    """
+    data = await state.get_data()
+    return 'back_to_menu' if data.get('tariff_selection_skipped') else 'menu_buy'
+
+
+async def _proceed_with_selected_tariff(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
     state: FSMContext,
-):
-    """Обрабатывает выбор тарифа."""
+    tariff_id: int,
+    *,
+    skip_selection: bool = False,
+) -> None:
+    """Переход к периоду/подтверждению выбранного тарифа (первая покупка).
+
+    Вызывается и из ``select_tariff`` (кнопка в списке), и из ``show_tariffs_list``
+    при единственном доступном тарифе — без дублирования логики.
+
+    ``skip_selection=True``: экран списка тарифов был пропущен, поэтому «Назад»
+    ведёт в главное меню (``back_to_menu``), а не в ``menu_buy`` / список.
+    """
     texts = get_texts(db_user.language)
-    tariff_id = int(callback.data.split(':')[1])
+    back_callback = 'back_to_menu' if skip_selection else 'menu_buy'
+    # Признак нужен последующим перерисовкам в других хендлерах.
+    await state.update_data(tariff_selection_skipped=skip_selection)
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff or not tariff.is_active:
@@ -856,7 +954,9 @@ async def select_tariff(
                     discount=discount_text,
                     balance=format_price_kopeks(user_balance),
                 ),
-                reply_markup=get_daily_tariff_confirm_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_confirm_keyboard(
+                    tariff_id, db_user.language, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
         else:
@@ -909,7 +1009,9 @@ async def select_tariff(
                     'TARIFF_PURCHASE_CART_SAVED_HINT',
                     '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет оформлена автоматически.</i>',
                 ),
-                reply_markup=get_daily_tariff_insufficient_balance_keyboard(tariff_id, db_user.language),
+                reply_markup=get_daily_tariff_insufficient_balance_keyboard(
+                    tariff_id, db_user.language, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
     else:
@@ -958,6 +1060,7 @@ async def select_tariff(
                     max_days=tariff.max_days,
                     min_traffic=tariff.min_traffic_gb,
                     max_traffic=tariff.max_traffic_gb,
+                    back_callback=back_callback,
                 ),
                 parse_mode='HTML',
             )
@@ -970,19 +1073,35 @@ async def select_tariff(
                     'TARIFF_PURCHASE_TRAFFIC_SETUP_HINT',
                     '\n\n📊 <i>После выбора периода вы сможете настроить трафик</i>',
                 ),
-                reply_markup=get_tariff_periods_keyboard_with_traffic(tariff, db_user.language, db_user=db_user),
+                reply_markup=get_tariff_periods_keyboard_with_traffic(
+                    tariff, db_user.language, db_user=db_user, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
         else:
             # Для обычного тарифа показываем выбор периода
             await callback.message.edit_text(
                 format_tariff_info_for_user(tariff, db_user.language),
-                reply_markup=get_tariff_periods_keyboard(tariff, db_user.language, db_user=db_user),
+                reply_markup=get_tariff_periods_keyboard(
+                    tariff, db_user.language, db_user=db_user, back_callback=back_callback
+                ),
                 parse_mode='HTML',
             )
 
     await state.update_data(selected_tariff_id=tariff_id)
     await callback.answer()
+
+
+@error_handler
+async def select_tariff(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Обрабатывает выбор тарифа."""
+    tariff_id = int(callback.data.split(':')[1])
+    await _proceed_with_selected_tariff(callback, db_user, db, state, tariff_id)
 
 
 @error_handler
@@ -993,6 +1112,9 @@ async def handle_custom_days_change(
     state: FSMContext,
 ):
     """Обрабатывает изменение количества дней."""
+    # Экран списка мог быть пропущен — «Назад» обязан помнить об этом
+    # и при перерисовке, иначе он вернёт на этот же экран.
+    back_callback = await _tariff_back_callback(state)
     texts = get_texts(db_user.language)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
@@ -1045,6 +1167,7 @@ async def handle_custom_days_change(
             max_days=tariff.max_days,
             min_traffic=tariff.min_traffic_gb,
             max_traffic=tariff.max_traffic_gb,
+            back_callback=back_callback,
         ),
         parse_mode='HTML',
     )
@@ -1059,6 +1182,9 @@ async def handle_custom_traffic_change(
     state: FSMContext,
 ):
     """Обрабатывает изменение количества трафика."""
+    # Экран списка мог быть пропущен — «Назад» обязан помнить об этом
+    # и при перерисовке, иначе он вернёт на этот же экран.
+    back_callback = await _tariff_back_callback(state)
     texts = get_texts(db_user.language)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
@@ -1104,6 +1230,7 @@ async def handle_custom_traffic_change(
             max_days=tariff.max_days,
             min_traffic=tariff.min_traffic_gb,
             max_traffic=tariff.max_traffic_gb,
+            back_callback=back_callback,
         ),
         parse_mode='HTML',
     )
@@ -1296,9 +1423,9 @@ async def handle_custom_confirm(
         # Обновляем пользователя в Remnawave
         # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
         if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_uuid
+            _should_create = not subscription.remnawave_id
         else:
-            _should_create = not getattr(db_user, 'remnawave_uuid', None)
+            _should_create = not getattr(db_user, 'remnawave_id', None)
         try:
             subscription_service = SubscriptionService()
             if _should_create:
@@ -1417,6 +1544,9 @@ async def select_tariff_period_with_traffic(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для тарифа с кастомным трафиком - показывает экран настройки трафика."""
+    # Экран списка мог быть пропущен — «Назад» обязан помнить об этом
+    # и при перерисовке, иначе он вернёт на этот же экран.
+    back_callback = await _tariff_back_callback(state)
     texts = get_texts(db_user.language)
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
@@ -1472,6 +1602,7 @@ async def select_tariff_period_with_traffic(
             max_days=period,
             min_traffic=tariff.min_traffic_gb,
             max_traffic=tariff.max_traffic_gb,
+            back_callback=back_callback,
         ),
         parse_mode='HTML',
     )
@@ -1967,12 +2098,12 @@ async def confirm_tariff_purchase(
     # Обновляем пользователя в Remnawave
     # При покупке тарифа ВСЕГДА сбрасываем трафик в панели
     # In multi-tariff mode, each subscription has its own panel user.
-    # A new subscription has no remnawave_uuid yet, so always CREATE.
-    # In single-tariff mode, reuse the user-level UUID if available.
+    # A new subscription has no remnawave_id yet, so always CREATE.
+    # In single-tariff mode, reuse the user-level panel id if available.
     if settings.is_multi_tariff_enabled():
-        _should_create = not subscription.remnawave_uuid
+        _should_create = not subscription.remnawave_id
     else:
-        _should_create = not getattr(db_user, 'remnawave_uuid', None)
+        _should_create = not getattr(db_user, 'remnawave_id', None)
     try:
         subscription_service = SubscriptionService()
         if _should_create:
@@ -1996,9 +2127,9 @@ async def confirm_tariff_purchase(
         # Ретрай повторяет то же mode-aware решение, что и синк выше: у
         # конвертированного из триала (или реанимированной #3004) подписки уже
         # есть панельный юзер — его надо ОБНОВИТЬ, а не создать дубль. Хардкод
-        # 'update' по subscription.remnawave_uuid здесь не годится: в
-        # single-tariff вебхук панели чистит user.remnawave_uuid при удалении
-        # юзера, а на подписке остаётся стухший UUID.
+        # 'update' по subscription.remnawave_id здесь не годится: в
+        # single-tariff вебхук панели чистит user.remnawave_id при удалении
+        # юзера, а на подписке остаётся стухший id.
         remnawave_retry_queue.enqueue(
             subscription_id=subscription.id,
             user_id=db_user.id,
@@ -2286,9 +2417,9 @@ async def confirm_daily_tariff_purchase(
     try:
         subscription_service = SubscriptionService()
         if settings.is_multi_tariff_enabled():
-            _should_create = not subscription.remnawave_uuid
+            _should_create = not subscription.remnawave_id
         else:
-            _should_create = not getattr(db_user, 'remnawave_uuid', None)
+            _should_create = not getattr(db_user, 'remnawave_id', None)
 
         if _should_create:
             await subscription_service.create_remnawave_user(
@@ -2802,15 +2933,12 @@ async def select_tariff_extend_period(
                 'TARIFF_RENEW_CART_SAVED_HINT',
                 '\n\n🛒 <i>Корзина сохранена! После пополнения баланса подписка будет продлена автоматически.</i>',
             ),
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
-                        )
-                    ],
-                    [InlineKeyboardButton(text=texts.BACK, callback_data='subscription_extend')],
-                ]
+            reply_markup=get_tariff_extend_insufficient_balance_keyboard(
+                tariff_id,
+                subscription.id if subscription else None,
+                period,
+                db_user.language,
+                missing_kopeks=missing,
             ),
             parse_mode='HTML',
         )
@@ -2948,9 +3076,9 @@ async def confirm_tariff_extend(
         try:
             subscription_service = SubscriptionService()
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
+                _should_create = not subscription.remnawave_id
             else:
-                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+                _should_create = not getattr(db_user, 'remnawave_id', None)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -3757,9 +3885,9 @@ async def confirm_tariff_switch(
         try:
             subscription_service = SubscriptionService()
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
+                _should_create = not subscription.remnawave_id
             else:
-                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+                _should_create = not getattr(db_user, 'remnawave_id', None)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -3787,24 +3915,30 @@ async def confirm_tariff_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        _reset_uuid = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else db_user.remnawave_uuid
+        _reset_panel_id = (
+            subscription.remnawave_id
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+            else db_user.remnawave_id
         )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_id', None):
             logger.warning(
-                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                'Multi-tariff: subscription missing remnawave_id, using user fallback',
                 subscription_id=getattr(subscription, 'id', None),
             )
-        if _reset_uuid:
+        if _reset_panel_id:
             try:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(_reset_uuid)
-                    logger.info('🔧 Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
+                    # reset_user_devices больше не бросает при отказе панели —
+                    # он ловит ошибку внутри и возвращает False. Без проверки
+                    # результата лог утверждал бы, что сброс прошёл, когда он
+                    # провалился, и старые HWID остались бы за новым лимитом.
+                    if await api.reset_user_devices(_reset_panel_id):
+                        logger.info('🔧 Сброшены устройства при смене тарифа для user_id', db_user_id=db_user.id)
+                    else:
+                        logger.error('Не удалось сбросить устройства при смене тарифа', db_user_id=db_user.id)
             except Exception as e:
                 logger.error('Ошибка сброса устройств при смене тарифа', error=e)
 
@@ -4046,9 +4180,9 @@ async def confirm_daily_tariff_switch(
         try:
             subscription_service = SubscriptionService()
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
+                _should_create = not subscription.remnawave_id
             else:
-                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+                _should_create = not getattr(db_user, 'remnawave_id', None)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -4076,24 +4210,34 @@ async def confirm_daily_tariff_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        _reset_uuid_daily = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else db_user.remnawave_uuid
+        _reset_panel_id_daily = (
+            subscription.remnawave_id
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+            else db_user.remnawave_id
         )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_id', None):
             logger.warning(
-                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                'Multi-tariff: subscription missing remnawave_id, using user fallback',
                 subscription_id=getattr(subscription, 'id', None),
             )
-        if _reset_uuid_daily:
+        if _reset_panel_id_daily:
             try:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(_reset_uuid_daily)
-                    logger.info('🔧 Сброшены устройства при смене на суточный тариф для user_id', db_user_id=db_user.id)
+                    # reset_user_devices больше не бросает при отказе панели —
+                    # он ловит ошибку внутри и возвращает False. Без проверки
+                    # результата лог утверждал бы, что сброс прошёл, когда он
+                    # провалился, и старые HWID остались бы за новым лимитом.
+                    if await api.reset_user_devices(_reset_panel_id_daily):
+                        logger.info(
+                            '🔧 Сброшены устройства при смене на суточный тариф для user_id', db_user_id=db_user.id
+                        )
+                    else:
+                        logger.error(
+                            'Не удалось сбросить устройства при смене на суточный тариф', db_user_id=db_user.id
+                        )
             except Exception as e:
                 logger.error('Ошибка сброса устройств при смене тарифа', error=e)
 
@@ -4993,9 +5137,9 @@ async def confirm_instant_switch(
         try:
             subscription_service = SubscriptionService()
             if settings.is_multi_tariff_enabled():
-                _should_create = not subscription.remnawave_uuid
+                _should_create = not subscription.remnawave_id
             else:
-                _should_create = not getattr(db_user, 'remnawave_uuid', None)
+                _should_create = not getattr(db_user, 'remnawave_id', None)
 
             if _should_create:
                 await subscription_service.create_remnawave_user(
@@ -5023,26 +5167,36 @@ async def confirm_instant_switch(
 
         # Гарантированный сброс устройств при смене тарифа
         await db.refresh(db_user)
-        _reset_uuid_instant = (
-            subscription.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-            else db_user.remnawave_uuid
+        _reset_panel_id_instant = (
+            subscription.remnawave_id
+            if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+            else db_user.remnawave_id
         )
-        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_uuid', None):
+        if settings.is_multi_tariff_enabled() and not getattr(subscription, 'remnawave_id', None):
             logger.warning(
-                'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                'Multi-tariff: subscription missing remnawave_id, using user fallback',
                 subscription_id=getattr(subscription, 'id', None),
             )
-        if _reset_uuid_instant:
+        if _reset_panel_id_instant:
             try:
                 from app.services.remnawave_service import RemnaWaveService
 
                 service = RemnaWaveService()
                 async with service.get_api_client() as api:
-                    await api.reset_user_devices(_reset_uuid_instant)
-                    logger.info(
-                        '🔧 Сброшены устройства при мгновенном переключении тарифа для user_id', db_user_id=db_user.id
-                    )
+                    # reset_user_devices больше не бросает при отказе панели —
+                    # он ловит ошибку внутри и возвращает False. Без проверки
+                    # результата лог утверждал бы, что сброс прошёл, когда он
+                    # провалился, и старые HWID остались бы за новым лимитом.
+                    if await api.reset_user_devices(_reset_panel_id_instant):
+                        logger.info(
+                            '🔧 Сброшены устройства при мгновенном переключении тарифа для user_id',
+                            db_user_id=db_user.id,
+                        )
+                    else:
+                        logger.error(
+                            'Не удалось сбросить устройства при мгновенном переключении тарифа',
+                            db_user_id=db_user.id,
+                        )
             except Exception as e:
                 logger.error('Ошибка сброса устройств при переключении тарифа', error=e)
 
@@ -5219,6 +5373,12 @@ async def return_to_saved_tariff_cart(
             )
         elif cart_mode == 'extend':
             period = cart_data.get('period_days', 30)
+            # Метка «пополняю ради корзины» живёт 30 минут, сама корзина — час.
+            # Экран возврата рисует кнопки оплаты на недостающую сумму, поэтому
+            # без продления метки пользователь мог оплатить ровно столько,
+            # сколько нужно, уже после её истечения — и автопродление молча не
+            # срабатывало. Пересохранение обновляет оба срока.
+            await user_cart_service.save_user_cart(db_user.id, cart_data)
             await callback.message.edit_text(
                 texts.t(
                     'TARIFF_PURCHASE_STILL_INSUFFICIENT',
@@ -5235,8 +5395,12 @@ async def return_to_saved_tariff_cart(
                     balance=format_price_kopeks(user_balance),
                     missing=format_price_kopeks(missing),
                 ),
-                reply_markup=get_tariff_insufficient_balance_keyboard(
-                    tariff_id, period, db_user.language, missing_kopeks=missing
+                reply_markup=get_tariff_extend_insufficient_balance_keyboard(
+                    tariff_id,
+                    cart_data.get('subscription_id'),
+                    period,
+                    db_user.language,
+                    missing_kopeks=missing,
                 ),
                 parse_mode='HTML',
             )

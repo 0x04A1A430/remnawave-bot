@@ -1,4 +1,11 @@
-"""Contract tests for exact subscription-level Remnawave resolution."""
+"""Contract tests for exact subscription-level Remnawave resolution.
+
+Remnawave 3.0.0 идентифицирует панельного пользователя числовым ``id``, поэтому
+резолвер принимает либо число (``subscriptions.remnawave_id``), либо ``shortUuid``
+(``subscriptions.remnawave_short_uuid``) — вторую строку, которую видно в панели.
+Гарантия та же, что и до миграции: только точное совпадение по подписке, без
+эвристик по пользовательским полям.
+"""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -9,11 +16,12 @@ from fastapi import HTTPException
 from app.cabinet.routes import admin_users
 
 
-UUID = '11111111-1111-4111-8111-111111111111'
+PANEL_USER_ID = 4242
+SHORT_UUID = 'aBcDeF0123456789'
 
 
 def _resolver():
-    resolver = getattr(admin_users, 'get_user_by_remnawave_uuid', None)
+    resolver = getattr(admin_users, 'get_user_by_remnawave_identifier', None)
     assert resolver is not None, 'The exact subscription resolver route must exist'
     return resolver
 
@@ -26,12 +34,23 @@ def _db_with_matches(*matches):
     return db
 
 
-def _subscription(*, subscription_id: int, user_id: int, remnawave_uuid: str | None = UUID):
-    return SimpleNamespace(id=subscription_id, user_id=user_id, remnawave_uuid=remnawave_uuid)
+def _subscription(
+    *,
+    subscription_id: int,
+    user_id: int,
+    remnawave_id: int | None = PANEL_USER_ID,
+    remnawave_short_uuid: str | None = None,
+):
+    return SimpleNamespace(
+        id=subscription_id,
+        user_id=user_id,
+        remnawave_id=remnawave_id,
+        remnawave_short_uuid=remnawave_short_uuid,
+    )
 
 
 def test_resolver_route_is_registered_before_user_id_route(registered_paths) -> None:
-    assert 'GET' in registered_paths.get('/cabinet/admin/users/by-remnawave/{remnawave_uuid}', set())
+    assert 'GET' in registered_paths.get('/cabinet/admin/users/by-remnawave/{remnawave_identifier}', set())
 
 
 def test_resolver_requires_users_read_permission() -> None:
@@ -52,47 +71,75 @@ async def test_resolver_returns_the_exact_matching_subscription(subscription_id:
     subscription = _subscription(subscription_id=subscription_id, user_id=user_id)
     db = _db_with_matches(subscription)
 
-    response = await _resolver()(UUID, admin=SimpleNamespace(id=1), db=db)
+    response = await _resolver()(str(PANEL_USER_ID), admin=SimpleNamespace(id=1), db=db)
 
     assert response.model_dump() == {
         'user_id': user_id,
         'subscription_id': subscription_id,
-        'matched_remnawave_uuid': UUID,
+        'matched_remnawave_id': PANEL_USER_ID,
     }
+    query = str(db.execute.await_args.args[0])
+    assert 'subscriptions.remnawave_id' in query
+
+
+async def test_resolver_accepts_a_short_uuid_for_subscriptions_without_a_panel_id() -> None:
+    """Would fail if the resolver only understood numeric panel ids.
+
+    shortUuid пережил 3.0.0 и остаётся единственным идентификатором у подписок,
+    которым числовой id ещё не проставлен.
+    """
+    subscription = _subscription(
+        subscription_id=303,
+        user_id=9,
+        remnawave_id=None,
+        remnawave_short_uuid=SHORT_UUID,
+    )
+    db = _db_with_matches(subscription)
+
+    response = await _resolver()(SHORT_UUID, admin=SimpleNamespace(id=1), db=db)
+
+    assert response.model_dump() == {
+        'user_id': 9,
+        'subscription_id': 303,
+        'matched_remnawave_id': None,
+    }
+    query = str(db.execute.await_args.args[0])
+    assert 'subscriptions.remnawave_short_uuid' in query
 
 
 @pytest.mark.parametrize(
     'path_value',
     [
-        '22222222-2222-4222-8222-222222222222',
         None,
-        'not-a-uuid',
+        '',
+        '   ',
+        '0',
+        str(2**63),
     ],
-    ids=['unknown-uuid', 'null-uuid', 'malformed-uuid'],
+    ids=['null', 'empty', 'blank', 'zero', 'out-of-range'],
 )
-async def test_resolver_rejects_unlinked_or_invalid_uuid_without_a_heuristic_lookup(path_value) -> None:
-    """Would fail if unknown, null, or malformed input were guessed from user data."""
+async def test_resolver_rejects_unusable_identifiers_without_any_lookup(path_value) -> None:
+    """Would fail if garbage input were guessed from user data or hit the database."""
     db = _db_with_matches()
 
     with pytest.raises(HTTPException) as exc:
         await _resolver()(path_value, admin=SimpleNamespace(id=1), db=db)
 
-    assert exc.value.status_code in {400, 404}
-    if path_value in (None, 'not-a-uuid'):
-        db.execute.assert_not_awaited()
+    assert exc.value.status_code == 400
+    db.execute.assert_not_awaited()
 
 
-async def test_resolver_rejects_a_uuid_present_only_on_the_legacy_user_field() -> None:
-    """Would fail if the route reused legacy get_user_by_remnawave_uuid behavior."""
+async def test_resolver_rejects_an_identifier_present_only_on_the_legacy_user_field() -> None:
+    """Would fail if the route reused legacy user-level resolution."""
     db = _db_with_matches()
 
     with pytest.raises(HTTPException) as exc:
-        await _resolver()(UUID, admin=SimpleNamespace(id=1), db=db)
+        await _resolver()(str(PANEL_USER_ID), admin=SimpleNamespace(id=1), db=db)
 
     assert exc.value.status_code == 404
     query = str(db.execute.await_args.args[0])
-    assert 'subscriptions.remnawave_uuid' in query
-    assert 'users.remnawave_uuid' not in query
+    assert 'subscriptions.remnawave_id' in query
+    assert 'users.remnawave_id' not in query
 
 
 async def test_resolver_treats_a_physically_absent_deleted_subscription_as_not_found() -> None:
@@ -100,19 +147,36 @@ async def test_resolver_treats_a_physically_absent_deleted_subscription_as_not_f
     db = _db_with_matches()
 
     with pytest.raises(HTTPException) as exc:
-        await _resolver()(UUID, admin=SimpleNamespace(id=1), db=db)
+        await _resolver()(str(PANEL_USER_ID), admin=SimpleNamespace(id=1), db=db)
 
     assert exc.value.status_code == 404
 
 
-async def test_resolver_rejects_duplicate_subscription_mappings_as_a_conflict() -> None:
+@pytest.mark.parametrize(
+    ('identifier', 'matches'),
+    [
+        (
+            str(PANEL_USER_ID),
+            (
+                _subscription(subscription_id=101, user_id=7),
+                _subscription(subscription_id=202, user_id=8),
+            ),
+        ),
+        (
+            SHORT_UUID,
+            (
+                _subscription(subscription_id=101, user_id=7, remnawave_id=None, remnawave_short_uuid=SHORT_UUID),
+                _subscription(subscription_id=202, user_id=8, remnawave_id=None, remnawave_short_uuid=SHORT_UUID),
+            ),
+        ),
+    ],
+    ids=['panel-id', 'short-uuid'],
+)
+async def test_resolver_rejects_duplicate_subscription_mappings_as_a_conflict(identifier, matches) -> None:
     """Would fail if corrupted mappings silently selected one subscription."""
-    db = _db_with_matches(
-        _subscription(subscription_id=101, user_id=7),
-        _subscription(subscription_id=202, user_id=8),
-    )
+    db = _db_with_matches(*matches)
 
     with pytest.raises(HTTPException) as exc:
-        await _resolver()(UUID, admin=SimpleNamespace(id=1), db=db)
+        await _resolver()(identifier, admin=SimpleNamespace(id=1), db=db)
 
     assert exc.value.status_code == 409

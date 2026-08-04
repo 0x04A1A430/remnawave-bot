@@ -28,11 +28,11 @@ def _is_blocked_non_admin(user: Any) -> bool:
     return user.status == UserStatus.BLOCKED.value and not settings.is_admin(user.telegram_id)
 
 
-async def _refresh_remnawave_description(remnawave_uuid: str, description: str, telegram_id: int) -> None:
+async def _refresh_remnawave_description(remnawave_id: int, description: str, telegram_id: int) -> None:
     try:
         remnawave_service = RemnaWaveService()
         async with remnawave_service.get_api_client() as api:
-            await api.update_user(uuid=remnawave_uuid, description=description)
+            await api.update_user(user_id=remnawave_id, description=description)
         logger.info('✅ [Middleware] Описание пользователя обновлено в RemnaWave', telegram_id=telegram_id)
     except Exception as remnawave_error:
         logger.error(
@@ -208,13 +208,13 @@ class AuthMiddleware(BaseMiddleware):
                     db_user.updated_at = datetime.now(UTC)
                     logger.info('💾 [Middleware] Профиль пользователя обновлен в middleware', user_id=user.id)
 
-                    if db_user.remnawave_uuid:
+                    if db_user.remnawave_id:
                         description = settings.format_remnawave_user_description(
                             full_name=db_user.full_name, username=db_user.username, telegram_id=db_user.telegram_id
                         )
                         asyncio.create_task(
                             _refresh_remnawave_description(
-                                remnawave_uuid=db_user.remnawave_uuid,
+                                remnawave_id=db_user.remnawave_id,
                                 description=description,
                                 telegram_id=db_user.telegram_id,
                             )
@@ -228,10 +228,10 @@ class AuthMiddleware(BaseMiddleware):
                             telegram_id=db_user.telegram_id,
                         )
                         for sub in getattr(db_user, 'subscriptions', None) or []:
-                            if sub.remnawave_uuid and sub.remnawave_uuid != db_user.remnawave_uuid:
+                            if sub.remnawave_id and sub.remnawave_id != db_user.remnawave_id:
                                 asyncio.create_task(
                                     _refresh_remnawave_description(
-                                        remnawave_uuid=sub.remnawave_uuid,
+                                        remnawave_id=sub.remnawave_id,
                                         description=description,
                                         telegram_id=db_user.telegram_id,
                                     )

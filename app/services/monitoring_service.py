@@ -495,6 +495,9 @@ class MonitoringService:
 
         `cause` ('charge_error' | 'insufficient_balance') selects the email/non-Telegram
         reason wording so a non-balance charge failure isn't mislabelled as low balance."""
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+
         cycle_token = int(subscription.end_date.timestamp())
         now_ts = current_time.timestamp()
         hours_left = (subscription.end_date - current_time).total_seconds() / 3600.0
@@ -551,8 +554,13 @@ class MonitoringService:
 
                 user = await get_user_by_id(db, subscription.user_id)
                 if user and self.bot:
+                    from app.utils.notification_prefs import is_subscription_expiry_enabled
+
                     # Skip notification if user has another ACTIVE subscription (multi-tariff)
-                    skip_notify = False
+                    skip_notify = (
+                        not NotificationSettingsService.are_notifications_globally_enabled()
+                        or not is_subscription_expiry_enabled(user)
+                    )
                     if settings.is_multi_tariff_enabled():
                         other_active = await db.execute(
                             select(Subscription.id)
@@ -564,7 +572,7 @@ class MonitoringService:
                             )
                             .limit(1)
                         )
-                        skip_notify = other_active.scalar_one_or_none() is not None
+                        skip_notify = skip_notify or other_active.scalar_one_or_none() is not None
                     if not skip_notify:
                         await self._send_subscription_expired_notification(user, subscription, tariff_name=_tariff_name)
 
@@ -595,15 +603,15 @@ class MonitoringService:
                 return None
 
             user = await get_user_by_id(db, subscription.user_id)
-            remnawave_uuid = (
-                subscription.remnawave_uuid
-                if settings.is_multi_tariff_enabled() and getattr(subscription, 'remnawave_uuid', None)
-                else user.remnawave_uuid
+            panel_user_id = (
+                subscription.remnawave_id
+                if settings.is_multi_tariff_enabled() and getattr(subscription, 'remnawave_id', None) is not None
+                else user.remnawave_id
                 if user
                 else None
             )
-            if not user or not remnawave_uuid:
-                logger.error('RemnaWave UUID не найден для пользователя', user_id=subscription.user_id)
+            if not user or panel_user_id is None:
+                logger.error('RemnaWave id не найден для пользователя', user_id=subscription.user_id)
                 return None
 
             # Обновляем subscription в сессии, чтобы избежать detached instance
@@ -653,7 +661,7 @@ class MonitoringService:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
                 update_kwargs = dict(
-                    uuid=remnawave_uuid,
+                    user_id=panel_user_id,
                     status=RemnaWaveUserStatus.ACTIVE if is_active else RemnaWaveUserStatus.DISABLED,
                     expire_at=subscription.end_date
                     if is_active
@@ -690,7 +698,7 @@ class MonitoringService:
                 status_text = 'активным' if is_active else 'истёкшим'
                 logger.info(
                     '✅ Обновлен RemnaWave пользователь со статусом',
-                    remnawave_uuid=remnawave_uuid,
+                    remnawave_id=panel_user_id,
                     status_text=status_text,
                 )
                 return updated_user
@@ -698,7 +706,10 @@ class MonitoringService:
         except RemnaWaveAPIError as e:
             if is_user_not_found_error(e):
                 # Пользователя удалили из панели при живой подписке в боте —
-                # пересоздаём (create-флоу сохранит новый UUID и ссылки в подписку).
+                # пересоздаём (create-флоу сохранит новый id панели и ссылки в подписку).
+                # RemnaWaveInvalidUserIdError сюда намеренно не попадает: битый
+                # локальный идентификатор — баг в данных бота, а не «юзера нет»,
+                # и уход в пересоздание плодил бы дубли в панели.
                 return await self.subscription_service.recreate_deleted_panel_user(db, subscription)
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)
             return None
@@ -707,6 +718,9 @@ class MonitoringService:
             return None
 
     async def _check_expiring_subscriptions(self, db: AsyncSession):
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+
         try:
             warning_days = settings.get_autopay_warning_days()
             all_processed_users = set()
@@ -825,6 +839,9 @@ class MonitoringService:
             logger.error('Ошибка проверки истекающих подписок', error=e)
 
     async def _check_trial_expiring_soon(self, db: AsyncSession):
+        if not NotificationSettingsService.are_notifications_globally_enabled():
+            return
+
         try:
             threshold_time = datetime.now(UTC) + timedelta(hours=2)
 
@@ -853,6 +870,11 @@ class MonitoringService:
             for subscription in trial_expiring:
                 user = subscription.user
                 if not user:
+                    continue
+
+                from app.utils.notification_prefs import is_subscription_expiry_enabled
+
+                if not is_subscription_expiry_enabled(user):
                     continue
 
                 if await notification_sent(db, user.id, subscription.id, 'trial_2h'):
@@ -1043,18 +1065,18 @@ class MonitoringService:
                                 is_trial=subscription.is_trial,
                             )
 
-                            panel_uuid = (
-                                subscription.remnawave_uuid
-                                if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                                else user.remnawave_uuid
+                            panel_user_id = (
+                                subscription.remnawave_id
+                                if settings.is_multi_tariff_enabled() and subscription.remnawave_id is not None
+                                else user.remnawave_id
                             )
-                            if panel_uuid:
+                            if panel_user_id is not None:
                                 try:
-                                    await self.subscription_service.disable_remnawave_user(panel_uuid)
+                                    await self.subscription_service.disable_remnawave_user(panel_user_id)
                                 except Exception as api_error:
                                     logger.error(
                                         'Failed to disable RemnaWave user',
-                                        remnawave_uuid=panel_uuid,
+                                        remnawave_id=panel_user_id,
                                         api_error=api_error,
                                     )
 
@@ -1121,9 +1143,9 @@ class MonitoringService:
 
                             try:
                                 if settings.is_multi_tariff_enabled():
-                                    _should_create = not subscription.remnawave_uuid
+                                    _should_create = subscription.remnawave_id is None
                                 else:
-                                    _should_create = not getattr(user, 'remnawave_uuid', None)
+                                    _should_create = getattr(user, 'remnawave_id', None) is None
 
                                 if _should_create:
                                     # create_remnawave_user calls db.commit() internally --
@@ -1131,13 +1153,13 @@ class MonitoringService:
                                     await batch_db.commit()
                                     await self.subscription_service.create_remnawave_user(batch_db, subscription)
                                 else:
-                                    _enable_uuid = (
-                                        subscription.remnawave_uuid
+                                    _enable_panel_user_id = (
+                                        subscription.remnawave_id
                                         if settings.is_multi_tariff_enabled()
-                                        else user.remnawave_uuid
+                                        else user.remnawave_id
                                     )
-                                    if _enable_uuid:
-                                        await self.subscription_service.enable_remnawave_user(_enable_uuid)
+                                    if _enable_panel_user_id is not None:
+                                        await self.subscription_service.enable_remnawave_user(_enable_panel_user_id)
                             except Exception as api_error:
                                 logger.error(
                                     'Failed to update RemnaWave user',
@@ -1219,6 +1241,11 @@ class MonitoringService:
             for subscription in subscriptions:
                 user = subscription.user
                 if not user:
+                    continue
+
+                from app.utils.notification_prefs import is_subscription_expiry_enabled
+
+                if not is_subscription_expiry_enabled(user):
                     continue
 
                 if subscription.end_date is None:
@@ -1422,7 +1449,12 @@ class MonitoringService:
                     try:
                         if not await cache.exists(autopay_legacy_key):
                             user = sub.user
-                            if user and user.telegram_id and self.bot:
+                            if (
+                                user
+                                and user.telegram_id
+                                and self.bot
+                                and NotificationSettingsService.are_notifications_globally_enabled()
+                            ):
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
                                     text=(
@@ -1681,7 +1713,11 @@ class MonitoringService:
                                 )
 
                             # Send notification via appropriate channel
-                            if user.telegram_id and self.bot:
+                            if (
+                                user.telegram_id
+                                and self.bot
+                                and NotificationSettingsService.are_notifications_globally_enabled()
+                            ):
                                 await self._send_autopay_success_notification(
                                     user, charge_amount, autopay_period, subscription=subscription
                                 )
@@ -2397,7 +2433,7 @@ class MonitoringService:
 
     async def _check_traffic_warnings(self, db: AsyncSession):
         """Check subscriptions approaching traffic limit and notify users."""
-        if not self.bot:
+        if not self.bot or not NotificationSettingsService.are_notifications_globally_enabled():
             return
 
         try:
@@ -2495,7 +2531,7 @@ class MonitoringService:
         - Quiet hours: skips sending between 22:00 and 09:00 server time
         - Rate-limited: max 1 alert per 24 hours per user
         """
-        if not self.bot:
+        if not self.bot or not NotificationSettingsService.are_notifications_globally_enabled():
             return
 
         try:

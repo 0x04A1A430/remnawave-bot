@@ -2,7 +2,6 @@
 
 import math
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -175,7 +174,15 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     days_remaining = 0
 
     subs = getattr(user, 'subscriptions', None) or []
-    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    # Среди активных берём ту, что кончается РАНЬШЕ всех, а не самую свежую по
+    # дате создания (связь отсортирована по created_at). При мультитарифе иначе
+    # выходило расхождение: список отсортирован по ближайшему окончанию, а в
+    # строке показана дата другой подписки — сортировка выглядела сломанной.
+    _active_subs = [s for s in subs if s.is_active]
+    if _active_subs:
+        subscription = min(_active_subs, key=lambda s: (s.end_date is None, s.end_date))
+    else:
+        subscription = subs[0] if subs else None
     if subscription:
         has_subscription = True
         subscription_status = subscription.status
@@ -339,20 +346,25 @@ async def _sync_subscription_to_panel(
     Optionally resets traffic after sync.
     Returns dict with changes/errors.
     """
-    if pinned_subscription_identity and not subscription.remnawave_uuid:
+    if pinned_subscription_identity and not subscription.remnawave_id:
         # Fail-closed по задумке: подменять личность выбранной подписки пользовательским
-        # UUID нельзя. Но вызывающие результат не смотрят и отвечают админу success=True,
-        # поэтому без лога «продлил, а в панели не изменилось» диагностировать нечем.
+        # идентификатором нельзя. Но вызывающие результат не смотрят и отвечают админу
+        # success=True, поэтому без лога «продлил, а в панели не изменилось»
+        # диагностировать нечем.
         logger.warning(
-            'Skipped panel sync: selected subscription has no panel UUID',
+            'Skipped panel sync: selected subscription has no panel user id',
             user_id=getattr(user, 'id', None),
             subscription_id=getattr(subscription, 'id', None),
         )
-        return {'skipped': True, 'reason': 'Selected subscription has no panel UUID'}
+        return {'skipped': True, 'reason': 'Selected subscription has no panel user id'}
 
     try:
         from app.config import settings
-        from app.external.remnawave_api import UserStatus as PanelUserStatus
+        from app.external.remnawave_api import (
+            RemnaWaveAPIError,
+            UserStatus as PanelUserStatus,
+            is_user_not_found_error,
+        )
         from app.services.grace_access_runtime import (
             create_panel_user_grace_safe,
             update_panel_user_grace_safe,
@@ -416,51 +428,55 @@ async def _sync_subscription_to_panel(
         async with service.get_api_client() as api:
             # Multi-tariff: each subscription has its own panel user
             if pinned_subscription_identity or settings.is_multi_tariff_enabled():
-                panel_uuid = subscription.remnawave_uuid
+                panel_user_id = subscription.remnawave_id
             else:
-                panel_uuid = user.remnawave_uuid
+                panel_user_id = user.remnawave_id
 
-            # Try to find existing user by UUID first
-            if panel_uuid:
-                existing_user = await api.get_user_by_uuid(panel_uuid)
+            # Try to find existing user by panel id first.
+            # None здесь означает ровно одно — явный 404, то есть пользователя в панели
+            # действительно нет. Непригодный локальный идентификатор и транспортная
+            # ошибка приходят исключением и уходят в общий except, НЕ обнуляя связь:
+            # её обнуление необратимо, а в панели после него остаётся дубль.
+            if panel_user_id:
+                existing_user = await api.get_user_by_id(panel_user_id)
                 if not existing_user:
-                    logger.warning('Stale remnawave_uuid, clearing', user_id=user.id, panel_uuid=panel_uuid)
-                    panel_uuid = None
+                    logger.warning('Stale remnawave_id, clearing', user_id=user.id, panel_user_id=panel_user_id)
+                    panel_user_id = None
                     if pinned_subscription_identity or settings.is_multi_tariff_enabled():
-                        subscription.remnawave_uuid = None
+                        subscription.remnawave_id = None
                     else:
-                        user.remnawave_uuid = None
+                        user.remnawave_id = None
 
             # Fallback: search by telegram_id (single-tariff only)
             if (
-                not panel_uuid
+                not panel_user_id
                 and not pinned_subscription_identity
                 and not settings.is_multi_tariff_enabled()
                 and user.telegram_id
             ):
-                existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+                existing_users = await api.find_users_by_telegram_id(user.telegram_id)
                 if existing_users:
-                    panel_uuid = existing_users[0].uuid
-                    user.remnawave_uuid = panel_uuid
-                    changes['remnawave_uuid_discovered'] = panel_uuid
+                    panel_user_id = existing_users[0].id
+                    user.remnawave_id = panel_user_id
+                    changes['remnawave_id_discovered'] = panel_user_id
 
             # Fallback: search by email (single-tariff, OAuth users)
             if (
-                not panel_uuid
+                not panel_user_id
                 and not pinned_subscription_identity
                 and not settings.is_multi_tariff_enabled()
                 and user.email
             ):
-                existing_users = await api.get_user_by_email(user.email)
+                existing_users = await api.find_users_by_email(user.email)
                 if existing_users:
-                    panel_uuid = existing_users[0].uuid
-                    user.remnawave_uuid = panel_uuid
-                    changes['remnawave_uuid_discovered'] = panel_uuid
+                    panel_user_id = existing_users[0].id
+                    user.remnawave_id = panel_user_id
+                    changes['remnawave_id_discovered'] = panel_user_id
 
-            if panel_uuid:
+            if panel_user_id:
                 # Update existing user
                 update_kwargs = {
-                    'uuid': panel_uuid,
+                    'user_id': panel_user_id,
                     'status': panel_status,
                     'traffic_limit_bytes': traffic_limit_bytes,
                     'traffic_limit_strategy': get_traffic_reset_strategy(subscription.tariff),
@@ -490,15 +506,16 @@ async def _sync_subscription_to_panel(
                     changes['action'] = 'updated'
                     logger.info('Updated user in Remnawave panel', user_id=user.id)
                 except Exception as update_error:
-                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
-                    if (
-                        hasattr(update_error, 'status_code') and update_error.status_code == 404
-                    ) or error_code == 'A018':
-                        panel_uuid = None  # Will create new
+                    # «Пользователя нет» = только явный признак этого (404/A018/A063).
+                    # Непригодный локальный идентификатор даёт RemnaWaveInvalidUserIdError,
+                    # который is_user_not_found_error намеренно не признаёт: иначе каждый
+                    # промах идентификатора уходил бы в ветку создания и плодил дубли.
+                    if isinstance(update_error, RemnaWaveAPIError) and is_user_not_found_error(update_error):
+                        panel_user_id = None  # Will create new
                     else:
                         raise
 
-            if not panel_uuid and not pinned_subscription_identity:
+            if not panel_user_id and not pinned_subscription_identity:
                 # Create new user
                 create_kwargs = {
                     'username': username,
@@ -522,28 +539,29 @@ async def _sync_subscription_to_panel(
                 new_panel_user = await create_panel_user_grace_safe(
                     api,
                     subscription.id,
+                    adopt_short_uuid=subscription.remnawave_short_uuid,
                     **create_kwargs,
                 )
-                subscription.remnawave_uuid = new_panel_user.uuid
+                subscription.remnawave_id = new_panel_user.id
                 subscription.remnawave_short_uuid = new_panel_user.short_uuid
                 subscription.subscription_url = new_panel_user.subscription_url
                 subscription.subscription_crypto_link = new_panel_user.happ_crypto_link
-                # Legacy: also set user-level UUID in single mode
+                # Legacy: also set user-level panel id in single mode
                 if not settings.is_multi_tariff_enabled():
-                    user.remnawave_uuid = new_panel_user.uuid
+                    user.remnawave_id = new_panel_user.id
                 changes['action'] = 'created'
-                changes['panel_uuid'] = new_panel_user.uuid
-                logger.info('Created user in Remnawave panel', user_id=user.id, uuid=new_panel_user.uuid)
+                changes['panel_user_id'] = new_panel_user.id
+                logger.info('Created user in Remnawave panel', user_id=user.id, panel_user_id=new_panel_user.id)
 
             # Reset traffic on panel if requested
-            _reset_uuid = (
-                subscription.remnawave_uuid
+            _reset_panel_user_id = (
+                subscription.remnawave_id
                 if pinned_subscription_identity or settings.is_multi_tariff_enabled()
-                else user.remnawave_uuid
+                else user.remnawave_id
             )
-            if reset_traffic and _reset_uuid:
+            if reset_traffic and _reset_panel_user_id:
                 try:
-                    await api.reset_user_traffic(_reset_uuid)
+                    await api.reset_user_traffic(_reset_panel_user_id)
                     changes['traffic_reset'] = True
                     reason_text = f' ({reset_traffic_reason})' if reset_traffic_reason else ''
                     logger.info('Reset RemnaWave traffic for user', user_id=user.id, reason=reason_text)
@@ -587,7 +605,7 @@ async def list_users(
     - **search**: Search by telegram_id, username, first_name, last_name
     - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count)
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
     """
     # Convert status enum to model enum
     user_status = None
@@ -600,6 +618,7 @@ async def list_users(
     order_by_last_activity = sort_by == SortByEnum.LAST_ACTIVITY
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
+    order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -626,6 +645,7 @@ async def list_users(
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
+        order_by_subscription_end=order_by_subscription_end,
     )
 
     total = await get_users_count(
@@ -754,38 +774,49 @@ async def get_users_stats(
 # === User Detail ===
 
 
-@router.get('/by-remnawave/{remnawave_uuid}', response_model=UserByRemnawaveResponse)
-async def get_user_by_remnawave_uuid(
-    remnawave_uuid: str,
+@router.get('/by-remnawave/{remnawave_identifier}', response_model=UserByRemnawaveResponse)
+async def get_user_by_remnawave_identifier(
+    remnawave_identifier: str,
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
-    """Resolve an exact Remnawave UUID through its owning subscription only."""
-    try:
-        normalized = str(UUID(remnawave_uuid))
-    except (TypeError, ValueError, AttributeError):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Remnawave UUID')
+    """Resolve an exact Remnawave identifier through its owning subscription only.
 
-    matches = (
-        (await db.execute(select(Subscription).where(Subscription.remnawave_uuid == normalized).limit(2)))
-        .scalars()
-        .all()
-    )
+    В 3.0.0 панельный пользователь идентифицируется числовым id, поэтому прежняя
+    валидация через ``UUID()`` отвергала ровно то, что админ копирует из панели.
+    ``shortUuid`` принимается тоже: он пережил 3.0.0 и остаётся второй строкой,
+    которую видно в панели (и единственной у подписок без числового id).
+    """
+    identifier = (remnawave_identifier or '').strip()
+    # Та же граница, что и в клиенте: `isdigit()` истинен для '²'/'٥', на
+    # которых int() либо падает, либо молча даёт ЧУЖОЙ id.
+    if identifier.isascii() and identifier.isdigit():
+        panel_user_id = int(identifier)
+        # BigInteger: значение вне диапазона — не «не найдено», а мусор на входе.
+        if not 0 < panel_user_id < 2**63:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Remnawave identifier')
+        condition = Subscription.remnawave_id == panel_user_id
+    elif identifier:
+        condition = Subscription.remnawave_short_uuid == identifier
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Remnawave identifier')
+
+    matches = (await db.execute(select(Subscription).where(condition).limit(2))).scalars().all()
     if not matches:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail='Remnawave UUID is not linked to a subscription'
+            status_code=status.HTTP_404_NOT_FOUND, detail='Remnawave identifier is not linked to a subscription'
         )
     if len(matches) > 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Remnawave UUID is linked to multiple subscriptions',
+            detail='Remnawave identifier is linked to multiple subscriptions',
         )
 
     subscription = matches[0]
     return UserByRemnawaveResponse(
         user_id=subscription.user_id,
         subscription_id=subscription.id,
-        matched_remnawave_uuid=normalized,
+        matched_remnawave_id=subscription.remnawave_id,
     )
 
 
@@ -926,10 +957,10 @@ async def get_user_detail(
         promo_offer_discount_source=user.promo_offer_discount_source,
         promo_offer_discount_expires_at=user.promo_offer_discount_expires_at,
         recent_transactions=recent_transactions,
-        remnawave_uuid=(
-            primary_sub.remnawave_uuid
-            if settings.is_multi_tariff_enabled() and primary_sub and primary_sub.remnawave_uuid
-            else user.remnawave_uuid
+        remnawave_id=(
+            primary_sub.remnawave_id
+            if settings.is_multi_tariff_enabled() and primary_sub and primary_sub.remnawave_id
+            else user.remnawave_id
         ),
     )
 
@@ -968,10 +999,10 @@ async def get_user_panel_info(
             detail='User not found',
         )
 
-    panel_uuid = None
+    panel_user_id = None
     if subscription_id is not None:
-        panel_uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
-        if panel_uuid is None:
+        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
+        if panel_user_id is None:
             return UserPanelInfoResponse(found=False)
 
     try:
@@ -984,11 +1015,11 @@ async def get_user_panel_info(
         async with service.get_api_client() as api:
             panel_user = None
 
-            if subscription_id is not None and panel_uuid:
-                panel_user = await api.get_user_by_uuid(panel_uuid)
+            if subscription_id is not None and panel_user_id:
+                panel_user = await api.get_user_by_id(panel_user_id)
             # Legacy fallback is only for callers that did not select a subscription.
-            elif subscription_id is None and user.remnawave_uuid:
-                panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+            elif subscription_id is None and user.remnawave_id:
+                panel_user = await api.get_user_by_id(user.remnawave_id)
 
             # Fallback: search by telegram_id (single-tariff only)
             if (
@@ -997,13 +1028,13 @@ async def get_user_panel_info(
                 and not settings.is_multi_tariff_enabled()
                 and user.telegram_id
             ):
-                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                panel_users = await api.find_users_by_telegram_id(user.telegram_id)
                 if panel_users:
                     panel_user = panel_users[0]
 
             # Fallback: search by email (single-tariff, OAuth users)
             if not panel_user and subscription_id is None and not settings.is_multi_tariff_enabled() and user.email:
-                panel_users_by_email = await api.get_user_by_email(user.email)
+                panel_users_by_email = await api.find_users_by_email(user.email)
                 if panel_users_by_email:
                     panel_user = panel_users_by_email[0]
 
@@ -1016,7 +1047,7 @@ async def get_user_panel_info(
             if panel_user.user_traffic and panel_user.user_traffic.last_connected_node_uuid:
                 last_node_uuid = panel_user.user_traffic.last_connected_node_uuid
                 try:
-                    accessible = await api.get_user_accessible_nodes(panel_user.uuid)
+                    accessible = await api.get_user_accessible_nodes(panel_user.id)
                     for node in accessible:
                         if node.uuid == last_node_uuid:
                             last_node_name = node.node_name
@@ -1063,13 +1094,13 @@ async def get_subscription_request_history(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
-    panel_uuid = None
+    panel_user_id = None
     if subscription_id is not None:
-        panel_uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
+        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
     else:
-        panel_uuid = getattr(user, 'remnawave_uuid', None)
+        panel_user_id = getattr(user, 'remnawave_id', None)
 
-    if not panel_uuid:
+    if not panel_user_id:
         return {'total': 0, 'records': []}
 
     try:
@@ -1080,7 +1111,10 @@ async def get_subscription_request_history(
             return {'total': 0, 'records': []}
 
         async with service.get_api_client() as api:
-            result = await api.get_subscription_request_history(panel_uuid, offset=offset, limit=limit)
+            # offset/limit остаются в сигнатуре ради совместимости вызывающих:
+            # панель их не принимала ни в 2.8, ни в 3.0 и всегда отдаёт последние
+            # записи целиком — поведение эндпоинта от них никогда не зависело.
+            result = await api.get_subscription_request_history(panel_user_id)
             return result
     except Exception as e:
         logger.error('Error getting subscription request history', user_id=user_id, error=e)
@@ -1102,18 +1136,18 @@ async def get_user_node_usage(
             detail='User not found',
         )
 
-    # Resolve panel UUID
-    _panel_uuid = None
+    # Resolve panel user id
+    _panel_user_id = None
     if settings.is_multi_tariff_enabled() and subscription_id:
         from app.database.crud.subscription import get_subscription_by_id_for_user
 
         sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
         if sub:
-            _panel_uuid = sub.remnawave_uuid
+            _panel_user_id = sub.remnawave_id
     else:
-        _panel_uuid = user.remnawave_uuid
+        _panel_user_id = user.remnawave_id
 
-    if not _panel_uuid:
+    if not _panel_user_id:
         return UserNodeUsageResponse(items=[])
 
     try:
@@ -1130,11 +1164,11 @@ async def get_user_node_usage(
 
         async with service.get_api_client() as api:
             # Get user's accessible nodes (1 API call)
-            accessible_nodes = await api.get_user_accessible_nodes(_panel_uuid)
+            accessible_nodes = await api.get_user_accessible_nodes(_panel_user_id)
 
             # Get user bandwidth stats (1 API call)
             # Response: {categories: [dates], series: [{uuid, name, countryCode, total, data: [daily]}, ...]}
-            stats = await api.get_bandwidth_stats_user(_panel_uuid, start_str, end_str)
+            stats = await api.get_bandwidth_stats_user(_panel_user_id, start_str, end_str)
 
             categories: list[str] = []
             series_map: dict[str, dict] = {}
@@ -1665,7 +1699,7 @@ async def update_user_subscription(
         # дальше юзер сам покупает тариф с нуля и выбирает срок.
         if request.subscription_id is not None:
             # A selected BP-S reset is fail-closed: never substitute the
-            # legacy user UUID, and preserve the selected row for an exact
+            # legacy user panel id, and preserve the selected row for an exact
             # retry when panel deactivation fails.
             from app.database.crud.subscription import reset_subscription
             from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
@@ -1676,11 +1710,11 @@ async def update_user_subscription(
             # спишет деньги и воскресит только что сброшенную подписку.
             await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
             await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-            panel_uuid = subscription.remnawave_uuid
+            panel_user_id = subscription.remnawave_id
             panel_disabled = False
-            if panel_uuid:
+            if panel_user_id:
                 try:
-                    panel_disabled = await SubscriptionService().disable_remnawave_user(panel_uuid)
+                    panel_disabled = await SubscriptionService().disable_remnawave_user(panel_user_id)
                 except Exception as error:
                     logger.warning(
                         'Failed to disable selected Remnawave subscription during reset',
@@ -1768,14 +1802,14 @@ async def update_user_subscription(
         await _sync_subscription_to_panel(db, user, subscription)
 
         # Явно включаем пользователя на панели (PATCH может не снять LIMITED-статус)
-        _enable_uuid = (
-            subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
+        _enable_panel_user_id = (
+            subscription.remnawave_id if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_id', None)
         )
-        if _enable_uuid and subscription.status == 'active':
+        if _enable_panel_user_id and subscription.status == 'active':
             from app.services.subscription_service import SubscriptionService
 
             subscription_service = SubscriptionService()
-            await subscription_service.enable_remnawave_user(_enable_uuid)
+            await subscription_service.enable_remnawave_user(_enable_panel_user_id)
 
         logger.info('Admin added traffic for user', admin_id=admin.id, traffic_gb=request.traffic_gb, user_id=user_id)
 
@@ -2601,16 +2635,16 @@ async def get_user_devices(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
-    # Resolve panel UUID
+    # Resolve panel user id
     selected_subscription = None
-    _dev_uuid = None
+    _dev_panel_user_id = None
     if subscription_id is not None:
         selected_subscription = await _get_owned_subscription_or_404(db, subscription_id, user_id)
-        _dev_uuid = selected_subscription.remnawave_uuid
+        _dev_panel_user_id = selected_subscription.remnawave_id
     else:
-        _dev_uuid = user.remnawave_uuid
+        _dev_panel_user_id = user.remnawave_id
 
-    if not _dev_uuid:
+    if not _dev_panel_user_id:
         return UserDevicesResponse()
 
     try:
@@ -2621,7 +2655,7 @@ async def get_user_devices(
             return UserDevicesResponse()
 
         async with service.get_api_client() as api:
-            response = await api.get_user_devices_all(_dev_uuid)
+            response = await api.get_user_devices_all(_dev_panel_user_id)
 
             # Aliases per-(user, hwid) — единый дикт на весь список устройств.
             # Best-effort: при сбое чтения возвращаем девайсы без локальных имён,
@@ -2681,13 +2715,13 @@ async def delete_user_device(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
-    _uuid = None
+    _panel_user_id = None
     if subscription_id is not None:
-        _uuid = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_uuid
+        _panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
     else:
-        _uuid = user.remnawave_uuid
+        _panel_user_id = user.remnawave_id
 
-    if not _uuid:
+    if not _panel_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
 
     try:
@@ -2695,7 +2729,7 @@ async def delete_user_device(
 
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            success = await api.remove_device(_uuid, hwid)
+            success = await api.remove_device(_panel_user_id, hwid)
 
         if success:
             logger.info('Admin deleted device for user', admin_id=admin.id, hwid=hwid, user_id=user_id)
@@ -2729,7 +2763,7 @@ async def rename_user_device(
     if not hwid:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
 
-    # Best-effort hwid validation across ALL the user's panel UUIDs (multi-tariff
+    # Best-effort hwid validation across ALL the user's panel accounts (multi-tariff
     # aware). Shared with the user-facing endpoint via cabinet.utils.device_ownership.
     if not await verify_hwid_belongs_to_user(user, hwid):
         raise HTTPException(
@@ -2766,17 +2800,17 @@ async def reset_user_devices(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
 
-    _rst_uuid = None
+    _rst_panel_user_id = None
     if settings.is_multi_tariff_enabled() and subscription_id:
         from app.database.crud.subscription import get_subscription_by_id_for_user
 
         sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
         if sub:
-            _rst_uuid = sub.remnawave_uuid
+            _rst_panel_user_id = sub.remnawave_id
     else:
-        _rst_uuid = user.remnawave_uuid
+        _rst_panel_user_id = user.remnawave_id
 
-    if not _rst_uuid:
+    if not _rst_panel_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
 
     try:
@@ -2784,7 +2818,7 @@ async def reset_user_devices(
 
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            devices_info = await api.get_user_devices_all(_rst_uuid)
+            devices_info = await api.get_user_devices_all(_rst_panel_user_id)
             devices = devices_info.get('devices', [])
             total = len(devices)
 
@@ -2795,14 +2829,21 @@ async def reset_user_devices(
             for d in devices:
                 device_hwid = d.get('hwid') or d.get('deviceId') or d.get('id')
                 if device_hwid:
-                    try:
-                        await api.remove_device(_rst_uuid, device_hwid)
+                    # remove_device ловит ошибки панели внутри и возвращает False —
+                    # `except` здесь уже недостижим, поэтому единственный признак
+                    # успеха это результат. Без проверки эндпоинт рапортовал бы
+                    # «Deleted 5/5 devices» при пяти отказах подряд.
+                    if await api.remove_device(_rst_panel_user_id, device_hwid):
                         deleted += 1
-                    except Exception:
-                        pass
 
         logger.info('Admin reset devices for user /', admin_id=admin.id, user_id=user_id, deleted=deleted, total=total)
-        return ResetDevicesResponse(success=True, message=f'Deleted {deleted}/{total} devices', deleted_count=deleted)
+        if deleted < total:
+            logger.error('Часть устройств не удалось удалить', user_id=user_id, deleted=deleted, total=total)
+        return ResetDevicesResponse(
+            success=deleted == total,
+            message=f'Deleted {deleted}/{total} devices',
+            deleted_count=deleted,
+        )
 
     except Exception as e:
         logger.error('Error resetting devices for user', user_id=user_id, error=e)
@@ -2970,7 +3011,7 @@ async def reset_user_trial(
             else:
                 # Снос триала — общий код с ботовым bulk-сбросом: удаляет панель-юзера
                 # ПЕРВЫМ (race-safe относительно синк-воскрешения), затем строки в БД и
-                # чистит устаревший single-tariff remnawave_uuid.
+                # чистит устаревший single-tariff remnawave_id.
                 from app.database.crud.subscription import wipe_trial_subscriptions
 
                 wiped = await wipe_trial_subscriptions(db, subs_to_delete)
@@ -3067,12 +3108,13 @@ async def reset_user_subscription(
 
             subscription_service = SubscriptionService()
             if settings.is_multi_tariff_enabled():
-                panel_targets = [sub.remnawave_uuid for sub in subs if sub.remnawave_uuid]
+                panel_targets = [sub.remnawave_id for sub in subs if sub.remnawave_id]
             else:
-                panel_targets = [user.remnawave_uuid] if user.remnawave_uuid else []
+                panel_targets = [user.remnawave_id] if user.remnawave_id else []
 
             panel_results = [
-                await subscription_service.disable_remnawave_user(panel_uuid, db=db) for panel_uuid in panel_targets
+                await subscription_service.disable_remnawave_user(panel_user_id, db=db)
+                for panel_user_id in panel_targets
             ]
             panel_deactivated = bool(panel_targets) and all(panel_results)
             if panel_targets and not panel_deactivated:
@@ -3154,7 +3196,7 @@ async def disable_user(
         logger.info(
             '⏭️ Пропуск отключения RemnaWave: у пользователя активная оплаченная подписка',
             user_id=user_id,
-            remnawave_uuid=user.remnawave_uuid,
+            remnawave_id=user.remnawave_id,
         )
     else:
         try:
@@ -3163,14 +3205,14 @@ async def disable_user(
             subscription_service = SubscriptionService()
             if settings.is_multi_tariff_enabled():
                 for sub in subs:
-                    if sub.remnawave_uuid:
+                    if sub.remnawave_id:
                         try:
-                            await subscription_service.disable_remnawave_user(sub.remnawave_uuid, db=db)
+                            await subscription_service.disable_remnawave_user(sub.remnawave_id, db=db)
                         except Exception:
                             pass
                 panel_deactivated = True
-            elif user.remnawave_uuid:
-                panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_uuid, db=db)
+            elif user.remnawave_id:
+                panel_deactivated = await subscription_service.disable_remnawave_user(user.remnawave_id, db=db)
             if panel_deactivated:
                 logger.info('Disabled Remnawave user(s)', user_id=user_id)
         except Exception as e:
@@ -3661,11 +3703,11 @@ async def get_user_sync_status(
         bot_device_limit = active_sub.device_limit or 0
         bot_squads = active_sub.connected_squads or []
 
-    # In multi-tariff mode, UUID lives on subscription, not user
-    effective_uuid = (
-        active_sub.remnawave_uuid
-        if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid
-        else user.remnawave_uuid
+    # In multi-tariff mode, the panel identity lives on subscription, not user
+    effective_panel_user_id = (
+        active_sub.remnawave_id
+        if settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_id
+        else user.remnawave_id
     )
 
     # Panel data
@@ -3686,19 +3728,19 @@ async def get_user_sync_status(
             async with service.get_api_client() as api:
                 panel_user = None
 
-                # Try by UUID first (works for all users including OAuth)
-                if effective_uuid:
-                    panel_user = await api.get_user_by_uuid(effective_uuid)
+                # Try by panel id first (works for all users including OAuth)
+                if effective_panel_user_id:
+                    panel_user = await api.get_user_by_id(effective_panel_user_id)
 
                 # Fallback: search by telegram_id
                 if not panel_user and user.telegram_id:
-                    panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                    panel_users = await api.find_users_by_telegram_id(user.telegram_id)
                     if panel_users:
                         panel_user = panel_users[0]
 
                 # Fallback: search by email (OAuth users)
                 if not panel_user and user.email:
-                    panel_users_by_email = await api.get_user_by_email(user.email)
+                    panel_users_by_email = await api.find_users_by_email(user.email)
                     if panel_users_by_email:
                         panel_user = panel_users_by_email[0]
 
@@ -3780,7 +3822,7 @@ async def get_user_sync_status(
     return PanelSyncStatusResponse(
         user_id=user.id,
         telegram_id=user.telegram_id,
-        remnawave_uuid=effective_uuid,
+        remnawave_id=effective_panel_user_id,
         last_sync=user.last_remnawave_sync,
         subscription_id=active_sub.id if active_sub else None,
         subscription_tariff_name=sub_tariff_name,
@@ -3850,32 +3892,32 @@ async def sync_user_from_panel(
             selected_sub = None
 
         async with service.get_api_client() as api:
-            # Find user in panel: UUID → telegram_id → email
+            # Find user in panel: panel id → telegram_id → email
             panel_user = None
 
             if settings.is_multi_tariff_enabled():
-                if selected_sub and selected_sub.remnawave_uuid:
-                    # Specific subscription requested — use its UUID directly
-                    panel_user = await api.get_user_by_uuid(selected_sub.remnawave_uuid)
-                elif selected_sub and not selected_sub.remnawave_uuid:
-                    # The subscription lost its panel UUID (e.g. a spurious user.deleted
+                if selected_sub and selected_sub.remnawave_id:
+                    # Specific subscription requested — use its panel id directly
+                    panel_user = await api.get_user_by_id(selected_sub.remnawave_id)
+                elif selected_sub and not selected_sub.remnawave_id:
+                    # The subscription lost its panel id (e.g. a spurious user.deleted
                     # webhook wiped it). Re-link it to its live panel user by
                     # telegram_id/email — but only UNAMBIGUOUSLY: choose a panel user that
                     # is NOT already linked to another of this user's subscriptions, so we
                     # never bind two subs to the same panel user (telegram_id is one-to-many
                     # in multi-tariff). This is what makes the panel->bot repair work after
                     # the sibling-expiry corruption.
-                    linked_uuids = {s.remnawave_uuid for s in from_subs if s.id != selected_sub.id and s.remnawave_uuid}
+                    linked_ids = {s.remnawave_id for s in from_subs if s.id != selected_sub.id and s.remnawave_id}
                     candidates = []
                     if user.telegram_id:
-                        candidates = list(await api.get_user_by_telegram_id(user.telegram_id) or [])
+                        candidates = list(await api.find_users_by_telegram_id(user.telegram_id) or [])
                     if not candidates and user.email:
-                        candidates = list(await api.get_user_by_email(user.email) or [])
-                    orphans = [pu for pu in candidates if pu.uuid not in linked_uuids]
+                        candidates = list(await api.find_users_by_email(user.email) or [])
+                    orphans = [pu for pu in candidates if pu.id not in linked_ids]
                     if len(orphans) == 1:
                         panel_user = orphans[0]
-                        changes['remnawave_uuid'] = {'old': None, 'new': panel_user.uuid}
-                        selected_sub.remnawave_uuid = panel_user.uuid
+                        changes['remnawave_id'] = {'old': None, 'new': panel_user.id}
+                        selected_sub.remnawave_id = panel_user.id
                     elif len(orphans) > 1:
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
@@ -3890,22 +3932,22 @@ async def sync_user_from_panel(
                             detail='This subscription is not linked to the panel and no matching panel user was found.',
                         )
                 else:
-                    # No specific subscription — iterate all subscription UUIDs
-                    sub_uuids = [s.remnawave_uuid for s in from_subs if s.remnawave_uuid]
-                    for _uuid in sub_uuids:
-                        panel_user = await api.get_user_by_uuid(_uuid)
+                    # No specific subscription — iterate all subscription panel ids
+                    sub_panel_user_ids = [s.remnawave_id for s in from_subs if s.remnawave_id]
+                    for _panel_user_id in sub_panel_user_ids:
+                        panel_user = await api.get_user_by_id(_panel_user_id)
                         if panel_user:
                             break
-            elif user.remnawave_uuid:
-                panel_user = await api.get_user_by_uuid(user.remnawave_uuid)
+            elif user.remnawave_id:
+                panel_user = await api.get_user_by_id(user.remnawave_id)
 
             if not panel_user and user.telegram_id:
-                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                panel_users = await api.find_users_by_telegram_id(user.telegram_id)
                 if panel_users:
                     panel_user = panel_users[0]
 
             if not panel_user and user.email:
-                panel_users_by_email = await api.get_user_by_email(user.email)
+                panel_users_by_email = await api.find_users_by_email(user.email)
                 if panel_users_by_email:
                     panel_user = panel_users_by_email[0]
 
@@ -3913,7 +3955,7 @@ async def sync_user_from_panel(
                 return SyncFromPanelResponse(
                     success=False,
                     message='User not found in panel',
-                    errors=['No user found in Remnawave panel by UUID, telegram_id, or email'],
+                    errors=['No user found in Remnawave panel by panel id, telegram_id, or email'],
                 )
 
             # Build panel info. active_internal_squads is a list[dict] (see the
@@ -3933,7 +3975,7 @@ async def sync_user_from_panel(
                     active_squads.append(squad_uuid)
 
             panel_info = PanelUserInfo(
-                uuid=panel_user.uuid,
+                id=panel_user.id,
                 short_uuid=panel_user.short_uuid,
                 username=panel_user.username,
                 status=panel_user.status.value if panel_user.status else None,
@@ -3945,11 +3987,11 @@ async def sync_user_from_panel(
                 active_squads=active_squads,
             )
 
-            # Update remnawave_uuid if different
-            # In multi-tariff mode the UUID belongs to the subscription, not the user
-            if not settings.is_multi_tariff_enabled() and user.remnawave_uuid != panel_user.uuid:
-                changes['remnawave_uuid'] = {'old': user.remnawave_uuid, 'new': panel_user.uuid}
-                user.remnawave_uuid = panel_user.uuid
+            # Update remnawave_id if different
+            # In multi-tariff mode the panel identity belongs to the subscription, not the user
+            if not settings.is_multi_tariff_enabled() and user.remnawave_id != panel_user.id:
+                changes['remnawave_id'] = {'old': user.remnawave_id, 'new': panel_user.id}
+                user.remnawave_id = panel_user.id
 
             # Update subscription if requested
             # Use explicitly selected subscription or fall back to first-active
@@ -4062,6 +4104,10 @@ async def sync_user_from_panel(
                     connected_squads=active_squads,
                 )
                 new_sub.remnawave_short_uuid = panel_user.short_uuid
+                # Панельная идентичность обязана уехать в новую строку вместе с
+                # short_uuid: без неё гейт «создавать или обновлять» на следующем
+                # синке решит, что панельного юзера нет, и заведёт дубль.
+                new_sub.remnawave_id = panel_user.id
                 new_sub.subscription_url = panel_user.subscription_url
                 changes['subscription_created'] = True
 
@@ -4132,7 +4178,11 @@ async def sync_user_to_panel(
 
     try:
         from app.config import settings
-        from app.external.remnawave_api import UserStatus as PanelUserStatus
+        from app.external.remnawave_api import (
+            RemnaWaveAPIError,
+            UserStatus as PanelUserStatus,
+            is_user_not_found_error,
+        )
         from app.services.grace_access_runtime import (
             create_panel_user_grace_safe,
             update_panel_user_grace_safe,
@@ -4152,8 +4202,8 @@ async def sync_user_to_panel(
         changes = {}
         errors = []
         action = 'no_changes'
-        panel_uuid = (
-            sub.remnawave_uuid if settings.is_multi_tariff_enabled() and sub.remnawave_uuid else user.remnawave_uuid
+        panel_user_id = (
+            sub.remnawave_id if settings.is_multi_tariff_enabled() and sub.remnawave_id else user.remnawave_id
         )
 
         # Prepare data for panel
@@ -4204,36 +4254,40 @@ async def sync_user_to_panel(
         ext_squad_uuid = sub.tariff.external_squad_uuid if sub.tariff else None
 
         async with service.get_api_client() as api:
-            # Validate existing UUID
-            if panel_uuid:
-                existing_user = await api.get_user_by_uuid(panel_uuid)
+            # Validate existing panel id.
+            # None здесь = явный 404, то есть пользователя в панели действительно нет.
+            # Непригодный локальный идентификатор и транспортная ошибка приходят
+            # исключением и уходят в общий except, НЕ обнуляя связь: её обнуление
+            # необратимо, а в панели после него остаётся дубль.
+            if panel_user_id:
+                existing_user = await api.get_user_by_id(panel_user_id)
                 if not existing_user:
-                    logger.warning('Stale remnawave_uuid, clearing', user_id=user.id, panel_uuid=panel_uuid)
-                    panel_uuid = None
+                    logger.warning('Stale remnawave_id, clearing', user_id=user.id, panel_user_id=panel_user_id)
+                    panel_user_id = None
                     if settings.is_multi_tariff_enabled():
-                        sub.remnawave_uuid = None
+                        sub.remnawave_id = None
                     else:
-                        user.remnawave_uuid = None
+                        user.remnawave_id = None
 
             # Fallback: search by telegram_id (single-tariff only)
-            if not panel_uuid and not settings.is_multi_tariff_enabled() and user.telegram_id:
-                existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+            if not panel_user_id and not settings.is_multi_tariff_enabled() and user.telegram_id:
+                existing_users = await api.find_users_by_telegram_id(user.telegram_id)
                 if existing_users:
-                    panel_uuid = existing_users[0].uuid
-                    user.remnawave_uuid = panel_uuid
-                    changes['remnawave_uuid_discovered'] = panel_uuid
+                    panel_user_id = existing_users[0].id
+                    user.remnawave_id = panel_user_id
+                    changes['remnawave_id_discovered'] = panel_user_id
 
             # Fallback: search by email (single-tariff, OAuth users)
-            if not panel_uuid and not settings.is_multi_tariff_enabled() and user.email:
-                existing_users = await api.get_user_by_email(user.email)
+            if not panel_user_id and not settings.is_multi_tariff_enabled() and user.email:
+                existing_users = await api.find_users_by_email(user.email)
                 if existing_users:
-                    panel_uuid = existing_users[0].uuid
-                    user.remnawave_uuid = panel_uuid
-                    changes['remnawave_uuid_discovered'] = panel_uuid
+                    panel_user_id = existing_users[0].id
+                    user.remnawave_id = panel_user_id
+                    changes['remnawave_id_discovered'] = panel_user_id
 
-            if panel_uuid:
+            if panel_user_id:
                 # Update existing user
-                update_kwargs = {'uuid': panel_uuid}
+                update_kwargs = {'user_id': panel_user_id}
 
                 if request.update_status:
                     update_kwargs['status'] = panel_status
@@ -4270,16 +4324,17 @@ async def sync_user_to_panel(
                     )
                     action = 'updated'
                 except Exception as update_error:
-                    error_code = (getattr(update_error, 'response_data', None) or {}).get('errorCode', '')
-                    if (
-                        hasattr(update_error, 'status_code') and update_error.status_code == 404
-                    ) or error_code == 'A018':
+                    # «Пользователя нет» = только явный признак этого (404/A018/A063).
+                    # RemnaWaveInvalidUserIdError (битый локальный идентификатор) сюда
+                    # намеренно не попадает: иначе промах идентификатора уходил бы в
+                    # ветку создания и плодил дубли в панели.
+                    if isinstance(update_error, RemnaWaveAPIError) and is_user_not_found_error(update_error):
                         # User not found in panel, create new
-                        panel_uuid = None
+                        panel_user_id = None
                     else:
                         raise
 
-            if not panel_uuid and request.create_if_missing:
+            if not panel_user_id and request.create_if_missing:
                 # Create new user in panel
                 create_kwargs = {
                     'username': username,
@@ -4304,17 +4359,18 @@ async def sync_user_to_panel(
                 new_panel_user = await create_panel_user_grace_safe(
                     api,
                     sub.id,
+                    adopt_short_uuid=sub.remnawave_short_uuid,
                     **create_kwargs,
                 )
-                panel_uuid = new_panel_user.uuid
-                sub.remnawave_uuid = new_panel_user.uuid
+                panel_user_id = new_panel_user.id
+                sub.remnawave_id = new_panel_user.id
                 sub.remnawave_short_uuid = new_panel_user.short_uuid
                 sub.subscription_url = new_panel_user.subscription_url
                 if not settings.is_multi_tariff_enabled():
-                    user.remnawave_uuid = new_panel_user.uuid
+                    user.remnawave_id = new_panel_user.id
 
                 changes['created_in_panel'] = True
-                changes['panel_uuid'] = panel_uuid
+                changes['panel_user_id'] = panel_user_id
                 changes['short_uuid'] = new_panel_user.short_uuid
                 action = 'created'
 
@@ -4330,7 +4386,7 @@ async def sync_user_to_panel(
             success=True,
             message=f'User {action} in panel' if action != 'no_changes' else 'No changes needed',
             action=action,
-            panel_uuid=panel_uuid,
+            panel_user_id=panel_user_id,
             changes=changes,
             errors=errors,
         )

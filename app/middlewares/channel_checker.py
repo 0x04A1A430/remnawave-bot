@@ -489,23 +489,23 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 service = SubscriptionService()
                 for subscription in deactivated_subs:
-                    panel_uuid = (
-                        subscription.remnawave_uuid
-                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                        else user.remnawave_uuid
+                    panel_user_id = (
+                        subscription.remnawave_id
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+                        else user.remnawave_id
                     )
-                    if panel_uuid:
+                    if panel_user_id:
                         try:
-                            await service.disable_remnawave_user(panel_uuid)
+                            await service.disable_remnawave_user(panel_user_id)
                         except Exception as api_error:
                             logger.error(
                                 'Failed to disable RemnaWave user',
-                                remnawave_uuid=panel_uuid,
+                                remnawave_id=panel_user_id,
                                 api_error=api_error,
                             )
 
                 # Notify user about deactivation
-                if deactivated_subs:
+                if deactivated_subs and settings.is_notifications_enabled():
                     try:
                         normalized = _normalize_channels(channels)
                         texts = get_texts(user.language or DEFAULT_LANGUAGE)
@@ -577,23 +577,26 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 # Enable in RemnaWave
                 service = SubscriptionService()
                 for subscription in disabled_subs:
-                    panel_uuid = (
-                        subscription.remnawave_uuid
-                        if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                        else user.remnawave_uuid
+                    panel_user_id = (
+                        subscription.remnawave_id
+                        if settings.is_multi_tariff_enabled() and subscription.remnawave_id
+                        else user.remnawave_id
                     )
-                    if panel_uuid:
+                    if panel_user_id:
                         try:
-                            await service.enable_remnawave_user(panel_uuid)
+                            await service.enable_remnawave_user(panel_user_id)
                         except Exception as api_error:
                             logger.error(
                                 'Failed to enable RemnaWave user',
-                                remnawave_uuid=panel_uuid,
+                                remnawave_id=panel_user_id,
                                 api_error=api_error,
                             )
 
                 # Notify user about reactivation
                 try:
+                    if not settings.is_notifications_enabled():
+                        await db.commit()
+                        return
                     texts = get_texts(user.language or DEFAULT_LANGUAGE)
                     if settings.is_multi_tariff_enabled() and len(disabled_subs) > 1:
                         notification_text = texts.t(

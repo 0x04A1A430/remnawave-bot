@@ -90,24 +90,37 @@ async def on_user_joined_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Re-enable in RemnaWave panel
             service = SubscriptionService()
             for subscription in disabled_subs:
-                _uuid = (
-                    subscription.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                    else db_user.remnawave_uuid
-                )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
+                # Раньше в single-tariff колонка подписки игнорировалась, и если
+                # бэкфилл оставил строку пользователя неразрешённой (штатный
+                # исход), вызов в панель молча не происходил вовсе.
+                panel_user_id = subscription.remnawave_id or db_user.remnawave_id
+                if not panel_user_id:
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                        'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
+                        user_id=getattr(db_user, 'id', None),
                     )
-                if _uuid:
+                elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
+                    # В мультитарифе у каждой подписки свой аккаунт, поэтому
+                    # падение на пользовательский id — это адресация соседнего
+                    # тарифа. Сигнал нужен: молча так делать нельзя.
+                    logger.warning(
+                        'Мультитариф: у подписки нет своего панельного id, адресуем через пользователя',
+                        subscription_id=getattr(subscription, 'id', None),
+                        remnawave_id=panel_user_id,
+                    )
+                if panel_user_id:
                     try:
-                        await service.enable_remnawave_user(_uuid)
+                        await service.enable_remnawave_user(panel_user_id)
                     except Exception as api_error:
                         logger.error('Failed to enable RemnaWave user', error=api_error)
 
             # Notify the user
             try:
+                if not settings.is_notifications_enabled():
+                    await db.commit()
+                    return
                 texts = get_texts(db_user.language or DEFAULT_LANGUAGE)
                 notification_text = texts.t(
                     'SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE',
@@ -174,24 +187,37 @@ async def on_user_left_channel(event: ChatMemberUpdated, bot: Bot) -> None:
             # Disable in RemnaWave panel
             service = SubscriptionService()
             for subscription in active_subs:
-                _uuid = (
-                    subscription.remnawave_uuid
-                    if settings.is_multi_tariff_enabled() and subscription.remnawave_uuid
-                    else db_user.remnawave_uuid
-                )
-                if settings.is_multi_tariff_enabled() and not subscription.remnawave_uuid:
+                # Сначала id самой подписки, потом пользователя — в ОБОИХ режимах.
+                # Раньше в single-tariff колонка подписки игнорировалась, и если
+                # бэкфилл оставил строку пользователя неразрешённой (штатный
+                # исход), вызов в панель молча не происходил вовсе.
+                panel_user_id = subscription.remnawave_id or db_user.remnawave_id
+                if not panel_user_id:
                     logger.warning(
-                        'Multi-tariff: subscription missing remnawave_uuid, using user fallback',
+                        'Панельный id не найден ни у подписки, ни у пользователя — панель не тронута',
                         subscription_id=getattr(subscription, 'id', None),
+                        user_id=getattr(db_user, 'id', None),
                     )
-                if _uuid:
+                elif not subscription.remnawave_id and settings.is_multi_tariff_enabled():
+                    # В мультитарифе у каждой подписки свой аккаунт, поэтому
+                    # падение на пользовательский id — это адресация соседнего
+                    # тарифа. Сигнал нужен: молча так делать нельзя.
+                    logger.warning(
+                        'Мультитариф: у подписки нет своего панельного id, адресуем через пользователя',
+                        subscription_id=getattr(subscription, 'id', None),
+                        remnawave_id=panel_user_id,
+                    )
+                if panel_user_id:
                     try:
-                        await service.disable_remnawave_user(_uuid)
+                        await service.disable_remnawave_user(panel_user_id)
                     except Exception as api_error:
                         logger.error('Failed to disable RemnaWave user', error=api_error)
 
             # Notify the user with channel subscription keyboard
             try:
+                if not settings.is_notifications_enabled():
+                    await db.commit()
+                    return
                 texts = get_texts(db_user.language or DEFAULT_LANGUAGE)
                 unsub_channels = await channel_subscription_service.get_channels_with_status(user.id)
                 notification_text = texts.t(

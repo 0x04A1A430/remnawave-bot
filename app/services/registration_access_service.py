@@ -75,7 +75,8 @@ class RegistrationInviteValidator(Protocol):
         identity: VerifiedRegistrationIdentity,
         allow_gift: bool,
         lock_limited: bool,
-    ) -> RegistrationInviteEvidence | None: ...
+    ) -> RegistrationInviteEvidence | None:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True, slots=True)

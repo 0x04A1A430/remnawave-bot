@@ -21,6 +21,7 @@ from app.database.models import (
     PromoGroup,
     Subscription,
     SubscriptionStatus,
+    Tariff,
     Transaction,
     TransactionType,
     User,
@@ -233,7 +234,20 @@ async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Use
     return user
 
 
-async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> User | None:
+async def get_user_by_remnawave_id(db: AsyncSession, remnawave_id: int) -> User | None:
+    """Найти бот-пользователя по числовому id пользователя панели.
+
+    Remnawave 3.0.0 удалил `uuid` из UsersSchema, поэтому идентичность панели —
+    это `id`. Форма поиска прежняя: сначала колонка на User, затем (в
+    multi-tariff) — по подписке, где панельная идентичность и живёт.
+    """
+    if remnawave_id is None:
+        return None
+    try:
+        panel_user_id = int(remnawave_id)
+    except (TypeError, ValueError):
+        return None
+
     result = await db.execute(
         select(User)
         .options(
@@ -241,11 +255,11 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
-        .where(User.remnawave_uuid == remnawave_uuid)
+        .where(User.remnawave_id == panel_user_id)
     )
     user = result.scalar_one_or_none()
 
-    # Multi-tariff: UUID lives on Subscription, not User
+    # Multi-tariff: панельная идентичность лежит на Subscription, не на User
     if not user and settings.is_multi_tariff_enabled():
         from app.database.models import Subscription as _Subscription
 
@@ -254,7 +268,7 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
             .options(
                 selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
             )
-            .where(_Subscription.remnawave_uuid == remnawave_uuid)
+            .where(_Subscription.remnawave_id == panel_user_id)
         )
         sub = sub_result.scalar_one_or_none()
         if sub and sub.user:
@@ -947,6 +961,7 @@ async def get_users_list(
     order_by_last_activity: bool = False,
     order_by_total_spent: bool = False,
     order_by_purchase_count: bool = False,
+    order_by_subscription_end: bool = False,
 ) -> list[User]:
     query = select(User).options(
         selectinload(User.subscriptions).selectinload(Subscription.tariff),
@@ -1012,10 +1027,11 @@ async def get_users_list(
         order_by_last_activity,
         order_by_total_spent,
         order_by_purchase_count,
+        order_by_subscription_end,
     ]
     if sum(int(flag) for flag in sort_flags) > 1:
         logger.debug(
-            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность'
+            'Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность > окончание подписки'
         )
 
     transactions_stats = None
@@ -1044,6 +1060,37 @@ async def get_users_list(
         query = query.order_by(User.balance_kopeks.desc(), User.created_at.desc())
     elif order_by_last_activity:
         query = query.order_by(nullslast(User.last_activity.desc()), User.created_at.desc())
+    elif order_by_subscription_end:
+        # MIN(end_date) среди подписок пользователя; без outerjoin — иначе дубли
+        # строк при нескольких подписках (мультитариф).
+        #
+        # Статус берём тот же, по которому фильтруется список: иначе связка
+        # «покажи истёкших, отсортируй по дате окончания» давала бы у ВСЕХ строк
+        # пустой ключ и молча схлопывалась в сортировку по дате регистрации.
+        _sort_status = subscription_status or SubscriptionStatus.ACTIVE.value
+        soonest_end_conditions = [
+            Subscription.user_id == User.id,
+            Subscription.status == _sort_status,
+        ]
+        if _sort_status == SubscriptionStatus.ACTIVE.value:
+            # Суточные тарифы исключаем ровно как `get_expiring_subscriptions`:
+            # у активной суточной подписки end_date всегда +24ч, поэтому иначе
+            # они навсегда занимают верх списка и хоронят тех, ради кого
+            # сортировка и делалась. Комментарий там же, subscription.py:1749.
+            soonest_end_conditions.append(
+                ~and_(
+                    Tariff.is_daily.is_(True),
+                    Subscription.is_daily_paused.is_(False),
+                )
+            )
+        soonest_end = (
+            select(func.min(Subscription.end_date))
+            .select_from(Subscription)
+            .outerjoin(Tariff, Subscription.tariff_id == Tariff.id)
+            .where(*soonest_end_conditions)
+            .scalar_subquery()
+        )
+        query = query.order_by(nullslast(soonest_end.asc()), User.created_at.desc())
     else:
         query = query.order_by(User.created_at.desc())
 
@@ -1336,7 +1383,7 @@ async def get_users_with_active_subscriptions(db: AsyncSession) -> list[User]:
     Используется для мониторинга трафика.
 
     Returns:
-        Список пользователей с активными подписками и remnawave_uuid
+        Список пользователей с активными подписками и панельной идентичностью
     """
     current_time = datetime.now(UTC)
 
@@ -1345,7 +1392,9 @@ async def get_users_with_active_subscriptions(db: AsyncSession) -> list[User]:
         .join(Subscription, User.id == Subscription.user_id)
         .where(
             and_(
-                User.remnawave_uuid.isnot(None),
+                # Панельная идентичность живёт на User (single-tariff) либо на
+                # Subscription (multi-tariff, где User.remnawave_id не заполняется вовсе).
+                or_(User.remnawave_id.isnot(None), Subscription.remnawave_id.isnot(None)),
                 User.status == UserStatus.ACTIVE.value,
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.end_date > current_time,
