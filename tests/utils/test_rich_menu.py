@@ -227,6 +227,62 @@ async def test_builder_single_subscription_structure(monkeypatch):
     assert '1250' in html_out
 
 
+async def test_builder_links_username_used_instead_of_name(monkeypatch):
+    """Без имени full_name подставляет логин — показываем его ссылкой на профиль.
+
+    skip_entity_detection=True гасит автоопределение @упоминаний, поэтому голый
+    логин в шапке был бы мёртвым текстом.
+    """
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+
+    user = _make_user(None)
+    user.first_name = None
+    user.last_name = None
+    user.username = 'durov'
+    user.full_name = 'durov'
+
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert html_out.startswith('<h4>👤 <a href="https://t.me/durov">@durov</a></h4>')
+
+
+async def test_builder_keeps_plain_name_when_user_has_one(monkeypatch):
+    """Имя есть — шапка остаётся обычным текстом, ссылка на логин не подставляется."""
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+
+    user = _make_user(None)
+    user.first_name = 'Егор'
+    user.last_name = None
+    user.username = 'durov'
+
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert html_out.startswith('<h4>👤 Егор &lt;script&gt;</h4>')
+    assert 't.me/durov' not in html_out
+
+
+async def test_builder_survives_user_without_username_attribute(monkeypatch):
+    """Шапка не должна падать на объекте без username — иначе меню молча уедет в классику.
+
+    try_send_rich_main_menu ловит любое исключение сборки и возвращает False, так что
+    AttributeError здесь стоил бы rich-меню без единой записи в логе о причине.
+    """
+    _patch_content_sources(monkeypatch)
+    monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: False)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+
+    user = _make_user(None)
+    assert not hasattr(user, 'username')
+
+    html_out = await rich_menu.build_main_menu_rich_html(user, DummyTexts(), AsyncMock())
+
+    assert html_out.startswith('<h4>👤 Егор &lt;script&gt;</h4>')
+
+
 async def test_builder_multi_tariff_table(monkeypatch):
     _patch_content_sources(monkeypatch)
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
