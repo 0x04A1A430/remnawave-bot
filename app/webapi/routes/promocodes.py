@@ -86,12 +86,22 @@ def _validate_create_payload(payload: PromoCodeCreateRequest) -> None:
     normalized_valid_from = _normalize_datetime(payload.valid_from)
     normalized_valid_until = _normalize_datetime(payload.valid_until)
 
-    if payload.type in {PromoCodeType.BALANCE, PromoCodeType.BALANCE_AND_DAYS} and payload.balance_bonus_kopeks <= 0:
+    if payload.type == PromoCodeType.BALANCE and payload.balance_bonus_kopeks <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Balance bonus must be positive for balance promo codes')
 
+    # Набор бонусов собирается из составляющих — требуем хотя бы одну.
+    if payload.type == PromoCodeType.BALANCE_AND_DAYS and not (
+        payload.balance_bonus_kopeks > 0
+        or payload.subscription_days > 0
+        or (payload.traffic_gb or 0) > 0
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            'Bonus set must grant at least one of: balance, subscription days, traffic',
+        )
+
     if (
-        payload.type
-        in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION, PromoCodeType.BALANCE_AND_DAYS}
+        payload.type in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION}
         and payload.subscription_days <= 0
     ):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription days must be positive for this promo code type')
@@ -116,11 +126,11 @@ def _validate_update_payload(payload: PromoCodeUpdateRequest, promocode: PromoCo
         payload.subscription_days if payload.subscription_days is not None else promocode.subscription_days
     )
 
-    if new_type in {PromoCodeType.BALANCE, PromoCodeType.BALANCE_AND_DAYS} and balance_bonus <= 0:
+    if new_type == PromoCodeType.BALANCE and balance_bonus <= 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Balance bonus must be positive for balance promo codes')
 
     if (
-        new_type in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION, PromoCodeType.BALANCE_AND_DAYS}
+        new_type in {PromoCodeType.SUBSCRIPTION_DAYS, PromoCodeType.TRIAL_SUBSCRIPTION}
         and subscription_days <= 0
     ):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription days must be positive for this promo code type')

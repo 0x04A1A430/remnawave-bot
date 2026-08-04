@@ -25,6 +25,7 @@ def _combo_promocode(**overrides) -> SimpleNamespace:
         type=PromoCodeType.BALANCE_AND_DAYS.value,
         balance_bonus_kopeks=50000,  # 500 ₽
         subscription_days=7,
+        traffic_gb=0,  # третий бонус набора; по умолчанию выключен
         tariff_id=None,
         promo_group_id=None,
     )
@@ -113,8 +114,8 @@ async def test_single_balance_type_untouched(monkeypatch):
     extend.assert_not_awaited()
 
 
-def test_cabinet_create_validation_requires_both_fields():
-    """Кабинетная валидация: комбинированному коду нужны И сумма, И дни."""
+def test_cabinet_bonus_set_requires_at_least_one_component():
+    """Кабинетная валидация: в наборе должна быть хотя бы одна составляющая."""
     from app.cabinet.routes.admin_promocodes import _validate_create_payload
 
     def payload(**kw):
@@ -123,22 +124,30 @@ def test_cabinet_create_validation_requires_both_fields():
             type=PromoCodeType.BALANCE_AND_DAYS,
             balance_bonus_kopeks=10000,
             subscription_days=7,
+            traffic_gb=0,
             valid_from=None,
             valid_until=None,
         )
         base.update(kw)
         return SimpleNamespace(**base)
 
-    _validate_create_payload(payload())  # оба поля > 0 — ок
+    _validate_create_payload(payload())  # весь набор — ок
+
+    # Набор собирается галочками: одной включённой составляющей достаточно,
+    # иначе «дни + трафик» без баланса нельзя было бы завести.
+    _validate_create_payload(payload(balance_bonus_kopeks=0))
+    _validate_create_payload(payload(subscription_days=0))
+    _validate_create_payload(payload(balance_bonus_kopeks=0, subscription_days=0, traffic_gb=50))
+
+    # А вот пустой набор бессмысленен — ничего не начисляется.
+    with pytest.raises(HTTPException):
+        _validate_create_payload(payload(balance_bonus_kopeks=0, subscription_days=0, traffic_gb=0))
 
     with pytest.raises(HTTPException):
-        _validate_create_payload(payload(balance_bonus_kopeks=0))
-
-    with pytest.raises(HTTPException):
-        _validate_create_payload(payload(subscription_days=0))
+        _validate_create_payload(payload(traffic_gb=-5))
 
 
-def test_webapi_create_validation_requires_both_fields():
+def test_webapi_bonus_set_requires_at_least_one_component():
     from app.webapi.routes.promocodes import _validate_create_payload
 
     def payload(**kw):
@@ -147,6 +156,7 @@ def test_webapi_create_validation_requires_both_fields():
             type=PromoCodeType.BALANCE_AND_DAYS,
             balance_bonus_kopeks=10000,
             subscription_days=7,
+            traffic_gb=0,
             valid_from=None,
             valid_until=None,
         )
@@ -155,8 +165,57 @@ def test_webapi_create_validation_requires_both_fields():
 
     _validate_create_payload(payload())
 
-    with pytest.raises(HTTPException):
-        _validate_create_payload(payload(balance_bonus_kopeks=0))
+    _validate_create_payload(payload(balance_bonus_kopeks=0))
+    _validate_create_payload(payload(subscription_days=0))
 
     with pytest.raises(HTTPException):
-        _validate_create_payload(payload(subscription_days=0))
+        _validate_create_payload(payload(balance_bonus_kopeks=0, subscription_days=0))
+
+
+async def test_combo_grants_traffic(monkeypatch):
+    """Трафик из набора начисляется той же подписке, что и дни."""
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription()
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.extend_subscription', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.add_user_balance', AsyncMock(return_value=True))
+    add_traffic = AsyncMock(return_value=sub)
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', add_traffic)
+
+    description = await service._apply_promocode_effects(
+        AsyncMock(), _user(), _combo_promocode(traffic_gb=50)
+    )
+
+    add_traffic.assert_awaited_once()
+    assert add_traffic.await_args.args[1] is sub  # та же подписка, что у дней
+    assert add_traffic.await_args.args[2] == 50
+    assert '50 ГБ' in description
+
+
+async def test_combo_without_traffic_does_not_touch_it(monkeypatch):
+    """traffic_gb=0 — начисления нет, старые коды ведут себя как прежде."""
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription()
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.extend_subscription', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.add_user_balance', AsyncMock(return_value=True))
+    add_traffic = AsyncMock()
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', add_traffic)
+
+    await service._apply_promocode_effects(AsyncMock(), _user(), _combo_promocode())
+
+    add_traffic.assert_not_awaited()
