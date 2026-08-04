@@ -23,6 +23,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.utils.cache import RateLimitCache, cache, cache_key
+from app.utils.formatters import format_username_link
 from app.utils.miniapp_buttons import build_admin_ticket_cabinet_button
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.timezone import format_local_datetime
@@ -1053,7 +1054,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             user = None
         full_name = html.escape(user.full_name or '') if user else 'Unknown'
         telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = html.escape((user.username or 'отсутствует') if user else 'отсутствует')
+        username_display = format_username_link(user.username if user else None, 'отсутствует')
 
         # Загружаем первое сообщение для получения медиа и превью текста
         first_message = await TicketMessageCRUD.get_first_message(db, ticket.id)
@@ -1074,7 +1075,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
             f'👤 <b>Пользователь:</b> {full_name}\n'
             f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> @{username_display}\n'
+            f'📱 <b>Username:</b> {username_display}\n'
             f'📝 <b>Заголовок:</b> {safe_title}\n'
         )
 
@@ -1130,7 +1131,7 @@ async def notify_admins_about_ticket_reply(
             user = None
         full_name = html.escape(user.full_name or '') if user else 'Unknown'
         telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = html.escape((user.username or 'отсутствует') if user else 'отсутствует')
+        username_display = format_username_link(user.username if user else None, 'отсутствует')
 
         reply_preview = reply_text[:200] + '...' if len(reply_text) > 200 else reply_text
         safe_title = html.escape(title) if title else '—'
@@ -1141,7 +1142,7 @@ async def notify_admins_about_ticket_reply(
             f'📝 <b>Заголовок:</b> {safe_title}\n'
             f'👤 <b>Пользователь:</b> {full_name}\n'
             f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> @{username_display}\n\n'
+            f'📱 <b>Username:</b> {username_display}\n\n'
             f'📩 <b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
         )
 
