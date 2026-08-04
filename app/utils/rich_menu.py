@@ -507,9 +507,7 @@ async def build_main_menu_rich_html(user: User, texts, db: AsyncSession) -> str:
 
     has_name = bool(getattr(user, 'first_name', None) or getattr(user, 'last_name', None))
     user_name = (
-        html.escape(user.full_name or '')
-        if has_name or not user.username
-        else format_username_link(user.username)
+        html.escape(user.full_name or '') if has_name or not user.username else format_username_link(user.username)
     )
     blocks.append(f'<h4>👤 {user_name}</h4>')
     blocks.append('<hr/>')
