@@ -15,7 +15,7 @@ from app.database.crud.promocode import (
 from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.user_promo_group import add_user_to_promo_group, has_user_promo_group
-from app.database.models import PromoCode, PromoCodeType, Subscription, User
+from app.database.models import PromoCode, PromoCodeType, Subscription, SubscriptionStatus, User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 
@@ -289,8 +289,6 @@ class PromoCodeService:
                 # "active or expired" promise. extend_subscription revives
                 # EXPIRED/DISABLED→ACTIVE, so fall back to those here too (full
                 # parity with classic/single, which already revive DISABLED).
-                from app.database.models import SubscriptionStatus
-
                 all_subs = await get_all_subscriptions_by_user_id(db, user.id)
                 active_subs = [
                     s
@@ -440,21 +438,49 @@ class PromoCodeService:
         # иначе в мультитарифе можно попасть в разные подписки одним кодом.
         traffic_gb = getattr(promocode, 'traffic_gb', 0) or 0
         if promocode.type == PromoCodeType.BALANCE_AND_DAYS.value and traffic_gb > 0:
-            from app.database.crud.subscription import add_subscription_traffic
+            from app.database.crud.subscription import add_subscription_traffic, reactivate_subscription
 
             if target_sub is None:
                 target_sub = await self._pick_target_subscription(db, user, promocode, subscription_id)
 
-            await add_subscription_traffic(db, target_sub, traffic_gb)
-            await self.subscription_service.update_remnawave_user(db, target_sub)
+            if target_sub.traffic_limit_gb == 0:
+                # Subscription.add_traffic на безлимите ничего не делает. Молча
+                # дописать «пополнен на N ГБ» значит соврать: код сгорит, а
+                # пользователь ничего не получит.
+                logger.info(
+                    'Трафик по промокоду не начислен: у подписки безлимит',
+                    _format_user_log=self._format_user_log(user),
+                    traffic_gb=traffic_gb,
+                    subscription_id=target_sub.id,
+                )
+            else:
+                await add_subscription_traffic(db, target_sub, traffic_gb)
 
-            effects.append(f'📦 Трафик пополнен на {traffic_gb} ГБ')
-            logger.info(
-                '✅ Пользователю начислен трафик по промокоду',
-                _format_user_log=self._format_user_log(user),
-                traffic_gb=traffic_gb,
-                subscription_id=target_sub.id,
-            )
+                # Трафик чаще всего дарят как раз тому, у кого он кончился, —
+                # такая подписка стоит в LIMITED. Без реактивации гигабайты
+                # лягут в базу, а update_remnawave_user отправит в панель тот же
+                # LIMITED, и доступ не вернётся. Тот же порядок, что во всех
+                # остальных начислениях трафика (handlers/subscription/traffic.py,
+                # handlers/admin/users.py, cabinet/routes/admin_users.py).
+                await reactivate_subscription(db, target_sub)
+                await self.subscription_service.update_remnawave_user(db, target_sub)
+
+                # PATCH не всегда снимает LIMITED — включаем явно.
+                panel_user_id = (
+                    target_sub.remnawave_id
+                    if settings.is_multi_tariff_enabled() and target_sub.remnawave_id
+                    else getattr(user, 'remnawave_id', None)
+                )
+                if panel_user_id and target_sub.status == SubscriptionStatus.ACTIVE.value:
+                    await self.subscription_service.enable_remnawave_user(panel_user_id)
+
+                effects.append(f'📦 Трафик пополнен на {traffic_gb} ГБ')
+                logger.info(
+                    '✅ Пользователю начислен трафик по промокоду',
+                    _format_user_log=self._format_user_log(user),
+                    traffic_gb=traffic_gb,
+                    subscription_id=target_sub.id,
+                )
 
         if (
             promocode.type in (PromoCodeType.BALANCE.value, PromoCodeType.BALANCE_AND_DAYS.value)
@@ -517,8 +543,6 @@ class PromoCodeService:
                         # uq_subscriptions_user_tariff_active only covers active/trial/
                         # limited, so a dup wouldn't error but would litter the table and
                         # break the one-sub-per-(user,tariff) invariant.
-                        from app.database.models import SubscriptionStatus
-
                         all_subs = await get_all_subscriptions_by_user_id(db, user.id)
                         existing_same_tariff_sub = next(
                             (

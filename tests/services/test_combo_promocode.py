@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.database.models import PromoCodeType
+from app.database.models import PromoCodeType, SubscriptionStatus
 from app.services.promocode_service import PromoCodeService
 
 
@@ -33,12 +33,10 @@ def _combo_promocode(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**base)
 
 
-def _service(monkeypatch) -> PromoCodeService:
+def _service(monkeypatch, panel=None) -> PromoCodeService:
     monkeypatch.setattr('app.services.promocode_service.RemnaWaveService', MagicMock())
-    monkeypatch.setattr(
-        'app.services.promocode_service.SubscriptionService',
-        lambda: SimpleNamespace(update_remnawave_user=AsyncMock()),
-    )
+    stub = panel or SimpleNamespace(update_remnawave_user=AsyncMock(), enable_remnawave_user=AsyncMock())
+    monkeypatch.setattr('app.services.promocode_service.SubscriptionService', lambda: stub)
     return PromoCodeService()
 
 
@@ -46,8 +44,19 @@ def _user() -> SimpleNamespace:
     return SimpleNamespace(id=1, telegram_id=100, email=None, balance_kopeks=0, language='ru')
 
 
-def _subscription() -> SimpleNamespace:
-    return SimpleNamespace(id=5, days_left=3, tariff=None, is_trial=False)
+def _subscription(**overrides) -> SimpleNamespace:
+    base = dict(
+        id=5,
+        days_left=3,
+        tariff=None,
+        is_trial=False,
+        # трафик читается начислением: 0 означает безлимит (Subscription.add_traffic)
+        traffic_limit_gb=100,
+        status=SubscriptionStatus.ACTIVE.value,
+        remnawave_id=None,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
 
 
 async def test_combo_applies_both_days_and_balance(monkeypatch):
@@ -189,9 +198,7 @@ async def test_combo_grants_traffic(monkeypatch):
     add_traffic = AsyncMock(return_value=sub)
     monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', add_traffic)
 
-    description = await service._apply_promocode_effects(
-        AsyncMock(), _user(), _combo_promocode(traffic_gb=50)
-    )
+    description = await service._apply_promocode_effects(AsyncMock(), _user(), _combo_promocode(traffic_gb=50))
 
     add_traffic.assert_awaited_once()
     assert add_traffic.await_args.args[1] is sub  # та же подписка, что у дней
@@ -217,5 +224,130 @@ async def test_combo_without_traffic_does_not_touch_it(monkeypatch):
     monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', add_traffic)
 
     await service._apply_promocode_effects(AsyncMock(), _user(), _combo_promocode())
+
+    add_traffic.assert_not_awaited()
+
+
+async def test_traffic_reactivates_limited_subscription(monkeypatch):
+    """Трафик чаще всего дарят тому, у кого он кончился, — подписка в LIMITED.
+
+    Без реактивации гигабайты лягут в базу, а в панель уедет тот же LIMITED:
+    человек получит бонус и останется без доступа.
+    """
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    panel = SimpleNamespace(update_remnawave_user=AsyncMock(), enable_remnawave_user=AsyncMock())
+    service = _service(monkeypatch, panel)
+
+    sub = _subscription(status=SubscriptionStatus.LIMITED.value)
+
+    async def fake_reactivate(db, subscription):
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        return subscription
+
+    reactivate = AsyncMock(side_effect=fake_reactivate)
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.add_user_balance', AsyncMock(return_value=True))
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.database.crud.subscription.reactivate_subscription', reactivate)
+
+    user = _user()
+    user.remnawave_id = 4242
+    await service._apply_promocode_effects(AsyncMock(), user, _combo_promocode(traffic_gb=50, subscription_days=0))
+
+    reactivate.assert_awaited_once()
+    assert sub.status == SubscriptionStatus.ACTIVE.value
+    # PATCH не всегда снимает LIMITED — включаем явно
+    panel.enable_remnawave_user.assert_awaited_once_with(4242)
+
+
+async def test_traffic_not_granted_on_unlimited_subscription(monkeypatch):
+    """Безлимит: Subscription.add_traffic ничего не делает — и обещать нечего.
+
+    Иначе код сгорает, а пользователю рапортуют о гигабайтах, которых он
+    не получил.
+    """
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription(traffic_limit_gb=0)
+    add_traffic = AsyncMock()
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.extend_subscription', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.add_user_balance', AsyncMock(return_value=True))
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', add_traffic)
+
+    description = await service._apply_promocode_effects(AsyncMock(), _user(), _combo_promocode(traffic_gb=50))
+
+    add_traffic.assert_not_awaited()
+    assert 'ГБ' not in description
+
+
+async def test_target_subscription_picked_once_per_activation(monkeypatch):
+    """Дни и трафик обязаны попасть в ОДНУ подписку — выбор делается один раз.
+
+    Второй независимый выбор в мультитарифе может вернуть другую строку, и
+    один код разложится по разным подпискам.
+    """
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription()
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.extend_subscription', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.add_user_balance', AsyncMock(return_value=True))
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.database.crud.subscription.reactivate_subscription', AsyncMock(return_value=sub))
+
+    picks = []
+    original = service._pick_target_subscription
+
+    async def counting_pick(db, user, promocode, subscription_id):
+        picks.append(subscription_id)
+        return await original(db, user, promocode, subscription_id)
+
+    monkeypatch.setattr(service, '_pick_target_subscription', counting_pick)
+
+    await service._apply_promocode_effects(AsyncMock(), _user(), _combo_promocode(traffic_gb=50))
+
+    assert len(picks) == 1
+
+
+async def test_traffic_only_applies_to_the_bonus_set_type(monkeypatch):
+    """Трафик — составляющая набора. Код другого типа его не раздаёт.
+
+    Поле есть у всех строк промокодов, поэтому без проверки типа сюда попал бы
+    и код «только дни», у которого трафик выставили по ошибке.
+    """
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription()
+    add_traffic = AsyncMock()
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.extend_subscription', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', add_traffic)
+
+    days_only = _combo_promocode(type=PromoCodeType.SUBSCRIPTION_DAYS.value, traffic_gb=50, balance_bonus_kopeks=0)
+    await service._apply_promocode_effects(AsyncMock(), _user(), days_only)
 
     add_traffic.assert_not_awaited()
