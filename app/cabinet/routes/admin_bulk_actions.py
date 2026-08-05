@@ -981,6 +981,13 @@ async def bulk_execute(
     params = request.params
     dry_run = request.dry_run
 
+    # Идентичность админа снимаем ДО работы: любой откат внутри цикла
+    # (ensure_no_open_grace_for_subscriptions, обработчик ошибок _execute_for_*)
+    # экспайрит все объекты сессии, включая самого админа, и следующее чтение
+    # admin.id уронило бы MissingGreenlet весь запрос — вместе с уже
+    # закоммиченными результатами. Та же дисциплина, что в _do_delete_subscription.
+    admin_id = admin.id
+
     # Delete user requires elevated permission
     if action == BulkActionType.DELETE_USER:
         from app.services.permission_service import PermissionService
@@ -1008,7 +1015,7 @@ async def bulk_execute(
 
         if stream:
             return StreamingResponse(
-                _stream_bulk_execute_subscriptions(db, sub_ids, action, params, tariff, dry_run, admin),
+                _stream_bulk_execute_subscriptions(db, sub_ids, action, params, tariff, dry_run, admin_id),
                 media_type='text/event-stream',
             )
 
@@ -1031,7 +1038,7 @@ async def bulk_execute(
 
         logger.info(
             'Bulk action completed (subscription mode)',
-            admin_id=admin.id,
+            admin_id=admin_id,
             action=action,
             total=len(sub_ids),
             success_count=success_count,
@@ -1055,7 +1062,7 @@ async def bulk_execute(
 
     if stream:
         return StreamingResponse(
-            _stream_bulk_execute(db, user_ids, action, params, tariff, dry_run, admin),
+            _stream_bulk_execute(db, user_ids, action, params, tariff, dry_run, admin_id),
             media_type='text/event-stream',
         )
 
@@ -1065,7 +1072,7 @@ async def bulk_execute(
     skipped_count = 0
 
     for uid in user_ids:
-        result = await _execute_for_user(db, uid, action, params, tariff, dry_run, admin_id=admin.id)
+        result = await _execute_for_user(db, uid, action, params, tariff, dry_run, admin_id=admin_id)
 
         results.append(result)
         if result.message == 'User not found':
@@ -1077,7 +1084,7 @@ async def bulk_execute(
 
     logger.info(
         'Bulk action completed',
-        admin_id=admin.id,
+        admin_id=admin_id,
         action=action,
         total=len(user_ids),
         success_count=success_count,
@@ -1109,7 +1116,7 @@ async def _stream_bulk_execute(
     params: BulkActionParams,
     tariff: Tariff | None,
     dry_run: bool,
-    admin: User,
+    admin_id: int,
 ):
     """Yield SSE events for each processed user, then a final summary."""
     total = len(user_ids)
@@ -1118,7 +1125,7 @@ async def _stream_bulk_execute(
     skipped_count = 0
 
     for i, uid in enumerate(user_ids):
-        result = await _execute_for_user(db, uid, action, params, tariff, dry_run, admin_id=admin.id)
+        result = await _execute_for_user(db, uid, action, params, tariff, dry_run, admin_id=admin_id)
 
         if result.message == 'User not found':
             skipped_count += 1
@@ -1142,7 +1149,7 @@ async def _stream_bulk_execute(
 
     logger.info(
         'Bulk action completed (streamed)',
-        admin_id=admin.id,
+        admin_id=admin_id,
         action=action,
         total=total,
         success_count=success_count,
@@ -1170,7 +1177,7 @@ async def _stream_bulk_execute_subscriptions(
     params: BulkActionParams,
     tariff: Tariff | None,
     dry_run: bool,
-    admin: User,
+    admin_id: int,
 ):
     """Yield SSE events for each processed subscription, then a final summary."""
     total = len(sub_ids)
@@ -1203,7 +1210,7 @@ async def _stream_bulk_execute_subscriptions(
 
     logger.info(
         'Bulk action completed (streamed, subscription mode)',
-        admin_id=admin.id,
+        admin_id=admin_id,
         action=action,
         total=total,
         success_count=success_count,

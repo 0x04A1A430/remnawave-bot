@@ -77,6 +77,68 @@ def test_known_subscriptions_uses_loaded_collection():
     assert bulk._known_subscriptions(user, SimpleNamespace(id=99)) == loaded
 
 
+def test_known_subscriptions_keeps_loaded_empty_list_empty():
+    """Загруженный пустой список — это «подписок нет», а не пробел в данных.
+
+    Подстановка сюда целевой подписки соврала бы админу: в отчёте появился бы
+    объект, которого у пользователя уже нет.
+    """
+    user = SimpleNamespace(id=1, username='u', subscriptions=[])
+    assert bulk._known_subscriptions(user, SimpleNamespace(id=99)) == []
+
+
+@pytest.mark.asyncio
+async def test_active_paid_skip_reports_target_without_collection():
+    """Ветка «активная платная» тоже читает подписки — и тоже не должна падать.
+
+    Это второе место в _do_delete_subscription, где коллекция трогается: сюда
+    попадают, когда админ удаляет активную платную подписку без force-флага.
+    """
+    user = _LazyUser()
+    sub = _expired_trial_sub(user)
+    sub.is_active = True
+    sub.is_trial = False
+    params = SimpleNamespace(force_delete_active_paid=False)
+
+    result = await bulk._do_delete_subscription(MagicMock(), user, params, dry_run=False, sub_override=sub)
+
+    assert result.success is False
+    assert 'Skipped' in result.message
+    assert [info.id for info in result.subscriptions] == [sub.id]
+
+
+@pytest.mark.asyncio
+async def test_execute_for_user_survives_unloaded_collection(monkeypatch):
+    """Досборка подписок в _execute_for_user не должна ронять действие.
+
+    Сегодня get_user_by_id грузит коллекцию через selectinload, так что ветка
+    молчит. Но она стоит ПОСЛЕ обработчика: если коллекция окажется
+    недоступна, уже выполненное действие будет объявлено провалившимся, а
+    сессия — откачена. Тест держит эту границу.
+    """
+    user = _LazyUser()
+
+    async def fake_get_user_by_id(db, uid):
+        return user
+
+    async def fake_handler(db, u, params, dry_run):
+        return SimpleNamespace(subscriptions=None, success=True, message='ok', user_id=u.id)
+
+    monkeypatch.setattr(bulk, 'get_user_by_id', fake_get_user_by_id)
+    monkeypatch.setitem(bulk._ACTION_HANDLERS, bulk.BulkActionType.CANCEL_SUBSCRIPTION, fake_handler)
+
+    db = MagicMock()
+    db.rollback = AsyncMock()
+
+    result = await bulk._execute_for_user(
+        db, user.id, bulk.BulkActionType.CANCEL_SUBSCRIPTION, SimpleNamespace(), None, dry_run=False
+    )
+
+    assert result.success is True
+    assert result.subscriptions == []
+    db.rollback.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_delete_subscription_survives_unloaded_collection():
     """Удаление истёкшего триала доходит до конца, а не падает на подписках."""
