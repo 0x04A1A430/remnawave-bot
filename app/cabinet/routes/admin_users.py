@@ -1951,6 +1951,57 @@ async def cancel_user_sbp_recurring(
     return {'status': 'cancelled'}
 
 
+@router.delete('/{user_id}/subscriptions/{sub_id}')
+async def delete_user_subscription(
+    user_id: int,
+    sub_id: int,
+    force: bool = Query(False, description='Allow deleting an active paid subscription'),
+    admin: User = Depends(require_permission('users:subscription')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Удалить конкретную подписку пользователя из его карточки.
+
+    В мультитарифном режиме у пользователя несколько подписок, и убрать
+    лишнюю (например, отработавший триал) можно было только через
+    «Массовые действия». Проверка принадлежности — та же, что у соседних
+    эндпоинтов по ``sub_id`` (защита от IDOR).
+
+    Активная платная подписка защищена от случайного удаления: чтобы
+    снести именно её, нужен явный ``force`` — иначе одним промахом
+    сносится оплаченный доступ.
+    """
+    from app.database.crud.subscription import get_subscription_by_id_for_user
+    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
+    from app.services.subscription_deletion_service import delete_subscription_record
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+
+    if subscription.is_active and not subscription.is_trial and not force:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Subscription is active and paid; pass force=true to delete it anyway',
+        )
+
+    try:
+        await delete_subscription_record(db, subscription, deleted_by=f'admin:{admin.id}')
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+        ) from error
+
+    logger.info(
+        'Admin deleted user subscription',
+        admin_id=admin.id,
+        user_id=user_id,
+        subscription_id=sub_id,
+        forced=force,
+    )
+    return {'status': 'deleted'}
+
+
 # === Available Tariffs ===
 
 
