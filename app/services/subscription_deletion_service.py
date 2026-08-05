@@ -13,6 +13,9 @@
   ``user.deleted`` вебхук своей чисткой заденет соседние живые подписки
   того же владельца.
 
+Панельный аккаунт адресуется по-разному в двух режимах, см.
+``_resolve_panel_target``.
+
 Вызывающий сам решает, как отвечать на ``GraceAccessDeletionBlocked``:
 кабинет отдаёт 409, массовые действия — пропуск с пояснением.
 """
@@ -20,12 +23,60 @@
 from __future__ import annotations
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.subscription import decrement_subscription_server_counts
-from app.database.models import Subscription
+from app.config import settings
+from app.database.crud.subscription import ALIVE_SUBSCRIPTION_STATUSES, decrement_subscription_server_counts
+from app.database.models import Subscription, User
+
 
 logger = structlog.get_logger(__name__)
+
+
+async def _resolve_panel_target(db: AsyncSession, subscription: Subscription) -> tuple[int | None, bool]:
+    """Панельный аккаунт этой подписки и можно ли его удалять.
+
+    Возвращает ``(panel_user_id, deletable)``.
+
+    В мультитарифе аккаунт принадлежит подписке: у каждой строки свой
+    ``remnawave_id``, удаление строки честно уносит и аккаунт.
+
+    В однотарифном режиме аккаунт принадлежит ПОЛЬЗОВАТЕЛЮ. Колонка подписки
+    там пуста у всех строк, кроме одной: ``uq_subscriptions_remnawave_id``
+    частично уникален, поэтому второй строке id не пишется, а адресация
+    остаётся через ``users.remnawave_id`` (см. subscription_service). Читать
+    только ``subscription.remnawave_id`` значит для таких строк молча
+    пропустить панель — админ снимает доступ, а VPN у человека продолжает
+    работать. Тот же режим у синхронизации кабинета по email/OAuth, которая
+    создаёт строку с ``remnawave_id=None`` намеренно.
+
+    Обратная сторона общего аккаунта: удалять его нельзя, пока у человека
+    осталась ЖИВАЯ соседняя подписка — она живёт на этом же аккаунте, и её
+    доступ умер бы заодно. В этом случае аккаунт только отключается, если
+    удаляемая строка была последней живой, и не трогается вовсе, если живая
+    соседка есть.
+    """
+    if settings.is_multi_tariff_enabled():
+        return subscription.remnawave_id, True
+
+    panel_user_id = await db.scalar(select(User.remnawave_id).where(User.id == subscription.user_id))
+    if not panel_user_id:
+        # Историческая строка, у которой id остался только на подписке.
+        return subscription.remnawave_id, True
+
+    alive_sibling = await db.scalar(
+        select(Subscription.id)
+        .where(
+            Subscription.user_id == subscription.user_id,
+            Subscription.id != subscription.id,
+            Subscription.status.in_(tuple(ALIVE_SUBSCRIPTION_STATUSES)),
+        )
+        .limit(1)
+    )
+    if alive_sibling is not None:
+        return None, False
+    return panel_user_id, False
 
 
 async def delete_subscription_record(
@@ -52,15 +103,21 @@ async def delete_subscription_record(
     # Автоплатёжки закоммитили своё — advisory-lock отпущен, берём заново.
     await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
 
-    if subscription.remnawave_id:
+    panel_user_id, panel_deletable = await _resolve_panel_target(db, subscription)
+    if panel_user_id:
         try:
             from app.services.remnawave_webhook_service import RemnaWaveWebhookService
             from app.services.subscription_service import SubscriptionService
 
-            RemnaWaveWebhookService.mark_intentional_panel_deletion(
-                panel_user_ids=[subscription.remnawave_id]
-            )
-            await SubscriptionService().delete_remnawave_user(subscription.remnawave_id)
+            service = SubscriptionService()
+            if panel_deletable:
+                RemnaWaveWebhookService.mark_intentional_panel_deletion(panel_user_ids=[panel_user_id])
+                await service.delete_remnawave_user(panel_user_id)
+            else:
+                # Общий аккаунт однотарифного режима: доступ снимаем, но сам
+                # аккаунт оставляем — на него ещё смотрит users.remnawave_id,
+                # и следующая покупка переиспользует его же.
+                await service.disable_remnawave_user(panel_user_id, db=db)
         except Exception as error:
             logger.warning('Failed to delete RemnaWave user on subscription delete', error=error)
 
