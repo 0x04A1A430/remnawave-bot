@@ -162,6 +162,7 @@ class PromoCodeService:
                     'subscription_not_found',
                     'trial_subscription_exists',
                     'trial_provisioning_failed',
+                    'traffic_not_applicable',
                 ):
                     return {'success': False, 'error': error_key}
                 raise
@@ -437,6 +438,7 @@ class PromoCodeService:
         # Целевая подписка та же, что у дней, — второй раз не выбираем,
         # иначе в мультитарифе можно попасть в разные подписки одним кодом.
         traffic_gb = getattr(promocode, 'traffic_gb', 0) or 0
+        traffic_skipped_unlimited = False
         if promocode.type == PromoCodeType.BALANCE_AND_DAYS.value and traffic_gb > 0:
             from app.database.crud.subscription import add_subscription_traffic, reactivate_subscription
 
@@ -447,6 +449,7 @@ class PromoCodeService:
                 # Subscription.add_traffic на безлимите ничего не делает. Молча
                 # дописать «пополнен на N ГБ» значит соврать: код сгорит, а
                 # пользователь ничего не получит.
+                traffic_skipped_unlimited = True
                 logger.info(
                     'Трафик по промокоду не начислен: у подписки безлимит',
                     _format_user_log=self._format_user_log(user),
@@ -629,6 +632,14 @@ class PromoCodeService:
                 # and returning success) refunds the reserved use + claimed increment, so
                 # the code is not silently burned and stays retryable.
                 raise ValueError('trial_subscription_exists')
+
+        if not effects and traffic_skipped_unlimited:
+            # Трафик был единственной составляющей, а подписка безлимитная —
+            # начислять нечего. Вернуть общий успех значит сжечь попытку: запись
+            # использования и инкремент счётчика сделаны ДО эффектов и
+            # откатываются только через исключение (тот же приём, что и у
+            # trial_subscription_exists выше).
+            raise ValueError('traffic_not_applicable')
 
         return '\n'.join(effects) if effects else '✅ Промокод активирован'
 

@@ -351,3 +351,50 @@ async def test_traffic_only_applies_to_the_bonus_set_type(monkeypatch):
     await service._apply_promocode_effects(AsyncMock(), _user(), days_only)
 
     add_traffic.assert_not_awaited()
+
+
+async def test_traffic_only_on_unlimited_does_not_burn_the_code(monkeypatch):
+    """Трафик — единственная составляющая, а подписка безлимитная: попытка не сгорает.
+
+    Запись использования и инкремент счётчика делаются ДО эффектов и
+    откатываются только через исключение. Вернуть общий успех значит забрать у
+    человека единственную попытку и не дать ничего.
+    """
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription(traffic_limit_gb=0)
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', AsyncMock())
+
+    traffic_only = _combo_promocode(traffic_gb=50, subscription_days=0, balance_bonus_kopeks=0)
+
+    with pytest.raises(ValueError, match='traffic_not_applicable'):
+        await service._apply_promocode_effects(AsyncMock(), _user(), traffic_only)
+
+
+async def test_unlimited_subscription_keeps_other_bonuses(monkeypatch):
+    """Если в наборе есть что-то ещё — оно начисляется, а код не откатывается."""
+    monkeypatch.setattr(
+        type(__import__('app.config', fromlist=['settings']).settings),
+        'is_multi_tariff_enabled',
+        lambda self: False,
+        raising=False,
+    )
+    service = _service(monkeypatch)
+
+    sub = _subscription(traffic_limit_gb=0)
+    monkeypatch.setattr('app.services.promocode_service.get_subscription_by_user_id', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.extend_subscription', AsyncMock(return_value=sub))
+    monkeypatch.setattr('app.services.promocode_service.add_user_balance', AsyncMock(return_value=True))
+    monkeypatch.setattr('app.database.crud.subscription.add_subscription_traffic', AsyncMock())
+
+    description = await service._apply_promocode_effects(AsyncMock(), _user(), _combo_promocode(traffic_gb=50))
+
+    assert 'ГБ' not in description
+    assert description.strip()
