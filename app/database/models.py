@@ -571,6 +571,110 @@ class PlategaPayment(Base):
         return f'<PlategaPayment(id={self.id}, transaction_id={self.platega_transaction_id}, amount={self.amount_rubles}₽, status={self.status}, method={self.payment_method_code})>'
 
 
+class PlategaSubscription(Base):
+    __tablename__ = 'platega_subscriptions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id'), nullable=True)
+
+    platega_subscription_id = Column(String(255), unique=True, nullable=True, index=True)
+    interval = Column(Integer, nullable=False)  # 1=day,2=week,3=month,4=year
+    charge_days = Column(Integer, nullable=False)  # шаг продления за одно списание
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default='RUB')
+
+    status = Column(String(20), nullable=False, default='PENDING')  # PENDING/ACTIVE/PAST_DUE/CANCELLED/FAILED
+    redirect_url = Column(Text, nullable=True)
+    next_charge_at = Column(AwareDateTime(), nullable=True)
+    last_charge_at = Column(AwareDateTime(), nullable=True)
+    last_charge_external_id = Column(String(255), nullable=True)  # идемпотентность коллбека по charge Id
+    charges_success = Column(Integer, nullable=False, default=0)
+    charges_failed = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    user = relationship('User', backref='platega_subscriptions')
+    subscription = relationship('Subscription', backref='platega_subscriptions')
+
+    __table_args__ = (
+        Index('ix_platega_subscriptions_user_active', 'user_id', 'status'),
+        # Одна живая привязка на подписку: гонка конкурентного enable проходит
+        # идемпотентную проверку ДО вставки — индекс делает вторую вставку
+        # IntegrityError, сервис возвращает существующую запись.
+        Index(
+            'uq_platega_subscriptions_alive',
+            'subscription_id',
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+            sqlite_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+        ),
+    )
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+
+class LavaSubscription(Base):
+    """Рекуррентная подписка Lava, привязанная к подписке бота.
+
+    Аналог :class:`PlategaSubscription`. Отличие: сумма и периодичность заданы
+    ПРОДУКТОМ в кабинете Lava (``lava_product_id``), а не выводятся из тарифа —
+    ``charge_days`` копируется из продукта на момент оформления.
+    """
+
+    __tablename__ = 'lava_subscriptions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False, index=True)
+    tariff_id = Column(Integer, ForeignKey('tariffs.id'), nullable=True)
+
+    lava_subscription_id = Column(String(255), unique=True, nullable=True, index=True)
+    lava_product_id = Column(String(255), nullable=False)
+    lava_consumer_id = Column(String(255), nullable=True)
+    # orderId подписки: по нему вебхук отличает списание по подписке от инвойса
+    order_id = Column(String(255), unique=True, nullable=False, index=True)
+
+    charge_days = Column(Integer, nullable=False)  # шаг продления за одно списание
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default='RUB')
+
+    status = Column(String(20), nullable=False, default='PENDING')  # PENDING/ACTIVE/PAST_DUE/CANCELLED/FAILED
+    redirect_url = Column(Text, nullable=True)
+    next_charge_at = Column(AwareDateTime(), nullable=True)
+    last_charge_at = Column(AwareDateTime(), nullable=True)
+    last_charge_external_id = Column(String(255), nullable=True)  # идемпотентность коллбека по invoice_id
+    charges_success = Column(Integer, nullable=False, default=0)
+    charges_failed = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    user = relationship('User', backref='lava_subscriptions')
+    subscription = relationship('Subscription', backref='lava_subscriptions')
+
+    __table_args__ = (
+        Index('ix_lava_subscriptions_user_active', 'user_id', 'status'),
+        # Одна живая привязка на подписку: проигравший гонку enable ловит
+        # IntegrityError и возвращает победителя (зеркало Platega).
+        Index(
+            'uq_lava_subscriptions_alive',
+            'subscription_id',
+            unique=True,
+            postgresql_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+            sqlite_where=text("status IN ('PENDING', 'ACTIVE', 'PAST_DUE')"),
+        ),
+    )
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+
 class CloudPaymentsPayment(Base):
     __tablename__ = 'cloudpayments_payments'
 
@@ -1037,6 +1141,10 @@ class Tariff(Base):
     # Суточный тариф - ежедневное списание
     is_daily = Column(Boolean, default=False, nullable=False)  # Является ли тариф суточным
     daily_price_kopeks = Column(Integer, default=0, nullable=False)  # Цена за день в копейках
+
+    # UUID продукта Lava для рекуррентных подписок: цена и периодичность списаний
+    # задаются в кабинете Lava, здесь только привязка тарифа к продукту.
+    lava_product_id = Column(String(255), nullable=True)
 
     # Произвольное количество дней
     custom_days_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольное кол-во дней
@@ -2155,6 +2263,17 @@ class PrivacyPolicy(Base):
 
 class PublicOffer(Base):
     __tablename__ = 'public_offers'
+
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String(10), nullable=False, unique=True)
+    content = Column(Text, nullable=False)
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+
+class RecurrentPayments(Base):
+    __tablename__ = 'recurrent_payments'
 
     id = Column(Integer, primary_key=True, index=True)
     language = Column(String(10), nullable=False, unique=True)
