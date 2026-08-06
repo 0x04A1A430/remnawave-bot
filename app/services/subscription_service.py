@@ -1233,15 +1233,15 @@ async def reset_subscription_with_panel(db, user: User, subscription: Subscripti
     # не того панельного пользователя). В single-tariff fallback на user корректен.
     if settings.is_multi_tariff_enabled():
         panel_uuid = getattr(subscription, 'remnawave_uuid', None)
+        panel_user_id = getattr(subscription, 'panel_user_id', None)
     else:
         panel_uuid = getattr(subscription, 'remnawave_uuid', None) or getattr(user, 'remnawave_uuid', None)
+        panel_user_id = getattr(user, 'panel_user_id', None)
 
     panel_disabled = False
     if panel_uuid:
         try:
-            panel_disabled = await SubscriptionService().disable_remnawave_user(
-                panel_uuid, user_id=subscription.panel_user_id
-            )
+            panel_disabled = await SubscriptionService().disable_remnawave_user(panel_uuid, user_id=panel_user_id)
         except Exception as e:
             logger.warning(
                 'Не удалось отключить пользователя в RemnaWave при обнулении подписки',

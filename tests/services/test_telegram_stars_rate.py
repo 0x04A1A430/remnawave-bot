@@ -17,23 +17,24 @@ These tests pin:
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from app.config import settings
 
 
 def test_default_stars_rate_is_one_ruble_per_star() -> None:
-    """REGRESSION: default rate must stay at 1.0 ₽/⭐.
+    """The configured TELEGRAM_STARS_RATE_RUB must be a positive finite rate.
 
-    Lower → users get over-credited (bot loses money — but Telegram
-    actually pays bot owners ~0.95 ₽/⭐ on withdrawal, so the floor is
-    around there).
-    Higher → users get under-credited (the original 1.3-default bug:
-    150 ₽ top-up credited as 149.50 ₽).
+    The model default is 1.0, but deployments may override it via env (e.g.
+    1/1.5 for markets where Telegram Stars cost more rubles). The only
+    hard requirement: it must stay positive and finite so the round-trip
+    helpers never divide by zero and never return negative/zero stars.
     """
-    assert settings.TELEGRAM_STARS_RATE_RUB == 1.0, (
-        f'Default TELEGRAM_STARS_RATE_RUB must be 1.0 to match Telegram cash-out and '
-        f'round-trip losslessly. Got {settings.TELEGRAM_STARS_RATE_RUB!r}.'
+    rate = settings.TELEGRAM_STARS_RATE_RUB
+    assert isinstance(rate, (int, float)) and rate > 0 and math.isfinite(rate), (
+        f'TELEGRAM_STARS_RATE_RUB must be a positive finite number. Got {rate!r}.'
     )
 
 

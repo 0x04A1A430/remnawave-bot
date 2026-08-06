@@ -194,7 +194,7 @@ async def test_reset_trials_deletes_panel_first_and_skips_panel_failures(monkeyp
     строку в БД не трогаем (иначе orphan + воскрешение синком)."""
     subs = [_trial_sub(1, 11, 'uuid-ok'), _trial_sub(2, 22, 'uuid-fail')]
 
-    def delete_side_effect(uuid):
+    def delete_side_effect(uuid, user_id=None):
         if uuid == 'uuid-fail':
             raise RuntimeError('panel 500')
         return True

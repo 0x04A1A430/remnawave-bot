@@ -58,7 +58,10 @@ _FOREVER_DAYS = (2099 - 2025) * 365
 _MAX_DEVICES = 999
 
 # Mixable flag tokens. A single '-' is the "skip position" sentinel, not a flag.
-_FLAG_TOKENS = {'-d', '-b', '-t', '-p'}
+# `-r` doubles as the standalone multi-activation prefix ("-r N days..."); as a
+# mixable flag it means "reset traffic usage". Both coexist: multi requires a
+# trailing numeric count and a bare "@user -r" target, so they never collide.
+_FLAG_TOKENS = {'-d', '-b', '-t', '-p', '-r'}
 
 
 def _is_admin(telegram_id: int) -> bool:
@@ -81,6 +84,8 @@ class ParsedQuery:
     # Temp-traffic component
     temp_traffic_gb: int = 0  # !=0 = present
     temp_traffic_days: int = 0  # >0 = present; 0 = default 30
+    # Reset-traffic component
+    reset_traffic: bool = False  # True = reset usage
 
     @property
     def is_multi(self) -> bool:
@@ -103,12 +108,27 @@ class ParsedQuery:
         return self.temp_traffic_gb != 0
 
     @property
+    def has_reset(self) -> bool:
+        return self.reset_traffic
+
+    @property
     def has_any(self) -> bool:
-        return self.has_subscription or self.has_discount or self.has_balance or self.has_temp
+        return self.has_subscription or self.has_discount or self.has_balance or self.has_temp or self.has_reset
 
     @property
     def is_combo(self) -> bool:
-        return sum([self.has_subscription, self.has_discount, self.has_balance, self.has_temp]) > 1
+        return (
+            sum(
+                [
+                    self.has_subscription,
+                    self.has_discount,
+                    self.has_balance,
+                    self.has_temp,
+                    self.has_reset,
+                ]
+            )
+            > 1
+        )
 
 
 def _parse_val(s: str, allow_neg_one: bool = False) -> int | None:
@@ -239,6 +259,11 @@ def _parse_query(query_text: str) -> ParsedQuery:
             i = j
             continue
 
+        if tok == '-r':
+            parsed.reset_traffic = True
+            i += 1
+            continue
+
         # Stray/unrecognized token: ignore and move on
         i += 1
 
@@ -346,6 +371,8 @@ def _build_combo_caption(
         lines.append(texts.t('INLINE_GIFT_BALANCE_BODY', '+{rub} ₽ на баланс').format(rub=parsed.balance_rub))
     if parsed.has_temp:
         lines.append(_temp_body_line(parsed.temp_traffic_gb, parsed.temp_traffic_days or 30, texts))
+    if parsed.has_reset:
+        lines.append(texts.t('INLINE_GIFT_RESET_BODY', 'Сброс использованного трафика'))
 
     body = '\n'.join(lines) if lines else '—'
     hint = texts.t('INLINE_GIFT_CAPTION_HINT', 'Нажмите кнопку ниже, чтобы активировать.')
@@ -368,6 +395,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         ('hint_disc', '@user -d 15', 'Скидка 15%'),
         ('hint_bal', '@user -b 1500', 'Пополнить баланс на 1500 ₽'),
         ('hint_t', '@user -t 100 60', 'Временный трафик: 100 ГБ на 60 дней (без дней — 30)'),
+        ('hint_r', '@user -r', 'Сброс использованного трафика'),
         ('hint_mix', '@user -p 1 500 3 -t 100 -b 1500 -d 15', 'Микс флагов одним подарком'),
     ]
     results = []
@@ -394,7 +422,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
 
 def _flag_hint(query_text: str, texts) -> str:
     t = query_text.strip()
-    if '-r' in t:
+    if t.startswith('-r'):
         return '-r N дни [гб [уст.]]  — первым N  |  - для пропуска'
     if '-d' in t:
         return '-d 15  — скидка 15%  (миксируется)'
@@ -404,7 +432,9 @@ def _flag_hint(query_text: str, texts) -> str:
         return '-t 100 [60]  — временный трафик, по умолчанию 30 дней  (миксируется)'
     if '-p' in t:
         return '-p дни [гб [уст.]]  |  - пропуск позиции  (миксируется)'
-    return '@user -p дни [гб [уст.]] | -t гб [дней] | -d % | -b ₽ | -r N | флаги миксируются | - пропуск'
+    if '-r' in t:
+        return '-r  — сброс использованного трафика  (миксируется)'
+    return '@user -p дни [гб [уст.]] | -t гб [дней] | -d % | -b ₽ | -r сброс трафика | флаги миксируются | - пропуск'
 
 
 async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
@@ -604,6 +634,10 @@ async def handle_admin_inline_query(inline_query: types.InlineQuery) -> None:
         title_parts.append(f'+{parsed.temp_traffic_gb} ГБ врем.')
         desc_parts.append(f'+{parsed.temp_traffic_gb} ГБ трафика на {temp_days} дн.')
 
+    if parsed.has_reset:
+        title_parts.append('сброс трафика')
+        desc_parts.append(texts.t('INLINE_GIFT_RESET_DESC', 'Сброс использованного трафика'))
+
     description = ', '.join(desc_parts)
     title = f'{recipient_display} — ' + ' + '.join(title_parts)
 
@@ -705,6 +739,8 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
             components.append('balance')
         if parsed.has_temp:
             components.append('temp_traffic')
+        if parsed.has_reset:
+            components.append('reset')
 
         gift_type = 'combo' if len(components) > 1 else components[0]
 
@@ -720,6 +756,7 @@ async def handle_chosen_inline_result(chosen: types.ChosenInlineResult) -> None:
             balance_amount_kopeks=parsed.balance_rub * 100 if parsed.has_balance else None,
             temp_traffic_gb=parsed.temp_traffic_gb if parsed.has_temp else None,
             temp_traffic_days=(parsed.temp_traffic_days or 30) if parsed.has_temp else None,
+            reset_traffic=parsed.reset_traffic if parsed.has_reset else None,
             inline_message_id=intended_sentinel or inline_message_id,
         )
 

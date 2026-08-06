@@ -71,6 +71,7 @@ def _build_info_text(
     temp_traffic_gb: int = 0,
     temp_traffic_days: int = 30,
     discount_percent: int = 0,
+    reset_traffic: bool = False,
 ) -> str:
     """Build activation preview. NULL values = no change, not shown."""
     lines = []
@@ -90,6 +91,15 @@ def _build_info_text(
         body = texts.t('INLINE_GIFT_TEMP_TRAFFIC_BODY', '{sign}{gb} ГБ трафика (на {days} дн.)').format(
             sign=sign, gb=temp_traffic_gb, days=temp_traffic_days or 30
         )
+        return (
+            f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+            f'<b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
+            f'<blockquote>{body}</blockquote>\n\n'
+            f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
+        )
+
+    if gift_type == 'reset':
+        body = texts.t('INLINE_GIFT_RESET_BODY', 'Сброс использованного трафика')
         return (
             f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
             f'<b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
@@ -183,6 +193,12 @@ def _build_info_text(
                 f'{texts.t("INLINE_GIFT_LABEL_TEMP_TRAFFIC", "Временный трафик")}: '
                 f'<b>+{temp_traffic_gb} ГБ (на {temp_traffic_days or 30} дн.)</b>'
             )
+        if reset_traffic:
+            lines.append(
+                f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_RESET", "Сброс трафика")}: '
+                f'<b>{texts.t("INLINE_GIFT_RESET_BODY", "Сброс использованного трафика")}</b>'
+            )
 
     body = '\n'.join(lines) if lines else '—'
     return (
@@ -191,6 +207,25 @@ def _build_info_text(
         f'<blockquote>{body}</blockquote>\n\n'
         f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
     )
+
+
+async def _reset_panel_traffic(subscription, user) -> None:
+    from app.services.remnawave_service import RemnaWaveService
+
+    remnawave_uuid = getattr(subscription, 'remnawave_uuid', None) or getattr(user, 'remnawave_uuid', None)
+    if not remnawave_uuid:
+        return
+    try:
+        remnawave_service = RemnaWaveService()
+        async with remnawave_service.get_api_client() as api:
+            await api.reset_user_traffic(
+                remnawave_uuid,
+                user_id=subscription.panel_user_id
+                if settings.is_multi_tariff_enabled() and subscription
+                else user.panel_user_id,
+            )
+    except Exception as e:
+        logger.warning('Не удалось сбросить трафик RemnaWave (подарок)', error=e)
 
 
 def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
@@ -294,6 +329,7 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str, state=Non
         temp_traffic_gb=temp_gb or 0,
         temp_traffic_days=gift.temp_traffic_days or 30,
         discount_percent=gift.discount_percent or 0,
+        reset_traffic=bool(gift.reset_traffic),
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
     return True
@@ -517,6 +553,56 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 )
                 return
 
+            if gift_type == 'reset':
+                existing_sub = await get_subscription_by_user_id(db, user.id)
+                if not existing_sub:
+                    await callback.message.edit_text(
+                        texts.t(
+                            'INLINE_GIFT_NO_SUBSCRIPTION',
+                            'У вас нет активной подписки для сброса трафика.',
+                        )
+                    )
+                    return
+
+                existing_sub.traffic_used_gb = 0.0
+                existing_sub.updated_at = datetime.now(UTC)
+
+                gift.activated_count = activated + 1
+                gift.is_activated = True
+                gift.activated_at = datetime.now(UTC)
+                gift.activated_by_user_id = user.id
+                inline_msg_id = gift.inline_message_id
+                await db.commit()
+
+                await _reset_panel_traffic(existing_sub, user)
+
+                success_text = texts.t(
+                    'INLINE_GIFT_RESET_SUCCESS',
+                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Трафик сброшен!</b>\n\n<blockquote>Использованный трафик обнулён</blockquote>',
+                )
+                back_kb = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            make_button(
+                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                callback_data='back_to_menu',
+                            )
+                        ]
+                    ]
+                )
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
+                await _update_inline_button(
+                    callback.bot,
+                    inline_msg_id,
+                    texts.t(
+                        'INLINE_GIFT_ACTIVATED_BUTTON',
+                        'Активировано',
+                    ),
+                    0,
+                    1,
+                )
+                return
+
             if gift_type == 'combo':
                 import secrets as _secrets
 
@@ -605,6 +691,24 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                         if forever_end_date:
                             subscription.end_date = forever_end_date
 
+                    sub_parts = []
+                    if gift_days is not None:
+                        if gift_days >= _FOREVER_DAYS:
+                            sub_parts.append(texts.t('INLINE_GIFT_LABEL_FOREVER', 'Навсегда'))
+                        else:
+                            sub_parts.append(f'+{_days_label(gift_days, texts)}')
+                    if gift_traffic is not None:
+                        sub_parts.append(_fmt_traffic(gift_traffic, texts))
+                    if gift_devices is not None:
+                        sub_parts.append(f'{gift_devices} уст.')
+                    if sub_parts:
+                        buffer.append(
+                            texts.t(
+                                'INLINE_GIFT_COMBO_SUB',
+                                'подписка: {changes}',
+                            ).format(changes=', '.join(sub_parts))
+                        )
+
                 # --- discount component ---
                 if gift.discount_percent:
                     pct = gift.discount_percent
@@ -660,6 +764,29 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                         ).format(gb=gb, days=temp_days)
                     )
 
+                reset_sub = None
+                # --- reset-traffic component ---
+                if gift.reset_traffic:
+                    reset_sub = subscription
+                    if reset_sub is None:
+                        reset_sub = await get_subscription_by_user_id(db, user.id)
+                    if not reset_sub:
+                        await callback.message.edit_text(
+                            texts.t(
+                                'INLINE_GIFT_NO_SUBSCRIPTION',
+                                'У вас нет активной подписки для сброса трафика.',
+                            )
+                        )
+                        return
+                    reset_sub.traffic_used_gb = 0.0
+                    reset_sub.updated_at = datetime.now(UTC)
+                    buffer.append(
+                        texts.t(
+                            'INLINE_GIFT_COMBO_RESET',
+                            'сброс трафика',
+                        )
+                    )
+
                 new_activated = activated + 1
                 remaining = max_act - new_activated
                 gift.activated_count = new_activated
@@ -671,6 +798,9 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     gift.subscription_id = subscription.id
                     await db.refresh(subscription)
                 await db.commit()
+
+                if reset_sub is not None:
+                    await _reset_panel_traffic(reset_sub, user)
 
                 changes = ', '.join(buffer)
                 success_text = texts.t(
@@ -989,6 +1119,7 @@ async def show_pending_inline_gift(
         temp_traffic_gb=temp_gb or 0,
         temp_traffic_days=gift.temp_traffic_days or 30,
         discount_percent=gift.discount_percent or 0,
+        reset_traffic=bool(gift.reset_traffic),
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
 
