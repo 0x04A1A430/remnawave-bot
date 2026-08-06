@@ -3614,6 +3614,8 @@ class InlineGiftSubscription(Base):
     # NULL = no temp-traffic component; days NULL = default 30
     temp_traffic_gb = Column(Integer, nullable=True)
     temp_traffic_days = Column(Integer, nullable=True)
+    # Reset traffic usage flag (gift_type == 'reset' / combo)
+    reset_traffic = Column(Boolean, nullable=True, default=False, server_default='false')
     # Multi-activation support (for "-r N" gifts: N separate activations, one shared code)
     max_activations = Column(Integer, nullable=False, default=1, server_default='1')
     activated_count = Column(Integer, nullable=False, default=0, server_default='0')
