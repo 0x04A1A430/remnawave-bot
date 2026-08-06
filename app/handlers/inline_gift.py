@@ -375,7 +375,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_msg_id,
                     texts.t(
                         'INLINE_GIFT_ACTIVATED_BUTTON',
-                        '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано',
+                        'Активировано',
                     ),
                     0,
                     1,
@@ -415,7 +415,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_msg_id,
                     texts.t(
                         'INLINE_GIFT_ACTIVATED_BUTTON',
-                        '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано',
+                        'Активировано',
                     ),
                     0,
                     1,
@@ -480,7 +480,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_msg_id,
                     texts.t(
                         'INLINE_GIFT_ACTIVATED_BUTTON',
-                        '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано',
+                        'Активировано',
                     ),
                     0,
                     1,
@@ -627,9 +627,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         fully_used = new_activated >= max_act
         button_text = (
-            texts.t(
-                'INLINE_GIFT_ACTIVATED_BUTTON', '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано'
-            )
+            texts.t('INLINE_GIFT_ACTIVATED_BUTTON', 'Активировано')
             if fully_used
             else texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(n=remaining)
         )
