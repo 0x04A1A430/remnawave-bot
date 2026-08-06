@@ -458,6 +458,17 @@ async def handle_subscription_delete_execute(
         await callback.answer('Можно удалить только истекшую или отключённую подписку', show_alert=True)
         return
 
+    # Best-effort: stop Platega SBP / Lava autopay before the row disappears —
+    # the platega_subscriptions/lava_subscriptions records CASCADE-delete with
+    # it, so cancelling after the delete would find nothing to cancel on the
+    # provider's side.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+
     # Delete from RemnaWave panel (stops webhooks / phantom notifications)
     if subscription.remnawave_uuid:
         try:

@@ -720,7 +720,30 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
+            # Platega sends both one-off payment callbacks and recurring СБП-subscription
+            # callbacks (charge + status-change) to this same endpoint. Subscription
+            # payloads carry PaymentMethod 6, a SubscriptionId, or a SUBSCRIPTION_-prefixed
+            # Status and must be routed to the dedicated handler.
+            is_subscription = (
+                payload.get('PaymentMethod') == 6
+                or 'SubscriptionId' in payload
+                or str(payload.get('Status', '')).startswith('SUBSCRIPTION_')
+            )
+
             try:
+                if is_subscription:
+                    # process_platega_subscription_callback self-handles errors/logging
+                    # and always returns None — it is NOT a success flag like the other
+                    # handlers, so the response must not be gated on its return value.
+                    # Per spec, subscription callbacks always get HTTP 200 unless
+                    # dispatch itself raises (caught below → 400, Platega retries).
+                    await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_platega_subscription_callback',
+                    )
+                    return JSONResponse({'status': 'ok'})
+
                 success = await _process_payment_service_callback(
                     payment_service,
                     payload,
@@ -1650,17 +1673,29 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 logger.warning('Lava webhook: invalid signature')
                 return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
 
+            # Списания по рекуррентной подписке приходят обычным инвойс-вебхуком:
+            # отличаем их по префиксу нашего orderId и уводим в ветку подписок —
+            # там продление подписки, а не начисление на баланс.
+            from app.services.lava_recurrent import is_recurrent_order_id
+
+            callback_method = (
+                'process_lava_subscription_callback'
+                if is_recurrent_order_id(payload.get('order_id'))
+                else 'process_lava_callback'
+            )
+
             try:
                 success = await _process_payment_service_callback(
                     payment_service,
                     payload,
-                    'process_lava_callback',
+                    callback_method,
                 )
                 if not success:
                     logger.error(
                         'Lava webhook processing failed',
                         order_id=payload.get('order_id'),
                         invoice_id=payload.get('invoice_id'),
+                        handler=callback_method,
                     )
             except Exception as e:
                 logger.exception('Lava webhook processing error', error=e)
