@@ -1482,6 +1482,17 @@ class Subscription(Base):
         return self.status == SubscriptionStatus.ACTIVE.value and end is not None and end > current_time
 
     @property
+    def is_pending_trial(self) -> bool:
+        """Неоплаченный черновик триала (PENDING + is_trial).
+
+        Такой драфт создаётся при выборе способа оплаты платного триала и означает
+        «повторную попытку оплаты», а не реальную подписку. Он не считается
+        использованным триалом (см. User.is_trial_already_used) и не должен
+        отображаться в пользовательских меню как существующая подписка.
+        """
+        return self.status == SubscriptionStatus.PENDING.value and bool(self.is_trial)
+
+    @property
     def is_expired(self) -> bool:
         """Проверяет, истёк ли срок подписки"""
         end = _aware(self.end_date)
