@@ -570,6 +570,15 @@ async def _do_delete_subscription(
                 error=e,
             )
 
+    # Лучшие усилия: останавливаем СБП-автопродление Platega и автопродление Lava,
+    # пока строка ещё существует — запись platega_subscriptions CASCADE-удаляется
+    # вместе с подпиской, и после удаления отменять на стороне провайдера было бы нечего.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, sub.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, sub.id)
     # Delete related records then subscription
     await db.execute(sa_delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
     await db.execute(sa_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == sub.id))
