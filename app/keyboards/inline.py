@@ -971,7 +971,7 @@ def get_info_menu_keyboard(
         )
 
     if settings.is_language_selection_enabled():
-        buttons.append([make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
+        buttons.append([make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language', style='primary')])
 
     buttons.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
