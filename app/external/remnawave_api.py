@@ -559,12 +559,18 @@ class RemnaWaveAPI:
         user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return f'/api/users/{user_id}'
+        uuid = self._sanitize_uuid(uuid)
+        if uuid is None:
+            raise ValueError('Cannot build user path: invalid uuid and no valid user_id')
         return f'/api/users/{uuid}'
 
     def _fmt_user_body_id(self, uuid: str, user_id: int | None = None) -> dict[str, str | int]:
         user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return {'id': user_id}
+        uuid = self._sanitize_uuid(uuid)
+        if uuid is None:
+            raise ValueError('Cannot build user body id: invalid uuid and no valid user_id')
         return {'uuid': uuid}
 
     def _fmt_hwid_user_key(self, user_uuid: str, user_id: int | None = None) -> str:
@@ -576,8 +582,12 @@ class RemnaWaveAPI:
     def _fmt_hwid_path(self, user_uuid: str, user_id: int | None = None) -> str:
         """Path to a user's HWID devices. v3.0.0: numeric userId in the path."""
         user_id = self._sanitize_user_id(user_id)
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-        return f'/api/hwid/devices/{_uid}'
+        if self._use_user_id() and user_id is not None:
+            return f'/api/hwid/devices/{user_id}'
+        user_uuid = self._sanitize_uuid(user_uuid)
+        if user_uuid is None:
+            raise ValueError('Cannot build hwid path: invalid uuid and no valid user_id')
+        return f'/api/hwid/devices/{user_uuid}'
 
     def _fmt_hwid_delete_payload(self, user_uuid: str, user_id: int | None, hwid: str) -> dict[str, str]:
         """Body for POST /api/hwid/devices/delete.
@@ -586,7 +596,12 @@ class RemnaWaveAPI:
         """
         user_id = self._sanitize_user_id(user_id)
         hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
+        if self._use_user_id() and user_id is not None:
+            _uid = user_id
+        else:
+            _uid = self._sanitize_uuid(user_uuid)
+            if _uid is None:
+                raise ValueError('Cannot build hwid delete payload: invalid uuid and no valid user_id')
         return {hwid_key: _uid, 'hwid': hwid}
 
     async def get_user_by_uuid(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser | None:
@@ -1564,12 +1579,11 @@ class RemnaWaveAPI:
             traffic_strategy = TrafficLimitStrategy.NO_RESET
 
         return RemnaWaveUser(
-            # v3.0.0: uuid поле удалено из объекта пользователя — пустая строка.
-            # Единственный идентификатор пользователя — числовой id.
-            # None вместо '' — чтобы в БД писался NULL, а не пустая строка:
-            # колонка users.remnawave_uuid UNIQUE, '' у двух юзеров ломает её.
-            uuid=user_data.get('uuid') or None,
-            short_uuid=user_data['shortUuid'],
+            # v3.0.0: uuid может отсутствовать, а может прийти как NaN/'' —
+            # отбрасываем их в None, чтобы в БД писался NULL: колонка
+            # users.remnawave_uuid UNIQUE, ''/NaN у двух юзеров ломает её.
+            uuid=self._sanitize_uuid(user_data.get('uuid')),
+            short_uuid=self._sanitize_uuid(user_data.get('shortUuid')) or '',
             username=user_data['username'],
             status=status,
             # Remnawave 2.8.0 ослабил валидацию trafficLimitBytes (integer → number),
@@ -1632,6 +1646,22 @@ class RemnaWaveAPI:
             return int(user_id)
         except (ValueError, TypeError):
             return None
+
+    @staticmethod
+    def _sanitize_uuid(uuid_value: Any) -> str | None:
+        """Return a usable panel uuid string, or None for NaN/garbage.
+
+        v3.0.0 панель может не вернуть uuid вовсе, а может прислать JSON-literal
+        ``NaN`` (json.loads -> float('nan')) или строку ``"NaN"``. Такие значения
+        нельзя писать в ``users.remnawave_uuid`` (колонка UNIQUE, а ``''``/``NaN``
+        у двух юзеров ломают её) и нельзя подставлять в URL ``/api/users/<uuid>``.
+        """
+        if not isinstance(uuid_value, str):
+            return None
+        uuid_value = uuid_value.strip()
+        if not uuid_value or uuid_value.lower() in ('nan', 'inf', '-inf', 'infinity', '-infinity'):
+            return None
+        return uuid_value
 
     def _parse_inbound(self, inbound_data: dict) -> RemnaWaveInbound:
         """Парсит данные inbound"""
