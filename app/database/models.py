@@ -3576,6 +3576,8 @@ class InlineGiftSubscription(Base):
       'subscription' — extend/create subscription (days/traffic/devices)
       'discount'     — give discount percent via promocode (@user %15)
       'balance'      — add balance kopeks (@user :1500)
+      'temp_traffic' — add temporary traffic (temp_traffic_gb/days)
+      'combo'        — any mix of the above components in one gift
     """
 
     __tablename__ = 'inline_gift_subscriptions'
@@ -3604,10 +3606,14 @@ class InlineGiftSubscription(Base):
     days = Column(Integer, nullable=True)
     traffic_limit_gb = Column(Integer, nullable=True)
     device_limit = Column(Integer, nullable=True)
-    # Discount parameters (gift_type == 'discount')
+    # Discount parameters (gift_type == 'discount' / combo)
     discount_percent = Column(Integer, nullable=True)
-    # Balance parameters (gift_type == 'balance'), stored in kopeks
+    # Balance parameters (gift_type == 'balance' / combo), stored in kopeks
     balance_amount_kopeks = Column(Integer, nullable=True)
+    # Temporary traffic parameters (gift_type == 'temp_traffic' / combo)
+    # NULL = no temp-traffic component; days NULL = default 30
+    temp_traffic_gb = Column(Integer, nullable=True)
+    temp_traffic_days = Column(Integer, nullable=True)
     # Multi-activation support (for "-r N" gifts: N separate activations, one shared code)
     max_activations = Column(Integer, nullable=False, default=1, server_default='1')
     activated_count = Column(Integer, nullable=False, default=0, server_default='0')
