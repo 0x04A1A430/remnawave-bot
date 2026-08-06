@@ -571,7 +571,7 @@ class RemnaWaveAPI:
         uuid = self._sanitize_uuid(uuid)
         if uuid is None:
             raise ValueError('Cannot build user body id: invalid uuid and no valid user_id')
-        return {'uuid': uuid}
+        return {'id': uuid}
 
     def _fmt_hwid_user_key(self, user_uuid: str, user_id: int | None = None) -> str:
         user_id = self._sanitize_user_id(user_id)
