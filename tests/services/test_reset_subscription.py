@@ -52,7 +52,7 @@ async def test_reset_subscription_zeroes_fields():
 async def test_reset_with_panel_disables_subscription_uuid(monkeypatch):
     disabled: list[str] = []
 
-    async def fake_disable(self, uuid):
+    async def fake_disable(self, uuid, user_id=None):
         disabled.append(uuid)
         return True
 
@@ -74,7 +74,7 @@ async def test_reset_with_panel_multitariff_no_sub_uuid_skips_panel(monkeypatch)
     (that legacy uuid could belong to a different active sub). Panel is skipped."""
     disabled: list[str] = []
 
-    async def fake_disable(self, uuid):
+    async def fake_disable(self, uuid, user_id=None):
         disabled.append(uuid)
         return True
 
@@ -94,7 +94,7 @@ async def test_reset_with_panel_multitariff_no_sub_uuid_skips_panel(monkeypatch)
 async def test_reset_with_panel_singletariff_falls_back_to_user_uuid(monkeypatch):
     disabled: list[str] = []
 
-    async def fake_disable(self, uuid):
+    async def fake_disable(self, uuid, user_id=None):
         disabled.append(uuid)
         return True
 
@@ -131,7 +131,7 @@ async def test_reset_with_panel_no_uuid_skips_panel(monkeypatch):
 async def test_reset_with_panel_survives_panel_error(monkeypatch):
     """A panel disable failure must not block the bot-side reset (best effort)."""
 
-    async def boom(self, uuid):
+    async def boom(self, uuid, user_id=None):
         raise RuntimeError('panel down')
 
     monkeypatch.setattr(ss.SubscriptionService, 'disable_remnawave_user', boom)

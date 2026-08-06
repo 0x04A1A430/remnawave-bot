@@ -110,6 +110,18 @@ class TestParseSingleMixables:
         assert _parse_query('@user -t 5000').temp_traffic_gb == 999
         assert _parse_query('@user -t -5000').temp_traffic_gb == -999
 
+    def test_reset_with_target(self):
+        p = _parse_query('@user -r')
+        assert p.reset_traffic
+        assert p.has_reset
+        assert p.multi_count == 0
+        assert not p.is_combo
+
+    def test_reset_without_target_is_multi(self):
+        p = _parse_query('-r 5 30 500 3')
+        assert p.multi_count == 5
+        assert not p.reset_traffic
+
 
 class TestParseMixing:
     def test_full_mix(self):
@@ -155,6 +167,18 @@ class TestParseMixing:
         assert p.has_subscription
         assert not p.is_combo
 
+    def test_subscription_plus_reset_is_combo(self):
+        p = _parse_query('@user -p 1 500 -r')
+        assert p.has_subscription
+        assert p.reset_traffic
+        assert p.is_combo
+
+    def test_reset_mixes_with_balance(self):
+        p = _parse_query('@user -b 500 -r')
+        assert p.has_balance
+        assert p.reset_traffic
+        assert p.is_combo
+
 
 class TestParseMulti:
     def test_multi_full(self):
@@ -191,6 +215,17 @@ class TestCaptions:
         p = _parse_query('@user -b 500 -t 100')
         cap = _build_combo_caption('user', p, texts)
         assert '+100 ГБ трафика (на 30 дн.)' in cap
+
+    def test_reset_caption_standalone(self):
+        p = _parse_query('@user -r')
+        cap = _build_combo_caption('user', p, texts)
+        assert 'Сброс использованного трафика' in cap
+
+    def test_combo_caption_with_reset(self):
+        p = _parse_query('@user -p 1 500 -r')
+        cap = _build_combo_caption('user', p, texts)
+        assert '1 дн.' in cap or '1 день' in cap
+        assert 'Сброс использованного трафика' in cap
 
     def test_subscription_caption_multi(self):
         cap = _build_subscription_caption('', 30, 500, 3, texts, multi_count=5)
@@ -287,6 +322,22 @@ class TestActivationPreview:
         assert 'Скидка: <b>15%</b>' in text
         assert 'Баланс: <b>+1500 ₽</b>' in text
         assert 'Временный трафик: <b>+100 ГБ (на 60 дн.)</b>' in text
+
+    def test_reset_preview_standalone(self):
+        text = _build_info_text(None, None, None, texts, gift_type='reset')
+        assert 'Сброс использованного трафика' in text
+
+    def test_combo_preview_with_reset(self):
+        text = _build_info_text(
+            30,
+            500,
+            3,
+            texts,
+            gift_type='combo',
+            reset_traffic=True,
+        )
+        assert 'Сброс трафика' in text
+        assert 'Сброс использованного трафика' in text
 
     def test_subscription_preview_no_existing(self):
         text = _build_info_text(30, 500, 3, texts, existing_sub=None)
