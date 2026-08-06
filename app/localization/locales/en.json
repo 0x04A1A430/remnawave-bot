@@ -1764,5 +1764,5 @@
   "INLINE_GIFT_SUCCESS": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> <b>Gift activated!</b>\n\nYour subscription has been updated.",
   "INLINE_GIFT_SUCCESS_CHANGES": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> <b>Gift activated!</b>\n\n<blockquote>{changes}</blockquote>",
   "INLINE_GIFT_INFO_MESSAGE": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <b>Gift subscription</b>\n\n<blockquote><tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji> Duration: <b>{days_str}</b>\n<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji> Traffic: <b>{traffic}</b>\n<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> Devices: <b>{devices}</b></blockquote>\n\nDo you want to activate it?",
-  "INLINE_GIFT_ACTIVATED_BUTTON": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> Activated"
+  "INLINE_GIFT_ACTIVATED_BUTTON": "Activated"
 }
