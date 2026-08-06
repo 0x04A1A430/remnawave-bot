@@ -44,9 +44,9 @@ class UserTraffic:
     last_connected_node_uuid: str | None = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RemnaWaveUser:
-    uuid: str
+    uuid: str | None = None
     short_uuid: str
     username: str
     status: UserStatus
@@ -1566,7 +1566,9 @@ class RemnaWaveAPI:
         return RemnaWaveUser(
             # v3.0.0: uuid поле удалено из объекта пользователя — пустая строка.
             # Единственный идентификатор пользователя — числовой id.
-            uuid=user_data.get('uuid', ''),
+            # None вместо '' — чтобы в БД писался NULL, а не пустая строка:
+            # колонка users.remnawave_uuid UNIQUE, '' у двух юзеров ломает её.
+            uuid=user_data.get('uuid') or None,
             short_uuid=user_data['shortUuid'],
             username=user_data['username'],
             status=status,
