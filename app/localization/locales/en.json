@@ -1080,7 +1080,7 @@
   "LOADING": "⏳ Loading...",
   "MAINTENANCE_MODE_ACTIVE": "\nMaintenance in progress!\n\nThe service is temporarily unavailable while we improve performance.\n\nEstimated completion time: unknown\nPlease try again later\n\nWe apologize for the inconvenience.\n",
   "MAINTENANCE_MODE_API_ERROR": "\nMaintenance in progress!\n\nThe service is temporarily unavailable due to connection issues with the servers.\n\nWe're working on it. Please try again in a few minutes.\n\nLast check: {last_check}\n",
-  "MAIN_MENU": "<b>{user_name}</b>\n\n<b>Subscription:</b> {subscription_status}\n\nChoose an option:\n",
+  "MAIN_MENU": "<blockquote><tg-emoji emoji-id='5886412370347036129'>👤</tg-emoji> <b>{user_name}</b>\n<b><tg-emoji emoji-id='5936017305585586269'>🪮</tg-emoji> Subscription:</b> {subscription_status}</blockquote>",
   "MAIN_MENU_ACTION_PROMPT": "Choose an option:",
   "MAIN_MENU_BUTTON": "Main menu",
   "MAIN_MENU_TEST_ACCESS_HEADER": "Test servers active: {servers}",
@@ -1583,7 +1583,7 @@
   "TRIAL_ACTIVATED": "Trial subscription activated!",
   "TRIAL_ACTIVATE_BUTTON": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> Activate",
   "TRIAL_ALREADY_USED": "The trial subscription has already been used",
-  "TRIAL_AVAILABLE": "\n<b><tg-emoji emoji-id='5985616167740379273'>⏰</tg-emoji> Trial subscription</b>\n\nYou can get a trial plan{price_line}:\n\n<b>Duration:</b> {days} days\n<b>Traffic:</b> {traffic}{devices_line}\n<b>Server:</b> {server_name}\n\nActivate the trial subscription?\n",
+  "TRIAL_AVAILABLE": "\n<b><tg-emoji emoji-id='5985616167740379273'>⏰</tg-emoji> Trial subscription</b>\n\n<blockquote><b>Duration:</b> {days} days\n<b>Traffic:</b> {traffic}{devices_line}</blockquote>\n\n<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> Activate the trial subscription?\n",
   "TRIAL_AVAILABLE_DEVICES_LINE": "\n<b>Devices:</b> {devices} pcs",
   "TRIAL_PAYMENT_PRICE_LINE": "\n<b>Activation price:</b> {price}",
   "TRIAL_PAYMENT_INSUFFICIENT_FUNDS": "️ Not enough funds to activate the trial.\nRequired: {required}\nOn balance: {balance}\nMissing: {missing}\n\nTop up your balance and try again.",
@@ -1756,7 +1756,13 @@
   "WEBHOOK_SUB_BANDWIDTH_THRESHOLD": "<b>{percent}% traffic used</b>\n\nYou have used a significant portion of traffic for your subscription{tariff_label}. Monitor your usage.",
   "WEBHOOK_RENEW_BUTTON": "Renew subscription",
   "WEBHOOK_USER_NOT_CONNECTED": "<b>Not connected yet</b>\n\nYour subscription{tariff_label} is active but no VPN connection has been made. Connect to start using the service.",
-  "WEBHOOK_DEVICE_ADDED": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> <b>New device</b>\n\nA new device has been added to your subscription{tariff_label}: <code>{device}</code>",
+  "WEBHOOK_DEVICE_ADDED": "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> <b>New device</b>\n\n<blockquote>A new device has been connected to your subscription{tariff_label}:\n{platform} <code>{device}</code></blockquote>",
   "WEBHOOK_DEVICE_DELETED": "<b>Device removed</b>\n\nA device has been removed from your subscription{tariff_label}: <code>{device}</code>",
-  "WEBHOOK_CLOSE_BUTTON": "️ Close"
+  "WEBHOOK_CLOSE_BUTTON": "️ Close",
+  "INLINE_GIFT_WRONG_RECIPIENT": "<tg-emoji emoji-id='5775887550262546277'>❗️</tg-emoji> This gift is meant for another user.",
+  "INLINE_GIFT_ACTIVATING": "<tg-emoji emoji-id='5846024087033353251'>📷</tg-emoji> Activating your gift...",
+  "INLINE_GIFT_SUCCESS": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> <b>Gift activated!</b>\n\nYour subscription has been updated.",
+  "INLINE_GIFT_SUCCESS_CHANGES": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> <b>Gift activated!</b>\n\n<blockquote>{changes}</blockquote>",
+  "INLINE_GIFT_INFO_MESSAGE": "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji> <b>Gift subscription</b>\n\n<blockquote><tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji> Duration: <b>{days_str}</b>\n<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji> Traffic: <b>{traffic}</b>\n<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji> Devices: <b>{devices}</b></blockquote>\n\nDo you want to activate it?",
+  "INLINE_GIFT_ACTIVATED_BUTTON": "<tg-emoji emoji-id='5825794181183836432'>✔️</tg-emoji> Activated"
 }
