@@ -213,16 +213,19 @@ class TestCaptions:
 
 
 class TestHints:
-    def test_syntax_hints_insert_text_without_sending(self):
+    def test_syntax_hints_carry_flag_template(self):
         hints = _build_syntax_hint(texts)
         ids = [h.id for h in hints]
         assert 'hint_sub' in ids
         assert 'hint_mix' in ids
         assert 'hint_t' in ids
-        for h in hints:
-            assert getattr(h, 'input_message_content', None) is None
         by_id = {h.id: h for h in hints}
         assert by_id['hint_t'].title == '@user -t 100 60'
+        for h in hints:
+            content = h.input_message_content
+            assert content is not None
+            assert content.message_text == h.title
+            assert getattr(content, 'parse_mode', None) == 'HTML'
 
     def test_flag_hint_branches(self):
         assert 'временный трафик' in _flag_hint('@user -t 100 60', texts)

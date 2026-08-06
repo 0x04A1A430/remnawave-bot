@@ -358,8 +358,8 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         'INLINE_GIFT_THUMBNAIL_URL',
         'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
     )
-    # hint articles WITHOUT input_message_content: tapping inserts the title
-    # (the flag template) into the message field instead of sending it.
+    # Hints carry the flag template as message content, so tapping a hint
+    # returns the template into the chat to copy/adapt.
     hints = [
         (
             'hint_sub',
@@ -394,18 +394,21 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
     ]
     results = []
     for rid, chat_text, desc in hints:
-        # Built via model_construct to DROP input_message_content: aiogram's
-        # typed model requires it, but omitting it from the payload is exactly
-        # what makes Telegram insert the title (flag template) into the message
-        # field when tapping the hint instead of sending a message.
+        # InlineQueryResultArticle requires message content (Telegram's server
+        # rejects content-less articles with "can't find field message_text"),
+        # so tapping a hint returns the flag template text into the chat.
         results.append(
-            types.InlineQueryResultArticle.model_construct(
+            types.InlineQueryResultArticle(
                 id=rid,
                 title=chat_text,
                 description=desc,
                 thumbnail_url=thumb,
                 thumbnail_width=512,
                 thumbnail_height=512,
+                input_message_content=types.InputTextMessageContent(
+                    message_text=chat_text,
+                    parse_mode='HTML',
+                ),
             )
         )
     return results
