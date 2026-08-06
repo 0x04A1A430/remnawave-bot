@@ -213,7 +213,7 @@ class TestCaptions:
 
 
 class TestHints:
-    def test_syntax_hints_carry_flag_template(self):
+    def test_syntax_hints_are_separate_and_tap_returns_error(self):
         hints = _build_syntax_hint(texts)
         ids = [h.id for h in hints]
         assert 'hint_sub' in ids
@@ -224,7 +224,7 @@ class TestHints:
         for h in hints:
             content = h.input_message_content
             assert content is not None
-            assert content.message_text == h.title
+            assert content.message_text == 'Ошибка: незаполненное поле'
             assert getattr(content, 'parse_mode', None) == 'HTML'
 
     def test_flag_hint_branches(self):

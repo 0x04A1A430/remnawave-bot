@@ -358,45 +358,23 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
         'INLINE_GIFT_THUMBNAIL_URL',
         'https://raw.githubusercontent.com/cy7su/cy7su/refs/heads/main/GIFT.png',
     )
-    # Hints carry the flag template as message content, so tapping a hint
-    # returns the template into the chat to copy/adapt.
+    error_text = texts.t(
+        'INLINE_GIFT_HINT_TAP_ERROR',
+        'Ошибка: незаполненное поле',
+    )
     hints = [
-        (
-            'hint_sub',
-            '@user -p 30 500 3',
-            'Подписка: дни [гб [уст.]]  (или просто @user 30)',
-        ),
-        (
-            'hint_multi',
-            '-r 5 30 500 3',
-            'Первым N: -r N дни [гб [уст.]]',
-        ),
-        (
-            'hint_disc',
-            '@user -d 15',
-            'Скидка 15%',
-        ),
-        (
-            'hint_bal',
-            '@user -b 1500',
-            'Пополнить баланс на 1500 ₽',
-        ),
-        (
-            'hint_t',
-            '@user -t 100 60',
-            'Временный трафик: 100 ГБ на 60 дней (без дней — 30)',
-        ),
-        (
-            'hint_mix',
-            '@user -p 1 500 3 -t 100 -b 1500 -d 15',
-            'Микс флагов одним подарком',
-        ),
+        ('hint_sub', '@user -p 30 500 3', 'Подписка: дни [гб [уст.]]  (или просто @user 30)'),
+        ('hint_multi', '-r 5 30 500 3', 'Первым N: -r N дни [гб [уст.]]'),
+        ('hint_disc', '@user -d 15', 'Скидка 15%'),
+        ('hint_bal', '@user -b 1500', 'Пополнить баланс на 1500 ₽'),
+        ('hint_t', '@user -t 100 60', 'Временный трафик: 100 ГБ на 60 дней (без дней — 30)'),
+        ('hint_mix', '@user -p 1 500 3 -t 100 -b 1500 -d 15', 'Микс флагов одним подарком'),
     ]
     results = []
     for rid, chat_text, desc in hints:
-        # InlineQueryResultArticle requires message content (Telegram's server
-        # rejects content-less articles with "can't find field message_text"),
-        # so tapping a hint returns the flag template text into the chat.
+        # InlineQueryResultArticle requires message content on tap (Telegram
+        # rejects content-less articles), so a hint tap returns a short error
+        # note instead of echoing the flag template into the chat.
         results.append(
             types.InlineQueryResultArticle(
                 id=rid,
@@ -406,7 +384,7 @@ def _build_syntax_hint(texts) -> list[types.InlineQueryResultArticle]:
                 thumbnail_width=512,
                 thumbnail_height=512,
                 input_message_content=types.InputTextMessageContent(
-                    message_text=chat_text,
+                    message_text=error_text,
                     parse_mode='HTML',
                 ),
             )
