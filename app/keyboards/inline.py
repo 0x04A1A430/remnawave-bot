@@ -317,6 +317,7 @@ def get_language_selection_keyboard(
     current_language: str | None = None,
     *,
     include_back: bool = False,
+    back_callback: str = 'back_to_menu',
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     available_languages = settings.get_available_languages()
@@ -351,7 +352,7 @@ def get_language_selection_keyboard(
 
     if include_back:
         texts = get_texts(language)
-        buttons.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
+        buttons.append([make_button(text=texts.BACK, style='danger', callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -545,27 +546,6 @@ def _build_cabinet_main_menu_keyboard(
                         continue
                     info_text = section_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'Инфо')
                     row_buttons.append(_cabinet_button(info_text, '/info', 'menu_info'))
-
-                case 'language':
-                    if not section_cfg.get('enabled', True):
-                        continue
-                    if not settings.is_language_selection_enabled():
-                        continue
-                    lang_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_LANGUAGE
-                    resolved_lang_emoji = section_cfg.get('icon_custom_emoji_id') or None
-                    resolved_lang_style = _resolve_style(section_cfg.get('style'))
-                    if resolved_lang_emoji:
-                        from app.utils.miniapp_buttons import strip_leading_emoji
-
-                        lang_text = strip_leading_emoji(lang_text)
-                    row_buttons.append(
-                        make_button(
-                            text=lang_text,
-                            callback_data='menu_language',
-                            style=resolved_lang_style,
-                            icon_custom_emoji_id=resolved_lang_emoji,
-                        )
-                    )
 
                 case 'admin':
                     if not is_admin:
@@ -851,9 +831,6 @@ def get_main_menu_keyboard(
         )
     )
 
-    if settings.is_language_selection_enabled():
-        bottom_buttons.append(make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
-
     for i in range(0, len(bottom_buttons), 3):
         row = bottom_buttons[i : i + 3]
         keyboard.append(row)
@@ -992,6 +969,9 @@ def get_info_menu_keyboard(
                 )
             ]
         )
+
+    if settings.is_language_selection_enabled():
+        buttons.append([make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language')])
 
     buttons.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 

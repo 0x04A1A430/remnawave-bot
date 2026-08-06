@@ -1097,6 +1097,7 @@ async def show_language_menu(
         keyboard=get_language_selection_keyboard(
             current_language=db_user.language,
             include_back=True,
+            back_callback='menu_info',
             language=db_user.language,
         ),
         parse_mode='HTML',
@@ -1149,11 +1150,10 @@ async def process_language_change(
     resolved_language = available_map[normalized_selected].lower()
 
     if db_user.language.lower() == normalized_selected:
-        await show_main_menu(
+        await show_info_menu(
             callback,
             db_user,
             db,
-            skip_callback_answer=True,
         )
         await callback.answer(texts.t('LANGUAGE_SELECTED', 'Язык интерфейса обновлен.'))
         return
@@ -1161,11 +1161,10 @@ async def process_language_change(
     updated_user = await update_user(db, db_user, language=resolved_language)
     texts = get_texts(updated_user.language)
 
-    await show_main_menu(
+    await show_info_menu(
         callback,
         updated_user,
         db,
-        skip_callback_answer=True,
     )
     await callback.answer(texts.t('LANGUAGE_SELECTED', 'Язык интерфейса обновлен.'))
 
