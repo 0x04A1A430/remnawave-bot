@@ -226,11 +226,13 @@ class SubscriptionService:
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
-                subscription.remnawave_uuid = updated_user.uuid
+                # v3.0.0: uuid может отсутствовать — пишем NULL, а не ''.
+                # users.remnawave_uuid UNIQUE: '' у двух пользователей падает.
+                subscription.remnawave_uuid = updated_user.uuid or None
                 subscription.panel_user_id = updated_user.id
                 # Legacy field — keep in sync for single-mode backward compat
                 if not settings.is_multi_tariff_enabled():
-                    user.remnawave_uuid = updated_user.uuid
+                    user.remnawave_uuid = updated_user.uuid or None
                     user.panel_user_id = updated_user.id
 
                 await db.commit()
@@ -248,6 +250,9 @@ class SubscriptionService:
             logger.error('Ошибка RemnaWave API', error=e)
             return None
         except Exception as e:
+            # Сбрасываем откаченную транзакцию, чтобы последующий доступ к
+            # subscription.id извне не упал с PendingRollbackError.
+            await db.rollback()
             logger.error('Ошибка создания RemnaWave пользователя', error=e)
             return None
 
@@ -590,6 +595,7 @@ class SubscriptionService:
             logger.error('Ошибка RemnaWave API', error=e)
             return None
         except Exception as e:
+            await db.rollback()
             logger.error('Ошибка обновления RemnaWave пользователя', error=e)
             return None
 
@@ -894,6 +900,7 @@ class SubscriptionService:
             return False, 'sync_failed'
 
         except RemnaWaveAPIError as api_error:
+            await db.rollback()
             logger.error(
                 'Ошибка RemnaWave API при синхронизации подписки',
                 subscription_id=subscription.id,
@@ -901,6 +908,7 @@ class SubscriptionService:
             )
             return False, 'api_error'
         except Exception as e:
+            await db.rollback()
             logger.error(
                 'Ошибка синхронизации подписки',
                 subscription_id=subscription.id,
