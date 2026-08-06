@@ -3816,6 +3816,15 @@ async def confirm_subscription_deletion(callback: types.CallbackQuery, db_user: 
 
     await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
 
+    # Best-effort: stop Platega SBP autopay before the row disappears — the
+    # platega_subscriptions record CASCADE-deletes with it, so cancelling
+    # after the delete would find nothing to cancel on Platega's side.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
     await db.delete(subscription)
     await db.commit()
 
