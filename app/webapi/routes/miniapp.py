@@ -94,6 +94,7 @@ from app.services.tribute_service import TributeService
 from app.utils.currency_converter import currency_converter
 from app.utils.pricing_utils import (
     apply_percentage_discount,
+    calculate_price_per_month,
     calculate_prorated_price,
     format_period_description,
 )
@@ -4712,7 +4713,7 @@ async def _prepare_subscription_renewal_options(
         )
 
         months = max(1, period_days // 30)
-        per_month = pricing_result.final_total // months if months > 0 else pricing_result.final_total
+        per_month = calculate_price_per_month(pricing_result.final_total, period_days)
 
         label = format_period_description(
             period_days,
@@ -6444,7 +6445,7 @@ async def _build_tariff_model(
                 discount_percent = 0
 
             months = max(1, period_days // 30)
-            per_month = price_kopeks // months if months > 0 else price_kopeks
+            per_month = calculate_price_per_month(price_kopeks, period_days)
 
             periods.append(
                 MiniAppTariffPeriod(
