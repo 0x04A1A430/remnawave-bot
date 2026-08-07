@@ -48,6 +48,12 @@ from app.middlewares.channel_checker import (
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
+from app.services.coupon_service import (
+    COUPON_DEEP_LINK_PREFIX,
+    CouponRedemptionError,
+    is_coupon_token,
+    redeem_coupon,
+)
 from app.services.guest_purchase_service import GIFT_TOKEN_MIN_PREFIX_LENGTH
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.phantom_service import claim_phantom, merge_phantom_into_user
@@ -228,6 +234,67 @@ async def _activate_pending_gift_after_registration(
             )
         except Exception:
             pass
+
+
+_COUPON_ERROR_TEXTS = {
+    'invalid': 'Купон не найден или уже использован.',
+    'expired': 'Срок действия купона истёк.',
+    'already_redeemed_by_you': 'Вы уже активировали этот купон.',
+    'per_user_limit': 'Вы уже использовали свой лимит купонов из этой раздачи.',
+    'internal': 'Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
+}
+
+
+async def _redeem_pending_coupon(
+    db: AsyncSession,
+    state: FSMContext,
+    user: 'User',
+    answer_func: Callable[..., Any],
+) -> None:
+    """Extract pending_coupon_token from FSM state and redeem it for ``user``.
+
+    Must be called BEFORE state.clear() to preserve the token.
+    """
+    coupon_token: str | None = None
+    try:
+        fresh_state = await state.get_data()
+        coupon_token = fresh_state.get('pending_coupon_token')
+        if not coupon_token:
+            return
+
+        try:
+            result = await redeem_coupon(db, coupon_token, user)
+        except CouponRedemptionError as error:
+            await answer_func(
+                _COUPON_ERROR_TEXTS.get(error.code, _COUPON_ERROR_TEXTS['invalid']),
+                parse_mode=ParseMode.HTML,
+            )
+            return
+    except Exception:
+        logger.exception(
+            'Failed to redeem coupon deep link',
+            token_prefix=(coupon_token or '')[:5],
+        )
+        try:
+            await answer_func(_COUPON_ERROR_TEXTS['internal'], parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+        return
+
+    # Redemption is committed at this point — a failed confirmation send must
+    # not claim the activation failed (the coupon IS consumed).
+    try:
+        tariff_name = html.escape(result.tariff_name)
+        await answer_func(
+            f'Купон активирован!\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception(
+            'Coupon redeemed but the confirmation message failed to send',
+            token_prefix=(coupon_token or '')[:5],
+            user_id=user.id,
+        )
 
 
 async def _activate_pending_inline_gift_after_registration(
@@ -871,6 +938,28 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await state.update_data(pending_gift_token=gift_token)
             start_parameter = None  # Don't treat as campaign or referral
 
+    # Handle coupon deep links: /start coupon_{token} — one-time wholesale coupons
+    if start_parameter and start_parameter.startswith(COUPON_DEEP_LINK_PREFIX):
+        coupon_token = start_parameter.removeprefix(COUPON_DEEP_LINK_PREFIX).lower()
+        # The payload fits Telegram's 64-char start param untruncated, so the
+        # lookup is exact-match. Swallow the parameter only for coupons that
+        # actually exist — a campaign start_parameter may legitimately begin
+        # with 'coupon_' (even coupon_<32 hex>) and must fall through to the
+        # campaign lookup below.
+        if is_coupon_token(coupon_token):
+            from app.database.crud.coupon import get_coupon_by_token
+
+            if await get_coupon_by_token(db, coupon_token) is not None:
+                logger.info(
+                    'Coupon deep link detected',
+                    token_prefix=coupon_token[:5],
+                    telegram_id=message.from_user.id,
+                )
+                # Redeemed via _redeem_pending_coupon(): immediately below for
+                # registered users, after registration for new ones.
+                await state.update_data(pending_coupon_token=coupon_token)
+                start_parameter = None  # Don't treat as campaign or referral
+
     # Handle admin inline gift deep links: /start bs_<gift_code>
     if start_parameter and start_parameter.startswith('bs_'):
         gift_code = start_parameter[3:]
@@ -1161,6 +1250,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
             showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
             await state.update_data(pending_gift_token=None)
+            await _redeem_pending_coupon(db, state, user, message.answer)
+            await state.update_data(pending_coupon_token=None)
             await _persist_pending_subid_after_registration(db, state, user)
             await state.update_data(pending_subid=None)
             # Refresh user to pick up newly created subscriptions
@@ -2097,6 +2188,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     showed_gift = await _activate_pending_inline_gift_after_registration(
         state, callback.message, from_user=callback.from_user
     )
+    await _redeem_pending_coupon(db, state, user, callback.message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
@@ -2475,6 +2567,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
     showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
+    await _redeem_pending_coupon(db, state, user, message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
