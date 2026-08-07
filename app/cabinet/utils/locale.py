@@ -1,6 +1,6 @@
 """Locale resolution utilities for multi-locale landing page text fields."""
 
-SUPPORTED_LOCALES: tuple[str, ...] = ('ru', 'en', 'zh', 'fa')
+SUPPORTED_LOCALES: tuple[str, ...] = ('ru', 'en', 'zh')
 DEFAULT_LOCALE: str = 'ru'
 
 

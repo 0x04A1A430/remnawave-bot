@@ -42,6 +42,7 @@ def _sub(
         subscription_crypto_link='crypto',
         updated_at=datetime.now(UTC),
         is_trial=False,
+        panel_user_id=None,
     )
 
 
@@ -149,7 +150,7 @@ async def test_sibling_alive_in_panel_via_user_uuid_fallback_not_expired():
 
     assert sibling.status == SubscriptionStatus.ACTIVE.value
     assert sibling.connected_squads == ['sq1']
-    api.get_user_by_uuid.assert_awaited_with('LIVE')  # fell back to user.remnawave_uuid
+    api.get_user_by_uuid.assert_awaited_with('LIVE', user_id=None)  # fell back to user.remnawave_uuid
 
 
 @pytest.mark.asyncio

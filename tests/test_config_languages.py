@@ -1,10 +1,10 @@
 from app.config import settings
 
 
-def test_available_languages_default_contains_fa(monkeypatch):
+def test_available_languages_default_contains_ru(monkeypatch):
     monkeypatch.setattr(settings, 'AVAILABLE_LANGUAGES', '', raising=False)
     languages = settings.get_available_languages()
-    assert 'fa' in languages
+    assert 'ru' in languages
 
 
 def test_available_languages_normalizes_and_deduplicates(monkeypatch):

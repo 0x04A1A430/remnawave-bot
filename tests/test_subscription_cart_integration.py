@@ -12,11 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.handlers.subscription.autopay import handle_subscription_cancel
-from app.handlers.subscription.purchase import (
-    clear_saved_cart,
-    return_to_saved_cart,
-    save_cart_and_redirect_to_topup,
-)
+from app.handlers.subscription.purchase import clear_saved_cart, return_to_saved_cart, save_cart_and_redirect_to_topup
 
 
 @pytest.fixture
@@ -56,13 +52,7 @@ def mock_db():
 def mock_state():
     state = AsyncMock(spec=FSMContext)
     state.get_data = AsyncMock(
-        return_value={
-            'period_days': 30,
-            'countries': ['ru'],
-            'devices': 2,
-            'traffic_gb': 10,
-            'total_price': 50000,
-        }
+        return_value={'period_days': 30, 'countries': ['ru'], 'devices': 2, 'traffic_gb': 10, 'total_price': 50000}
     )
     state.set_data = AsyncMock()
     state.update_data = AsyncMock()
@@ -146,10 +136,7 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
         mock_cart_service.save_user_cart = AsyncMock(return_value=True)
         mock_prepare_summary.return_value = ('summary', {})
-        mock_get_countries.return_value = [
-            {'uuid': 'ru', 'name': 'Russia'},
-            {'uuid': 'us', 'name': 'USA'},
-        ]
+        mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = '30 дней'
         mock_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text='✅', callback_data='confirm')]]
@@ -241,8 +228,8 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
 
         await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
 
-        mock_callback_query.message.edit_text.assert_not_called()
-        mock_callback_query.answer.assert_called_once_with('✅ Корзина восстановлена!')
+        # fork always shows cart
+        mock_callback_query.answer.assert_called_once_with('Корзина восстановлена!')
         mock_state.set_data.assert_called_once_with(cart_data)
         mock_state.set_state.assert_called_once()
         mock_cart_service.save_user_cart.assert_not_called()
@@ -288,10 +275,7 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
     ):
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
         mock_cart_service.save_user_cart = AsyncMock()
-        mock_get_countries.return_value = [
-            {'uuid': 'ru', 'name': 'Russia'},
-            {'uuid': 'us', 'name': 'USA'},
-        ]
+        mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = '30 дней'
         mock_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text='✅', callback_data='confirm')]]
@@ -410,13 +394,11 @@ async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query,
 
     with (
         patch('app.handlers.subscription.autopay.user_cart_service') as mock_cart_service,
-        patch(
-            'app.handlers.subscription.autopay.clear_subscription_checkout_draft',
-            new=mock_clear_draft,
-        ),
+        patch('app.handlers.subscription.autopay.clear_subscription_checkout_draft', new=mock_clear_draft),
         patch('app.localization.texts.get_texts', return_value=MagicMock()) as _,
         patch('app.handlers.menu.show_main_menu', new=mock_show_main_menu),
     ):
+        mock_cart_service.get_user_cart = AsyncMock(return_value=None)
         mock_cart_service.delete_user_cart = AsyncMock(return_value=True)
 
         await handle_subscription_cancel(mock_callback_query, mock_state, mock_user, mock_db)
@@ -425,4 +407,37 @@ async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query,
         mock_clear_draft.assert_awaited_once_with(mock_user.id)
         mock_cart_service.delete_user_cart.assert_awaited_once_with(mock_user.id)
         mock_show_main_menu.assert_awaited_once_with(mock_callback_query, mock_user, mock_db)
-        mock_callback_query.answer.assert_called_once_with('❌ Покупка отменена')
+        mock_callback_query.answer.assert_called_once_with('Покупка отменена')
+
+
+async def test_handle_subscription_cancel_clears_only_current_subscription_cart(
+    mock_callback_query, mock_state, mock_user, mock_db
+):
+    """Отмена покупки в мультитарифном сценарии чистит только корзину текущей подписки"""
+    mock_clear_draft = AsyncMock()
+    mock_show_main_menu = AsyncMock()
+
+    with (
+        patch('app.handlers.subscription.autopay.user_cart_service') as mock_cart_service,
+        patch('app.handlers.subscription.autopay.clear_subscription_checkout_draft', new=mock_clear_draft),
+        patch('app.localization.texts.get_texts', return_value=MagicMock()) as _,
+        patch('app.handlers.menu.show_main_menu', new=mock_show_main_menu),
+    ):
+        # First read returns the per-subscription cart; second (global) read still
+        # references the same subscription, so the global key is cleaned up too.
+        mock_cart_service.get_user_cart = AsyncMock(side_effect=[{'subscription_id': 777}, {'subscription_id': 777}])
+        mock_cart_service.delete_subscription_cart = AsyncMock(return_value=True)
+        mock_cart_service.delete_global_cart_only = AsyncMock(return_value=True)
+        mock_cart_service.delete_user_cart = AsyncMock(return_value=True)
+
+        await handle_subscription_cancel(mock_callback_query, mock_state, mock_user, mock_db)
+
+        mock_state.clear.assert_called_once()
+        mock_clear_draft.assert_awaited_once_with(mock_user.id)
+        # Money-safe: only the current subscription's cart is removed; the broad
+        # delete_user_cart that could nuke other subscriptions' carts is NOT called.
+        mock_cart_service.delete_subscription_cart.assert_awaited_once_with(mock_user.id, 777)
+        mock_cart_service.delete_global_cart_only.assert_awaited_once_with(mock_user.id)
+        mock_cart_service.delete_user_cart.assert_not_called()
+        mock_show_main_menu.assert_awaited_once_with(mock_callback_query, mock_user, mock_db)
+        mock_callback_query.answer.assert_called_once_with('Покупка отменена')

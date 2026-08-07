@@ -238,7 +238,7 @@ def ensure_locale_templates() -> None:
             _copy_locale(template, destination / template.name)
         return
 
-    for locale_code in ('ru', 'en', 'fa'):
+    for locale_code in ('ru', 'en'):
         source_path = _DEFAULT_LOCALES_DIR / f'{locale_code}.json'
         target_path = destination / f'{locale_code}.json'
 

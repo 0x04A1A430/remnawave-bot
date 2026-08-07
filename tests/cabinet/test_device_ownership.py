@@ -28,6 +28,7 @@ def _user(uuid: str | None, sub_uuids: list[str | None]) -> SimpleNamespace:
     return SimpleNamespace(
         id=1,
         remnawave_uuid=uuid,
+        panel_user_id=None,
         subscriptions=[SimpleNamespace(remnawave_uuid=u) for u in sub_uuids],
     )
 
@@ -48,7 +49,7 @@ def test_collect_panel_uuids_deduplicates_and_preserves_order() -> None:
 
 def test_collect_panel_uuids_handles_classic_mode_user_only() -> None:
     """Classic mode: only user.remnawave_uuid, no subscriptions array."""
-    user = SimpleNamespace(id=1, remnawave_uuid='solo', subscriptions=[])
+    user = SimpleNamespace(id=1, remnawave_uuid='solo', panel_user_id=None, subscriptions=[])
 
     result = _collect_panel_uuids(user)
 
@@ -78,7 +79,9 @@ def test_collect_panel_uuids_returns_empty_when_no_panel_attached() -> None:
 def _patched_remnawave(devices_by_uuid: dict[str, list[dict]]) -> MagicMock:
     """Stub the RemnaWaveService API client so we can simulate panel responses."""
     api_mock = MagicMock()
-    api_mock.get_user_devices_all = AsyncMock(side_effect=lambda uuid: {'devices': devices_by_uuid.get(uuid, [])})
+    api_mock.get_user_devices_all = AsyncMock(
+        side_effect=lambda uuid, user_id=None: {'devices': devices_by_uuid.get(uuid, [])}
+    )
 
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=api_mock)
