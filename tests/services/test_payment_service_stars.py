@@ -102,6 +102,7 @@ class DummyUser:
         self.language = 'ru'
         self.balance_kopeks = 0
         self.has_made_first_topup = False
+        self.has_had_paid_subscription = False
         self.promo_group = None
         self.subscription = None
 
@@ -109,8 +110,9 @@ class DummyUser:
 class DummyTransaction:
     """Локальная транзакция, созданная в тестах."""
 
-    def __init__(self, external_id: str) -> None:
+    def __init__(self, external_id: str, description: str = '') -> None:
         self.external_id = external_id
+        self.description = description
 
 
 class DummySubscriptionService:
@@ -125,9 +127,7 @@ class DummySubscriptionService:
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_stars_invoice_calculates_stars(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_stars_invoice_calculates_stars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Количество звёзд должно рассчитываться по курсу с округлением вниз и нижним порогом 1."""
     bot = DummyBot()
     service = _make_service(bot)
@@ -159,13 +159,11 @@ async def test_create_stars_invoice_calculates_stars(
     prices = call['prices']
     assert len(prices) == 1
     assert prices[0].amount == 2  # 14000 коп. → 140 ₽ → 2 звезды при курсе 70
-    assert '≈2 ⭐' in call['description']
+    assert '≈2 ' in call['description']
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_stars_invoice_enforces_minimum_star(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_stars_invoice_enforces_minimum_star(monkeypatch: pytest.MonkeyPatch) -> None:
     """При слишком маленькой сумме минимум должен составлять 1 звезду."""
     bot = DummyBot()
     service = _make_service(bot)
@@ -183,9 +181,7 @@ async def test_create_stars_invoice_enforces_minimum_star(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_stars_invoice_uses_explicit_stars(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_stars_invoice_uses_explicit_stars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Если передано значение stars_amount, функция должна использовать его напрямую."""
     bot = DummyBot()
     service = _make_service(bot)
@@ -201,13 +197,11 @@ async def test_create_stars_invoice_uses_explicit_stars(
 
     prices = bot.calls[0]['prices']
     assert prices[0].amount == 5
-    assert '≈5 ⭐' in bot.calls[0]['description']
+    assert '≈5 ' in bot.calls[0]['description']
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_stars_invoice_rejects_invalid_rate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_stars_invoice_rejects_invalid_rate(monkeypatch: pytest.MonkeyPatch) -> None:
     """Отрицательный или нулевой курс должен приводить к исключению."""
     bot = DummyBot()
     service = _make_service(bot)
@@ -261,10 +255,19 @@ async def test_process_stars_payment_simple_subscription_success(
         db: Any,
         user_id: int,
         period_days: int | None = None,
+        subscription_id: int | None = None,
     ) -> DummySubscription:
         activated_subscription.start_date = pending_subscription.start_date
         activated_subscription.end_date = activated_subscription.start_date + timedelta(days=period_days or 30)
         return activated_subscription
+
+    # Новый платёж: транзакции с таким charge_id ещё нет (иначе сработает идемпотентный
+    # ранний выход). Побочки шлются отдельно после атомарного коммита — здесь глушим.
+    async def fake_get_transaction_by_external_id(_db: Any, _external_id: str, _method: Any) -> None:
+        return None
+
+    async def fake_emit_side_effects(*_args: Any, **_kwargs: Any) -> None:
+        return None
 
     subscription_service_stub = DummySubscriptionService()
     admin_calls: list[dict[str, Any]] = []
@@ -296,6 +299,16 @@ async def test_process_stars_payment_simple_subscription_success(
     monkeypatch.setattr(
         'app.services.payment.stars.create_transaction',
         fake_create_transaction,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        'app.services.payment.stars.get_transaction_by_external_id',
+        fake_get_transaction_by_external_id,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        'app.services.payment.stars.emit_transaction_side_effects',
+        fake_emit_side_effects,
         raising=False,
     )
     monkeypatch.setattr(

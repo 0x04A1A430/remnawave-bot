@@ -114,7 +114,7 @@ async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -
         amount_kopeks=50_000,
         description='Пополнение счёта',
         language='ru',
-        payment_method_code=10,
+        payment_method_code=11,
     )
 
     assert result is not None
@@ -125,18 +125,16 @@ async def test_create_platega_payment_success(monkeypatch: pytest.MonkeyPatch) -
     assert 'correlation_id' in result and len(result['correlation_id']) == 32
     assert captured_args['user_id'] == 42
     assert captured_args['amount_kopeks'] == 50_000
-    assert captured_args['payment_method_code'] == 10
-    assert captured_args['metadata']['selected_method'] == 10
-    assert stub.calls and stub.calls[0]['payment_method'] == 10
+    assert captured_args['payment_method_code'] == 11
+    assert captured_args['metadata']['selected_method'] == 11
+    assert stub.calls and stub.calls[0]['payment_method'] == 11
     assert stub.calls[0]['amount'] == pytest.approx(500.0)
     assert stub.calls[0]['currency'] == 'RUB'
     assert captured_args['metadata']['language'] == 'ru'
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_platega_payment_respects_limits_and_configuration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_platega_payment_respects_limits_and_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPlategaService()
     service = _make_service(stub)
     db = DummySession()
@@ -177,9 +175,7 @@ async def test_create_platega_payment_respects_limits_and_configuration(
 
 
 @pytest.mark.anyio('asyncio')
-async def test_create_platega_payment_handles_service_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_create_platega_payment_handles_service_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = StubPlategaService()
     stub.raise_error = RuntimeError('network down')
     service = _make_service(stub)
@@ -209,24 +205,20 @@ async def test_create_platega_payment_handles_service_errors(
     assert stub.calls and 'payment_method' in stub.calls[0]
 
 
-def test_get_platega_active_methods_parses_and_filters(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_get_platega_active_methods_parses_and_filters(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         settings,
         'PLATEGA_ACTIVE_METHODS',
-        ' 2,10, 11 ;12,13,13,invalid ',
+        ' 2, 11 ;12,13,13,invalid ',
         raising=False,
     )
 
     methods = settings.get_platega_active_methods()
 
-    assert methods == [2, 10, 11, 12, 13]
+    assert methods == [2, 11, 12, 13]
 
 
-def test_get_platega_active_methods_returns_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_get_platega_active_methods_returns_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'PLATEGA_ACTIVE_METHODS', '', raising=False)
 
     methods = settings.get_platega_active_methods()
@@ -235,7 +227,9 @@ def test_get_platega_active_methods_returns_default(
 
 
 def test_platega_method_display_helpers() -> None:
-    assert settings.get_platega_method_display_name(10) == 'Банковские карты (RUB)'
-    assert settings.get_platega_method_display_title(10) == '💳 Карты (RUB)'
+    assert settings.get_platega_method_display_name(11) == 'Карты (RUB)'
+    title = settings.get_platega_method_display_title(11)
+    assert '<tg-emoji' in title
+    assert 'Карты (RUB)' in title
     assert settings.get_platega_method_display_name(999) == 'Метод 999'
     assert settings.get_platega_method_display_title(999) == 'Platega 999'

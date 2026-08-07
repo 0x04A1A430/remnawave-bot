@@ -1859,7 +1859,7 @@ class Settings(BaseSettings):
         return bool(value)
 
     def get_available_languages(self) -> list[str]:
-        defaults = ['ru', 'en', 'ua', 'zh', 'fa']
+        defaults = ['ru', 'en', 'ua', 'zh']
 
         try:
             langs = self.AVAILABLE_LANGUAGES

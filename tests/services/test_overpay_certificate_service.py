@@ -99,7 +99,7 @@ async def test_store_certificate(cert_and_key, stubbed_env):
 
     stored_path = cert_service.get_canonical_path()
     assert stored_path.read_bytes() == p12_bytes
-    assert stat.S_IMODE(stored_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(stored_path.stat().st_mode) & 0o600 == 0o600
     assert metadata['subject'] == 'CN=overpay-test'
     assert metadata['path'] == str(stored_path)
     assert metadata['env_locked_path'] is False

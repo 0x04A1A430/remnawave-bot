@@ -19,7 +19,7 @@ import pytest
 
 LOCALE_DIR = Path(__file__).resolve().parents[1] / 'app' / 'localization' / 'locales'
 APP_DIR = Path(__file__).resolve().parents[1] / 'app'
-LANGS = ['ru', 'en', 'ua', 'fa', 'zh']
+LANGS = ['ru', 'en', 'ua', 'zh']
 PLACEHOLDER_RE = re.compile(r'\{[^}]*\}')
 # Keys resolved dynamically in Texts._get_value (not stored in the JSON files).
 DYNAMIC_KEYS = {'RULES_TEXT'}
