@@ -170,6 +170,16 @@ class ReportingService:
         topic_id = settings.get_reports_topic_id()
 
         try:
+            from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
+
+            rich_html = classic_admin_html_to_rich(report_text, footer_label='Отчёт')
+            if await try_send_rich_admin_message(self.bot, chat_id, rich_html, thread_id=topic_id):
+                logger.info('Отчет отправлен rich-сообщением в чат', chat_id=chat_id)
+                return
+        except Exception as rich_error:
+            logger.warning('Сбой rich-отчёта', error=str(rich_error))
+
+        try:
             await self.bot.send_message(
                 chat_id=chat_id,
                 text=report_text,

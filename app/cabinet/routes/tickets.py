@@ -195,6 +195,25 @@ async def create_ticket(
     # Refresh to get relationships
     await db.refresh(ticket, ['messages'])
 
+    # Feed the mobile support socket bridge (event_emitter -> support_ws).
+    try:
+        from app.services.event_emitter import event_emitter
+
+        await event_emitter.emit(
+            'ticket.created',
+            {
+                'ticket_id': ticket.id,
+                'user_id': user.id,
+                'title': ticket.title,
+                'status': ticket.status,
+                'priority': ticket.priority or 'normal',
+                'has_media': bool(primary_file_id),
+            },
+            db=db,
+        )
+    except Exception as error:
+        logger.warning('Failed to emit ticket.created from cabinet', error=error)
+
     # Уведомить админов о новом тикете (Telegram)
     try:
         await notify_admins_about_new_ticket(ticket, db)
@@ -329,6 +348,26 @@ async def add_ticket_message(
 
     await db.commit()
     await db.refresh(message)
+
+    # Feed the mobile support socket bridge (event_emitter -> support_ws).
+    try:
+        from app.services.event_emitter import event_emitter
+
+        await event_emitter.emit(
+            'ticket.message_added',
+            {
+                'ticket_id': ticket.id,
+                'message_id': message.id,
+                'user_id': user.id,
+                'is_from_admin': False,
+                'message_text': (request.message or '')[:200],
+                'has_media': bool(primary_file_id),
+                'status': ticket.status,
+            },
+            db=db,
+        )
+    except Exception as error:
+        logger.warning('Failed to emit ticket.message_added from cabinet', error=error)
 
     # Уведомить админов об ответе пользователя (Telegram)
     try:

@@ -16,6 +16,7 @@ from app.database.crud.server_squad import (
 )
 from app.database.models import User
 from app.utils.cache import cache
+from app.utils.panel_node_usage import normalize_node_usage
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.remnawave import (
@@ -413,7 +414,7 @@ async def get_node_statistics(
     return NodeStatisticsResponse(
         node=_serialize_node(stats['node']),
         realtime=stats.get('realtime'),
-        usage_history=stats.get('usage_history') or [],
+        usage_history=normalize_node_usage(stats.get('usage_history'), stats['node'].get('uuid', '')),
         last_updated=_parse_datetime(stats.get('last_updated')),
     )
 
@@ -439,7 +440,7 @@ async def get_node_usage(
         )
 
     usage = await service.get_node_user_usage_by_range(node_uuid, start_dt, end_dt)
-    return NodeUsageResponse(items=usage or [])
+    return NodeUsageResponse(items=normalize_node_usage(usage, node_uuid))
 
 
 @router.post('/nodes/{node_uuid}/action', response_model=NodeActionResponse)

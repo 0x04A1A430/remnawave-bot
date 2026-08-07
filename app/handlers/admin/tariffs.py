@@ -22,6 +22,10 @@ from app.database.crud.tariff import (
     update_tariff,
 )
 from app.database.models import Tariff, User
+from app.handlers.admin.tariff_custom_traffic import (
+    format_custom_traffic_settings,
+    register_custom_traffic_handlers,
+)
 from app.localization.texts import get_texts
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -182,6 +186,14 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
+                text='⚙️ Произвольный трафик',
+                callback_data=f'admin_tariff_edit_custom_traffic:{tariff.id}',
+            ),
+        ]
+    )
+    buttons.append(
+        [
+            InlineKeyboardButton(
                 text='Докупка трафика',
                 callback_data=f'admin_tariff_edit_traffic_topup:{tariff.id}',
             ),
@@ -336,6 +348,9 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     # Форматируем докупку трафика
     traffic_topup_display = _format_traffic_topup_packages(tariff)
 
+    # Форматируем произвольный трафик
+    custom_traffic_display = format_custom_traffic_settings(tariff)
+
     # Форматируем режим сброса трафика
     traffic_reset_mode = getattr(tariff, 'traffic_reset_mode', None)
     traffic_reset_display = _format_traffic_reset_mode(traffic_reset_mode)
@@ -368,6 +383,9 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
 <b>Докупка трафика:</b>
 {traffic_topup_display}
+
+<b>Произвольный трафик:</b>
+{custom_traffic_display}
 
 <b>Сброс трафика:</b> {traffic_reset_display}
 
@@ -3055,7 +3073,8 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.startswith('trf_sq:')
         & ~F.data.startswith('admin_tariff_toggle_promo:')
         & ~F.data.startswith('admin_tariff_toggle_traffic_topup:')
-        & ~F.data.startswith('admin_tariff_toggle_daily:'),
+        & ~F.data.startswith('admin_tariff_toggle_daily:')
+        & ~F.data.startswith('admin_tariff_toggle_custom_traffic:'),
     )
     dp.callback_query.register(toggle_trial_tariff, F.data.startswith('admin_tariff_toggle_trial:'))
 
@@ -3159,3 +3178,6 @@ def register_handlers(dp: Dispatcher):
         F.data.startswith('admin_tariff_edit_reset_mode:'),
     )
     dp.callback_query.register(set_traffic_reset_mode, F.data.startswith('admin_tariff_set_reset_mode:'))
+
+    # Произвольный трафик
+    register_custom_traffic_handlers(dp)

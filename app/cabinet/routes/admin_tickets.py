@@ -506,6 +506,26 @@ async def reply_to_ticket(
     await db.commit()
     await db.refresh(message)
 
+    # Feed the mobile support socket bridge (event_emitter -> support_ws).
+    try:
+        from app.services.event_emitter import event_emitter
+
+        await event_emitter.emit(
+            'ticket.message_added',
+            {
+                'ticket_id': ticket.id,
+                'message_id': message.id,
+                'user_id': admin.id,
+                'is_from_admin': True,
+                'message_text': (request.message or '')[:200],
+                'has_media': has_media,
+                'status': ticket.status,
+            },
+            db=db,
+        )
+    except Exception as error:
+        logger.warning('Failed to emit ticket.message_added (admin) from cabinet', error=error)
+
     # Try to notify user via Telegram
     try:
         from app.bot_factory import create_bot

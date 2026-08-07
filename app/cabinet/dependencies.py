@@ -252,6 +252,12 @@ async def get_current_cabinet_user(
         except Exception:
             pass
 
+    # Лог действий юзера в кабинете (мутации) для таймлайна «Активность».
+    # Fire-and-forget: гейты (флаг, метод, исключения путей) внутри хелпера.
+    from app.services.user_action_log_service import schedule_cabinet_action_log
+
+    schedule_cabinet_action_log(user.id, request.method, request.url.path)
+
     return user
 
 

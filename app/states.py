@@ -220,6 +220,9 @@ class AdminStates(StatesGroup):
     editing_tariff_promo_groups = State()
     editing_tariff_traffic_topup_packages = State()
     editing_tariff_max_topup_traffic = State()
+    editing_tariff_custom_traffic_price = State()
+    editing_tariff_custom_traffic_min = State()
+    editing_tariff_custom_traffic_max = State()
     editing_tariff_daily_price = State()
 
 

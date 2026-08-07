@@ -775,6 +775,17 @@ async def main():
                 startup_notify_error=startup_notify_error,
             )
 
+        # Настраиваем кнопку «Меню» Telegram на открытие веб-кабинета
+        try:
+            from app.utils.chat_menu_button import configure_chat_menu_button
+
+            await configure_chat_menu_button(bot)
+        except Exception as chat_menu_error:
+            logger.warning(
+                'Не удалось настроить кнопку меню Telegram',
+                chat_menu_error=chat_menu_error,
+            )
+
         try:
             while not killer.exit:
                 await asyncio.sleep(1)
