@@ -222,6 +222,19 @@ class Settings(BaseSettings):
     SERVER_STATUS_REQUEST_TIMEOUT: int = 10
     SERVER_STATUS_ITEMS_PER_PAGE: int = 10
 
+    # === Grace access settings (restricted temporary access after exhaustion) ===
+    GRACE_ACCESS_MODE: str = 'false'  # 'false' | 'observe' | 'true' | 'drain'
+    GRACE_ACCESS_DURATION_HOURS: int = 72
+    GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
+    GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    GRACE_ACCESS_TRAFFIC_GB: int = 1
+    GRACE_ACCESS_TRIAL_ENABLED: bool = False
+    GRACE_ACCESS_DAILY_ENABLED: bool = False
+    GRACE_ACCESS_FREE_ENABLED: bool = False
+    GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
+    GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
+    GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
+
     BASE_SUBSCRIPTION_PRICE: int = 50000
     AVAILABLE_SUBSCRIPTION_PERIODS: str = '14,30,60,90,180,360'
     AVAILABLE_RENEWAL_PERIODS: str = '30,90,180'
@@ -1266,6 +1279,36 @@ class Settings(BaseSettings):
         if mode not in {'disabled', 'external_link', 'external_link_miniapp', 'xray'}:
             raise ValueError('SERVER_STATUS_MODE must be one of: disabled, external_link, external_link_miniapp, xray')
         return mode
+
+    @field_validator('GRACE_ACCESS_MODE', mode='before')
+    @classmethod
+    def normalize_grace_access_mode(cls, value: str | None) -> str:
+        normalized = str(value or 'false').strip().lower()
+        if normalized not in {'false', 'observe', 'true', 'drain'}:
+            raise ValueError('GRACE_ACCESS_MODE must be one of: false, observe, true, drain')
+        return normalized
+
+    @field_validator(
+        'GRACE_ACCESS_DURATION_HOURS',
+        'GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS',
+        'GRACE_ACCESS_RECONCILE_BATCH_SIZE',
+        'GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES',
+        mode='before',
+    )
+    @classmethod
+    def ensure_positive_grace_access_value(cls, value: int | str) -> int:
+        parsed = int(value)
+        if parsed < 1:
+            raise ValueError('Grace access duration, intervals, batch size and lookback must be positive')
+        return parsed
+
+    @field_validator('GRACE_ACCESS_TRAFFIC_GB', mode='before')
+    @classmethod
+    def ensure_nonnegative_grace_access_traffic(cls, value: int | str) -> int:
+        parsed = int(value)
+        if parsed < 0:
+            raise ValueError('Grace access traffic must not be negative')
+        return parsed
 
     @field_validator('SERVER_STATUS_ITEMS_PER_PAGE', mode='before')
     @classmethod

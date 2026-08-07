@@ -556,6 +556,25 @@ async def _do_delete_subscription(
             username=user.username,
         )
 
+    from app.services.grace_access_runtime import (
+        GraceAccessDeletionBlocked,
+        ensure_no_open_grace_for_subscriptions,
+    )
+
+    blocked_user_id = user.id
+    blocked_username = user.username
+    blocked_subscriptions = _build_subscription_info(getattr(user, 'subscriptions', None) or [])
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, (sub.id,))
+    except GraceAccessDeletionBlocked:
+        return BulkUserResult(
+            user_id=blocked_user_id,
+            success=False,
+            message=f'Skipped: {tariff_name} has open grace access; drain/restore it first',
+            username=blocked_username,
+            subscriptions=blocked_subscriptions,
+        )
+
     # Deactivate in RemnaWave panel first
     _sub_uuid = sub.remnawave_uuid if settings.is_multi_tariff_enabled() else getattr(user, 'remnawave_uuid', None)
     if _sub_uuid:
@@ -579,6 +598,16 @@ async def _do_delete_subscription(
     await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
     await cancel_lava_recurring_for_subscription_safe(db, sub.id)
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, (sub.id,))
+    except GraceAccessDeletionBlocked:
+        return BulkUserResult(
+            user_id=blocked_user_id,
+            success=False,
+            message=f'Skipped: {tariff_name} has open grace access; drain/restore it first',
+            username=blocked_username,
+            subscriptions=blocked_subscriptions,
+        )
     # Delete related records then subscription
     await db.execute(sa_delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub.id))
     await db.execute(sa_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == sub.id))
