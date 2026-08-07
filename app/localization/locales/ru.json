@@ -1827,5 +1827,6 @@
   "INLINE_GIFT_TRAFFIC_GB": "{gb} ГБ",
   "INLINE_GIFT_TRAFFIC_UNLIMITED": "Безлимит",
   "WEBHOOK_DEVICE_DEACTIVATE_BUTTON": "Деактивировать",
-  "WEBHOOK_DEVICE_HOME_BUTTON": "В главное меню"
+  "WEBHOOK_DEVICE_HOME_BUTTON": "В главное меню",
+  "ADMIN_CONTEST_PAYLOAD_PROMPT": "Отправьте JSON payload для игры (словарь настроек):\n"
 }

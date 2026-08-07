@@ -36,18 +36,6 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
             'Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n'
         ),
     },
-    'fa': {
-        'traffic_pattern': '{size} گیگابایت - {price}',
-        'unlimited_pattern': 'نامحدود - {price}',
-        'support_info': (
-            '\n<b>پشتیبانی</b>\n\n'
-            'برای هرگونه سؤال به پشتیبانی پیام دهید:\n\n'
-            '{support_username}\n\n'
-            '• ایجاد تیکت\n'
-            '• تیکت‌های من\n'
-            '• تماس مستقیم\n'
-        ),
-    },
     'en': {
         'traffic_pattern': '{size} GB - {price}',
         'unlimited_pattern': 'Unlimited - {price}',

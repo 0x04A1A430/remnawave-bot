@@ -9,7 +9,12 @@ as an opaque blob, with nosniff + a locked-down CSP, and a sanitized filename.
 
 from __future__ import annotations
 
+import mimetypes
+
 import pytest
+
+
+mimetypes.add_type('image/webp', '.webp')
 
 from app.cabinet.routes.media import (
     _BLOCKED_UPLOAD_CONTENT_TYPES,

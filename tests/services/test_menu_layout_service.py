@@ -34,8 +34,8 @@ async def test_build_button_connect_direct_mode_with_url():
 
     assert button is not None
     assert isinstance(button, InlineKeyboardButton)
-    assert button.web_app is not None
-    assert button.web_app.url == 'https://example.com/miniapp'
+    assert button.url is not None
+    assert button.url == 'https://example.com/miniapp'
     assert button.callback_data is None
 
 
@@ -73,8 +73,8 @@ async def test_build_button_connect_direct_mode_with_subscription_url():
 
         assert button is not None
         assert isinstance(button, InlineKeyboardButton)
-        assert button.web_app is not None
-        assert button.web_app.url == 'https://subscription.example.com/link'
+        assert button.url is not None
+        assert button.url == 'https://subscription.example.com/link'
 
 
 @pytest.mark.anyio

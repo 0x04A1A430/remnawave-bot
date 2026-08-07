@@ -196,8 +196,6 @@ _LANGUAGE_DISPLAY_NAMES = {
     'zh-hant': '中文 (繁體)',
     'vi': 'Tiếng Việt',
     'vi-vn': 'Tiếng Việt',
-    'fa': 'فارسی',
-    'fa-ir': 'فارسی',
 }
 
 
@@ -1387,16 +1385,43 @@ def get_subscription_keyboard(
                     ]
                 )
 
-    if not settings.is_multi_tariff_enabled():
-        keyboard.append(
-            [
-                make_button(
-                    text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
-                    callback_data='subscription_settings',
-                    style='primary',
-                )
-            ]
+    # Ряд: [Настройки] [+ Тариф/Купить тариф, если режим тарифов]
+    settings_row = [
+        make_button(
+            text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
+            callback_data='subscription_settings',
+            style='primary',
         )
+    ]
+    if settings.is_tariffs_mode() and subscription:
+        _row_tariff = getattr(subscription, 'tariff', None)
+        _row_is_daily = bool(_row_tariff and getattr(_row_tariff, 'is_daily', False))
+        # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
+        # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
+        # Теперь для таких подписок показываем «Купить тариф» (покупку с нуля).
+        if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
+            settings_row.append(
+                make_button(
+                    text=texts.t('BUY_TARIFF_BUTTON', 'Купить тариф'),
+                    callback_data='menu_buy',
+                )
+            )
+        else:
+            # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение.
+            # Бесплатный (0₽) тариф — тоже через список с выбором периода: prorated
+            # instant-switch посчитал бы доплату за весь остаток бесплатных дней
+            # и перенёс бы их на платный тариф вопреки TARIFF_SWITCH_RESET_FREE_DAYS.
+            is_free_tariff = bool(
+                _row_tariff and getattr(_row_tariff, 'is_free', False) and settings.TARIFF_SWITCH_RESET_FREE_DAYS
+            )
+            tariff_callback = 'tariff_switch' if (_row_is_daily or is_free_tariff) else 'instant_switch'
+            settings_row.append(
+                make_button(
+                    text=texts.t('CHANGE_TARIFF_BUTTON', 'Тариф'),
+                    callback_data=tariff_callback,
+                )
+            )
+    keyboard.append(settings_row)
 
     keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
@@ -2792,7 +2817,7 @@ def get_add_traffic_keyboard(
 
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code in {'ru'}
     back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     # Считаем по дням (как в кабинете и подтверждении)
@@ -2876,7 +2901,7 @@ def get_add_traffic_keyboard_from_tariff(
     """
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code in {'ru'}
     back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     if not packages:

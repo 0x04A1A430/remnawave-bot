@@ -93,4 +93,4 @@ def test_verify_webhook_signature_without_token(
 ) -> None:
     monkeypatch.setattr(settings, 'CRYPTOBOT_API_TOKEN', '', raising=False)
     service = CryptoBotService()
-    assert service.verify_webhook_signature('{}', 'anything') is True
+    assert service.verify_webhook_signature('{}', 'anything') is False

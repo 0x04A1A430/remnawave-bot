@@ -55,7 +55,7 @@ from app.utils.validators import sanitize_html
 
 logger = structlog.get_logger(__name__)
 
-_RTL_LANGUAGES = frozenset({'ar', 'fa', 'he'})
+_RTL_LANGUAGES = frozenset({'ar', 'he'})
 _PROGRESS_BAR_LENGTH = 10
 
 # Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).

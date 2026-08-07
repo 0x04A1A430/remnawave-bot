@@ -669,7 +669,7 @@ SAMPLE_CONTEXTS: dict[str, dict[str, Any]] = {
     },
 }
 
-AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua', 'fa']
+AVAILABLE_LANGUAGES = ['ru', 'en', 'zh', 'ua']
 
 # Recipient-level common vars are empty until the sending code fills them —
 # in preview/test we substitute samples so the admin sees realistic values.

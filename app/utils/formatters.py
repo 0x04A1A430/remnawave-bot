@@ -88,7 +88,7 @@ def format_time_ago(dt: datetime | str, language: str = 'ru') -> str:
 
 def format_days_declension(days: int, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    if language_code not in {'ru', 'fa'}:
+    if language_code not in {'ru'}:
         return f'{days} day{"s" if days != 1 else ""}'
 
     if days % 10 == 1 and days % 100 != 11:
@@ -182,7 +182,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
             end_date = datetime.now(UTC)
 
     language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code in {'ru'}
 
     if not is_active:
         return 'Неактивна' if use_russian_fallback else 'Inactive'
@@ -208,7 +208,7 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
 
 def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code in {'ru'}
 
     if limit_gb == 0:
         if use_russian_fallback:
@@ -224,6 +224,6 @@ def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') ->
 
 def format_boolean(value: bool, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    if language_code in {'ru', 'fa'}:
+    if language_code in {'ru'}:
         return 'Да' if value else 'Нет'
     return 'Yes' if value else 'No'
