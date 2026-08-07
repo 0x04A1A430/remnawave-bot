@@ -150,6 +150,16 @@ def get_admin_promo_submenu_keyboard(language: str = 'ru') -> InlineKeyboardMark
                 make_button(
                     text=_t(
                         texts,
+                        'ADMIN_COUPONS',
+                        'Купоны',
+                    ),
+                    callback_data='admin_coupons',
+                )
+            ],
+            [
+                make_button(
+                    text=_t(
+                        texts,
                         'ADMIN_CONTESTS',
                         "<tg-emoji emoji-id='5879585266426973039'>🌐</tg-emoji> Конкурсы",
                     ),
