@@ -53,11 +53,11 @@ async def send_ban_notification(
     )
 
     try:
-        if request.notification_type == 'punishment':
+        if request.notification_type in {'punishment', 'revoke'}:
             if request.ip_count is None or request.limit is None or request.ban_minutes is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Для типа 'punishment' требуются поля: ip_count, limit, ban_minutes",
+                    detail=f"Для типа '{request.notification_type}' требуются поля: ip_count, limit, ban_minutes",
                 )
 
             success, message, telegram_id = await ban_notification_service.send_punishment_notification(
@@ -68,6 +68,7 @@ async def send_ban_notification(
                 limit=request.limit,
                 ban_minutes=request.ban_minutes,
                 node_name=request.node_name,
+                revoke=request.notification_type == 'revoke',
             )
 
         elif request.notification_type == 'enabled':

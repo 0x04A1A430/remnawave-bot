@@ -23,6 +23,15 @@ from app.services.remnawave_service import remnawave_service
 logger = structlog.get_logger(__name__)
 
 
+def _format_notification_template(template: str, fallback: str, **values: object) -> str:
+    """Format an editable template and fall back safely when its placeholders are invalid."""
+    try:
+        return template.format(**values)
+    except (IndexError, KeyError, ValueError):
+        logger.exception('Некорректный шаблон ban-уведомления, использован резервный')
+        return fallback.format(**values)
+
+
 def get_delete_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура с кнопкой удаления уведомления"""
     return InlineKeyboardMarkup(
@@ -89,6 +98,7 @@ class BanNotificationService:
         limit: int,
         ban_minutes: int,
         node_name: str | None = None,
+        revoke: bool = False,
     ) -> tuple[bool, str, int | None]:
         """
         Отправить уведомление о блокировке пользователю
@@ -106,23 +116,24 @@ class BanNotificationService:
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем информацию о ноде (заметно выделяем)
-        node_info = f'🖥 <b>Нода:</b> <code>{node_name}</code>' if node_name else ''
+        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
 
         # Формируем сообщение из настроек
         # Используем безопасное форматирование - если {node_info} отсутствует в шаблоне, не будет ошибки
         format_vars = {'ip_count': ip_count, 'limit': limit, 'ban_minutes': ban_minutes, 'node_info': node_info}
-        try:
-            message_text = settings.BAN_MSG_PUNISHMENT.format(**format_vars)
-        except KeyError:
-            # Старый шаблон без {node_info} - форматируем без него
-            message_text = settings.BAN_MSG_PUNISHMENT.format(ip_count=ip_count, limit=limit, ban_minutes=ban_minutes)
-            # Добавляем информацию о ноде в конец, если она есть
-            if node_info:
-                message_text = message_text.rstrip() + f'\n\n{node_info.rstrip()}'
+        template = settings.BAN_MSG_REVOKE if revoke else settings.BAN_MSG_PUNISHMENT
+        message_text = _format_notification_template(
+            template,
+            '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n'
+            '📱 Устройств: <b>{ip_count}</b> из <b>{limit}</b>\n'
+            '⏱ Ограничение: <b>{ban_minutes} мин</b>',
+            **format_vars,
+        )
 
         # Handle email-only users via notification delivery service
         if not user.telegram_id:
-            reason = f'IP лимит превышен: {ip_count}/{limit}. Бан на {ban_minutes} минут.'
+            action = 'Ключи доступа сброшены' if revoke else f'Бан на {ban_minutes} минут'
+            reason = f'IP лимит превышен: {ip_count}/{limit}. {action}.'
             if node_name:
                 reason += f' Нода: {node_name}'
             success = await notification_delivery_service.notify_ban(
@@ -224,7 +235,12 @@ class BanNotificationService:
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек
-        message_text = settings.BAN_MSG_WARNING.format(warning_message=warning_message)
+        safe_warning = html.escape(warning_message)
+        message_text = _format_notification_template(
+            settings.BAN_MSG_WARNING,
+            '⚠️ <b>ПРЕДУПРЕЖДЕНИЕ</b>\n\n{warning_message}',
+            warning_message=safe_warning,
+        )
 
         # Handle email-only users via notification delivery service
         if not user.telegram_id:
@@ -285,21 +301,18 @@ class BanNotificationService:
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек (заметно выделяем)
-        network_info = f'├ 🌐 Сеть: <b>{network_type}</b>\n' if network_type else ''
-        node_info = f'🖥 <b>Нода:</b> <code>{node_name}</code>' if node_name else ''
+        network_info = f'├ 🌐 Сеть: <b>{html.escape(network_type)}</b>\n' if network_type else ''
+        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
 
         logger.info('WiFi notification', node_name=repr(node_name), node_info=repr(node_info))
 
         # Безопасное форматирование
         format_vars = {'ban_minutes': ban_minutes, 'network_info': network_info, 'node_info': node_info}
-        try:
-            message_text = settings.BAN_MSG_WIFI.format(**format_vars)
-        except KeyError:
-            logger.warning('BAN_MSG_WIFI template missing placeholders, adding node_info to end')
-            message_text = settings.BAN_MSG_WIFI.format(ban_minutes=ban_minutes)
-            extra_info = (network_info + node_info).strip()
-            if extra_info:
-                message_text = message_text.rstrip() + f'\n\n{extra_info}'
+        message_text = _format_notification_template(
+            settings.BAN_MSG_WIFI,
+            '🚫 <b>Блокировка за WiFi</b>\n\n{node_info}\n{network_info}⏱ Время блокировки: <b>{ban_minutes} мин</b>',
+            **format_vars,
+        )
 
         # Handle email-only users via notification delivery service
         if not user.telegram_id:
@@ -363,18 +376,17 @@ class BanNotificationService:
             return False, f'Пользователь не найден: {user_identifier}', None
 
         # Формируем сообщение из настроек (заметно выделяем)
-        network_info = f'├ 🌐 Сеть: <b>{network_type}</b>\n' if network_type else ''
-        node_info = f'🖥 <b>Нода:</b> <code>{node_name}</code>' if node_name else ''
+        network_info = f'├ 🌐 Сеть: <b>{html.escape(network_type)}</b>\n' if network_type else ''
+        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
 
         # Безопасное форматирование
         format_vars = {'ban_minutes': ban_minutes, 'network_info': network_info, 'node_info': node_info}
-        try:
-            message_text = settings.BAN_MSG_MOBILE.format(**format_vars)
-        except KeyError:
-            message_text = settings.BAN_MSG_MOBILE.format(ban_minutes=ban_minutes)
-            extra_info = (network_info + node_info).strip()
-            if extra_info:
-                message_text = message_text.rstrip() + f'\n\n{extra_info}'
+        message_text = _format_notification_template(
+            settings.BAN_MSG_MOBILE,
+            '🚫 <b>Блокировка за мобильную сеть</b>\n\n{node_info}\n{network_info}'
+            '⏱ Время блокировки: <b>{ban_minutes} мин</b>',
+            **format_vars,
+        )
 
         # Handle email-only users via notification delivery service
         if not user.telegram_id:
@@ -447,25 +459,16 @@ class BanNotificationService:
         template = getattr(settings, template_name)
         safe_reason = html.escape(reason or 'Детали нарушения не указаны')
         node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
-        try:
-            message_text = template.format(
-                ban_minutes=ban_minutes,
-                reason=safe_reason,
-                node_info=node_info,
-            )
-        except (IndexError, KeyError, ValueError):
-            logger.exception(
-                'Некорректный шаблон уведомления о бане, использован резервный',
-                notification_type=notification_type,
-                template_name=template_name,
-            )
-            message_text = (
-                '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n'
-                f'{node_info}\n'
-                f'📝 <b>Детали:</b> {safe_reason}\n'
-                f'⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
-                '🔄 Доступ восстановится автоматически после окончания блокировки.'
-            )
+        message_text = _format_notification_template(
+            template,
+            '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n{node_info}\n'
+            '📝 <b>Детали:</b> {reason}\n'
+            '⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+            '🔄 Доступ восстановится автоматически после окончания блокировки.',
+            ban_minutes=ban_minutes,
+            reason=safe_reason,
+            node_info=node_info,
+        )
 
         if not user.telegram_id:
             email_reason = reason or 'Нарушение правил сервиса'

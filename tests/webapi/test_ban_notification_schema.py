@@ -11,7 +11,7 @@ from app.webapi.schemas.ban_notifications import BanNotificationRequest
 
 @pytest.mark.parametrize(
     'notification_type',
-    ['torrent', 'hwid_limit', 'suspicious_destination', 'traffic_limit', 'manual'],
+    ['revoke', 'torrent', 'hwid_limit', 'suspicious_destination', 'traffic_limit', 'manual'],
 )
 def test_typed_ban_notification_types_are_accepted(notification_type: str) -> None:
     request = BanNotificationRequest(
@@ -32,6 +32,25 @@ def test_unknown_typed_ban_notification_is_rejected() -> None:
             user_identifier='user@example.com',
             username='user',
         )
+
+
+@pytest.mark.parametrize(
+    ('field', 'value'),
+    [('ip_count', -1), ('limit', -1), ('ban_minutes', 0), ('ban_minutes', 10081)],
+)
+def test_invalid_numeric_values_are_rejected(field: str, value: int) -> None:
+    payload = {
+        'notification_type': 'punishment',
+        'user_identifier': 'user@example.com',
+        'username': 'user',
+        'ip_count': 2,
+        'limit': 1,
+        'ban_minutes': 30,
+    }
+    payload[field] = value
+
+    with pytest.raises(ValidationError):
+        BanNotificationRequest(**payload)
 
 
 @pytest.mark.asyncio
