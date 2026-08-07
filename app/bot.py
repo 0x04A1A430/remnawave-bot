@@ -29,6 +29,7 @@ from app.handlers.admin import (
     bulk_unban as admin_bulk_unban,
     campaigns as admin_campaigns,
     contests as admin_contests,
+    coupons as admin_coupons,
     daily_contests as admin_daily_contests,
     faq as admin_faq,
     main as admin_main,
@@ -240,6 +241,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_required_channels.register_handlers(dp)
     admin_quick_amounts.register_handlers(dp)
     admin_overpay_certificate.register_handlers(dp)
+    admin_coupons.register_handlers(dp)
     register_channel_member_handlers(dp)
     register_gift_activation_handlers(dp)
     register_inline_gift_handlers(dp)
