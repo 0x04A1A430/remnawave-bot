@@ -70,6 +70,7 @@ class DeleteUserResult:
     bot_deleted: bool = False
     panel_deleted: bool = False
     panel_error: str | None = None
+    grace_blocked: bool = False
 
 
 class UserService:
@@ -852,6 +853,23 @@ class UserService:
 
             # Collect all panel UUIDs to process
             subs = getattr(user, 'subscriptions', None) or []
+            from app.services.grace_access_runtime import (
+                GraceAccessDeletionBlocked,
+                ensure_no_open_grace_for_subscriptions,
+            )
+
+            try:
+                await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
+            except GraceAccessDeletionBlocked as error:
+                result.panel_error = str(error)
+                result.grace_blocked = True
+                logger.warning(
+                    'User deletion blocked until grace access is restored',
+                    user_id=user_id,
+                    subscription_ids=error.subscription_ids,
+                )
+                return result
+
             if settings.is_multi_tariff_enabled():
                 panel_uuids = [sub.remnawave_uuid for sub in subs if sub.remnawave_uuid]
             else:

@@ -46,6 +46,8 @@ from app.database.models import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.grace_access_runtime import grace_access_runtime
+from app.services.grace_access_service import GraceReason
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -392,6 +394,19 @@ class RemnaWaveWebhookService:
                 data_2=data.get('uuid'),
             )
             return False
+
+        if subscription and await grace_access_runtime.should_suppress_webhook(
+            subscription.id,
+            event_name,
+            data,
+            db=db,
+        ):
+            logger.info(
+                'RemnaWave webhook suppressed as a grace overlay echo',
+                event_name=event_name,
+                subscription_id=subscription.id,
+            )
+            return True
 
         user_id = user.id
         try:
@@ -1110,6 +1125,9 @@ class RemnaWaveWebhookService:
             await db.commit()
             return
 
+        candidate_at = datetime.now(UTC)
+        subscription.grace_candidate_reason = GraceReason.EXPIRED.value
+        subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.EXPIRED.value:
             await expire_subscription(db, subscription)
@@ -1120,6 +1138,12 @@ class RemnaWaveWebhookService:
             )
         else:
             await db.commit()
+
+        await grace_access_runtime.consider_candidate(
+            subscription.id,
+            GraceReason.EXPIRED,
+            source='webhook',
+        )
 
         await self._notify_user(
             user,
@@ -1172,6 +1196,8 @@ class RemnaWaveWebhookService:
             await db.commit()
             return
 
+        subscription.grace_candidate_reason = None
+        subscription.grace_candidate_at = None
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.DISABLED.value:
             await deactivate_subscription(db, subscription)
@@ -1239,6 +1265,9 @@ class RemnaWaveWebhookService:
             )
             return
 
+        candidate_at = datetime.now(UTC)
+        subscription.grace_candidate_reason = GraceReason.LIMITED.value
+        subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
         if subscription.status in (
             SubscriptionStatus.ACTIVE.value,
@@ -1255,6 +1284,12 @@ class RemnaWaveWebhookService:
             )
         else:
             await db.commit()
+
+        await grace_access_runtime.consider_candidate(
+            subscription.id,
+            GraceReason.LIMITED,
+            source='webhook',
+        )
 
         await self._notify_user(
             user,
@@ -1930,7 +1965,7 @@ class RemnaWaveWebhookService:
             user,
             'WEBHOOK_USER_NOT_CONNECTED',
             reply_markup=self._get_connect_keyboard(user),
-            format_kwargs=format_kwargs if format_kwargs else None,
+            format_kwargs=format_kwargs or None,
             subscription=subscription,
         )
 

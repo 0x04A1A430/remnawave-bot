@@ -33,6 +33,7 @@ from app.services.account_merge_service import (
     flush_remnawave_deletions,
     get_merge_preview,
 )
+from app.services.grace_access_runtime import GraceAccessDeletionBlocked
 from app.utils.cache import RateLimitCache, TokenReplayCache
 
 from ..auth.merge_service import (
@@ -973,6 +974,13 @@ async def execute_merge_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Account merge cannot be completed. The accounts may have already been merged or deleted.',
+        ) from exc
+    except GraceAccessDeletionBlocked as exc:
+        await db.rollback()
+        await restore_merge_token(merge_token, consumed)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Account merge is temporarily blocked until grace access is finished.',
         ) from exc
     except Exception as exc:
         await db.rollback()

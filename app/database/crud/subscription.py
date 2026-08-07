@@ -1833,6 +1833,13 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     if not subscriptions:
         return 0
 
+    from app.services.grace_access_runtime import ensure_no_open_grace_for_subscriptions
+
+    await ensure_no_open_grace_for_subscriptions(
+        db,
+        tuple(int(subscription.id) for subscription in subscriptions),
+    )
+
     import asyncio
 
     from sqlalchemy import update

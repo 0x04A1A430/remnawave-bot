@@ -427,7 +427,14 @@ async def _sync_subscription_to_panel(
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                 try:
-                    updated_panel_user = await api.update_user(
+                    from app.services.grace_access_runtime import (
+                        create_panel_user_grace_safe,
+                        update_panel_user_grace_safe,
+                    )
+
+                    updated_panel_user = await update_panel_user_grace_safe(
+                        api,
+                        subscription.id,
                         user_id=subscription.panel_user_id
                         if settings.is_multi_tariff_enabled()
                         else user.panel_user_id,
@@ -468,7 +475,7 @@ async def _sync_subscription_to_panel(
                 # multi-tariff suffix уже встроен в `username` через
                 # build_remnawave_subscription_username — больше ничего не клеим.
 
-                new_panel_user = await api.create_user(**create_kwargs)
+                new_panel_user = await create_panel_user_grace_safe(api, subscription.id, **create_kwargs)
                 subscription.remnawave_uuid = new_panel_user.uuid
                 subscription.remnawave_short_uuid = new_panel_user.short_uuid
                 subscription.subscription_url = new_panel_user.subscription_url
@@ -2726,6 +2733,18 @@ async def delete_user(
         await soft_delete_user(db, user)
         action = 'soft deleted'
     else:
+        from app.services.grace_access_runtime import (
+            GraceAccessDeletionBlocked,
+            ensure_no_open_grace_for_user,
+        )
+
+        try:
+            await ensure_no_open_grace_for_user(db, user.id)
+        except GraceAccessDeletionBlocked as error:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='Open grace access must be drained or restored before permanent deletion.',
+            ) from error
         # Hard delete
         await db.delete(user)
         await db.commit()
@@ -2907,6 +2926,19 @@ async def reset_user_subscription(
             panel_deactivated=False,
         )
 
+    from app.services.grace_access_runtime import (
+        GraceAccessDeletionBlocked,
+        ensure_no_open_grace_for_subscriptions,
+    )
+
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Open grace access must be drained or restored before resetting subscriptions.',
+        ) from error
+
     # Deactivate in Remnawave panel if requested
     if request.deactivate_in_panel:
         try:
@@ -2939,6 +2971,13 @@ async def reset_user_subscription(
         await cancel_platega_recurring_for_subscription_safe(db, sub.id)
 
         await cancel_lava_recurring_for_subscription_safe(db, sub.id)
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, tuple(sub.id for sub in subs))
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Open grace access must be drained or restored before resetting subscriptions.',
+        ) from error
 
     # Delete all subscriptions from database
     from sqlalchemy import delete
@@ -3870,7 +3909,11 @@ async def sync_user_to_panel(
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                 try:
-                    await api.update_user(
+                    from app.services.grace_access_runtime import update_panel_user_grace_safe
+
+                    await update_panel_user_grace_safe(
+                        api,
+                        sub.id,
                         user_id=sub.panel_user_id if settings.is_multi_tariff_enabled() else user.panel_user_id,
                         **update_kwargs,
                     )
@@ -3907,7 +3950,9 @@ async def sync_user_to_panel(
                 # multi-tariff suffix уже встроен в `username` через
                 # build_remnawave_subscription_username — больше ничего не клеим.
 
-                new_panel_user = await api.create_user(**create_kwargs)
+                from app.services.grace_access_runtime import create_panel_user_grace_safe
+
+                new_panel_user = await create_panel_user_grace_safe(api, sub.id, **create_kwargs)
                 panel_uuid = new_panel_user.uuid
                 sub.remnawave_uuid = new_panel_user.uuid
                 sub.remnawave_short_uuid = new_panel_user.short_uuid

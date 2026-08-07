@@ -510,6 +510,55 @@ class SubscriptionService:
             # Определяем внешний сквад из тарифа
             ext_squad_uuid = subscription.tariff.external_squad_uuid if subscription.tariff else None
 
+            # Routine outbound updates must not replace a temporary grace overlay
+            # with the still-expired/limited billing state. A real renewal changes
+            # actual_status to active and is intentionally allowed.
+            from app.services.grace_access_runtime import (
+                lock_grace_sensitive_panel_updates,
+            )
+
+            open_grace_ids = await lock_grace_sensitive_panel_updates(db, (subscription.id,))
+            await db.flush((subscription, user))
+            await db.refresh(subscription)
+            await db.refresh(user)
+            preserve_open_grace = (
+                subscription.id in open_grace_ids
+                and user.status == UserStatus.ACTIVE.value
+                and subscription.actual_status in ('expired', 'limited')
+            )
+            if preserve_open_grace:
+                logger.info(
+                    'Routine Remnawave update masks grace-owned fields',
+                    subscription_id=subscription.id,
+                )
+                async with self.get_api_client() as api:
+                    metadata_kwargs: dict[str, Any] = {
+                        'uuid': remnawave_uuid,
+                        'user_id': getattr(subscription, 'panel_user_id', None),
+                        'description': settings.format_remnawave_user_description(
+                            full_name=user.full_name,
+                            username=user.username,
+                            telegram_id=user.telegram_id,
+                            email=user.email,
+                            user_id=user.id,
+                        ),
+                    }
+                    if user.telegram_id is not None:
+                        metadata_kwargs['telegram_id'] = user.telegram_id
+                    if user.email is not None:
+                        metadata_kwargs['email'] = user.email
+                    hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+                    if hwid_limit is not None:
+                        metadata_kwargs['hwid_device_limit'] = hwid_limit
+                    masked_tag = self._resolve_user_tag(subscription)
+                    if masked_tag is not None:
+                        metadata_kwargs['tag'] = masked_tag
+                    updated_user = await api.update_user(**metadata_kwargs)
+                subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
+                await db.commit()
+                return updated_user
+
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
@@ -639,10 +688,19 @@ class SubscriptionService:
                 error=exc,
             )
 
-    async def disable_remnawave_user(self, user_uuid: str, user_id: str | None = None) -> bool:
+    async def disable_remnawave_user(
+        self, user_uuid: str, user_id: str | None = None, db: AsyncSession | None = None
+    ) -> bool:
         try:
+            from app.services.grace_access_runtime import set_panel_user_enabled_state_grace_safe
+
             async with self.get_api_client() as api:
-                await api.disable_user(user_uuid, user_id=user_id)
+                await set_panel_user_enabled_state_grace_safe(
+                    api,
+                    user_uuid,
+                    enabled=False,
+                    db=db,
+                )
                 logger.info('Отключен RemnaWave пользователь', user_uuid=user_uuid)
                 return True
 
@@ -671,11 +729,20 @@ class SubscriptionService:
             logger.error('Ошибка удаления RemnaWave пользователя', error=e, user_uuid=user_uuid)
             return False
 
-    async def enable_remnawave_user(self, user_uuid: str, user_id: str | None = None) -> bool:
+    async def enable_remnawave_user(
+        self, user_uuid: str, user_id: str | None = None, db: AsyncSession | None = None
+    ) -> bool:
         """Включить пользователя в RemnaWave (реактивация)."""
         try:
+            from app.services.grace_access_runtime import set_panel_user_enabled_state_grace_safe
+
             async with self.get_api_client() as api:
-                await api.enable_user(user_uuid, user_id=user_id)
+                await set_panel_user_enabled_state_grace_safe(
+                    api,
+                    user_uuid,
+                    enabled=True,
+                    db=db,
+                )
                 logger.info('Включен RemnaWave пользователь', user_uuid=user_uuid)
                 return True
 
