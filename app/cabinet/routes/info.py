@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.rules import get_current_rules_content, get_rules_by_language
 from app.database.models import User
+from app.services import legal_consent_service
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
@@ -102,6 +103,14 @@ class InfoVisibilityResponse(BaseModel):
     rules: bool
     privacy: bool
     offer: bool
+
+
+class LegalConsentConfigResponse(BaseModel):
+    """Что кабинет покажет на экране первой авторизации."""
+
+    required: bool
+    prechecked: bool
+    documents: list[str]
 
 
 # ============ Routes ============
@@ -336,6 +345,24 @@ async def get_support_config():
         support_type=support_type,
         support_url=None,  # Cabinet doesn't use custom URLs
         support_username=settings.SUPPORT_USERNAME,  # Always return for fallback
+    )
+
+
+@router.get('/legal-consent', response_model=LegalConsentConfigResponse)
+async def get_legal_consent_config(
+    language: str = Query('ru', min_length=2, max_length=10),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Конфигурация экрана согласия «ознакомлен с документами».
+
+    Публичный: права на получение не требуется. Требуются только те
+    документы - если и открыть их пользователь действительно может.
+    """
+    requirement = await legal_consent_service.get_requirement(db, language)
+    return LegalConsentConfigResponse(
+        required=requirement.required,
+        prechecked=requirement.prechecked,
+        documents=requirement.documents,
     )
 
 

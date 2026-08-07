@@ -50,6 +50,7 @@ class Settings(BaseSettings):
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: str | None = None
+    ADMIN_NOTIFICATIONS_RICH_ENABLED: bool = True
     ADMIN_NOTIFICATIONS_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: int | None = None
@@ -957,6 +958,11 @@ class Settings(BaseSettings):
     CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
+    # Кнопка «Меню» Telegram на открытие веб-кабинета (WebApp). Пустой URL —
+    # падает на MINIAPP_CUSTOM_URL; работает только с https.
+    MENU_BUTTON_WEBAPP_ENABLED: bool = False
+    MENU_BUTTON_WEBAPP_URL: str = ''
+    MENU_BUTTON_WEBAPP_TEXT: str = 'Кабинет'
     MINIAPP_STATIC_PATH: str = 'miniapp'
     # Короткое имя Telegram Mini App (BotFather → /newapp), напр. 'cabinet'.
     # Нужно только для диплинков t.me/<bot>/<app>?startapp=… которые открывают
@@ -998,6 +1004,14 @@ class Settings(BaseSettings):
     FAQ_DISPLAY_MODE: str = 'both'
     RECURRENT_PAYMENTS_DISPLAY_MODE: str = 'both'
 
+    # Требовать галочку согласия с юр. документами при первой авторизации
+    # в кабинете. Ключевое правило: галочка возможна только для документа,
+    # который пользователь способен открыть (не выключен и не скрыт из веба),
+    # иначе установка без заполненной оферты заблокировала бы вход всем.
+    CABINET_REQUIRE_LEGAL_CONSENT: bool = True
+    # True - галочки показываются уже отмеченными (клиент сам подтверждает).
+    CABINET_LEGAL_CONSENT_PRECHECKED: bool = False
+
     # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
     PRICE_ROUNDING_ENABLED: bool = True
 
@@ -1020,6 +1034,10 @@ class Settings(BaseSettings):
     LOG_WARNING_FILE: str = 'warning.log'
     LOG_ERROR_FILE: str = 'error.log'
     LOG_PAYMENTS_FILE: str = 'payments.log'
+
+    # === User action log (cabinet activity timeline) ===
+    USER_ACTION_LOG_ENABLED: bool = True
+    USER_ACTION_LOG_RETENTION_DAYS: int = 90
 
     # === Ban Notification Messages ===
 
@@ -1128,6 +1146,11 @@ class Settings(BaseSettings):
     WEB_API_TOKEN_HASH_ALGORITHM: str = 'sha256'
     WEB_API_TOKEN_HMAC_SECRET: str | None = None
     WEB_API_REQUEST_LOGGING: bool = True
+    # Потолок ОДНОЙ операции ручного пополнения через POST /users/{id}/deposit.
+    # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
+    # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
+    # человеку годовую подписку. 0 — без ограничения.
+    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
 
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600

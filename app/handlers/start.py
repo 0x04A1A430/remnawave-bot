@@ -72,6 +72,7 @@ from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
 from app.utils.button_emoji import make_button
+from app.utils.long_messages import answer_long_text
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -706,7 +707,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('Правила отправлены после ввода реферального кода')
         else:
@@ -741,7 +742,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('Правила отправлены после принятия промокода')
         else:
@@ -836,7 +837,7 @@ async def _continue_registration_after_language(
 
     rules_text = await get_rules(language)
     try:
-        await target_message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+        await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
         logger.warning(
             'Пользователь заблокировал бота, пропускаем отправку правил',
@@ -3141,14 +3142,32 @@ async def required_sub_channel_check(
                         await _send_pinned_message(bot, db, user, pinned_message)
 
                     if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                        _result = await bot.send_photo(
-                            chat_id=query.from_user.id,
-                            photo=get_logo_media(),
-                            caption=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
-                        _cache_logo_file_id(_result)
+                        from app.services.start_media_service import get_start_video_file_id
+
+                        video_file_id = await get_start_video_file_id(db)
+                        if video_file_id:
+                            try:
+                                await bot.send_video(
+                                    chat_id=query.from_user.id,
+                                    video=video_file_id,
+                                    caption=menu_text,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML',
+                                )
+                            except Exception as video_error:
+                                logger.warning(
+                                    'Не удалось отправить видео меню — уходим на логотип',
+                                    error=str(video_error),
+                                )
+                        else:
+                            _result = await bot.send_photo(
+                                chat_id=query.from_user.id,
+                                photo=get_logo_media(),
+                                caption=menu_text,
+                                reply_markup=keyboard,
+                                parse_mode='HTML',
+                            )
+                            _cache_logo_file_id(_result)
                     else:
                         await bot.send_message(
                             chat_id=query.from_user.id,

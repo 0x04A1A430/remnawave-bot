@@ -82,6 +82,13 @@ class BrandingResponse(BaseModel):
     has_custom_logo: bool
 
 
+class BotStartVideoResponse(BaseModel):
+    """Bot start menu video state (Telegram file_id)."""
+
+    has_video: bool
+    file_id: str | None = None
+
+
 class BrandingNameUpdate(BaseModel):
     """Request to update branding name."""
 
@@ -461,6 +468,99 @@ async def get_logo():
             'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
         },
     )
+
+
+@router.get('/bot-start-video', response_model=BotStartVideoResponse)
+async def get_bot_start_video(
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Текущее видео стартового меню бота (Telegram file_id)."""
+    from app.services.start_media_service import get_start_video_file_id
+
+    file_id = await get_start_video_file_id(db)
+    return BotStartVideoResponse(has_video=bool(file_id), file_id=file_id)
+
+
+@router.post('/bot-start-video', response_model=BotStartVideoResponse)
+async def upload_bot_start_video(
+    file: UploadFile = File(...),
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Загрузить видео стартового меню.
+
+    Отправляет файл в Telegram для получения ``file_id`` (чтобы не хранить
+    сам файл и не слать его при каждом показе меню). Успешная отправка
+    означает, что видео пригодно для пересылки.
+    """
+    content_type = (file.content_type or '').lower()
+    if not content_type.startswith('video/'):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid file type. Expected a video')
+
+    max_bytes = settings.MEDIA_MAX_VIDEO_SIZE_MB * 1024 * 1024
+    content = await file.read(max_bytes + 1)
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Empty file')
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'File too large. Maximum size: {settings.MEDIA_MAX_VIDEO_SIZE_MB} MB',
+        )
+
+    from aiogram.types import BufferedInputFile
+
+    from app.bot_factory import create_bot
+    from app.cabinet.routes.media import _resolve_target_chat_id
+    from app.services.start_media_service import set_start_video_file_id
+
+    target_chat_id = _resolve_target_chat_id()
+    bot = create_bot()
+    try:
+        message = await bot.send_video(
+            chat_id=target_chat_id,
+            video=BufferedInputFile(content, filename=file.filename or 'start_video.mp4'),
+            disable_notification=True,
+        )
+        file_id = message.video.file_id if message.video else None
+        try:
+            await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
+        except Exception as delete_error:
+            logger.debug(
+                'Не удалось удалить тестовое сообщение с видео',
+                message_id=message.message_id,
+                error=str(delete_error),
+            )
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error('Не удалось отправить видео стартового меню в Telegram', error=str(error))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Telegram rejected the video',
+        ) from error
+    finally:
+        await bot.session.close()
+
+    if not file_id:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Telegram returned no file_id')
+
+    await set_start_video_file_id(db, file_id)
+    logger.info('Видео стартового меню обновлено', admin_id=admin.id)
+    return BotStartVideoResponse(has_video=True, file_id=file_id)
+
+
+@router.delete('/bot-start-video', response_model=BotStartVideoResponse)
+async def delete_bot_start_video(
+    admin: User = Depends(require_permission('settings:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Убрать видео из стартового меню (вернуть логотип/текст)."""
+    from app.services.start_media_service import set_start_video_file_id
+
+    await set_start_video_file_id(db, None)
+    logger.info('Видео стартового меню удалено', admin_id=admin.id)
+    return BotStartVideoResponse(has_video=False, file_id=None)
 
 
 @router.put('/name', response_model=BrandingResponse)

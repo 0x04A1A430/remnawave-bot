@@ -2383,6 +2383,27 @@ class RecurrentPayments(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
 
 
+class LegalConsent(Base):
+    """Журнал согласий пользователя с офертой/политикой при регистрации.
+
+    Храним журнал, а не флаг на пользователе: кто, с каким документом, когда
+    и откуда согласился. Таблица append-only, без уникальности: переподтверждение
+    после смены редакции документа ложится новой строкой рядом со старой.
+    """
+
+    __tablename__ = 'legal_consents'
+    __table_args__ = (Index('ix_legal_consents_user_document', 'user_id', 'document'),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    document = Column(String(32), nullable=False)
+    accepted_at = Column(AwareDateTime(), default=func.now(), nullable=False)
+    source = Column(String(32), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+
+    user = relationship('User')
+
+
 class FaqSetting(Base):
     __tablename__ = 'faq_settings'
 

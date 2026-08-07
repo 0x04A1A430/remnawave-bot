@@ -297,8 +297,11 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
     if not rules_text:
         rules_text = await get_rules(db_user.language)
 
-    await callback.message.edit_text(
-        f'{texts.t("RULES_HEADER", " <b>Правила сервиса</b>")}\n\n{rules_text}',
+    from app.utils.long_messages import edit_long_text
+
+    await edit_long_text(
+        callback.message,
+        f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')]]
         ),
