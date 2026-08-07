@@ -30,6 +30,7 @@ from app.database.crud.user import (
     verify_and_apply_email_change,
 )
 from app.database.models import CabinetRefreshToken, User, UserStatus
+from app.services import legal_consent_service
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
 from app.services.rbac_bootstrap_service import (
@@ -732,6 +733,38 @@ async def auth_telegram(
     return response
 
 
+async def _require_legal_consent(
+    db: AsyncSession,
+    *,
+    accepted: list[str] | None,
+    language: str,
+) -> list[str]:
+    """Требование согласия для НОВОГО пользователя кабинета.
+
+    Возвращает документы, на которые получено согласие, в порядке, в котором
+    они показываются пользователю. Если пользователь не отметил - 428 с
+    списком документов: дальше вход не продолжается до подтверждения.
+    """
+    requirement = await legal_consent_service.get_requirement(db, language)
+    if not requirement.required:
+        return []
+
+    missing = legal_consent_service.missing_documents(requirement.documents, accepted)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_428_PRECONDITION_REQUIRED,
+            detail={
+                'code': 'legal_consent_required',
+                'message': 'Consent to the legal documents is required to create an account',
+                'documents': requirement.documents,
+                'missing': missing,
+                'prechecked': requirement.prechecked,
+            },
+        )
+
+    return requirement.documents
+
+
 @router.post('/telegram/widget', response_model=AuthResponse)
 async def auth_telegram_widget(
     request: TelegramWidgetAuthRequest,
@@ -817,7 +850,9 @@ async def auth_telegram_widget(
                 logger.warning('Failed to check pending referral (widget)', error=e)
 
     is_new_user = not user
+    consent_documents: list[str] = []
     if not user:
+        consent_documents = await _require_legal_consent(db, accepted=request.accepted_legal_documents, language='ru')
         # Create new user from Telegram data
         logger.info(
             'Creating new user from cabinet: telegram_id=, username',
@@ -837,6 +872,9 @@ async def auth_telegram_widget(
             'User created successfully: id=, telegram_id',
             user_id=user.id,
             telegram_id=user.telegram_id,
+        )
+        await legal_consent_service.record_consent(
+            db, user, consent_documents, source='cabinet_telegram_widget', ip_address=client_ip
         )
 
     if user.status != UserStatus.ACTIVE.value:
@@ -1012,7 +1050,11 @@ async def auth_telegram_oidc(
                 logger.warning('Failed to check pending referral (oidc)', error=e)
 
     is_new_user = not user
+    consent_documents: list[str] = []
     if not user:
+        consent_documents = await _require_legal_consent(
+            db, accepted=request.accepted_legal_documents, language=language or 'ru'
+        )
         logger.info(
             'Creating new user from cabinet OIDC',
             telegram_id=telegram_id,
@@ -1028,6 +1070,9 @@ async def auth_telegram_oidc(
             referred_by_id=referrer_id,
         )
         logger.info('User created successfully', user_id=user.id, telegram_id=user.telegram_id)
+        await legal_consent_service.record_consent(
+            db, user, consent_documents, source='cabinet_telegram_oidc', ip_address=client_ip
+        )
 
     if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
@@ -1420,6 +1465,10 @@ async def register_email_standalone(
                     referral_code=request.referral_code,
                 )
 
+    consent_documents = await _require_legal_consent(
+        db, accepted=request.accepted_legal_documents, language=request.language or 'ru'
+    )
+
     # Создать пользователя
     user = await create_user_by_email(
         db=db,
@@ -1428,6 +1477,9 @@ async def register_email_standalone(
         first_name=request.first_name,
         language=request.language,
         referred_by_id=referrer.id if referrer else None,
+    )
+    await legal_consent_service.record_consent(
+        db, user, consent_documents, source='cabinet_email', ip_address=client_ip
     )
 
     # Сохранить campaign_slug для обработки при верификации email

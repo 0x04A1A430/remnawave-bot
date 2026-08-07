@@ -10,6 +10,7 @@ from app.database.crud.server_squad import (
     count_active_users_for_squad,
     get_server_squad_by_uuid,
 )
+from app.utils.panel_node_usage import normalize_node_usage
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.remnawave import (
@@ -206,7 +207,7 @@ async def get_node_statistics(
         raise HTTPException(status.HTTP_404_NOT_FOUND, 'Не удалось получить информацию по ноде')
 
     node_data = _serialize_node(stats['node'])
-    usage_history = stats.get('usage_history') or []
+    usage_history = normalize_node_usage(stats.get('usage_history'), stats['node'].get('uuid', ''))
     realtime = stats.get('realtime')
     last_updated = _parse_last_updated(stats.get('last_updated'))
 
@@ -235,7 +236,7 @@ async def get_node_usage_range(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Некорректный диапазон дат')
 
     usage = await service.get_node_user_usage_by_range(node_uuid, start_dt, end_dt)
-    return RemnaWaveNodeUsageResponse(items=usage or [])
+    return RemnaWaveNodeUsageResponse(items=normalize_node_usage(usage, node_uuid))
 
 
 @router.post('/nodes/{node_uuid}/actions', response_model=RemnaWaveNodeActionResponse)

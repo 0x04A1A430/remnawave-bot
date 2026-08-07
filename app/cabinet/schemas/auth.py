@@ -22,6 +22,15 @@ class TelegramAuthRequest(BaseModel):
         pattern=r'^[a-zA-Z0-9_-]+$',
         description='Referral code of inviter',
     )
+    accepted_legal_documents: list[str] | None = Field(
+        None,
+        max_length=8,
+        description=(
+            'Список документов, с которыми пользователь согласился при регистрации '
+            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
+            'для открытых документов обязательно.'
+        ),
+    )
 
 
 class TelegramWidgetAuthRequest(BaseModel):
@@ -47,6 +56,15 @@ class TelegramWidgetAuthRequest(BaseModel):
         pattern=r'^[a-zA-Z0-9_-]+$',
         description='Referral code of inviter',
     )
+    accepted_legal_documents: list[str] | None = Field(
+        None,
+        max_length=8,
+        description=(
+            'Список документов, с которыми пользователь согласился при регистрации '
+            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
+            'для открытых документов обязательно.'
+        ),
+    )
 
 
 class TelegramOIDCAuthRequest(BaseModel):
@@ -65,6 +83,15 @@ class TelegramOIDCAuthRequest(BaseModel):
         max_length=32,
         pattern=r'^[a-zA-Z0-9_-]+$',
         description='Referral code of inviter',
+    )
+    accepted_legal_documents: list[str] | None = Field(
+        None,
+        max_length=8,
+        description=(
+            'Список документов, с которыми пользователь согласился при регистрации '
+            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
+            'для открытых документов обязательно.'
+        ),
     )
 
 
@@ -181,6 +208,15 @@ class EmailRegisterStandaloneRequest(BaseModel):
         max_length=64,
         pattern=r'^[a-zA-Z0-9_-]+$',
         description='Campaign slug from web link',
+    )
+    accepted_legal_documents: list[str] | None = Field(
+        None,
+        max_length=8,
+        description=(
+            'Список документов, с которыми пользователь согласился при регистрации '
+            '(см. GET /cabinet/info/legal-consent). Пусто только при отключённой защите; '
+            'для открытых документов обязательно.'
+        ),
     )
 
 

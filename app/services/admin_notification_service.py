@@ -1498,6 +1498,28 @@ class AdminNotificationService:
         if reply_markup is not None:
             message_kwargs['reply_markup'] = reply_markup
 
+        # Rich-вид (Bot API 10.1): конвертация классического HTML-текста в
+        # rich. При недоступности/переполнении — классический путь с ретраями ниже.
+        try:
+            from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
+
+            rich_html = classic_admin_html_to_rich(text)
+            if rich_html and await try_send_rich_admin_message(
+                self.bot,
+                self.chat_id,
+                rich_html,
+                thread_id=thread_id,
+                reply_markup=reply_markup,
+            ):
+                logger.info(
+                    'Уведомление отправлено rich-сообщением в чат',
+                    chat_id=self.chat_id,
+                    category=category,
+                )
+                return True
+        except Exception as rich_error:
+            logger.warning('Сбой rich-уведомления', error=str(rich_error))
+
         # ВАЖНО: вся ветка ошибок ниже логируется через logger.warning, а не
         # logger.error. Иначе TelegramNotifierProcessor попытается переслать
         # ошибку в этот же админ-чат, упрётся в тот же flood control — петля

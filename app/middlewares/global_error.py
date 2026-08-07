@@ -1,3 +1,4 @@
+import html
 import traceback
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -16,6 +17,12 @@ from sqlalchemy.exc import InterfaceError, OperationalError
 
 from app.config import settings
 from app.services.startup_notification_service import _get_error_recommendations
+from app.utils.rich_admin import (
+    RICH_TEXT_LIMIT,
+    rich_footer_now,
+    rich_traceback_details,
+    try_send_rich_admin_message,
+)
 from app.utils.timezone import format_local_datetime
 
 
@@ -220,6 +227,37 @@ class ErrorStatisticsMiddleware(BaseMiddleware):
             self.error_counts[key] = 0
 
 
+def _build_rich_error_report(now: datetime, error_type: str, context: str) -> str | None:
+    """Rich-отчёт об ошибке: сводка + сворачиваемые трейсбэки из буфера.
+
+    Возвращает None, если отчёт не помещается в лимит rich-сообщения (тогда
+    классический путь с .txt-файлом не нужен).
+    """
+    blocks = [
+        '<h6>Отчёт об ошибке</h6><hr/>',
+        (f'<p><b>Тип:</b> <code>{html.escape(error_type)}</code> · <b>Ошибок в отчёте:</b> {len(_error_buffer)}</p>'),
+    ]
+    if context:
+        blocks.append(f'<p><b>Контекст:</b> {context}</p>')
+
+    recommendations = _get_error_recommendations(_error_buffer[-1][1] if _error_buffer else '')
+    if recommendations:
+        blocks.append(f'<blockquote>{recommendations}</blockquote>')
+
+    # Сворачиваемые трейсбэки (новые сверху) — открыт только самый свежий
+    for index, (err_type, err_msg, err_tb) in enumerate(reversed(_error_buffer)):
+        summary = f'ⓘ {err_type}: {err_msg[:80]}' if err_msg else f'ⓘ {err_type}'
+        blocks.append(rich_traceback_details(summary, err_tb, open_by_default=index == 0))
+
+    blocks.append('<hr/>')
+    blocks.append(rich_footer_now())
+
+    rich_html = ''.join(blocks)
+    if len(rich_html) > RICH_TEXT_LIMIT:
+        return None
+    return rich_html
+
+
 async def send_error_to_admin_chat(
     bot: Bot, error: Exception, context: str = '', tb_override: str | None = None
 ) -> bool:
@@ -296,6 +334,18 @@ async def send_error_to_admin_chat(
         log_content = '\n'.join(log_lines)
 
         errors_count = len(_error_buffer)
+
+        # Rich-вид (Bot API 10.1): трейсбэки в свёрнутых блоках, лимит 32768
+        # символов против 1024 у caption, .txt-файл не нужен. Если недоступен —
+        # классический путь с файлом ниже.
+        try:
+            rich_html = _build_rich_error_report(now, error_type, context)
+            if rich_html and await try_send_rich_admin_message(bot, chat_id, rich_html, thread_id=topic_id):
+                _error_buffer.clear()
+                logger.info('Rich-уведомление об ошибке отправлено в чат', chat_id=chat_id)
+                return True
+        except Exception as rich_error:
+            logger.warning('Сбой rich-рендера отчёта об ошибке', error=str(rich_error))
 
         file_name = f'error_report_{now.strftime(DATETIME_FORMAT_FILENAME)}.txt'
         file = BufferedInputFile(
