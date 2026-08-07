@@ -973,7 +973,13 @@ class MonitoringService:
                 # вызывает FK violation → A039. Назначается при создании подписки.
 
                 update_kwargs['user_id'] = subscription.panel_user_id
-                updated_user = await api.update_user(**update_kwargs)
+                from app.services.grace_access_runtime import update_panel_user_grace_safe
+
+                updated_user = await update_panel_user_grace_safe(
+                    api,
+                    subscription.id,
+                    **update_kwargs,
+                )
 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link

@@ -621,6 +621,12 @@ async def execute_merge(
         provider_id=provider_id,
     )
 
+    # A merge can move or delete subscriptions and panel identities. Keep the
+    # snapshot owner stable until every open grace overlay is restored.
+    from app.services.grace_access_runtime import ensure_no_open_grace_for_users
+
+    await ensure_no_open_grace_for_users(db, (primary_user_id, secondary_user_id))
+
     # 1. Перенос OAuth ID
     # Два прохода: сначала очищаем secondary (flush для освобождения unique constraint),
     # затем устанавливаем на primary. Без этого SQLAlchemy может отправить UPDATE primary
