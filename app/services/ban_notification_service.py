@@ -2,6 +2,8 @@
 Сервис для отправки уведомлений от ban системы пользователям
 """
 
+import html
+
 import structlog
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
@@ -405,6 +407,93 @@ class BanNotificationService:
         except TelegramAPIError as e:
             logger.error(
                 'Ошибка отправки Mobile уведомления пользователю',
+                username=username,
+                telegram_id=user.telegram_id,
+                error=e,
+            )
+            return False, f'Ошибка Telegram API: {e!s}', user.telegram_id
+
+    async def send_typed_ban_notification(
+        self,
+        db: AsyncSession,
+        user_identifier: str,
+        username: str,
+        notification_type: str,
+        ban_minutes: int,
+        reason: str | None = None,
+        node_name: str | None = None,
+    ) -> tuple[bool, str, int | None]:
+        """Send a BanHammer ban notification using a template for its cause."""
+        if not self._bot:
+            return False, 'Бот не инициализирован', None
+
+        template_names = {
+            'torrent': 'BAN_MSG_TORRENT',
+            'hwid_limit': 'BAN_MSG_HWID_LIMIT',
+            'suspicious_destination': 'BAN_MSG_SUSPICIOUS_DESTINATION',
+            'traffic_limit': 'BAN_MSG_TRAFFIC_LIMIT',
+            'manual': 'BAN_MSG_MANUAL',
+        }
+        template_name = template_names.get(notification_type)
+        if not template_name:
+            logger.warning('Неизвестный типизированный тип бана', notification_type=notification_type)
+            return False, f'Неизвестный тип бана: {notification_type}', None
+
+        user = await self._find_user_by_identifier(db, user_identifier)
+        if not user:
+            logger.warning('Пользователь не найден в базе данных', user_identifier=user_identifier)
+            return False, f'Пользователь не найден: {user_identifier}', None
+
+        template = getattr(settings, template_name)
+        safe_reason = html.escape(reason or 'Детали нарушения не указаны')
+        node_info = f'🖥 <b>Нода:</b> <code>{html.escape(node_name)}</code>' if node_name else ''
+        try:
+            message_text = template.format(
+                ban_minutes=ban_minutes,
+                reason=safe_reason,
+                node_info=node_info,
+            )
+        except (IndexError, KeyError, ValueError):
+            logger.exception(
+                'Некорректный шаблон уведомления о бане, использован резервный',
+                notification_type=notification_type,
+                template_name=template_name,
+            )
+            message_text = (
+                '🚫 <b>АККАУНТ ЗАБЛОКИРОВАН</b>\n\n'
+                f'{node_info}\n'
+                f'📝 <b>Детали:</b> {safe_reason}\n'
+                f'⏱ <b>Время блокировки:</b> {ban_minutes} мин\n\n'
+                '🔄 Доступ восстановится автоматически после окончания блокировки.'
+            )
+
+        if not user.telegram_id:
+            email_reason = reason or 'Нарушение правил сервиса'
+            if node_name:
+                email_reason += f' Нода: {node_name}'
+            success = await notification_delivery_service.notify_ban(user=user, reason=email_reason)
+            if success:
+                return True, 'Email уведомление отправлено', None
+            return False, 'Не удалось отправить email уведомление', None
+
+        try:
+            await self._bot.send_message(
+                chat_id=user.telegram_id,
+                text=message_text,
+                parse_mode='HTML',
+                reply_markup=get_delete_keyboard(),
+            )
+            logger.info(
+                'Типизированное уведомление о бане отправлено пользователю',
+                notification_type=notification_type,
+                username=username,
+                telegram_id=user.telegram_id,
+            )
+            return True, 'Уведомление отправлено', user.telegram_id
+        except TelegramAPIError as e:
+            logger.error(
+                'Ошибка отправки типизированного уведомления о бане',
+                notification_type=notification_type,
                 username=username,
                 telegram_id=user.telegram_id,
                 error=e,
