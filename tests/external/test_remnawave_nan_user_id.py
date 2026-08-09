@@ -1,8 +1,8 @@
-"""Regression tests for NaN/invalid panel_user_id handling.
+"""Regression tests for NaN/invalid remnawave_id handling.
 
 RemnaWave 3.0.0: panel users are identified by numeric ``id``. A JSON literal
 ``NaN`` parsed by ``json.loads`` becomes ``float('nan')``; if that leaks into
-``panel_user_id`` in the DB, URL paths like ``/api/users/nan`` are built and the
+``remnawave_id`` in the DB, URL paths like ``/api/users/nan`` are built and the
 panel rejects them with 400 "Validation failed ... received NaN". These tests
 assert the sanitizer rejects such values both when formatting requests and when
 parsing panel responses.

@@ -1346,7 +1346,7 @@ class User(Base):
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
     last_activity = Column(AwareDateTime(), default=func.now())
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
-    panel_user_id = Column(Integer, nullable=True, index=True)
+    remnawave_id = Column(BigInteger, nullable=True, unique=True, index=True)
 
     # Cabinet authentication fields
     email = Column(String(255), unique=True, nullable=True, index=True)
@@ -1549,6 +1549,12 @@ class Subscription(Base):
             unique=True,
             postgresql_where=text("tariff_id IS NOT NULL AND status IN ('active', 'trial')"),
         ),
+        # Дискриминантный индекс на панельный id. В отличие от upstream здесь он
+        # НЕ уникален: в single-tariff одна панельная учётка делится между
+        # строками subscriptions (при смене тарифа переиспользуется та же
+        # учётка), поэтому уникальность нарушалась бы на живых данных.
+        Index('ix_subscriptions_remnawave_id', 'remnawave_id'),
+        Index('ix_subscriptions_remnawave_short_uuid', 'remnawave_short_uuid'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -1585,7 +1591,7 @@ class Subscription(Base):
 
     remnawave_short_uuid = Column(String(255), nullable=True)
     remnawave_uuid = Column(String(255), nullable=True)
-    panel_user_id = Column(Integer, nullable=True, index=True)
+    remnawave_id = Column(BigInteger, nullable=True)
 
     # Grace-access ingress marker.  Only trusted status transitions set the
     # candidate timestamp; generic updated_at/webhooks must not resurrect old
@@ -1888,8 +1894,11 @@ class GraceAccessSessionModel(Base):
 
     id = Column(String(36), primary_key=True)
     subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='CASCADE'), nullable=False)
-    # Панельная идентичность сессии: в форке это uuid (Remnawave v2-style ключ).
-    remnawave_uuid = Column(String(255), nullable=False)
+    # Панельная идентичность сессии: в форке это uuid (Remnawave v2-style ключ),
+    # который панель v3 больше не возвращает, поэтому колонка теперь nullable,
+    # а новой числовой ключ живёт в remnawave_id.
+    remnawave_uuid = Column(String(255), nullable=True)
+    remnawave_id = Column(BigInteger, nullable=True, index=True)
     reason = Column(String(16), nullable=False)
     incident_key = Column(String(255), nullable=False)
     state = Column(String(16), nullable=False)

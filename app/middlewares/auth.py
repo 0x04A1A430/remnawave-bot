@@ -241,7 +241,7 @@ class AuthMiddleware(BaseMiddleware):
                                 remnawave_uuid=db_user.remnawave_uuid,
                                 description=description,
                                 telegram_id=db_user.telegram_id,
-                                user_id=db_user.panel_user_id,
+                                user_id=db_user.remnawave_id,
                             )
                         )
 
@@ -259,7 +259,7 @@ class AuthMiddleware(BaseMiddleware):
                                         remnawave_uuid=sub.remnawave_uuid,
                                         description=description,
                                         telegram_id=db_user.telegram_id,
-                                        user_id=sub.panel_user_id,
+                                        user_id=sub.remnawave_id,
                                     )
                                 )
 

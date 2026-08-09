@@ -1,15 +1,15 @@
 """
-Тест бэкфилла panel_user_id из remnawave_uuid (подготовка к RemnaWave 3.0.0).
+Тест бэкфилла remnawave_id из remnawave_uuid (подготовка к RemnaWave 3.0.0).
 
 Сервис заполняет числовой id у строк User/Subscription, у которых есть
-remnawave_uuid, но нет panel_user_id, пока панель ещё в v2-режиме. В v3-режиме
+remnawave_uuid, но нет remnawave_id, пока панель ещё в v2-режиме. В v3-режиме
 (REMNAWAVE_USE_USER_ID) — no-op.
 """
 
 from unittest.mock import AsyncMock, MagicMock
 
 from app.config import settings
-from app.services import panel_user_id_backfill_service as backfill
+from app.services import remnawave_id_backfill_service as backfill
 
 
 def _patch_targets(monkeypatch, targets):
@@ -17,7 +17,7 @@ def _patch_targets(monkeypatch, targets):
 
 
 def _patch_resolver(monkeypatch, mapping):
-    monkeypatch.setattr(backfill, '_resolve_panel_user_ids', AsyncMock(return_value=mapping))
+    monkeypatch.setattr(backfill, '_resolve_remnawave_ids', AsyncMock(return_value=mapping))
 
 
 def _patch_db(monkeypatch):
@@ -39,7 +39,7 @@ async def test_v3_mode_is_noop(monkeypatch):
     monkeypatch.setattr(settings, 'REMNAWAVE_USE_USER_ID', True)
     monkeypatch.setattr(backfill, '_collect_targets', AsyncMock(side_effect=AssertionError))
 
-    stats = await backfill.backfill_panel_user_ids()
+    stats = await backfill.backfill_remnawave_ids()
 
     assert stats == {'checked': 0, 'backfilled': 0, 'not_found': 0, 'errors': 0}
     backfill._collect_targets.assert_not_awaited()
@@ -50,7 +50,7 @@ async def test_no_targets_is_noop(monkeypatch):
     _patch_targets(monkeypatch, [])
     db = _patch_db(monkeypatch)
 
-    stats = await backfill.backfill_panel_user_ids()
+    stats = await backfill.backfill_remnawave_ids()
 
     assert stats['checked'] == 0
     db.commit.assert_not_awaited()
@@ -68,7 +68,7 @@ async def test_backfills_user_and_subscription_rows(monkeypatch):
     _patch_resolver(monkeypatch, {'uuid-user': 1001, 'uuid-sub': 2002})
     db = _patch_db(monkeypatch)
 
-    stats = await backfill.backfill_panel_user_ids()
+    stats = await backfill.backfill_remnawave_ids()
 
     assert stats == {'checked': 2, 'backfilled': 2, 'not_found': 0, 'errors': 0}
     db.commit.assert_awaited_once()
@@ -90,9 +90,9 @@ async def test_dedupe_shared_uuid_resolves_once(monkeypatch):
     _patch_resolver(monkeypatch, {'shared-uuid': 1001})
     db = _patch_db(monkeypatch)
 
-    stats = await backfill.backfill_panel_user_ids()
+    stats = await backfill.backfill_remnawave_ids()
 
-    backfill._resolve_panel_user_ids.assert_awaited_once_with(['shared-uuid'])
+    backfill._resolve_remnawave_ids.assert_awaited_once_with(['shared-uuid'])
     assert stats == {'checked': 3, 'backfilled': 3, 'not_found': 0, 'errors': 0}
     assert db.execute.await_count == 3
 
@@ -109,14 +109,14 @@ async def test_unresolvable_uuid_is_skipped(monkeypatch):
     _patch_resolver(monkeypatch, {'ok-uuid': 77, 'gone-uuid': None})
     db = _patch_db(monkeypatch)
 
-    stats = await backfill.backfill_panel_user_ids()
+    stats = await backfill.backfill_remnawave_ids()
 
     assert stats == {'checked': 2, 'backfilled': 1, 'not_found': 1, 'errors': 0}
     db.commit.assert_awaited_once()
     assert db.execute.await_count == 1
 
 
-async def test_nan_panel_user_id_is_skipped(monkeypatch):
+async def test_nan_remnawave_id_is_skipped(monkeypatch):
     _patch_v2(monkeypatch)
     _patch_targets(
         monkeypatch,
@@ -128,7 +128,7 @@ async def test_nan_panel_user_id_is_skipped(monkeypatch):
     _patch_resolver(monkeypatch, {'ok-uuid': 77, 'nan-uuid': float('nan')})
     db = _patch_db(monkeypatch)
 
-    stats = await backfill.backfill_panel_user_ids()
+    stats = await backfill.backfill_remnawave_ids()
 
     assert stats == {'checked': 2, 'backfilled': 1, 'not_found': 1, 'errors': 0}
     db.commit.assert_awaited_once()
@@ -163,7 +163,7 @@ async def test_collect_targets_filters_nulls(monkeypatch):
     ]
 
 
-async def test_resolve_panel_user_ids_uses_get_user_by_uuid(monkeypatch):
+async def test_resolve_remnawave_ids_uses_get_user_by_uuid(monkeypatch):
     api = AsyncMock()
     api.get_user_by_uuid = AsyncMock(side_effect=lambda uuid: _panel_user(uuid))
     acm = MagicMock()
@@ -173,7 +173,7 @@ async def test_resolve_panel_user_ids_uses_get_user_by_uuid(monkeypatch):
     service.get_api_client = MagicMock(return_value=acm)
     monkeypatch.setattr(backfill, 'RemnaWaveService', MagicMock(return_value=service))
 
-    resolved = await backfill._resolve_panel_user_ids(['u-a', 'u-gone'])
+    resolved = await backfill._resolve_remnawave_ids(['u-a', 'u-gone'])
 
     assert resolved == {'u-a': 1001, 'u-gone': None}
     assert api.get_user_by_uuid.await_count == 2
@@ -181,7 +181,7 @@ async def test_resolve_panel_user_ids_uses_get_user_by_uuid(monkeypatch):
     api.get_user_by_uuid.assert_any_await('u-gone')
 
 
-async def test_resolve_panel_user_ids_survives_api_error(monkeypatch):
+async def test_resolve_remnawave_ids_survives_api_error(monkeypatch):
     api = AsyncMock()
     api.get_user_by_uuid = AsyncMock(side_effect=RuntimeError('panel down'))
     acm = MagicMock()
@@ -191,7 +191,7 @@ async def test_resolve_panel_user_ids_survives_api_error(monkeypatch):
     service.get_api_client = MagicMock(return_value=acm)
     monkeypatch.setattr(backfill, 'RemnaWaveService', MagicMock(return_value=service))
 
-    resolved = await backfill._resolve_panel_user_ids(['u-a'])
+    resolved = await backfill._resolve_remnawave_ids(['u-a'])
 
     assert resolved == {'u-a': None}
 

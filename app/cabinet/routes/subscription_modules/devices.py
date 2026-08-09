@@ -67,14 +67,14 @@ def _resolve_panel_uuid(subscription: Subscription | None, user: User) -> str | 
 
 
 def _resolve_panel_identifiers(subscription: Subscription | None, user: User) -> tuple[str | None, int | None]:
-    """Resolve (panel uuid, panel_user_id) — v3.0.0 users are keyed by numeric id.
+    """Resolve (panel uuid, remnawave_id) — v3.0.0 users are keyed by numeric id.
 
     Mirrors _resolve_panel_uuid: per-subscription in multi-tariff, user-level
-    otherwise. In v3 the uuid field is gone, so panel_user_id is the primary key.
+    otherwise. In v3 the uuid field is gone, so remnawave_id is the primary key.
     """
     if settings.is_multi_tariff_enabled() and subscription is not None:
-        return subscription.remnawave_uuid, subscription.panel_user_id
-    return user.remnawave_uuid, user.panel_user_id
+        return subscription.remnawave_uuid, subscription.remnawave_id
+    return user.remnawave_uuid, user.remnawave_id
 
 
 @router.post('/devices')
@@ -930,8 +930,8 @@ async def get_devices(
             detail='No subscription found',
         )
 
-    _puuid, _panel_user_id = _resolve_panel_identifiers(subscription, user)
-    if not _puuid and _panel_user_id is None:
+    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
+    if not _puuid and _remnawave_id is None:
         return {
             'devices': [],
             'total': 0,
@@ -941,7 +941,7 @@ async def get_devices(
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            response = await api.get_user_devices_all(_puuid, user_id=_panel_user_id)
+            response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
 
             devices_list = response.get('devices', [])
             # Подтягиваем все локальные alias'ы юзера одним запросом — дешевле
@@ -1077,8 +1077,8 @@ async def delete_device(
             detail='No subscription found',
         )
 
-    _puuid, _panel_user_id = _resolve_panel_identifiers(subscription, user)
-    if not _puuid and _panel_user_id is None:
+    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
+    if not _puuid and _remnawave_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='User UUID not found',
@@ -1087,7 +1087,7 @@ async def delete_device(
     try:
         service = RemnaWaveService()
         async with service.get_api_client() as api:
-            delete_data = api._fmt_hwid_delete_payload(_puuid, _panel_user_id, hwid)
+            delete_data = api._fmt_hwid_delete_payload(_puuid, _remnawave_id, hwid)
             await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
 
             return {
@@ -1121,8 +1121,8 @@ async def delete_all_devices(
             detail='No subscription found',
         )
 
-    _puuid, _panel_user_id = _resolve_panel_identifiers(subscription, user)
-    if not _puuid and _panel_user_id is None:
+    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
+    if not _puuid and _remnawave_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='User UUID not found',
@@ -1132,7 +1132,7 @@ async def delete_all_devices(
         service = RemnaWaveService()
         async with service.get_api_client() as api:
             # Get all devices first
-            response = await api.get_user_devices_all(_puuid, user_id=_panel_user_id)
+            response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
 
             if not response:
                 return {
@@ -1154,7 +1154,7 @@ async def delete_all_devices(
                 device_hwid = device.get('hwid')
                 if device_hwid:
                     try:
-                        delete_data = api._fmt_hwid_delete_payload(_puuid, _panel_user_id, device_hwid)
+                        delete_data = api._fmt_hwid_delete_payload(_puuid, _remnawave_id, device_hwid)
                         await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
                         deleted_count += 1
                     except Exception as device_error:
@@ -1232,12 +1232,12 @@ async def get_device_reduction_info(
 
     # Get connected devices count
     connected_devices_count = 0
-    _puuid, _panel_user_id = _resolve_panel_identifiers(subscription, user)
-    if _puuid or _panel_user_id is not None:
+    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
+    if _puuid or _remnawave_id is not None:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api.get_user_devices_all(_puuid, user_id=_panel_user_id)
+                response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
                 if response:
                     connected_devices_count = response.get('total', 0)
         except Exception as e:
@@ -1321,12 +1321,12 @@ async def reduce_devices(
     # Get connected devices and remove excess (last connected ones)
     connected_devices_count = 0
     devices_removed_count = 0
-    _puuid, _panel_user_id = _resolve_panel_identifiers(subscription, user)
-    if _puuid or _panel_user_id is not None:
+    _puuid, _remnawave_id = _resolve_panel_identifiers(subscription, user)
+    if _puuid or _remnawave_id is not None:
         try:
             service = RemnaWaveService()
             async with service.get_api_client() as api:
-                response = await api.get_user_devices_all(_puuid, user_id=_panel_user_id)
+                response = await api.get_user_devices_all(_puuid, user_id=_remnawave_id)
                 if response:
                     devices_list = response.get('devices', [])
                     connected_devices_count = len(devices_list)
@@ -1353,7 +1353,7 @@ async def reduce_devices(
                             device_hwid = device.get('hwid')
                             if device_hwid:
                                 try:
-                                    delete_data = api._fmt_hwid_delete_payload(_puuid, _panel_user_id, device_hwid)
+                                    delete_data = api._fmt_hwid_delete_payload(_puuid, _remnawave_id, device_hwid)
                                     await api._make_request(
                                         'POST',
                                         '/api/hwid/devices/delete',

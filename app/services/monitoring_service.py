@@ -972,7 +972,7 @@ class MonitoringService:
                 # Внешний сквад НЕ пересылаем в рутинном sync — стейловый UUID
                 # вызывает FK violation → A039. Назначается при создании подписки.
 
-                update_kwargs['user_id'] = subscription.panel_user_id
+                update_kwargs['user_id'] = subscription.remnawave_id
                 from app.services.grace_access_runtime import update_panel_user_grace_safe
 
                 updated_user = await update_panel_user_grace_safe(

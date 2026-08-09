@@ -262,8 +262,8 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
     return user
 
 
-async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> User | None:
-    """Находит пользователя по panel_user_id (числовой ID из панели Remnawave)."""
+async def get_user_by_remnawave_id(db: AsyncSession, remnawave_id: int) -> User | None:
+    """Находит пользователя по remnawave_id (числовой ID из панели Remnawave)."""
     result = await db.execute(
         select(User)
         .options(
@@ -271,11 +271,11 @@ async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> Use
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
-        .where(User.panel_user_id == panel_user_id)
+        .where(User.remnawave_id == remnawave_id)
     )
     user = result.scalar_one_or_none()
 
-    # Multi-tariff: panel_user_id lives on Subscription, not User
+    # Multi-tariff: remnawave_id lives on Subscription, not User
     if not user and settings.is_multi_tariff_enabled():
         from app.database.models import Subscription as _Subscription
 
@@ -284,7 +284,7 @@ async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> Use
             .options(
                 selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
             )
-            .where(_Subscription.panel_user_id == panel_user_id)
+            .where(_Subscription.remnawave_id == remnawave_id)
         )
         sub = sub_result.scalar_one_or_none()
         if sub and sub.user:

@@ -205,49 +205,49 @@ async def _get_remnawave_api() -> AsyncIterator[RemnaWaveAPI]:
         yield api
 
 
-async def _delete_remnawave_user_with_fallback(remnawave_uuid: str, panel_user_id: int | None = None) -> None:
+async def _delete_remnawave_user_with_fallback(remnawave_uuid: str, remnawave_id: int | None = None) -> None:
     """Удаляет пользователя из RemnaWave. При неудаче — деактивирует как fallback."""
     try:
         async with _get_remnawave_api() as api:
-            deleted = await api.delete_user(remnawave_uuid, user_id=panel_user_id)
+            deleted = await api.delete_user(remnawave_uuid, user_id=remnawave_id)
             if deleted:
                 logger.info(
                     'RemnaWave пользователь удалён при мерже',
                     remnawave_uuid=remnawave_uuid,
-                    panel_user_id=panel_user_id,
+                    remnawave_id=remnawave_id,
                 )
             else:
                 logger.warning(
                     'RemnaWave delete_user вернул False, пробуем disable',
                     remnawave_uuid=remnawave_uuid,
-                    panel_user_id=panel_user_id,
+                    remnawave_id=remnawave_id,
                 )
-                await api.disable_user(remnawave_uuid, user_id=panel_user_id)
+                await api.disable_user(remnawave_uuid, user_id=remnawave_id)
                 logger.info(
                     'RemnaWave пользователь деактивирован как fallback при мерже',
                     remnawave_uuid=remnawave_uuid,
-                    panel_user_id=panel_user_id,
+                    remnawave_id=remnawave_id,
                 )
     except Exception:
         logger.warning(
             'Не удалось удалить RemnaWave пользователя, пробуем disable',
             remnawave_uuid=remnawave_uuid,
-            panel_user_id=panel_user_id,
+            remnawave_id=remnawave_id,
             exc_info=True,
         )
         try:
             async with _get_remnawave_api() as api:
-                await api.disable_user(remnawave_uuid, user_id=panel_user_id)
+                await api.disable_user(remnawave_uuid, user_id=remnawave_id)
                 logger.info(
                     'RemnaWave пользователь деактивирован как fallback при мерже',
                     remnawave_uuid=remnawave_uuid,
-                    panel_user_id=panel_user_id,
+                    remnawave_id=remnawave_id,
                 )
         except Exception:
             logger.error(
                 'Не удалось ни удалить, ни деактивировать RemnaWave пользователя',
                 remnawave_uuid=remnawave_uuid,
-                panel_user_id=panel_user_id,
+                remnawave_id=remnawave_id,
                 exc_info=True,
             )
 
@@ -255,7 +255,7 @@ async def _delete_remnawave_user_with_fallback(remnawave_uuid: str, panel_user_i
 async def flush_remnawave_deletions(remnawave_users: list[tuple[str, int | None]]) -> None:
     """Удаляет (или деактивирует как fallback) пользователей RemnaWave.
 
-    Каждый элемент — кортеж (remnawave_uuid, panel_user_id): в v3.0.0 uuid в
+    Каждый элемент — кортеж (remnawave_uuid, remnawave_id): в v3.0.0 uuid в
     объекте пользователя отсутствует, поэтому удаление выполняется по числовому
     id, а uuid может быть пустым.
 
@@ -264,8 +264,8 @@ async def flush_remnawave_deletions(remnawave_users: list[tuple[str, int | None]
     чтобы упавший мерж не оставил удалённого юзера в панели при rollback.
     Каждое удаление изолировано — сбой одного не мешает остальным.
     """
-    for remnawave_uuid, panel_user_id in remnawave_users:
-        await _delete_remnawave_user_with_fallback(remnawave_uuid, panel_user_id)
+    for remnawave_uuid, remnawave_id in remnawave_users:
+        await _delete_remnawave_user_with_fallback(remnawave_uuid, remnawave_id)
 
 
 async def _sync_transferred_subscriptions_to_panel(
@@ -465,11 +465,11 @@ async def _handle_subscription_merge(
 
     # Подписка только у primary — удаляем RemnaWave юзера secondary (если есть)
     if has_primary_sub and not has_secondary_sub:
-        _sec_panel_id = getattr(secondary, 'panel_user_id', None)
+        _sec_panel_id = getattr(secondary, 'remnawave_id', None)
         if secondary.remnawave_uuid or _sec_panel_id is not None:
             deferred_remnawave_deletions.append((secondary.remnawave_uuid, _sec_panel_id))
             secondary.remnawave_uuid = None
-            secondary.panel_user_id = None
+            secondary.remnawave_id = None
         logger.info(
             'Мерж подписок: оставлена подписка primary, secondary не имел подписки',
             primary_id=primary.id,
@@ -482,15 +482,15 @@ async def _handle_subscription_merge(
         assert secondary_sub is not None
         secondary_sub.user_id = primary.id
         # Переносим remnawave_uuid (clear→flush→assign — unique constraint safety)
-        _sec_panel_id = getattr(secondary, 'panel_user_id', None)
+        _sec_panel_id = getattr(secondary, 'remnawave_id', None)
         if secondary.remnawave_uuid or _sec_panel_id is not None:
             uuid_to_transfer = secondary.remnawave_uuid
-            panel_user_id_to_transfer = _sec_panel_id
+            remnawave_id_to_transfer = _sec_panel_id
             secondary.remnawave_uuid = None
-            secondary.panel_user_id = None
+            secondary.remnawave_id = None
             await db.flush()
             primary.remnawave_uuid = uuid_to_transfer
-            primary.panel_user_id = panel_user_id_to_transfer
+            primary.remnawave_id = remnawave_id_to_transfer
         await db.flush()
         logger.info(
             'Мерж подписок: перенесена подписка secondary на primary',
@@ -505,11 +505,11 @@ async def _handle_subscription_merge(
 
     if keep_subscription_from == 'secondary':
         # Удаляем подписку primary из RemnaWave
-        _pri_panel_id = getattr(primary, 'panel_user_id', None)
+        _pri_panel_id = getattr(primary, 'remnawave_id', None)
         if primary.remnawave_uuid or _pri_panel_id is not None:
             deferred_remnawave_deletions.append((primary.remnawave_uuid, _pri_panel_id))
             primary.remnawave_uuid = None
-            primary.panel_user_id = None
+            primary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete: CASCADE
         # снесёт локальную запись, и Platega продолжила бы списывать в никуда.
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
@@ -525,15 +525,15 @@ async def _handle_subscription_merge(
         # Переносим подписку secondary на primary
         secondary_sub.user_id = primary.id
         # Переносим remnawave_uuid (clear→flush→assign — unique constraint safety)
-        _sec_panel_id = getattr(secondary, 'panel_user_id', None)
+        _sec_panel_id = getattr(secondary, 'remnawave_id', None)
         if secondary.remnawave_uuid or _sec_panel_id is not None:
             uuid_to_transfer = secondary.remnawave_uuid
-            panel_user_id_to_transfer = _sec_panel_id
+            remnawave_id_to_transfer = _sec_panel_id
             secondary.remnawave_uuid = None
-            secondary.panel_user_id = None
+            secondary.remnawave_id = None
             await db.flush()
             primary.remnawave_uuid = uuid_to_transfer
-            primary.panel_user_id = panel_user_id_to_transfer
+            primary.remnawave_id = remnawave_id_to_transfer
         # Flush сразу — гарантируем, что DELETE предшествует UPDATE (unique constraint на subscription.user_id)
         await db.flush()
         logger.info(
@@ -544,11 +544,11 @@ async def _handle_subscription_merge(
     else:
         # keep_subscription_from == 'primary' (по умолчанию)
         # Удаляем подписку secondary из RemnaWave
-        _sec_panel_id = getattr(secondary, 'panel_user_id', None)
+        _sec_panel_id = getattr(secondary, 'remnawave_id', None)
         if secondary.remnawave_uuid or _sec_panel_id is not None:
             deferred_remnawave_deletions.append((secondary.remnawave_uuid, _sec_panel_id))
             secondary.remnawave_uuid = None
-            secondary.panel_user_id = None
+            secondary.remnawave_id = None
         # СБП-автопродление Platega удаляемой подписки отменяем ДО delete (см. выше).
         from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
         from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe

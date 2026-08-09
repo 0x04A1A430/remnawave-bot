@@ -32,7 +32,7 @@ from app.services.grace_access_service import (
 
 GIB = 1024**3
 # The fork keys every session/panel operation by the uuid string identity
-# (no numeric id, no coerce_panel_user_id / RemnaWaveInvalidUserIdError).
+# (no numeric id, no coerce_remnawave_id / RemnaWaveInvalidUserIdError).
 PANEL_UUID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 # Historical value of the remnawave_uuid column found only in pre-port rows;
 # the fork keeps it as an audit trace and never uses it as a lookup key.

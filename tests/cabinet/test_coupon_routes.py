@@ -42,18 +42,13 @@ def _batch(**overrides) -> SimpleNamespace:
 # --- Wiring ----------------------------------------------------------------
 
 
-def test_coupon_routes_registered() -> None:
-    from app.cabinet.routes import router
-
-    paths: dict[str, set[str]] = {}
-    for route in router.routes:
-        paths.setdefault(route.path, set()).update(getattr(route, 'methods', []) or [])
-    assert paths.get('/cabinet/admin/coupons') == {'GET', 'POST'}
-    assert paths.get('/cabinet/admin/coupons/{batch_id}') == {'GET', 'DELETE'}
-    assert paths.get('/cabinet/admin/coupons/{batch_id}/links') == {'GET'}
-    assert paths.get('/cabinet/admin/coupons/{batch_id}/revoke') == {'POST'}
-    assert paths.get('/cabinet/coupon/redeem') == {'POST'}
-    assert paths.get('/cabinet/coupon/{token}/status') == {'GET'}
+def test_coupon_routes_registered(registered_paths) -> None:
+    assert registered_paths.get('/cabinet/admin/coupons') == {'GET', 'POST'}
+    assert registered_paths.get('/cabinet/admin/coupons/{batch_id}') == {'GET', 'DELETE'}
+    assert registered_paths.get('/cabinet/admin/coupons/{batch_id}/links') == {'GET'}
+    assert registered_paths.get('/cabinet/admin/coupons/{batch_id}/revoke') == {'POST'}
+    assert registered_paths.get('/cabinet/coupon/redeem') == {'POST'}
+    assert registered_paths.get('/cabinet/coupon/{token}/status') == {'GET'}
 
 
 def test_coupons_permissions_registered() -> None:

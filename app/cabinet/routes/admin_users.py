@@ -375,7 +375,7 @@ async def _sync_subscription_to_panel(
             if panel_uuid:
                 existing_user = await api.get_user_by_uuid(
                     panel_uuid,
-                    user_id=subscription.panel_user_id if settings.is_multi_tariff_enabled() else user.panel_user_id,
+                    user_id=subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id,
                 )
                 if not existing_user:
                     logger.warning(
@@ -435,9 +435,7 @@ async def _sync_subscription_to_panel(
                     updated_panel_user = await update_panel_user_grace_safe(
                         api,
                         subscription.id,
-                        user_id=subscription.panel_user_id
-                        if settings.is_multi_tariff_enabled()
-                        else user.panel_user_id,
+                        user_id=subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id,
                         **update_kwargs,
                     )
                     subscription.subscription_url = updated_panel_user.subscription_url
@@ -497,9 +495,7 @@ async def _sync_subscription_to_panel(
                 try:
                     await api.reset_user_traffic(
                         _reset_uuid,
-                        user_id=subscription.panel_user_id
-                        if settings.is_multi_tariff_enabled()
-                        else user.panel_user_id,
+                        user_id=subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id,
                     )
                     changes['traffic_reset'] = True
                     reason_text = f' ({reset_traffic_reason})' if reset_traffic_reason else ''
@@ -916,10 +912,10 @@ async def get_user_panel_info(
 
                 sub = await get_subscription_by_id_for_user(db, subscription_id, user_id)
                 if sub and sub.remnawave_uuid:
-                    panel_user = await api.get_user_by_uuid(sub.remnawave_uuid, user_id=sub.panel_user_id)
+                    panel_user = await api.get_user_by_uuid(sub.remnawave_uuid, user_id=sub.remnawave_id)
             # Single-tariff: user-level UUID
             elif user.remnawave_uuid:
-                panel_user = await api.get_user_by_uuid(user.remnawave_uuid, user_id=user.panel_user_id)
+                panel_user = await api.get_user_by_uuid(user.remnawave_uuid, user_id=user.remnawave_id)
 
             # Fallback: search by telegram_id (single-tariff only)
             if not panel_user and not settings.is_multi_tariff_enabled() and user.telegram_id:
@@ -1010,9 +1006,9 @@ async def get_subscription_request_history(
         async with service.get_api_client() as api:
             result = await api.get_subscription_request_history(
                 panel_uuid,
-                user_id=sub.panel_user_id
+                user_id=sub.remnawave_id
                 if (settings.is_multi_tariff_enabled() and subscription_id)
-                else user.panel_user_id,
+                else user.remnawave_id,
                 offset=offset,
                 limit=limit,
             )
@@ -1067,9 +1063,9 @@ async def get_user_node_usage(
             # Get user's accessible nodes (1 API call)
             accessible_nodes = await api.get_user_accessible_nodes(
                 _panel_uuid,
-                user_id=sub.panel_user_id
+                user_id=sub.remnawave_id
                 if (settings.is_multi_tariff_enabled() and subscription_id)
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
 
             # Get user bandwidth stats (1 API call)
@@ -1078,9 +1074,9 @@ async def get_user_node_usage(
                 _panel_uuid,
                 start_str,
                 end_str,
-                user_id=sub.panel_user_id
+                user_id=sub.remnawave_id
                 if (settings.is_multi_tariff_enabled() and subscription_id)
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
 
             categories: list[str] = []
@@ -2474,9 +2470,9 @@ async def get_user_devices(
         async with service.get_api_client() as api:
             response = await api.get_user_devices_all(
                 _dev_uuid,
-                user_id=sub.panel_user_id
+                user_id=sub.remnawave_id
                 if (settings.is_multi_tariff_enabled() and subscription_id)
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
 
             # Aliases per-(user, hwid) — единый дикт на весь список устройств.
@@ -2558,9 +2554,9 @@ async def delete_user_device(
             success = await api.remove_device(
                 _uuid,
                 hwid,
-                user_id=sub.panel_user_id
+                user_id=sub.remnawave_id
                 if (settings.is_multi_tariff_enabled() and subscription_id)
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
 
         if success:
@@ -2662,9 +2658,9 @@ async def reset_user_devices(
         async with service.get_api_client() as api:
             devices_info = await api.get_user_devices_all(
                 _rst_uuid,
-                user_id=sub.panel_user_id
+                user_id=sub.remnawave_id
                 if (settings.is_multi_tariff_enabled() and subscription_id)
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
             devices = devices_info.get('devices', [])
             total = len(devices)
@@ -2680,9 +2676,9 @@ async def reset_user_devices(
                         await api.remove_device(
                             _rst_uuid,
                             device_hwid,
-                            user_id=sub.panel_user_id
+                            user_id=sub.remnawave_id
                             if (settings.is_multi_tariff_enabled() and subscription_id)
-                            else user.panel_user_id,
+                            else user.remnawave_id,
                         )
                         deleted += 1
                     except Exception:
@@ -3286,9 +3282,9 @@ async def get_user_sync_status(
                 if effective_uuid:
                     panel_user = await api.get_user_by_uuid(
                         effective_uuid,
-                        user_id=active_sub.panel_user_id
+                        user_id=active_sub.remnawave_id
                         if (settings.is_multi_tariff_enabled() and active_sub and active_sub.remnawave_uuid)
-                        else user.panel_user_id,
+                        else user.remnawave_id,
                     )
 
                 # Fallback: search by telegram_id
@@ -3458,7 +3454,7 @@ async def sync_user_from_panel(
                 if selected_sub and selected_sub.remnawave_uuid:
                     # Specific subscription requested — use its UUID directly
                     panel_user = await api.get_user_by_uuid(
-                        selected_sub.remnawave_uuid, user_id=selected_sub.panel_user_id
+                        selected_sub.remnawave_uuid, user_id=selected_sub.remnawave_id
                     )
                 elif selected_sub and not selected_sub.remnawave_uuid:
                     # The subscription lost its panel UUID (e.g. a spurious user.deleted
@@ -3502,13 +3498,13 @@ async def sync_user_from_panel(
                         panel_user = await api.get_user_by_uuid(
                             _uuid,
                             user_id=next(
-                                (s.panel_user_id for s in from_subs if s.remnawave_uuid == _uuid), user.panel_user_id
+                                (s.remnawave_id for s in from_subs if s.remnawave_uuid == _uuid), user.remnawave_id
                             ),
                         )
                         if panel_user:
                             break
             elif user.remnawave_uuid:
-                panel_user = await api.get_user_by_uuid(user.remnawave_uuid, user_id=user.panel_user_id)
+                panel_user = await api.get_user_by_uuid(user.remnawave_uuid, user_id=user.remnawave_id)
 
             if not panel_user and user.telegram_id:
                 panel_users = await api.get_user_by_telegram_id(user.telegram_id)
@@ -3847,7 +3843,7 @@ async def sync_user_to_panel(
             # Validate existing UUID
             if panel_uuid:
                 existing_user = await api.get_user_by_uuid(
-                    panel_uuid, user_id=sub.panel_user_id if settings.is_multi_tariff_enabled() else user.panel_user_id
+                    panel_uuid, user_id=sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
                 )
                 if not existing_user:
                     logger.warning(
@@ -3914,7 +3910,7 @@ async def sync_user_to_panel(
                     await update_panel_user_grace_safe(
                         api,
                         sub.id,
-                        user_id=sub.panel_user_id if settings.is_multi_tariff_enabled() else user.panel_user_id,
+                        user_id=sub.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id,
                         **update_kwargs,
                     )
                     action = 'updated'

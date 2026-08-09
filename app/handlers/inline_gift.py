@@ -220,9 +220,9 @@ async def _reset_panel_traffic(subscription, user) -> None:
         async with remnawave_service.get_api_client() as api:
             await api.reset_user_traffic(
                 remnawave_uuid,
-                user_id=subscription.panel_user_id
+                user_id=subscription.remnawave_id
                 if settings.is_multi_tariff_enabled() and subscription
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
     except Exception as e:
         logger.warning('Не удалось сбросить трафик RemnaWave (подарок)', error=e)

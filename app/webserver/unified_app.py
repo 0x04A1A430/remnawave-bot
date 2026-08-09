@@ -23,18 +23,18 @@ from . import payments, telegram
 logger = structlog.get_logger(__name__)
 
 
-async def _spawn_panel_user_id_backfill() -> None:
-    """Запускает бэкфилл panel_user_id в фоне, не блокируя стартап.
+async def _spawn_remnawave_id_backfill() -> None:
+    """Запускает бэкфилл remnawave_id в фоне, не блокируя стартап.
 
     Пока панель на v2.8.1, собирает числовой id по remnawave_uuid у строк,
-    где panel_user_id ещё не заполнен, чтобы обновление на RemnaWave 3.0.0
+    где remnawave_id ещё не заполнен, чтобы обновление на RemnaWave 3.0.0
     (uuid → id) прошло без ручной миграции данных. В v3-режиме — no-op.
     """
     import asyncio
 
-    from app.services.panel_user_id_backfill_service import backfill_panel_user_ids
+    from app.services.remnawave_id_backfill_service import backfill_remnawave_ids
 
-    asyncio.create_task(backfill_panel_user_ids(), name='panel-user-id-backfill')
+    asyncio.create_task(backfill_remnawave_ids(), name='panel-user-id-backfill')
 
 
 def _attach_docs_alias(app: FastAPI, docs_url: str | None) -> None:
@@ -269,7 +269,7 @@ def create_unified_app(
     startup_handlers.append(disposable_email_service.start)
     shutdown_handlers.append(disposable_email_service.stop)
 
-    startup_handlers.append(_spawn_panel_user_id_backfill)
+    startup_handlers.append(_spawn_remnawave_id_backfill)
 
     miniapp_mounted, miniapp_path = _mount_miniapp_static(app)
     _mount_uploads_static(app)

@@ -1,4 +1,3 @@
-
 from app.services.platega_service import PlategaService
 
 

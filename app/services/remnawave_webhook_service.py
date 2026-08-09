@@ -34,7 +34,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import (
     get_user_by_id,
-    get_user_by_panel_user_id,
+    get_user_by_remnawave_id,
     get_user_by_remnawave_uuid,
     get_user_by_telegram_id,
 )
@@ -790,13 +790,13 @@ class RemnaWaveWebhookService:
 
         # Extract Remnawave UUID from payload (used for subscription lookup in multi-tariff)
         remnawave_uuid = data.get('uuid') or data.get('userUuid')
-        panel_user_id = data.get('userId')
+        remnawave_id = data.get('userId')
         if not remnawave_uuid:
             nested_user = data.get('user')
             if isinstance(nested_user, dict):
                 remnawave_uuid = nested_user.get('uuid')
-                if panel_user_id is None:
-                    panel_user_id = nested_user.get('userId')
+                if remnawave_id is None:
+                    remnawave_id = nested_user.get('userId')
 
         # Try top-level telegramId first
         telegram_id = data.get('telegramId')
@@ -811,8 +811,8 @@ class RemnaWaveWebhookService:
             user = await get_user_by_remnawave_uuid(db, remnawave_uuid)
 
         # Try top-level userId (v3.0.0+)
-        if not user and panel_user_id is not None:
-            user = await get_user_by_panel_user_id(db, panel_user_id)
+        if not user and remnawave_id is not None:
+            user = await get_user_by_remnawave_id(db, remnawave_id)
 
         # Try nested user object (e.g. user_hwid_devices events)
         if not user:
@@ -831,7 +831,7 @@ class RemnaWaveWebhookService:
                 if not user:
                     nested_pid = nested_user.get('userId')
                     if nested_pid is not None:
-                        user = await get_user_by_panel_user_id(db, nested_pid)
+                        user = await get_user_by_remnawave_id(db, nested_pid)
 
         # Multi-tariff: try finding user through subscription's remnawave_uuid
         if not user and remnawave_uuid and settings.is_multi_tariff_enabled():
@@ -1551,7 +1551,7 @@ class RemnaWaveWebhookService:
 
             # Always clear stale UUID — panel user was deleted
             subscription.remnawave_uuid = None
-            subscription.panel_user_id = None
+            subscription.remnawave_id = None
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
@@ -1559,7 +1559,7 @@ class RemnaWaveWebhookService:
         if not settings.is_multi_tariff_enabled():
             if user.remnawave_uuid:
                 user.remnawave_uuid = None
-                user.panel_user_id = None
+                user.remnawave_id = None
         elif subscription is None:
             panel_uuid = data.get('uuid') or data.get('userUuid')
             if panel_uuid:
@@ -1568,7 +1568,7 @@ class RemnaWaveWebhookService:
                     if getattr(sub, 'remnawave_uuid', None) == panel_uuid:
                         sub.remnawave_uuid = None
                         sub.remnawave_short_uuid = None
-                        sub.panel_user_id = None
+                        sub.remnawave_id = None
                         break
 
         # Deactivate sibling subscriptions whose panel user also no longer exists.
@@ -1610,7 +1610,7 @@ class RemnaWaveWebhookService:
             try:
                 async with subscription_service.get_api_client() as api:
                     panel_user = await api.get_user_by_uuid(
-                        sibling_uuid, user_id=other_sub.panel_user_id if other_sub else None
+                        sibling_uuid, user_id=other_sub.remnawave_id if other_sub else None
                     )
             except Exception as exc:
                 logger.warning(
@@ -1630,7 +1630,7 @@ class RemnaWaveWebhookService:
             other_sub.updated_at = now
             if settings.is_multi_tariff_enabled():
                 other_sub.remnawave_uuid = None
-                other_sub.panel_user_id = None
+                other_sub.remnawave_id = None
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == other_sub.id))
             logger.info(
                 'Webhook user.deleted: deactivated sibling subscription (panel user gone)',
