@@ -1,7 +1,7 @@
 """Add panel_user_id to User and Subscription for Remnawave v3.0.0 migration
 
-Revision ID: 0099
-Revises: 0098
+Revision ID: 9105
+Revises: 9104
 Create Date: 2026-07-15
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0099"
-down_revision: Union[str, None] = "0098"
+revision: str = "9105"
+down_revision: Union[str, None] = "9104"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

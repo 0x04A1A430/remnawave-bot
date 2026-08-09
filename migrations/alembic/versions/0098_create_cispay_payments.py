@@ -4,8 +4,8 @@ CisPay (api.cispay.app) H2H merchant payments. Store per-payment
 bookkeeping (order_id/cispay_payment_id, amounts in kopeks, status)
 so webhooks can be reconciled against the internal Transaction.
 
-Revision ID: 0111
-Revises: 0110
+Revision ID: 0098
+Revises: 0097
 Create Date: 2026-08-07
 
 """
@@ -15,8 +15,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '0111'
-down_revision: Union[str, None] = '0110'
+revision: str = '0098'
+down_revision: Union[str, None] = '0097'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

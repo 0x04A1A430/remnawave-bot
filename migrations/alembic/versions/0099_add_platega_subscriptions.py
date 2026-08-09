@@ -1,14 +1,14 @@
 """add platega_subscriptions
 
-Revision ID: 0106
-Revises: 0105
+Revision ID: 0099
+Revises: 0098
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = '0106'
-down_revision = '0105'
+revision = '0099'
+down_revision = '0098'
 branch_labels = None
 depends_on = None
 
