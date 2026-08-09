@@ -719,27 +719,7 @@ def get_main_menu_keyboard(
             )
         )
 
-        # Добавляем кнопку докупки трафика для лимитированных подписок
-        # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
-        # В классическом режиме проверяем глобальные настройки
-        show_traffic_topup = False
-        if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
-            if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
-                # Режим тарифов - показываем кнопку, проверка настроек тарифа в хендлере
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-            elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                # Классический режим - проверяем глобальные настройки
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-
-        if show_traffic_topup:
-            paired_buttons.append(
-                make_button(
-                    text=texts.t('BUY_TRAFFIC_BUTTON', 'Докупить трафик'),
-                    callback_data='buy_traffic',
-                )
-            )
-
-    keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance', style='success')])
+        keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance', style='success')])
 
     show_trial = (
         not has_had_paid_subscription
@@ -1385,7 +1365,7 @@ def get_subscription_keyboard(
                     ]
                 )
 
-    # Ряд: [Настройки] [+ Тариф/Купить тариф, если режим тарифов]
+    # Ряд: [Настройки] [+ Купить тариф для истёкших/отключённых]
     settings_row = [
         make_button(
             text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
@@ -1393,34 +1373,16 @@ def get_subscription_keyboard(
             style='primary',
         )
     ]
-    # Для тестовых подписок кнопка переключения тарифа (instant_switch) не нужна —
-    # триальщику уже показывается «Купить подписку» выше.
+    # Вкладка подписки: кнопка мгновенного переключения тарифа (instant_switch)
+    # убрана полностью — смена тарифа недоступна отсюда. Для истёкшей/отключённой
+    # подписки показываем «Купить тариф» (покупку с нуля) — переключить там
+    # всё равно нельзя, а покупка нового оформляется штатно через menu_buy.
     if settings.is_tariffs_mode() and subscription and not is_trial:
-        _row_tariff = getattr(subscription, 'tariff', None)
-        _row_is_daily = bool(_row_tariff and getattr(_row_tariff, 'is_daily', False))
-        # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её
-        # блокирует) — раньше кнопка «Тариф» всё равно показывалась и вела в тупик.
-        # Теперь для таких подписок показываем «Купить тариф» (покупку с нуля).
         if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
             settings_row.append(
                 make_button(
                     text=texts.t('BUY_TARIFF_BUTTON', 'Купить тариф'),
                     callback_data='menu_buy',
-                )
-            )
-        else:
-            # Для суточных тарифов переходим на список тарифов, для обычных - мгновенное переключение.
-            # Бесплатный (0₽) тариф — тоже через список с выбором периода: prorated
-            # instant-switch посчитал бы доплату за весь остаток бесплатных дней
-            # и перенёс бы их на платный тариф вопреки TARIFF_SWITCH_RESET_FREE_DAYS.
-            is_free_tariff = bool(
-                _row_tariff and getattr(_row_tariff, 'is_free', False) and settings.TARIFF_SWITCH_RESET_FREE_DAYS
-            )
-            tariff_callback = 'tariff_switch' if (_row_is_daily or is_free_tariff) else 'instant_switch'
-            settings_row.append(
-                make_button(
-                    text=texts.t('CHANGE_TARIFF_BUTTON', 'Тариф'),
-                    callback_data=tariff_callback,
                 )
             )
     keyboard.append(settings_row)
@@ -3671,27 +3633,6 @@ def get_updated_subscription_settings_keyboard(
                 make_button(
                     text=texts.t('SWITCH_TRAFFIC_BUTTON', 'Переключить трафик'),
                     callback_data='subscription_switch_traffic',
-                )
-            ]
-        )
-
-    # Докупка трафика
-    show_traffic_topup = False
-    if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
-        if has_tariff:
-            # В режиме тарифов показываем кнопку, детальная проверка настроек тарифа в хендлере
-            show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-        elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-            show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-
-    if show_traffic_topup:
-        keyboard.append(
-            [
-                make_button(
-                    text=texts.t(
-                        'BUY_TRAFFIC_BUTTON', "<tg-emoji emoji-id='5778550614669660455'>⏲️</tg-emoji> Докупить трафик"
-                    ),
-                    callback_data='buy_traffic',
                 )
             ]
         )
