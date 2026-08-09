@@ -8,7 +8,7 @@ This endpoint is for mobile support clients only. The existing `/cabinet/ws` end
 
 - `Authorization: Bearer <cabinet_access_token>` is required.
 - Query-token authentication is rejected on this endpoint.
-- `Sec-WebSocket-Protocol` must include `bedolaga.support.mobile.v1`; the server echoes that exact value.
+- `Sec-WebSocket-Protocol` must include `@xilarobot.support.mobile.v1`; the server echoes that exact value.
 - Optional `X-Telegram-Init-Data` is validated against the JWT user when present. A mismatch rejects the connection.
 - Invalid or expired access tokens are rejected before command processing.
 

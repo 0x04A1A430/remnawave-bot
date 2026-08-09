@@ -52,7 +52,7 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
-SUPPORTED_SUBPROTOCOL = 'bedolaga.support.mobile.v1'
+SUPPORTED_SUBPROTOCOL = '@xilarobot.support.mobile.v1'
 ERROR_CODES = {
     'AUTH_REQUIRED',
     'AUTH_EXPIRED',

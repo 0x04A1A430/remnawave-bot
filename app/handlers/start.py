@@ -73,6 +73,7 @@ from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_au
 from app.states import RegistrationStates
 from app.utils.button_emoji import make_button
 from app.utils.long_messages import answer_long_text
+from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -99,6 +100,38 @@ def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]
     if not head or not tail or len(tail) > 255:
         return param, None
     return head, tail
+
+
+async def _answer_main_menu_rich_first(
+    message,
+    user,
+    texts,
+    db: AsyncSession,
+    menu_text: str,
+    keyboard,
+) -> None:
+    """Ответить главным меню: rich-сообщение, при недоступности — классика."""
+    if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
+        await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+
+
+async def _send_main_menu_rich_first(
+    bot: Bot,
+    chat_id: int,
+    user,
+    texts,
+    db: AsyncSession,
+    menu_text: str,
+    keyboard,
+) -> None:
+    """Отправить главное меню: rich-сообщение, при недоступности — классика."""
+    if not await try_send_rich_main_menu(bot, chat_id, user, texts, db, keyboard):
+        await bot.send_message(
+            chat_id=chat_id,
+            text=menu_text,
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
 
 
 async def _persist_pending_subid_after_registration(
@@ -1303,7 +1336,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             is_moderator=is_moderator,
             custom_buttons=custom_buttons,
         )
-        await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+        await _answer_main_menu_rich_first(message, user, texts, db, menu_text, keyboard)
 
         if pinned_message and not pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2019,7 +2052,14 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(
+                    callback.message,
+                    existing_user,
+                    texts,
+                    db,
+                    menu_text,
+                    keyboard,
+                )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2290,7 +2330,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(callback.message, user, texts, db, menu_text, keyboard)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             logger.info('Главное меню показано пользователю', telegram_id=user.telegram_id)
@@ -2370,7 +2410,14 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(
+                message,
+                existing_user,
+                texts,
+                db,
+                menu_text,
+                keyboard,
+            )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2677,7 +2724,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(message, user, texts, db, menu_text, keyboard)
             logger.info('Главное меню показано пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2967,22 +3014,23 @@ async def required_sub_channel_check(
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(bot, db, user, pinned_message)
 
-            if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                _result = await bot.send_photo(
-                    chat_id=query.from_user.id,
-                    photo=get_logo_media(),
-                    caption=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-                _cache_logo_file_id(_result)
-            else:
-                await bot.send_message(
-                    chat_id=query.from_user.id,
-                    text=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
+            if not await try_send_rich_main_menu(bot, query.from_user.id, user, texts, db, keyboard):
+                if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
+                    _result = await bot.send_photo(
+                        chat_id=query.from_user.id,
+                        photo=get_logo_media(),
+                        caption=menu_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
+                    _cache_logo_file_id(_result)
+                else:
+                    await bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=menu_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(bot, db, user, pinned_message)
         else:
@@ -3141,40 +3189,41 @@ async def required_sub_channel_check(
                     if pinned_message and pinned_message.send_before_menu:
                         await _send_pinned_message(bot, db, user, pinned_message)
 
-                    if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                        from app.services.start_media_service import get_start_video_file_id
+                    if not await try_send_rich_main_menu(bot, query.from_user.id, user, texts, db, keyboard):
+                        if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
+                            from app.services.start_media_service import get_start_video_file_id
 
-                        video_file_id = await get_start_video_file_id(db)
-                        if video_file_id:
-                            try:
-                                await bot.send_video(
+                            video_file_id = await get_start_video_file_id(db)
+                            if video_file_id:
+                                try:
+                                    await bot.send_video(
+                                        chat_id=query.from_user.id,
+                                        video=video_file_id,
+                                        caption=menu_text,
+                                        reply_markup=keyboard,
+                                        parse_mode='HTML',
+                                    )
+                                except Exception as video_error:
+                                    logger.warning(
+                                        'Не удалось отправить видео меню — уходим на логотип',
+                                        error=str(video_error),
+                                    )
+                            else:
+                                _result = await bot.send_photo(
                                     chat_id=query.from_user.id,
-                                    video=video_file_id,
+                                    photo=get_logo_media(),
                                     caption=menu_text,
                                     reply_markup=keyboard,
                                     parse_mode='HTML',
                                 )
-                            except Exception as video_error:
-                                logger.warning(
-                                    'Не удалось отправить видео меню — уходим на логотип',
-                                    error=str(video_error),
-                                )
+                                _cache_logo_file_id(_result)
                         else:
-                            _result = await bot.send_photo(
+                            await bot.send_message(
                                 chat_id=query.from_user.id,
-                                photo=get_logo_media(),
-                                caption=menu_text,
+                                text=menu_text,
                                 reply_markup=keyboard,
                                 parse_mode='HTML',
                             )
-                            _cache_logo_file_id(_result)
-                    else:
-                        await bot.send_message(
-                            chat_id=query.from_user.id,
-                            text=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(bot, db, user, pinned_message)
                 else:
