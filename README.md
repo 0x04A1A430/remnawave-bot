@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src=".github/assets/logo.png" alt="Bedolaga Bot" width="800" />
+<img src=".github/assets/logo.png" alt="@xilarobot" width="800" />
 
-# Bedolaga Bot
+# @xilarobot
 
 **Telegram-бот для автоматизации VPN-бизнеса на базе [Remnawave](https://github.com/remnawave/backend)**
 
@@ -10,24 +10,24 @@
 
 [![Python 3.13+](https://img.shields.io/badge/Python-3.13+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.bedolagam.ru/getting-started/docker-deployment)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.@xilarobotm.ru/getting-started/docker-deployment)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-[📖 Документация](https://docs.bedolagam.ru) · [🤖 Тестировать бота](https://t.me/zero_ping_vpn_bot?start=Git) · [💬 Чат сообщества](https://t.me/+wTdMtSWq8YdmZmVi)
+[📖 Документация](https://docs.@xilarobotm.ru) · [🤖 Тестировать бота](https://t.me/zero_ping_vpn_bot?start=Git) · [💬 Чат сообщества](https://t.me/+wTdMtSWq8YdmZmVi)
 
 </div>
 
 ---
 
-## 🧩 Что такое Bedolaga?
+## 🧩 Что такое @xilarobot?
 
-Bedolaga — полнофункциональная платформа для продажи VPN-подписок через Telegram. Бот интегрируется с панелью [Remnawave](https://github.com/remnawave/backend) и берёт на себя весь цикл: от регистрации пользователя до автопродления подписки.
+@xilarobot — полнофункциональная платформа для продажи VPN-подписок через Telegram. Бот интегрируется с панелью [Remnawave](https://github.com/remnawave/backend) и берёт на себя весь цикл: от регистрации пользователя до автопродления подписки.
 
-> 🖥 **[Bedolaga Cabinet](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)** — веб-кабинет на React + TypeScript, который существенно расширяет возможности бота: личный кабинет, OAuth-авторизация (Google, Yandex, Discord, VK, Telegram OIDC), лендинги, аналитика продаж, RBAC и подарочные подписки.
+> 🖥 **[@xilarobot Cabinet](https://github.com/@xilarobot-DEV/@xilarobot-cabinet)** — веб-кабинет на React + TypeScript, который существенно расширяет возможности бота: личный кабинет, OAuth-авторизация (Google, Yandex, Discord, VK, Telegram OIDC), лендинги, аналитика продаж, RBAC и подарочные подписки.
 
 <div align="center">
 
-<img src=".github/assets/bot-preview.png" alt="Bedolaga Bot — Telegram" width="700" />
+<img src=".github/assets/bot-preview.png" alt="@xilarobot — Telegram" width="700" />
 
 </div>
 
@@ -124,7 +124,7 @@ Bedolaga — полнофункциональная платформа для п
 | 💳 | **RioPay** | Карты | RUB |
 | 💳 | **SeverPay** | СБП, карты | RUB |
 | 🤝 | **[PayPear](https://t.me/Paymen1_Manager)** 🔸 | Карты, СБП, SberPay, T-Pay | RUB |
-| 🤝 | **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто | RUB → USDT |
+| 🤝 | **[RollyPay](https://rollypay.io/?utm_source=@xilarobot&utm_medium=community&utm_campaign=integration)** 🔸 | СБП, карты, крипто | RUB → USDT |
 | 🤝 | **[AuraPay](https://aurapay.tech/)** 🔸 | Карты, СБП | RUB |
 | 🤝 | **[Overpay](https://overpay.pro/)** 🔸 | Карты, СБП | RUB |
 | 🦌 | **Antilopay** | Карты, СБП, SberPay (RSA подпись) | RUB |
@@ -137,9 +137,9 @@ Bedolaga — полнофункциональная платформа для п
 
 </div>
 
-> 🔸 — официальный партнёр Bedolaga (особые условия по кодовому слову **`bedolaga`**)
+> 🔸 — официальный партнёр @xilarobot (особые условия по кодовому слову **`@xilarobot`**)
 >
-> Все провайдеры работают параллельно через единый веб-сервер на порту 8080. Подробная настройка — в [документации](https://docs.bedolagam.ru/bot/payments).
+> Все провайдеры работают параллельно через единый веб-сервер на порту 8080. Подробная настройка — в [документации](https://docs.@xilarobotm.ru/bot/payments).
 
 <div align="center">
 <table>
@@ -150,8 +150,8 @@ Bedolaga — полнофункциональная платформа для п
 
 **🤝 Официальный партнёр Platega**
 
-Bedolaga — официальный партнёр платёжной системы **Platega**.<br>
-Пользователи бота получают **особые условия** при подключении по кодовому слову **`bedolaga`**
+@xilarobot — официальный партнёр платёжной системы **Platega**.<br>
+Пользователи бота получают **особые условия** при подключении по кодовому слову **`@xilarobot`**
 
 📩 По вопросам: [@ArstanPlatega](https://t.me/ArstanPlatega)
 
@@ -162,7 +162,7 @@ Bedolaga — официальный партнёр платёжной систе
 
 **🤝 Официальный партнёр PayPear**
 
-Bedolaga — официальный партнёр платёжной системы **[PayPear](https://paypear.ru)**.<br>
+@xilarobot — официальный партнёр платёжной системы **[PayPear](https://paypear.ru)**.<br>
 Банковские карты, СБП, SberPay и T-Pay — всё через единый API.<br>
 Подключение по **спец. условиям** через кодовое слово **`БЕДОЛАГА`**
 
@@ -173,12 +173,12 @@ Bedolaga — официальный партнёр платёжной систе
 
 **🤝 Официальный партнёр RollyPay**
 
-Bedolaga — официальный партнёр платёжного шлюза **[RollyPay](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)**.<br>
+@xilarobot — официальный партнёр платёжного шлюза **[RollyPay](https://rollypay.io/?utm_source=@xilarobot&utm_medium=community&utm_campaign=integration)**.<br>
 СБП (от 5%), банковские карты РФ, крипто, вывод в USDT.<br>
 Универсальная форма оплаты, высокая проходимость, стабильная работа в каскаде.<br>
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
 
-📩 Менеджер: [@rollypay_manager](https://t.me/rollypay_manager) | 🌐 [rollypay.io](https://rollypay.io/?utm_source=bedolaga&utm_medium=community&utm_campaign=integration)
+📩 Менеджер: [@rollypay_manager](https://t.me/rollypay_manager) | 🌐 [rollypay.io](https://rollypay.io/?utm_source=@xilarobot&utm_medium=community&utm_campaign=integration)
 
 </td>
 </tr>
@@ -187,7 +187,7 @@ Bedolaga — официальный партнёр платёжного шлюз
 
 **🤝 Официальный партнёр AuraPay**
 
-Bedolaga — официальный партнёр платёжной системы **[AuraPay](https://aurapay.tech/)**.<br>
+@xilarobot — официальный партнёр платёжной системы **[AuraPay](https://aurapay.tech/)**.<br>
 Банковские карты и СБП через единый API с быстрой интеграцией.<br>
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
 
@@ -198,7 +198,7 @@ Bedolaga — официальный партнёр платёжной систе
 
 **🤝 Официальный партнёр Overpay**
 
-Bedolaga — официальный партнёр платёжного шлюза **[Overpay](https://overpay.pro/)**.<br>
+@xilarobot — официальный партнёр платёжного шлюза **[Overpay](https://overpay.pro/)**.<br>
 Банковские карты и СБП, mTLS-авторизация, HPP-интеграция.<br>
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
 
@@ -211,7 +211,7 @@ Bedolaga — официальный партнёр платёжного шлюз
 
 **🤝 Официальный партнёр Jupiter (FPGate P2P)**
 
-Bedolaga — официальный партнёр платёжного шлюза **Jupiter** (FPGate P2P v2.1).<br>
+@xilarobot — официальный партнёр платёжного шлюза **Jupiter** (FPGate P2P v2.1).<br>
 Эквайринг СБП через QR-код банковского приложения, HMAC-SHA256 подпись.<br>
 Высокая проходимость, callback-driven архитектура, защита от replay-атак.<br>
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
@@ -223,7 +223,7 @@ Bedolaga — официальный партнёр платёжного шлюз
 
 **🤝 Официальный партнёр Donut**
 
-Bedolaga — официальный партнёр платёжной системы **Donut** (Donut P2P).<br>
+@xilarobot — официальный партнёр платёжной системы **Donut** (Donut P2P).<br>
 P2P-оплата картой, СБП по номеру телефона и СБП QR — три метода через единый API.<br>
 HMAC-SHA256 подпись, sticky terminal-status guard, защита от amount tampering.<br>
 Подключение по кодовому слову **`БЕДОЛАГА`** — **спец. условия**
@@ -240,13 +240,13 @@ HMAC-SHA256 подпись, sticky terminal-status guard, защита от amou
 ## 🚀 Быстрый старт
 
 ```bash
-git clone https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot.git
-cd remnawave-bedolaga-telegram-bot
+git clone https://github.com/@xilarobot-DEV/remnawave-@xilarobot-telegram-bot.git
+cd remnawave-@xilarobot-telegram-bot
 cp .env.example .env   # заполните переменные
 docker compose up -d
 ```
 
-📖 Подробнее: **[Развёртывание →](https://docs.bedolagam.ru/getting-started/docker-deployment)** · **[Переменные окружения →](https://docs.bedolagam.ru/getting-started/environment)**
+📖 Подробнее: **[Развёртывание →](https://docs.@xilarobotm.ru/getting-started/docker-deployment)** · **[Переменные окружения →](https://docs.@xilarobotm.ru/getting-started/environment)**
 
 ---
 
@@ -265,15 +265,15 @@ docker compose up -d
 
 ---
 
-## 🖥 Bedolaga Cabinet
+## 🖥 @xilarobot Cabinet
 
 <div align="center">
 
-[![Cabinet](https://img.shields.io/badge/Репозиторий-Bedolaga_Cabinet-6366f1?style=for-the-badge&logo=react&logoColor=white)](https://github.com/BEDOLAGA-DEV/bedolaga-cabinet)
+[![Cabinet](https://img.shields.io/badge/Репозиторий-@xilarobot_Cabinet-6366f1?style=for-the-badge&logo=react&logoColor=white)](https://github.com/@xilarobot-DEV/@xilarobot-cabinet)
 
 <br>
 
-<img src=".github/assets/cabinet-preview.png" alt="Bedolaga Cabinet" width="700" />
+<img src=".github/assets/cabinet-preview.png" alt="@xilarobot Cabinet" width="700" />
 
 </div>
 
@@ -294,17 +294,17 @@ docker compose up -d
 
 | | Раздел | Описание |
 |:---:|:---|:---|
-| 🚀 | [Быстрый старт](https://docs.bedolagam.ru/getting-started/quickstart) | Развёртывание за 5 минут |
-| 💳 | [Настройка платежей](https://docs.bedolagam.ru/bot/payments) | 24+ провайдера, webhook, фискализация, Apple IAP |
-| 📦 | [Подписки и тарифы](https://docs.bedolagam.ru/bot/subscriptions) | Конфигурация планов и трафика |
-| 👥 | [Реферальная программа](https://docs.bedolagam.ru/bot/referral-program) | Партнёрка и вывод средств |
-| 🖥 | [Cabinet](https://docs.bedolagam.ru/cabinet/overview) | Настройка веб-кабинета |
-| 🏷 | [Промо-система](https://docs.bedolagam.ru/bot/promo-system) | Промокоды, предложения, скидки |
-| 🔌 | [API Reference](https://docs.bedolagam.ru/api-reference/overview) | REST API для внешних интеграций |
+| 🚀 | [Быстрый старт](https://docs.@xilarobotm.ru/getting-started/quickstart) | Развёртывание за 5 минут |
+| 💳 | [Настройка платежей](https://docs.@xilarobotm.ru/bot/payments) | 24+ провайдера, webhook, фискализация, Apple IAP |
+| 📦 | [Подписки и тарифы](https://docs.@xilarobotm.ru/bot/subscriptions) | Конфигурация планов и трафика |
+| 👥 | [Реферальная программа](https://docs.@xilarobotm.ru/bot/referral-program) | Партнёрка и вывод средств |
+| 🖥 | [Cabinet](https://docs.@xilarobotm.ru/cabinet/overview) | Настройка веб-кабинета |
+| 🏷 | [Промо-система](https://docs.@xilarobotm.ru/bot/promo-system) | Промокоды, предложения, скидки |
+| 🔌 | [API Reference](https://docs.@xilarobotm.ru/api-reference/overview) | REST API для внешних интеграций |
 
 <div align="center">
 
-**📖 Полная документация: [docs.bedolagam.ru](https://docs.bedolagam.ru)**
+**📖 Полная документация: [docs.@xilarobotm.ru](https://docs.@xilarobotm.ru)**
 
 </div>
 
@@ -315,11 +315,11 @@ docker compose up -d
 <div align="center">
 
 [![Telegram Chat](https://img.shields.io/badge/Telegram-Чат_сообщества-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/+wTdMtSWq8YdmZmVi)
-[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues)
+[![GitHub Issues](https://img.shields.io/badge/GitHub-Issues-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/@xilarobot-DEV/remnawave-@xilarobot-telegram-bot/issues)
 
 </div>
 
-- 🐛 **Баги и предложения** — [GitHub Issues](https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues)
+- 🐛 **Баги и предложения** — [GitHub Issues](https://github.com/@xilarobot-DEV/remnawave-@xilarobot-telegram-bot/issues)
 - 💬 **Вопросы и обсуждения** — [Telegram-чат](https://t.me/+wTdMtSWq8YdmZmVi)
 - 🤖 **Тестирование** — [@zero_ping_vpn_bot](https://t.me/zero_ping_vpn_bot?start=Git)
 

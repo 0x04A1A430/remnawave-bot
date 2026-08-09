@@ -43,7 +43,7 @@ class ReleasesResponse(BaseModel):
 
 # ============ Cabinet releases cache ============
 
-CABINET_REPO = 'BEDOLAGA-DEV/bedolaga-cabinet'
+CABINET_REPO = '@xilarobot-DEV/@xilarobot-cabinet'
 _cabinet_cache: dict = {}
 _cabinet_last_check: datetime | None = None
 _CACHE_TTL = 3600

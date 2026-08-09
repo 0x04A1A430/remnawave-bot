@@ -72,7 +72,7 @@ def _mark_rich_admin_unavailable(error: Exception) -> None:
     _rich_unavailable = True
 
 
-def rich_footer_now(label: str = 'Remnawave Bedolaga Bot') -> str:
+def rich_footer_now(label: str = '@xilarobot') -> str:
     """Футер с меткой и временем: tg-time рендерится в таймзоне админа."""
     now = datetime.now(UTC)
     stamp = f'<tg-time unix="{int(now.timestamp())}" format="dt">{now.strftime("%d.%m.%Y %H:%M")} UTC</tg-time>'

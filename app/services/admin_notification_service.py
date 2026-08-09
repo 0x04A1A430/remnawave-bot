@@ -622,7 +622,7 @@ class AdminNotificationService:
                 truncate_for_blockquote,
             )
 
-            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
+            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-@xilarobot-telegram-bot')
             release_url = f'https://github.com/{repo}/releases/tag/{latest_version.tag_name}'
             repo_url = f'https://github.com/{repo}'
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')

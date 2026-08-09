@@ -42,6 +42,7 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
 )
+from app.utils.rich_menu import try_edit_rich_main_menu, try_send_rich_main_menu
 from app.utils.telegram_html import (
     html_to_telegram,
     info_page_faq_to_telegram,
@@ -242,12 +243,13 @@ async def show_main_menu(
         custom_buttons=custom_buttons,
     )
 
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=menu_text,
-        keyboard=keyboard,
-        parse_mode='HTML',
-    )
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        await edit_or_answer_photo(
+            callback=callback,
+            caption=menu_text,
+            keyboard=keyboard,
+            parse_mode='HTML',
+        )
     if not skip_callback_answer:
         await callback.answer()
 
@@ -1239,12 +1241,13 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         custom_buttons=custom_buttons,
     )
 
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=menu_text,
-        keyboard=keyboard,
-        parse_mode='HTML',
-    )
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        await edit_or_answer_photo(
+            callback=callback,
+            caption=menu_text,
+            keyboard=keyboard,
+            parse_mode='HTML',
+        )
     await callback.answer()
 
 

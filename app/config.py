@@ -955,6 +955,17 @@ class Settings(BaseSettings):
     ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'Карта (Etoplatezhi)'
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
+    # Rich-меню (Bot API 10.1): главное меню собирается rich-сообщением с теми же
+    # кнопками (reply_markup сохраняется). Требует Bot API 10.1+; при недоступности
+    # бот сам откатывается на классический рендер до рестарта.
+    MAIN_MENU_RICH_ENABLED: bool = False
+    # Эффект сообщения при отправке rich-меню (пустая строка — без эффекта).
+    MAIN_MENU_RICH_EFFECT_ID: str = ''
+    # Публичный HTTPS-URL логотипа в шапке rich-меню. Пусто — авто-режим (webhook+LOGO_FILE);
+    # "none" — rich-меню без логотипа.
+    MAIN_MENU_RICH_LOGO_URL: str = ''
+    # Сворачивать таблицу подписок rich-меню в раскрываемый блок при >1 подписке.
+    MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
@@ -1157,7 +1168,7 @@ class Settings(BaseSettings):
     APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
-    VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-bedolaga-telegram-bot'
+    VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-@xilarobot-telegram-bot'
     VERSION_CHECK_INTERVAL_HOURS: int = 1
 
     BACKUP_AUTO_ENABLED: bool = True

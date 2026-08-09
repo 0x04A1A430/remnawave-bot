@@ -813,7 +813,7 @@
 
 ## assets
 
-- `assets/bedolaga_app3.svg` — файл (.svg)
+- `assets/@xilarobot_app3.svg` — файл (.svg)
 - `assets/logo2.svg` — файл (.svg)
 
 ## locales
