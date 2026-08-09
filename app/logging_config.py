@@ -205,23 +205,15 @@ def setup_logging() -> tuple[logging.Formatter, logging.Formatter, Any]:
     )
 
     # Console formatter: colors controlled by LOG_COLORS env var (default: true).
-    # Rich tracebacks with conservative limits to avoid 5000-line dumps.
+    # Tracebacks always render as plain text (no Rich box/❱ decorations) so
+    # container logs look identical regardless of color mode.
     use_colors = settings.LOG_COLORS
     console_renderer_kwargs: dict[str, Any] = {
         'colors': use_colors,
         'pad_event_to': 0,
         'pad_level': False,
     }
-    if use_colors:
-        console_renderer_kwargs['exception_formatter'] = structlog.dev.RichTracebackFormatter(
-            show_locals=False,
-            max_frames=20,
-            extra_lines=1,
-            width=120,
-            suppress=['aiogram', 'aiohttp'],
-        )
-    else:
-        console_renderer_kwargs['exception_formatter'] = structlog.dev.plain_traceback
+    console_renderer_kwargs['exception_formatter'] = structlog.dev.plain_traceback
 
     console_formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
