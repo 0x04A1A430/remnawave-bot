@@ -684,13 +684,13 @@ class AdminNotificationService:
         try:
             message = f"""<b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
 
-    📦 <b>Текущая версия:</b> <code>{current_version}</code>
-    ❌ <b>Ошибка:</b> {error_message}
+    <b>Текущая версия:</b> <code>{current_version}</code>
+    <b>Ошибка:</b> {error_message}
 
-    🔄 Следующая попытка через час.
-    ⚙️ Проверьте доступность GitHub API и настройки сети.
+    Следующая попытка через час.
+    Проверьте доступность GitHub API и настройки сети.
 
-    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+    <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message, category=NotificationCategory.ERRORS)
 
@@ -989,30 +989,30 @@ class AdminNotificationService:
 
             message = f"""<b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
-👤 <b>Пользователь:</b> {user_display}
-🆔 <b>{user_id_label}:</b> {user_id_display}
-📱 <b>Username:</b> @{html.escape(getattr(user, 'username', None) or 'отсутствует')}
+<b>Пользователь:</b> {user_display}
+<b>{user_id_label}:</b> {user_id_display}
+<b>Username:</b> @{html.escape(getattr(user, 'username', None) or 'отсутствует')}
 
 {promo_block}
 
-💰 <b>Платеж:</b>
-💵 Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
-💳 Способ: {payment_method}
-🆔 ID транзакции: {transaction.id}
+<b>Платеж:</b>
+Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
+Способ: {payment_method}
+ID транзакции: {transaction.id}
 
-📅 <b>Продление:</b>
-➕ Добавлено дней: {extended_days}
-📆 Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
-📆 Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
+<b>Продление:</b>
+Добавлено дней: {extended_days}
+Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
+Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
 
-📱 <b>Текущие параметры:</b>
-📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
-📱 Устройства: {subscription.device_limit}
-🌐 Серверы: {servers_info}
+<b>Текущие параметры:</b>
+Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
+Устройства: {subscription.device_limit}
+Серверы: {servers_info}
 
-💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
+<b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
-⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+<i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message, category=NotificationCategory.RENEWALS)
 
@@ -1443,7 +1443,7 @@ class AdminNotificationService:
 
         Returns:
             'admin'     — полный набор кнопок;
-            'moderator' — набор без «👤 К пользователю» (@admin_required);
+            'moderator' — набор без «К пользователю» (@admin_required);
             'group'     — групповой/супергруппа/канал админ-чат: только надёжные
                           (не-FSM) кнопки, т.к. конкретного получателя не определить
                           и FSM-ввод в общем чате не работает (privacy mode бота);
@@ -1639,7 +1639,6 @@ class AdminNotificationService:
 
             # Contact info
             contact_display = html.escape(purchase.contact_value or '—')
-            contact_icon = '📧' if purchase.contact_type == 'email' else '📱'
 
             payment_method = self._get_payment_method_display(purchase.payment_method)
 
@@ -1655,7 +1654,7 @@ class AdminNotificationService:
                     buyer_name = f'@{buyer.username}' if buyer.username else buyer.email or f'id:{buyer.id}'
                     message_lines.append(f'Покупатель: <code>{html.escape(buyer_name)}</code>')
                 else:
-                    message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+                    message_lines.append(f'Покупатель: <code>{contact_display}</code>')
             else:
                 # Landing: show page slug and buyer contact
                 landing_slug = '—'
@@ -1669,13 +1668,12 @@ class AdminNotificationService:
                     if purchase.landing_id:
                         landing_slug = f'ID:{purchase.landing_id}'
                 message_lines.append(f'Страница: <b>/buy/{html.escape(landing_slug)}</b>')
-                message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+                message_lines.append(f'Покупатель: <code>{contact_display}</code>')
 
             if purchase.is_gift:
                 if purchase.gift_recipient_value:
-                    recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
                     recipient_value = html.escape(purchase.gift_recipient_value)
-                    message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
+                    message_lines.append(f'Получатель: <code>{recipient_value}</code>')
                 else:
                     message_lines.append('Получатель: <i>по коду активации</i>')
                 if purchase.gift_message:
