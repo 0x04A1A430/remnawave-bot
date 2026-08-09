@@ -229,9 +229,6 @@ class StartupNotificationService:
             trial_subscriptions_count = await self._get_trial_subscriptions_count()
             remnawave_connected, remnawave_status = await self._check_remnawave_connection()
 
-            # Иконка статуса Remnawave
-            remnawave_icon = '🟢' if remnawave_connected else ''
-
             # Формируем системную информацию для blockquote
             system_info_lines = [
                 f'Версия: {version}',
@@ -240,7 +237,7 @@ class StartupNotificationService:
                 f'Платных подписок: {paid_subscriptions_count:,}'.replace(',', ' '),
                 f'Триальных подписок: {trial_subscriptions_count:,}'.replace(',', ' '),
                 f'Открытых тикетов: {open_tickets_count:,}'.replace(',', ' '),
-                f'{remnawave_icon} Remnawave: {remnawave_status}',
+                f'Remnawave: {remnawave_status}',
             ]
             system_info = '\n'.join(system_info_lines)
 
@@ -266,7 +263,7 @@ class StartupNotificationService:
                     ('Платных подписок', f'{paid_subscriptions_count:,}'.replace(',', ' ')),
                     ('Триальных подписок', f'{trial_subscriptions_count:,}'.replace(',', ' ')),
                     ('Открытых тикетов', f'{open_tickets_count:,}'.replace(',', ' ')),
-                    ('Remnawave', f'{remnawave_icon} {html.escape(remnawave_status)}'),
+                    ('Remnawave', html.escape(remnawave_status)),
                 ]
                 rich_blocks = []
                 logo_url = _resolve_rich_logo_url()
@@ -274,8 +271,8 @@ class StartupNotificationService:
                     rich_blocks.append(f'<img src="{html.escape(logo_url, quote=True)}"/>')
                 rich_blocks.extend(
                     [
-                        '<h5>🤖 Remnawave Bot</h5>',
-                        '<p>✅ Бот успешно запущен</p>',
+                        '<h5>Remnawave Bot</h5>',
+                        '<p>Бот успешно запущен</p>',
                         rich_kv_table(stats_rows),
                         '<hr/>',
                         rich_footer_now(),
