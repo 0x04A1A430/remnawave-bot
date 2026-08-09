@@ -5,8 +5,8 @@ or the string "NaN". Such values were persisted into `users`/`subscriptions`
 and then built into `/api/users/NaN` URLs (panel rejects with 400 "received NaN").
 Normalize leftover NaN-like identifiers to NULL.
 
-Revision ID: 0102
-Revises: 0101
+Revision ID: 9108
+Revises: 9107
 Create Date: 2026-08-06
 
 """
@@ -16,8 +16,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0102"
-down_revision: Union[str, None] = "0101"
+revision: str = "9108"
+down_revision: Union[str, None] = "9107"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

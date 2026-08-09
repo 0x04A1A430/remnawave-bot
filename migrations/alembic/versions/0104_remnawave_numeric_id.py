@@ -2,7 +2,7 @@
 
 Remnawave 3.0.0 removed the ``uuid`` field from ``UsersSchema`` entirely: a
 panel user is now identified only by a numeric ``id``.  This fork previously
-tracked that id in ``panel_user_id`` (revision 0099).  This revision converges
+tracked that id in ``panel_user_id`` (revision 9105).  This revision converges
 the schema to the upstream shape: it adds ``remnawave_id`` columns with the same
 index/constraint layout as upstream 0104, copies the already-populated values
 from ``panel_user_id``, and then drops the legacy columns so the database ends
@@ -11,8 +11,8 @@ up indistinguishable from upstream (plus the fork's extra feature columns).
 Empty (NULL) ``panel_user_id`` rows stay unresolved: their ``remnawave_id`` is
 NULL until the one-shot backfill service has talked to the panel.
 
-Revision ID: 0114
-Revises: 0113
+Revision ID: 0104
+Revises: 0103
 Create Date: 2026-08-10
 
 """
@@ -21,8 +21,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision = '0114'
-down_revision = '0113'
+revision = '0104'
+down_revision = '0103'
 branch_labels = None
 depends_on = None
 
@@ -152,7 +152,7 @@ def downgrade() -> None:
         ).scalar_one()
         if null_uuids:
             raise RuntimeError(
-                f'Cannot downgrade 0114: {null_uuids} grace_access_sessions row(s) have no historical '
+                f'Cannot downgrade 0104: {null_uuids} grace_access_sessions row(s) have no historical '
                 'remnawave_uuid, so dropping remnawave_id would erase their only panel identity.'
             )
         with op.batch_alter_table('grace_access_sessions') as batch:
