@@ -1393,7 +1393,9 @@ def get_subscription_keyboard(
             style='primary',
         )
     ]
-    if settings.is_tariffs_mode() and subscription:
+    # Для тестовых подписок кнопка переключения тарифа (instant_switch) не нужна —
+    # триальщику уже показывается «Купить подписку» выше.
+    if settings.is_tariffs_mode() and subscription and not is_trial:
         _row_tariff = getattr(subscription, 'tariff', None)
         _row_is_daily = bool(_row_tariff and getattr(_row_tariff, 'is_daily', False))
         # На истёкшей/отключённой подписке смена тарифа недоступна (хендлер её

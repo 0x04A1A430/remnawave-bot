@@ -109,7 +109,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       # OCI-референсы требуют lowercase, а github.repository сохраняет регистр
-      # (BEDOLAGA-DEV/…) — Trivy падал бы на 'repository name must be lowercase'.
+      # (@xilarobot-DEV/…) — Trivy падал бы на 'repository name must be lowercase'.
       # metadata-action лоуэркейсит теги сам, но digest-референс собираем вручную.
       - name: Lowercase image name for Trivy
         if: steps.version.outputs.should_push == 'true'

@@ -1,5 +1,5 @@
 [project]
-name = 'remnawave-bedolaga-telegram-bot'
+name = 'remnawave-xilarobot-telegram-bot'
 version = "4.0.0"
 description = 'Telegram bot for RemnaWave VPN service'
 readme = 'README.md'
