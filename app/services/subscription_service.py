@@ -1030,6 +1030,30 @@ class SubscriptionService:
                 except Exception as api_error:
                     logger.error('Ошибка проверки пользователя в панели', api_error=api_error)
                     needs_cleanup = True
+            elif use_user_id and user.telegram_id:
+                # В v3 в БД может ещё не быть remnawave_id (старый юзер / не
+                # бэкфильнутый). Сопоставляем с панелью по telegram_id и
+                # записываем найденный id, чтобы последующие вызовы шли по id.
+                try:
+                    async with self.get_api_client() as api:
+                        panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                        matched = next(
+                            (u for u in panel_users if u.telegram_id == user.telegram_id),
+                            None,
+                        )
+                        if matched and matched.id is not None:
+                            if settings.is_multi_tariff_enabled():
+                                subscription.remnawave_id = matched.id
+                            else:
+                                user.remnawave_id = matched.id
+                            logger.info(
+                                'Сопоставлен remnawave_id по telegram_id',
+                                user_log=user_log,
+                                remnawave_id=matched.id,
+                            )
+                except Exception as api_error:
+                    logger.error('Ошибка сопоставления по telegram_id', api_error=api_error)
+                    needs_cleanup = True
 
             # В v3 режиме отсутствие remnawave_uuid — норма: панель опознаёт юзера
             # по числовому id. Поэтому наличие short_uuid без uuid НЕ считается мусором.

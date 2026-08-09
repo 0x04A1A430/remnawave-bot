@@ -47,7 +47,7 @@ def _user(telegram_id=7667943460, remnawave_id=None, remnawave_uuid=None):
     )
 
 
-def _patch(monkeypatch, *, use_user_id: bool, multi_tariff: bool, panel_user=None):
+def _patch(monkeypatch, *, use_user_id: bool, multi_tariff: bool, panel_user=None, tg_panel_users=None):
     from app.config import settings
     from app.config import Settings
 
@@ -61,7 +61,11 @@ def _patch(monkeypatch, *, use_user_id: bool, multi_tariff: bool, panel_user=Non
     async def _amock(*args, **kwargs):
         return panel_user
 
+    async def _tgmock(*args, **kwargs):
+        return list(tg_panel_users) if tg_panel_users else []
+
     api.get_user_by_uuid = _amock
+    api.get_user_by_telegram_id = _tgmock
 
     @asynccontextmanager
     async def _client():
@@ -146,3 +150,49 @@ def test_v2_short_uuid_without_uuid_still_cleaned(monkeypatch):
     assert result is True
     assert sub.remnawave_short_uuid is None  # legacy cleanup preserved
     assert db.committed is True
+
+
+def test_v3_no_id_falls_back_to_telegram_id(monkeypatch):
+    """v3: no remnawave_id in DB -> match panel user by telegram_id and backfill."""
+    panel_user = SimpleNamespace(telegram_id=7667943460, id=314)
+    svc, api = _patch(
+        monkeypatch,
+        use_user_id=True,
+        multi_tariff=False,
+        panel_user=None,
+        tg_panel_users=[panel_user],
+    )
+    sub = _sub(remnawave_id=None, remnawave_uuid=None)
+    user = _user(telegram_id=7667943460, remnawave_id=None)
+    db = _fake_db()
+
+    import asyncio
+
+    result = asyncio.run(svc.validate_and_clean_subscription(db, sub, user))
+
+    assert result is True
+    assert user.remnawave_id == 314  # backfilled from panel
+    assert sub.remnawave_short_uuid == 'duPmeL84Skv_bydv'  # preserved
+    assert db.committed is False
+
+
+def test_v3_no_id_no_panel_match_keeps_short_uuid(monkeypatch):
+    """v3: no remnawave_id, telegram lookup empty -> NOT garbage, short_uuid kept."""
+    svc, api = _patch(
+        monkeypatch,
+        use_user_id=True,
+        multi_tariff=False,
+        panel_user=None,
+        tg_panel_users=[],
+    )
+    sub = _sub(remnawave_id=None, remnawave_uuid=None)
+    user = _user(telegram_id=7667943460, remnawave_id=None)
+    db = _fake_db()
+
+    import asyncio
+
+    result = asyncio.run(svc.validate_and_clean_subscription(db, sub, user))
+
+    assert result is True
+    assert sub.remnawave_short_uuid == 'duPmeL84Skv_bydv'  # preserved
+    assert db.committed is False
