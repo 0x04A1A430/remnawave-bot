@@ -193,6 +193,13 @@ class Texts:
         return settings.format_price(kopeks, round_kopeks=round_kopeks)
 
     @staticmethod
+    def format_device_limit(limit: int | None) -> str:
+        """Format device limit. 0 or None means unlimited (HWID disabled)."""
+        if not limit:
+            return '∞ (безлимит)'
+        return str(limit)
+
+    @staticmethod
     def format_traffic(gb: float, is_limit: bool = True) -> str:
         """Format traffic value.
 
