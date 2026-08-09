@@ -27,7 +27,7 @@ DEFAULT_MENU_CONFIG: dict[str, Any] = {
         },
         {
             'id': 'subscription_traffic_row',
-            'buttons': ['subscription', 'buy_traffic'],
+            'buttons': ['subscription'],
             'conditions': {'has_active_subscription': True},
             'max_per_row': 2,
         },
