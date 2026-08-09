@@ -28,7 +28,7 @@ def _user(uuid: str | None, sub_uuids: list[str | None]) -> SimpleNamespace:
     return SimpleNamespace(
         id=1,
         remnawave_uuid=uuid,
-        panel_user_id=None,
+        remnawave_id=None,
         subscriptions=[SimpleNamespace(remnawave_uuid=u) for u in sub_uuids],
     )
 
@@ -49,7 +49,7 @@ def test_collect_panel_uuids_deduplicates_and_preserves_order() -> None:
 
 def test_collect_panel_uuids_handles_classic_mode_user_only() -> None:
     """Classic mode: only user.remnawave_uuid, no subscriptions array."""
-    user = SimpleNamespace(id=1, remnawave_uuid='solo', panel_user_id=None, subscriptions=[])
+    user = SimpleNamespace(id=1, remnawave_uuid='solo', remnawave_id=None, subscriptions=[])
 
     result = _collect_panel_uuids(user)
 

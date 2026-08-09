@@ -15,9 +15,9 @@ from app.handlers.subscription.devices import _get_remnawave_identifiers, _get_r
 
 
 class _Obj:
-    def __init__(self, uuid, panel_user_id=None):
+    def __init__(self, uuid, remnawave_id=None):
         self.remnawave_uuid = uuid
-        self.panel_user_id = panel_user_id
+        self.remnawave_id = remnawave_id
 
 
 def _set_multi(monkeypatch, value: bool) -> None:
@@ -67,7 +67,7 @@ def test_cabinet_no_subscription_uses_user_uuid(monkeypatch):
     assert _resolve_panel_uuid(None, _Obj('USER')) == 'USER'
 
 
-# ---- v3.0.0 identifier helpers: (uuid, panel_user_id) pairs ----
+# ---- v3.0.0 identifier helpers: (uuid, remnawave_id) pairs ----
 
 
 def test_bot_multi_tariff_identifiers_from_subscription(monkeypatch):
