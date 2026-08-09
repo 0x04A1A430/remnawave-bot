@@ -988,19 +988,32 @@ class SubscriptionService:
             needs_cleanup = False
             user_log = self._format_user_log(user)
 
-            # In multi-tariff mode, validate per-subscription UUID, not user-level UUID
+            # RemnaWave v3.0+ не возвращает uuid пользователя — только числовой id
+            # (REMNAWAVE_USE_USER_ID=true). В этом режиме валидируем по id.
+            use_user_id = settings.REMNAWAVE_USE_USER_ID
             check_uuid = subscription.remnawave_uuid if settings.is_multi_tariff_enabled() else user.remnawave_uuid
+            check_user_id = subscription.remnawave_id if settings.is_multi_tariff_enabled() else user.remnawave_id
 
-            if check_uuid:
+            if use_user_id:
+                has_panel_identity = check_user_id is not None
+                panel_identity = check_user_id
+            else:
+                has_panel_identity = bool(check_uuid)
+                panel_identity = check_uuid
+
+            if has_panel_identity:
                 try:
                     async with self.get_api_client() as api:
-                        remnawave_user = await api.get_user_by_uuid(check_uuid, user_id=subscription.remnawave_id)
+                        remnawave_user = await api.get_user_by_uuid(
+                            str(panel_identity),
+                            user_id=check_user_id,
+                        )
 
                         if not remnawave_user:
                             logger.warning(
-                                'UUID не найден в панели',
+                                'Пользователь не найден в панели',
                                 user_log=user_log,
-                                remnawave_uuid=check_uuid,
+                                panel_identity=panel_identity,
                             )
                             needs_cleanup = True
                         elif (
@@ -1018,7 +1031,9 @@ class SubscriptionService:
                     logger.error('Ошибка проверки пользователя в панели', api_error=api_error)
                     needs_cleanup = True
 
-            if subscription.remnawave_short_uuid and not check_uuid:
+            # В v3 режиме отсутствие remnawave_uuid — норма: панель опознаёт юзера
+            # по числовому id. Поэтому наличие short_uuid без uuid НЕ считается мусором.
+            if not use_user_id and subscription.remnawave_short_uuid and not check_uuid:
                 logger.warning('У подписки есть short_uuid, но нет remnawave_uuid')
                 needs_cleanup = True
 
