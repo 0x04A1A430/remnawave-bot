@@ -1,7 +1,7 @@
 """Make inline_gift days/traffic/devices nullable (NULL = no change)
 
-Revision ID: 0056
-Revises: 0055
+Revision ID: 9104
+Revises: 9103
 Create Date: 2026-05-17
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0098"
-down_revision: Union[str, None] = "0097"
+revision: str = "9104"
+down_revision: Union[str, None] = "9103"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

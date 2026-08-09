@@ -5,8 +5,8 @@ Allow an admin gift to reset a user's traffic usage via a `-r` flag
 
 - add `reset_traffic` boolean column
 
-Revision ID: 0104
-Revises: 0103
+Revision ID: 9110
+Revises: 9109
 Create Date: 2026-08-07
 
 """
@@ -16,8 +16,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0104"
-down_revision: Union[str, None] = "0103"
+revision: str = "9110"
+down_revision: Union[str, None] = "9109"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

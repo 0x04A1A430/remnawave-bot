@@ -6,8 +6,8 @@ Postgres treats `''` as a real value (unlike NULL), so a second user synced
 without a uuid violates the `users_remnawave_uuid_key` unique constraint.
 Normalize leftover `''` to NULL.
 
-Revision ID: 0101
-Revises: 0100
+Revision ID: 9107
+Revises: 9106
 Create Date: 2026-08-06
 
 """
@@ -17,8 +17,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0101"
-down_revision: Union[str, None] = "0100"
+revision: str = "9107"
+down_revision: Union[str, None] = "9106"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

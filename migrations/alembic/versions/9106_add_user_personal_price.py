@@ -1,7 +1,7 @@
 """Add personal_price_kopeks to User
 
-Revision ID: 0100
-Revises: 0099
+Revision ID: 9106
+Revises: 9105
 Create Date: 2026-08-01
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0100"
-down_revision: Union[str, None] = "0099"
+revision: str = "9106"
+down_revision: Union[str, None] = "9105"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

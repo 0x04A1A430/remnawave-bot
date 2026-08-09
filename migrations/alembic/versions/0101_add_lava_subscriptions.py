@@ -8,16 +8,16 @@
 Partial unique index создаётся сразу (в отличие от Platega, где он приехал
 отдельной миграцией 0100): живых дублей на новой таблице ещё не существует.
 
-Revision ID: 0108
-Revises: 0107
+Revision ID: 0101
+Revises: 0100
 """
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision = '0108'
-down_revision = '0107'
+revision = '0101'
+down_revision = '0100'
 branch_labels = None
 depends_on = None
 

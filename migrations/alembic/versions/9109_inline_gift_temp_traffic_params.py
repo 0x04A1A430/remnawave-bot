@@ -7,8 +7,8 @@ traffic limit so a single gift can mix subscription + temp traffic (combo).
 - backfill existing `temp_traffic` gifts: move GB out of `traffic_limit_gb`
   into `temp_traffic_gb` and default the duration to 30 days
 
-Revision ID: 0103
-Revises: 0102
+Revision ID: 9109
+Revises: 9108
 Create Date: 2026-08-06
 
 """
@@ -18,8 +18,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0103"
-down_revision: Union[str, None] = "0102"
+revision: str = "9109"
+down_revision: Union[str, None] = "9108"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

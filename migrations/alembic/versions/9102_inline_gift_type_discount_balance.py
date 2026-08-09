@@ -1,7 +1,7 @@
 """Add gift_type, discount_percent, balance_amount_kopeks to inline_gift_subscriptions
 
-Revision ID: 0054
-Revises: 0053
+Revision ID: 9102
+Revises: 9101
 Create Date: 2026-04-10
 
 """
@@ -11,8 +11,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0096"
-down_revision: Union[str, None] = "0095"
+revision: str = "9102"
+down_revision: Union[str, None] = "9101"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

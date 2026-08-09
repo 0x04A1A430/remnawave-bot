@@ -12,15 +12,15 @@ IntegrityError — сервис ловит её и возвращает суще
 новейшая (max id), остальные помечаются CANCELLED локально (remote-отмену
 дочистит reconciler-свип CANCELLED-записей по remote-статусу).
 
-Revision ID: 0107
-Revises: 0106
+Revision ID: 0100
+Revises: 0099
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = '0107'
-down_revision = '0106'
+revision = '0100'
+down_revision = '0099'
 branch_labels = None
 depends_on = None
 
