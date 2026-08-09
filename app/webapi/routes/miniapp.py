@@ -2826,9 +2826,9 @@ async def _load_devices_info(user: User, subscription=None) -> tuple[int, list[M
         async with service.get_api_client() as api:
             response = await api.get_user_devices_all(
                 remnawave_uuid,
-                user_id=subscription.panel_user_id
+                user_id=subscription.remnawave_id
                 if subscription is not None and settings.is_multi_tariff_enabled()
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
     except RemnaWaveConfigurationError:
         logger.debug('RemnaWave configuration missing while loading devices')
@@ -4466,7 +4466,7 @@ async def remove_connected_device(
 
     try:
         async with service.get_api_client() as api:
-            success = await api.remove_device(remnawave_uuid, hwid, user_id=user.panel_user_id)
+            success = await api.remove_device(remnawave_uuid, hwid, user_id=user.remnawave_id)
     except RemnaWaveConfigurationError as error:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

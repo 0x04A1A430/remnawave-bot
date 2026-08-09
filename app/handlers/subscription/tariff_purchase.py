@@ -3516,9 +3516,9 @@ async def confirm_tariff_switch(
                 async with service.get_api_client() as api:
                     await api.reset_user_devices(
                         _reset_uuid,
-                        user_id=subscription.panel_user_id
+                        user_id=subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription
-                        else db_user.panel_user_id,
+                        else db_user.remnawave_id,
                     )
                     logger.info(
                         'Сброшены устройства при смене тарифа для user_id',
@@ -3802,9 +3802,9 @@ async def confirm_daily_tariff_switch(
                 async with service.get_api_client() as api:
                     await api.reset_user_devices(
                         _reset_uuid_daily,
-                        user_id=subscription.panel_user_id
+                        user_id=subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription
-                        else db_user.panel_user_id,
+                        else db_user.remnawave_id,
                     )
                     logger.info(
                         'Сброшены устройства при смене на суточный тариф для user_id',
@@ -4594,9 +4594,9 @@ async def confirm_instant_switch(
                 async with service.get_api_client() as api:
                     await api.reset_user_devices(
                         _reset_uuid_instant,
-                        user_id=subscription.panel_user_id
+                        user_id=subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription
-                        else db_user.panel_user_id,
+                        else db_user.remnawave_id,
                     )
                     logger.info(
                         'Сброшены устройства при мгновенном переключении тарифа для user_id',

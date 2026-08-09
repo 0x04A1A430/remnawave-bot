@@ -247,3 +247,24 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
         loop.close()
 
     return True
+
+
+@pytest.fixture(scope='session')
+def registered_paths() -> dict[str, set[str]]:
+    """Карта `путь -> {HTTP-методы}` кабинетного роутера, как их реально
+    обслуживает приложение.
+
+    Раньше тесты обходили ``router.routes`` и читали ``route.path`` напрямую.
+    Начиная со Starlette 1.x вложенные роутеры (``include_router``) хранятся
+    лениво как ``_IncludedRouter`` без атрибута ``path``, поэтому такой обход
+    ломается. Резолвим фактическую таблицу маршрутов через OpenAPI-схему
+    приложения — это устойчиво между версиями Starlette/FastAPI.
+    """
+    from fastapi import FastAPI
+
+    from app.cabinet.routes import router
+
+    app = FastAPI()
+    app.include_router(router)
+    schema = app.openapi()
+    return {path: {method.upper() for method in operations} for path, operations in schema.get('paths', {}).items()}

@@ -7,7 +7,7 @@ billing dates/status and never resets used traffic.
 
 IDENTITY NOTE: the upstream feature keys every session/panel operation by the
 numeric ``remnawave_id`` (Remnawave 3.0.0) via ``get_user_by_id`` /
-``coerce_panel_user_id``.  The fork deliberately uses the uuid string identity
+``coerce_remnawave_id``.  The fork deliberately uses the uuid string identity
 (its identity overhaul/backfill was excluded), so all occurrences of
 ``remnawave_id`` here are named ``remnawave_uuid`` and the panel gateway routes
 through ``get_user_by_uuid`` / ``update_user(uuid=...)``.  See the porting report.

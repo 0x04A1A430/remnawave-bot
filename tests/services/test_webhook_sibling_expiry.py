@@ -42,7 +42,7 @@ def _sub(
         subscription_crypto_link='crypto',
         updated_at=datetime.now(UTC),
         is_trial=False,
-        panel_user_id=None,
+        remnawave_id=None,
     )
 
 

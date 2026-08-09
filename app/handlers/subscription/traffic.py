@@ -391,9 +391,9 @@ async def confirm_reset_traffic(
             async with remnawave_service.get_api_client() as api:
                 await api.reset_user_traffic(
                     remnawave_uuid,
-                    user_id=subscription.panel_user_id
+                    user_id=subscription.remnawave_id
                     if settings.is_multi_tariff_enabled() and subscription
-                    else user.panel_user_id,
+                    else user.remnawave_id,
                 )
 
         await create_transaction(
