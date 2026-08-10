@@ -312,6 +312,7 @@ async def _redeem_pending_coupon(
         try:
             await answer_func(_COUPON_ERROR_TEXTS['internal'], parse_mode=ParseMode.HTML)
         except Exception:
+            # пользователь уже мог отключить чат — без ретрая, чтобы не плодить исключения
             pass
         return
 

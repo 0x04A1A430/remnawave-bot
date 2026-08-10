@@ -541,6 +541,7 @@ class GraceAccessRuntime:
         try:
             await task
         except asyncio.CancelledError:
+            # штатная остановка: таск отменён самим рантаймом
             pass
         finally:
             self._task = None

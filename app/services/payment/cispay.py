@@ -272,13 +272,14 @@ class CisPayPaymentMixin:
                     try:
                         payment.charged_amount_kopeks = int(charged_amount)
                     except (TypeError, ValueError):
+                        # строка не конвертируется в int — оставляем прежнее значение
                         pass
                 payment.callback_payload = callback_payload
                 payment.updated_at = datetime.now(UTC)
                 await db.flush()
                 return await self._finalize_cispay_payment(db, payment, trigger='webhook')
 
-            payment = await cispay_crud.update_cispay_payment_status(
+            await cispay_crud.update_cispay_payment_status(
                 db=db,
                 payment=payment,
                 status=internal_status,
