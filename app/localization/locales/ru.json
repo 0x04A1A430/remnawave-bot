@@ -1460,7 +1460,7 @@
   "SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE": "<b>Шаг 3 - Подключение:</b>",
   "SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE": "<b>Шаг 1 - Установка:</b>",
   "SUBSCRIPTION_EXPIRED": "\n<b>Подписка истекла</b>\n\nВаша подписка истекла. Для восстановления доступа продлите подписку.\n",
-  "SUBSCRIPTION_EXPIRED_1D": "<b>Подписка{tariff_label} закончилась</b>\n\nДоступ был отключён {end_date}. Продлите подписку, чтобы вернуть полный доступ.\n\nСтоимость продления: {price}",
+  "SUBSCRIPTION_EXPIRED_1D": "<b>Подписка{tariff_label} закончилась</b>\n\nДоступ был отключён {end_date}. Вы были переведены на временный доступ.",
   "SUBSCRIPTION_EXPIRED_SECOND_WAVE": "<b>Скидка {percent}% на продление{tariff_label}</b>\n\nАктивируйте предложение, чтобы получить дополнительную скидку. Она суммируется с вашей промогруппой и действует до {expires_at}.",
   "SUBSCRIPTION_EXPIRED_THIRD_WAVE": "<b>Индивидуальная скидка {percent}%{tariff_label}</b>\n\nПрошло {trigger_days} дней без подписки. Вернитесь и активируйте дополнительную скидку — она суммируется с промогруппой и действует до {expires_at}.",
   "SUBSCRIPTION_EXPIRING": "\n️ <b>Подписка истекает!</b>\n\nВаша подписка истекает через {days} дней.\n\nНе забудьте продлить подписку, чтобы не потерять доступ к серверам.\n",
