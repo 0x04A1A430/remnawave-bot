@@ -518,6 +518,22 @@ async def send_referral_notification(
         bonus_kopeks: Сумма бонуса в копейках
         referral_name: Имя реферала
     """
+    if not settings.is_notifications_enabled():
+        logger.debug(
+            'Реферальное уведомление подавлено: уведомления пользователям отключены',
+            telegram_id=telegram_id,
+            user_id=getattr(user, 'id', None),
+        )
+        return
+
+    if not settings.is_referral_notifications_enabled():
+        logger.debug(
+            'Реферальное уведомление подавлено: реферальные уведомления отключены',
+            telegram_id=telegram_id,
+            user_id=getattr(user, 'id', None),
+        )
+        return
+
     # Handle email-only users via notification delivery service
     if telegram_id is None:
         if user is not None:

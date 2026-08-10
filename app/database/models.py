@@ -2743,6 +2743,9 @@ class PromoCode(Base):
 
     balance_bonus_kopeks = Column(Integer, default=0)
     subscription_days = Column(Integer, default=0)
+    # Гигабайты к подписке. Часть набора бонусов наравне с балансом и днями;
+    # 0 — трафик не начисляется.
+    traffic_gb = Column(Integer, default=0, server_default='0', nullable=False)
 
     max_uses = Column(Integer, default=1)
     current_uses = Column(Integer, default=0)

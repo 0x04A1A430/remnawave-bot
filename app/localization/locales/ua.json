@@ -1715,6 +1715,7 @@
   "DEVICE_RENAME_BUTTON": "✏️",
   "PAYMENT_METHODS_NONE_AVAILABLE": "💳 <b>Способи поповнення балансу</b>\n\n⚠️ Наразі способи оплати тимчасово недоступні.\nСпробуйте пізніше.\n\nОберіть спосіб поповнення:",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "❌ Підписку не знайдено",
+  "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "❌ Цей промокод дає лише трафік, а у вашої підписки він безлімітний. Код не витрачено.",
   "PROMOCODE_USER_NOT_FOUND": "❌ Користувача не знайдено",
   "PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS": "❌ У вас вже є підписка, тому тріал-промокод застосувати не можна.",
   "PROMOCODE_TRIAL_PROVISIONING_FAILED": "❌ Не вдалося видати тріал просто зараз. Спробуйте пізніше.",

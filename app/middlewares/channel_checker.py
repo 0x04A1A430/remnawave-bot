@@ -505,7 +505,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                             )
 
                 # Notify user about deactivation
-                if deactivated_subs:
+                if deactivated_subs and settings.is_notifications_enabled():
                     try:
                         normalized = _normalize_channels(channels)
                         texts = get_texts(user.language or DEFAULT_LANGUAGE)
@@ -594,6 +594,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
                 # Notify user about reactivation
                 try:
+                    if not settings.is_notifications_enabled():
+                        await db.commit()
+                        return
                     texts = get_texts(user.language or DEFAULT_LANGUAGE)
                     if settings.is_multi_tariff_enabled() and len(disabled_subs) > 1:
                         notification_text = texts.t(
