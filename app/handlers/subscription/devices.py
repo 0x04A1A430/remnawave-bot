@@ -948,7 +948,7 @@ async def handle_device_management(
                     await callback.answer()
                     return
 
-                await show_devices_page(callback, db_user, devices_list, page=1, sub_id=sub_id)
+                await show_devices_page(callback, db_user, devices_list, page=1, sub_id=sub_id, limit=subscription.device_limit)
             else:
                 await callback.answer(
                     texts.t(
@@ -995,6 +995,7 @@ async def show_devices_page(
     devices_list: list[dict],
     page: int = 1,
     sub_id: int | None = None,
+    limit: int | None = None,
 ):
     texts = get_texts(db_user.language)
     devices_per_page = 5
@@ -1043,6 +1044,13 @@ async def show_devices_page(
 
         devices_text += '</blockquote>\n'
 
+    if limit is not None:
+        limit_display = '∞' if limit <= 0 else str(limit)
+        devices_text += '\n' + texts.t(
+            'DEVICE_MANAGEMENT_COUNTER',
+            'Подключено устройств: {connected}/{limit}',
+        ).format(connected=len(devices_list), limit=limit_display) + '\n'
+
     await callback.message.edit_text(
         devices_text,
         reply_markup=get_devices_management_keyboard(
@@ -1075,7 +1083,14 @@ async def handle_devices_page(
 
             if response and 'response' in response:
                 devices_list = response['response'].get('devices', [])
-                await show_devices_page(callback, db_user, devices_list, page=page, sub_id=sub_id)
+                await show_devices_page(
+                    callback,
+                    db_user,
+                    devices_list,
+                    page=page,
+                    sub_id=sub_id,
+                    limit=getattr(subscription, 'device_limit', None),
+                )
             else:
                 await callback.answer(
                     texts.t('DEVICE_FETCH_ERROR', 'Ошибка получения устройств'),
@@ -1316,7 +1331,14 @@ async def cancel_device_rename(
             async with service.get_api_client() as api:
                 response = await api._make_request('GET', api._fmt_hwid_path(remnawave_uuid, remnawave_user_id))
             devices_list = (response or {}).get('response', {}).get('devices', []) or []
-            await show_devices_page(callback, db_user, devices_list, page=page, sub_id=sub_id)
+            await show_devices_page(
+                callback,
+                db_user,
+                devices_list,
+                page=page,
+                sub_id=sub_id,
+                limit=getattr(subscription, 'device_limit', None),
+            )
             await callback.answer(texts.t('DEVICE_RENAME_CANCELLED', 'Переименование отменено'))
             return
         except Exception as exc:
@@ -1427,6 +1449,7 @@ async def handle_single_device_reset(
                                     updated_devices,
                                     page=page,
                                     sub_id=sub_id,
+                                    limit=getattr(subscription, 'device_limit', None),
                                 )
                             else:
                                 await callback.message.edit_text(

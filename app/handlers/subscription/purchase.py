@@ -322,6 +322,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     devices_used_str = ''
     devices_list: list[dict[str, Any]] = []
 
+    # Максимум устройств по умолчанию — из подписки (база + докупленные).
+    # Если в панели админ поменял hwidDeviceLimit напрямую — подставим из неё.
+    effective_device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+
     if show_devices:
         try:
             _device_uuid = (
@@ -358,6 +362,14 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                             telegram_id=db_user.telegram_id,
                         )
 
+                    # Реальный лимит из панели (админ мог поменять его вручную)
+                    try:
+                        panel_user = await api.get_user_by_uuid(_device_uuid, user_id=_device_user_id)
+                        if panel_user is not None and getattr(panel_user, 'hwid_device_limit', None):
+                            effective_device_limit = panel_user.hwid_device_limit
+                    except Exception as e:
+                        logger.warning('Не удалось получить лимит устройств из панели', error=e)
+
         except Exception as e:
             logger.error('Ошибка получения устройств для отображения', error=e)
             devices_used = await get_current_devices_count(db_user)
@@ -384,7 +396,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 tariff_info_lines = [
                     f'<b> {html.escape(tariff.name)}</b>',
                     (f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит'),
-                    f'Устройства: {tariff.device_limit}',
+                    f'Устройства: {effective_device_limit}',
                 ]
 
                 if is_daily:
@@ -499,7 +511,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             '',
         )
 
-    device_limit_display = str(subscription.device_limit)
+    device_limit_display = str(effective_device_limit)
 
     message = message_template.format(
         full_name=html.escape(db_user.full_name or ''),
