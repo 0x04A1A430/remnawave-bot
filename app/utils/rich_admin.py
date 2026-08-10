@@ -48,8 +48,11 @@ _LEADING_TITLE_RE = re.compile(r'^(?P<title>[^\n]{1,160})[ \t]*\n+')
 # Сегментация по блочным тегам: внутри цитат переносы строк конвертируются в
 # <br>, pre-блоки не трогаются вовсе (сохраняют форматирование), остальной
 # текст — в абзацы.
-_BLOCK_SPLIT_RE = re.compile(r'(<blockquote>.*?</blockquote>|<pre>.*?</pre>)', re.IGNORECASE | re.DOTALL)
-_PRE_SPLIT_RE = re.compile(r'(<pre>.*?</pre>)', re.IGNORECASE | re.DOTALL)
+_BLOCK_SPLIT_RE = re.compile(
+    r'(<blockquote>(?:(?!</blockquote>).)*</blockquote>|<pre>(?:(?!</pre>).)*</pre>)',
+    re.IGNORECASE | re.DOTALL,
+)
+_PRE_SPLIT_RE = re.compile(r'(<pre>(?:(?!</pre>).)*</pre>)', re.IGNORECASE | re.DOTALL)
 
 
 def is_rich_admin_enabled() -> bool:
