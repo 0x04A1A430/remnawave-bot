@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import math
+import re
 import ssl
 from dataclasses import dataclass
 from datetime import datetime
@@ -646,6 +647,45 @@ class RemnaWaveAPI:
                 break
             cursor = data['nextCursor']
         return users
+
+    @staticmethod
+    def _description_matches_telegram_id(description: str | None, telegram_id: int | None) -> bool:
+        """True, если description несёт маркер telegram_id.
+
+        Бот пишет в описание сегмент ``TG: <id>``; также поддерживается формат
+        ``{tg_username} - {tg_id}``, где id — отдельный токен.
+        """
+        if not description or telegram_id is None:
+            return False
+        tid = str(telegram_id)
+        tokens = re.split(r'[\s\-–—|,;:()/.]+', description)
+        return tid in tokens
+
+    async def resolve_user_id_by_telegram_description(self, telegram_id: int) -> int | None:
+        """Ищет числовой remnawave_id по telegram, сверяя description.
+
+        v2: GET /api/users/by-telegram-id/{id} (id второй попыткой).
+        v3.0.0: uuid у юзеров НЕТ, remnawave_id может быть пустым в БД —
+        сначала фильтр /api/users/stream?telegramId=, затем полный обход стрима
+        с матчем по Description (``{tg_username} - {tg_id}`` / ``TG: <id>``).
+        """
+        if not self._use_user_id():
+            users = await self.get_user_by_telegram_id(telegram_id)
+            for user in users:
+                if user.id is not None:
+                    return user.id
+            return None
+        try:
+            users = await self._get_users_by_stream_filter({'telegramId': telegram_id})
+        except Exception:
+            users = []
+        for user in users:
+            if user.id is not None:
+                return user.id
+        for user in await self._get_users_by_stream_filter({}):
+            if self._description_matches_telegram_id(user.description, telegram_id):
+                return user.id
+        return None
 
     async def get_user_by_username(self, username: str) -> RemnaWaveUser | None:
         try:

@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import structlog
 from sqlalchemy import select
@@ -475,26 +476,9 @@ class SubscriptionService:
                     # v3: в БД может ещё не быть remnawave_id (старый юзер).
                     # Сопоставляем с панелью по telegram_id и записываем id.
                     if user.telegram_id:
-                        try:
-                            async with self.get_api_client() as api:
-                                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
-                                matched = next(
-                                    (u for u in panel_users if u.telegram_id == user.telegram_id),
-                                    None,
-                                )
-                                if matched and matched.id is not None:
-                                    remnawave_id = matched.id
-                                    if settings.is_multi_tariff_enabled():
-                                        subscription.remnawave_id = matched.id
-                                    else:
-                                        user.remnawave_id = matched.id
-                                    logger.info(
-                                        'Сопоставлен remnawave_id по telegram_id (update)',
-                                        user_id=subscription.user_id,
-                                        remnawave_id=matched.id,
-                                    )
-                        except Exception as api_error:
-                            logger.error('Ошибка сопоставления по telegram_id', api_error=api_error)
+                        resolved_id = await self._resolve_remnawave_id_by_telegram(db, subscription, user)
+                        if resolved_id is not None:
+                            remnawave_id = resolved_id
                     if remnawave_id is None:
                         logger.error(
                             'RemnaWave id не найден для пользователя (v3)',
@@ -685,6 +669,56 @@ class SubscriptionService:
         if user.email:
             return f'user {user.id} ({user.email})'
         return f'user {user.id}'
+
+    async def _resolve_remnawave_id_by_telegram(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        user: User,
+    ) -> int | None:
+        """Восстанавливает remnawave_id по telegram_id / Description из панели.
+
+        v3.0.0: uuid у юзеров панели НЕТ, а remnawave_id в БД может быть пустым.
+        Сначала ищем по telegramId, затем по Description (бот пишет ``TG: <id>``,
+        у многих стоит ``{tg_username} - {tg_id}``) — находим числовой id и
+        записываем в БД, чтобы дальше работать без обходов.
+        """
+        if not settings.REMNAWAVE_USE_USER_ID or not user or user.telegram_id is None:
+            return None
+        try:
+            async with self.get_api_client() as api:
+                matched = None
+                try:
+                    panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                    matched = next((u for u in panel_users if u.telegram_id == user.telegram_id), None)
+                except Exception:
+                    matched = None
+                if matched is None or matched.id is None:
+                    resolved = await api.resolve_user_id_by_telegram_description(user.telegram_id)
+                    if resolved is not None:
+                        matched = SimpleNamespace(id=resolved, telegram_id=user.telegram_id)
+        except Exception as e:
+            logger.warning('Не удалось определить remnawave_id по telegram/Description', error=e)
+            return None
+        if matched is None or matched.id is None:
+            return None
+        remnawave_id = RemnaWaveAPI._sanitize_user_id(matched.id)
+        if remnawave_id is None:
+            return None
+        if settings.is_multi_tariff_enabled():
+            subscription.remnawave_id = remnawave_id
+        else:
+            user.remnawave_id = remnawave_id
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+        logger.info(
+            'remnawave_id восстановлен по telegram/Description',
+            subscription_id=getattr(subscription, 'id', None),
+            remnawave_id=remnawave_id,
+        )
+        return remnawave_id
 
     async def _reset_user_traffic(
         self,

@@ -111,7 +111,7 @@ class TestParseSingleMixables:
         assert _parse_query('@user -t -5000').temp_traffic_gb == -999
 
     def test_reset_with_target(self):
-        p = _parse_query('@user -r')
+        p = _parse_query('@user -g')
         assert p.reset_traffic
         assert p.has_reset
         assert p.multi_count == 0
@@ -168,13 +168,13 @@ class TestParseMixing:
         assert not p.is_combo
 
     def test_subscription_plus_reset_is_combo(self):
-        p = _parse_query('@user -p 1 500 -r')
+        p = _parse_query('@user -p 1 500 -g')
         assert p.has_subscription
         assert p.reset_traffic
         assert p.is_combo
 
     def test_reset_mixes_with_balance(self):
-        p = _parse_query('@user -b 500 -r')
+        p = _parse_query('@user -b 500 -g')
         assert p.has_balance
         assert p.reset_traffic
         assert p.is_combo
@@ -217,12 +217,12 @@ class TestCaptions:
         assert '+100 ГБ трафика (на 30 дн.)' in cap
 
     def test_reset_caption_standalone(self):
-        p = _parse_query('@user -r')
+        p = _parse_query('@user -g')
         cap = _build_combo_caption('user', p, texts)
         assert 'Сброс использованного трафика' in cap
 
     def test_combo_caption_with_reset(self):
-        p = _parse_query('@user -p 1 500 -r')
+        p = _parse_query('@user -p 1 500 -g')
         cap = _build_combo_caption('user', p, texts)
         assert '1 дн.' in cap or '1 день' in cap
         assert 'Сброс использованного трафика' in cap
