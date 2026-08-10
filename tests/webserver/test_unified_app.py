@@ -53,11 +53,8 @@ async def test_unified_app_health_reports_features(monkeypatch: pytest.MonkeyPat
 
     assert getattr(health_route, 'path', None) == '/health/unified'
 
-    await app.router.startup()
-    try:
+    async with app.router.lifespan_context(app):
         response = await health_route.endpoint()  # type: ignore[func-returns-value]
-    finally:
-        await app.router.shutdown()
 
     payload = json.loads(response.body.decode('utf-8'))  # type: ignore[attr-defined]
 

@@ -17,7 +17,7 @@ DB encoding for subscription params:
   device_limit=N     → set to N devices
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot, Dispatcher, F, types
@@ -69,6 +69,9 @@ def _build_info_text(
     gift_type: str = 'subscription',
     balance_amount_kopeks: int = 0,
     temp_traffic_gb: int = 0,
+    temp_traffic_days: int = 30,
+    discount_percent: int = 0,
+    reset_traffic: bool = False,
 ) -> str:
     """Build activation preview. NULL values = no change, not shown."""
     lines = []
@@ -85,8 +88,8 @@ def _build_info_text(
 
     if gift_type == 'temp_traffic':
         sign = '+' if temp_traffic_gb >= 0 else ''
-        body = texts.t('INLINE_GIFT_TEMP_TRAFFIC_BODY', '{sign}{gb} ГБ трафика (на 30 дней)').format(
-            sign=sign, gb=temp_traffic_gb
+        body = texts.t('INLINE_GIFT_TEMP_TRAFFIC_BODY', '{sign}{gb} ГБ трафика (на {days} дн.)').format(
+            sign=sign, gb=temp_traffic_gb, days=temp_traffic_days or 30
         )
         return (
             f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
@@ -95,72 +98,107 @@ def _build_info_text(
             f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
         )
 
-    if existing_sub is None:
-        if gift_days is not None:
-            lines.append(
-                f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(gift_days, texts)}</b>'
-            )
-        if gift_traffic_gb is not None:
-            lines.append(
-                f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
-            )
-        if gift_devices is not None:
-            lines.append(
-                f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>")} '
-                f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{gift_devices}</b>'
-            )
-    else:
-        cur_days = max(0, existing_sub.days_left) if hasattr(existing_sub, 'days_left') else 0
-        cur_traffic = existing_sub.traffic_limit_gb or 0
-        cur_devices = existing_sub.device_limit or 1
+    if gift_type == 'reset':
+        body = texts.t('INLINE_GIFT_RESET_BODY', 'Сброс использованного трафика')
+        return (
+            f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+            f'<b>{texts.t("INLINE_GIFT_TITLE", "Подарочная подписка")}</b>\n\n'
+            f'<blockquote>{body}</blockquote>\n\n'
+            f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
+        )
 
-        if gift_days is not None:
-            new_days = cur_days + gift_days
-            forever = gift_days >= _FOREVER_DAYS or new_days >= _FOREVER_DAYS
-            if forever:
+    if gift_days is not None or gift_traffic_gb is not None or gift_devices is not None:
+        if existing_sub is None:
+            if gift_days is not None:
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(cur_days, texts)}</b> → '
-                    f'<b>{texts.t("INLINE_GIFT_LABEL_FOREVER", "Навсегда")}</b>'
+                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(gift_days, texts)}</b>'
                 )
-            else:
-                lines.append(
-                    f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(cur_days, texts)}</b> '
-                    f'+{gift_days}{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → <b>{_days_label(new_days, texts)}</b>'
-                )
-
-        if gift_traffic_gb is not None:
-            if gift_traffic_gb == -1:
-                if cur_traffic != 0:
-                    lines.append(
-                        f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
-                        f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(cur_traffic, texts)}</b> → '
-                        f'<b>{texts.t("INLINE_GIFT_TRAFFIC_UNLIMITED", "Безлимит")}</b>'
-                    )
-            elif cur_traffic != 0:
-                delta = gift_traffic_gb - cur_traffic
-                sign = '+' if delta >= 0 else ''
+            if gift_traffic_gb is not None:
                 lines.append(
                     f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(cur_traffic, texts)}</b> '
-                    f'{sign}{delta} → <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
+                    f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
                 )
+            if gift_devices is not None:
+                lines.append(
+                    f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>")} '
+                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{gift_devices}</b>'
+                )
+        else:
+            cur_days = max(0, existing_sub.days_left) if hasattr(existing_sub, 'days_left') else 0
+            cur_traffic = existing_sub.traffic_limit_gb or 0
+            cur_devices = existing_sub.device_limit or 1
 
-        if gift_devices is not None:
-            new_dev = max(cur_devices, gift_devices)
-            if new_dev != cur_devices:
-                lines.append(
-                    f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{cur_devices}</b> +{new_dev - cur_devices} → <b>{new_dev}</b>'
-                )
-            else:
-                lines.append(
-                    f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>")} '
-                    f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{cur_devices}</b>'
-                )
+            if gift_days is not None:
+                new_days = cur_days + gift_days
+                forever = gift_days >= _FOREVER_DAYS or new_days >= _FOREVER_DAYS
+                if forever:
+                    lines.append(
+                        f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji>")} '
+                        f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(cur_days, texts)}</b> → '
+                        f'<b>{texts.t("INLINE_GIFT_LABEL_FOREVER", "Навсегда")}</b>'
+                    )
+                else:
+                    lines.append(
+                        f'{texts.t("INLINE_GIFT_EMOJI_CALENDAR", "<tg-emoji emoji-id='5967412305338568701'>📅</tg-emoji>")} '
+                        f'{texts.t("INLINE_GIFT_LABEL_DURATION", "Срок")}: <b>{_days_label(cur_days, texts)}</b> '
+                        f'+{gift_days}{texts.t("INLINE_GIFT_DAYS_SUFFIX", " дн.")} → <b>{_days_label(new_days, texts)}</b>'
+                    )
+
+            if gift_traffic_gb is not None:
+                if gift_traffic_gb == -1:
+                    if cur_traffic != 0:
+                        lines.append(
+                            f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
+                            f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(cur_traffic, texts)}</b> → '
+                            f'<b>{texts.t("INLINE_GIFT_TRAFFIC_UNLIMITED", "Безлимит")}</b>'
+                        )
+                elif cur_traffic != 0:
+                    delta = gift_traffic_gb - cur_traffic
+                    sign = '+' if delta >= 0 else ''
+                    lines.append(
+                        f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
+                        f'{texts.t("INLINE_GIFT_LABEL_TRAFFIC", "Трафик")}: <b>{_fmt_traffic(cur_traffic, texts)}</b> '
+                        f'{sign}{delta} → <b>{_fmt_traffic(gift_traffic_gb, texts)}</b>'
+                    )
+
+            if gift_devices is not None:
+                new_dev = max(cur_devices, gift_devices)
+                if new_dev != cur_devices:
+                    lines.append(
+                        f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>")} '
+                        f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{cur_devices}</b> +{new_dev - cur_devices} → <b>{new_dev}</b>'
+                    )
+                else:
+                    lines.append(
+                        f'{texts.t("INLINE_GIFT_EMOJI_DEVICES", "<tg-emoji emoji-id='5877318502947229960'>💻</tg-emoji>")} '
+                        f'{texts.t("INLINE_GIFT_LABEL_DEVICES", "Устройств")}: <b>{cur_devices}</b>'
+                    )
+
+    if gift_type == 'combo':
+        if discount_percent:
+            lines.append(
+                f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_DISCOUNT", "Скидка")}: <b>{discount_percent}%</b>'
+            )
+        if balance_amount_kopeks:
+            rub = balance_amount_kopeks // 100
+            lines.append(
+                f'{texts.t("INLINE_GIFT_EMOJI_GIFT", "<tg-emoji emoji-id='6032937473162614352'>🎁</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_BALANCE", "Баланс")}: <b>+{rub} ₽</b>'
+            )
+        if temp_traffic_gb:
+            lines.append(
+                f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_TEMP_TRAFFIC", "Временный трафик")}: '
+                f'<b>+{temp_traffic_gb} ГБ (на {temp_traffic_days or 30} дн.)</b>'
+            )
+        if reset_traffic:
+            lines.append(
+                f'{texts.t("INLINE_GIFT_EMOJI_TRAFFIC", "<tg-emoji emoji-id='5931472654660800739'>📊</tg-emoji>")} '
+                f'{texts.t("INLINE_GIFT_LABEL_RESET", "Сброс трафика")}: '
+                f'<b>{texts.t("INLINE_GIFT_RESET_BODY", "Сброс использованного трафика")}</b>'
+            )
 
     body = '\n'.join(lines) if lines else '—'
     return (
@@ -169,6 +207,25 @@ def _build_info_text(
         f'<blockquote>{body}</blockquote>\n\n'
         f'{texts.t("INLINE_GIFT_CONFIRM_PROMPT", "Хотите активировать?")}'
     )
+
+
+async def _reset_panel_traffic(subscription, user) -> None:
+    from app.services.remnawave_service import RemnaWaveService
+
+    remnawave_uuid = getattr(subscription, 'remnawave_uuid', None) or getattr(user, 'remnawave_uuid', None)
+    if not remnawave_uuid:
+        return
+    try:
+        remnawave_service = RemnaWaveService()
+        async with remnawave_service.get_api_client() as api:
+            await api.reset_user_traffic(
+                remnawave_uuid,
+                user_id=subscription.remnawave_id
+                if settings.is_multi_tariff_enabled() and subscription
+                else user.remnawave_id,
+            )
+    except Exception as e:
+        logger.warning('Не удалось сбросить трафик RemnaWave (подарок)', error=e)
 
 
 def _check_recipient(gift: InlineGiftSubscription, telegram_id: int, username: str) -> bool:
@@ -258,6 +315,9 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str, state=Non
         ]
     )
 
+    temp_gb = gift.temp_traffic_gb
+    if temp_gb is None and gift.gift_type == 'temp_traffic':
+        temp_gb = gift.traffic_limit_gb
     text_out = _build_info_text(
         gift.days,
         gift.traffic_limit_gb,
@@ -266,7 +326,10 @@ async def handle_gift_deeplink(message: types.Message, gift_code: str, state=Non
         existing_sub,
         gift_type=gift.gift_type or 'subscription',
         balance_amount_kopeks=gift.balance_amount_kopeks or 0,
-        temp_traffic_gb=gift.traffic_limit_gb if gift.gift_type == 'temp_traffic' else 0,
+        temp_traffic_gb=temp_gb or 0,
+        temp_traffic_days=gift.temp_traffic_days or 30,
+        discount_percent=gift.discount_percent or 0,
+        reset_traffic=bool(gift.reset_traffic),
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
     return True
@@ -375,7 +438,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_msg_id,
                     texts.t(
                         'INLINE_GIFT_ACTIVATED_BUTTON',
-                        '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано',
+                        'Активировано',
                     ),
                     0,
                     1,
@@ -415,7 +478,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_msg_id,
                     texts.t(
                         'INLINE_GIFT_ACTIVATED_BUTTON',
-                        '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано',
+                        'Активировано',
                     ),
                     0,
                     1,
@@ -426,7 +489,10 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 from app.database.crud.subscription import _lock_subscription_row
                 from app.database.models import TrafficPurchase
 
-                gb = gift.traffic_limit_gb or 0
+                gb = gift.temp_traffic_gb or 0
+                if not gb:
+                    gb = gift.traffic_limit_gb or 0
+                temp_days = gift.temp_traffic_days or 30
                 existing_sub = await get_subscription_by_user_id(db, user.id)
 
                 if not existing_sub:
@@ -440,7 +506,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
                 await _lock_subscription_row(db, existing_sub)
 
-                new_expires_at = datetime.now(UTC) + timedelta(days=30)
+                new_expires_at = datetime.now(UTC) + timedelta(days=temp_days)
                 new_purchase = TrafficPurchase(
                     subscription_id=existing_sub.id,
                     traffic_gb=gb,
@@ -462,8 +528,8 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                 sign = '+' if gb >= 0 else ''
                 success_text = texts.t(
                     'INLINE_GIFT_TEMP_TRAFFIC_SUCCESS',
-                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Временный трафик активирован!</b>\n\n<blockquote>{sign}{gb} ГБ трафика (на 30 дней)</blockquote>',
-                ).format(sign=sign, gb=gb)
+                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Временный трафик активирован!</b>\n\n<blockquote>{sign}{gb} ГБ трафика (на {days} дней)</blockquote>',
+                ).format(sign=sign, gb=gb, days=temp_days)
                 back_kb = types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
@@ -480,10 +546,287 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
                     inline_msg_id,
                     texts.t(
                         'INLINE_GIFT_ACTIVATED_BUTTON',
-                        '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано',
+                        'Активировано',
                     ),
                     0,
                     1,
+                )
+                return
+
+            if gift_type == 'reset':
+                existing_sub = await get_subscription_by_user_id(db, user.id)
+                if not existing_sub:
+                    await callback.message.edit_text(
+                        texts.t(
+                            'INLINE_GIFT_NO_SUBSCRIPTION',
+                            'У вас нет активной подписки для сброса трафика.',
+                        )
+                    )
+                    return
+
+                existing_sub.traffic_used_gb = 0.0
+                existing_sub.updated_at = datetime.now(UTC)
+
+                gift.activated_count = activated + 1
+                gift.is_activated = True
+                gift.activated_at = datetime.now(UTC)
+                gift.activated_by_user_id = user.id
+                inline_msg_id = gift.inline_message_id
+                await db.commit()
+
+                await _reset_panel_traffic(existing_sub, user)
+
+                success_text = texts.t(
+                    'INLINE_GIFT_RESET_SUCCESS',
+                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Трафик сброшен!</b>\n\n<blockquote>Использованный трафик обнулён</blockquote>',
+                )
+                back_kb = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            make_button(
+                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                callback_data='back_to_menu',
+                            )
+                        ]
+                    ]
+                )
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
+                await _update_inline_button(
+                    callback.bot,
+                    inline_msg_id,
+                    texts.t(
+                        'INLINE_GIFT_ACTIVATED_BUTTON',
+                        'Активировано',
+                    ),
+                    0,
+                    1,
+                )
+                return
+
+            if gift_type == 'combo':
+                import secrets as _secrets
+
+                from app.database.crud.promocode import create_promocode
+                from app.database.crud.server_squad import get_available_server_squads
+                from app.database.crud.subscription import _lock_subscription_row
+                from app.database.crud.user import add_user_balance
+                from app.database.models import PromoCodeType, TrafficPurchase
+
+                buffer: list[str] = []
+                inline_msg_id = gift.inline_message_id
+                subscription = None
+
+                # --- subscription component ---
+                has_sub = gift.days is not None or gift.traffic_limit_gb is not None or gift.device_limit is not None
+                if has_sub:
+                    available = await get_available_server_squads(db)
+                    squads: list[str] = [available[0].squad_uuid] if available else []
+                    existing_sub = await get_subscription_by_user_id(db, user.id)
+                    subscription_service = SubscriptionService()
+                    gift_days = gift.days
+                    gift_traffic = gift.traffic_limit_gb
+                    gift_devices = gift.device_limit
+
+                    if existing_sub:
+                        if gift_traffic is None:
+                            new_traffic = None
+                        elif gift_traffic == -1:
+                            new_traffic = 0
+                        elif gift_traffic != existing_sub.traffic_limit_gb:
+                            new_traffic = gift_traffic
+                        else:
+                            new_traffic = None
+
+                        if gift_devices is None:
+                            new_devices = None
+                        else:
+                            cur_dev = existing_sub.device_limit or 1
+                            new_devices = max(cur_dev, gift_devices)
+                            if new_devices == cur_dev:
+                                new_devices = None
+
+                        if gift_days is not None and gift_days >= _FOREVER_DAYS:
+                            existing_sub.end_date = datetime.now(UTC).replace(year=2099)
+                            subscription = await extend_subscription(
+                                db=db,
+                                subscription=existing_sub,
+                                days=0,
+                                traffic_limit_gb=new_traffic,
+                                device_limit=new_devices,
+                                connected_squads=squads if squads else None,
+                                commit=False,
+                            )
+                        else:
+                            subscription = await extend_subscription(
+                                db=db,
+                                subscription=existing_sub,
+                                days=gift_days or 0,
+                                traffic_limit_gb=new_traffic,
+                                device_limit=new_devices,
+                                connected_squads=squads if squads else None,
+                                commit=False,
+                            )
+                        await subscription_service.update_remnawave_user(db, subscription)
+                    else:
+                        duration_days = gift_days or 0
+                        forever_end_date = None
+                        if duration_days >= _FOREVER_DAYS:
+                            forever_end_date = datetime.now(UTC).replace(year=2099)
+                            duration_days = 1
+                        traffic_for_new = (
+                            0
+                            if gift_traffic == -1
+                            else (settings.DEFAULT_TRAFFIC_LIMIT_GB if gift_traffic is None else gift_traffic)
+                        )
+                        devices_for_new = gift_devices if gift_devices is not None else settings.DEFAULT_DEVICE_LIMIT
+                        subscription = await create_paid_subscription(
+                            db=db,
+                            user_id=user.id,
+                            duration_days=duration_days,
+                            traffic_limit_gb=traffic_for_new,
+                            device_limit=devices_for_new,
+                            connected_squads=squads,
+                            update_server_counters=True,
+                        )
+                        if forever_end_date:
+                            subscription.end_date = forever_end_date
+
+                    sub_parts = []
+                    if gift_days is not None:
+                        if gift_days >= _FOREVER_DAYS:
+                            sub_parts.append(texts.t('INLINE_GIFT_LABEL_FOREVER', 'Навсегда'))
+                        else:
+                            sub_parts.append(f'+{_days_label(gift_days, texts)}')
+                    if gift_traffic is not None:
+                        sub_parts.append(_fmt_traffic(gift_traffic, texts))
+                    if gift_devices is not None:
+                        sub_parts.append(f'{gift_devices} уст.')
+                    if sub_parts:
+                        buffer.append(
+                            texts.t(
+                                'INLINE_GIFT_COMBO_SUB',
+                                'подписка: {changes}',
+                            ).format(changes=', '.join(sub_parts))
+                        )
+
+                # --- discount component ---
+                if gift.discount_percent:
+                    pct = gift.discount_percent
+                    promo_code_str = _secrets.token_hex(4).upper()
+                    await create_promocode(
+                        db,
+                        code=promo_code_str,
+                        type=PromoCodeType.DISCOUNT,
+                        balance_bonus_kopeks=pct,
+                        max_uses=1,
+                        created_by=gift.sender_user_id,
+                    )
+                    buffer.append(
+                        texts.t(
+                            'INLINE_GIFT_COMBO_DISCOUNT',
+                            'скидка {pct}% — промокод <code>{code}</code>',
+                        ).format(pct=pct, code=promo_code_str)
+                    )
+
+                # --- balance component ---
+                if gift.balance_amount_kopeks:
+                    kopeks = gift.balance_amount_kopeks
+                    await add_user_balance(db, user, kopeks, description='Подарок от администратора')
+                    buffer.append(texts.t('INLINE_GIFT_COMBO_BALANCE', '+{rub} ₽ на баланс').format(rub=kopeks // 100))
+
+                # --- temp-traffic component ---
+                if gift.temp_traffic_gb:
+                    gb = gift.temp_traffic_gb
+                    coincident_sub = await get_subscription_by_user_id(db, user.id)
+                    if not coincident_sub:
+                        await callback.message.edit_text(
+                            texts.t(
+                                'INLINE_GIFT_NO_SUBSCRIPTION',
+                                'У вас нет активной подписки для добавления трафика.',
+                            )
+                        )
+                        return
+                    await _lock_subscription_row(db, coincident_sub)
+                    temp_days = gift.temp_traffic_days or 30
+                    new_expires_at = datetime.now(UTC) + timedelta(days=temp_days)
+                    new_purchase = TrafficPurchase(
+                        subscription_id=coincident_sub.id,
+                        traffic_gb=gb,
+                        expires_at=new_expires_at,
+                    )
+                    db.add(new_purchase)
+                    coincident_sub.purchased_traffic_gb = (getattr(coincident_sub, 'purchased_traffic_gb', 0) or 0) + gb
+                    coincident_sub.updated_at = datetime.now(UTC)
+                    buffer.append(
+                        texts.t(
+                            'INLINE_GIFT_COMBO_TEMP',
+                            '+{gb} ГБ трафика (на {days} дн.)',
+                        ).format(gb=gb, days=temp_days)
+                    )
+
+                reset_sub = None
+                # --- reset-traffic component ---
+                if gift.reset_traffic:
+                    reset_sub = subscription
+                    if reset_sub is None:
+                        reset_sub = await get_subscription_by_user_id(db, user.id)
+                    if not reset_sub:
+                        await callback.message.edit_text(
+                            texts.t(
+                                'INLINE_GIFT_NO_SUBSCRIPTION',
+                                'У вас нет активной подписки для сброса трафика.',
+                            )
+                        )
+                        return
+                    reset_sub.traffic_used_gb = 0.0
+                    reset_sub.updated_at = datetime.now(UTC)
+                    buffer.append(
+                        texts.t(
+                            'INLINE_GIFT_COMBO_RESET',
+                            'сброс трафика',
+                        )
+                    )
+
+                new_activated = activated + 1
+                gift.activated_count = new_activated
+                if new_activated >= max_act:
+                    gift.is_activated = True
+                gift.activated_at = datetime.now(UTC)
+                gift.activated_by_user_id = user.id
+                if subscription is not None:
+                    gift.subscription_id = subscription.id
+                    await db.refresh(subscription)
+                await db.commit()
+
+                if reset_sub is not None:
+                    await _reset_panel_traffic(reset_sub, user)
+
+                changes = ', '.join(buffer)
+                success_text = texts.t(
+                    'INLINE_GIFT_SUCCESS_CHANGES',
+                    '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> <b>Подарок активирован!</b>\n\n<blockquote>{changes}</blockquote>',
+                ).format(changes=changes)
+                back_kb = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            make_button(
+                                text=texts.t('MAIN_MENU_BUTTON', 'Главное меню'),
+                                callback_data='back_to_menu',
+                            )
+                        ]
+                    ]
+                )
+                await callback.message.edit_text(success_text, parse_mode='HTML', reply_markup=back_kb)
+                fully_used = new_activated >= max_act
+                button_text = (
+                    texts.t('INLINE_GIFT_ACTIVATED_BUTTON', 'Активировано')
+                    if fully_used
+                    else texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(
+                        n=max_act - new_activated
+                    )
+                )
+                await _update_inline_button(
+                    callback.bot, inline_msg_id, button_text, max_act - new_activated, max_act, gift_code=gift_code
                 )
                 return
 
@@ -627,9 +970,7 @@ async def handle_activate_callback(callback: types.CallbackQuery) -> None:
 
         fully_used = new_activated >= max_act
         button_text = (
-            texts.t(
-                'INLINE_GIFT_ACTIVATED_BUTTON', '<tg-emoji emoji-id="5825794181183836432">✔️</tg-emoji> Активировано'
-            )
+            texts.t('INLINE_GIFT_ACTIVATED_BUTTON', 'Активировано')
             if fully_used
             else texts.t('INLINE_GIFT_ACTIVATE_BUTTON_N', 'Активировать (осталось: {n})').format(n=remaining)
         )
@@ -763,6 +1104,9 @@ async def show_pending_inline_gift(
         ]
     )
 
+    temp_gb = gift.temp_traffic_gb
+    if temp_gb is None and gift.gift_type == 'temp_traffic':
+        temp_gb = gift.traffic_limit_gb
     text_out = _build_info_text(
         gift.days,
         gift.traffic_limit_gb,
@@ -771,7 +1115,10 @@ async def show_pending_inline_gift(
         existing_sub,
         gift_type=gift.gift_type or 'subscription',
         balance_amount_kopeks=gift.balance_amount_kopeks or 0,
-        temp_traffic_gb=gift.traffic_limit_gb if gift.gift_type == 'temp_traffic' else 0,
+        temp_traffic_gb=temp_gb or 0,
+        temp_traffic_days=gift.temp_traffic_days or 30,
+        discount_percent=gift.discount_percent or 0,
+        reset_traffic=bool(gift.reset_traffic),
     )
     await message.answer(text_out, reply_markup=keyboard, parse_mode='HTML')
 

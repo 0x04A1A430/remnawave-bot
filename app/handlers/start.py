@@ -48,6 +48,12 @@ from app.middlewares.channel_checker import (
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.channel_subscription_service import channel_subscription_service
+from app.services.coupon_service import (
+    COUPON_DEEP_LINK_PREFIX,
+    CouponRedemptionError,
+    is_coupon_token,
+    redeem_coupon,
+)
 from app.services.guest_purchase_service import GIFT_TOKEN_MIN_PREFIX_LENGTH
 from app.services.main_menu_button_service import MainMenuButtonService
 from app.services.phantom_service import claim_phantom, merge_phantom_into_user
@@ -66,6 +72,8 @@ from app.services.support_settings_service import SupportSettingsService
 from app.services.web_auth_service import WEB_AUTH_TOKEN_MIN_LENGTH, link_web_auth_token
 from app.states import RegistrationStates
 from app.utils.button_emoji import make_button
+from app.utils.long_messages import answer_long_text
+from app.utils.rich_menu import try_answer_rich_main_menu, try_send_rich_main_menu
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -92,6 +100,38 @@ def _split_start_param_subid(param: str | None) -> tuple[str | None, str | None]
     if not head or not tail or len(tail) > 255:
         return param, None
     return head, tail
+
+
+async def _answer_main_menu_rich_first(
+    message,
+    user,
+    texts,
+    db: AsyncSession,
+    menu_text: str,
+    keyboard,
+) -> None:
+    """Ответить главным меню: rich-сообщение, при недоступности — классика."""
+    if not await try_answer_rich_main_menu(message, user, texts, db, keyboard):
+        await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+
+
+async def _send_main_menu_rich_first(
+    bot: Bot,
+    chat_id: int,
+    user,
+    texts,
+    db: AsyncSession,
+    menu_text: str,
+    keyboard,
+) -> None:
+    """Отправить главное меню: rich-сообщение, при недоступности — классика."""
+    if not await try_send_rich_main_menu(bot, chat_id, user, texts, db, keyboard):
+        await bot.send_message(
+            chat_id=chat_id,
+            text=menu_text,
+            reply_markup=keyboard,
+            parse_mode='HTML',
+        )
 
 
 async def _persist_pending_subid_after_registration(
@@ -228,6 +268,68 @@ async def _activate_pending_gift_after_registration(
             )
         except Exception:
             pass
+
+
+_COUPON_ERROR_TEXTS = {
+    'invalid': 'Купон не найден или уже использован.',
+    'expired': 'Срок действия купона истёк.',
+    'already_redeemed_by_you': 'Вы уже активировали этот купон.',
+    'per_user_limit': 'Вы уже использовали свой лимит купонов из этой раздачи.',
+    'internal': 'Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
+}
+
+
+async def _redeem_pending_coupon(
+    db: AsyncSession,
+    state: FSMContext,
+    user: 'User',
+    answer_func: Callable[..., Any],
+) -> None:
+    """Extract pending_coupon_token from FSM state and redeem it for ``user``.
+
+    Must be called BEFORE state.clear() to preserve the token.
+    """
+    coupon_token: str | None = None
+    try:
+        fresh_state = await state.get_data()
+        coupon_token = fresh_state.get('pending_coupon_token')
+        if not coupon_token:
+            return
+
+        try:
+            result = await redeem_coupon(db, coupon_token, user)
+        except CouponRedemptionError as error:
+            await answer_func(
+                _COUPON_ERROR_TEXTS.get(error.code, _COUPON_ERROR_TEXTS['invalid']),
+                parse_mode=ParseMode.HTML,
+            )
+            return
+    except Exception:
+        logger.exception(
+            'Failed to redeem coupon deep link',
+            token_prefix=(coupon_token or '')[:5],
+        )
+        try:
+            await answer_func(_COUPON_ERROR_TEXTS['internal'], parse_mode=ParseMode.HTML)
+        except Exception:
+            # пользователь уже мог отключить чат — без ретрая, чтобы не плодить исключения
+            pass
+        return
+
+    # Redemption is committed at this point — a failed confirmation send must
+    # not claim the activation failed (the coupon IS consumed).
+    try:
+        tariff_name = html.escape(result.tariff_name)
+        await answer_func(
+            f'Купон активирован!\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        logger.exception(
+            'Coupon redeemed but the confirmation message failed to send',
+            token_prefix=(coupon_token or '')[:5],
+            user_id=user.id,
+        )
 
 
 async def _activate_pending_inline_gift_after_registration(
@@ -639,7 +741,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('Правила отправлены после ввода реферального кода')
         else:
@@ -674,7 +776,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
             texts = get_texts(language)
 
             rules_text = await get_rules(language)
-            await message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+            await answer_long_text(message, rules_text, reply_markup=get_rules_keyboard(language))
             await state.set_state(RegistrationStates.waiting_for_rules_accept)
             logger.info('Правила отправлены после принятия промокода')
         else:
@@ -769,7 +871,7 @@ async def _continue_registration_after_language(
 
     rules_text = await get_rules(language)
     try:
-        await target_message.answer(rules_text, reply_markup=get_rules_keyboard(language))
+        await answer_long_text(target_message, rules_text, reply_markup=get_rules_keyboard(language))
     except TelegramForbiddenError:
         logger.warning(
             'Пользователь заблокировал бота, пропускаем отправку правил',
@@ -870,6 +972,28 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             # _activate_pending_gift_after_registration() before state.clear().
             await state.update_data(pending_gift_token=gift_token)
             start_parameter = None  # Don't treat as campaign or referral
+
+    # Handle coupon deep links: /start coupon_{token} — one-time wholesale coupons
+    if start_parameter and start_parameter.startswith(COUPON_DEEP_LINK_PREFIX):
+        coupon_token = start_parameter.removeprefix(COUPON_DEEP_LINK_PREFIX).lower()
+        # The payload fits Telegram's 64-char start param untruncated, so the
+        # lookup is exact-match. Swallow the parameter only for coupons that
+        # actually exist — a campaign start_parameter may legitimately begin
+        # with 'coupon_' (even coupon_<32 hex>) and must fall through to the
+        # campaign lookup below.
+        if is_coupon_token(coupon_token):
+            from app.database.crud.coupon import get_coupon_by_token
+
+            if await get_coupon_by_token(db, coupon_token) is not None:
+                logger.info(
+                    'Coupon deep link detected',
+                    token_prefix=coupon_token[:5],
+                    telegram_id=message.from_user.id,
+                )
+                # Redeemed via _redeem_pending_coupon(): immediately below for
+                # registered users, after registration for new ones.
+                await state.update_data(pending_coupon_token=coupon_token)
+                start_parameter = None  # Don't treat as campaign or referral
 
     # Handle admin inline gift deep links: /start bs_<gift_code>
     if start_parameter and start_parameter.startswith('bs_'):
@@ -1161,6 +1285,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await _activate_pending_gift_after_registration(db, state, user, message.answer)
             showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
             await state.update_data(pending_gift_token=None)
+            await _redeem_pending_coupon(db, state, user, message.answer)
+            await state.update_data(pending_coupon_token=None)
             await _persist_pending_subid_after_registration(db, state, user)
             await state.update_data(pending_subid=None)
             # Refresh user to pick up newly created subscriptions
@@ -1211,7 +1337,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             is_moderator=is_moderator,
             custom_buttons=custom_buttons,
         )
-        await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+        await _answer_main_menu_rich_first(message, user, texts, db, menu_text, keyboard)
 
         if pinned_message and not pinned_message.send_before_menu:
             await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -1927,7 +2053,14 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(
+                callback.message,
+                existing_user,
+                texts,
+                db,
+                menu_text,
+                keyboard,
+            )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2097,6 +2230,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
     showed_gift = await _activate_pending_inline_gift_after_registration(
         state, callback.message, from_user=callback.from_user
     )
+    await _redeem_pending_coupon(db, state, user, callback.message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
@@ -2197,7 +2331,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
-            await callback.message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(callback.message, user, texts, db, menu_text, keyboard)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, user, pinned_message)
             logger.info('Главное меню показано пользователю', telegram_id=user.telegram_id)
@@ -2277,7 +2411,14 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(
+                message,
+                existing_user,
+                texts,
+                db,
+                menu_text,
+                keyboard,
+            )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, existing_user, pinned_message)
         except Exception as e:
@@ -2475,6 +2616,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
     # Auto-activate pending gift for newly registered user (before state.clear() wipes the token)
     await _activate_pending_gift_after_registration(db, state, user, message.answer)
     showed_gift = await _activate_pending_inline_gift_after_registration(state, message)
+    await _redeem_pending_coupon(db, state, user, message.answer)
     await _persist_pending_subid_after_registration(db, state, user)
 
     await state.clear()
@@ -2583,7 +2725,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             )
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
-            await message.answer(menu_text, reply_markup=keyboard, parse_mode='HTML')
+            await _answer_main_menu_rich_first(message, user, texts, db, menu_text, keyboard)
             logger.info('Главное меню показано пользователю', telegram_id=user.telegram_id)
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(message.bot, db, user, pinned_message)
@@ -2873,22 +3015,23 @@ async def required_sub_channel_check(
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(bot, db, user, pinned_message)
 
-            if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                _result = await bot.send_photo(
-                    chat_id=query.from_user.id,
-                    photo=get_logo_media(),
-                    caption=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
-                _cache_logo_file_id(_result)
-            else:
-                await bot.send_message(
-                    chat_id=query.from_user.id,
-                    text=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode='HTML',
-                )
+            if not await try_send_rich_main_menu(bot, query.from_user.id, user, texts, db, keyboard):
+                if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
+                    _result = await bot.send_photo(
+                        chat_id=query.from_user.id,
+                        photo=get_logo_media(),
+                        caption=menu_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
+                    _cache_logo_file_id(_result)
+                else:
+                    await bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=menu_text,
+                        reply_markup=keyboard,
+                        parse_mode='HTML',
+                    )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(bot, db, user, pinned_message)
         else:
@@ -3047,22 +3190,41 @@ async def required_sub_channel_check(
                     if pinned_message and pinned_message.send_before_menu:
                         await _send_pinned_message(bot, db, user, pinned_message)
 
-                    if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
-                        _result = await bot.send_photo(
-                            chat_id=query.from_user.id,
-                            photo=get_logo_media(),
-                            caption=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
-                        _cache_logo_file_id(_result)
-                    else:
-                        await bot.send_message(
-                            chat_id=query.from_user.id,
-                            text=menu_text,
-                            reply_markup=keyboard,
-                            parse_mode='HTML',
-                        )
+                    if not await try_send_rich_main_menu(bot, query.from_user.id, user, texts, db, keyboard):
+                        if settings.ENABLE_LOGO_MODE and not caption_exceeds_telegram_limit(menu_text):
+                            from app.services.start_media_service import get_start_video_file_id
+
+                            video_file_id = await get_start_video_file_id(db)
+                            if video_file_id:
+                                try:
+                                    await bot.send_video(
+                                        chat_id=query.from_user.id,
+                                        video=video_file_id,
+                                        caption=menu_text,
+                                        reply_markup=keyboard,
+                                        parse_mode='HTML',
+                                    )
+                                except Exception as video_error:
+                                    logger.warning(
+                                        'Не удалось отправить видео меню — уходим на логотип',
+                                        error=str(video_error),
+                                    )
+                            else:
+                                _result = await bot.send_photo(
+                                    chat_id=query.from_user.id,
+                                    photo=get_logo_media(),
+                                    caption=menu_text,
+                                    reply_markup=keyboard,
+                                    parse_mode='HTML',
+                                )
+                                _cache_logo_file_id(_result)
+                        else:
+                            await bot.send_message(
+                                chat_id=query.from_user.id,
+                                text=menu_text,
+                                reply_markup=keyboard,
+                                parse_mode='HTML',
+                            )
                     if pinned_message and not pinned_message.send_before_menu:
                         await _send_pinned_message(bot, db, user, pinned_message)
                 else:

@@ -12,7 +12,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.user import get_user_by_panel_user_id, get_user_by_remnawave_uuid
+from app.database.crud.user import get_user_by_remnawave_id, get_user_by_remnawave_uuid
 from app.database.database import AsyncSessionLocal
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
 from app.services.admin_notification_service import AdminNotificationService
@@ -49,15 +49,15 @@ class TrafficViolation:
     last_node_uuid: str | None
     last_node_name: str | None
     check_type: str  # "fast" или "daily"
-    panel_user_id: int | None = None
+    remnawave_id: int | None = None
 
     @property
     def identity(self) -> str:
         """Стабильный ключ для кулдауна/кэша.
 
-        v3.0.0: uuid отсутствует — числовой panel_user_id становится ключом.
+        v3.0.0: uuid отсутствует — числовой remnawave_id становится ключом.
         """
-        return str(self.panel_user_id) if self.panel_user_id is not None else self.user_uuid
+        return str(self.remnawave_id) if self.remnawave_id is not None else self.user_uuid
 
 
 class TrafficMonitoringServiceV2:
@@ -579,7 +579,7 @@ class TrafficMonitoringServiceV2:
                     last_node_uuid=last_node_uuid,
                     last_node_name=node_name,
                     check_type='fast',
-                    panel_user_id=user.id,
+                    remnawave_id=user.id,
                 )
                 violations.append(violation)
 
@@ -681,7 +681,7 @@ class TrafficMonitoringServiceV2:
                         last_node_uuid=last_node_uuid,
                         last_node_name=node_name,
                         check_type='daily',
-                        panel_user_id=user.id,
+                        remnawave_id=user.id,
                     )
 
                 except Exception as e:
@@ -747,9 +747,9 @@ class TrafficMonitoringServiceV2:
                 user_info = ''
                 async with AsyncSessionLocal() as db:
                     db_user = None
-                    # v3.0.0: идентификация по числовому panel_user_id, uuid может быть пустым
-                    if violation.panel_user_id is not None:
-                        db_user = await get_user_by_panel_user_id(db, violation.panel_user_id)
+                    # v3.0.0: идентификация по числовому remnawave_id, uuid может быть пустым
+                    if violation.remnawave_id is not None:
+                        db_user = await get_user_by_remnawave_id(db, violation.remnawave_id)
                     if db_user is None and violation.user_uuid:
                         db_user = await get_user_by_remnawave_uuid(db, violation.user_uuid)
                     if db_user:

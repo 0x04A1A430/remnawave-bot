@@ -413,7 +413,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
             if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
                 return JSONResponse(
-                    {'status': 'error', 'reason': 'forbidden_ip'},
+                    {'status': 'error', 'reason': 'forbidden_ip', 'ip': str(client_ip)},
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
@@ -720,7 +720,30 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
 
+            # Platega sends both one-off payment callbacks and recurring СБП-subscription
+            # callbacks (charge + status-change) to this same endpoint. Subscription
+            # payloads carry PaymentMethod 6, a SubscriptionId, or a SUBSCRIPTION_-prefixed
+            # Status and must be routed to the dedicated handler.
+            is_subscription = (
+                payload.get('PaymentMethod') == 6
+                or 'SubscriptionId' in payload
+                or str(payload.get('Status', '')).startswith('SUBSCRIPTION_')
+            )
+
             try:
+                if is_subscription:
+                    # process_platega_subscription_callback self-handles errors/logging
+                    # and always returns None — it is NOT a success flag like the other
+                    # handlers, so the response must not be gated on its return value.
+                    # Per spec, subscription callbacks always get HTTP 200 unless
+                    # dispatch itself raises (caught below → 400, Platega retries).
+                    await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_platega_subscription_callback',
+                    )
+                    return JSONResponse({'status': 'ok'})
+
                 success = await _process_payment_service_callback(
                     payment_service,
                     payload,
@@ -1650,21 +1673,88 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 logger.warning('Lava webhook: invalid signature')
                 return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
 
+            # Списания по рекуррентной подписке приходят обычным инвойс-вебхуком:
+            # отличаем их по префиксу нашего orderId и уводим в ветку подписок —
+            # там продление подписки, а не начисление на баланс.
+            from app.services.lava_recurrent import is_recurrent_order_id
+
+            callback_method = (
+                'process_lava_subscription_callback'
+                if is_recurrent_order_id(payload.get('order_id'))
+                else 'process_lava_callback'
+            )
+
             try:
                 success = await _process_payment_service_callback(
                     payment_service,
                     payload,
-                    'process_lava_callback',
+                    callback_method,
                 )
                 if not success:
                     logger.error(
                         'Lava webhook processing failed',
                         order_id=payload.get('order_id'),
                         invoice_id=payload.get('invoice_id'),
+                        handler=callback_method,
                     )
             except Exception as e:
                 logger.exception('Lava webhook processing error', error=e)
             # Lava ожидает HTTP 200 как подтверждение приёма; иначе будет повтор до 5 раз раз в 150с
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # cisPay webhook (api.cispay.app)
+    if settings.is_cispay_enabled():
+
+        @router.get(settings.CISPAY_WEBHOOK_PATH)
+        async def cispay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'cispay_webhook',
+                    'enabled': settings.is_cispay_enabled(),
+                }
+            )
+
+        @router.post(settings.CISPAY_WEBHOOK_PATH)
+        async def cispay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.cispay_service import cispay_service
+
+            # X-Signature — HMAC-SHA256 от сырого тела запроса, ключ — X-Api-Key магазина
+            received_signature = request.headers.get('X-Signature')
+            if not cispay_service.verify_webhook_signature(raw_body, received_signature):
+                logger.warning('cisPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                payload = json.loads(raw_body)
+            except Exception as parse_error:
+                logger.error('cisPay webhook: failed to parse JSON', parse_error=parse_error)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                success = await _process_payment_service_callback(
+                    payment_service,
+                    payload,
+                    'process_cispay_callback',
+                )
+            except Exception as e:
+                logger.exception('cisPay webhook processing error', error=e)
+                success = False
+
+            if not success:
+                logger.error(
+                    'cisPay webhook processing failed',
+                    order_id=payload.get('order_id'),
+                    payment_id=payload.get('id'),
+                )
+                # Не-2xx заставит cisPay повторить вебхук по расписанию
+                # (через 1 мин, 5 мин, 15 мин, 1 час — всего 5 попыток)
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
 
         routes_registered = True
@@ -1745,6 +1835,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     'jupiter_enabled': settings.is_jupiter_enabled(),
                     'donut_enabled': settings.is_donut_enabled(),
                     'lava_enabled': settings.is_lava_enabled(),
+                    'cispay_enabled': settings.is_cispay_enabled(),
                 }
             )
 

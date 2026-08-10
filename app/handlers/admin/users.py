@@ -3816,6 +3816,15 @@ async def confirm_subscription_deletion(callback: types.CallbackQuery, db_user: 
 
     await db.execute(sql_delete(TrafficPurchase).where(TrafficPurchase.subscription_id == subscription.id))
 
+    # Best-effort: stop Platega SBP autopay before the row disappears — the
+    # platega_subscriptions record CASCADE-deletes with it, so cancelling
+    # after the delete would find nothing to cancel on Platega's side.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
     await db.delete(subscription)
     await db.commit()
 
@@ -4203,9 +4212,9 @@ async def toggle_user_server(callback: types.CallbackQuery, db_user: User, db: A
                     await api.update_user(
                         uuid=_uuid,
                         active_internal_squads=current_squads,
-                        user_id=subscription.panel_user_id
+                        user_id=subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription
-                        else user.panel_user_id,
+                        else user.remnawave_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -4660,9 +4669,9 @@ async def reset_user_devices(callback: types.CallbackQuery, db_user: User, db: A
         async with remnawave_service.get_api_client() as api:
             success = await api.reset_user_devices(
                 _uuid,
-                user_id=subscription.panel_user_id
+                user_id=subscription.remnawave_id
                 if subscription_id and settings.is_multi_tariff_enabled() and subscription
-                else user.panel_user_id,
+                else user.remnawave_id,
             )
 
         if success:
@@ -4722,9 +4731,9 @@ async def _update_user_devices(
                     await api.update_user(
                         uuid=_uuid,
                         hwid_device_limit=devices,
-                        user_id=subscription.panel_user_id
+                        user_id=subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription
-                        else user.panel_user_id,
+                        else user.remnawave_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -4790,9 +4799,9 @@ async def _update_user_traffic(
                         traffic_limit_strategy=get_traffic_reset_strategy(
                             subscription.tariff if subscription else None
                         ),
-                        user_id=subscription.panel_user_id
+                        user_id=subscription.remnawave_id
                         if settings.is_multi_tariff_enabled() and subscription
-                        else user.panel_user_id,
+                        else user.remnawave_id,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
@@ -5613,9 +5622,9 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
                             update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
                         update_kwargs['user_id'] = (
-                            subscription.panel_user_id
+                            subscription.remnawave_id
                             if settings.is_multi_tariff_enabled()
-                            else target_user.panel_user_id
+                            else target_user.remnawave_id
                         )
                         remnawave_user = await api.update_user(**update_kwargs)
                 else:

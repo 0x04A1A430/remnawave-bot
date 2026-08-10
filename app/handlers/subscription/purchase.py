@@ -130,6 +130,9 @@ from app.utils.timezone import format_local_datetime
 
 from .autopay import (
     handle_autopay_menu,
+    handle_sbp_recurring_cancel,
+    handle_sbp_recurring_enable,
+    handle_sbp_recurring_menu,
     handle_subscription_cancel,
     handle_subscription_config_back,
     set_autopay_days,
@@ -319,6 +322,10 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     devices_used_str = ''
     devices_list: list[dict[str, Any]] = []
 
+    # Максимум устройств по умолчанию — из подписки (база + докупленные).
+    # Если в панели админ поменял hwidDeviceLimit напрямую — подставим из неё.
+    effective_device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+
     if show_devices:
         try:
             _device_uuid = (
@@ -327,9 +334,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 else None
             ) or db_user.remnawave_uuid
             _device_user_id = (
-                getattr(subscription, 'panel_user_id', None)
+                getattr(subscription, 'remnawave_id', None)
                 if settings.is_multi_tariff_enabled() and subscription
-                else db_user.panel_user_id
+                else db_user.remnawave_id
             )
             if _device_uuid or _device_user_id is not None:
                 from app.services.remnawave_service import RemnaWaveService
@@ -354,6 +361,14 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                             'Не удалось получить информацию об устройствах для',
                             telegram_id=db_user.telegram_id,
                         )
+
+                    # Реальный лимит из панели (админ мог поменять его вручную)
+                    try:
+                        panel_user = await api.get_user_by_uuid(_device_uuid, user_id=_device_user_id)
+                        if panel_user is not None and getattr(panel_user, 'hwid_device_limit', None):
+                            effective_device_limit = panel_user.hwid_device_limit
+                    except Exception as e:
+                        logger.warning('Не удалось получить лимит устройств из панели', error=e)
 
         except Exception as e:
             logger.error('Ошибка получения устройств для отображения', error=e)
@@ -381,7 +396,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 tariff_info_lines = [
                     f'<b> {html.escape(tariff.name)}</b>',
                     (f'Трафик: {tariff.traffic_limit_gb} ГБ' if tariff.traffic_limit_gb > 0 else 'Трафик: ∞ Безлимит'),
-                    f'Устройства: {tariff.device_limit}',
+                    f'Устройства: {effective_device_limit}',
                 ]
 
                 if is_daily:
@@ -496,7 +511,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
             '',
         )
 
-    device_limit_display = str(subscription.device_limit)
+    device_limit_display = str(effective_device_limit)
 
     message = message_template.format(
         full_name=html.escape(db_user.full_name or ''),
@@ -4389,6 +4404,12 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(handle_autopay_menu, F.data == 'subscription_autopay')
+
+    dp.callback_query.register(handle_sbp_recurring_menu, F.data == 'sbp_recurring_menu')
+
+    dp.callback_query.register(handle_sbp_recurring_enable, F.data == 'sbp_recurring_enable')
+
+    dp.callback_query.register(handle_sbp_recurring_cancel, F.data == 'sbp_recurring_cancel')
 
     dp.callback_query.register(toggle_autopay, F.data.in_(['autopay_enable', 'autopay_disable']))
 

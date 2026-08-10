@@ -50,6 +50,7 @@ class Settings(BaseSettings):
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: str | None = None
+    ADMIN_NOTIFICATIONS_RICH_ENABLED: bool = True
     ADMIN_NOTIFICATIONS_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: int | None = None
     ADMIN_NOTIFICATIONS_NALOG_TOPIC_ID: int | None = None
@@ -221,6 +222,20 @@ class Settings(BaseSettings):
     SERVER_STATUS_METRICS_VERIFY_SSL: bool = True
     SERVER_STATUS_REQUEST_TIMEOUT: int = 10
     SERVER_STATUS_ITEMS_PER_PAGE: int = 10
+
+    # === Grace access settings (restricted temporary access after exhaustion) ===
+    GRACE_ACCESS_MODE: str = 'false'  # 'false' | 'observe' | 'true' | 'drain'
+    GRACE_ACCESS_DURATION_HOURS: int = 72
+    GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
+    GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    GRACE_ACCESS_EXTERNAL_SQUAD_UUID: str = ''
+    GRACE_ACCESS_TRAFFIC_GB: int = 1
+    GRACE_ACCESS_TRIAL_ENABLED: bool = False
+    GRACE_ACCESS_DAILY_ENABLED: bool = False
+    GRACE_ACCESS_FREE_ENABLED: bool = False
+    GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS: int = 60
+    GRACE_ACCESS_RECONCILE_BATCH_SIZE: int = 200
+    GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES: int = 30
 
     BASE_SUBSCRIPTION_PRICE: int = 50000
     AVAILABLE_SUBSCRIPTION_PERIODS: str = '14,30,60,90,180,360'
@@ -586,6 +601,7 @@ class Settings(BaseSettings):
     PLATEGA_SECRET: str | None = None
     PLATEGA_DISPLAY_NAME: str = 'Platega'
     PLATEGA_BASE_URL: str = 'https://app.platega.io'
+    PLATEGA_API_VERSION: str = 'v1'  # API создания платежа: v1 | v2
     PLATEGA_RETURN_URL: str | None = None
     PLATEGA_FAILED_URL: str | None = None
     PLATEGA_CURRENCY: str = 'RUB'
@@ -596,6 +612,7 @@ class Settings(BaseSettings):
     PLATEGA_WEBHOOK_PATH: str = '/platega-webhook'
     PLATEGA_WEBHOOK_HOST: str = '0.0.0.0'
     PLATEGA_WEBHOOK_PORT: int = 8086
+    PLATEGA_RECURRENT_ENABLED: bool = False  # Рекуррентные СБП-подписки Platega (автопродление)
 
     WATA_ENABLED: bool = False
     WATA_DISPLAY_NAME: str = 'Wata'
@@ -887,6 +904,10 @@ class Settings(BaseSettings):
     LAVA_SHOP_ID: str | None = None  # UUID проекта
     LAVA_SECRET_KEY: str | None = None  # secret_key — для подписи запросов
     LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
+
+    # Рекуррентные подписки Lava. Подписка оформляется на ПРОДУКТ из кабинета Lava
+    # (цена и период заданы там), поэтому тарифу нужно проставить lava_product_id.
+    LAVA_RECURRENT_ENABLED: bool = False
     LAVA_DISPLAY_NAME: str = 'Lava'
     LAVA_CURRENCY: str = 'RUB'
     LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
@@ -899,6 +920,24 @@ class Settings(BaseSettings):
     LAVA_CARD_DISPLAY_NAME: str = 'Карта (Lava)'
     LAVA_SBP_ENABLED: bool = False
     LAVA_SBP_DISPLAY_NAME: str = 'СБП (Lava)'
+
+    # cisPay (H2H merchant API, api.cispay.app)
+    CISPAY_ENABLED: bool = False
+    CISPAY_SHOP_ID: str | None = None  # X-Shop-ID — UUID магазина
+    CISPAY_API_KEY: str | None = None  # X-Api-Key — секретный ключ (cis_sec_...)
+    CISPAY_BASE_URL: str = 'https://api.cispay.app'
+    CISPAY_DISPLAY_NAME: str = 'CisPay'
+    CISPAY_CURRENCY: str = 'RUB'
+    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    CISPAY_WEBHOOK_PATH: str = '/cispay-webhook'
+    # Счёт cisPay живёт 30 минут, после чего переходит в EXPIRED на стороне провайдера
+    CISPAY_PAYMENT_LIFETIME_MINUTES: int = 30
+    # Sub-методы cisPay (payment_method в запросе создания платежа)
+    CISPAY_CARD_ENABLED: bool = False
+    CISPAY_CARD_DISPLAY_NAME: str = 'Карта (CisPay)'
+    CISPAY_SBP_ENABLED: bool = False
+    CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
 
     # Etoplatezhi (paymentpage.etoplatezhi.ru)
     ETOPLATEZHI_ENABLED: bool = False
@@ -917,10 +956,26 @@ class Settings(BaseSettings):
     ETOPLATEZHI_CARD_DISPLAY_NAME: str = 'Карта (Etoplatezhi)'
 
     MAIN_MENU_MODE: str = 'default'  # 'default' | 'cabinet'
+    # Rich-меню (Bot API 10.1): главное меню собирается rich-сообщением с теми же
+    # кнопками (reply_markup сохраняется). Требует Bot API 10.1+; при недоступности
+    # бот сам откатывается на классический рендер до рестарта.
+    MAIN_MENU_RICH_ENABLED: bool = False
+    # Эффект сообщения при отправке rich-меню (пустая строка — без эффекта).
+    MAIN_MENU_RICH_EFFECT_ID: str = ''
+    # Публичный HTTPS-URL логотипа в шапке rich-меню. Пусто — авто-режим (webhook+LOGO_FILE);
+    # "none" — rich-меню без логотипа.
+    MAIN_MENU_RICH_LOGO_URL: str = ''
+    # Сворачивать таблицу подписок rich-меню в раскрываемый блок при >1 подписке.
+    MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE: bool = True
     # Стиль кнопок Cabinet: primary (синий), success (зелёный), danger (красный), '' (по умолчанию для каждой секции)
     CABINET_BUTTON_STYLE: str = ''
     CONNECT_BUTTON_MODE: str = 'miniapp_subscription'
     MINIAPP_CUSTOM_URL: str = ''
+    # Кнопка «Меню» Telegram на открытие веб-кабинета (WebApp). Пустой URL —
+    # падает на MINIAPP_CUSTOM_URL; работает только с https.
+    MENU_BUTTON_WEBAPP_ENABLED: bool = False
+    MENU_BUTTON_WEBAPP_URL: str = ''
+    MENU_BUTTON_WEBAPP_TEXT: str = 'Кабинет'
     MINIAPP_STATIC_PATH: str = 'miniapp'
     # Короткое имя Telegram Mini App (BotFather → /newapp), напр. 'cabinet'.
     # Нужно только для диплинков t.me/<bot>/<app>?startapp=… которые открывают
@@ -960,6 +1015,15 @@ class Settings(BaseSettings):
     PUBLIC_OFFER_DISPLAY_MODE: str = 'both'
     SERVICE_RULES_DISPLAY_MODE: str = 'both'
     FAQ_DISPLAY_MODE: str = 'both'
+    RECURRENT_PAYMENTS_DISPLAY_MODE: str = 'both'
+
+    # Требовать галочку согласия с юр. документами при первой авторизации
+    # в кабинете. Ключевое правило: галочка возможна только для документа,
+    # который пользователь способен открыть (не выключен и не скрыт из веба),
+    # иначе установка без заполненной оферты заблокировала бы вход всем.
+    CABINET_REQUIRE_LEGAL_CONSENT: bool = True
+    # True - галочки показываются уже отмеченными (клиент сам подтверждает).
+    CABINET_LEGAL_CONSENT_PRECHECKED: bool = False
 
     # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
     PRICE_ROUNDING_ENABLED: bool = True
@@ -983,6 +1047,10 @@ class Settings(BaseSettings):
     LOG_WARNING_FILE: str = 'warning.log'
     LOG_ERROR_FILE: str = 'error.log'
     LOG_PAYMENTS_FILE: str = 'payments.log'
+
+    # === User action log (cabinet activity timeline) ===
+    USER_ACTION_LOG_ENABLED: bool = True
+    USER_ACTION_LOG_RETENTION_DAYS: int = 90
 
     # === Ban Notification Messages ===
 
@@ -1091,12 +1159,17 @@ class Settings(BaseSettings):
     WEB_API_TOKEN_HASH_ALGORITHM: str = 'sha256'
     WEB_API_TOKEN_HMAC_SECRET: str | None = None
     WEB_API_REQUEST_LOGGING: bool = True
+    # Потолок ОДНОЙ операции ручного пополнения через POST /users/{id}/deposit.
+    # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
+    # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
+    # человеку годовую подписку. 0 — без ограничения.
+    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
 
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
-    VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-bedolaga-telegram-bot'
+    VERSION_CHECK_REPO: str = 'fr1ngg/remnawave-@xilarobot-telegram-bot'
     VERSION_CHECK_INTERVAL_HOURS: int = 1
 
     BACKUP_AUTO_ENABLED: bool = True
@@ -1243,6 +1316,36 @@ class Settings(BaseSettings):
             raise ValueError('SERVER_STATUS_MODE must be one of: disabled, external_link, external_link_miniapp, xray')
         return mode
 
+    @field_validator('GRACE_ACCESS_MODE', mode='before')
+    @classmethod
+    def normalize_grace_access_mode(cls, value: str | None) -> str:
+        normalized = str(value or 'false').strip().lower()
+        if normalized not in {'false', 'observe', 'true', 'drain'}:
+            raise ValueError('GRACE_ACCESS_MODE must be one of: false, observe, true, drain')
+        return normalized
+
+    @field_validator(
+        'GRACE_ACCESS_DURATION_HOURS',
+        'GRACE_ACCESS_RECONCILE_INTERVAL_SECONDS',
+        'GRACE_ACCESS_RECONCILE_BATCH_SIZE',
+        'GRACE_ACCESS_CANDIDATE_LOOKBACK_MINUTES',
+        mode='before',
+    )
+    @classmethod
+    def ensure_positive_grace_access_value(cls, value: int | str) -> int:
+        parsed = int(value)
+        if parsed < 1:
+            raise ValueError('Grace access duration, intervals, batch size and lookback must be positive')
+        return parsed
+
+    @field_validator('GRACE_ACCESS_TRAFFIC_GB', mode='before')
+    @classmethod
+    def ensure_nonnegative_grace_access_traffic(cls, value: int | str) -> int:
+        parsed = int(value)
+        if parsed < 0:
+            raise ValueError('Grace access traffic must not be negative')
+        return parsed
+
     @field_validator('SERVER_STATUS_ITEMS_PER_PAGE', mode='before')
     @classmethod
     def ensure_positive_server_status_page_size(cls, value: int | None) -> int:
@@ -1346,11 +1449,11 @@ class Settings(BaseSettings):
 
     def get_proxy_url(self) -> str | None:
         """Return SOCKS5 proxy URL or None."""
-        return self.PROXY_URL if self.PROXY_URL else None
+        return self.PROXY_URL or None
 
     def get_telegram_api_url(self) -> str | None:
         """Return custom Telegram Bot API server URL or None."""
-        return self.TELEGRAM_API_URL if self.TELEGRAM_API_URL else None
+        return self.TELEGRAM_API_URL or None
 
     def get_nalogo_proxy_url(self) -> str | None:
         """Return SOCKS proxy URL for nalogo or None.
@@ -1769,7 +1872,7 @@ class Settings(BaseSettings):
         return bool(value)
 
     def get_available_languages(self) -> list[str]:
-        defaults = ['ru', 'en', 'ua', 'zh', 'fa']
+        defaults = ['ru', 'en', 'ua', 'zh']
 
         try:
             langs = self.AVAILABLE_LANGUAGES
@@ -2236,6 +2339,9 @@ class Settings(BaseSettings):
     def is_platega_enabled(self) -> bool:
         return self.PLATEGA_ENABLED and self.PLATEGA_MERCHANT_ID is not None and self.PLATEGA_SECRET is not None
 
+    def is_platega_recurrent_enabled(self) -> bool:
+        return self.is_platega_enabled() and self.PLATEGA_RECURRENT_ENABLED
+
     def get_platega_display_name(self) -> str:
         name = (self.PLATEGA_DISPLAY_NAME or '').strip()
         if not name:
@@ -2405,7 +2511,7 @@ class Settings(BaseSettings):
 
     def get_severpay_display_name(self) -> str:
         name = (self.SEVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SeverPay'
+        return name or 'SeverPay'
 
     def get_severpay_display_name_html(self) -> str:
         return html.escape(self.get_severpay_display_name())
@@ -2476,7 +2582,7 @@ class Settings(BaseSettings):
 
     def get_paypear_display_name(self) -> str:
         name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
-        return name if name else 'PayPear'
+        return name or 'PayPear'
 
     def get_paypear_display_name_html(self) -> str:
         return html.escape(self.get_paypear_display_name())
@@ -2486,7 +2592,7 @@ class Settings(BaseSettings):
 
     def get_rollypay_display_name(self) -> str:
         name = (self.ROLLYPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'RollyPay'
+        return name or 'RollyPay'
 
     def get_rollypay_display_name_html(self) -> str:
         return html.escape(self.get_rollypay_display_name())
@@ -2501,7 +2607,7 @@ class Settings(BaseSettings):
 
     def get_overpay_display_name(self) -> str:
         name = (self.OVERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Overpay'
+        return name or 'Overpay'
 
     def get_overpay_display_name_html(self) -> str:
         return html.escape(self.get_overpay_display_name())
@@ -2530,7 +2636,7 @@ class Settings(BaseSettings):
 
     def get_aurapay_display_name(self) -> str:
         name = (self.AURAPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'AuraPay'
+        return name or 'AuraPay'
 
     def get_aurapay_display_name_html(self) -> str:
         return html.escape(self.get_aurapay_display_name())
@@ -2566,7 +2672,7 @@ class Settings(BaseSettings):
 
     def get_antilopay_display_name(self) -> str:
         name = (self.ANTILOPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'Antilopay'
+        return name or 'Antilopay'
 
     def get_antilopay_display_name_html(self) -> str:
         return html.escape(self.get_antilopay_display_name())
@@ -2606,7 +2712,7 @@ class Settings(BaseSettings):
 
     def get_jupiter_display_name(self) -> str:
         name = (self.JUPITER_DISPLAY_NAME or '').strip()
-        return name if name else 'Jupiter'
+        return name or 'Jupiter'
 
     def get_jupiter_display_name_html(self) -> str:
         return html.escape(self.get_jupiter_display_name())
@@ -2626,7 +2732,7 @@ class Settings(BaseSettings):
 
     def get_donut_display_name(self) -> str:
         name = (self.DONUT_DISPLAY_NAME or '').strip()
-        return name if name else 'Donut'
+        return name or 'Donut'
 
     def get_donut_display_name_html(self) -> str:
         return html.escape(self.get_donut_display_name())
@@ -2669,9 +2775,12 @@ class Settings(BaseSettings):
             and self.LAVA_WEBHOOK_SECRET is not None
         )
 
+    def is_lava_recurrent_enabled(self) -> bool:
+        return self.LAVA_RECURRENT_ENABLED and self.is_lava_enabled()
+
     def get_lava_display_name(self) -> str:
         name = (self.LAVA_DISPLAY_NAME or '').strip()
-        return name if name else 'Lava'
+        return name or 'Lava'
 
     def get_lava_display_name_html(self) -> str:
         return html.escape(self.get_lava_display_name())
@@ -2696,6 +2805,36 @@ class Settings(BaseSettings):
     def get_lava_sbp_display_name_html(self) -> str:
         return html.escape(self.get_lava_sbp_display_name())
 
+    def is_cispay_enabled(self) -> bool:
+        return bool(self.CISPAY_ENABLED and self.CISPAY_SHOP_ID and self.CISPAY_API_KEY)
+
+    def get_cispay_display_name(self) -> str:
+        name = (self.CISPAY_DISPLAY_NAME or '').strip()
+        return name or 'CisPay'
+
+    def get_cispay_display_name_html(self) -> str:
+        return html.escape(self.get_cispay_display_name())
+
+    def is_cispay_card_enabled(self) -> bool:
+        return self.CISPAY_CARD_ENABLED and self.is_cispay_enabled()
+
+    def get_cispay_card_display_name(self) -> str:
+        name = (self.CISPAY_CARD_DISPLAY_NAME or '').strip()
+        return name or 'Карта (CisPay)'
+
+    def get_cispay_card_display_name_html(self) -> str:
+        return html.escape(self.get_cispay_card_display_name())
+
+    def is_cispay_sbp_enabled(self) -> bool:
+        return self.CISPAY_SBP_ENABLED and self.is_cispay_enabled()
+
+    def get_cispay_sbp_display_name(self) -> str:
+        name = (self.CISPAY_SBP_DISPLAY_NAME or '').strip()
+        return name or 'СБП (CisPay)'
+
+    def get_cispay_sbp_display_name_html(self) -> str:
+        return html.escape(self.get_cispay_sbp_display_name())
+
     def is_etoplatezhi_enabled(self) -> bool:
         return (
             self.ETOPLATEZHI_ENABLED
@@ -2705,7 +2844,7 @@ class Settings(BaseSettings):
 
     def get_etoplatezhi_display_name(self) -> str:
         name = (self.ETOPLATEZHI_DISPLAY_NAME or '').strip()
-        return name if name else 'Etoplatezhi'
+        return name or 'Etoplatezhi'
 
     def get_etoplatezhi_display_name_html(self) -> str:
         return html.escape(self.get_etoplatezhi_display_name())
@@ -2735,7 +2874,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sbp_display_name(self) -> str:
         name = (self.KASSA_AI_SBP_DISPLAY_NAME or '').strip()
-        return name if name else 'СБП (KassaAI)'
+        return name or 'СБП (KassaAI)'
 
     def get_kassa_ai_sbp_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sbp_display_name())
@@ -2745,7 +2884,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_card_display_name(self) -> str:
         name = (self.KASSA_AI_CARD_DISPLAY_NAME or '').strip()
-        return name if name else 'Карта (KassaAI)'
+        return name or 'Карта (KassaAI)'
 
     def get_kassa_ai_card_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_card_display_name())
@@ -2755,7 +2894,7 @@ class Settings(BaseSettings):
 
     def get_kassa_ai_sberpay_display_name(self) -> str:
         name = (self.KASSA_AI_SBERPAY_DISPLAY_NAME or '').strip()
-        return name if name else 'SberPay (KassaAI)'
+        return name or 'SberPay (KassaAI)'
 
     def get_kassa_ai_sberpay_display_name_html(self) -> str:
         return html.escape(self.get_kassa_ai_sberpay_display_name())

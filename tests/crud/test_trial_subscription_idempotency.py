@@ -14,7 +14,7 @@ tariff_id WHERE status IN ('active','trial','limited')) и падал с Integri
    успел вставить запись — перехватываем IntegrityError, делаем rollback и
    возвращаем подписку, созданную параллельным потоком.
 
-GitHub issue: https://github.com/BEDOLAGA-DEV/remnawave-bedolaga-telegram-bot/issues/2995
+GitHub issue: https://github.com/@xilarobot-DEV/remnawave-@xilarobot-telegram-bot/issues/2995
 """
 
 from unittest.mock import AsyncMock, MagicMock

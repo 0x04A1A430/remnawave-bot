@@ -22,6 +22,7 @@ from app.services.ban_notification_service import ban_notification_service
 from app.services.broadcast_service import broadcast_service
 from app.services.contest_rotation_service import contest_rotation_service
 from app.services.daily_subscription_service import daily_subscription_service
+from app.services.grace_access_runtime import grace_access_runtime
 from app.services.log_rotation_service import log_rotation_service
 from app.services.maintenance_service import maintenance_service
 from app.services.monitoring_service import monitoring_service
@@ -689,6 +690,21 @@ async def main():
                 stage.skip('Проверка версий отключена настройками')
 
         async with timeline.stage(
+            'Grace Access',
+            '⏳',
+            success_message='Grace-рантайм запущен',
+        ) as stage:
+            try:
+                await grace_access_runtime.start()
+            except Exception as error:
+                logger.critical('Не удалось запустить grace-рантайм', error=str(error))
+                raise
+            if grace_access_runtime.mode.value == 'false':
+                stage.skip('Grace access отключен настройками')
+            else:
+                stage.log(f'Режим: {grace_access_runtime.mode.value}')
+
+        async with timeline.stage(
             'Запуск polling',
             '🤖',
             success_message='Aiogram polling запущен',
@@ -773,6 +789,17 @@ async def main():
             logger.warning(
                 'Не удалось отправить стартовое уведомление',
                 startup_notify_error=startup_notify_error,
+            )
+
+        # Настраиваем кнопку «Меню» Telegram на открытие веб-кабинета
+        try:
+            from app.utils.chat_menu_button import configure_chat_menu_button
+
+            await configure_chat_menu_button(bot)
+        except Exception as chat_menu_error:
+            logger.warning(
+                'Не удалось настроить кнопку меню Telegram',
+                chat_menu_error=chat_menu_error,
             )
 
         try:
@@ -862,6 +889,12 @@ async def main():
             await auto_payment_verification_service.stop()
         except Exception as error:
             logger.error('Ошибка остановки сервиса автопроверки пополнений', error=error)
+
+        logger.info('ℹ️ Остановка grace-рантайма...')
+        try:
+            await grace_access_runtime.stop()
+        except Exception as error:
+            logger.error('Ошибка остановки grace-рантайма', error=error)
 
         if monitoring_task and not monitoring_task.done():
             logger.info('ℹ️ Остановка службы мониторинга...')

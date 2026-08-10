@@ -36,18 +36,6 @@ _DYNAMIC_LANGUAGE_CONFIGS = {
             'Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n'
         ),
     },
-    'fa': {
-        'traffic_pattern': '{size} گیگابایت - {price}',
-        'unlimited_pattern': 'نامحدود - {price}',
-        'support_info': (
-            '\n<b>پشتیبانی</b>\n\n'
-            'برای هرگونه سؤال به پشتیبانی پیام دهید:\n\n'
-            '{support_username}\n\n'
-            '• ایجاد تیکت\n'
-            '• تیکت‌های من\n'
-            '• تماس مستقیم\n'
-        ),
-    },
     'en': {
         'traffic_pattern': '{size} GB - {price}',
         'unlimited_pattern': 'Unlimited - {price}',
@@ -203,6 +191,13 @@ class Texts:
     @staticmethod
     def format_price(kopeks: int, round_kopeks: bool | None = None) -> str:
         return settings.format_price(kopeks, round_kopeks=round_kopeks)
+
+    @staticmethod
+    def format_device_limit(limit: int | None) -> str:
+        """Format device limit. 0 or None means unlimited (HWID disabled)."""
+        if not limit:
+            return '∞ (безлимит)'
+        return str(limit)
 
     @staticmethod
     def format_traffic(gb: float, is_limit: bool = True) -> str:

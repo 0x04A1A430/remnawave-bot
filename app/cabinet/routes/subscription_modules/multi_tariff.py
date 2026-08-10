@@ -129,6 +129,19 @@ async def delete_subscription(
             detail='Only expired or disabled subscriptions can be deleted',
         )
 
+    from app.services.grace_access_runtime import (
+        GraceAccessDeletionBlocked,
+        ensure_no_open_grace_for_subscriptions,
+    )
+
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+        ) from error
+
     # Delete from RemnaWave panel (stops webhooks / phantom notifications)
     if subscription.remnawave_uuid:
         try:
@@ -143,6 +156,22 @@ async def delete_subscription(
         except Exception as e:
             logger.warning('Failed to delete RemnaWave user on subscription delete', error=e)
 
+    # Best-effort: stop Platega SBP autopay before the row disappears — the
+    # platega_subscriptions record CASCADE-deletes with it, so cancelling
+    # after the delete would find nothing to cancel on Platega's side.
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+    try:
+        await ensure_no_open_grace_for_subscriptions(db, (subscription.id,))
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+        ) from error
     # Decrement server counts
     await decrement_subscription_server_counts(db, subscription)
 

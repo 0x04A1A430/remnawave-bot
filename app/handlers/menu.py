@@ -42,6 +42,7 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
 )
+from app.utils.rich_menu import try_edit_rich_main_menu
 from app.utils.telegram_html import (
     html_to_telegram,
     info_page_faq_to_telegram,
@@ -242,12 +243,13 @@ async def show_main_menu(
         custom_buttons=custom_buttons,
     )
 
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=menu_text,
-        keyboard=keyboard,
-        parse_mode='HTML',
-    )
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        await edit_or_answer_photo(
+            callback=callback,
+            caption=menu_text,
+            keyboard=keyboard,
+            parse_mode='HTML',
+        )
     if not skip_callback_answer:
         await callback.answer()
 
@@ -297,8 +299,11 @@ async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: A
     if not rules_text:
         rules_text = await get_rules(db_user.language)
 
-    await callback.message.edit_text(
-        f'{texts.t("RULES_HEADER", " <b>Правила сервиса</b>")}\n\n{rules_text}',
+    from app.utils.long_messages import edit_long_text
+
+    await edit_long_text(
+        callback.message,
+        f'{texts.t("RULES_HEADER", " <b>Правила</b>")}\n\n{rules_text}',
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')]]
         ),
@@ -1097,6 +1102,7 @@ async def show_language_menu(
         keyboard=get_language_selection_keyboard(
             current_language=db_user.language,
             include_back=True,
+            back_callback='menu_info',
             language=db_user.language,
         ),
         parse_mode='HTML',
@@ -1149,11 +1155,10 @@ async def process_language_change(
     resolved_language = available_map[normalized_selected].lower()
 
     if db_user.language.lower() == normalized_selected:
-        await show_main_menu(
+        await show_info_menu(
             callback,
             db_user,
             db,
-            skip_callback_answer=True,
         )
         await callback.answer(texts.t('LANGUAGE_SELECTED', 'Язык интерфейса обновлен.'))
         return
@@ -1161,11 +1166,10 @@ async def process_language_change(
     updated_user = await update_user(db, db_user, language=resolved_language)
     texts = get_texts(updated_user.language)
 
-    await show_main_menu(
+    await show_info_menu(
         callback,
         updated_user,
         db,
-        skip_callback_answer=True,
     )
     await callback.answer(texts.t('LANGUAGE_SELECTED', 'Язык интерфейса обновлен.'))
 
@@ -1237,12 +1241,13 @@ async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, 
         custom_buttons=custom_buttons,
     )
 
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=menu_text,
-        keyboard=keyboard,
-        parse_mode='HTML',
-    )
+    if not await try_edit_rich_main_menu(callback, db_user, texts, db, keyboard):
+        await edit_or_answer_photo(
+            callback=callback,
+            caption=menu_text,
+            keyboard=keyboard,
+            parse_mode='HTML',
+        )
     await callback.answer()
 
 
@@ -1344,6 +1349,8 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     from app.database.crud.subscription import get_all_subscriptions_by_user_id
 
     subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
+    # Неоплаченные черновики триала не показываем как существующую подписку
+    subscriptions = [sub for sub in subscriptions if not getattr(sub, 'is_pending_trial', False)]
 
     if not subscriptions:
         return texts.t('SUB_STATUS_NONE', 'Отсутствует'), ''

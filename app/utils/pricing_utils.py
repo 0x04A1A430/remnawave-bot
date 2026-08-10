@@ -20,6 +20,20 @@ def calculate_months_from_days(days: int) -> int:
     return max(1, round(days / 30))
 
 
+def calculate_price_per_month(price_kopeks: int, period_days: int) -> int:
+    """Месячная ставка для периода длиной period_days дней (месяц = 30 дней).
+
+    Считается пропорцией, а не делением на округлённое число месяцев:
+    для коротких (7 дней) и некратных 30 (45 дней) периодов делитель
+    зажимался в 1-2 месяца, и цена периода уходила в отображение как
+    месячная. Значение только для показа, начисления идут по полной
+    цене периода.
+    """
+    if price_kopeks <= 0 or period_days <= 0:
+        return max(0, price_kopeks)
+    return round(price_kopeks * 30 / period_days)
+
+
 def calculate_prorated_price(monthly_price: int, end_date: datetime, min_charge_days: int = 1) -> tuple[int, int]:
     """Calculate prorated price based on remaining days.
 
@@ -260,7 +274,7 @@ def _pluralize_days_ru(n: int) -> str:
 
 def format_period_description(days: int, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
-    if language_code in {'ru', 'fa'}:
+    if language_code in {'ru'}:
         if days == 30:
             return '1 месяц'
         if days == 60:

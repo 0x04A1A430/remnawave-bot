@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import math
+import re
 import ssl
 from dataclasses import dataclass
 from datetime import datetime
@@ -44,9 +45,9 @@ class UserTraffic:
     last_connected_node_uuid: str | None = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RemnaWaveUser:
-    uuid: str
+    uuid: str | None = None
     short_uuid: str
     username: str
     status: UserStatus
@@ -172,6 +173,8 @@ class RemnaWaveNode:
     versions: dict[str, str] | None = None  # {xray, node}
     system: dict[str, Any] | None = None  # {info: {arch, cpus, cpuModel, memoryTotal, ...}, stats: {...}}
     active_plugin_uuid: str | None = None
+    # v3.1.0: панель возвращает числовой id рядом с uuid (additive; роуты по-прежнему принимают {uuid})
+    id: int | None = None
 
     @property
     def is_node_online(self) -> bool:
@@ -557,13 +560,19 @@ class RemnaWaveAPI:
         user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return f'/api/users/{user_id}'
+        uuid = self._sanitize_uuid(uuid)
+        if uuid is None:
+            raise ValueError('Cannot build user path: invalid uuid and no valid user_id')
         return f'/api/users/{uuid}'
 
     def _fmt_user_body_id(self, uuid: str, user_id: int | None = None) -> dict[str, str | int]:
         user_id = self._sanitize_user_id(user_id)
         if self._use_user_id() and user_id is not None:
             return {'id': user_id}
-        return {'uuid': uuid}
+        uuid = self._sanitize_uuid(uuid)
+        if uuid is None:
+            raise ValueError('Cannot build user body id: invalid uuid and no valid user_id')
+        return {'id': uuid}
 
     def _fmt_hwid_user_key(self, user_uuid: str, user_id: int | None = None) -> str:
         user_id = self._sanitize_user_id(user_id)
@@ -574,8 +583,12 @@ class RemnaWaveAPI:
     def _fmt_hwid_path(self, user_uuid: str, user_id: int | None = None) -> str:
         """Path to a user's HWID devices. v3.0.0: numeric userId in the path."""
         user_id = self._sanitize_user_id(user_id)
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
-        return f'/api/hwid/devices/{_uid}'
+        if self._use_user_id() and user_id is not None:
+            return f'/api/hwid/devices/{user_id}'
+        user_uuid = self._sanitize_uuid(user_uuid)
+        if user_uuid is None:
+            raise ValueError('Cannot build hwid path: invalid uuid and no valid user_id')
+        return f'/api/hwid/devices/{user_uuid}'
 
     def _fmt_hwid_delete_payload(self, user_uuid: str, user_id: int | None, hwid: str) -> dict[str, str]:
         """Body for POST /api/hwid/devices/delete.
@@ -584,7 +597,12 @@ class RemnaWaveAPI:
         """
         user_id = self._sanitize_user_id(user_id)
         hwid_key = self._fmt_hwid_user_key(user_uuid, user_id)
-        _uid = user_id if (self._use_user_id() and user_id is not None) else user_uuid
+        if self._use_user_id() and user_id is not None:
+            _uid = user_id
+        else:
+            _uid = self._sanitize_uuid(user_uuid)
+            if _uid is None:
+                raise ValueError('Cannot build hwid delete payload: invalid uuid and no valid user_id')
         return {hwid_key: _uid, 'hwid': hwid}
 
     async def get_user_by_uuid(self, uuid: str, user_id: int | None = None) -> RemnaWaveUser | None:
@@ -630,6 +648,45 @@ class RemnaWaveAPI:
             cursor = data['nextCursor']
         return users
 
+    @staticmethod
+    def _description_matches_telegram_id(description: str | None, telegram_id: int | None) -> bool:
+        """True, если description несёт маркер telegram_id.
+
+        Бот пишет в описание сегмент ``TG: <id>``; также поддерживается формат
+        ``{tg_username} - {tg_id}``, где id — отдельный токен.
+        """
+        if not description or telegram_id is None:
+            return False
+        tid = str(telegram_id)
+        tokens = re.split(r'[\s\-–—|,;:()/.]+', description)
+        return tid in tokens
+
+    async def resolve_user_id_by_telegram_description(self, telegram_id: int) -> int | None:
+        """Ищет числовой remnawave_id по telegram, сверяя description.
+
+        v2: GET /api/users/by-telegram-id/{id} (id второй попыткой).
+        v3.0.0: uuid у юзеров НЕТ, remnawave_id может быть пустым в БД —
+        сначала фильтр /api/users/stream?telegramId=, затем полный обход стрима
+        с матчем по Description (``{tg_username} - {tg_id}`` / ``TG: <id>``).
+        """
+        if not self._use_user_id():
+            users = await self.get_user_by_telegram_id(telegram_id)
+            for user in users:
+                if user.id is not None:
+                    return user.id
+            return None
+        try:
+            users = await self._get_users_by_stream_filter({'telegramId': telegram_id})
+        except Exception:
+            users = []
+        for user in users:
+            if user.id is not None:
+                return user.id
+        for user in await self._get_users_by_stream_filter({}):
+            if self._description_matches_telegram_id(user.description, telegram_id):
+                return user.id
+        return None
+
     async def get_user_by_username(self, username: str) -> RemnaWaveUser | None:
         try:
             response = await self._make_request('GET', f'/api/users/by-username/{username}')
@@ -671,6 +728,10 @@ class RemnaWaveAPI:
 
         Returns dict with 'total' and 'records' list.
         Each record has: id, userId, requestAt, requestIp, userAgent.
+        v3.1.0: каждый record также несёт srrResponseType (string) и srrRuleName
+        (string|null) — какое правило запроса подписки обработало запрос.
+        Records передаются как есть (сырые dict с панели), поэтому эти поля
+        пробрасываются в бота автоматически.
 
         Remnawave 2.8.0+: поле ``userUuid`` (uuid) переименовано в ``userId``
         (числовой внутренний id пользователя панели).
@@ -1558,10 +1619,11 @@ class RemnaWaveAPI:
             traffic_strategy = TrafficLimitStrategy.NO_RESET
 
         return RemnaWaveUser(
-            # v3.0.0: uuid поле удалено из объекта пользователя — пустая строка.
-            # Единственный идентификатор пользователя — числовой id.
-            uuid=user_data.get('uuid', ''),
-            short_uuid=user_data['shortUuid'],
+            # v3.0.0: uuid может отсутствовать, а может прийти как NaN/'' —
+            # отбрасываем их в None, чтобы в БД писался NULL: колонка
+            # users.remnawave_uuid UNIQUE, ''/NaN у двух юзеров ломает её.
+            uuid=self._sanitize_uuid(user_data.get('uuid')),
+            short_uuid=self._sanitize_uuid(user_data.get('shortUuid')) or '',
             username=user_data['username'],
             status=status,
             # Remnawave 2.8.0 ослабил валидацию trafficLimitBytes (integer → number),
@@ -1624,6 +1686,22 @@ class RemnaWaveAPI:
             return int(user_id)
         except (ValueError, TypeError):
             return None
+
+    @staticmethod
+    def _sanitize_uuid(uuid_value: Any) -> str | None:
+        """Return a usable panel uuid string, or None for NaN/garbage.
+
+        v3.0.0 панель может не вернуть uuid вовсе, а может прислать JSON-literal
+        ``NaN`` (json.loads -> float('nan')) или строку ``"NaN"``. Такие значения
+        нельзя писать в ``users.remnawave_uuid`` (колонка UNIQUE, а ``''``/``NaN``
+        у двух юзеров ломают её) и нельзя подставлять в URL ``/api/users/<uuid>``.
+        """
+        if not isinstance(uuid_value, str):
+            return None
+        uuid_value = uuid_value.strip()
+        if not uuid_value or uuid_value.lower() in ('nan', 'inf', '-inf', 'infinity', '-infinity'):
+            return None
+        return uuid_value
 
     def _parse_inbound(self, inbound_data: dict) -> RemnaWaveInbound:
         """Парсит данные inbound"""
@@ -1702,6 +1780,7 @@ class RemnaWaveAPI:
             versions=node_data.get('versions'),
             system=node_data.get('system'),
             active_plugin_uuid=node_data.get('activePluginUuid'),
+            id=self._sanitize_user_id(node_data.get('id')),  # v3.1.0
         )
 
     def _parse_subscription_info(self, data: dict) -> SubscriptionInfo:

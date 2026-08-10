@@ -66,7 +66,7 @@ DEFAULT_BUTTON_STYLES: dict[str, dict] = {
     },
 }
 
-BOT_LOCALES = ('ru', 'en', 'ua', 'zh', 'fa')
+BOT_LOCALES = ('ru', 'en', 'ua', 'zh')
 
 SECTIONS = list(DEFAULT_BUTTON_STYLES.keys())
 

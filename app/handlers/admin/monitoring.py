@@ -25,6 +25,7 @@ from app.services.traffic_monitoring_service import (
     traffic_monitoring_scheduler,
 )
 from app.states import AdminStates
+from app.utils.button_emoji import make_button
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
 
@@ -160,7 +161,7 @@ async def _build_notification_preview_message(language: str, notification_type: 
     now = datetime.now(UTC)
     price_30_days = settings.format_price(settings.PRICE_30_DAYS)
 
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from aiogram.types import InlineKeyboardMarkup
 
     from app.keyboards.inline import get_channel_sub_keyboard
     from app.services.channel_subscription_service import channel_subscription_service
@@ -197,15 +198,24 @@ async def _build_notification_preview_message(language: str, notification_type: 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                         callback_data='subscription_extend',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                         callback_data='balance_topup',
+                        style='primary',
+                    )
+                ],
+                [
+                    make_button(
+                        text=texts.get('SUPPORT_BUTTON', 'Поддержка'),
+                        callback_data='menu_support',
+                        style='primary',
                     )
                 ],
             ]
@@ -230,21 +240,31 @@ async def _build_notification_preview_message(language: str, notification_type: 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text='Получить скидку',
                         callback_data='claim_discount_preview',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                         callback_data='subscription_extend',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                         callback_data='balance_topup',
+                        style='primary',
+                    )
+                ],
+                [
+                    make_button(
+                        text=texts.get('SUPPORT_BUTTON', 'Поддержка'),
+                        callback_data='menu_support',
+                        style='primary',
                     )
                 ],
             ]
@@ -270,21 +290,31 @@ async def _build_notification_preview_message(language: str, notification_type: 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text='Получить скидку',
                         callback_data='claim_discount_preview',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('SUBSCRIPTION_EXTEND', 'Продлить подписку'),
                         callback_data='subscription_extend',
+                        style='success',
                     )
                 ],
                 [
-                    InlineKeyboardButton(
+                    make_button(
                         text=texts.t('BALANCE_TOPUP', 'Пополнить баланс'),
                         callback_data='balance_topup',
+                        style='primary',
+                    )
+                ],
+                [
+                    make_button(
+                        text=texts.get('SUPPORT_BUTTON', 'Поддержка'),
+                        callback_data='menu_support',
+                        style='primary',
                     )
                 ],
             ]
@@ -1187,7 +1217,7 @@ async def nalogo_retry_callback(callback: CallbackQuery):
 
         await callback.answer('Отправляю чек...', show_alert=False)
 
-        receipt_uuid = await nalogo_service.retry_pending_receipt(payment_id)
+        receipt_uuid = await nalogo_service.retry_pending_receipt(payment_id, bot=callback.bot)
 
         if receipt_uuid:
             await callback.answer(f'Чек создан: {receipt_uuid}', show_alert=True)

@@ -69,6 +69,8 @@ class UserSubscriptionInfo(BaseModel):
     days_remaining: int = 0
     purchased_traffic_gb: int = 0
     traffic_purchases: list[TrafficPurchaseItem] = []
+    sbp_recurring_status: str | None = None
+    sbp_recurring_id: int | None = None
 
 
 class UserPromoGroupInfo(BaseModel):

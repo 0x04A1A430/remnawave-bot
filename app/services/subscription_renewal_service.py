@@ -32,6 +32,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.pricing_engine import RenewalPricing
 from app.services.remnawave_service import RemnaWaveConfigurationError
 from app.services.subscription_service import SubscriptionService
+from app.utils.pricing_utils import calculate_price_per_month
 
 
 logger = structlog.get_logger(__name__)
@@ -113,8 +114,8 @@ class SubscriptionRenewalPricing:
 
         # per_month
         per_month = int(payload.get('per_month', 0) or 0)
-        if not per_month and months > 0:
-            per_month = final_total // months
+        if not per_month and period_days > 0:
+            per_month = calculate_price_per_month(final_total, period_days)
 
         # server_ids: legacy at top level, RenewalPricing in breakdown
         server_ids = list(payload.get('server_ids') or breakdown.get('server_ids') or [])
@@ -554,14 +555,14 @@ class SubscriptionRenewalService:
                     if settings.is_multi_tariff_enabled()
                     else getattr(user, 'remnawave_uuid', None)
                 )
-                _panel_user_id = (
-                    getattr(subscription_after, 'panel_user_id', None)
+                _remnawave_id = (
+                    getattr(subscription_after, 'remnawave_id', None)
                     if settings.is_multi_tariff_enabled()
-                    else getattr(user, 'panel_user_id', None)
+                    else getattr(user, 'remnawave_id', None)
                 )
-                if _uuid or _panel_user_id is not None:
+                if _uuid or _remnawave_id is not None:
                     async with rw_service.get_api_client() as api:
-                        await api.reset_user_devices(_uuid, user_id=_panel_user_id)
+                        await api.reset_user_devices(_uuid, user_id=_remnawave_id)
                     logger.info(
                         'Devices reset on renewal',
                         subscription_id=subscription_after.id,

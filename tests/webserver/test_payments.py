@@ -64,6 +64,7 @@ def _build_request(
 @pytest.mark.anyio
 async def test_tribute_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, 'TRIBUTE_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'TRIBUTE_API_KEY', 'test-key', raising=False)
 
     process_mock = AsyncMock(return_value={'status': 'ok'})
 

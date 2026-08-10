@@ -206,10 +206,16 @@ class AdminNotificationService:
     ) -> None:
         """Persist subscription-related event for external dashboards."""
 
+        # user.id читаем ДО любых операций с БД: после упавшего commit сессия
+        # переходит в pending-rollback, и обращение к атрибутам ORM бросает
+        # PendingRollbackError вместо исходной ошибки (см. #инцидент с таймаутом
+        # блокировки строки users).
+        user_id = user.id if user is not None else None
+
         try:
             await create_subscription_event(
                 db,
-                user_id=user.id,
+                user_id=user_id,
                 event_type=event_type,
                 subscription_id=subscription.id if subscription else None,
                 transaction_id=transaction.id if transaction else None,
@@ -223,7 +229,7 @@ class AdminNotificationService:
             logger.error(
                 'Не удалось сохранить событие подписки для пользователя',
                 event_type=event_type,
-                getattr=getattr(user, 'id', 'unknown'),
+                user_id=user_id,
                 exc_info=True,
             )
 
@@ -232,7 +238,7 @@ class AdminNotificationService:
             except Exception:
                 logger.error(
                     'Не удалось выполнить rollback после ошибки события подписки пользователя',
-                    getattr=getattr(user, 'id', 'unknown'),
+                    user_id=user_id,
                     exc_info=True,
                 )
 
@@ -622,7 +628,7 @@ class AdminNotificationService:
                 truncate_for_blockquote,
             )
 
-            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
+            repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-@xilarobot-telegram-bot')
             release_url = f'https://github.com/{repo}/releases/tag/{latest_version.tag_name}'
             repo_url = f'https://github.com/{repo}'
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
@@ -684,13 +690,13 @@ class AdminNotificationService:
         try:
             message = f"""<b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
 
-    📦 <b>Текущая версия:</b> <code>{current_version}</code>
-    ❌ <b>Ошибка:</b> {error_message}
+    <b>Текущая версия:</b> <code>{current_version}</code>
+    <b>Ошибка:</b> {error_message}
 
-    🔄 Следующая попытка через час.
-    ⚙️ Проверьте доступность GitHub API и настройки сети.
+    Следующая попытка через час.
+    Проверьте доступность GitHub API и настройки сети.
 
-    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+    <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message, category=NotificationCategory.ERRORS)
 
@@ -989,30 +995,30 @@ class AdminNotificationService:
 
             message = f"""<b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
-👤 <b>Пользователь:</b> {user_display}
-🆔 <b>{user_id_label}:</b> {user_id_display}
-📱 <b>Username:</b> @{html.escape(getattr(user, 'username', None) or 'отсутствует')}
+<b>Пользователь:</b> {user_display}
+<b>{user_id_label}:</b> {user_id_display}
+<b>Username:</b> @{html.escape(getattr(user, 'username', None) or 'отсутствует')}
 
 {promo_block}
 
-💰 <b>Платеж:</b>
-💵 Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
-💳 Способ: {payment_method}
-🆔 ID транзакции: {transaction.id}
+<b>Платеж:</b>
+Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
+Способ: {payment_method}
+ID транзакции: {transaction.id}
 
-📅 <b>Продление:</b>
-➕ Добавлено дней: {extended_days}
-📆 Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
-📆 Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
+<b>Продление:</b>
+Добавлено дней: {extended_days}
+Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
+Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
 
-📱 <b>Текущие параметры:</b>
-📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
-📱 Устройства: {subscription.device_limit}
-🌐 Серверы: {servers_info}
+<b>Текущие параметры:</b>
+Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
+Устройства: {subscription.device_limit}
+Серверы: {servers_info}
 
-💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
+<b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
-⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+<i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message, category=NotificationCategory.RENEWALS)
 
@@ -1443,7 +1449,7 @@ class AdminNotificationService:
 
         Returns:
             'admin'     — полный набор кнопок;
-            'moderator' — набор без «👤 К пользователю» (@admin_required);
+            'moderator' — набор без «К пользователю» (@admin_required);
             'group'     — групповой/супергруппа/канал админ-чат: только надёжные
                           (не-FSM) кнопки, т.к. конкретного получателя не определить
                           и FSM-ввод в общем чате не работает (privacy mode бота);
@@ -1497,6 +1503,28 @@ class AdminNotificationService:
             message_kwargs['message_thread_id'] = thread_id
         if reply_markup is not None:
             message_kwargs['reply_markup'] = reply_markup
+
+        # Rich-вид (Bot API 10.1): конвертация классического HTML-текста в
+        # rich. При недоступности/переполнении — классический путь с ретраями ниже.
+        try:
+            from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
+
+            rich_html = classic_admin_html_to_rich(text)
+            if rich_html and await try_send_rich_admin_message(
+                self.bot,
+                self.chat_id,
+                rich_html,
+                thread_id=thread_id,
+                reply_markup=reply_markup,
+            ):
+                logger.info(
+                    'Уведомление отправлено rich-сообщением в чат',
+                    chat_id=self.chat_id,
+                    category=category,
+                )
+                return True
+        except Exception as rich_error:
+            logger.warning('Сбой rich-уведомления', error=str(rich_error))
 
         # ВАЖНО: вся ветка ошибок ниже логируется через logger.warning, а не
         # logger.error. Иначе TelegramNotifierProcessor попытается переслать
@@ -1617,7 +1645,6 @@ class AdminNotificationService:
 
             # Contact info
             contact_display = html.escape(purchase.contact_value or '—')
-            contact_icon = '📧' if purchase.contact_type == 'email' else '📱'
 
             payment_method = self._get_payment_method_display(purchase.payment_method)
 
@@ -1633,7 +1660,7 @@ class AdminNotificationService:
                     buyer_name = f'@{buyer.username}' if buyer.username else buyer.email or f'id:{buyer.id}'
                     message_lines.append(f'Покупатель: <code>{html.escape(buyer_name)}</code>')
                 else:
-                    message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+                    message_lines.append(f'Покупатель: <code>{contact_display}</code>')
             else:
                 # Landing: show page slug and buyer contact
                 landing_slug = '—'
@@ -1647,13 +1674,12 @@ class AdminNotificationService:
                     if purchase.landing_id:
                         landing_slug = f'ID:{purchase.landing_id}'
                 message_lines.append(f'Страница: <b>/buy/{html.escape(landing_slug)}</b>')
-                message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+                message_lines.append(f'Покупатель: <code>{contact_display}</code>')
 
             if purchase.is_gift:
                 if purchase.gift_recipient_value:
-                    recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
                     recipient_value = html.escape(purchase.gift_recipient_value)
-                    message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
+                    message_lines.append(f'Получатель: <code>{recipient_value}</code>')
                 else:
                     message_lines.append('Получатель: <i>по коду активации</i>')
                 if purchase.gift_message:
@@ -1710,6 +1736,7 @@ class AdminNotificationService:
             'cloudpayments': f'{settings.get_cloudpayments_display_name()}',
             'freekassa': f'{settings.get_freekassa_display_name()}',
             'kassa_ai': f'{settings.get_kassa_ai_display_name()}',
+            'cispay': f'{settings.get_cispay_display_name()}',
             'manual': 'Вручную (админ)',
             'balance': 'С баланса',
         }

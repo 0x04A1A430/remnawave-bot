@@ -18,7 +18,9 @@
 !alembic.ini
 !release-please-config.json
 !release-please-manifest.json
+!.release-please-manifest.json
 !.pre-commit-config.yaml
+!bot_logo.png
 
 # Документация
 !README.md
@@ -30,6 +32,8 @@
 !install_bot.sh
 !main.py
 !entrypoint.py
+!scripts/
+!scripts/**
 
 # Статические файлы
 !vpn_logo.png

@@ -420,7 +420,17 @@ async def switch_tariff(
 
     # Reset device limit to new tariff base (extra purchased devices are not carried over)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
+    from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
+    # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила бы
+    # списывать сумму СТАРОГО тарифа со старым каденсом. Отменяем привязку до
+    # мутаций — юзер переподключит СБП-автопродление под новый тариф (нужна
+    # новая банковская авторизация, молча пересоздать нельзя).
+    from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
     # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
     # (subtract_user_balance re-selects User with populate_existing=True which expires relationships)
     await db.refresh(subscription)
@@ -522,9 +532,9 @@ async def switch_tariff(
             async with service.get_api_client() as api:
                 await api.reset_user_devices(
                     _switch_uuid,
-                    user_id=subscription.panel_user_id
+                    user_id=subscription.remnawave_id
                     if settings.is_multi_tariff_enabled() and subscription
-                    else user.panel_user_id,
+                    else user.remnawave_id,
                 )
                 devices_reset = True
                 logger.info('Reset all devices for user on tariff switch', user_id=user.id)

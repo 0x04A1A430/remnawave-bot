@@ -89,10 +89,10 @@ def _get_remnawave_uuid(subscription, db_user):
 
 
 def _get_remnawave_identifiers(subscription, db_user):
-    """Get (remnawave_uuid, panel_user_id) for device operations.
+    """Get (remnawave_uuid, remnawave_id) for device operations.
 
     v3.0.0: panel users are identified by numeric id, the uuid field is gone —
-    it may be empty, so device calls must fall back to panel_user_id.
+    it may be empty, so device calls must fall back to remnawave_id.
     Multi-tariff: each subscription owns its OWN panel user, so use the
     subscription's identifiers and do NOT fall back to the user-level ones
     (same reasoning as _get_remnawave_uuid).
@@ -100,20 +100,20 @@ def _get_remnawave_identifiers(subscription, db_user):
     if subscription is not None and settings.is_multi_tariff_enabled():
         return (
             getattr(subscription, 'remnawave_uuid', None),
-            getattr(subscription, 'panel_user_id', None),
+            getattr(subscription, 'remnawave_id', None),
         )
     uuid = getattr(subscription, 'remnawave_uuid', None) or db_user.remnawave_uuid
-    return uuid, db_user.panel_user_id
+    return uuid, db_user.remnawave_id
 
 
 async def get_current_devices_detailed(db_user: User, subscription=None) -> dict:
     try:
-        uuid, panel_user_id = (
+        uuid, remnawave_id = (
             _get_remnawave_identifiers(subscription, db_user)
             if subscription
-            else (db_user.remnawave_uuid, db_user.panel_user_id)
+            else (db_user.remnawave_uuid, db_user.remnawave_id)
         )
-        if not uuid and panel_user_id is None:
+        if not uuid and remnawave_id is None:
             return {'count': 0, 'devices': []}
 
         from app.services.remnawave_service import RemnaWaveService
@@ -121,7 +121,7 @@ async def get_current_devices_detailed(db_user: User, subscription=None) -> dict
         service = RemnaWaveService()
 
         async with service.get_api_client() as api:
-            response = await api._make_request('GET', api._fmt_hwid_path(uuid, panel_user_id))
+            response = await api._make_request('GET', api._fmt_hwid_path(uuid, remnawave_id))
 
             if response and 'response' in response:
                 devices_info = response['response']
@@ -188,12 +188,12 @@ async def get_servers_display_names(squad_uuids: list[str]) -> str:
 
 async def get_current_devices_count(db_user: User, subscription=None) -> str:
     try:
-        uuid, panel_user_id = (
+        uuid, remnawave_id = (
             _get_remnawave_identifiers(subscription, db_user)
             if subscription
-            else (db_user.remnawave_uuid, db_user.panel_user_id)
+            else (db_user.remnawave_uuid, db_user.remnawave_id)
         )
-        if not uuid and panel_user_id is None:
+        if not uuid and remnawave_id is None:
             return '—'
 
         from app.services.remnawave_service import RemnaWaveService
@@ -201,7 +201,7 @@ async def get_current_devices_count(db_user: User, subscription=None) -> str:
         service = RemnaWaveService()
 
         async with service.get_api_client() as api:
-            response = await api._make_request('GET', api._fmt_hwid_path(uuid, panel_user_id))
+            response = await api._make_request('GET', api._fmt_hwid_path(uuid, remnawave_id))
 
             if response and 'response' in response:
                 total_devices = response['response'].get('total', 0)
@@ -948,7 +948,9 @@ async def handle_device_management(
                     await callback.answer()
                     return
 
-                await show_devices_page(callback, db_user, devices_list, page=1, sub_id=sub_id)
+                await show_devices_page(
+                    callback, db_user, devices_list, page=1, sub_id=sub_id, limit=subscription.device_limit
+                )
             else:
                 await callback.answer(
                     texts.t(
@@ -995,6 +997,7 @@ async def show_devices_page(
     devices_list: list[dict],
     page: int = 1,
     sub_id: int | None = None,
+    limit: int | None = None,
 ):
     texts = get_texts(db_user.language)
     devices_per_page = 5
@@ -1043,6 +1046,17 @@ async def show_devices_page(
 
         devices_text += '</blockquote>\n'
 
+    if limit is not None:
+        limit_display = '∞' if limit <= 0 else str(limit)
+        devices_text += (
+            '\n'
+            + texts.t(
+                'DEVICE_MANAGEMENT_COUNTER',
+                'Подключено устройств: {connected}/{limit}',
+            ).format(connected=len(devices_list), limit=limit_display)
+            + '\n'
+        )
+
     await callback.message.edit_text(
         devices_text,
         reply_markup=get_devices_management_keyboard(
@@ -1075,7 +1089,14 @@ async def handle_devices_page(
 
             if response and 'response' in response:
                 devices_list = response['response'].get('devices', [])
-                await show_devices_page(callback, db_user, devices_list, page=page, sub_id=sub_id)
+                await show_devices_page(
+                    callback,
+                    db_user,
+                    devices_list,
+                    page=page,
+                    sub_id=sub_id,
+                    limit=getattr(subscription, 'device_limit', None),
+                )
             else:
                 await callback.answer(
                     texts.t('DEVICE_FETCH_ERROR', 'Ошибка получения устройств'),
@@ -1316,7 +1337,14 @@ async def cancel_device_rename(
             async with service.get_api_client() as api:
                 response = await api._make_request('GET', api._fmt_hwid_path(remnawave_uuid, remnawave_user_id))
             devices_list = (response or {}).get('response', {}).get('devices', []) or []
-            await show_devices_page(callback, db_user, devices_list, page=page, sub_id=sub_id)
+            await show_devices_page(
+                callback,
+                db_user,
+                devices_list,
+                page=page,
+                sub_id=sub_id,
+                limit=getattr(subscription, 'device_limit', None),
+            )
             await callback.answer(texts.t('DEVICE_RENAME_CANCELLED', 'Переименование отменено'))
             return
         except Exception as exc:
@@ -1427,6 +1455,7 @@ async def handle_single_device_reset(
                                     updated_devices,
                                     page=page,
                                     sub_id=sub_id,
+                                    limit=getattr(subscription, 'device_limit', None),
                                 )
                             else:
                                 await callback.message.edit_text(

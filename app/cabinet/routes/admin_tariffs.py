@@ -687,13 +687,17 @@ async def _background_sync_squads(tariff_id: int, admin_id: int) -> None:
                         return
                     async with semaphore:
                         try:
-                            await api.update_user(
+                            from app.services.grace_access_runtime import update_panel_user_grace_safe
+
+                            await update_panel_user_grace_safe(
+                                api,
+                                sub.id,
                                 uuid=remnawave_uuid,
                                 active_internal_squads=new_squads,
                                 external_squad_uuid=ext_squad_uuid,
-                                user_id=sub.panel_user_id
+                                user_id=sub.remnawave_id
                                 if settings.is_multi_tariff_enabled()
-                                else (sub.user.panel_user_id if sub.user else None),
+                                else (sub.user.remnawave_id if sub.user else None),
                             )
                             sub.connected_squads = new_squads
                             updated += 1
@@ -811,13 +815,17 @@ async def sync_tariff_squads(
                     return 'skipped'
 
                 try:
-                    await api.update_user(
+                    from app.services.grace_access_runtime import update_panel_user_grace_safe
+
+                    await update_panel_user_grace_safe(
+                        api,
+                        sub.id,
                         uuid=remnawave_uuid,
                         active_internal_squads=new_squads,
                         external_squad_uuid=ext_squad_uuid,
-                        user_id=sub.panel_user_id
+                        user_id=sub.remnawave_id
                         if settings.is_multi_tariff_enabled()
-                        else (sub.user.panel_user_id if sub.user else None),
+                        else (sub.user.remnawave_id if sub.user else None),
                     )
                     # Update local DB only on successful API call
                     sub.connected_squads = new_squads

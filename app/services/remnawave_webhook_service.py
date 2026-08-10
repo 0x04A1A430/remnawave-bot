@@ -34,7 +34,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import (
     get_user_by_id,
-    get_user_by_panel_user_id,
+    get_user_by_remnawave_id,
     get_user_by_remnawave_uuid,
     get_user_by_telegram_id,
 )
@@ -46,6 +46,8 @@ from app.database.models import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
+from app.services.grace_access_runtime import get_open_grace_overlay, grace_access_runtime
+from app.services.grace_access_service import GraceReason, webhook_matches_overlay
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -392,6 +394,19 @@ class RemnaWaveWebhookService:
                 data_2=data.get('uuid'),
             )
             return False
+
+        if subscription and await grace_access_runtime.should_suppress_webhook(
+            subscription.id,
+            event_name,
+            data,
+            db=db,
+        ):
+            logger.info(
+                'RemnaWave webhook suppressed as a grace overlay echo',
+                event_name=event_name,
+                subscription_id=subscription.id,
+            )
+            return True
 
         user_id = user.id
         try:
@@ -775,13 +790,13 @@ class RemnaWaveWebhookService:
 
         # Extract Remnawave UUID from payload (used for subscription lookup in multi-tariff)
         remnawave_uuid = data.get('uuid') or data.get('userUuid')
-        panel_user_id = data.get('userId')
+        remnawave_id = data.get('userId')
         if not remnawave_uuid:
             nested_user = data.get('user')
             if isinstance(nested_user, dict):
                 remnawave_uuid = nested_user.get('uuid')
-                if panel_user_id is None:
-                    panel_user_id = nested_user.get('userId')
+                if remnawave_id is None:
+                    remnawave_id = nested_user.get('userId')
 
         # Try top-level telegramId first
         telegram_id = data.get('telegramId')
@@ -796,8 +811,8 @@ class RemnaWaveWebhookService:
             user = await get_user_by_remnawave_uuid(db, remnawave_uuid)
 
         # Try top-level userId (v3.0.0+)
-        if not user and panel_user_id is not None:
-            user = await get_user_by_panel_user_id(db, panel_user_id)
+        if not user and remnawave_id is not None:
+            user = await get_user_by_remnawave_id(db, remnawave_id)
 
         # Try nested user object (e.g. user_hwid_devices events)
         if not user:
@@ -816,7 +831,7 @@ class RemnaWaveWebhookService:
                 if not user:
                     nested_pid = nested_user.get('userId')
                     if nested_pid is not None:
-                        user = await get_user_by_panel_user_id(db, nested_pid)
+                        user = await get_user_by_remnawave_id(db, nested_pid)
 
         # Multi-tariff: try finding user through subscription's remnawave_uuid
         if not user and remnawave_uuid and settings.is_multi_tariff_enabled():
@@ -1110,6 +1125,9 @@ class RemnaWaveWebhookService:
             await db.commit()
             return
 
+        candidate_at = datetime.now(UTC)
+        subscription.grace_candidate_reason = GraceReason.EXPIRED.value
+        subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.EXPIRED.value:
             await expire_subscription(db, subscription)
@@ -1120,6 +1138,12 @@ class RemnaWaveWebhookService:
             )
         else:
             await db.commit()
+
+        await grace_access_runtime.consider_candidate(
+            subscription.id,
+            GraceReason.EXPIRED,
+            source='webhook',
+        )
 
         await self._notify_user(
             user,
@@ -1172,6 +1196,8 @@ class RemnaWaveWebhookService:
             await db.commit()
             return
 
+        subscription.grace_candidate_reason = None
+        subscription.grace_candidate_at = None
         self._stamp_webhook_update(subscription)
         if subscription.status != SubscriptionStatus.DISABLED.value:
             await deactivate_subscription(db, subscription)
@@ -1239,6 +1265,9 @@ class RemnaWaveWebhookService:
             )
             return
 
+        candidate_at = datetime.now(UTC)
+        subscription.grace_candidate_reason = GraceReason.LIMITED.value
+        subscription.grace_candidate_at = candidate_at
         self._stamp_webhook_update(subscription)
         if subscription.status in (
             SubscriptionStatus.ACTIVE.value,
@@ -1255,6 +1284,12 @@ class RemnaWaveWebhookService:
             )
         else:
             await db.commit()
+
+        await grace_access_runtime.consider_candidate(
+            subscription.id,
+            GraceReason.LIMITED,
+            source='webhook',
+        )
 
         await self._notify_user(
             user,
@@ -1309,11 +1344,32 @@ class RemnaWaveWebhookService:
         if not subscription:
             return
 
+        # While a grace overlay is open, the panel's status/expireAt/traffic limit
+        # are grace-owned values. Their user.modified echoes must be masked so they
+        # cannot overwrite the canonical billing state (which would make the
+        # reconciliation treat the session as recovered and revert the grace squad).
+        # Usage and URLs still keep synchronizing below.
+        try:
+            grace_overlay = await get_open_grace_overlay(db, subscription.id)
+        except Exception:
+            logger.exception(
+                'Grace overlay lookup failed; user.modified sync proceeds unmasked',
+                subscription_id=subscription.id,
+            )
+            grace_overlay = None
+        mask_grace_fields = grace_overlay is not None and webhook_matches_overlay(data, grace_overlay)
+        if mask_grace_fields:
+            logger.info(
+                'Webhook user.modified masked as a grace overlay echo',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+
         changed = False
 
-        # Sync traffic limit
+        # Sync traffic limit (grace-owned: masked during an open overlay)
         traffic_limit_bytes = data.get('trafficLimitBytes')
-        if traffic_limit_bytes is not None:
+        if traffic_limit_bytes is not None and not mask_grace_fields:
             try:
                 new_limit_gb = int(traffic_limit_bytes) // (1024**3)
                 if subscription.traffic_limit_gb != new_limit_gb:
@@ -1348,7 +1404,7 @@ class RemnaWaveWebhookService:
         # отдельно синхронизируется ниже: при panel ACTIVE + future end_date подписка
         # всё равно может корректно реактивироваться через обычное продление/активацию.
         expire_at = data.get('expireAt')
-        if expire_at and subscription.status != SubscriptionStatus.DISABLED.value:
+        if expire_at and subscription.status != SubscriptionStatus.DISABLED.value and not mask_grace_fields:
             try:
                 parsed_dt = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                 new_end_date = parsed_dt.astimezone(UTC)
@@ -1368,7 +1424,7 @@ class RemnaWaveWebhookService:
 
         # Sync status from panel
         panel_status = data.get('status')
-        if panel_status:
+        if panel_status and not mask_grace_fields:
             now = datetime.now(UTC)
             end_date = subscription.end_date
             if panel_status == 'ACTIVE' and end_date and end_date > now:
@@ -1516,7 +1572,7 @@ class RemnaWaveWebhookService:
 
             # Always clear stale UUID — panel user was deleted
             subscription.remnawave_uuid = None
-            subscription.panel_user_id = None
+            subscription.remnawave_id = None
 
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == sub_id))
 
@@ -1524,7 +1580,7 @@ class RemnaWaveWebhookService:
         if not settings.is_multi_tariff_enabled():
             if user.remnawave_uuid:
                 user.remnawave_uuid = None
-                user.panel_user_id = None
+                user.remnawave_id = None
         elif subscription is None:
             panel_uuid = data.get('uuid') or data.get('userUuid')
             if panel_uuid:
@@ -1533,7 +1589,7 @@ class RemnaWaveWebhookService:
                     if getattr(sub, 'remnawave_uuid', None) == panel_uuid:
                         sub.remnawave_uuid = None
                         sub.remnawave_short_uuid = None
-                        sub.panel_user_id = None
+                        sub.remnawave_id = None
                         break
 
         # Deactivate sibling subscriptions whose panel user also no longer exists.
@@ -1575,7 +1631,7 @@ class RemnaWaveWebhookService:
             try:
                 async with subscription_service.get_api_client() as api:
                     panel_user = await api.get_user_by_uuid(
-                        sibling_uuid, user_id=other_sub.panel_user_id if other_sub else None
+                        sibling_uuid, user_id=other_sub.remnawave_id if other_sub else None
                     )
             except Exception as exc:
                 logger.warning(
@@ -1595,7 +1651,7 @@ class RemnaWaveWebhookService:
             other_sub.updated_at = now
             if settings.is_multi_tariff_enabled():
                 other_sub.remnawave_uuid = None
-                other_sub.panel_user_id = None
+                other_sub.remnawave_id = None
             await db.execute(delete(SubscriptionServer).where(SubscriptionServer.subscription_id == other_sub.id))
             logger.info(
                 'Webhook user.deleted: deactivated sibling subscription (panel user gone)',
@@ -1930,7 +1986,7 @@ class RemnaWaveWebhookService:
             user,
             'WEBHOOK_USER_NOT_CONNECTED',
             reply_markup=self._get_connect_keyboard(user),
-            format_kwargs=format_kwargs if format_kwargs else None,
+            format_kwargs=format_kwargs or None,
             subscription=subscription,
         )
 

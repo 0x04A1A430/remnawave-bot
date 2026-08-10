@@ -1250,6 +1250,7 @@ class YooKassaPaymentMixin:
                     payment=payment,
                     transaction=transaction,
                     telegram_user_id=user.telegram_id if user else None,
+                    user_email=user.email if user else None,
                 )
 
             return True
@@ -1395,6 +1396,7 @@ class YooKassaPaymentMixin:
         payment: YooKassaPayment,
         transaction: Transaction | None = None,
         telegram_user_id: int | None = None,
+        user_email: str | None = None,
     ) -> None:
         """Создание чека через NaloGO для успешного платежа."""
         if not hasattr(self, 'nalogo_service') or not self.nalogo_service:
@@ -1424,6 +1426,7 @@ class YooKassaPaymentMixin:
                 payment_id=payment.yookassa_payment_id,
                 telegram_user_id=telegram_user_id,
                 amount_kopeks=payment.amount_kopeks,
+                user_email=user_email,
             )
 
             if receipt_uuid:
@@ -1449,6 +1452,15 @@ class YooKassaPaymentMixin:
                             'Не удалось сохранить receipt_uuid в транзакцию',
                             save_error=save_error,
                         )
+
+                # Отправляем чек пользователю (Telegram или почта) и дублируем в админ-топик
+                if getattr(self, 'bot', None):
+                    await self._send_nalogo_receipt_to_user(
+                        telegram_user_id=telegram_user_id,
+                        receipt_uuid=receipt_uuid,
+                        amount_kopeks=payment.amount_kopeks,
+                        user_email=user_email,
+                    )
             # При временной недоступности чек добавляется в очередь автоматически
 
         except Exception as error:
@@ -1458,6 +1470,29 @@ class YooKassaPaymentMixin:
                 error=error,
                 exc_info=True,
             )
+
+    async def _send_nalogo_receipt_to_user(
+        self,
+        telegram_user_id: int | None,
+        receipt_uuid: str,
+        amount_kopeks: int,
+        user_email: str | None = None,
+    ) -> None:
+        """Отправляет пользователю ссылку на фискальный чек НПД и дублирует в админ-топик."""
+        if not hasattr(self, 'nalogo_service') or not self.nalogo_service:
+            return
+
+        from app.services.nalogo_service import send_nalogo_receipt_notifications
+
+        await send_nalogo_receipt_notifications(
+            bot=getattr(self, 'bot', None),
+            nalogo_service=self.nalogo_service,
+            receipt_uuid=receipt_uuid,
+            amount_kopeks=amount_kopeks,
+            telegram_user_id=telegram_user_id,
+            context_label='Источник: YooKassa',
+            user_email=user_email,
+        )
 
     async def process_yookassa_webhook(
         self,

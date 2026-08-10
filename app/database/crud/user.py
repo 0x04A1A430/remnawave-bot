@@ -27,10 +27,37 @@ from app.database.models import (
     UserPromoGroup,
     UserStatus,
 )
+from app.utils.text_search import contains_conditions
 from app.utils.validators import sanitize_telegram_name
 
 
 logger = structlog.get_logger(__name__)
+
+# PostgreSQL BIGINT upper bound. A numeric search term larger than this fits a
+# Python int but overflows the telegram_id BigInteger column, so comparing against
+# it raises a DB error instead of returning no rows.
+_BIGINT_MAX = 9223372036854775807
+
+
+def _user_search_conditions(search: str) -> list:
+    """Build the OR-conditions for the admin user search box (id/name/username).
+
+    Always matches the text columns; matches telegram_id only when the term is an
+    in-range BIGINT number. A digit string that overflows BIGINT (or a non-ASCII
+    "digit" that int() rejects) would otherwise crash the query, so it falls back
+    to text-only matching instead. Кириллица ищется регистронезависимо через
+    contains_conditions (Lower/ILIKE не сворачивают кириллицу под локалью C) —
+    см. app/utils/text_search.py.
+    """
+    conditions = contains_conditions((User.first_name, User.last_name, User.username), search)
+    if search.isdigit():
+        try:
+            search_int = int(search)
+        except ValueError:
+            search_int = None
+        if search_int is not None and 0 <= search_int <= _BIGINT_MAX:
+            conditions.append(User.telegram_id == search_int)
+    return conditions
 
 
 def _normalize_language_code(language: str | None, fallback: str = 'ru') -> str:
@@ -235,8 +262,8 @@ async def get_user_by_remnawave_uuid(db: AsyncSession, remnawave_uuid: str) -> U
     return user
 
 
-async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> User | None:
-    """Находит пользователя по panel_user_id (числовой ID из панели Remnawave)."""
+async def get_user_by_remnawave_id(db: AsyncSession, remnawave_id: int) -> User | None:
+    """Находит пользователя по remnawave_id (числовой ID из панели Remnawave)."""
     result = await db.execute(
         select(User)
         .options(
@@ -244,11 +271,11 @@ async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> Use
             selectinload(User.promo_group),
             selectinload(User.referrer),
         )
-        .where(User.panel_user_id == panel_user_id)
+        .where(User.remnawave_id == remnawave_id)
     )
     user = result.scalar_one_or_none()
 
-    # Multi-tariff: panel_user_id lives on Subscription, not User
+    # Multi-tariff: remnawave_id lives on Subscription, not User
     if not user and settings.is_multi_tariff_enabled():
         from app.database.models import Subscription as _Subscription
 
@@ -257,7 +284,7 @@ async def get_user_by_panel_user_id(db: AsyncSession, panel_user_id: int) -> Use
             .options(
                 selectinload(_Subscription.user).selectinload(User.subscriptions).selectinload(_Subscription.tariff)
             )
-            .where(_Subscription.panel_user_id == panel_user_id)
+            .where(_Subscription.remnawave_id == remnawave_id)
         )
         sub = sub_result.scalar_one_or_none()
         if sub and sub.user:
@@ -506,8 +533,6 @@ async def create_user(
 
 
 async def update_user(db: AsyncSession, user: User, **kwargs) -> User:
-    from app.utils.validators import sanitize_telegram_name
-
     for field, value in kwargs.items():
         if field in ('first_name', 'last_name'):
             value = sanitize_telegram_name(value)
@@ -1023,24 +1048,7 @@ async def get_users_list(
         )
 
     if search:
-        search_term = f'%{search}%'
-        conditions = [
-            User.first_name.ilike(search_term),
-            User.last_name.ilike(search_term),
-            User.username.ilike(search_term),
-        ]
-
-        if search.isdigit():
-            try:
-                search_int = int(search)
-                # Добавляем условие поиска по telegram_id, который является BigInteger
-                # и может содержать большие значения, в отличие от User.id (INTEGER)
-                conditions.append(User.telegram_id == search_int)
-            except ValueError:
-                # Если не удалось преобразовать в int, просто ищем по текстовым полям
-                pass
-
-        query = query.where(or_(*conditions))
+        query = query.where(or_(*_user_search_conditions(search)))
 
     if email:
         query = query.where(User.email.ilike(f'%{email}%'))
@@ -1162,24 +1170,7 @@ async def get_users_count(
         )
 
     if search:
-        search_term = f'%{search}%'
-        conditions = [
-            User.first_name.ilike(search_term),
-            User.last_name.ilike(search_term),
-            User.username.ilike(search_term),
-        ]
-
-        if search.isdigit():
-            try:
-                search_int = int(search)
-                # Добавляем условие поиска по telegram_id, который является BigInteger
-                # и может содержать большие значения, в отличие от User.id (INTEGER)
-                conditions.append(User.telegram_id == search_int)
-            except ValueError:
-                # Если не удалось преобразовать в int, просто ищем по текстовым полям
-                pass
-
-        query = query.where(or_(*conditions))
+        query = query.where(or_(*_user_search_conditions(search)))
 
     if email:
         query = query.where(User.email.ilike(f'%{email}%'))

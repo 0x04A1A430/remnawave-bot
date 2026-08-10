@@ -51,6 +51,7 @@ router = APIRouter(prefix='/admin/stats', tags=['Cabinet Admin Stats'])
 class NodeStatus(BaseModel):
     """Node status info."""
 
+    id: int | None = None
     uuid: str
     name: str
     address: str
@@ -473,6 +474,7 @@ async def _get_nodes_overview() -> NodesOverview:
 
         node_statuses = [
             NodeStatus(
+                id=n.get('id'),
                 uuid=n.get('uuid', ''),
                 name=n.get('name', 'Unknown'),
                 address=n.get('address', ''),

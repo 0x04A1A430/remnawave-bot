@@ -1288,6 +1288,15 @@ async def add_subscription_traffic(db: AsyncSession, subscription: Subscription,
         gb=gb,
         new_expires_at=new_expires_at.strftime('%d.%m.%Y'),
     )
+
+    # В классическом режиме докупленный трафик входит в цену продления
+    # (_calculate_classic_mode передаёт purchased_traffic_gb) — привязка с
+    # прежней суммой её больше не покрывает. В тарифном режиме цена не
+    # меняется, и хелпер молча выйдет по совпадению сумм.
+    from app.services.recurrent_amount import sync_recurrent_bindings_after_price_change
+
+    await sync_recurrent_bindings_after_price_change(db, subscription.id)
+
     return subscription
 
 
@@ -1338,6 +1347,14 @@ async def add_subscription_devices(db: AsyncSession, subscription: Subscription,
         user_id=subscription.user_id,
         devices=devices,
     )
+
+    # Изменение числа устройств не влияет на цену рекуррентной привязки, но
+    # хелпер молча выйдет по совпадению сумм — звонок безопасен и держит
+    # каденс/сумму в актуальном состоянии при последующих чарджах.
+    from app.services.recurrent_amount import sync_recurrent_bindings_after_price_change
+
+    await sync_recurrent_bindings_after_price_change(db, subscription.id)
+
     return subscription
 
 
@@ -1467,6 +1484,24 @@ async def update_subscription_autopay(
 
     await db.commit()
     await db.refresh(subscription)
+
+    if enabled:
+        # Взаимоисключение движков продления ЦЕНТРАЛИЗОВАНО здесь: включение
+        # balance-autopay отменяет активное СБП-автопродление Platega. Точечные
+        # вызовы на отдельных поверхностях (бот/кабинет) пропускали новые точки
+        # включения (миниапп, админ-тоглы) — и юзер платил дважды за цикл.
+        try:
+            from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
+            from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
+
+            await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+            await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+        except Exception as platega_error:  # pragma: no cover - хелпер сам best-effort
+            logger.warning(
+                'Не удалось отменить СБП-автопродление при включении автоплатежа',
+                subscription_id=getattr(subscription, 'id', None),
+                error=str(platega_error),
+            )
 
     status = 'включен' if enabled else 'выключен'
     logger.info(
@@ -1798,6 +1833,13 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
     if not subscriptions:
         return 0
 
+    from app.services.grace_access_runtime import ensure_no_open_grace_for_subscriptions
+
+    await ensure_no_open_grace_for_subscriptions(
+        db,
+        tuple(int(subscription.id) for subscription in subscriptions),
+    )
+
     import asyncio
 
     from sqlalchemy import update
@@ -1822,11 +1864,14 @@ async def wipe_trial_subscriptions(db: AsyncSession, subscriptions) -> int:
                     return True  # в панели нечего удалять
                 async with semaphore:
                     try:
+                        remnawave_id = (
+                            getattr(subscription, 'remnawave_id', None)
+                            if is_multi
+                            else (getattr(subscription.user, 'remnawave_id', None) if subscription.user else None)
+                        )
                         await api.delete_user(
                             panel_uuid,
-                            user_id=subscription.panel_user_id
-                            if is_multi
-                            else (subscription.user.panel_user_id if subscription.user else None),
+                            user_id=remnawave_id,
                         )
                         return True
                     except Exception as error:

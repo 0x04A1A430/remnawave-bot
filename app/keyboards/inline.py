@@ -196,8 +196,6 @@ _LANGUAGE_DISPLAY_NAMES = {
     'zh-hant': '中文 (繁體)',
     'vi': 'Tiếng Việt',
     'vi-vn': 'Tiếng Việt',
-    'fa': 'فارسی',
-    'fa-ir': 'فارسی',
 }
 
 
@@ -317,6 +315,7 @@ def get_language_selection_keyboard(
     current_language: str | None = None,
     *,
     include_back: bool = False,
+    back_callback: str = 'back_to_menu',
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     available_languages = settings.get_available_languages()
@@ -351,7 +350,7 @@ def get_language_selection_keyboard(
 
     if include_back:
         texts = get_texts(language)
-        buttons.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
+        buttons.append([make_button(text=texts.BACK, style='danger', callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -546,27 +545,6 @@ def _build_cabinet_main_menu_keyboard(
                     info_text = section_cfg.get('labels', {}).get(language, '') or texts.t('MENU_INFO', 'Инфо')
                     row_buttons.append(_cabinet_button(info_text, '/info', 'menu_info'))
 
-                case 'language':
-                    if not section_cfg.get('enabled', True):
-                        continue
-                    if not settings.is_language_selection_enabled():
-                        continue
-                    lang_text = section_cfg.get('labels', {}).get(language, '') or texts.MENU_LANGUAGE
-                    resolved_lang_emoji = section_cfg.get('icon_custom_emoji_id') or None
-                    resolved_lang_style = _resolve_style(section_cfg.get('style'))
-                    if resolved_lang_emoji:
-                        from app.utils.miniapp_buttons import strip_leading_emoji
-
-                        lang_text = strip_leading_emoji(lang_text)
-                    row_buttons.append(
-                        make_button(
-                            text=lang_text,
-                            callback_data='menu_language',
-                            style=resolved_lang_style,
-                            icon_custom_emoji_id=resolved_lang_emoji,
-                        )
-                    )
-
                 case 'admin':
                     if not is_admin:
                         continue
@@ -741,27 +719,7 @@ def get_main_menu_keyboard(
             )
         )
 
-        # Добавляем кнопку докупки трафика для лимитированных подписок
-        # В режиме тарифов проверяем tariff_id (детальная проверка в хендлере)
-        # В классическом режиме проверяем глобальные настройки
-        show_traffic_topup = False
-        if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
-            if settings.is_tariffs_mode() and getattr(subscription, 'tariff_id', None):
-                # Режим тарифов - показываем кнопку, проверка настроек тарифа в хендлере
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-            elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-                # Классический режим - проверяем глобальные настройки
-                show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-
-        if show_traffic_topup:
-            paired_buttons.append(
-                make_button(
-                    text=texts.t('BUY_TRAFFIC_BUTTON', 'Докупить трафик'),
-                    callback_data='buy_traffic',
-                )
-            )
-
-    keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance', style='success')])
+        keyboard.append([make_button(text=balance_button_text, callback_data='menu_balance', style='success')])
 
     show_trial = (
         not has_had_paid_subscription
@@ -850,9 +808,6 @@ def get_main_menu_keyboard(
             callback_data='menu_info',
         )
     )
-
-    if settings.is_language_selection_enabled():
-        bottom_buttons.append(make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language'))
 
     for i in range(0, len(bottom_buttons), 3):
         row = bottom_buttons[i : i + 3]
@@ -992,6 +947,9 @@ def get_info_menu_keyboard(
                 )
             ]
         )
+
+    if settings.is_language_selection_enabled():
+        buttons.append([make_button(text=texts.MENU_LANGUAGE, callback_data='menu_language', style='primary')])
 
     buttons.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
@@ -1407,16 +1365,27 @@ def get_subscription_keyboard(
                     ]
                 )
 
-    if not settings.is_multi_tariff_enabled():
-        keyboard.append(
-            [
-                make_button(
-                    text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
-                    callback_data='subscription_settings',
-                    style='primary',
-                )
-            ]
+    # Ряд: [Настройки] [+ Купить тариф для истёкших/отключённых]
+    settings_row = [
+        make_button(
+            text=texts.t('SUBSCRIPTION_SETTINGS_BUTTON', 'Настройки'),
+            callback_data='subscription_settings',
+            style='primary',
         )
+    ]
+    # Вкладка подписки: кнопка мгновенного переключения тарифа (instant_switch)
+    # убрана полностью — смена тарифа недоступна отсюда. Для истёкшей/отключённой
+    # подписки показываем «Купить тариф» (покупку с нуля) — переключить там
+    # всё равно нельзя, а покупка нового оформляется штатно через menu_buy.
+    if settings.is_tariffs_mode() and subscription and not is_trial:
+        if getattr(subscription, 'actual_status', None) in ('expired', 'disabled'):
+            settings_row.append(
+                make_button(
+                    text=texts.t('BUY_TARIFF_BUTTON', 'Купить тариф'),
+                    callback_data='menu_buy',
+                )
+            )
+    keyboard.append(settings_row)
 
     keyboard.append([make_button(text=texts.BACK, style='danger', callback_data='back_to_menu')])
 
@@ -2371,6 +2340,42 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_cispay_card_enabled():
+        cispay_card_name = settings.get_cispay_card_display_name()
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t('PAYMENT_CISPAY_CARD', f'{cispay_card_name}'),
+                    callback_data=_build_callback('cispay_card'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_cispay_sbp_enabled():
+        cispay_sbp_name = settings.get_cispay_sbp_display_name()
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t('PAYMENT_CISPAY_SBP', f'{cispay_sbp_name}'),
+                    callback_data=_build_callback('cispay_sbp'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_cispay_enabled() and not settings.is_cispay_card_enabled() and not settings.is_cispay_sbp_enabled():
+        cispay_name = settings.get_cispay_display_name()
+        keyboard.append(
+            [
+                make_button(
+                    text=texts.t('PAYMENT_CISPAY', f'{cispay_name}'),
+                    callback_data=_build_callback('cispay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [
@@ -2776,7 +2781,7 @@ def get_add_traffic_keyboard(
 
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code in {'ru'}
     back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     # Считаем по дням (как в кабинете и подтверждении)
@@ -2860,7 +2865,7 @@ def get_add_traffic_keyboard_from_tariff(
     """
     texts = get_texts(language)
     language_code = (language or DEFAULT_LANGUAGE).split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
+    use_russian_fallback = language_code in {'ru'}
     back_cb = f'sm:{sub_id}' if sub_id and settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     if not packages:
@@ -3628,27 +3633,6 @@ def get_updated_subscription_settings_keyboard(
                 make_button(
                     text=texts.t('SWITCH_TRAFFIC_BUTTON', 'Переключить трафик'),
                     callback_data='subscription_switch_traffic',
-                )
-            ]
-        )
-
-    # Докупка трафика
-    show_traffic_topup = False
-    if subscription and not subscription.is_trial and (subscription.traffic_limit_gb or 0) > 0:
-        if has_tariff:
-            # В режиме тарифов показываем кнопку, детальная проверка настроек тарифа в хендлере
-            show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-        elif settings.is_traffic_topup_enabled() and not settings.is_traffic_topup_blocked():
-            show_traffic_topup = settings.BUY_TRAFFIC_BUTTON_VISIBLE
-
-    if show_traffic_topup:
-        keyboard.append(
-            [
-                make_button(
-                    text=texts.t(
-                        'BUY_TRAFFIC_BUTTON', "<tg-emoji emoji-id='5778550614669660455'>⏲️</tg-emoji> Докупить трафик"
-                    ),
-                    callback_data='buy_traffic',
                 )
             ]
         )

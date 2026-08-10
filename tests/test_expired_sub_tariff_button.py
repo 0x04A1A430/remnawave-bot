@@ -1,8 +1,8 @@
 """Regression (#3): on a fully EXPIRED subscription the "📦 Тариф" (change-tariff)
 button used to be shown in the subscription menu, but the handler blocked the action
 ("Переключение недоступно") — a dead button. Now expired/disabled subs show
-"📦 Купить тариф" (menu_buy / fresh purchase) instead, and active subs keep the
-normal change-tariff button.
+"📦 Купить тариф" (menu_buy / fresh purchase) instead. The change-tariff button
+(instant_switch / tariff_switch) is removed from the subscription menu entirely.
 """
 
 from __future__ import annotations
@@ -74,8 +74,10 @@ def test_active_sub_keeps_change_tariff(monkeypatch):
         subscription=_fake_sub('active', 'active'),
     )
     cbs = _callbacks(markup)
-    assert 'instant_switch' in cbs  # normal switch flow untouched
+    assert 'instant_switch' not in cbs  # instant switch removed from subscription menu
+    assert 'tariff_switch' not in cbs
     assert 'menu_buy' not in cbs
+    assert 'subscription_settings' in cbs
 
 
 def test_limited_sub_keeps_change_tariff(monkeypatch):
@@ -88,4 +90,6 @@ def test_limited_sub_keeps_change_tariff(monkeypatch):
         subscription=_fake_sub('limited', 'limited'),
     )
     cbs = _callbacks(markup)
-    assert 'instant_switch' in cbs
+    assert 'instant_switch' not in cbs  # instant switch removed from subscription menu
+    assert 'tariff_switch' not in cbs
+    assert 'subscription_settings' in cbs

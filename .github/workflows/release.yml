@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   contents: write
@@ -148,7 +148,7 @@ jobs:
 
             ```bash
             # Docker Hub
-            docker pull fr1ngg/remnawave-bedolaga-telegram-bot:${{ github.ref_name }}
+            docker pull fr1ngg/remnawave-@xilarobot-telegram-bot:${{ github.ref_name }}
 
             # GitHub Container Registry
             docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}

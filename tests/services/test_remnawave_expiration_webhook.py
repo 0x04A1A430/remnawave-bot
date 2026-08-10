@@ -6,8 +6,10 @@ while still accepting the old events from 2.7.x panels.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+from app.services.grace_access_service import GracePanelOverlay
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
 
@@ -142,3 +144,114 @@ async def test_user_modified_used_traffic_falls_back_to_flat_key():
     sub.traffic_used_gb = 0.0
     await svc._handle_user_modified(AsyncMock(), _user(), sub, {'usedTrafficBytes': 2 * 1024**3})
     assert sub.traffic_used_gb == 2.0
+
+
+def _grace_overlay(expire_at: datetime) -> GracePanelOverlay:
+    return GracePanelOverlay(
+        status='ACTIVE',
+        expire_at=expire_at,
+        traffic_limit_bytes=11 * 1024**3,
+        squad_uuids=('11111111-1111-1111-1111-111111111111',),
+    )
+
+
+async def _run_modified_with_overlay(
+    monkeypatch,
+    svc: RemnaWaveWebhookService,
+    sub,
+    data,
+    overlay: GracePanelOverlay | None,
+) -> None:
+    """Run the handler with a stubbed open-grace-overlay lookup."""
+    import app.services.remnawave_webhook_service as rw
+
+    async def fake_overlay(db, subscription_id):
+        assert subscription_id == sub.id
+        return overlay
+
+    monkeypatch.setattr(rw, 'get_open_grace_overlay', fake_overlay)
+    await svc._handle_user_modified(AsyncMock(), _user(), sub, data)
+
+
+async def test_user_modified_grace_echo_does_not_overwrite_billing_fields(monkeypatch):
+    """A user.modified echo of the active grace overlay must NOT clobber the
+    canonical billing status/end_date/traffic limit. Regression for the case
+    where the grace overlay PATCH echoed status=ACTIVE + expireAt=grace_until and
+    rewrote billing, causing reconciliation to complete the session as paid and
+    revert the user to the old squad."""
+    svc = _service()
+    now = datetime.now(UTC)
+    grace_until = now + timedelta(hours=21)
+    sub = MagicMock()
+    sub.id = 42
+    sub.status = 'limited'
+    sub.traffic_limit_gb = 5
+    sub.traffic_used_gb = 4.5
+    sub.end_date = now + timedelta(days=3650)
+    sub.subscription_url = 'https://x'
+    sub.subscription_crypto_link = 'crypto'
+    sub.updated_at = now
+
+    echo = {
+        'status': 'ACTIVE',
+        'expireAt': grace_until.isoformat(),
+        'trafficLimitBytes': 11 * 1024**3,
+        'activeInternalSquads': [{'uuid': '11111111-1111-1111-1111-111111111111'}],
+        'usedTrafficBytes': 5 * 1024**3,
+    }
+    await _run_modified_with_overlay(monkeypatch, svc, sub, echo, _grace_overlay(grace_until))
+
+    assert sub.status == 'limited'  # not reactivated by the overlay echo
+    assert sub.traffic_limit_gb == 5  # not overwritten with the grace overlay limit
+    assert abs((sub.end_date - (now + timedelta(days=3650))).total_seconds()) < 2  # untouched
+    assert sub.traffic_used_gb == 5.0  # usage still synchronized
+
+
+async def test_user_modified_real_renewal_still_syncs_without_grace_echo(monkeypatch):
+    """A genuine panel renewal (different expireAt/limit) must still sync even
+    while an unrelated grace overlay is open."""
+    svc = _service()
+    now = datetime.now(UTC)
+    sub = MagicMock()
+    sub.id = 42
+    sub.status = 'limited'
+    sub.traffic_limit_gb = 5
+    sub.traffic_used_gb = 4.5
+    sub.end_date = now + timedelta(days=1)
+    sub.subscription_url = 'https://x'
+    sub.subscription_crypto_link = 'crypto'
+    sub.updated_at = now
+
+    real_expiry = now + timedelta(days=30)
+    renewal = {
+        'status': 'ACTIVE',
+        'expireAt': real_expiry.isoformat(),
+        'trafficLimitBytes': 20 * 1024**3,
+        'activeInternalSquads': [{'uuid': '22222222-2222-2222-2222-222222222222'}],
+    }
+    await _run_modified_with_overlay(monkeypatch, svc, sub, renewal, _grace_overlay(now + timedelta(hours=1)))
+
+    assert sub.status == 'active'  # genuine renewal is honored
+    assert abs((sub.end_date - real_expiry).total_seconds()) < 2
+    assert sub.traffic_limit_gb == 20
+
+
+async def test_user_modified_without_open_grace_syncs_normally(monkeypatch):
+    """Without an open grace overlay the handler keeps its original behaviour."""
+    svc = _service()
+    now = datetime.now(UTC)
+    sub = MagicMock()
+    sub.id = 42
+    sub.status = 'active'
+    sub.traffic_limit_gb = 5
+    sub.traffic_used_gb = 0.0
+    sub.end_date = now + timedelta(days=10)
+    sub.subscription_url = 'https://x'
+    sub.subscription_crypto_link = 'crypto'
+    sub.updated_at = now
+
+    data = {'status': 'ACTIVE', 'expireAt': (now + timedelta(days=15)).isoformat()}
+    await _run_modified_with_overlay(monkeypatch, svc, sub, data, None)
+
+    assert sub.status == 'active'
+    assert abs((sub.end_date - (now + timedelta(days=15))).total_seconds()) < 2
