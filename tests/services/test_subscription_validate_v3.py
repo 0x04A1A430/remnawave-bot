@@ -9,8 +9,6 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
-import pytest
-
 from app.services.subscription_service import SubscriptionService
 
 
@@ -48,8 +46,7 @@ def _user(telegram_id=7667943460, remnawave_id=None, remnawave_uuid=None):
 
 
 def _patch(monkeypatch, *, use_user_id: bool, multi_tariff: bool, panel_user=None, tg_panel_users=None):
-    from app.config import settings
-    from app.config import Settings
+    from app.config import Settings, settings
 
     monkeypatch.setattr(settings, 'REMNAWAVE_USE_USER_ID', use_user_id)
     monkeypatch.setattr(Settings, 'is_multi_tariff_enabled', lambda self: multi_tariff)

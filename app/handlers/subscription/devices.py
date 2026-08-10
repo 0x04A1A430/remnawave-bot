@@ -948,7 +948,9 @@ async def handle_device_management(
                     await callback.answer()
                     return
 
-                await show_devices_page(callback, db_user, devices_list, page=1, sub_id=sub_id, limit=subscription.device_limit)
+                await show_devices_page(
+                    callback, db_user, devices_list, page=1, sub_id=sub_id, limit=subscription.device_limit
+                )
             else:
                 await callback.answer(
                     texts.t(
@@ -1046,10 +1048,14 @@ async def show_devices_page(
 
     if limit is not None:
         limit_display = '∞' if limit <= 0 else str(limit)
-        devices_text += '\n' + texts.t(
-            'DEVICE_MANAGEMENT_COUNTER',
-            'Подключено устройств: {connected}/{limit}',
-        ).format(connected=len(devices_list), limit=limit_display) + '\n'
+        devices_text += (
+            '\n'
+            + texts.t(
+                'DEVICE_MANAGEMENT_COUNTER',
+                'Подключено устройств: {connected}/{limit}',
+            ).format(connected=len(devices_list), limit=limit_display)
+            + '\n'
+        )
 
     await callback.message.edit_text(
         devices_text,
