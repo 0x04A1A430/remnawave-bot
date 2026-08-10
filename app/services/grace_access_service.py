@@ -113,6 +113,7 @@ class GraceAccessPolicy:
     duration: timedelta
     expired_squad_uuid: str
     limited_squad_uuid: str
+    external_squad_uuid: str = ''
     traffic_bytes: int = 1024**3
     trial_enabled: bool = False
     daily_enabled: bool = False
@@ -966,9 +967,10 @@ def build_panel_overlay(
         expire_at=_as_utc(now) + policy.duration,
         traffic_limit_bytes=temporary_limit,
         squad_uuids=(policy.squad_for(reason),),
-        # External squads can provide unrestricted access independently of the
-        # internal Telegram-only squad, so grace must temporarily detach them.
-        external_squad_uuid=None,
+        # External squads могут давать доступ вне Telegram-сквадов, поэтому по
+        # умолчанию грейс их отвязывает. Если задан GRACE_ACCESS_EXTERNAL_SQUAD_UUID —
+        # на время грейса выдаём этот external squad вместо отвязки.
+        external_squad_uuid=policy.external_squad_uuid.strip() or None,
     )
 
 
