@@ -762,6 +762,7 @@ class SubscriptionService:
                     api,
                     user_uuid,
                     enabled=False,
+                    user_id=user_id,
                     db=db,
                 )
                 logger.info('Отключен RemnaWave пользователь', user_uuid=user_uuid)
@@ -804,6 +805,7 @@ class SubscriptionService:
                     api,
                     user_uuid,
                     enabled=True,
+                    user_id=user_id,
                     db=db,
                 )
                 logger.info('Включен RemnaWave пользователь', user_uuid=user_uuid)
