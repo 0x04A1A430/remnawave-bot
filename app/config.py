@@ -1331,6 +1331,16 @@ class Settings(BaseSettings):
     # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
     SMTP_USE_SSL: bool = False
 
+    # Отписка от маркетинговых писем (winback, промопредложения, email-рассылки).
+    # Gmail/Yahoo для bulk-отправителей требуют one-click unsubscribe (RFC 8058),
+    # а жалобы «Спам» вместо отписки бьют по репутации домена.
+    EMAIL_UNSUBSCRIBE_ENABLED: bool = True
+    # Публичный URL эндпоинта отписки. Пусто → CABINET_URL + /api/cabinet/public/unsubscribe.
+    # Задавать явно, если API кабинета проксируется не через /api.
+    EMAIL_UNSUBSCRIBE_BASE_URL: str = ''
+    # Необязательный mailto-вариант в List-Unsubscribe для клиентов без HTTP one-click.
+    EMAIL_UNSUBSCRIBE_MAILTO: str = ''
+
     # Ban System Integration (BedolagaBan monitoring)
     BAN_SYSTEM_ENABLED: bool = False
     BAN_SYSTEM_API_URL: str | None = None  # e.g., http://ban-server:8000
