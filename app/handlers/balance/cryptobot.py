@@ -264,44 +264,53 @@ async def process_cryptobot_payment_amount(
 @error_handler
 async def check_cryptobot_payment_status(callback: types.CallbackQuery, db: AsyncSession):
     try:
-        local_payment_id = int(callback.data.split('_')[-1])
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        await callback.answer('Некорректный идентификатор платежа', show_alert=True)
+        return
 
-        from app.database.crud.cryptobot import get_cryptobot_payment_by_id
+    payment_service = PaymentService(callback.bot)
 
-        payment = await get_cryptobot_payment_by_id(db, local_payment_id)
-
-        if not payment:
-            await callback.answer('Платеж не найден', show_alert=True)
-            return
-
-        status_emoji = {'active': '', 'paid': '', 'expired': ''}
-
-        status_text = {
-            'active': 'Ожидает оплаты',
-            'paid': 'Оплачен',
-            'expired': 'Истек',
-        }
-
-        emoji = status_emoji.get(payment.status, '')
-        status = status_text.get(payment.status, 'Неизвестно')
-
-        message_text = (
-            f'Статус платежа:\n\n'
-            f'ID: {payment.invoice_id[:8]}...\n'
-            f'Сумма: {payment.amount} {payment.asset}\n'
-            f'Статус: {emoji} {status}\n'
-            f'Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}\n'
-        )
-
-        if payment.is_paid:
-            message_text += '\nПлатеж успешно завершен!\n\nСредства зачислены на баланс.'
-        elif payment.is_pending:
-            message_text += "\n Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
-        elif payment.is_expired:
-            message_text += f'\nПлатеж истек. Обратитесь в {settings.get_support_contact_display()}'
-
-        await callback.answer(message_text, show_alert=True)
-
-    except Exception as e:
-        logger.error('Ошибка проверки статуса CryptoBot платежа', error=e)
+    try:
+        status_info = await payment_service.get_cryptobot_payment_status(db, local_payment_id)
+    except Exception as error:
+        logger.exception('Ошибка проверки статуса CryptoBot', error=error)
         await callback.answer('Ошибка проверки статуса', show_alert=True)
+        return
+
+    if not status_info:
+        await callback.answer('Платеж не найден', show_alert=True)
+        return
+
+    payment = status_info.get('payment') or status_info
+    if not payment:
+        await callback.answer('Платеж не найден', show_alert=True)
+        return
+
+    status_emoji = {'active': '', 'paid': '', 'expired': ''}
+
+    status_text = {
+        'active': 'Ожидает оплаты',
+        'paid': 'Оплачен',
+        'expired': 'Истек',
+    }
+
+    emoji = status_emoji.get(payment.status, '')
+    status = status_text.get(payment.status, 'Неизвестно')
+
+    message_text = (
+        f'Статус платежа:\n\n'
+        f'ID: {payment.invoice_id[:8]}...\n'
+        f'Сумма: {payment.amount} {payment.asset}\n'
+        f'Статус: {emoji} {status}\n'
+        f'Создан: {payment.created_at.strftime("%d.%m.%Y %H:%M")}\n'
+    )
+
+    if payment.is_paid:
+        message_text += '\nПлатеж успешно завершен!\n\nСредства зачислены на баланс.'
+    elif payment.is_pending:
+        message_text += "\n Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
+    elif payment.is_expired:
+        message_text += f'\nПлатеж истек. Обратитесь в {settings.get_support_contact_display()}'
+
+    await callback.answer(message_text, show_alert=True)

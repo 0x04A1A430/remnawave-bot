@@ -1946,9 +1946,20 @@ async def check_simple_cryptobot_payment_status(
         await callback.answer('Некорректный идентификатор платежа', show_alert=True)
         return
 
-    from app.database.crud.cryptobot import get_cryptobot_payment_by_id
+    payment_service = PaymentService(callback.bot)
 
-    payment = await get_cryptobot_payment_by_id(db, local_payment_id)
+    try:
+        status_info = await payment_service.get_cryptobot_payment_status(db, local_payment_id)
+    except Exception as error:
+        logger.error('Ошибка проверки статуса CryptoBot', error=error)
+        await callback.answer('Ошибка проверки статуса', show_alert=True)
+        return
+
+    if not status_info:
+        await callback.answer('Платеж не найден', show_alert=True)
+        return
+
+    payment = status_info.get('payment') or status_info
     if not payment:
         await callback.answer('Платеж не найден', show_alert=True)
         return
