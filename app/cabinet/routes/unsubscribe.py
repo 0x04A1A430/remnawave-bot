@@ -5,17 +5,24 @@
 кабинета. Требовать вход — значит гарантированно получить жалобу «Спам»
 вместо отписки.
 
-``GET`` отписывает сразу и показывает страницу-подтверждение: почтовые клиенты
-всё равно открывают ссылку в браузере, а лишний экран «нажмите, чтобы
-подтвердить» роняет конверсию отписки и провоцирует жалобу. ``POST`` — тот же
-эффект для one-click.
+Состояние меняет ТОЛЬКО ``POST``. Корпоративные почтовые шлюзы (Defender Safe
+Links, Proofpoint URL Defense, Mimecast) при доставке сами дёргают GET по каждой
+ссылке из письма — если бы отписывал GET, такой шлюз отписывал бы получателя
+ещё до того, как тот открыл письмо, и целые домены уходили бы в ноль. Сделать
+повтор идемпотентным тут не помогает: коммитит саму отписку первый же запрос
+сканера.
+
+При этом лишнего клика у человека не появляется: ``GET`` отдаёт страницу,
+которая сама отправляет форму (сканеры JS не исполняют и POST не шлют), а без
+JS остаётся обычная кнопка. Gmail/Yahoo по RFC 8058 шлют POST напрямую и этой
+страницы не видят.
 """
 
 from __future__ import annotations
 
 import html
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,10 +70,63 @@ async def _unsubscribe(token: str, db: AsyncSession) -> bool:
     return await apply_unsubscribe(db, token)
 
 
-@router.get('/unsubscribe', summary='Отписка от маркетинговых писем (ссылка из письма)')
-async def unsubscribe_page(token: str = '', db: AsyncSession = Depends(get_cabinet_db)) -> HTMLResponse:
-    """Отписывает по токену и показывает результат человеку."""
-    if await _unsubscribe(token, db):
+def _auto_submit_page(token: str) -> HTMLResponse:
+    """Страница, которая сама отправляет POST. Без JS — обычная кнопка."""
+    safe_token = html.escape(token, quote=True)
+    service_name = html.escape(settings.SMTP_FROM_NAME or 'VPN')
+    body = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Отписка</title>
+</head>
+<body style="margin:0;background:#eef0f3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2933">
+  <div style="max-width:520px;margin:12vh auto;padding:34px 30px;background:#fff;border:1px solid #e6e8ec;border-radius:16px">
+    <h1 style="margin:0 0 12px;font-size:21px;color:#0a0f1a">Отписка от рассылок</h1>
+    <form id="u" method="post" action="?token={safe_token}">
+      <noscript><p style="margin:0 0 18px;font-size:15px">Нажмите кнопку, чтобы подтвердить отписку.</p></noscript>
+      <button type="submit" style="border:0;border-radius:10px;padding:12px 20px;font-size:15px;background:#dc2626;color:#fff;cursor:pointer">
+        Отписаться
+      </button>
+    </form>
+    <p style="margin:26px 0 0;font-size:12px;color:#98a2b3">&copy; {service_name}</p>
+  </div>
+  <script>document.getElementById('u').submit();</script>
+</body>
+</html>"""
+    return HTMLResponse(body)
+
+
+@router.get('/unsubscribe', summary='Страница отписки (ссылка из письма)')
+async def unsubscribe_page(token: str = '') -> HTMLResponse:
+    """Ничего не меняет — только отдаёт самоотправляющуюся форму.
+
+    БД тут намеренно не трогаем: этот GET выполняют почтовые сканеры.
+    """
+    return _auto_submit_page(token)
+
+
+@router.post('/unsubscribe', summary='Отписка (one-click RFC 8058 и форма со страницы)')
+async def unsubscribe_one_click(
+    request: Request,
+    token: str = '',
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> Response:
+    """Единственное место, где отписка применяется.
+
+    Сюда приходят и кнопка «Отписаться» в Gmail/Yahoo, и форма со страницы выше.
+    Браузеру отвечаем страницей с результатом, почтовому клиенту — пустым 200:
+    ему всё равно нечего показать пользователю, а на протухшем токене ошибка
+    только напугала бы.
+    """
+    ok = await _unsubscribe(token, db)
+
+    if 'text/html' not in (request.headers.get('accept') or ''):
+        return Response(status_code=200)
+
+    if ok:
         return _page(
             'Вы отписались',
             'Больше не будем присылать новости и промо-предложения на этот адрес. '
@@ -79,15 +139,3 @@ async def unsubscribe_page(token: str = '', db: AsyncSession = Depends(get_cabin
         'настройках уведомлений личного кабинета.',
         ok=False,
     )
-
-
-@router.post('/unsubscribe', summary='One-click отписка (RFC 8058)')
-async def unsubscribe_one_click(token: str = '', db: AsyncSession = Depends(get_cabinet_db)) -> Response:
-    """Обработчик кнопки «Отписаться» в Gmail/Yahoo.
-
-    Тело запроса (``List-Unsubscribe=One-Click``) не читаем — токен уже в
-    query-строке. Отвечаем 200 даже на протухший токен: почтовый клиент
-    покажет пользователю ошибку, хотя делать ему с ней нечего.
-    """
-    await _unsubscribe(token, db)
-    return Response(status_code=200)

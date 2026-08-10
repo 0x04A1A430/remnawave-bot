@@ -21,6 +21,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.constants import POSTGRES_INT4_MAX, POSTGRES_INT4_MIN
 
 
 logger = structlog.get_logger(__name__)
@@ -67,9 +68,15 @@ def parse_token(token: str) -> tuple[int, str] | None:
     if len(parts) != 3:
         return None
     raw_id, category, signature = parts
-    if not raw_id.isdigit() or not signature or category not in CATEGORY_PREF_KEYS:
+    # isdigit() пропускает и не-ASCII цифры («١٢٣» → 123), и строку любой длины.
+    # users.id — int4, и db.get с числом вне диапазона роняет asyncpg, а эндпоинт
+    # публичный: подобранный токен вернул бы 500 вместо честного «не сработало».
+    if not raw_id.isascii() or not raw_id.isdigit() or not signature or category not in CATEGORY_PREF_KEYS:
         return None
-    return int(raw_id), category
+    user_id = int(raw_id)
+    if user_id < POSTGRES_INT4_MIN or user_id > POSTGRES_INT4_MAX:
+        return None
+    return user_id, category
 
 
 def verify_token(token: str, email: str) -> bool:
@@ -100,9 +107,19 @@ def build_unsubscribe_url(user_id: int, email: str, category: str = 'all') -> st
 
 
 def build_unsubscribe_mailto() -> str:
-    """mailto-вариант для клиентов без HTTP one-click. Пусто, если не настроен."""
+    """mailto-вариант для клиентов без HTTP one-click. Пусто, если не настроен.
+
+    Значение попадает в заголовок List-Unsubscribe рядом с URL, поэтому проходит
+    ту же проверку: перенос строки или угловая скобка внутри дописали бы в письмо
+    произвольный заголовок. Кривой адрес выбрасываем целиком, а не чиним.
+    """
     address = (getattr(settings, 'EMAIL_UNSUBSCRIBE_MAILTO', '') or '').strip()
-    return f'mailto:{address}?subject=unsubscribe' if address else ''
+    if not address:
+        return ''
+    if any(ch in address for ch in '\r\n<>,') or '@' not in address:
+        logger.warning('Некорректный EMAIL_UNSUBSCRIBE_MAILTO — mailto в заголовок не добавлен')
+        return ''
+    return f'mailto:{address}?subject=unsubscribe'
 
 
 async def apply_unsubscribe(db: AsyncSession, token: str) -> bool:
