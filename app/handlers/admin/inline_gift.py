@@ -337,7 +337,7 @@ def _recipient_html(display: str) -> str:
     safe = html.escape(display) if display else ''
     m = re.search(r'\((@[^\s)]+)\)$', safe) or re.search(r'\((id:\d+)\)$', safe)
     if m:
-        return f'{safe[: m.start(1)]}<code>{m.group(1)}</code>{safe[m.end(1):]}'
+        return f'{safe[: m.start(1)]}<code>{m.group(1)}</code>{safe[m.end(1) :]}'
     return f'<code>{safe}</code>'
 
 
