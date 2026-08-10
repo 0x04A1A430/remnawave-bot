@@ -2514,7 +2514,7 @@ async def sync_all_users(callback: types.CallbackQuery, db_user: User, db: Async
     await callback.message.edit_text(progress_text, reply_markup=None)
 
     remnawave_service = RemnaWaveService()
-    stats = await remnawave_service.sync_users_from_panel(db, 'all')
+    stats = await remnawave_service.sync_users_from_panel(db, 'all', bot=callback.bot)
 
     total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
 
@@ -2904,7 +2904,7 @@ async def sync_users(callback: types.CallbackQuery, db_user: User, db: AsyncSess
         'update_data': 'update_only',
     }
 
-    stats = await remnawave_service.sync_users_from_panel(db, sync_map.get(sync_type, 'all'))
+    stats = await remnawave_service.sync_users_from_panel(db, sync_map.get(sync_type, 'all'), bot=callback.bot)
 
     total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
     stats['created'] + stats['updated'] + stats.get('deleted', 0)
