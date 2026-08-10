@@ -45,6 +45,10 @@ class EmailService:
         return settings.SMTP_FROM_NAME
 
     @property
+    def reply_to(self) -> str:
+        return (settings.SMTP_REPLY_TO or '').strip()
+
+    @property
     def use_tls(self) -> bool:
         return settings.SMTP_USE_TLS
 
@@ -152,6 +156,15 @@ class EmailService:
             safe_from_email = sender_email.replace('\n', '').replace('\r', '')
             msg['From'] = formataddr((safe_from_name, safe_from_email))
             msg['To'] = to_email
+            # Адрес из .env: перенос строки в нём дописал бы произвольный
+            # заголовок в письмо, поэтому кривое значение не чиним, а
+            # выбрасываем — письмо важнее обратного канала.
+            if reply_to := self.reply_to:
+                if any(ch in reply_to for ch in '\r\n') or '@' not in reply_to:
+                    logger.warning('Некорректный SMTP_REPLY_TO — заголовок Reply-To пропущен')
+                else:
+                    msg['Reply-To'] = formataddr((safe_from_name, reply_to))
+
             msg['Date'] = formatdate(localtime=False)
             msg['Message-ID'] = make_msgid(domain=safe_from_email.split('@')[-1])
 
