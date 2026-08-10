@@ -460,19 +460,48 @@ class SubscriptionService:
                 logger.error('Пользователь не найден', user_id=subscription.user_id)
                 return None
 
-            # Resolve the Remnawave UUID: prefer subscription-level in multi-tariff mode
+            # Resolve the Remnawave identity. v3.0+ (REMNAWAVE_USE_USER_ID) has no
+            # uuid — the panel identifies users by numeric id, so fall back to it.
+            use_user_id = settings.REMNAWAVE_USE_USER_ID
             if settings.is_multi_tariff_enabled():
                 remnawave_uuid = subscription.remnawave_uuid
-                if not remnawave_uuid:
-                    logger.warning(
-                        'Multi-tariff: subscription has no remnawave_uuid, cannot update panel',
-                        subscription_id=subscription.id,
-                        user_id=subscription.user_id,
-                    )
-                    return None
+                remnawave_id = subscription.remnawave_id
             else:
                 remnawave_uuid = user.remnawave_uuid
-            if not remnawave_uuid:
+                remnawave_id = user.remnawave_id
+
+            if use_user_id:
+                if remnawave_id is None:
+                    # v3: в БД может ещё не быть remnawave_id (старый юзер).
+                    # Сопоставляем с панелью по telegram_id и записываем id.
+                    if user.telegram_id:
+                        try:
+                            async with self.get_api_client() as api:
+                                panel_users = await api.get_user_by_telegram_id(user.telegram_id)
+                                matched = next(
+                                    (u for u in panel_users if u.telegram_id == user.telegram_id),
+                                    None,
+                                )
+                                if matched and matched.id is not None:
+                                    remnawave_id = matched.id
+                                    if settings.is_multi_tariff_enabled():
+                                        subscription.remnawave_id = matched.id
+                                    else:
+                                        user.remnawave_id = matched.id
+                                    logger.info(
+                                        'Сопоставлен remnawave_id по telegram_id (update)',
+                                        user_id=subscription.user_id,
+                                        remnawave_id=matched.id,
+                                    )
+                        except Exception as api_error:
+                            logger.error('Ошибка сопоставления по telegram_id', api_error=api_error)
+                    if remnawave_id is None:
+                        logger.error(
+                            'RemnaWave id не найден для пользователя (v3)',
+                            user_id=subscription.user_id,
+                        )
+                        return None
+            elif not remnawave_uuid:
                 logger.error(
                     'RemnaWave UUID не найден для пользователя',
                     user_id=subscription.user_id,
@@ -601,7 +630,7 @@ class SubscriptionService:
                 if sync_squads and ext_squad_uuid is not None:
                     update_kwargs['external_squad_uuid'] = ext_squad_uuid
 
-                update_kwargs['user_id'] = subscription.remnawave_id
+                update_kwargs['user_id'] = remnawave_id
                 updated_user = await api.update_user(**update_kwargs)
 
                 if reset_traffic:
@@ -617,13 +646,13 @@ class SubscriptionService:
                             reset_uuid = None
                     else:
                         reset_uuid = user.remnawave_uuid
-                    if reset_uuid or getattr(subscription, 'remnawave_id', None) is not None:
+                    if reset_uuid or remnawave_id is not None:
                         await self._reset_user_traffic(
                             api,
                             reset_uuid,
                             user,
                             reset_reason,
-                            remnawave_id=getattr(subscription, 'remnawave_id', None),
+                            remnawave_id=remnawave_id,
                         )
 
                 subscription.subscription_url = updated_user.subscription_url

@@ -889,7 +889,17 @@ class MonitoringService:
                 if user
                 else None
             )
-            if not user or not remnawave_uuid:
+            remnawave_id = (
+                subscription.remnawave_id
+                if settings.is_multi_tariff_enabled() and getattr(subscription, 'remnawave_id', None)
+                else user.remnawave_id
+                if user
+                else None
+            )
+            # v3.0+ (REMNAWAVE_USE_USER_ID): панель опознаёт юзера по числовому id,
+            # uuid отсутствует — считаем идентичность найденной, если есть id.
+            use_user_id = settings.REMNAWAVE_USE_USER_ID
+            if not user or (use_user_id and remnawave_id is None) or (not use_user_id and not remnawave_uuid):
                 logger.error(
                     'RemnaWave UUID не найден для пользователя',
                     user_id=subscription.user_id,
@@ -972,7 +982,7 @@ class MonitoringService:
                 # Внешний сквад НЕ пересылаем в рутинном sync — стейловый UUID
                 # вызывает FK violation → A039. Назначается при создании подписки.
 
-                update_kwargs['user_id'] = subscription.remnawave_id
+                update_kwargs['user_id'] = remnawave_id if use_user_id else subscription.remnawave_id
                 from app.services.grace_access_runtime import update_panel_user_grace_safe
 
                 updated_user = await update_panel_user_grace_safe(
