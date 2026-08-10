@@ -271,13 +271,14 @@ async def test_notify_user_gate_is_respected(monkeypatch: pytest.MonkeyPatch) ->
 
 
 async def test_email_notification_not_duplicated_by_cart_helper(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Письмо шлёт _notify_user; общий пост-топап хелпер не должен слать второе."""
+    """Письмо шлёт _notify_user; пост-топап хелпер больше не принимает notify_email
+    и вторых писем не шлёт — проверяем, что он вызывается без лишних kwargs."""
     async with memory_session(monkeypatch, TABLES) as db:
         user = await _seed_user(db)
-        seen: list[bool] = []
+        calls: list[dict] = []
 
-        async def _fake_cart(_user, _amount, _db, _bot, *, notify_email=True):
-            seen.append(notify_email)
+        async def _fake_cart(_user, _amount, _db, _bot, **_kwargs):
+            calls.append(_kwargs)
             return False
 
         import app.services.payment.common as payment_common
@@ -286,7 +287,7 @@ async def test_email_notification_not_duplicated_by_cart_helper(monkeypatch: pyt
 
         await credit_manual_topup(db, user, 10000, description='Пополнение')
 
-        assert seen == [False]
+        assert calls == [{}]
 
 
 def test_external_id_fits_the_column() -> None:

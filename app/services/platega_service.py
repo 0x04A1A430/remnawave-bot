@@ -102,7 +102,30 @@ class PlategaService:
         # отвечает полем `url` и нужен мерчантам, у которых карточные каскады
         # работают только в v2 (#2934: v1 отдаёт 400 «No available card cascades»).
         endpoint = '/v2/transaction/process' if self.api_version == 'v2' else '/transaction/process'
-        return await self._request('POST', endpoint, json_data=body)
+        data, http_status = await self._request('POST', endpoint, json_data=body, return_status=True)
+
+        # Авто-fallback v1→v2: если создание через v1 не удалось (HTTP-ошибка,
+        # чаще всего 400 «No available card cascades» для карточных методов,
+        # либо транспортный сбой status=None), повторяем тот же запрос на v2.
+        # Это убирает зависимость от PLATEGA_API_VERSION для карточных каскадов.
+        if self.api_version != 'v2' and (http_status is None or http_status >= 400):
+            logger.info(
+                'Platega create через v1 не удался — повторяем на v2',
+                v1_status=http_status,
+                payment_method=payment_method,
+            )
+            data, http_status = await self._request(
+                'POST', '/v2/transaction/process', json_data=body, return_status=True
+            )
+
+        if http_status is not None and http_status >= 400:
+            logger.error(
+                'Platega create_payment: провайдер вернул HTTP-ошибку',
+                http_status=http_status,
+                data=data,
+            )
+            return None
+        return data
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any] | None:
         # Статусный GET не версионируется: в доках Platega путь один — /transaction/{id}.

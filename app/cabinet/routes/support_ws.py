@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 from aiogram.types import BufferedInputFile
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette.websockets import WebSocketState
@@ -316,9 +316,6 @@ class SupportWsSession:
     idempotency: dict[str, str] = field(default_factory=dict)
     idempotency_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-
-    def __hash__(self) -> int:
-        return id(self)
 
     async def send_json(self, data: dict[str, Any]) -> None:
         # Broadcasts run from another user's task; serialize with the session's own
@@ -693,23 +690,18 @@ async def _handle_ticket_list(db: AsyncSession, session: SupportWsSession, paylo
     offset = _parse_int(cursor, 'cursor', minimum=0) if cursor not in (None, '') else 0
     updated_after = _parse_iso_datetime(payload.get('updatedAfter'))
     query = select(Ticket).options(selectinload(Ticket.messages), selectinload(Ticket.user))
-    count_query = select(func.count()).select_from(Ticket)
 
     if context.role == 'owner' or payload.get('mineOnly') is True:
         query = query.where(Ticket.user_id == context.user_id)
-        count_query = count_query.where(Ticket.user_id == context.user_id)
     elif not await _has_permission(db, context, 'tickets:read'):
         raise PermissionError('tickets:read is required')
 
     if status_filters:
         query = query.where(Ticket.status.in_(status_filters))
-        count_query = count_query.where(Ticket.status.in_(status_filters))
     if priority_filters:
         query = query.where(Ticket.priority.in_(priority_filters))
-        count_query = count_query.where(Ticket.priority.in_(priority_filters))
     if updated_after is not None:
         query = query.where(Ticket.updated_at > updated_after)
-        count_query = count_query.where(Ticket.updated_at > updated_after)
 
     assigned_to = payload.get('assignedTo')
     if assigned_to not in (None, '', 'null'):
@@ -1061,6 +1053,8 @@ async def _upload_to_telegram(upload: UploadTransfer) -> dict[str, Any]:
         try:
             await bot.delete_message(chat_id=target_chat_id, message_id=message.message_id)
         except Exception:
+            # удаление чернового сообщения best-effort: если оно уже недоступно,
+            # ничего страшного — это не влияет на результат загрузки медиа
             pass
         return {
             'mediaId': str(media.file_id),
@@ -1522,6 +1516,7 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
             try:
                 await websocket.close()
             except RuntimeError:
+                # сокет уже закрыт либо никогда не устанавливался — нечего закрывать
                 pass
 
 
@@ -1535,7 +1530,6 @@ async def support_mobile_websocket_endpoint(websocket: WebSocket):
 # whitelisted support-v1 events (message.created / ticket.status.updated).
 # ---------------------------------------------------------------------------
 
-_bridge_registered = False
 _bridge_tasks: set[asyncio.Task[Any]] = set()
 
 
@@ -1659,13 +1653,14 @@ def _bridge_listener_status_changed(event_data: dict[str, Any]) -> None:
 
 def register_support_ticket_event_bridge() -> None:
     """Attach the support-socket bridge to the global event emitter (idempotent)."""
-    global _bridge_registered
-    if _bridge_registered:
-        return
     from app.services.event_emitter import event_emitter
 
+    # Сначала снимаем, потом вешаем: повторный вызов заменяет обработчики,
+    # а не дублирует их (это и есть идемпотентность без флага-глобала).
+    event_emitter.off('ticket.message_added', _bridge_listener_message_added)
     event_emitter.on('ticket.message_added', _bridge_listener_message_added)
+    event_emitter.off('ticket.created', _bridge_listener_ticket_created)
     event_emitter.on('ticket.created', _bridge_listener_ticket_created)
+    event_emitter.off('ticket.status_changed', _bridge_listener_status_changed)
     event_emitter.on('ticket.status_changed', _bridge_listener_status_changed)
-    _bridge_registered = True
     logger.info('Support ticket event bridge registered')
