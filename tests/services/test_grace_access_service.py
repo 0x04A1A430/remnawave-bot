@@ -31,9 +31,9 @@ GIB = 1024**3
 EXPIRED_SQUAD = '11111111-1111-1111-1111-111111111111'
 LIMITED_SQUAD = '22222222-2222-2222-2222-222222222222'
 REGULAR_SQUAD = '33333333-3333-3333-3333-333333333333'
-# The fork keys every session/panel operation by the uuid string identity.
-PANEL_UUID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-OTHER_PANEL_UUID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+# The session/panel operations are keyed by the numeric Remnawave id.
+PANEL_ID = 9001
+OTHER_PANEL_ID = 9002
 
 
 def test_runtime_mode_values_are_explicit_and_fail_closed() -> None:
@@ -112,18 +112,18 @@ class FakePanelGateway:
         self.pending_restore_attempts = 0
         self.restore_outcome = GraceRestoreOutcome.RESTORED
 
-    async def read_snapshot(self, remnawave_uuid: str) -> GracePanelSnapshot | None:
-        if remnawave_uuid != self.snapshot.remnawave_uuid:
+    async def read_snapshot(self, remnawave_id: int) -> GracePanelSnapshot | None:
+        if remnawave_id != self.snapshot.remnawave_id:
             return None
         return self.snapshot
 
-    async def apply_overlay(self, remnawave_uuid: str, overlay: GracePanelOverlay) -> None:
+    async def apply_overlay(self, remnawave_id: int, overlay: GracePanelOverlay) -> None:
         if self.fail_overlay_attempts > 0:
             self.fail_overlay_attempts -= 1
             raise RuntimeError('temporary panel error')
-        self.applied_overlays.append((remnawave_uuid, overlay))
+        self.applied_overlays.append((remnawave_id, overlay))
         self.snapshot = GracePanelSnapshot(
-            remnawave_uuid=remnawave_uuid,
+            remnawave_id=remnawave_id,
             status=overlay.status,
             expire_at=overlay.expire_at,
             traffic_limit_bytes=overlay.traffic_limit_bytes,
@@ -136,11 +136,11 @@ class FakePanelGateway:
 
     async def restore_snapshot(
         self,
-        remnawave_uuid: str,
+        remnawave_id: int,
         snapshot: GracePanelSnapshot,
         expected_overlay: GracePanelOverlay,
     ) -> GraceRestoreOutcome:
-        self.restored_snapshots.append((remnawave_uuid, snapshot))
+        self.restored_snapshots.append((remnawave_id, snapshot))
         if self.pending_restore_attempts > 0:
             self.pending_restore_attempts -= 1
             raise GracePanelTransitionPending
@@ -187,7 +187,7 @@ def make_billing(
 ) -> GraceBillingState:
     return GraceBillingState(
         subscription_id=42,
-        remnawave_uuid=PANEL_UUID,
+        remnawave_id=PANEL_ID,
         status=status,
         end_at=end_at,
         traffic_limit_bytes=traffic_limit_bytes,
@@ -204,7 +204,7 @@ def make_snapshot(
     used_traffic_bytes: int = 3 * GIB,
 ) -> GracePanelSnapshot:
     return GracePanelSnapshot(
-        remnawave_uuid=PANEL_UUID,
+        remnawave_id=PANEL_ID,
         status='DISABLED',
         expire_at=expire_at,
         traffic_limit_bytes=traffic_limit_bytes,
@@ -456,7 +456,7 @@ async def test_timeout_restores_original_panel_values_once() -> None:
 
     assert first_reconcile.timed_out == 1
     assert second_reconcile.inspected == 0
-    assert panel.restored_snapshots == [(PANEL_UUID, snapshot)]
+    assert panel.restored_snapshots == [(PANEL_ID, snapshot)]
     completed = store.only_session()
     assert completed.state is GraceSessionState.COMPLETED
     assert completed.completion_reason is GraceCompletionReason.TIMEOUT
@@ -504,8 +504,8 @@ async def test_limited_snapshot_restore_stays_restoring_while_panel_derives_stat
     assert store.only_session().state is GraceSessionState.COMPLETED
     assert store.only_session().completion_reason is GraceCompletionReason.TIMEOUT
     assert panel.restored_snapshots == [
-        (PANEL_UUID, snapshot),
-        (PANEL_UUID, snapshot),
+        (PANEL_ID, snapshot),
+        (PANEL_ID, snapshot),
     ]
 
 
@@ -590,14 +590,14 @@ async def test_canonical_squad_change_ends_grace_and_applies_fresh_billing() -> 
     assert completed.completion_reason is GraceCompletionReason.CONFLICT
 
 
-@pytest.mark.parametrize('relinked_panel_uuid', [OTHER_PANEL_UUID, None])
+@pytest.mark.parametrize('relinked_panel_id', [OTHER_PANEL_ID, None])
 async def test_panel_identity_change_restores_the_old_user_instead_of_pushing_billing_onto_it(
-    relinked_panel_uuid: str | None,
+    relinked_panel_id: int | None,
 ) -> None:
     # Подписку перелинковали на другого панельного юзера (или связь потеряли).
-    # Канонический биллинг описывает уже не тот uuid, под которым выдан оверлей,
+    # Канонический биллинг описывает уже не тот id, под которым выдан оверлей,
     # поэтому применять его к старому пользователю нельзя — только откат
-    # снапшота на прежний uuid. `None` не должен «совпасть» с uuid сессии.
+    # снапшота на прежний id. `None` не должен «совпасть» с id сессии.
     now = datetime(2026, 7, 15, 12, tzinfo=UTC)
     clock = MutableClock(now)
     billing = make_billing(status='expired', end_at=now - timedelta(days=1))
@@ -609,13 +609,13 @@ async def test_panel_identity_change_restores_the_old_user_instead_of_pushing_bi
     )
     await service.start_if_eligible(billing, GraceReason.EXPIRED)
 
-    billing_gateway.state = replace(billing, remnawave_uuid=relinked_panel_uuid)
+    billing_gateway.state = replace(billing, remnawave_id=relinked_panel_id)
 
     result = await service.reconcile()
 
     assert result.conflicts == 1
     assert panel.applied_billing == []
-    assert panel.restored_snapshots == [(PANEL_UUID, snapshot)]
+    assert panel.restored_snapshots == [(PANEL_ID, snapshot)]
     completed = store.only_session()
     assert completed.state is GraceSessionState.COMPLETED
     assert completed.completion_reason is GraceCompletionReason.CONFLICT
