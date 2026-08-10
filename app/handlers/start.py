@@ -2053,13 +2053,13 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             if pinned_message and pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
             await _answer_main_menu_rich_first(
-                    callback.message,
-                    existing_user,
-                    texts,
-                    db,
-                    menu_text,
-                    keyboard,
-                )
+                callback.message,
+                existing_user,
+                texts,
+                db,
+                menu_text,
+                keyboard,
+            )
             if pinned_message and not pinned_message.send_before_menu:
                 await _send_pinned_message(callback.bot, db, existing_user, pinned_message)
         except Exception as e:
