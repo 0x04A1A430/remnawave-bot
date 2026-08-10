@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
 import structlog
@@ -287,13 +287,17 @@ class _PanelTarget:
 class RemnawaveGracePanelGateway:
     """Changes only fields controlled by the temporary overlay."""
 
-    async def read_snapshot(self, remnawave_id: int) -> GracePanelSnapshot | None:
-        from app.services.remnawave_service import remnawave_service
+    def __init__(
+        self,
+        get_api_client: Callable[[], AbstractAsyncContextManager[Any]],
+    ) -> None:
+        self._get_api_client = get_api_client
 
+    async def read_snapshot(self, remnawave_id: int) -> GracePanelSnapshot | None:
         # An unusable local identifier raises from the client boundary instead of
         # returning None: that is a broken link in our database, not a deleted
         # panel user, and must never be answered by "nothing left to restore".
-        async with remnawave_service.get_api_client() as api:
+        async with self._get_api_client() as api:
             panel_user = await api.get_user_by_uuid(_BLANK_UUID, user_id=remnawave_id)
         if panel_user is None:
             return None
@@ -338,12 +342,10 @@ class RemnawaveGracePanelGateway:
         snapshot: GracePanelSnapshot,
         expected_overlay: GracePanelOverlay,
     ) -> GraceRestoreOutcome:
-        from app.services.remnawave_service import remnawave_service
-
         now = datetime.now(UTC)
         target = _build_restore_target(snapshot, now=now)
 
-        async with remnawave_service.get_api_client() as api:
+        async with self._get_api_client() as api:
             # Only an explicit 404 reaches this as None.  A malformed local
             # identifier raises instead, so a data fault can never be mistaken
             # for "the panel user is gone, nothing to restore".
@@ -405,14 +407,12 @@ class RemnawaveGracePanelGateway:
         *,
         expected_overlay: GracePanelOverlay,
     ) -> None:
-        from app.services.remnawave_service import remnawave_service
-
         if billing.remnawave_id is None:
             raise GracePanelError('Canonical subscription has no Remnawave panel user id')
         now = datetime.now(UTC)
         target = _build_billing_target(billing, now=now)
 
-        async with remnawave_service.get_api_client() as api:
+        async with self._get_api_client() as api:
             if target.status is PanelUserStatus.LIMITED:
                 current_user = await api.get_user_by_uuid(_BLANK_UUID, user_id=billing.remnawave_id)
                 if current_user is None:
