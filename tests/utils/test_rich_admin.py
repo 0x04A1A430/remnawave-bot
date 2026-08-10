@@ -119,6 +119,16 @@ async def test_try_send_oversized_falls_back():
     bot.send_rich_message.assert_not_awaited()
 
 
+def test_many_unclosed_blockquotes_do_not_cause_redos():
+    """CodeQL-регрессия: полиномиальные `.*?</blockquote>` на строках с множеством
+    `<blockquote>` без закрытия. Темперированный токен разбирает строку линейно."""
+    classic = '<blockquote>' * 200 + '\n<b>ПОКУПКА ПОДПИСКИ</b>'
+
+    rich = rich_admin.classic_admin_html_to_rich(classic)
+
+    assert rich.count('<blockquote>') >= 200
+
+
 def test_pre_blocks_survive_conversion():
     """<pre>-блоки (описание релиза из markdown) сохраняют форматирование —
     переносы внутри не конвертируются в <br>."""
