@@ -975,6 +975,22 @@ class RemnaWaveWebhookService:
             ]
         )
 
+    async def _grace_access_active(self, db: AsyncSession, subscription_id: int) -> bool:
+        """True when an open grace session exists for the subscription.
+
+        During grace the panel keeps a temporary overlay (status/expiry owned by
+        the grace runtime), so panel-driven "subscription expiring" notifications
+        are meaningless and must be suppressed.
+        """
+        try:
+            return await get_open_grace_overlay(db, subscription_id) is not None
+        except Exception:
+            logger.exception(
+                'Grace access check failed; notification proceeds',
+                subscription_id=subscription_id,
+            )
+            return False
+
     async def _notify_user(
         self,
         user: User,
@@ -1791,6 +1807,13 @@ class RemnaWaveWebhookService:
                 user_id=user.id,
             )
             return
+        if await self._grace_access_active(db, subscription.id):
+            logger.info(
+                'Webhook expires_72h: пропуск уведомления — активен grace-доступ',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+            return
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_72H',
@@ -1811,6 +1834,13 @@ class RemnaWaveWebhookService:
                 user_id=user.id,
             )
             return
+        if await self._grace_access_active(db, subscription.id):
+            logger.info(
+                'Webhook expires_48h: пропуск уведомления — активен grace-доступ',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+            return
         await self._notify_user(
             user,
             'WEBHOOK_SUB_EXPIRES_48H',
@@ -1828,6 +1858,13 @@ class RemnaWaveWebhookService:
         if not subscription:
             logger.info(
                 'Webhook expires_24h: подписка не найдена в БД, пропуск',
+                user_id=user.id,
+            )
+            return
+        if await self._grace_access_active(db, subscription.id):
+            logger.info(
+                'Webhook expires_24h: пропуск уведомления — активен grace-доступ',
+                subscription_id=subscription.id,
                 user_id=user.id,
             )
             return
@@ -1909,6 +1946,14 @@ class RemnaWaveWebhookService:
                 hours=hours,
                 text_key=text_key,
             )
+
+        if await self._grace_access_active(db, subscription.id):
+            logger.info(
+                'Webhook user.expiration: пропуск уведомления — активен grace-доступ',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+            return
 
         await self._notify_user(
             user,
