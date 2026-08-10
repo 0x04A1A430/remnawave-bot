@@ -46,8 +46,8 @@ from app.database.models import (
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.grace_access_runtime import grace_access_runtime
-from app.services.grace_access_service import GraceReason
+from app.services.grace_access_runtime import get_open_grace_overlay, grace_access_runtime
+from app.services.grace_access_service import GraceReason, webhook_matches_overlay
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -1344,11 +1344,32 @@ class RemnaWaveWebhookService:
         if not subscription:
             return
 
+        # While a grace overlay is open, the panel's status/expireAt/traffic limit
+        # are grace-owned values. Their user.modified echoes must be masked so they
+        # cannot overwrite the canonical billing state (which would make the
+        # reconciliation treat the session as recovered and revert the grace squad).
+        # Usage and URLs still keep synchronizing below.
+        try:
+            grace_overlay = await get_open_grace_overlay(db, subscription.id)
+        except Exception:
+            logger.exception(
+                'Grace overlay lookup failed; user.modified sync proceeds unmasked',
+                subscription_id=subscription.id,
+            )
+            grace_overlay = None
+        mask_grace_fields = grace_overlay is not None and webhook_matches_overlay(data, grace_overlay)
+        if mask_grace_fields:
+            logger.info(
+                'Webhook user.modified masked as a grace overlay echo',
+                subscription_id=subscription.id,
+                user_id=user.id,
+            )
+
         changed = False
 
-        # Sync traffic limit
+        # Sync traffic limit (grace-owned: masked during an open overlay)
         traffic_limit_bytes = data.get('trafficLimitBytes')
-        if traffic_limit_bytes is not None:
+        if traffic_limit_bytes is not None and not mask_grace_fields:
             try:
                 new_limit_gb = int(traffic_limit_bytes) // (1024**3)
                 if subscription.traffic_limit_gb != new_limit_gb:
@@ -1383,7 +1404,7 @@ class RemnaWaveWebhookService:
         # отдельно синхронизируется ниже: при panel ACTIVE + future end_date подписка
         # всё равно может корректно реактивироваться через обычное продление/активацию.
         expire_at = data.get('expireAt')
-        if expire_at and subscription.status != SubscriptionStatus.DISABLED.value:
+        if expire_at and subscription.status != SubscriptionStatus.DISABLED.value and not mask_grace_fields:
             try:
                 parsed_dt = datetime.fromisoformat(expire_at.replace('Z', '+00:00'))
                 new_end_date = parsed_dt.astimezone(UTC)
@@ -1403,7 +1424,7 @@ class RemnaWaveWebhookService:
 
         # Sync status from panel
         panel_status = data.get('status')
-        if panel_status:
+        if panel_status and not mask_grace_fields:
             now = datetime.now(UTC)
             end_date = subscription.end_date
             if panel_status == 'ACTIVE' and end_date and end_date > now:

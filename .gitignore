@@ -20,6 +20,7 @@
 !release-please-manifest.json
 !.release-please-manifest.json
 !.pre-commit-config.yaml
+!bot_logo.png
 
 # Документация
 !README.md

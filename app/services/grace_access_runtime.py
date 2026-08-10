@@ -905,6 +905,19 @@ async def get_open_grace_subscription_ids(db: AsyncSession) -> set[int]:
     return {int(value) for value in result.scalars().all()}
 
 
+async def get_open_grace_overlay(db: AsyncSession, subscription_id: int) -> GracePanelOverlay | None:
+    """Return the active overlay of an open grace session, if any.
+
+    Used by the webhook service to mask grace-owned fields (status, expire_at,
+    traffic limit) on ``user.modified`` echoes without suppressing usage sync.
+    """
+    if grace_access_runtime.mode in (GraceAccessMode.DISABLED, GraceAccessMode.OBSERVE):
+        return None
+    store = SQLAlchemyGraceSessionStore(db, subscription_id=subscription_id)
+    session = await store.get_open(subscription_id)
+    return session.overlay if session else None
+
+
 async def lock_grace_sensitive_panel_updates(
     db: AsyncSession,
     subscription_ids: Sequence[int],

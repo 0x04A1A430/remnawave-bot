@@ -206,10 +206,16 @@ class AdminNotificationService:
     ) -> None:
         """Persist subscription-related event for external dashboards."""
 
+        # user.id читаем ДО любых операций с БД: после упавшего commit сессия
+        # переходит в pending-rollback, и обращение к атрибутам ORM бросает
+        # PendingRollbackError вместо исходной ошибки (см. #инцидент с таймаутом
+        # блокировки строки users).
+        user_id = user.id if user is not None else None
+
         try:
             await create_subscription_event(
                 db,
-                user_id=user.id,
+                user_id=user_id,
                 event_type=event_type,
                 subscription_id=subscription.id if subscription else None,
                 transaction_id=transaction.id if transaction else None,
@@ -223,7 +229,7 @@ class AdminNotificationService:
             logger.error(
                 'Не удалось сохранить событие подписки для пользователя',
                 event_type=event_type,
-                getattr=getattr(user, 'id', 'unknown'),
+                user_id=user_id,
                 exc_info=True,
             )
 
@@ -232,7 +238,7 @@ class AdminNotificationService:
             except Exception:
                 logger.error(
                     'Не удалось выполнить rollback после ошибки события подписки пользователя',
-                    getattr=getattr(user, 'id', 'unknown'),
+                    user_id=user_id,
                     exc_info=True,
                 )
 

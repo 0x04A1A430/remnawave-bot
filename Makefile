@@ -1,16 +1,16 @@
 .PHONY: up
 up: ## Поднять контейнеры (detached)
-	@echo "🚀 Поднимаем контейнеры (detached)..."
+	@echo "Поднимаем контейнеры (detached)..."
 	docker compose up -d --build
 
 .PHONY: up-follow
 up-follow: ## Поднять контейнеры с логами
-	@echo "📡 Поднимаем контейнеры (в консоли)..."
+	@echo "Поднимаем контейнеры (в консоли)..."
 	docker compose up --build
 
 .PHONY: down
 down: ## Остановить и удалить контейнеры
-	@echo "🛑 Останавливаем и удаляем контейнеры..."
+	@echo "Останавливаем и удаляем контейнеры..."
 	docker compose down
 
 .PHONY: reload
@@ -63,7 +63,7 @@ migrate-history: ## Показать историю миграций
 .PHONY: help
 help: ## Показать список доступных команд
 	@echo ""
-	@echo "📘 Команды Makefile:"
+	@echo "Команды Makefile:"
 	@echo ""
 	@awk -F':.*## ' '/^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
