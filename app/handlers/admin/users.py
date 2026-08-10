@@ -5266,7 +5266,7 @@ async def admin_buy_subscription_execute(callback: types.CallbackQuery, db_user:
         )
 
         try:
-            if callback.bot and target_user.telegram_id:
+            if callback.bot and target_user.telegram_id and settings.is_notifications_enabled():
                 tariff_line = ''
                 if settings.is_multi_tariff_enabled() and getattr(subscription, 'tariff', None):
                     tariff_line = f'\n📦 Тариф: «{subscription.tariff.name}»'
@@ -5672,7 +5672,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
 
         # Уведомляем пользователя
         try:
-            if callback.bot and target_user.telegram_id:
+            if callback.bot and target_user.telegram_id and settings.is_notifications_enabled():
                 await callback.bot.send_message(
                     chat_id=target_user.telegram_id,
                     text=f'💳 <b>Администратор оформил вам тариф</b>\n\n'

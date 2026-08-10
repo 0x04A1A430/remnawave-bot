@@ -1979,6 +1979,8 @@ async def _send_offer_to_users(
 
     async def send_single_offer(user):
         """Отправляет одно предложение с семафором ограничения"""
+        from app.utils.notification_prefs import is_promo_offers_enabled
+
         # Email-only юзеры (без telegram_id) раньше пропускались целиком —
         # ни оффера, ни уведомления. Теперь оффер создаётся, а уведомление
         # уходит на подтверждённую почту (активация — в кабинете).
@@ -2028,6 +2030,17 @@ async def _send_offer_to_users(
                         user.language or db_user.language,
                         server_name=squad_name,
                     )
+
+                    # Настройка уведомлений глушит СООБЩЕНИЕ, но не саму скидку:
+                    # оффер уже создан выше и остаётся доступным в кабинете и
+                    # миниаппе. Так же ведёт себя кабинетная рассылка
+                    # (`admin_promo_offers.broadcast`), и расходиться они не должны.
+                    if not settings.is_notifications_enabled() or not is_promo_offers_enabled(user):
+                        logger.debug(
+                            'Промо-оффер создан, уведомление подавлено настройками',
+                            user_id=user.id,
+                        )
+                        return True
 
                     if not user.telegram_id:
                         # Email-only юзер: тот же текст на почту, кнопке «Получить»

@@ -1945,6 +1945,7 @@
   "DEVICE_RENAME_BUTTON": "✏️",
   "PAYMENT_METHODS_NONE_AVAILABLE": "💳 <b>روش‌های شارژ موجودی</b>\n\n⚠️ در حال حاضر روش‌های پرداخت موقتاً در دسترس نیستند.\nبعداً تلاش کنید.\n\nروش شارژ را انتخاب کنید:",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "❌ اشتراک یافت نشد",
+  "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "❌ این کد تخفیف فقط ترافیک می‌دهد، اما اشتراک شما نامحدود است. کد مصرف نشد.",
   "PROMOCODE_USER_NOT_FOUND": "❌ کاربر یافت نشد",
   "PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS": "❌ شما در حال حاضر اشتراک دارید، بنابراین نمی‌توان کد آزمایشی را اعمال کرد.",
   "PROMOCODE_TRIAL_PROVISIONING_FAILED": "❌ فعال‌سازی دوره آزمایشی در حال حاضر ممکن نیست. لطفاً بعداً دوباره تلاش کنید.",

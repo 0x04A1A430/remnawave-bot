@@ -1823,6 +1823,7 @@
   "DEVICE_RENAME_BUTTON": "✏️",
   "PAYMENT_METHODS_NONE_AVAILABLE": "💳 <b>Balance top-up methods</b>\n\n⚠️ Payment methods are temporarily unavailable.\nPlease try later.\n\nChoose a top-up method:",
   "PROMOCODE_SUBSCRIPTION_NOT_FOUND": "❌ Subscription not found",
+  "PROMOCODE_TRAFFIC_NOT_APPLICABLE": "❌ This promo code only grants traffic, but your subscription is already unlimited. The code has not been used up.",
   "PROMOCODE_USER_NOT_FOUND": "❌ User not found",
   "PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS": "❌ You already have a subscription, so a trial promo code cannot be applied.",
   "PROMOCODE_TRIAL_PROVISIONING_FAILED": "❌ Failed to activate the trial right now. Please try again later.",

@@ -174,7 +174,15 @@ def _build_user_list_item(user: User, spending_stats: dict = None) -> UserListIt
     days_remaining = 0
 
     subs = getattr(user, 'subscriptions', None) or []
-    subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
+    # Среди активных берём ту, что кончается РАНЬШЕ всех, а не самую свежую по
+    # дате создания (связь отсортирована по created_at). При мультитарифе иначе
+    # выходило расхождение: список отсортирован по ближайшему окончанию, а в
+    # строке показана дата другой подписки — сортировка выглядела сломанной.
+    _active_subs = [s for s in subs if s.is_active]
+    if _active_subs:
+        subscription = min(_active_subs, key=lambda s: (s.end_date is None, s.end_date))
+    else:
+        subscription = subs[0] if subs else None
     if subscription:
         has_subscription = True
         subscription_status = subscription.status
@@ -597,7 +605,7 @@ async def list_users(
     - **search**: Search by telegram_id, username, first_name, last_name
     - **email**: Search by email
     - **status**: Filter by user status (active, blocked, deleted)
-    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count)
+    - **sort_by**: Sort field (created_at, balance, traffic, last_activity, total_spent, purchase_count, subscription_end_date)
     """
     # Convert status enum to model enum
     user_status = None
@@ -610,6 +618,7 @@ async def list_users(
     order_by_last_activity = sort_by == SortByEnum.LAST_ACTIVITY
     order_by_total_spent = sort_by == SortByEnum.TOTAL_SPENT
     order_by_purchase_count = sort_by == SortByEnum.PURCHASE_COUNT
+    order_by_subscription_end = sort_by == SortByEnum.SUBSCRIPTION_END_DATE
 
     # Parse comma-separated tariff_ids
     tariff_ids: list[int] | None = None
@@ -636,6 +645,7 @@ async def list_users(
         order_by_last_activity=order_by_last_activity,
         order_by_total_spent=order_by_total_spent,
         order_by_purchase_count=order_by_purchase_count,
+        order_by_subscription_end=order_by_subscription_end,
     )
 
     total = await get_users_count(
@@ -1939,6 +1949,57 @@ async def cancel_user_sbp_recurring(
     )
 
     return {'status': 'cancelled'}
+
+
+@router.delete('/{user_id}/subscriptions/{sub_id}')
+async def delete_user_subscription(
+    user_id: int,
+    sub_id: int,
+    force: bool = Query(False, description='Allow deleting an active paid subscription'),
+    admin: User = Depends(require_permission('users:subscription')),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Удалить конкретную подписку пользователя из его карточки.
+
+    В мультитарифном режиме у пользователя несколько подписок, и убрать
+    лишнюю (например, отработавший триал) можно было только через
+    «Массовые действия». Проверка принадлежности — та же, что у соседних
+    эндпоинтов по ``sub_id`` (защита от IDOR).
+
+    Активная платная подписка защищена от случайного удаления: чтобы
+    снести именно её, нужен явный ``force`` — иначе одним промахом
+    сносится оплаченный доступ.
+    """
+    from app.database.crud.subscription import get_subscription_by_id_for_user
+    from app.services.grace_access_runtime import GraceAccessDeletionBlocked
+    from app.services.subscription_deletion_service import delete_subscription_record
+
+    subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+
+    if subscription.is_active and not subscription.is_trial and not force:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Subscription is active and paid; pass force=true to delete it anyway',
+        )
+
+    try:
+        await delete_subscription_record(db, subscription, deleted_by=f'admin:{admin.id}')
+    except GraceAccessDeletionBlocked as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+        ) from error
+
+    logger.info(
+        'Admin deleted user subscription',
+        admin_id=admin.id,
+        user_id=user_id,
+        subscription_id=sub_id,
+        forced=force,
+    )
+    return {'status': 'deleted'}
 
 
 # === Available Tariffs ===

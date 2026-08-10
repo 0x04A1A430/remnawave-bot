@@ -184,6 +184,12 @@ def create_unified_app(
     if payments_router:
         app.include_router(payments_router)
 
+        # ПЕРВЫМ в порядке shutdown: часть платёжных вебхуков отвечает 200 сразу
+        # и дорабатывает в фоне, а провайдер после 200 коллбек не повторит. Дренаж
+        # обязан отработать, пока живы и telegram-процессор (фон шлёт уведомление
+        # о зачислении), и пул БД — то есть до всех остановок ниже.
+        shutdown_handlers.append(payments.drain_webhook_bg_tasks)
+
     # Mount RemnaWave incoming webhook router
     remnawave_webhook_enabled = settings.is_remnawave_webhook_enabled()
     if remnawave_webhook_enabled:
