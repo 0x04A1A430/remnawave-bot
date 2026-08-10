@@ -1327,6 +1327,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str | None = None
     SMTP_FROM_NAME: str = 'VPN Service'
+    # Куда должны падать ответы клиентов. Отправитель часто живёт на поддомене
+    # без MX (noreply@mail.example.com у Resend/SES) — ответ на такое письмо
+    # отбивается, и человек, нажавший «Ответить», уходит в никуда.
+    SMTP_REPLY_TO: str = ''
     SMTP_USE_TLS: bool = True
     # Implicit TLS (SMTPS) — required for port 465. Auto-enabled when SMTP_PORT == 465.
     SMTP_USE_SSL: bool = False
