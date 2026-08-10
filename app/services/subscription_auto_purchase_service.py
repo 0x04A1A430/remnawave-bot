@@ -724,7 +724,7 @@ async def _auto_extend_subscription(
         )
 
     # Send user notification only for Telegram users
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
             auto_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
@@ -1098,7 +1098,7 @@ async def _auto_purchase_tariff(
         )
 
     # Send user notification only for Telegram users
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
             texts = get_texts(getattr(user, 'language', 'ru'))
             period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
@@ -1461,7 +1461,7 @@ async def _auto_purchase_daily_tariff(
         )
 
     # Send user notification only for Telegram users
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
             texts = get_texts(getattr(user, 'language', 'ru'))
 
@@ -1804,7 +1804,7 @@ async def _auto_add_devices(
         logger.warning('⚠️ Автопокупка устройств: не удалось отправить WebSocket уведомление', ws_error=ws_error)
 
     # Уведомление пользователю
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         texts = get_texts(getattr(user, 'language', 'ru'))
         try:
             message = texts.t(
@@ -2160,7 +2160,7 @@ async def _auto_add_traffic(
         logger.warning('⚠️ Автопокупка трафика: не удалось отправить WebSocket уведомление', ws_error=ws_error)
 
     # User notification
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         texts = get_texts(getattr(user, 'language', 'ru'))
         try:
             message = texts.t(
@@ -2546,7 +2546,7 @@ async def try_auto_extend_expired_after_topup(
         )
 
     # Send user notification (only for Telegram users)
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
             auto_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED',
@@ -2944,7 +2944,7 @@ async def try_resume_disabled_daily_after_topup(
         )
 
     # User notification
-    if bot and user.telegram_id:
+    if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
             texts = get_texts(getattr(user, 'language', 'ru'))
 
@@ -3363,7 +3363,7 @@ async def _process_legacy_generic_cart(
             )
 
         # Send user notification only for Telegram users
-        if user.telegram_id:
+        if user.telegram_id and settings.is_notifications_enabled():
             try:
                 period_label = format_period_description(
                     selection.period.days,

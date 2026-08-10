@@ -96,6 +96,8 @@ class BanNotificationService:
         """
         if not self._bot:
             return False, 'Бот не инициализирован', None
+        if not settings.is_notifications_enabled():
+            return False, 'Уведомления пользователям отключены', None
 
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
@@ -164,6 +166,8 @@ class BanNotificationService:
         """
         if not self._bot:
             return False, 'Бот не инициализирован', None
+        if not settings.is_notifications_enabled():
+            return False, 'Уведомления пользователям отключены', None
 
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
@@ -214,6 +218,8 @@ class BanNotificationService:
         """
         if not self._bot:
             return False, 'Бот не инициализирован', None
+        if not settings.is_notifications_enabled():
+            return False, 'Уведомления пользователям отключены', None
 
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
@@ -275,6 +281,8 @@ class BanNotificationService:
         """
         if not self._bot:
             return False, 'Бот не инициализирован', None
+        if not settings.is_notifications_enabled():
+            return False, 'Уведомления пользователям отключены', None
 
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
@@ -353,6 +361,8 @@ class BanNotificationService:
         """
         if not self._bot:
             return False, 'Бот не инициализирован', None
+        if not settings.is_notifications_enabled():
+            return False, 'Уведомления пользователям отключены', None
 
         # Находим пользователя
         user = await self._find_user_by_identifier(db, user_identifier)
