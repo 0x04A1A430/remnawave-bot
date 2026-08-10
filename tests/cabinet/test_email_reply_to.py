@@ -75,3 +75,16 @@ def test_broken_reply_to_is_dropped(monkeypatch, smtp_ready, bad):
 
     assert msg['Reply-To'] is None
     assert msg['Bcc'] is None
+
+
+def test_reply_to_is_trimmed(monkeypatch, smtp_ready):
+    """Пробелы вокруг адреса обязаны срезаться до сборки заголовка.
+
+    Без этого formataddr соберёт «Example VPN <  support@example.com  >» —
+    заголовок формально есть, но адрес в нём разберут не все клиенты, и
+    обратный канал молча не работает, то есть ровно то, ради чего PR и нужен.
+    """
+    msg = _send(monkeypatch, smtp_ready, '  support@example.com  ')
+
+    assert parseaddr(msg['Reply-To'])[1] == 'support@example.com'
+    assert '  support@example.com  ' not in msg['Reply-To']
