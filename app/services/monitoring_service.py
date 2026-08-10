@@ -1015,6 +1015,13 @@ class MonitoringService:
             warning_days = settings.get_autopay_warning_days()
             all_processed_users = set()
 
+            # Grace-сессия держит временный оверлей в панели (status/expiry —
+            # grace-owned), поэтому «подписка истекает» для таких подписок не
+            # имеет смысла и не отправляется.
+            from app.services.grace_access_runtime import get_open_grace_subscription_ids
+
+            grace_open_subscription_ids = await get_open_grace_subscription_ids(db)
+
             for days in warning_days:
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
                 sent_count = 0
@@ -1025,6 +1032,14 @@ class MonitoringService:
                 )
 
                 for subscription in expiring_subscriptions:
+                    if subscription.id in grace_open_subscription_ids:
+                        logger.debug(
+                            'Пропускаем уведомление об истечении — активен grace-доступ',
+                            subscription_id=subscription.id,
+                            days=days,
+                        )
+                        continue
+
                     user = await get_user_by_id(db, subscription.user_id)
                     if not user:
                         continue
@@ -1142,9 +1157,20 @@ class MonitoringService:
             )
             trial_expiring = result.scalars().all()
 
+            from app.services.grace_access_runtime import get_open_grace_subscription_ids
+
+            grace_open_subscription_ids = await get_open_grace_subscription_ids(db)
+
             for subscription in trial_expiring:
                 user = subscription.user
                 if not user:
+                    continue
+
+                if subscription.id in grace_open_subscription_ids:
+                    logger.debug(
+                        'Пропускаем уведомление об окончании триала — активен grace-доступ',
+                        subscription_id=subscription.id,
+                    )
                     continue
 
                 if await notification_sent(db, user.id, subscription.id, 'trial_2h'):

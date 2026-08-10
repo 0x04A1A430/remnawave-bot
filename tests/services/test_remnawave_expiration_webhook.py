@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.grace_access_service import GracePanelOverlay
 from app.services.remnawave_webhook_service import RemnaWaveWebhookService
 
@@ -255,3 +257,57 @@ async def test_user_modified_without_open_grace_syncs_normally(monkeypatch):
 
     assert sub.status == 'active'
     assert abs((sub.end_date - (now + timedelta(days=15))).total_seconds()) < 2
+
+
+async def _run_expiration_with_grace(
+    monkeypatch,
+    svc: RemnaWaveWebhookService,
+    sub,
+    grace_active: bool,
+) -> None:
+    """Run an expiring-webhook handler with a stubbed grace-access lookup."""
+    import app.services.remnawave_webhook_service as rw
+
+    async def fake_overlay(db, subscription_id):
+        assert subscription_id == sub.id
+        return _grace_overlay(datetime.now(UTC) + timedelta(hours=1)) if grace_active else None
+
+    monkeypatch.setattr(rw, 'get_open_grace_overlay', fake_overlay)
+
+
+@pytest.mark.parametrize('handler_name', ['_handle_expires_in_72h', '_handle_expires_in_48h', '_handle_expires_in_24h'])
+async def test_expiring_webhooks_suppressed_during_grace(monkeypatch, handler_name):
+    """Panel 'subscription expiring' webhooks must be skipped while grace is open."""
+    svc = _service()
+    sub = _sub()
+    await _run_expiration_with_grace(monkeypatch, svc, sub, grace_active=True)
+    await getattr(svc, handler_name)(AsyncMock(), _user(), sub, {})
+    svc._notify_user.assert_not_awaited()
+
+
+@pytest.mark.parametrize('handler_name', ['_handle_expires_in_72h', '_handle_expires_in_48h', '_handle_expires_in_24h'])
+async def test_expiring_webhooks_sent_without_grace(monkeypatch, handler_name):
+    """Without grace the expiring webhooks still notify as before."""
+    svc = _service()
+    sub = _sub()
+    await _run_expiration_with_grace(monkeypatch, svc, sub, grace_active=False)
+    await getattr(svc, handler_name)(AsyncMock(), _user(), sub, {})
+    svc._notify_user.assert_awaited_once()
+
+
+async def test_user_expiration_suppressed_during_grace(monkeypatch):
+    """The unified user.expiration event must be suppressed during grace."""
+    svc = _service()
+    sub = _sub()
+    await _run_expiration_with_grace(monkeypatch, svc, sub, grace_active=True)
+    await svc._handle_user_expiration(AsyncMock(), _user(), sub, _receiver_data(-24))
+    svc._notify_user.assert_not_awaited()
+
+
+async def test_user_expiration_sent_without_grace(monkeypatch):
+    """Without grace the user.expiration event still notifies."""
+    svc = _service()
+    sub = _sub()
+    await _run_expiration_with_grace(monkeypatch, svc, sub, grace_active=False)
+    await svc._handle_user_expiration(AsyncMock(), _user(), sub, _receiver_data(-24))
+    svc._notify_user.assert_awaited_once()
